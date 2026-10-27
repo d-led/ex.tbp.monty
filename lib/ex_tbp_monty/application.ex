@@ -12,8 +12,11 @@ defmodule ExTbpMonty.Application do
       ExTbpMonty.Repo,
       {DNSCluster, query: Application.get_env(:ex_tbp_monty, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: ExTbpMonty.PubSub},
-      # Start a worker by calling: ExTbpMonty.Worker.start_link(arg)
-      # {ExTbpMonty.Worker, arg},
+      # Every sensor and learning module registers here, so the step
+      # coordinator can address a module by name across restarts.
+      {Registry, keys: :unique, name: Monty.Runtime.Registry},
+      # One child per running model (module servers + step coordinator).
+      {DynamicSupervisor, name: ExTbpMonty.ModelSupervisor, strategy: :one_for_one},
       # Start to serve requests, typically the last entry
       ExTbpMontyWeb.Endpoint
     ]
