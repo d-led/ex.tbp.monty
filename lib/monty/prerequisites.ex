@@ -21,7 +21,8 @@ defmodule Monty.Prerequisites do
           required(:url) => String.t(),
           required(:root) => String.t(),
           required(:target) => String.t(),
-          optional(:sha256) => String.t() | nil
+          optional(:sha256) => String.t() | nil,
+          optional(:extract) => boolean()
         }
 
   @doc "Every configured prerequisite."
@@ -92,7 +93,10 @@ defmodule Monty.Prerequisites do
       url: Map.fetch!(entry, "url"),
       root: Map.fetch!(entry, "root"),
       target: Map.fetch!(entry, "target"),
-      sha256: Map.get(entry, "sha256")
+      sha256: Map.get(entry, "sha256"),
+      # An archive is unpacked where it lands: a prerequisite Monty's docs say
+      # to unpack is not in place until it is unpacked.
+      extract: Map.get(entry, "extract", false)
     }
   end
 end

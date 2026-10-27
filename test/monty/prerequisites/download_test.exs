@@ -17,6 +17,12 @@ defmodule Monty.Prerequisites.DownloadTest do
         url: https://example.test/tiny.tgz
         root: MONTY_DATA
         target: tiny.tgz
+      - id: tiny_unpacked
+        title: Tiny archive that must be unpacked
+        url: https://example.test/tiny.tgz
+        root: MONTY_DATA
+        target: tiny-unpacked.tgz
+        extract: true
       - id: tiny_bad_checksum
         title: Tiny archive with a wrong checksum
         url: https://example.test/tiny.tgz
@@ -70,6 +76,46 @@ defmodule Monty.Prerequisites.DownloadTest do
       {:ok, second} = Download.start(prerequisite)
 
       assert first == second
+    end
+  end
+
+  describe "a prerequisite that arrives as an archive" do
+    test "is unpacked where it lands, and says how many files came out", %{tmp: tmp} do
+      archive = Path.join(tmp, "tiny.tgz")
+
+      :ok =
+        :erl_tar.create(
+          to_charlist(archive),
+          [{~c"pretrained_ycb_v13/model.pt", "weights"}],
+          [:compressed]
+        )
+
+      Application.put_env(:ex_tbp_monty, :fake_download_chunks, [File.read!(archive)])
+
+      prerequisite = Prerequisites.get("tiny_unpacked")
+      {:ok, _pid} = Download.start(prerequisite)
+
+      # Unpacking is a phase of the download, so it is reported as one.
+      assert_receive {:download, %{id: "tiny_unpacked", status: :extracting}}, 1_000
+      assert_receive {:download, %{id: "tiny_unpacked", status: :done, extracted: 1}}, 1_000
+
+      unpacked =
+        Path.join([
+          Path.dirname(Prerequisites.target_path(prerequisite)),
+          "pretrained_ycb_v13",
+          "model.pt"
+        ])
+
+      assert File.exists?(unpacked)
+    end
+
+    test "an archive that will not unpack fails, with the reason" do
+      Application.put_env(:ex_tbp_monty, :fake_download_chunks, ["not a tarball"])
+
+      {:ok, _pid} = Download.start(Prerequisites.get("tiny_unpacked"))
+
+      assert_receive {:download, %{id: "tiny_unpacked", status: :failed, error: reason}}, 1_000
+      assert {:cannot_extract, _path, _why} = reason
     end
   end
 

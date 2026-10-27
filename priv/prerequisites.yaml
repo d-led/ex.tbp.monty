@@ -19,6 +19,8 @@ prerequisites:
     url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v13.tgz
     root: MONTY_MODELS
     target: pretrained_ycb_v13.tgz
+    # Unpacked next to itself into ~/tbp/results/monty/pretrained_models/pretrained_ycb_v13.
+    extract: true
 
   - id: pretrained_ycb_v13_zip
     title: Pretrained YCB models (v13, zip)
@@ -26,3 +28,4 @@ prerequisites:
     url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v13.zip
     root: MONTY_MODELS
     target: pretrained_ycb_v13.zip
+    extract: true

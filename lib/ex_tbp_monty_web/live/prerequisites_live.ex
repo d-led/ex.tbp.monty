@@ -151,17 +151,18 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp start_error(other), do: "Could not start: #{inspect(other)}"
 
   defp status(statuses, id), do: statuses |> Map.get(id) |> then(&(&1 && &1.status))
-  defp downloading?(statuses, id), do: status(statuses, id) == :downloading
+  defp downloading?(statuses, id), do: status(statuses, id) in [:downloading, :extracting]
   defp progress(statuses, id), do: Map.get(statuses, id)
 
   defp downloadable?(statuses, id) do
-    status(statuses, id) not in [:downloading, :done]
+    status(statuses, id) not in [:downloading, :extracting, :done]
   end
 
   defp status_label(nil, true), do: "present"
   defp status_label(nil, false), do: "not downloaded"
   defp status_label(:queued, _present), do: "queued"
   defp status_label(:downloading, _present), do: "downloading"
+  defp status_label(:extracting, _present), do: "unpacking"
   defp status_label(:done, _present), do: "done"
   defp status_label(:failed, _present), do: "failed"
   defp status_label(:cancelled, _present), do: "cancelled"
@@ -171,6 +172,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp badge_class(:done, _present), do: "badge-success"
   defp badge_class(:failed, _present), do: "badge-error"
   defp badge_class(:downloading, _present), do: "badge-info"
+  defp badge_class(:extracting, _present), do: "badge-info"
   defp badge_class(_other, _present), do: "badge-ghost"
 
   defp max_bytes(%{total: nil, bytes: bytes}), do: max(bytes, 1)

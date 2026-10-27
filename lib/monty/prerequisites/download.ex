@@ -15,12 +15,13 @@ defmodule Monty.Prerequisites.Download do
   use GenServer
 
   alias Monty.Prerequisites
+  alias Monty.Prerequisites.Archive
   alias Monty.Runtime.Registry
 
   @topic "prerequisites"
   @broadcast_every 512 * 1024
 
-  @type status :: :queued | :downloading | :done | :failed | :cancelled
+  @type status :: :queued | :downloading | :extracting | :done | :failed | :cancelled
 
   @type progress :: %{
           id: String.t(),
@@ -29,6 +30,7 @@ defmodule Monty.Prerequisites.Download do
           bytes: non_neg_integer(),
           total: non_neg_integer() | nil,
           path: Path.t(),
+          extracted: non_neg_integer() | nil,
           error: term() | nil,
           started_at: integer() | nil,
           finished_at: integer() | nil
@@ -164,6 +166,7 @@ defmodule Monty.Prerequisites.Download do
       status: :queued,
       bytes: 0,
       total: nil,
+      extracted: nil,
       error: nil,
       # The destination is decided once, when the download starts: a change to
       # the environment variable afterwards must not move the file elsewhere.
@@ -238,10 +241,20 @@ defmodule Monty.Prerequisites.Download do
     {:noreply, fail(state, reason)}
   end
 
+  def handle_info({:extracted, {:ok, files}}, %{status: :extracting} = state) do
+    {:noreply, done(%{state | extracted: files})}
+  end
+
+  def handle_info({:extracted, {:error, reason}}, %{status: :extracting} = state) do
+    {:noreply, fail(state, reason)}
+  end
+
   def handle_info({:DOWN, reference, :process, pid, reason}, %{task: {pid, reference}} = state) do
     # The finished message arrives first in the normal case; an exit without
     # one is the downloader itself dying.
-    if state.status == :downloading, do: {:noreply, fail(state, reason)}, else: {:noreply, state}
+    if state.status in [:downloading, :extracting],
+      do: {:noreply, fail(state, reason)},
+      else: {:noreply, state}
   end
 
   def handle_info(_message, state), do: {:noreply, state}
@@ -250,15 +263,39 @@ defmodule Monty.Prerequisites.Download do
 
   defp finish(state, bytes) do
     case verify_checksum(state.part, state.prerequisite[:sha256]) do
-      :ok -> {:noreply, complete(state, bytes)}
+      :ok -> complete(state, bytes)
       {:error, reason} -> {:noreply, fail(state, reason)}
     end
   end
 
   defp complete(state, bytes) do
-    File.rename!(state.part, state.path)
+    case File.rename(state.part, state.path) do
+      :ok -> after_move(%{state | bytes: bytes}, bytes)
+      {:error, reason} -> fail(state, {:cannot_move, state.path, reason})
+    end
+  end
 
-    state = %{state | status: :done, bytes: bytes, finished_at: now()}
+  # An archive that Monty's docs say to unpack is not a prerequisite until it
+  # is unpacked, so unpacking is the last phase of the download rather than a
+  # step a person is left to remember.
+  defp after_move(%{prerequisite: %{extract: true}} = state, _bytes),
+    do: start_extracting(%{state | status: :extracting})
+
+  defp after_move(state, _bytes), do: {:noreply, done(state)}
+
+  defp start_extracting(state) do
+    parent = self()
+    path = state.path
+
+    {pid, reference} =
+      spawn_monitor(fn -> send(parent, {:extracted, Archive.extract(path)}) end)
+
+    broadcast(state)
+    {:noreply, %{state | task: {pid, reference}}}
+  end
+
+  defp done(state) do
+    state = %{state | status: :done, finished_at: now()}
     broadcast(state)
     state
   end
@@ -305,6 +342,7 @@ defmodule Monty.Prerequisites.Download do
       bytes: state.bytes,
       total: state.total,
       path: state.path,
+      extracted: state.extracted,
       error: state.error,
       started_at: state.started_at,
       finished_at: state.finished_at
