@@ -221,12 +221,18 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
     end
   end
 
+  # Monty stores every feature as a float tensor, so a boolean feature is 1.0 or
+  # 0.0 in `x` too.
   defp as_rows(values) do
     Enum.map(values, fn
       value when is_number(value) -> [value * 1.0]
-      row -> Enum.map(row, &(&1 * 1.0))
+      value when is_boolean(value) -> [if(value, do: 1.0, else: 0.0)]
+      row -> Enum.map(row, &normalise_value/1)
     end)
   end
+
+  defp normalise_value(value) when is_number(value), do: value * 1.0
+  defp normalise_value(value) when is_boolean(value), do: if(value, do: 1.0, else: 0.0)
 
   # Mirrors `GraphObjectModel._build_adjacency_graph`. Public because a graph
   # built from observations is useful on its own, and because Monty's own tests

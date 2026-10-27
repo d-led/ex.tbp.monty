@@ -1485,7 +1485,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.GraphMatching",
     package: "monty",
     python: "frameworks/models/graph_matching.py",
@@ -1501,7 +1501,7 @@
         python: "GraphLM"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.GraphMatching.GraphMemory",
         python: "GraphMemory"
       }
