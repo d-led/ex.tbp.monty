@@ -33,6 +33,7 @@ defmodule ExTbpMontyWeb.Router do
 
     get "/", PageController, :home
     live "/runs/demo", RunsLive, :demo
+    live "/prerequisites", PrerequisitesLive, :index
   end
 
   # Other scopes may use custom stacks.
