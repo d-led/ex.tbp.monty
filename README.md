@@ -30,7 +30,8 @@ hypothesis evidence and the vote telemetry as they happen.
 | `Monty.Runtime` — one process per sensor and learning module, step barriers, vote rounds with deadlines | done |
 | Synthetic environment and `/runs/demo` live run view | done |
 | `Monty.Prerequisites` — streaming downloads into Monty's data and model paths, `/prerequisites` view | done |
-| Evidence matching, motor policies, MuJoCo bridge, config editor | planned |
+| `Monty.Studio` — faceted experiment index, setup preview and validation, builder, run history | done |
+| Ported sensor/learning modules, evidence matching, motor policies, MuJoCo bridge | planned |
 
 ## Quick start
 
@@ -46,6 +47,23 @@ Monty's configs are read from a checkout of `tbp.monty`:
 export MONTY_SOURCE=../monty-orig   # default; any tbp.monty checkout works
 export TELEOP_SOURCE=../tbp.teleop # default; the teleop tool being replaced
 ```
+
+## The studio
+
+The application is a studio for Monty experiments, not a wrapper around one
+script:
+
+| Page | What it is for |
+| --- | --- |
+| `/` | every experiment Monty ships, faceted by agent, module count, learning module and starting point, with the filters in the URL |
+| `/experiments/*name` | one experiment: its wiring diagram, what the checks say, the config, and a run that streams its steps and its log |
+| `/build` | an experiment from the least input — a name is enough — previewed by composing the config it would write |
+| `/runs` | every run, with the config snapshot and inputs it was given, its summary and its log; delete asks first |
+| `/prerequisites` | the data and models an experiment needs, downloaded into Monty's own paths |
+
+Runs are recorded in Postgres the moment they start: the composed config, the
+inputs, the step log and the summary. Artifacts stay on the filesystem where
+Monty puts them, so forgetting a run forgets its history, not its model.
 
 ## Prerequisites
 
@@ -68,6 +86,7 @@ finished. The manifest is [priv/prerequisites.yaml](priv/prerequisites.yaml).
 ## Quality gates
 
 ```bash
+mix ecto.migrate             # run history needs its table
 scripts/quality.sh           # lint, the suite with coverage, the CRAP report
 scripts/quality.sh --fast    # static analysis only
 scripts/quality.sh --types   # ...and dialyzer (CI runs it as its own job)
