@@ -43,9 +43,12 @@ should move with every commit; when a mapped class is implemented,
 `mix monty.run` stop calling it a stand-in the day it lands.
 
 1. **`frameworks/models/buffer.py`** — `FeatureAtLocationBuffer`,
-   `FeatureAtLocation`. The smallest thing everything else assumes.
-2. **`evidence_matching/hypotheses.py`** — `HypothesisSpace`, `Hypotheses`,
-   plus `hypotheses_updater/` (`BurstSamplingHypothesesUpdater`, `Displacer`,
+   `BufferEncoder`. **Ported**: the buffer is a value (every Python mutation
+   returns a new buffer), NaN padding is `nil`, and encoders are registered per
+   module because Elixir structs have no parent classes.
+2. **`evidence_matching/hypotheses.py`** — `Hypotheses` (**ported**: four
+   parallel columns plus `take/2` for the subset a module still believes), then
+   `hypotheses_updater/` (`BurstSamplingHypothesesUpdater`, `Displacer`,
    `EvidenceSlopeTracker`). Property tests for evidence updates, fixtures for
    the displacement.
 3. **`graph_memory/`** — `GraphMemory`, `ObjectModel`, `features`/`locations`
