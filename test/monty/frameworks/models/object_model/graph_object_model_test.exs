@@ -86,6 +86,35 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModelTest do
     end
   end
 
+  describe "finding the nearest nodes" do
+    setup do
+      locations = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [5.0, 0.0, 0.0], [5.5, 0.0, 0.0]]
+      features = %{"rgba" => Enum.map(locations, fn [x | _] -> [x] end)}
+
+      %{built: model(locations, features)}
+    end
+
+    test "one list per search location, nearest first", %{built: built} do
+      assert GraphObjectModel.find_nearest_neighbors(built, [[4.0, 0.0, 0.0]], 2) == [[2, 3]]
+    end
+
+    test "as many searches as asked, in the order they were asked", %{built: built} do
+      assert GraphObjectModel.find_nearest_neighbors(built, [[0.1, 0.0, 0.0], [5.1, 0.0, 0.0]], 1) ==
+               [[0], [2]]
+    end
+
+    test "a graph with fewer nodes than asked answers with the nodes it has", %{built: built} do
+      assert GraphObjectModel.find_nearest_neighbors(built, [[0.0, 0.0, 0.0]], 10) == [
+               [0, 1, 2, 3]
+             ]
+    end
+
+    test "equally distant nodes are ordered by id, so a run is repeatable", %{built: built} do
+      # Nodes 0 and 2 are both 2.5 m away; the lower id is taken first.
+      assert GraphObjectModel.find_nearest_neighbors(built, [[2.5, 0.0, 0.0]], 2) == [[1, 0]]
+    end
+  end
+
   describe "extending a graph" do
     test "new observations join the point cloud and keep the old nodes first" do
       pose = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]

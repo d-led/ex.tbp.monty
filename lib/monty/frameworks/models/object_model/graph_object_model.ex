@@ -170,6 +170,34 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   def edge_index_between(%__MODULE__{graph: %{}}, _previous_node, _new_node), do: nil
 
   @doc """
+  The ids of the `count` nodes nearest each of `search_locations`.
+
+  One list per search location, nearest first, ties going to the lower node id so
+  that two runs of the same episode choose the same nodes. Monty asks its grid
+  model this question through a `KDTree`; a graph answers it by measuring, which
+  is the same answer at the sizes an object model has.
+  """
+  @spec find_nearest_neighbors(t(), [location()], pos_integer()) :: [[non_neg_integer()]]
+  def find_nearest_neighbors(
+        %__MODULE__{graph: %{pos: positions}} = model,
+        search_locations,
+        count
+      ) do
+    _ = model
+
+    count = min(count, length(positions))
+
+    Enum.map(search_locations, fn search_location ->
+      positions
+      |> Enum.with_index()
+      |> Enum.map(fn {position, index} -> {index, distance(search_location, position)} end)
+      |> Enum.sort_by(fn {index, distance} -> {distance, index} end)
+      |> Enum.take(count)
+      |> Enum.map(fn {index, _distance} -> index end)
+    end)
+  end
+
+  @doc """
   The existing graph and the new observations, as one point cloud.
 
   New features become new columns, with zeros for the nodes that never had them
