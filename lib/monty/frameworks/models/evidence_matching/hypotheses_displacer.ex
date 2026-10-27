@@ -235,7 +235,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
           displacer.graph_memory,
           graph_id,
           input_channel,
-          node_ids
+          node_ids,
+          ["pose_vectors", "pose_fully_defined"]
         )
 
       radius_evidence =

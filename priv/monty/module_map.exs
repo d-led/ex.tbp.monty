@@ -1390,18 +1390,18 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater",
     package: "monty",
     python: "frameworks/models/evidence_matching/hypotheses_updater.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater",
         python: "HypothesesUpdater"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypothesesUpdater",
         python: "DefaultHypothesesUpdater"
       }
