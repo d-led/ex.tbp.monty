@@ -1248,18 +1248,18 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker",
     package: "monty",
     python: "frameworks/models/evidence_matching/evidence_slope_tracker.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker",
         python: "EvidenceSlopeTracker"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker.HypothesesSelection",
         python: "HypothesesSelection"
       }
