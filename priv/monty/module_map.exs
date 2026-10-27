@@ -1409,18 +1409,18 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.LearningModule",
     package: "monty",
     python: "frameworks/models/evidence_matching/learning_module.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.LearningModule.InvalidEvidenceThresholdConfig",
         python: "InvalidEvidenceThresholdConfig"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM",
         python: "EvidenceGraphLM"
       }
@@ -2356,7 +2356,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Runtime",
     package: "monty",
     python: "runtime.py",

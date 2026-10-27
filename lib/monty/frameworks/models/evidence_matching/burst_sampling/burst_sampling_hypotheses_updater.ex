@@ -26,6 +26,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   has earned nothing yet, but it is the alternative the burst exists to try.
   """
 
+  @behaviour Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
+
   alias Monty.Frameworks.Models.EvidenceMatching.Channels
   alias Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker
   alias Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker.HypothesesSelection
@@ -79,6 +81,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   end
 
   @doc "Forget what an episode learned, keeping the configuration."
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
   @spec reset(t()) :: t()
   def reset(%__MODULE__{} = updater),
     do: %{updater | sampling_burst_steps: 0, evidence_slope_trackers: %{}}
@@ -89,6 +92,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   A burst starts when evidence has stopped moving, not while it is climbing —
   while it climbs, another observation is the cheaper way to settle things.
   """
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
   @spec begin_step(t()) :: t()
   def begin_step(%__MODULE__{} = updater) do
     max_slope = max_global_slope(updater)
@@ -103,6 +107,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   end
 
   @doc "Count a burst step down once the step's update is done."
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
   @spec end_step(t()) :: t()
   def end_step(%__MODULE__{sampling_burst_steps: steps} = updater) when steps > 0,
     do: %{updater | sampling_burst_steps: steps - 1}
@@ -115,6 +120,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   A no-op with no hypotheses or no movement — before the first step there is
   nothing to move by.
   """
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
   @spec displace_hypotheses(t(), Hypotheses.t(), [number()] | nil) :: Hypotheses.t()
   def displace_hypotheses(%__MODULE__{}, %Hypotheses{} = hypotheses, nil), do: hypotheses
 
@@ -137,6 +143,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   empty when the observation carries no channel this graph stores — the caller
   then has nothing to update rather than an empty space pretending to be one.
   """
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
   @spec update_evidence(
           t(),
           Hypotheses.t(),

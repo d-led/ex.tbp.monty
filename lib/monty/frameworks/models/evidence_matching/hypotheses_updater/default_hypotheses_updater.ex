@@ -30,6 +30,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   had several steps to climb.
   """
 
+  @behaviour Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
+
   alias Monty.Frameworks.Models.EvidenceMatching.Channels
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
@@ -64,12 +66,27 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   end
 
   @doc "Forget which channels this episode has started."
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
   @spec reset(t()) :: t()
   def reset(%__MODULE__{} = updater), do: %{updater | initialised_channels: %{}}
 
   @doc """
+  Nothing to prepare: this updater keeps every hypothesis it has and spends no
+  step sampling new ones, so each step looks like every other.
+  """
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
+  @spec begin_step(t()) :: t()
+  def begin_step(%__MODULE__{} = updater), do: updater
+
+  @doc "Nothing to wind down, for the same reason `begin_step/1` has nothing to set up."
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
+  @spec end_step(t()) :: t()
+  def end_step(%__MODULE__{} = updater), do: updater
+
+  @doc """
   Move every hypothesis by `displacement`, as its own orientation sees it.
   """
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
   @spec displace_hypotheses(t(), Hypotheses.t(), [number()] | nil) :: Hypotheses.t()
   def displace_hypotheses(%__MODULE__{}, %Hypotheses{} = hypotheses, nil), do: hypotheses
 
@@ -92,6 +109,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   reporting, and otherwise adds the observation's evidence to what is there.
   Returns `nil` and no telemetry when no stored channel was observed.
   """
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
   @spec update_evidence(
           t(),
           Hypotheses.t(),

@@ -55,4 +55,38 @@ defmodule Monty.Math do
   """
   @spec degrees(number()) :: float()
   def degrees(degrees), do: degrees * :math.pi() / 180
+
+  @doc """
+  The average of a sample, or zero for an empty one.
+
+  numpy's `np.mean`, which Monty uses to summarise evidence and locations. The
+  empty case is Monty's own convention for a hypothesis space with nothing in
+  it: no observations, no average, and zero is the neutral value to add to.
+  """
+  @spec mean([number()]) :: float()
+  def mean([]), do: 0.0
+  def mean(values), do: Enum.sum(values) / length(values)
+
+  @doc """
+  The spread of a sample around its mean, dividing by `n`.
+
+  numpy's `np.std` — population standard deviation, not the sample estimate.
+  Monty uses it to decide whether one object stands out from the field: a wide
+  spread means there is something to discriminate between.
+  """
+  @spec population_std([number()]) :: float()
+  def population_std([]), do: 0.0
+
+  def population_std(values) do
+    average = mean(values)
+
+    values
+    |> Enum.map(fn value -> (value - average) * (value - average) end)
+    |> mean()
+    |> :math.sqrt()
+  end
+
+  @doc "The value moved inside `[low, high]`, numpy's `np.clip`."
+  @spec clip(number(), number(), number()) :: number()
+  def clip(value, low, high), do: value |> max(low) |> min(high)
 end

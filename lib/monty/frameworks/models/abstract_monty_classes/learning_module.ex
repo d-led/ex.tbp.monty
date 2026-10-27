@@ -30,8 +30,15 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
   @doc "What this module believes, for other modules to weigh."
   @callback send_out_vote(state) :: {vote(), state}
 
-  @doc "Votes gathered from the modules wired to this one."
-  @callback receive_votes([vote()], state) :: {:ok, state}
+  @doc """
+  Votes gathered from the modules wired to this one.
+
+  What a vote *is* differs by family: the displacement modules exchange sets of
+  objects they have excluded, the evidence modules a map of object id to the
+  hypotheses worth voting for. The coordinator passes on whatever the senders'
+  `send_out_vote/1` produced, and this callback decides how to weigh it.
+  """
+  @callback receive_votes(vote(), state) :: {:ok, state}
 
   @doc "A goal this module wants pursued (usually a hypothesis test)."
   @callback propose_goals(state) :: {[Goal.t()], state}

@@ -17,7 +17,12 @@
           # Rendering and sync code has a few deliberately explicit branches;
           # these thresholds keep the checks useful instead of stylistic.
           {Credo.Check.Refactor.CyclomaticComplexity, [max_complexity: 12]},
-          {Credo.Check.Refactor.Nesting, [max_nesting: 3]}
+          {Credo.Check.Refactor.Nesting, [max_nesting: 3]},
+          # An evidence learning module is one column of Monty's cortical
+          # column: the settings an experiment tunes and the short-term memory
+          # it accumulates. Monty keeps both on the class, and splitting them
+          # here would scatter the settings an experiment sets.
+          {Credo.Check.Warning.StructFieldAmount, [max_fields: 35]}
         ]
       }
     }
