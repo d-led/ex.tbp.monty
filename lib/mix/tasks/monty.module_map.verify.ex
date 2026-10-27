@@ -35,7 +35,7 @@ defmodule Mix.Tasks.Monty.ModuleMap.Verify do
         Mix.shell().info(
           "module map: #{summary.modules} modules, " <>
             "#{summary.implemented} implemented, #{summary.planned} planned, " <>
-            "#{summary.excluded} excluded " <> inspect(summary.by_package, label: "per package")
+            "#{summary.excluded} excluded, per package: #{inspect(summary.by_package)}"
         )
 
       {:error, problems} ->

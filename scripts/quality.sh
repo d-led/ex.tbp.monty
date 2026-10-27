@@ -6,8 +6,8 @@
 #
 #   scripts/quality.sh              everything CI runs on a push
 #   scripts/quality.sh --fast       static analysis only: no database, no tests
-#   scripts/quality.sh --no-tests   reuse the coverage already exported, re-rank
-#   scripts/quality.sh --image      additionally build the image and check the user
+#   scripts/quality.sh --no-tests   reuse the coverage already exported, re-rank#   scripts/quality.sh --types      additionally run dialyzer (slow the first
+#                                   time; CI runs it as its own job)#   scripts/quality.sh --image      additionally build the image and check the user
 #                                   it runs as (slow; CI does it for a release)
 #   scripts/quality.sh --top 20     how many CRAP entries to rank (default 8)
 #
@@ -20,16 +20,18 @@ cd "$(dirname "$0")/.."
 fast=0
 tests=1
 image=0
+types=0
 top=8
 
 usage() {
-  sed -n '3,14p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'
+  sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --fast) fast=1; shift ;;
     --no-tests) tests=0; shift ;;
+    --types) types=1; shift ;;
     --image) image=1; shift ;;
     --top) top="${2:?--top needs a number}"; shift 2 ;;
     -h | --help) usage; exit 0 ;;
@@ -172,6 +174,21 @@ else
   printf '\n'
   grep -E 'threshold failed|score=' "$report" | first_lines 20 || true
   record complexity 1 "worst ${worst:-?}, $offenders function(s) above $threshold"
+fi
+
+# ---------------------------------------------------------------------------
+# Types, when asked for. CI runs this as its own job with a cached PLT; here it
+# is opt-in because the first run builds that PLT.
+# ---------------------------------------------------------------------------
+
+if [[ $types -eq 1 ]]; then
+  banner "types"
+  if MIX_ENV=test mix dialyzer >"$report" 2>&1; then
+    record types 0 "$(grep -E 'done \(passed successfully\)' "$report" | tail -1)"
+  else
+    grep -E '^(lib|test)/' "$report" | first_lines 20 || true
+    record types 1 "see above"
+  fi
 fi
 
 # ---------------------------------------------------------------------------

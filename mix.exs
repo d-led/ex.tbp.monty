@@ -120,11 +120,10 @@ defmodule ExTbpMonty.MixProject do
       plt_core_path: "priv/plts",
       plt_local_path: "priv/plts",
       plt_add_apps: [:mix, :ex_unit],
-      # The types job is about the application. Mix tasks are build tooling
-      # that dialyzer cannot see in every environment (a dev-only asset
-      # library is absent under MIX_ENV=test), and tests are exercised by
-      # running them; warnings there would drown the signal.
-      exclude_paths: ["test/**"],
+      # The types job is about the application: Mix tasks are operator tooling
+      # whose contract is the command line, and tests are exercised by running
+      # them. Warnings there would drown the signal.
+      exclude_paths: ["lib/mix/tasks/**", "test/**"],
       flags: [:error_handling, :extra_return, :missing_return]
     ]
   end

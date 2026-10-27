@@ -41,8 +41,8 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
     summary = ModuleMap.summary(entries)
 
     Mix.shell().info(
-      "#{@map_path}: #{summary.modules} modules, #{summary.implemented} implemented " <>
-        inspect(summary.by_package, label: "per package")
+      "#{@map_path}: #{summary.modules} modules, #{summary.implemented} implemented, " <>
+        "per package: #{inspect(summary.by_package)}"
     )
   end
 
