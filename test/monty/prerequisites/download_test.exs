@@ -48,7 +48,7 @@ defmodule Monty.Prerequisites.DownloadTest do
       File.rm_rf!(tmp)
     end)
 
-    {:ok, prerequisite: Prerequisites.get("tiny")}
+    {:ok, prerequisite: Prerequisites.get("tiny"), tmp: tmp}
   end
 
   describe "a successful download" do
@@ -91,6 +91,78 @@ defmodule Monty.Prerequisites.DownloadTest do
 
       refute File.exists?(Prerequisites.target_path(prerequisite))
       refute File.exists?(Prerequisites.target_path(prerequisite) <> ".part")
+    end
+  end
+
+  describe "cancelling" do
+    test "a download that has already finished is nothing to do", %{prerequisite: prerequisite} do
+      {:ok, pid} = Download.start(prerequisite)
+      assert_receive {:download, %{id: "tiny", status: :done}}, 1_000
+
+      # The page may still be holding the pid; asking it to cancel must not
+      # raise once the process is gone.
+      _ = GenServer.stop(pid)
+
+      assert Download.cancel(pid) == {:error, :not_found}
+    end
+  end
+
+  describe "the folder a download lands in" do
+    test "is created before the download starts, however deep it is", %{tmp: tmp} do
+      manifest = Path.join(tmp, "deep.yaml")
+
+      File.write!(manifest, """
+      prerequisites:
+        - id: deep
+          title: Deep target
+          url: https://example.test/tiny.tgz
+          root: MONTY_DATA
+          target: nested/deeper/tiny.tgz
+      """)
+
+      Application.put_env(:ex_tbp_monty, :prerequisites_manifest, manifest)
+      prerequisite = Prerequisites.get("deep")
+
+      {:ok, _pid} = Download.start(prerequisite)
+
+      assert_receive {:download, %{id: "deep", status: :done}}, 1_000
+      assert File.exists?(Path.join([tmp, "data", "nested", "deeper", "tiny.tgz"]))
+    end
+
+    test "a folder that cannot be created is reported, not crashed into" do
+      # A file where the folder should be: `mkdir` cannot make it, and no
+      # download process may be left behind.
+      blocker = Path.join(System.tmp_dir!(), "blocked-#{System.unique_integer([:positive])}")
+      File.write!(blocker, "not a directory")
+
+      previous = System.get_env("MONTY_DATA")
+      System.put_env("MONTY_DATA", Path.join(blocker, "data"))
+
+      on_exit(fn ->
+        if previous,
+          do: System.put_env("MONTY_DATA", previous),
+          else: System.delete_env("MONTY_DATA")
+
+        File.rm(blocker)
+      end)
+
+      manifest =
+        Path.join(System.tmp_dir!(), "blocked-#{System.unique_integer([:positive])}.yaml")
+
+      File.write!(manifest, """
+      prerequisites:
+        - id: blocked
+          title: Blocked target
+          url: https://example.test/tiny.tgz
+          root: MONTY_DATA
+          target: tiny.tgz
+      """)
+
+      Application.put_env(:ex_tbp_monty, :prerequisites_manifest, manifest)
+      on_exit(fn -> File.rm(manifest) end)
+
+      assert {:error, {:cannot_create, _directory, _reason}} =
+               Download.start(Prerequisites.get("blocked"))
     end
   end
 

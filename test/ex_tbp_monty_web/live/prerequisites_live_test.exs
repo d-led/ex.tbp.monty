@@ -62,6 +62,19 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert File.read!(Prerequisites.target_path(Prerequisites.get("tiny"))) == "hello world"
   end
 
+  test "a folder that cannot be created is a message, not a crash", %{conn: conn, tmp: tmp} do
+    # A file where the folder should be: the click fails at the click, with the
+    # path in the message, and the page stays up.
+    blocker = Path.join(tmp, "blocker")
+    File.write!(blocker, "not a directory")
+    System.put_env("MONTY_DATA", Path.join(blocker, "data"))
+
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    assert view |> element("#download-tiny") |> render_click() =~ "Cannot create"
+    assert has_element?(view, "#prereq-tiny")
+  end
+
   test "a prerequisite already on disk says so", %{conn: conn} do
     path = Prerequisites.target_path(Prerequisites.get("tiny"))
     File.mkdir_p!(Path.dirname(path))

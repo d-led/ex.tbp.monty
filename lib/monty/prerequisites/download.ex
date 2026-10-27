@@ -49,22 +49,41 @@ defmodule Monty.Prerequisites.Download do
   @spec start(Prerequisites.prerequisite(), keyword()) ::
           {:ok, pid()} | {:ok, pid(), term()} | :ignore | {:error, term()}
   def start(%{id: id} = prerequisite, opts \\ []) do
+    # A click is a person, not a test: nothing here may raise. A registry entry
+    # can outlive its process by a moment, and a dead pid between the lookup and
+    # the call used to take the whole page down with it.
     case Registry.lookup({:download, id}) do
-      [{pid, _value}] ->
-        case status(Registry.via({:download, id})) do
-          %{status: status} when status in [:done, :failed, :cancelled] ->
-            # A finished attempt is history, not a download in progress: stop
-            # it so the next click really fetches again.
-            GenServer.stop(pid)
-            start_fresh(prerequisite, opts)
+      [{pid, _value}] -> existing(id, pid, prerequisite, opts)
+      [] -> start_fresh(prerequisite, opts)
+    end
+  end
 
-          _running ->
-            {:ok, pid}
-        end
+  defp existing(id, pid, prerequisite, opts) do
+    case running(id) do
+      {:ok, status} when status in [:done, :failed, :cancelled] ->
+        # A finished attempt is history, not a download in progress: stop it so
+        # the next click really fetches again.
+        stop(pid)
+        start_fresh(prerequisite, opts)
 
-      [] ->
+      {:ok, _status} ->
+        {:ok, pid}
+
+      :gone ->
         start_fresh(prerequisite, opts)
     end
+  end
+
+  defp running(id) do
+    {:ok, status(Registry.via({:download, id})).status}
+  catch
+    :exit, _reason -> :gone
+  end
+
+  defp stop(pid) do
+    GenServer.stop(pid)
+  catch
+    :exit, _reason -> :ok
   end
 
   defp start_fresh(prerequisite, opts) do
@@ -86,8 +105,19 @@ defmodule Monty.Prerequisites.Download do
   @spec status(GenServer.server()) :: progress()
   def status(server), do: GenServer.call(server, :status, :infinity)
 
-  @spec cancel(GenServer.server()) :: :ok
-  def cancel(server), do: GenServer.call(server, :cancel, :infinity)
+  @doc """
+  Stops a download, if it is still there.
+
+  Cancelling is a person changing their mind, so a download that finished (or
+  died) while the page was rendering must not take the page down: `:not_found`
+  is the honest answer, and the page treats it as nothing to do.
+  """
+  @spec cancel(GenServer.server()) :: :ok | {:error, :not_found}
+  def cancel(server) do
+    GenServer.call(server, :cancel, :infinity)
+  catch
+    :exit, _reason -> {:error, :not_found}
+  end
 
   # -- callbacks ------------------------------------------------------------
 
@@ -110,7 +140,25 @@ defmodule Monty.Prerequisites.Download do
   def init({prerequisite, opts}) do
     path = Prerequisites.target_path(prerequisite)
 
-    state = %{
+    # The folder is made before the download is announced, not when the first
+    # byte arrives: a target we cannot write to should fail at the click, with
+    # the path in the message, rather than mid-transfer.
+    with :ok <- make_directory(path) do
+      {:ok, state(prerequisite, opts, path), {:continue, :download}}
+    end
+  end
+
+  defp make_directory(path) do
+    directory = Path.dirname(path)
+
+    case File.mkdir_p(directory) do
+      :ok -> :ok
+      {:error, reason} -> {:stop, {:cannot_create, directory, reason}}
+    end
+  end
+
+  defp state(prerequisite, opts, path) do
+    %{
       prerequisite: prerequisite,
       fetcher: Keyword.get(opts, :fetcher, fetcher()),
       status: :queued,
@@ -126,15 +174,11 @@ defmodule Monty.Prerequisites.Download do
       started_at: nil,
       finished_at: nil
     }
-
-    {:ok, state, {:continue, :download}}
   end
 
   @impl true
   def handle_continue(:download, state) do
-    %{prerequisite: prerequisite, fetcher: fetcher, part: part, path: path} = state
-
-    File.mkdir_p!(Path.dirname(path))
+    %{prerequisite: prerequisite, fetcher: fetcher, part: part} = state
 
     parent = self()
 

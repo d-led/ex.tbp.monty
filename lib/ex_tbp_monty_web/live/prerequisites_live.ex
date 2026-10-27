@@ -134,12 +134,21 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp start(socket, prerequisite) do
     case Download.start(prerequisite) do
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Could not start: #{inspect(reason)}")}
+        {:noreply, put_flash(socket, :error, start_error(reason))}
 
       _started ->
         {:noreply, socket}
     end
   end
+
+  # A download that cannot even make its folder is a permissions problem or a
+  # wrong `MONTY_MODELS`; saying which is more useful than a tuple.
+  defp start_error({:cannot_create, directory, reason}) do
+    "Cannot create #{directory} (#{reason}). Check the folder's permissions, or where " <>
+      "MONTY_DATA / MONTY_MODELS / MONTY_LOGS point."
+  end
+
+  defp start_error(other), do: "Could not start: #{inspect(other)}"
 
   defp status(statuses, id), do: statuses |> Map.get(id) |> then(&(&1 && &1.status))
   defp downloading?(statuses, id), do: status(statuses, id) == :downloading
