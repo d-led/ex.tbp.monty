@@ -104,6 +104,11 @@ jobs:
           restore-keys: ${{ runner.os }}-mix-
 
       - run: mix deps.get
+
+      # Run history is stored, so the suite needs its table.
+      - name: Prepare the database
+        run: mix ecto.create --quiet && mix ecto.migrate
+
       - run: mix cover
       - run: mix complexity
 
