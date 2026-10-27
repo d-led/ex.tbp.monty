@@ -27,8 +27,9 @@ hypothesis evidence and the vote telemetry as they happen.
 | `Monty.Cmp` — message, goal, attention region, wire form | done |
 | `Monty.Config` — Hydra composition, resolvers, snapshot parity | done (103/103) |
 | `Monty.ModuleMap` — the module contract and its verification | done (124 modules, 2 implemented) |
-| Actor runtime (`Monty.Runtime.*`), synthetic environment | next |
-| Evidence matching, voting, motor policies, MuJoCo bridge, UI | planned |
+| `Monty.Runtime` — one process per sensor and learning module, step barriers, vote rounds with deadlines | done |
+| Synthetic environment and `/runs/demo` live run view | done |
+| Evidence matching, motor policies, MuJoCo bridge, config editor | planned |
 
 ## Quick start
 

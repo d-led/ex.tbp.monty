@@ -6,10 +6,10 @@ makes results comparable.
 
 ## A timestep
 
-The coordinator (`Monty.Runtime.Step`, next phase) runs Monty's
-`Monty._matching_step` as a sequence of barriers. Every phase is a fan-out and
-a gather, so a module can be inspected, restarted or replaced without touching
-the coordinator.
+The coordinator (`Monty.Runtime.Step`) runs Monty's `Monty._matching_step` as a
+sequence of barriers. Every phase is a fan-out and a gather (`Monty.Runtime.Barrier`),
+so a module can be inspected, restarted or replaced without touching the
+coordinator.
 
 ```mermaid
 sequenceDiagram
@@ -54,6 +54,12 @@ Facts worth keeping in mind, all inherited from Monty:
   hypotheses without updating evidence.
 
 ## Why processes
+
+A model (`Monty.Runtime.Model`) is a supervisor: one child per sensor module,
+one per learning module, and the step coordinator last. The strategy is
+`:one_for_one` and modules are addressed by registered name
+(`{:learning_module, model_id, id}`), so a module that dies is replaced without
+the coordinator losing its step count.
 
 * **Isolation.** A learning module that crashes is restarted; the run continues
   and is marked degraded. The Python runtime cannot offer that.
