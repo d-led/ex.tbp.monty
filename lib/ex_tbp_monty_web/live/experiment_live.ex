@@ -421,7 +421,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         end
 
       {:error, changeset} ->
-        {:noreply, push(socket, nil, "cannot record this run: #{changeset_errors(changeset)}", :error)}
+        {:noreply,
+         push(socket, nil, "cannot record this run: #{changeset_errors(changeset)}", :error)}
     end
   end
 
