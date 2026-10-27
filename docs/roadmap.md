@@ -42,30 +42,36 @@ should move with every commit; when a mapped class is implemented,
 `Setup.model_spec/2` uses it instead of the synthetic stand-in, so the page and
 `mix monty.run` stop calling it a stand-in the day it lands.
 
-1. **`frameworks/models/buffer.py`** — `FeatureAtLocationBuffer`,
+1. **`math.py`, `geometry.py::Rotation`, `frameworks/utils/spatial_arithmetics.py`**
+   — the tolerances every comparison shares, a rotation with exactly one spelling
+   (quaternion `wxyz`, extrinsic Euler order, scipy's behaviour without scipy),
+   and the pose-vector arithmetic everything later measures with. **Ported**:
+   `TangentFrame` transport stays orthonormal over a thousand steps, and a
+   mirrored frame shows up as a large alignment error instead of a silent zero.
+2. **`frameworks/models/buffer.py`** — `FeatureAtLocationBuffer`,
    `BufferEncoder`. **Ported**: the buffer is a value (every Python mutation
    returns a new buffer), NaN padding is `nil`, and encoders are registered per
    module because Elixir structs have no parent classes.
-2. **`evidence_matching/hypotheses.py`** — `Hypotheses` (**ported**: four
+3. **`evidence_matching/hypotheses.py`** — `Hypotheses` (**ported**: four
    parallel columns plus `take/2` for the subset a module still believes), then
    `hypotheses_updater/` (`BurstSamplingHypothesesUpdater`, `Displacer`,
    `EvidenceSlopeTracker`). Property tests for evidence updates, fixtures for
    the displacement.
-3. **`graph_memory/`** — `GraphMemory`, `ObjectModel`, `features`/`locations`
+4. **`graph_memory/`** — `GraphMemory`, `ObjectModel`, `features`/`locations`
    bookkeeping. Fixtures: a small graph saved by Monty, loaded identically.
-4. **`evidence_matching/learning_module.py`** — `EvidenceGraphLM`. The first real
+5. **`evidence_matching/learning_module.py`** — `EvidenceGraphLM`. The first real
    learning module; the `Setup` diagram's `learning_module_0` becomes genuinely
    ported rather than "planned".
-5. **`sensor_modules/`** — `ObservationProcessor`, `SurfaceNormalMethod`,
+6. **`sensor_modules/`** — `ObservationProcessor`, `SurfaceNormalMethod`,
    `SnapshotTelemetry`, `CameraSM`, then `two_d_sensor_module`. Golden-file
    tests on a recorded observation, feature by feature.
-6. **`goal_generation.py`** — `EvidenceGoalGenerator` (and
+7. **`goal_generation.py`** — `EvidenceGoalGenerator` (and
    `GraphGoalGenerator`), then `motor_policies.py`, `motor_policy_selectors.py`,
    `motor_system.py`.
-7. **`monty_base.py`, `graph_matching.py`, `evidence_matching/model.py`** — the
+8. **`monty_base.py`, `graph_matching.py`, `evidence_matching/model.py`** — the
    classes that wire modules together; here the runtime's routing is replaced by
    the ported one where it is behaviour, and stays where it is supervision.
-8. **`experiments/`** — `MontyExperiment`, `MontySupervisedObjectPretraining…`,
+9. **`experiments/`** — `MontyExperiment`, `MontySupervisedObjectPretraining…`,
    `MontyObjectRecognition…`: epochs, episodes, recognition policy, hooks.
 
 **Done when**: `base_config_10distinctobj_dist_agent` reports `ported here 12/12`
