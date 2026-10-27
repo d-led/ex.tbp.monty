@@ -30,11 +30,14 @@ defmodule Monty.Config.Composer do
   Options:
 
     * `:conf_dir` — the Hydra config directory, defaulting to the checkout's.
+    * `:overrides` — group overrides keyed by group path without a leading
+      slash, as Hydra takes them on the command line
+      (`%{"monty/learning_module" => "evidence_1lm_nn5_dod003"}`).
   """
   @spec compose(String.t(), keyword()) :: {:ok, tree()} | {:error, term()}
   def compose(experiment, opts \\ []) do
     conf_dir = Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dir() end)
-    overrides = %{"experiment" => experiment}
+    overrides = Map.put(Keyword.get(opts, :overrides, %{}), "experiment", experiment)
 
     with {:ok, tree} <- compose_group(conf_dir, "", "experiment", nil, overrides, 0) do
       # `conf/hydra/default.yaml` configures Hydra itself (where its run
@@ -52,19 +55,59 @@ defmodule Monty.Config.Composer do
   defp compose_group(conf_dir, group, option, package_override, overrides, depth) do
     with {:ok, config} <- Source.load(conf_dir, group, option) do
       base_package = package_override || config.package || Source.default_package(group)
+      compose_config(conf_dir, config, base_package, group, overrides, depth)
+    end
+  end
 
-      with {:ok, tree, saw_self} <-
-             compose_defaults(
-               config.defaults,
-               config.body,
-               conf_dir,
-               group,
-               base_package,
-               overrides,
-               depth
-             ) do
-        {:ok, merge_body(tree, saw_self, base_package, config.body)}
+  @doc """
+  Composes a config written as text, as if Monty shipped it.
+
+  A generated experiment is an experiment file: Monty's launcher composes it
+  *through* its root config, which is where `constants` and the rest of the
+  top-level settings come from. So the text is composed as the root config's
+  `experiment` choice rather than on its own — otherwise a generated config
+  would resolve fewer interpolations than the identical file would in Monty's
+  own tree.
+  """
+  @spec compose_yaml(String.t(), keyword()) :: {:ok, tree()} | {:error, term()}
+  def compose_yaml(text, opts \\ []) do
+    conf_dir = Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dir() end)
+
+    with {:ok, config} <- Source.load_text(text) do
+      overrides =
+        opts
+        |> Keyword.get(:overrides, %{})
+        |> Map.put("experiment", {:config, config})
+
+      with {:ok, tree} <- compose_group(conf_dir, "", "experiment", nil, overrides, 0) do
+        {:ok, Map.delete(tree, "hydra")}
       end
+    end
+  end
+
+  @doc "Composes a config from a file outside Monty's config tree."
+  @spec compose_file(Path.t(), keyword()) :: {:ok, tree()} | {:error, term()}
+  def compose_file(path, opts \\ []) do
+    with {:ok, text} <- File.read(path) do
+      compose_yaml(text, opts)
+    end
+  end
+
+  # `group` is only needed to resolve a relative default; a config composed
+  # from text has no group of its own, and a generated config names its groups
+  # absolutely, the way Monty's experiment files do.
+  defp compose_config(conf_dir, config, base_package, group, overrides, depth) do
+    with {:ok, tree, saw_self} <-
+           compose_defaults(
+             config.defaults,
+             config.body,
+             conf_dir,
+             group,
+             base_package,
+             overrides,
+             depth
+           ) do
+      {:ok, merge_body(tree, saw_self, base_package, config.body)}
     end
   end
 
@@ -95,15 +138,25 @@ defmodule Monty.Config.Composer do
        ) do
     with {:ok, child_option} <- apply_override(child_group, option, overrides) do
       child_package = resolve_package(package_spec, base)
+      child_group_path = join(group, child_group)
 
-      compose_group(
-        conf_dir,
-        join(group, child_group),
-        child_option,
-        child_package,
-        overrides,
-        depth + 1
-      )
+      case child_option do
+        # An override may carry a config that was never a file on disk — a
+        # generated experiment — in which case it is composed in place of the
+        # group option it replaces.
+        {:config, config} ->
+          compose_config(
+            conf_dir,
+            config,
+            child_package || config.package || Source.default_package(child_group_path),
+            child_group_path,
+            overrides,
+            depth + 1
+          )
+
+        option ->
+          compose_group(conf_dir, child_group_path, option, child_package, overrides, depth + 1)
+      end
     end
   end
 
@@ -114,14 +167,23 @@ defmodule Monty.Config.Composer do
   defp merge_body(tree, true, _package, _body), do: tree
   defp merge_body(tree, false, package, body), do: merge(tree, put_at(package, body))
 
-  defp apply_override(group, :missing, overrides) do
+  # An override wins over the option a defaults list names; a `??`-marked group
+  # has no option of its own, so it needs one.
+  defp apply_override(group, option, overrides) do
     case Map.fetch(overrides, String.trim_leading(group, "/")) do
-      {:ok, option} -> {:ok, option}
-      :error -> {:error, {:required_group_not_overridden, group}}
+      {:ok, {:config, _config} = override} ->
+        {:ok, override}
+
+      {:ok, override} ->
+        {:ok, override}
+
+      :error when option == :missing ->
+        {:error, {:required_group_not_overridden, group}}
+
+      :error ->
+        {:ok, option}
     end
   end
-
-  defp apply_override(_group, option, _overrides), do: {:ok, option}
 
   defp resolve_package(nil, _base), do: nil
   defp resolve_package("_global_", _base), do: []

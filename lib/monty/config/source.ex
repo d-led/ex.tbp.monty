@@ -76,8 +76,29 @@ defmodule Monty.Config.Source do
   def load(conf_dir, group, option) do
     path = path_for(conf_dir, group, option)
 
-    with {:ok, text} <- read(path),
-         {:ok, document} <- parse_yaml(text, path) do
+    with {:ok, text} <- read(path) do
+      load_text(text, path)
+    end
+  end
+
+  @doc "Loads a config file by path, wherever it lives."
+  @spec load_file(Path.t()) :: {:ok, config()} | {:error, term()}
+  def load_file(path) do
+    with {:ok, text} <- read(path) do
+      load_text(text, path)
+    end
+  end
+
+  @doc """
+  Parses config text as if it were the file at `path`.
+
+  This is what makes a generated config the same kind of thing as one Monty
+  ships: it is composed from its text, not from a struct that would have to
+  keep its own idea of what the text means.
+  """
+  @spec load_text(String.t(), Path.t()) :: {:ok, config()} | {:error, term()}
+  def load_text(text, path \\ "<generated>") do
+    with {:ok, document} <- parse_yaml(text, path) do
       {:ok, describe(document, text, path)}
     end
   end
@@ -122,7 +143,8 @@ defmodule Monty.Config.Source do
   end
 
   defp describe(document, text, path) do
-    {defaults, body} = Map.pop(document, "defaults", [])
+    {defaults, body} =
+      document |> Map.pop("defaults", []) |> then(fn {found, body} -> {found || [], body} end)
 
     %{
       package: package_header(text),
