@@ -1728,7 +1728,7 @@
     python: "frameworks/models/object_model.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.ObjectModel.GraphObjectModel",
         python: "GraphObjectModel"
       },
