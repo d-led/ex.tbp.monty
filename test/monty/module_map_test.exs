@@ -72,4 +72,66 @@ defmodule Monty.ModuleMapTest do
       end
     end
   end
+
+  describe "reading a class path out of a config" do
+    test "a Monty class resolves to the Elixir module that holds it" do
+      assert {:ok,
+              %{
+                class: "CameraSM",
+                elixir: "Monty.Frameworks.Models.SensorModules.CameraSM",
+                status: :planned
+              }} =
+               ModuleMap.resolve("tbp.monty.frameworks.models.sensor_modules.CameraSM")
+    end
+
+    test "a class this port has written comes back implemented" do
+      assert {:ok, %{status: :implemented}} = ModuleMap.resolve("tbp.monty.cmp.Message")
+    end
+
+    test "a class nobody wrote comes back unknown rather than guessed at" do
+      assert {:ok, %{status: :unknown}} =
+               ModuleMap.resolve("tbp.monty.frameworks.models.sensor_modules.NotAClass")
+
+      assert :error = ModuleMap.resolve("tbp.monty.no_such_module.Thing")
+      assert :error = ModuleMap.resolve("not.a.monty.path")
+    end
+  end
+
+  describe "regenerating the map" do
+    # The map is generated, and a generator that treats what it read as a
+    # decision makes its own output permanent. Only classes the old map
+    # actually excluded are carried; everything else is recomputed from the
+    # Python source.
+    test "a planned class is not turned into an excluded one" do
+      entries = [
+        %{
+          package: "monty",
+          python: "frameworks/models/sensor_modules.py",
+          status: :planned,
+          classes: [
+            %{
+              python: "CameraSM",
+              status: :planned,
+              elixir: "Monty.Frameworks.Models.SensorModules.CameraSM"
+            },
+            %{
+              python: "PerceptFilter",
+              status: :excluded,
+              elixir: "Monty.Frameworks.Models.SensorModules.PerceptFilter"
+            }
+          ]
+        }
+      ]
+
+      decisions = Mix.Tasks.Monty.ModuleMap.Gen.carry_decisions(entries)
+
+      assert %{
+               {"monty", "frameworks/models/sensor_modules.py"} => %{
+                 excluded_classes: ["PerceptFilter"],
+                 status: :planned
+               }
+             } =
+               decisions
+    end
+  end
 end

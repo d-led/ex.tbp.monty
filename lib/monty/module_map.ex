@@ -142,6 +142,77 @@ defmodule Monty.ModuleMap do
     }
   end
 
+  @doc """
+  Resolves a Python dotted class path to its entry in the map.
+
+  Monty's configs name classes the way Python imports them
+  (`tbp.monty.frameworks.models.sensor_modules.CameraSM`), so this is how a
+  composed config is read back as "which modules does this experiment use, and
+  are they ported?".
+
+  A class the map does not list is reported as `:unknown` rather than guessed
+  at: the map is generated from the Python source, so a missing class means the
+  target names something the generator did not see.
+  """
+  @spec resolve(String.t(), keyword()) :: {:ok, map()} | :error
+  def resolve(dotted, opts \\ []) do
+    entries = Keyword.get_lazy(opts, :map, fn -> load() end)
+
+    with {:ok, package, file, class} <- split_target(dotted),
+         {:ok, entry} <- find_entry(entries, package, file) do
+      {:ok, describe_target(entry, class)}
+    end
+  end
+
+  @doc "Whether a target resolves to a module that exists here."
+  @spec implemented?(String.t(), keyword()) :: boolean()
+  def implemented?(dotted, opts \\ []) do
+    case resolve(dotted, opts) do
+      {:ok, %{status: :implemented}} -> true
+      _planned_or_unknown -> false
+    end
+  end
+
+  defp split_target(dotted) do
+    case String.split(dotted, ".", trim: true) do
+      ["tbp", package | rest] when rest != [] ->
+        {class, path} = List.pop_at(rest, -1)
+        {:ok, package, Enum.join(path, "/") <> ".py", class}
+
+      _not_a_target ->
+        :error
+    end
+  end
+
+  defp find_entry(entries, package, file) do
+    case Enum.find(entries, &(&1.package == package and &1.python == file)) do
+      nil -> :error
+      entry -> {:ok, entry}
+    end
+  end
+
+  defp describe_target(entry, class) do
+    case Enum.find(entry.classes, &(&1.python == class)) do
+      nil ->
+        %{
+          package: entry.package,
+          python: entry.python,
+          class: class,
+          elixir: entry.elixir,
+          status: :unknown
+        }
+
+      class_entry ->
+        %{
+          package: entry.package,
+          python: entry.python,
+          class: class,
+          elixir: class_entry.elixir,
+          status: class_entry.status
+        }
+    end
+  end
+
   defp coverage_problems(package, mapped) do
     dir = Path.join(package.root.(), package.relative)
 

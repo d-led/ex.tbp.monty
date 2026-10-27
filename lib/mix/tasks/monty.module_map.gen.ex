@@ -15,6 +15,10 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
 
   Statuses survive a regeneration: an entry marked `excluded` with a reason
   stays excluded, and an entry whose module now exists becomes `implemented`.
+
+  `--reset-decisions` recomputes everything from the checkouts and carries
+  nothing over. It repairs a map whose decisions were wrong; it is not how the
+  map is normally regenerated.
   """
 
   use Mix.Task
@@ -26,13 +30,17 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
   @impl true
   def run(args) do
     {opts, _rest} =
-      OptionParser.parse!(args, strict: [source: :string, teleop_source: :string])
+      OptionParser.parse!(args,
+        strict: [source: :string, teleop_source: :string, reset_decisions: :boolean]
+      )
 
     configure_sources(opts)
 
+    decisions = if opts[:reset_decisions], do: %{}, else: read_existing()
+
     entries =
       ModuleMap.packages()
-      |> Enum.flat_map(&entries_for(&1, read_existing()))
+      |> Enum.flat_map(&entries_for(&1, decisions))
       |> Enum.sort_by(&{&1.package, &1.python})
 
     File.mkdir_p!(Path.dirname(@map_path))
@@ -129,21 +137,35 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
 
   defp read_existing do
     if File.exists?(@map_path) do
-      {entries, _binding} = Code.eval_file(@map_path)
-
-      Map.new(entries, fn entry ->
-        package = Map.get(entry, :package, "monty")
-
-        {{package, entry.python},
-         %{
-           status: entry.status,
-           reason: entry[:reason],
-           excluded_classes: Enum.map(entry.classes, & &1.python)
-         }}
-      end)
+      @map_path |> Code.eval_file() |> elem(0) |> carry_decisions()
     else
       %{}
     end
+  end
+
+  @doc """
+  The decisions a previous map made, keyed by entry.
+
+  Only what a person or an earlier run *decided* is carried: an entry that is
+  excluded, why, and which classes are excluded. Everything else is recomputed
+  from the checkout, so a module that has since been written becomes
+  `implemented` on its own.
+
+  Carrying every class as excluded — which an earlier version of this task did
+  — poisons the map: one regeneration marks all of a file's classes excluded,
+  and the next run treats that as a decision and keeps it.
+  """
+  def carry_decisions(entries) do
+    Map.new(entries, fn entry ->
+      package = Map.get(entry, :package, "monty")
+
+      {{package, entry.python},
+       %{
+         status: entry.status,
+         reason: entry[:reason],
+         excluded_classes: for(%{status: :excluded, python: class} <- entry.classes, do: class)
+       }}
+    end)
   end
 
   defp render(entries) do

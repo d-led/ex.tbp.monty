@@ -11,17 +11,17 @@
     python: "attention/attention_system.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.AttentionSystem",
         python: "AttentionSystem"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.AttentionSystem.NoopAttentionSystem",
         python: "NoopAttentionSystem"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.AttentionSystem.DefaultAttentionSystem",
         python: "DefaultAttentionSystem"
       }
@@ -35,17 +35,17 @@
     python: "attention/decay.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.Decay.VoxelGridWeightDecay",
         python: "VoxelGridWeightDecay"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.Decay.NoopDecay",
         python: "NoopDecay"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.Decay.LinearWeightDecay",
         python: "LinearWeightDecay"
       }
@@ -59,17 +59,17 @@
     python: "attention/goal_filter.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.GoalFilter",
         python: "GoalFilter"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.GoalFilter.NoopGoalFilter",
         python: "NoopGoalFilter"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.GoalFilter.HardGoalFilter",
         python: "HardGoalFilter"
       }
@@ -83,12 +83,12 @@
     python: "attention/merge.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.Merge.VoxelGridMerge",
         python: "VoxelGridMerge"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.Merge.Union",
         python: "Union"
       }
@@ -102,17 +102,17 @@
     python: "attention/telemetry.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.Telemetry.AttentionSystemTelemetry",
         python: "AttentionSystemTelemetry"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.Telemetry.NoopAttentionSystemTelemetry",
         python: "NoopAttentionSystemTelemetry"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.Telemetry.DefaultAttentionSystemTelemetry",
         python: "DefaultAttentionSystemTelemetry"
       }
@@ -126,7 +126,7 @@
     python: "attention/voxel_grid.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.VoxelGrid",
         python: "VoxelGrid"
       }
@@ -140,7 +140,7 @@
     python: "attention/weight_pooler.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Attention.WeightPooler",
         python: "WeightPooler"
       }
@@ -153,10 +153,10 @@
     package: "monty",
     python: "cmp.py",
     classes: [
-      %{status: :excluded, elixir: "Monty.Cmp.Message", python: "Message"},
-      %{status: :excluded, elixir: "Monty.Cmp.Goal", python: "Goal"},
+      %{status: :implemented, elixir: "Monty.Cmp.Message", python: "Message"},
+      %{status: :implemented, elixir: "Monty.Cmp.Goal", python: "Goal"},
       %{
-        status: :excluded,
+        status: :implemented,
         elixir: "Monty.Cmp.AttentionRegion",
         python: "AttentionRegion"
       }
@@ -202,7 +202,7 @@
     python: "context.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Context.RuntimeContext",
         python: "RuntimeContext"
       }
@@ -216,27 +216,27 @@
     python: "experiment/environment.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.Environment.Interface",
         python: "Interface"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.Environment.OneObjectPerEpisodeInterface",
         python: "OneObjectPerEpisodeInterface"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.Environment.OmniglotInterface",
         python: "OmniglotInterface"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.Environment.SaccadeOnImageInterface",
         python: "SaccadeOnImageInterface"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.Environment.SaccadeOnImageFromStreamInterface",
         python: "SaccadeOnImageFromStreamInterface"
       }
@@ -250,7 +250,7 @@
     python: "experiment/learning_module.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.LearningModule.ExperimentLearningModule",
         python: "ExperimentLearningModule"
       }
@@ -264,17 +264,17 @@
     python: "experiment/match_criteria.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.MatchCriteria.MatchCriterion",
         python: "MatchCriterion"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.MatchCriteria.AnyLMsMatch",
         python: "AnyLMsMatch"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.MatchCriteria.NamedLMsMatch",
         python: "NamedLMsMatch"
       }
@@ -288,7 +288,7 @@
     python: "experiment/monty.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.Monty.ExperimentMonty",
         python: "ExperimentMonty"
       }
@@ -302,17 +302,17 @@
     python: "experiment/motor_system.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.MotorSystem.ExperimentMotorSystem",
         python: "ExperimentMotorSystem"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.MotorSystem.ExperimentMotorPolicySelector",
         python: "ExperimentMotorPolicySelector"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.MotorSystem.ExperimentMotorPolicy",
         python: "ExperimentMotorPolicy"
       }
@@ -326,62 +326,62 @@
     python: "experiment/recognition_policy.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy.RecognitionCounter",
         python: "RecognitionCounter"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy.RecognitionResult",
         python: "RecognitionResult"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy",
         python: "RecognitionPolicy"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy.MontyIsDone",
         python: "MontyIsDone"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy.MinEvalMaxTotalSteps",
         python: "MinEvalMaxTotalSteps"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy.MaxTotalSteps",
         python: "MaxTotalSteps"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy.MaximumSteps",
         python: "MaximumSteps"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy.StepLimit",
         python: "StepLimit"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy.MinimumLMs",
         python: "MinimumLMs"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy.NaiveScan",
         python: "NaiveScan"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy.ObjectRecognition",
         python: "ObjectRecognition"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionPolicy.AnyPolicy",
         python: "AnyPolicy"
       }
@@ -395,12 +395,12 @@
     python: "experiment/recognition_status.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionStatus.RecognitionConclusion",
         python: "RecognitionConclusion"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.RecognitionStatus",
         python: "RecognitionStatus"
       }
@@ -414,17 +414,17 @@
     python: "experiment/sensor_module.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.SensorModule.ResettableSensorModule",
         python: "ResettableSensorModule"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.SensorModule.ExperimentTransform",
         python: "ExperimentTransform"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.SensorModule.ExperimentSensorModule",
         python: "ExperimentSensorModule"
       }
@@ -438,7 +438,7 @@
     python: "experiment/sensor_modules/telemetry.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Experiment.SensorModules.Telemetry.Snapshot",
         python: "Snapshot"
       }
@@ -452,17 +452,17 @@
     python: "frameworks/actions/action_samplers.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.ActionSamplers.ActionSampler",
         python: "ActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.ActionSamplers.ConstantSampler",
         python: "ConstantSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.ActionSamplers.UniformlyDistributedSampler",
         python: "UniformlyDistributedSampler"
       }
@@ -476,227 +476,227 @@
     python: "frameworks/actions/actions.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.Action",
         python: "Action"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.LookDownActionSampler",
         python: "LookDownActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.LookDownActuator",
         python: "LookDownActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.LookDown",
         python: "LookDown"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.LookUpActionSampler",
         python: "LookUpActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.LookUpActuator",
         python: "LookUpActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.LookUp",
         python: "LookUp"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.MoveForwardActionSampler",
         python: "MoveForwardActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.MoveForwardActuator",
         python: "MoveForwardActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.MoveForward",
         python: "MoveForward"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.MoveTangentiallyActionSampler",
         python: "MoveTangentiallyActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.MoveTangentiallyActuator",
         python: "MoveTangentiallyActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.MoveTangentially",
         python: "MoveTangentially"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.OrientHorizontalActionSampler",
         python: "OrientHorizontalActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.OrientHorizontalActuator",
         python: "OrientHorizontalActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.OrientHorizontal",
         python: "OrientHorizontal"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.OrientVerticalActionSampler",
         python: "OrientVerticalActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.OrientVerticalActuator",
         python: "OrientVerticalActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.OrientVertical",
         python: "OrientVertical"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetAgentPitchActionSampler",
         python: "SetAgentPitchActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetAgentPitchActuator",
         python: "SetAgentPitchActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetAgentPitch",
         python: "SetAgentPitch"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetAgentPoseActionSampler",
         python: "SetAgentPoseActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetAgentPoseActuator",
         python: "SetAgentPoseActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetAgentPose",
         python: "SetAgentPose"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetSensorPitchActionSampler",
         python: "SetSensorPitchActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetSensorPitchActuator",
         python: "SetSensorPitchActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetSensorPitch",
         python: "SetSensorPitch"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetSensorPoseActionSampler",
         python: "SetSensorPoseActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetSensorPoseActuator",
         python: "SetSensorPoseActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetSensorPose",
         python: "SetSensorPose"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetSensorRotationActionSampler",
         python: "SetSensorRotationActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetSensorRotationActuator",
         python: "SetSensorRotationActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetSensorRotation",
         python: "SetSensorRotation"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetYawActionSampler",
         python: "SetYawActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetYawActuator",
         python: "SetYawActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.SetYaw",
         python: "SetYaw"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.TurnLeftActionSampler",
         python: "TurnLeftActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.TurnLeftActuator",
         python: "TurnLeftActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.TurnLeft",
         python: "TurnLeft"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.TurnRightActionSampler",
         python: "TurnRightActionSampler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.TurnRightActuator",
         python: "TurnRightActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.TurnRight",
         python: "TurnRight"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.ActionJSONEncoder",
         python: "ActionJSONEncoder"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Actions.ActionJSONDecoder",
         python: "ActionJSONDecoder"
       }
@@ -718,7 +718,7 @@
     python: "frameworks/environment_utils/server.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.EnvironmentUtils.Server.MontyRequestHandler",
         python: "MontyRequestHandler"
       }
@@ -732,42 +732,42 @@
     python: "frameworks/environment_utils/transforms.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.TransformContext",
         python: "TransformContext"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.Transform",
         python: "Transform"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.MissingToMaxDepth",
         python: "MissingToMaxDepth"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.AddNoiseToRawDepthImage",
         python: "AddNoiseToRawDepthImage"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.GaussianSmoothing",
         python: "GaussianSmoothing"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.GaussianBlurRGB",
         python: "GaussianBlurRGB"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations",
         python: "DepthTo3DLocations"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.NoDepthSensorPresent",
         python: "NoDepthSensorPresent"
       }
@@ -781,32 +781,32 @@
     python: "frameworks/environments/environment.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.Environment.ObjectInfo",
         python: "ObjectInfo"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.Environment",
         python: "Environment"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.Environment.ObjectEnvironment",
         python: "ObjectEnvironment"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.Environment.ResettableEnvironment",
         python: "ResettableEnvironment"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.Environment.SimulatedEnvironment",
         python: "SimulatedEnvironment"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.Environment.SimulatedObjectEnvironment",
         python: "SimulatedObjectEnvironment"
       }
@@ -820,27 +820,27 @@
     python: "frameworks/environments/object_init_samplers.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.ObjectInitSamplers.MultiObjectNames",
         python: "MultiObjectNames"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.ObjectInitSamplers.ObjectInitParams",
         python: "ObjectInitParams"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.ObjectInitSamplers.Default",
         python: "Default"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.ObjectInitSamplers.Predefined",
         python: "Predefined"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.ObjectInitSamplers.RandomRotation",
         python: "RandomRotation"
       }
@@ -854,32 +854,32 @@
     python: "frameworks/environments/positioning_procedures.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.ObjectNotVisibleError",
         python: "ObjectNotVisibleError"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.PositioningProcedureResult",
         python: "PositioningProcedureResult"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.PositioningProcedure",
         python: "PositioningProcedure"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.PositioningProcedureFactory",
         python: "PositioningProcedureFactory"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.GetGoodView",
         python: "GetGoodView"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.GetGoodViewFactory",
         python: "GetGoodViewFactory"
       }
@@ -893,17 +893,17 @@
     python: "frameworks/environments/two_d_data.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.TwoDData.OmniglotEnvironment",
         python: "OmniglotEnvironment"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.TwoDData.SaccadeOnImageEnvironment",
         python: "SaccadeOnImageEnvironment"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Environments.TwoDData.SaccadeOnImageFromStreamEnvironment",
         python: "SaccadeOnImageFromStreamEnvironment"
       }
@@ -917,12 +917,12 @@
     python: "frameworks/experiments/hooks.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Experiments.Hooks.StepHook",
         python: "StepHook"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Experiments.Hooks.NoOpStepHook",
         python: "NoOpStepHook"
       }
@@ -936,7 +936,7 @@
     python: "frameworks/experiments/mode.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Experiments.Mode.ExperimentMode",
         python: "ExperimentMode"
       }
@@ -950,7 +950,7 @@
     python: "frameworks/experiments/monty_experiment.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Experiments.MontyExperiment",
         python: "MontyExperiment"
       }
@@ -964,7 +964,7 @@
     python: "frameworks/experiments/object_recognition_experiments.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Experiments.ObjectRecognitionExperiments.MontyObjectRecognitionExperiment",
         python: "MontyObjectRecognitionExperiment"
       }
@@ -978,7 +978,7 @@
     python: "frameworks/experiments/pretraining_experiments.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Experiments.PretrainingExperiments.MontySupervisedObjectPretrainingExperiment",
         python: "MontySupervisedObjectPretrainingExperiment"
       }
@@ -992,7 +992,7 @@
     python: "frameworks/experiments/profile.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Experiments.Profile.ProfileExperimentMixin",
         python: "ProfileExperimentMixin"
       }
@@ -1014,17 +1014,17 @@
     python: "frameworks/loggers/exp_logger.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.ExpLogger.LoggingCallbackHandler",
         python: "LoggingCallbackHandler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.ExpLogger.BaseMontyLogger",
         python: "BaseMontyLogger"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.ExpLogger.TestLogger",
         python: "TestLogger"
       }
@@ -1038,17 +1038,17 @@
     python: "frameworks/loggers/graph_matching_loggers.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger",
         python: "BasicGraphMatchingLogger"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers.DetailedGraphMatchingLogger",
         python: "DetailedGraphMatchingLogger"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers.SelectiveEvidenceLogger",
         python: "SelectiveEvidenceLogger"
       }
@@ -1062,17 +1062,17 @@
     python: "frameworks/loggers/monty_handlers.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.MontyHandlers.MontyHandler",
         python: "MontyHandler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.MontyHandlers.DetailedJSONHandler",
         python: "DetailedJSONHandler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.MontyHandlers.BasicCSVStatsHandler",
         python: "BasicCSVStatsHandler"
       }
@@ -1086,37 +1086,37 @@
     python: "frameworks/loggers/wandb_handlers.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.WandbHandlers.WandbWrapper",
         python: "WandbWrapper"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.WandbHandlers.WandbHandler",
         python: "WandbHandler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.WandbHandlers.BasicWandbTableStatsHandler",
         python: "BasicWandbTableStatsHandler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.WandbHandlers.DetailedWandbTableStatsHandler",
         python: "DetailedWandbTableStatsHandler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.WandbHandlers.BasicWandbChartStatsHandler",
         python: "BasicWandbChartStatsHandler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.WandbHandlers.DetailedWandbHandler",
         python: "DetailedWandbHandler"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Loggers.WandbHandlers.DetailedWandbMarkedObsHandler",
         python: "DetailedWandbMarkedObsHandler"
       }
@@ -1130,52 +1130,52 @@
     python: "frameworks/models/abstract_monty_classes.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.AbstractMontyClasses.AgentObservations",
         python: "AgentObservations"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.AbstractMontyClasses.Observations",
         python: "Observations"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.AbstractMontyClasses.RuntimeMonty",
         python: "RuntimeMonty"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.AbstractMontyClasses.Monty",
         python: "Monty"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.AbstractMontyClasses.RuntimeLearningModule",
         python: "RuntimeLearningModule"
       },
       %{
-        status: :excluded,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.AbstractMontyClasses.LearningModule",
         python: "LearningModule"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.AbstractMontyClasses.LMMemory",
         python: "LMMemory"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.AbstractMontyClasses.ObjectModel",
         python: "ObjectModel"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.AbstractMontyClasses.GoalGenerator",
         python: "GoalGenerator"
       },
       %{
-        status: :excluded,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.AbstractMontyClasses.SensorModule",
         python: "SensorModule"
       }
@@ -1189,12 +1189,12 @@
     python: "frameworks/models/buffer.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer",
         python: "FeatureAtLocationBuffer"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Buffer.BufferEncoder",
         python: "BufferEncoder"
       }
@@ -1208,12 +1208,12 @@
     python: "frameworks/models/displacement_matching.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM",
         python: "DisplacementGraphLM"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphMemory",
         python: "DisplacementGraphMemory"
       }
@@ -1227,12 +1227,12 @@
     python: "frameworks/models/evidence_matching/burst_sampling.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingTelemetry",
         python: "BurstSamplingTelemetry"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHypothesesUpdater",
         python: "BurstSamplingHypothesesUpdater"
       }
@@ -1254,12 +1254,12 @@
     python: "frameworks/models/evidence_matching/evidence_slope_tracker.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker",
         python: "EvidenceSlopeTracker"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker.HypothesesSelection",
         python: "HypothesesSelection"
       }
@@ -1273,12 +1273,12 @@
     python: "frameworks/models/evidence_matching/feature_evidence/calculator.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.FeatureEvidenceCalculator",
         python: "FeatureEvidenceCalculator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.DefaultFeatureEvidenceCalculator",
         python: "DefaultFeatureEvidenceCalculator"
       }
@@ -1292,12 +1292,12 @@
     python: "frameworks/models/evidence_matching/feature_evidence/scorer.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.FeatureEvidenceScorer",
         python: "FeatureEvidenceScorer"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.DefaultFeatureEvidenceScorer",
         python: "DefaultFeatureEvidenceScorer"
       }
@@ -1311,7 +1311,7 @@
     python: "frameworks/models/evidence_matching/features_for_matching/all_selector.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.AllSelector.AllFeaturesForMatchingSelector",
         python: "AllFeaturesForMatchingSelector"
       }
@@ -1325,12 +1325,12 @@
     python: "frameworks/models/evidence_matching/features_for_matching/selector.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.Selector.FeaturesForMatchingSelector",
         python: "FeaturesForMatchingSelector"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.Selector.DefaultFeaturesForMatchingSelector",
         python: "DefaultFeaturesForMatchingSelector"
       }
@@ -1344,7 +1344,7 @@
     python: "frameworks/models/evidence_matching/graph_memory.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.GraphMemory.EvidenceGraphMemory",
         python: "EvidenceGraphMemory"
       }
@@ -1358,7 +1358,7 @@
     python: "frameworks/models/evidence_matching/hypotheses.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.Hypotheses",
         python: "Hypotheses"
       }
@@ -1372,17 +1372,17 @@
     python: "frameworks/models/evidence_matching/hypotheses_displacer.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer.HypothesisDisplacerTelemetry",
         python: "HypothesisDisplacerTelemetry"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer",
         python: "HypothesesDisplacer"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer.DefaultHypothesesDisplacer",
         python: "DefaultHypothesesDisplacer"
       }
@@ -1396,12 +1396,12 @@
     python: "frameworks/models/evidence_matching/hypotheses_updater.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater",
         python: "HypothesesUpdater"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypothesesUpdater",
         python: "DefaultHypothesesUpdater"
       }
@@ -1415,12 +1415,12 @@
     python: "frameworks/models/evidence_matching/learning_module.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.LearningModule.InvalidEvidenceThresholdConfig",
         python: "InvalidEvidenceThresholdConfig"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM",
         python: "EvidenceGraphLM"
       }
@@ -1434,7 +1434,7 @@
     python: "frameworks/models/evidence_matching/model.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching",
         python: "MontyForEvidenceGraphMatching"
       }
@@ -1448,12 +1448,12 @@
     python: "frameworks/models/feature_location_matching.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM",
         python: "FeatureGraphLM"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphMemory",
         python: "FeatureGraphMemory"
       }
@@ -1467,17 +1467,17 @@
     python: "frameworks/models/goal_generation.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.GoalGeneration.ParentLMNotProvided",
         python: "ParentLMNotProvided"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator",
         python: "GraphGoalGenerator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator",
         python: "EvidenceGoalGenerator"
       }
@@ -1491,17 +1491,17 @@
     python: "frameworks/models/graph_matching.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.GraphMatching.MontyForGraphMatching",
         python: "MontyForGraphMatching"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.GraphMatching.GraphLM",
         python: "GraphLM"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.GraphMatching.GraphMemory",
         python: "GraphMemory"
       }
@@ -1515,12 +1515,12 @@
     python: "frameworks/models/mixins/no_reset_evidence.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Mixins.NoResetEvidence.HypothesesUpdaterGraphTelemetry",
         python: "HypothesesUpdaterGraphTelemetry"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Mixins.NoResetEvidence.TheoreticalLimitLMLoggingMixin",
         python: "TheoreticalLimitLMLoggingMixin"
       }
@@ -1534,7 +1534,7 @@
     python: "frameworks/models/monty_base.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MontyBase",
         python: "MontyBase"
       }
@@ -1548,72 +1548,72 @@
     python: "frameworks/models/motor_policies.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.NoGoalProvided",
         python: "NoGoalProvided"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.SurfacePolicyTelemetry",
         python: "SurfacePolicyTelemetry"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.PolicyStatus",
         python: "PolicyStatus"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult",
         python: "MotorPolicyResult"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.RuntimeMotorPolicy",
         python: "RuntimeMotorPolicy"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.MotorPolicy",
         python: "MotorPolicy"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.BasePolicy",
         python: "BasePolicy"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.InformedPolicyRandomWalk",
         python: "InformedPolicyRandomWalk"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.PredefinedPolicy",
         python: "PredefinedPolicy"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.JumpToGoal",
         python: "JumpToGoal"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.InformedPolicy",
         python: "InformedPolicy"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.NaiveScanPolicy",
         python: "NaiveScanPolicy"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.SurfacePolicy",
         python: "SurfacePolicy"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed",
         python: "SurfacePolicyCurvatureInformed"
       }
@@ -1627,22 +1627,22 @@
     python: "frameworks/models/motor_policy_selectors.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicySelectors.RuntimeMotorPolicySelector",
         python: "RuntimeMotorPolicySelector"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicySelectors.MotorPolicySelector",
         python: "MotorPolicySelector"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicySelectors.SinglePolicySelector",
         python: "SinglePolicySelector"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorPolicySelectors.DistantPolicySelector",
         python: "DistantPolicySelector"
       }
@@ -1656,17 +1656,17 @@
     python: "frameworks/models/motor_system.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorSystem.SurfacePolicyActionDetailsTelemetry",
         python: "SurfacePolicyActionDetailsTelemetry"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorSystem.RuntimeMotorSystem",
         python: "RuntimeMotorSystem"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorSystem",
         python: "MotorSystem"
       }
@@ -1680,22 +1680,22 @@
     python: "frameworks/models/motor_system_state.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorSystemState.SensorState",
         python: "SensorState"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorSystemState.AgentState",
         python: "AgentState"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorSystemState.ProprioceptiveState",
         python: "ProprioceptiveState"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.MotorSystemState",
         python: "MotorSystemState"
       }
@@ -1709,12 +1709,12 @@
     python: "frameworks/models/no_reset_evidence_matching.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.NoResetEvidenceMatching.MontyForNoResetEvidenceGraphMatching",
         python: "MontyForNoResetEvidenceGraphMatching"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM",
         python: "NoResetEvidenceGraphLM"
       }
@@ -1728,17 +1728,17 @@
     python: "frameworks/models/object_model.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.ObjectModel.GraphObjectModel",
         python: "GraphObjectModel"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.ObjectModel.GridTooSmallError",
         python: "GridTooSmallError"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.ObjectModel.GridObjectModel",
         python: "GridObjectModel"
       }
@@ -1752,12 +1752,12 @@
     python: "frameworks/models/salience/motor_policy.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.MotorPolicy.GoalCollocatedWithSensor",
         python: "GoalCollocatedWithSensor"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.MotorPolicy.LookAtGoal",
         python: "LookAtGoal"
       }
@@ -1771,7 +1771,7 @@
     python: "frameworks/models/salience/on_object_observation.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.OnObjectObservation",
         python: "OnObjectObservation"
       }
@@ -1785,22 +1785,22 @@
     python: "frameworks/models/salience/return_inhibitor.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayKernel",
         python: "DecayKernel"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayKernelFactory",
         python: "DecayKernelFactory"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayField",
         python: "DecayField"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor",
         python: "ReturnInhibitor"
       }
@@ -1814,7 +1814,7 @@
     python: "frameworks/models/salience/segmentation/slic_merge.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Segmentation.SlicMerge",
         python: "SlicMerge"
       }
@@ -1828,7 +1828,7 @@
     python: "frameworks/models/salience/segmentation/strategy.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Segmentation.Strategy.SegmentationStrategy",
         python: "SegmentationStrategy"
       }
@@ -1842,7 +1842,7 @@
     python: "frameworks/models/salience/sensor_module.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.SensorModule.SalienceSM",
         python: "SalienceSM"
       }
@@ -1856,7 +1856,7 @@
     python: "frameworks/models/salience/strategies/protocol.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Protocol.SalienceStrategy",
         python: "SalienceStrategy"
       }
@@ -1870,7 +1870,7 @@
     python: "frameworks/models/salience/strategies/uniform.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Uniform",
         python: "Uniform"
       }
@@ -1884,7 +1884,7 @@
     python: "frameworks/models/salience/strategies/vocus2/images.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images.ColorSpaceConverter",
         python: "ColorSpaceConverter"
       }
@@ -1898,17 +1898,17 @@
     python: "frameworks/models/salience/strategies/vocus2/pyramids.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.Pyramid",
         python: "Pyramid"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.PyramidCombine",
         python: "PyramidCombine"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.PyramidCollapse",
         python: "PyramidCollapse"
       }
@@ -1922,62 +1922,62 @@
     python: "frameworks/models/salience/strategies/vocus2/vocus2.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.MapCombine",
         python: "MapCombine"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.WeightedSum",
         python: "WeightedSum"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.WeightedMean",
         python: "WeightedMean"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.OperatingLimits",
         python: "OperatingLimits"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.NoOperatingLimits",
         python: "NoOperatingLimits"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.SafeOperatingLimits",
         python: "SafeOperatingLimits"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalience",
         python: "ColorChannelSalience"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.DepthSalience",
         python: "DepthSalience"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.OrientationSalience",
         python: "OrientationSalience"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Vocus2SalienceConfig",
         python: "Vocus2SalienceConfig"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Normalize",
         python: "Normalize"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2",
         python: "Vocus2"
       }
@@ -1991,17 +1991,17 @@
     python: "frameworks/models/salience/telemetry.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Telemetry.SalienceSMTelemetry",
         python: "SalienceSMTelemetry"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Telemetry.NoopSalienceSMTelemetry",
         python: "NoopSalienceSMTelemetry"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.Salience.Telemetry.DetailedSalienceSMTelemetry",
         python: "DetailedSalienceSMTelemetry"
       }
@@ -2015,52 +2015,52 @@
     python: "frameworks/models/sensor_modules.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.SensorModules.SnapshotTelemetry",
         python: "SnapshotTelemetry"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.SensorModules.SurfaceNormalMethod",
         python: "SurfaceNormalMethod"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.SensorModules.ObservationProcessor",
         python: "ObservationProcessor"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.SensorModules.MessageNoise",
         python: "MessageNoise"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.SensorModules.NoMessageNoise",
         python: "NoMessageNoise"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.SensorModules.DefaultMessageNoise",
         python: "DefaultMessageNoise"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.SensorModules.CameraSM",
         python: "CameraSM"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.SensorModules.PerceptFilter",
         python: "PerceptFilter"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.SensorModules.PassthroughPerceptFilter",
         python: "PassthroughPerceptFilter"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.SensorModules.FeatureChangeFilter",
         python: "FeatureChangeFilter"
       }
@@ -2074,7 +2074,7 @@
     python: "frameworks/models/two_d_sensor_module.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Models.TwoDSensorModule",
         python: "TwoDSensorModule"
       }
@@ -2112,12 +2112,12 @@
     python: "frameworks/sensors.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Sensors.Resolution2D",
         python: "Resolution2D"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Sensors.SensorConfig",
         python: "SensorConfig"
       }
@@ -2139,7 +2139,7 @@
     python: "frameworks/utils/dataclass_utils.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Utils.DataclassUtils.Dataclass",
         python: "Dataclass"
       }
@@ -2153,17 +2153,17 @@
     python: "frameworks/utils/edge_detection.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Utils.EdgeDetection.StructureTensor",
         python: "StructureTensor"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Utils.EdgeDetection.EdgeFeatures",
         python: "EdgeFeatures"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Utils.EdgeDetection.EdgeDetector",
         python: "EdgeDetector"
       }
@@ -2185,7 +2185,7 @@
     python: "frameworks/utils/live_plotter.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Utils.LivePlotter",
         python: "LivePlotter"
       }
@@ -2207,7 +2207,7 @@
     python: "frameworks/utils/object_model_utils.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Utils.ObjectModelUtils.NumpyGraph",
         python: "NumpyGraph"
       }
@@ -2237,7 +2237,7 @@
     python: "frameworks/utils/plot_utils_dev.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Utils.PlotUtilsDev.PolicyPlot",
         python: "PolicyPlot"
       }
@@ -2267,7 +2267,7 @@
     python: "frameworks/utils/spatial_arithmetics.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Frameworks.Utils.SpatialArithmetics.TangentFrame",
         python: "TangentFrame"
       }
@@ -2280,23 +2280,19 @@
     package: "monty",
     python: "geometry.py",
     classes: [
+      %{status: :planned, elixir: "Monty.Geometry.Rotation", python: "Rotation"},
       %{
-        status: :excluded,
-        elixir: "Monty.Geometry.Rotation",
-        python: "Rotation"
-      },
-      %{
-        status: :excluded,
+        status: :implemented,
         elixir: "Monty.Geometry.SurfacePoseVectors",
         python: "SurfacePoseVectors"
       },
       %{
-        status: :excluded,
+        status: :implemented,
         elixir: "Monty.Geometry.OrientationMatrix",
         python: "OrientationMatrix"
       },
       %{
-        status: :excluded,
+        status: :implemented,
         elixir: "Monty.Geometry.GazeDirection",
         python: "GazeDirection"
       }
@@ -2326,7 +2322,7 @@
     python: "memento.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Memento.Snapshotable",
         python: "Snapshotable"
       }
@@ -2340,7 +2336,7 @@
     python: "observations.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Observations.SensorObservation",
         python: "SensorObservation"
       }
@@ -2370,27 +2366,27 @@
     python: "sensor_modules/sensor_module.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.SensorModules.SensorModule.Payload",
         python: "Payload"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.SensorModules.SensorModule.TransformContext",
         python: "TransformContext"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.SensorModules.SensorModule.Transform",
         python: "Transform"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.SensorModules.SensorModule.RuntimeSensorModule",
         python: "RuntimeSensorModule"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.SensorModules.SensorModule",
         python: "SensorModule"
       }
@@ -2404,57 +2400,57 @@
     python: "simulators/habitat/actions.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actions.ActuationVecSpec",
         python: "ActuationVecSpec"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actions.SetYaw",
         python: "SetYaw"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actions.SetSensorPitch",
         python: "SetSensorPitch"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actions.SetAgentPitch",
         python: "SetAgentPitch"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actions.SetSensorPose",
         python: "SetSensorPose"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actions.SetSensorRotation",
         python: "SetSensorRotation"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actions.SetAgentPose",
         python: "SetAgentPose"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actions.MoveForward",
         python: "MoveForward"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actions.MoveTangentially",
         python: "MoveTangentially"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actions.OrientHorizontal",
         python: "OrientHorizontal"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actions.OrientVertical",
         python: "OrientVertical"
       }
@@ -2468,22 +2464,22 @@
     python: "simulators/habitat/actuator.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actuator.HabitatActuatorRequirements",
         python: "HabitatActuatorRequirements"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actuator.HabitatActuator",
         python: "HabitatActuator"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actuator.InvalidActionName",
         python: "InvalidActionName"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Actuator.NoActionParameters",
         python: "NoActionParameters"
       }
@@ -2497,17 +2493,17 @@
     python: "simulators/habitat/agents.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Agents.HabitatAgent",
         python: "HabitatAgent"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Agents.MultiSensorAgent",
         python: "MultiSensorAgent"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Agents.SingleSensorAgent",
         python: "SingleSensorAgent"
       }
@@ -2521,17 +2517,17 @@
     python: "simulators/habitat/environment.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Environment.HabitatAgentArgs",
         python: "HabitatAgentArgs"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Environment.AgentConfig",
         python: "AgentConfig"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Environment.HabitatEnvironment",
         python: "HabitatEnvironment"
       }
@@ -2545,17 +2541,17 @@
     python: "simulators/habitat/sensors.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Sensors.SensorConfig",
         python: "SensorConfig"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Sensors.RGBDSensorConfig",
         python: "RGBDSensorConfig"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Sensors.SemanticSensorConfig",
         python: "SemanticSensorConfig"
       }
@@ -2569,7 +2565,7 @@
     python: "simulators/habitat/simulator.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Habitat.Simulator.HabitatSim",
         python: "HabitatSim"
       }
@@ -2583,32 +2579,32 @@
     python: "simulators/mujoco/agents.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Agents.Axis",
         python: "Axis"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Agents.Agent",
         python: "Agent"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Agents.Embodiment",
         python: "Embodiment"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Agents.NoopAgent",
         python: "NoopAgent"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Agents.DistantAgent",
         python: "DistantAgent"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Agents.SurfaceAgent",
         python: "SurfaceAgent"
       }
@@ -2622,17 +2618,17 @@
     python: "simulators/mujoco/objects.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Objects.InvalidObjectMetadata",
         python: "InvalidObjectMetadata"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Objects.ObjectMetadata",
         python: "ObjectMetadata"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Objects.ObjectMetadataDecoder",
         python: "ObjectMetadataDecoder"
       }
@@ -2646,42 +2642,42 @@
     python: "simulators/mujoco/simulator.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Simulator.ModelMetadata",
         python: "ModelMetadata"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Simulator.MuJoCoAgentFactory",
         python: "MuJoCoAgentFactory"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Simulator.UnknownObjectType",
         python: "UnknownObjectType"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Simulator.MissingObjectModel",
         python: "MissingObjectModel"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Simulator.MissingObjectTexture",
         python: "MissingObjectTexture"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Simulator.DataPathNotConfigured",
         python: "DataPathNotConfigured"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Simulator.ActuateMethodMissing",
         python: "ActuateMethodMissing"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator",
         python: "MuJoCoSimulator"
       }
@@ -2695,7 +2691,7 @@
     python: "simulators/tacto/agents.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Tacto.Agents.TactoFingerAgent",
         python: "TactoFingerAgent"
       }
@@ -2709,32 +2705,32 @@
     python: "simulators/tacto/config.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Tacto.Config.Gel",
         python: "Gel"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Tacto.Config.Camera",
         python: "Camera"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Tacto.Config.Lights",
         python: "Lights"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Tacto.Config.Noise",
         python: "Noise"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Tacto.Config.Force",
         python: "Force"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Tacto.Config.TactoSensorSpec",
         python: "TactoSensorSpec"
       }
@@ -2748,7 +2744,7 @@
     python: "simulators/tacto/sensors.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Simulators.Tacto.Sensors.TactoSensor",
         python: "TactoSensor"
       }
@@ -2762,7 +2758,7 @@
     python: "telemetry/formatters.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Telemetry.Formatters.JsonFormatter",
         python: "JsonFormatter"
       }
@@ -2776,7 +2772,7 @@
     python: "telemetry/publishers.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Telemetry.Publishers.TelemetryPublisher",
         python: "TelemetryPublisher"
       }
@@ -2790,12 +2786,12 @@
     python: "telemetry/schemas.py",
     classes: [
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Telemetry.Schemas.TelemetrySchema",
         python: "TelemetrySchema"
       },
       %{
-        status: :excluded,
+        status: :planned,
         elixir: "Monty.Telemetry.Schemas.TelemetryEvent",
         python: "TelemetryEvent"
       }
