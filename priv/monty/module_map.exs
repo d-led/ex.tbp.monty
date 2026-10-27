@@ -2261,13 +2261,13 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Utils.SpatialArithmetics",
     package: "monty",
     python: "frameworks/utils/spatial_arithmetics.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Utils.SpatialArithmetics.TangentFrame",
         python: "TangentFrame"
       }
@@ -2280,7 +2280,11 @@
     package: "monty",
     python: "geometry.py",
     classes: [
-      %{status: :planned, elixir: "Monty.Geometry.Rotation", python: "Rotation"},
+      %{
+        status: :implemented,
+        elixir: "Monty.Geometry.Rotation",
+        python: "Rotation"
+      },
       %{
         status: :implemented,
         elixir: "Monty.Geometry.SurfacePoseVectors",
@@ -2308,7 +2312,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Math",
     package: "monty",
     python: "math.py",
