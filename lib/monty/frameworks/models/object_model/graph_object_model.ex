@@ -179,12 +179,10 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   """
   @spec find_nearest_neighbors(t(), [location()], pos_integer()) :: [[non_neg_integer()]]
   def find_nearest_neighbors(
-        %__MODULE__{graph: %{pos: positions}} = model,
+        %__MODULE__{graph: %{pos: positions}},
         search_locations,
         count
       ) do
-    _ = model
-
     count = min(count, length(positions))
 
     Enum.map(search_locations, fn search_location ->
