@@ -12,8 +12,9 @@ mix phx.server
 ```
 
 Tests need the same database; `mix test` creates and migrates it. Config tests
-need a Monty checkout (`MONTY_SOURCE`, default `../monty-orig`); without one
-they are skipped, not silently passed.
+need a Monty checkout (`MONTY_SOURCE`, default `../monty-orig`), and the module
+contract needs both checkouts (`MONTY_SOURCE` and `TELEOP_SOURCE`, default
+`../tbp.teleop`); without one they fail rather than pass quietly.
 
 ## Invariants
 

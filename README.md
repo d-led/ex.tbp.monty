@@ -26,7 +26,7 @@ hypothesis evidence and the vote telemetry as they happen.
 | Phoenix app, Postgres/Ecto/Oban, quality gates, release tooling | done |
 | `Monty.Cmp` — message, goal, attention region, wire form | done |
 | `Monty.Config` — Hydra composition, resolvers, snapshot parity | done (103/103) |
-| `Monty.ModuleMap` — the module contract and its verification | done (124 modules, 2 implemented) |
+| `Monty.ModuleMap` — the module contract and its verification | done (131 modules: Monty + teleop, 3 implemented) |
 | `Monty.Runtime` — one process per sensor and learning module, step barriers, vote rounds with deadlines | done |
 | Synthetic environment and `/runs/demo` live run view | done |
 | Evidence matching, motor policies, MuJoCo bridge, config editor | planned |
@@ -43,6 +43,7 @@ Monty's configs are read from a checkout of `tbp.monty`:
 
 ```bash
 export MONTY_SOURCE=../monty-orig   # default; any tbp.monty checkout works
+export TELEOP_SOURCE=../tbp.teleop # default; the teleop tool being replaced
 ```
 
 ## Quality gates

@@ -33,13 +33,37 @@ with two collapses:
 The actor layer is the one addition: `Monty.Runtime.*` has no Python
 counterpart, because in Python the loop itself is the runtime.
 
+## The second package: `tbp.teleop`
+
+Teleop is the real-time GUI and teleoperation tool for Monty (matplotlib
+panels, buttons, sliders, a live plotter). The same recognisability rule
+applies with its own namespace:
+
+| Python | Elixir |
+| --- | --- |
+| `src/tbp/teleop/controls.py::Controls` | `Teleop.Controls.Controls` |
+| `src/tbp/teleop/panels.py::Panel` | `Teleop.Panels.Panel` |
+| `src/tbp/teleop/plotter.py::Plotter` | `Teleop.Plotter.Plotter` |
+| `src/tbp/teleop/live_plotter.py::LivePlotter` | `Teleop.LivePlotter.LivePlotter` |
+| `src/tbp/teleop/policies.py::...` | `Teleop.Policies....` |
+| `src/tbp/teleop/helpers.py::...` | `Teleop.Helpers....` |
+| `src/tbp/teleop/default.py::...` | `Teleop.Default....` |
+
+`tbp.teleop` is MIT-licensed like Monty; the point of the namespace is that a
+teleop developer can find their module here without a translation table.
+
+How each part is meant to land in a browser is a separate decision, made in
+`docs/architecture.md`: the matplotlib figure becomes LiveView components, a
+`StepHook` stays a hook, and the mouse/keyboard controls become LiveView
+events. The module map records *where* the logic lives, not how it is drawn.
+
 ## The map
 
-`priv/monty/module_map.exs` is generated from a checkout:
+`priv/monty/module_map.exs` is generated from the checkouts:
 
 ```bash
-mix monty.module_map.gen            # writes the file
-mix monty.module_map.verify         # fails on drift
+mix monty.module_map.gen             # writes the file (both packages)
+mix monty.module_map.verify          # fails on drift
 ```
 
 Each entry carries the Python path, the Elixir module, a status
@@ -50,8 +74,9 @@ verifier fails when:
 * an `implemented` entry points at a module that does not exist;
 * an `excluded` entry has no reason.
 
-Current state: 124 modules — 2 implemented, 118 planned, 4 excluded (Hydra's own
-tooling, superseded by `Monty.Config`).
+Current state: 131 modules — 3 implemented, 124 planned, 4 excluded (Hydra's own
+tooling, superseded by `Monty.Config`); 124 come from `tbp/monty` and 7 from
+`tbp/teleop`.
 
 The generated file's counts are the honest progress bar for the port: the UI
 will show per-experiment how much of the config it needs is already
