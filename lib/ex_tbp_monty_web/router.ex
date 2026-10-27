@@ -31,8 +31,15 @@ defmodule ExTbpMontyWeb.Router do
   scope "/", ExTbpMontyWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    # The studio is the application: the first thing you see is the list of
+    # experiments you can open, build or run.
+    live "/", ExperimentsLive, :index
+    live "/build", BuildLive, :new
+    # A glob: Monty names experiments by path (`tutorial/first_experiment`).
+    live "/experiments/*name", ExperimentLive, :show
     live "/runs/demo", RunsLive, :demo
+    live "/runs", RunHistoryLive, :index
+    live "/runs/:id", RunHistoryLive, :show
     live "/prerequisites", PrerequisitesLive, :index
   end
 

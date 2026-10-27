@@ -35,35 +35,30 @@ defmodule ExTbpMontyWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
-        </a>
-      </div>
-      <div class="flex-none">
-        <ul class="flex px-1 space-x-4 items-center">
-          <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
-          </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
-          </li>
-          <li>
-            <.theme_toggle />
-          </li>
-          <li>
-            <a href="https://phoenix.hexdocs.pm/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
-        </ul>
+    <header class="border-b border-base-300 bg-base-100/80 backdrop-blur">
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 py-2 sm:px-6 lg:px-8">
+        <.link navigate={~p"/"} class="flex items-center gap-2 rounded-field px-1 py-1">
+          <span class="grid size-8 place-items-center rounded-field bg-primary/15 text-primary">
+            <.icon name="hero-cpu-chip-mini" class="size-5" />
+          </span>
+          <span class="text-sm font-semibold tracking-tight">Monty on the BEAM</span>
+        </.link>
+
+        <nav class="ms-auto flex flex-wrap items-center gap-1">
+          <.nav_link navigate={~p"/"} label="Experiments" icon="hero-beaker-mini" />
+          <.nav_link navigate={~p"/build"} label="Build" icon="hero-wrench-screwdriver-mini" />
+          <.nav_link
+            navigate={~p"/prerequisites"}
+            label="Prerequisites"
+            icon="hero-arrow-down-tray-mini"
+          />
+          <.nav_link navigate={~p"/runs/demo"} label="Runtime" icon="hero-play-mini" />
+        </nav>
       </div>
     </header>
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
+    <main class="px-4 py-6 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-6xl space-y-6">
         {render_slot(@inner_block)}
       </div>
     </main>
@@ -122,39 +117,18 @@ defmodule ExTbpMontyWeb.Layouts do
   end
 
   @doc """
-  Provides dark vs light theme toggle based on themes defined in app.css.
-
-  See <head> in root.html.heex which applies the theme before page load.
+  One item in the application bar.
   """
-  def theme_toggle(assigns) do
+  attr :navigate, :string, required: true
+  attr :label, :string, required: true
+  attr :icon, :string, required: true
+
+  def nav_link(assigns) do
     ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 [[data-theme-source=system]_&]:!left-0 transition-[left]" />
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
-      >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="light"
-      >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="dark"
-      >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-    </div>
+    <.link navigate={@navigate} class="btn btn-ghost btn-sm gap-1.5 font-normal">
+      <.icon name={@icon} class="size-4 opacity-70" />
+      {@label}
+    </.link>
     """
   end
 end

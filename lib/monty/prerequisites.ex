@@ -44,6 +44,20 @@ defmodule Monty.Prerequisites do
   @spec target_path(prerequisite()) :: Path.t()
   def target_path(%{root: root, target: target}), do: Path.join(root_path(root), target)
 
+  @doc """
+  The directory an environment variable points at, with Monty's default.
+
+  Monty's tooling reads the same three variables with the same defaults, so a
+  shell that sets none of them still finds files where Monty expects them.
+  """
+  @spec root_default(String.t()) :: Path.t()
+  def root_default("MONTY_DATA"), do: Path.expand("~/tbp/data")
+
+  def root_default("MONTY_MODELS"),
+    do: Path.expand("~/tbp/results/monty/pretrained_models")
+
+  def root_default("MONTY_LOGS"), do: Path.expand("~/tbp/results/monty/projects")
+
   @doc "The directory an environment variable points at, with Monty's default."
   @spec root_path(String.t()) :: Path.t()
   def root_path("MONTY_DATA"), do: env_path("MONTY_DATA", "~/tbp/data")
