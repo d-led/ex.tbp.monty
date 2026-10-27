@@ -9,16 +9,24 @@ defmodule Monty.Studio.Diagram do
   the module sits between them" is an assertion, not a matter of taste — and it
   keeps the template to a `for` loop over boxes and lines.
 
-  Coordinates are in SVG user units. The columns are fixed width, so a wider
-  diagram is a wider canvas rather than a smaller font.
+  Boxes are sized from the text they hold, in three fixed columns: a label that
+  does not fit is a diagram that lies, so a long class name makes a wider box
+  rather than an ellipsis. Coordinates are SVG user units, which is why the
+  arithmetic is per-character: there is no font metrics here, only a budget.
   """
 
   alias Monty.Studio.Setup
 
-  @node_width 176
-  @node_height 40
-  @column_gap 88
+  @character_width 6.1
+  @padding 20
+  @min_node_width 176
+  @max_node_width 300
+  @node_height 42
+  @note_height 14
+  @column_gap 72
   @row_gap 12
+  @environment_gap 42
+  @bus_gutter 22
   @margin 24
 
   defstruct width: 0, height: 0, nodes: [], edges: []
@@ -30,6 +38,7 @@ defmodule Monty.Studio.Diagram do
           kind: kind(),
           label: String.t(),
           detail: String.t() | nil,
+          note: String.t() | nil,
           status: atom() | nil,
           x: number(),
           y: number(),
@@ -40,11 +49,12 @@ defmodule Monty.Studio.Diagram do
   @type edge :: %{
           from: String.t(),
           to: String.t(),
-          kind: :sensor_input | :hierarchy | :vote | :goal,
+          kind: :percept | :sensor_input | :hierarchy | :vote | :goal,
           x1: number(),
           y1: number(),
           x2: number(),
-          y2: number()
+          y2: number(),
+          via: [{number(), number()}]
         }
 
   @type t :: %__MODULE__{
@@ -57,31 +67,34 @@ defmodule Monty.Studio.Diagram do
   @doc "Lays out an experiment: environment on top, sensors, modules, motor."
   @spec new(Setup.t()) :: t()
   def new(%Setup{} = setup) do
-    environment = place_environment(environment_node(setup))
-    sensors = column(setup.sensors, :sensor, &sensor_node/1)
-    learning_modules = column(setup.learning_modules, :learning_module, &learning_module_node/1)
-    motor = motor_node(setup)
     linked = MapSet.new(for %{from: {:sensor, id}} <- setup.connections, do: id)
-    sensors = Enum.map(sensors, &mark_linked(&1, linked))
 
-    top = column_top(environment)
+    sensors = setup.sensors |> Enum.map(&sensor_node(&1, linked)) |> column(:sensor)
 
-    tallest =
-      [sensors, learning_modules, motor] |> Enum.map(&stack_height/1) |> Enum.max(fn -> 0 end)
+    learning_modules =
+      setup.learning_modules |> Enum.map(&learning_module_node/1) |> column(:learning_module)
 
-    sensors = place(sensors, 0, top, tallest)
-    learning_modules = place(learning_modules, 1, top, tallest)
-    motor = place(motor, 2, top, tallest)
+    motor = setup |> motor_nodes() |> column(:motor)
 
-    nodes = Enum.reject([environment | sensors ++ learning_modules ++ motor], &is_nil/1)
+    # The world is the thing being looked at, so it belongs over the sensors
+    # that look at it rather than in the top-left corner of an empty shelf.
+    top = @margin + @node_height + @environment_gap
+    columns = [sensors, learning_modules, motor]
+    tallest = columns |> Enum.map(&stack_height/1) |> Enum.max(fn -> 0 end)
+    positioned = place_columns(columns, top, tallest)
 
-    edges = edges(setup.connections, nodes) ++ goal_edges(setup, nodes)
+    environment =
+      setup |> environment_node() |> place_environment(@margin, column_width(sensors))
+
+    nodes = Enum.reject([environment | List.flatten(positioned)], &is_nil/1)
 
     %__MODULE__{
-      width: width(nodes),
-      height: height(nodes),
+      width: extent(nodes, &(&1.x + &1.width)),
+      height: extent(nodes, &(&1.y + &1.height)),
       nodes: nodes,
-      edges: edges
+      edges:
+        edges(setup.connections, nodes) ++
+          percept_edges(setup, nodes) ++ goal_edges(setup, nodes)
     }
   end
 
@@ -93,6 +106,8 @@ defmodule Monty.Studio.Diagram do
   @spec nodes(t(), kind()) :: [diagram_node()]
   def nodes(%__MODULE__{nodes: nodes}, kind), do: Enum.filter(nodes, &(&1.kind == kind))
 
+  # -- what the boxes say ----------------------------------------------------
+
   defp environment_node(%Setup{environment: nil}), do: nil
 
   defp environment_node(%Setup{environment: environment}) do
@@ -101,11 +116,8 @@ defmodule Monty.Studio.Diagram do
       kind: :environment,
       label: module_label(environment.module, "environment"),
       detail: environment_detail(environment),
-      status: environment.module && environment.module.status,
-      width: @node_width * 2,
-      height: @node_height,
-      x: 0,
-      y: 0
+      note: nil,
+      status: environment.module && environment.module.status
     }
   end
 
@@ -116,27 +128,18 @@ defmodule Monty.Studio.Diagram do
     end
   end
 
-  defp sensor_node(sensor) do
+  defp sensor_node(sensor, linked) do
     %{
       id: sensor.id,
       kind: :sensor,
       label: sensor.id,
       detail: module_label(sensor.module, "sensor module"),
+      # A sensor that feeds no learning module is not an error — a view finder
+      # is there for the motor policies — but it must not look like a missing
+      # arrow, so the box says so where it cannot be truncated away.
+      note: if(MapSet.member?(linked, sensor.id), do: nil, else: "no percept input"),
       status: sensor.module && sensor.module.status
     }
-  end
-
-  # A sensor that feeds no learning module is not an error — a view finder is
-  # there for the motor policies — but it does look like a missing arrow, so it
-  # says so on the box instead of leaving the reader to wonder.
-  defp mark_linked(node, linked) do
-    if MapSet.member?(linked, node.id) do
-      Map.put(node, :linked?, true)
-    else
-      node
-      |> Map.put(:linked?, false)
-      |> Map.put(:detail, (node.detail || "") <> " · no percept input")
-    end
   end
 
   defp learning_module_node(learning_module) do
@@ -145,13 +148,14 @@ defmodule Monty.Studio.Diagram do
       kind: :learning_module,
       label: learning_module.id,
       detail: module_label(learning_module.module, "learning module"),
+      note: nil,
       status: learning_module.module && learning_module.module.status
     }
   end
 
-  defp motor_node(%Setup{motor_system: nil}), do: []
+  defp motor_nodes(%Setup{motor_system: nil}), do: []
 
-  defp motor_node(%Setup{motor_system: motor}) do
+  defp motor_nodes(%Setup{motor_system: motor}) do
     [
       %{
         id: "motor_system",
@@ -161,9 +165,8 @@ defmodule Monty.Studio.Diagram do
           Enum.map_join(motor.policies, ", ", fn {_name, policy} ->
             module_label(policy, "policy")
           end),
-        status: motor.module && motor.module.status,
-        width: @node_width,
-        height: @node_height
+        note: nil,
+        status: motor.module && motor.module.status
       }
     ]
   end
@@ -172,40 +175,76 @@ defmodule Monty.Studio.Diagram do
   defp module_label(%{class: nil}, fallback), do: fallback
   defp module_label(%{class: class}, _fallback), do: class
 
-  # A column is stacked, then centred against the tallest column: with two
-  # sensors and one learning module the module belongs between them, not level
-  # with the first sensor.
-  defp column(entries, kind, describe) do
-    entries
-    |> Enum.map(describe)
-    |> Enum.map(fn node ->
-      Map.merge(node, %{kind: kind, x: 0, y: 0, width: @node_width, height: @node_height})
-    end)
+  # -- geometry --------------------------------------------------------------
+
+  defp column(nodes, kind) do
+    width = column_width(nodes)
+    height = if Enum.any?(nodes, & &1.note), do: @node_height + @note_height, else: @node_height
+
+    Enum.map(nodes, &Map.merge(&1, %{kind: kind, width: width, height: height, x: 0, y: 0}))
   end
 
-  defp place_environment(nil), do: nil
-  defp place_environment(node), do: %{node | x: @margin, y: @margin}
-
-  defp place([], _index, _top, _tallest), do: []
-
-  defp place(nodes, index, top, tallest) do
-    start = top + (tallest - stack_height(nodes)) / 2
-
+  # One width per column, from the widest label in it: two sensors in a column
+  # that disagree about their size is noise, not information.
+  defp column_width(nodes) do
     nodes
-    |> Enum.with_index()
-    |> Enum.map(fn {node, row} ->
-      Map.merge(node, %{
-        x: @margin + index * (@node_width + @column_gap),
-        y: start + row * (@node_height + @row_gap)
-      })
+    |> Enum.flat_map(fn node -> [node.label, node.detail, node.note] end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(&text_width/1)
+    |> Enum.max(fn -> 0 end)
+    |> max(@min_node_width)
+    |> min(@max_node_width)
+  end
+
+  defp text_width(text), do: round(String.length(text) * @character_width) + @padding
+
+  defp place_environment(nil, _column_x, _column_width), do: nil
+
+  # The world spans its sensors and a gutter to their left, where the percept
+  # bus runs: one arrow per sensor, none of them crossing a box.
+  defp place_environment(node, column_x, column_width) do
+    Map.merge(node, %{
+      x: column_x,
+      y: @margin,
+      width: column_width + @bus_gutter,
+      height: @node_height
+    })
+  end
+
+  # Columns are placed left to right, each after the width of the one before it,
+  # and centred against the tallest column: with two sensors and one learning
+  # module, the module belongs between them.
+  defp place_columns(columns, top, tallest) do
+    columns
+    |> Enum.reduce({[], @margin + @bus_gutter}, fn nodes, {placed, x} ->
+      start = top + (tallest - stack_height(nodes)) / 2
+      width = nodes |> Enum.map(& &1.width) |> Enum.max(fn -> 0 end)
+
+      positioned =
+        nodes
+        |> Enum.with_index()
+        |> Enum.map(fn {node, row} ->
+          %{node | x: x, y: start + row * (node.height + @row_gap)}
+        end)
+
+      {placed ++ [positioned], x + width + @column_gap}
     end)
+    |> elem(0)
   end
 
   defp stack_height([]), do: 0
-  defp stack_height(nodes), do: length(nodes) * @node_height + (length(nodes) - 1) * @row_gap
 
-  defp column_top(nil), do: @margin
-  defp column_top(%{y: y, height: height}), do: y + height + @column_gap
+  defp stack_height(nodes) do
+    Enum.reduce(nodes, 0, fn node, total -> total + node.height end) +
+      (length(nodes) - 1) * @row_gap
+  end
+
+  defp extent([], _position), do: 0
+
+  defp extent(nodes, position),
+    do: nodes |> Enum.map(position) |> Enum.max() |> Kernel.+(Float.ceil(@margin / 4))
+
+  # -- edges -----------------------------------------------------------------
 
   defp edges(connections, nodes) do
     by_id = Map.new(nodes, &{&1.id, &1})
@@ -220,6 +259,7 @@ defmodule Monty.Studio.Diagram do
           kind: kind,
           x1: source.x + source.width,
           y1: source.y + source.height / 2,
+          via: [],
           x2: target.x,
           y2: target.y + target.height / 2
         }
@@ -230,46 +270,65 @@ defmodule Monty.Studio.Diagram do
     |> Enum.reject(&is_nil/1)
   end
 
-  # Goals travel the other way: every learning module's goal proposals reach
-  # the motor system (through the attention system, which passes them all by
-  # default). Leaving that out of the picture makes the motor box look detached.
+  # The world is what the sensors look at: a trunk down the gutter, and a
+  # branch into each sensor, so an arrow never runs through a box.
+  defp percept_edges(%Setup{environment: nil}, _nodes), do: []
+
+  defp percept_edges(_setup, nodes) do
+    case Enum.find(nodes, &(&1.kind == :environment)) do
+      nil -> []
+      environment -> Enum.flat_map(nodes, &percept_edge(environment, &1))
+    end
+  end
+
+  defp percept_edge(_environment, %{kind: kind}) when kind != :sensor, do: []
+
+  defp percept_edge(environment, sensor) do
+    trunk_x = @margin + @bus_gutter / 2
+    middle = sensor.y + sensor.height / 2
+
+    [
+      %{
+        from: environment.id,
+        to: sensor.id,
+        kind: :percept,
+        x1: trunk_x,
+        y1: environment.y + environment.height,
+        via: [{trunk_x, middle}],
+        x2: sensor.x,
+        y2: middle
+      }
+    ]
+  end
+
+  # Goals travel the other way: every learning module's goal proposals reach the
+  # motor system, through the attention system, which passes them all by
+  # default. Without it the motor box looks detached.
   defp goal_edges(%Setup{motor_system: nil}, _nodes), do: []
 
   defp goal_edges(setup, nodes) do
     by_id = Map.new(nodes, &{&1.id, &1})
 
     case Map.get(by_id, "motor_system") do
-      nil ->
-        []
-
-      motor ->
-        Enum.flat_map(setup.learning_modules, fn learning_module ->
-          case Map.get(by_id, learning_module.id) do
-            nil ->
-              []
-
-            module ->
-              [
-                %{
-                  from: learning_module.id,
-                  to: "motor_system",
-                  kind: :goal,
-                  x1: module.x + module.width,
-                  y1: module.y + module.height / 2,
-                  x2: motor.x,
-                  y2: motor.y + motor.height / 2
-                }
-              ]
-          end
-        end)
+      nil -> []
+      motor -> Enum.flat_map(setup.learning_modules, &goal_edge(Map.get(by_id, &1.id), motor))
     end
   end
 
-  defp width([]), do: 0
-  defp width(nodes), do: nodes |> Enum.map(&(&1.x + &1.width)) |> Enum.max() |> Kernel.+(@margin)
+  defp goal_edge(nil, _motor), do: []
 
-  defp height([]), do: 0
-
-  defp height(nodes),
-    do: nodes |> Enum.map(&(&1.y + &1.height)) |> Enum.max() |> Kernel.+(@margin)
+  defp goal_edge(module, motor) do
+    [
+      %{
+        from: module.id,
+        to: "motor_system",
+        kind: :goal,
+        x1: module.x + module.width,
+        y1: module.y + module.height / 2,
+        via: [],
+        x2: motor.x,
+        y2: motor.y + motor.height / 2
+      }
+    ]
+  end
 end

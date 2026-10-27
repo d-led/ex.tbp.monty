@@ -24,62 +24,73 @@ defmodule ExTbpMontyWeb.StudioComponents do
   def diagram(assigns) do
     ~H"""
     <figure id={@id} class="rounded-box border border-base-300 bg-base-100 p-3">
-      <svg
-        viewBox={"0 0 #{@diagram.width} #{@diagram.height}"}
-        class="h-auto w-full"
-        role="img"
-        aria-label="Experiment wiring: sensors, learning modules and motor system"
-      >
-        <defs>
-          <marker
-            id="setup-arrow"
-            viewBox="0 0 10 10"
-            refX="9"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 0 L 10 5 L 0 10 z" class="fill-base-content/40" />
-          </marker>
-        </defs>
+      <%!-- A wiring diagram that shrinks to fit a phone is a diagram nobody
+      can read. It keeps roughly its natural size and the box scrolls. --%>
+      <div class="overflow-x-auto">
+        <svg
+          viewBox={"0 0 #{@diagram.width} #{@diagram.height}"}
+          style={"min-width: #{round(@diagram.width * 0.9)}px"}
+          class="h-auto w-full"
+          role="img"
+          aria-label="Experiment wiring: sensors, learning modules and motor system"
+        >
+          <defs>
+            <marker
+              id="setup-arrow"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" class="fill-base-content/40" />
+            </marker>
+          </defs>
 
-        <line
-          :for={edge <- @diagram.edges}
-          x1={edge.x1}
-          y1={edge.y1}
-          x2={edge.x2}
-          y2={edge.y2}
-          class={edge_class(edge.kind)}
-          marker-end="url(#setup-arrow)"
-        />
-
-        <g :for={node <- @diagram.nodes}>
-          <rect
-            x={node.x}
-            y={node.y}
-            width={node.width}
-            height={node.height}
-            rx="10"
-            class={node_class(node.kind)}
-            stroke-dasharray={if node[:linked?] == false, do: "6 3", else: nil}
+          <polyline
+            :for={edge <- @diagram.edges}
+            points={points(edge)}
+            fill="none"
+            class={edge_class(edge.kind)}
+            marker-end="url(#setup-arrow)"
           />
-          <text
-            x={node.x + 12}
-            y={node.y + 17}
-            class="fill-base-content text-[11px] font-semibold"
-          >
-            {truncate(node.label, 24)}
-          </text>
-          <text
-            x={node.x + 12}
-            y={node.y + 31}
-            class="fill-base-content/60 text-[10px]"
-          >
-            {truncate(node.detail || "", 26)}
-          </text>
-        </g>
-      </svg>
+
+          <g :for={node <- @diagram.nodes}>
+            <rect
+              x={node.x}
+              y={node.y}
+              width={node.width}
+              height={node.height}
+              rx="8"
+              class={node_class(node.kind)}
+              stroke-dasharray={if node.note, do: "6 3", else: nil}
+            />
+            <text
+              x={node.x + 10}
+              y={node.y + 17}
+              class="fill-base-content text-[11px] font-semibold"
+            >
+              {truncate(node.label, node.width)}
+            </text>
+            <text
+              x={node.x + 10}
+              y={node.y + 31}
+              class="fill-base-content/60 text-[10px]"
+            >
+              {truncate(node.detail || "", node.width)}
+            </text>
+            <text
+              :if={node.note}
+              x={node.x + 10}
+              y={node.y + 43}
+              class="fill-warning text-[9px]"
+            >
+              {truncate(node.note, node.width)}
+            </text>
+          </g>
+        </svg>
+      </div>
 
       <figcaption class="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-base-content/60">
         <span>solid: percepts and hierarchy</span>
@@ -186,14 +197,29 @@ defmodule ExTbpMontyWeb.StudioComponents do
   def duration(microseconds) when microseconds < 1_000, do: "#{microseconds} µs"
   def duration(microseconds), do: "#{Float.round(microseconds / 1_000, 1)} ms"
 
-  @doc "Trims a label to fit a diagram box."
-  @spec truncate(String.t(), pos_integer()) :: String.t()
-  def truncate(text, limit) when byte_size(text) <= limit, do: text
-  def truncate(text, limit), do: String.slice(text, 0, limit - 1) <> "…"
+  @doc """
+  Trims a label to the box it sits in.
+
+  The diagram sizes its boxes from this same budget, so a label is only cut when
+  it is longer than the widest box the layout allows — which is the one place a
+  truncation is the honest answer.
+  """
+  @spec truncate(String.t(), number()) :: String.t()
+  def truncate(text, width) do
+    limit = max(trunc(width / 6.1) - 1, 4)
+
+    if String.length(text) <= limit, do: text, else: String.slice(text, 0, limit - 1) <> "…"
+  end
 
   defp edge_class(:vote), do: "stroke-base-content/25 [stroke-dasharray:6_4]"
   defp edge_class(:goal), do: "stroke-base-content/30 [stroke-dasharray:2_4]"
   defp edge_class(_input), do: "stroke-base-content/40"
+
+  defp points(edge) do
+    [{edge.x1, edge.y1} | edge.via]
+    |> Kernel.++([{edge.x2, edge.y2}])
+    |> Enum.map_join(" ", fn {x, y} -> "#{x},#{y}" end)
+  end
 
   defp node_class(:environment), do: "fill-info/15 stroke-info/40"
   defp node_class(:sensor), do: "fill-secondary/15 stroke-secondary/40"

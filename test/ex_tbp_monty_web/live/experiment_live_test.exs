@@ -37,6 +37,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       assert html =~ "tutorial/first_experiment"
       assert has_element?(view, "#setup-diagram")
+      assert has_element?(view, "#setup-diagram polyline[points]")
       assert has_element?(view, "#setup-findings")
       assert has_element?(view, "#run")
     end

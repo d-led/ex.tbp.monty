@@ -39,6 +39,16 @@ defmodule Monty.Studio.DiagramTest do
       assert environment.y < sensor_top
     end
 
+    test "the world spans the sensors it feeds, not off to one side" do
+      diagram = Diagram.new(setup_for("tutorial/first_experiment"))
+
+      [environment] = Diagram.nodes(diagram, :environment)
+      [patch | _] = Diagram.nodes(diagram, :sensor)
+
+      assert environment.x < patch.x
+      assert environment.x + environment.width == patch.x + patch.width
+    end
+
     test "the canvas is big enough for everything on it" do
       diagram = Diagram.new(setup_for("randrot_noise_10distinctobj_5lms_dist_agent"))
 
@@ -51,6 +61,29 @@ defmodule Monty.Studio.DiagramTest do
   end
 
   describe "the wiring" do
+    test "every sensor looks at the world, down a bus that crosses no box" do
+      diagram = Diagram.new(setup_for("tutorial/first_experiment"))
+
+      percepts = Enum.filter(diagram.edges, &(&1.kind == :percept))
+      [environment] = Diagram.nodes(diagram, :environment)
+      sensors = Diagram.nodes(diagram, :sensor)
+
+      assert percepts |> Enum.map(& &1.to) |> Enum.sort() == ["patch", "view_finder"]
+      assert Enum.all?(percepts, &(&1.from == "environment"))
+      assert Enum.all?(percepts, &(&1.y1 == environment.y + environment.height))
+
+      # Each arrow leaves the world, runs down the gutter left of the sensors,
+      # then turns in to the box it feeds.
+      assert Enum.all?(percepts, fn edge ->
+               sensor = Diagram.node(diagram, edge.to)
+               middle = sensor.y + sensor.height / 2
+
+               edge.x1 < sensors |> Enum.map(& &1.x) |> Enum.min() and
+                 edge.y2 == middle and edge.x2 == sensor.x and
+                 edge.via == [{edge.x1, middle}]
+             end)
+    end
+
     test "a sensor input is a line from the sensor to the module it feeds" do
       diagram = Diagram.new(setup_for("tutorial/first_experiment"))
 
@@ -69,7 +102,7 @@ defmodule Monty.Studio.DiagramTest do
       diagram = Diagram.new(setup_for("randrot_noise_10distinctobj_5lms_dist_agent"))
       kinds = diagram.edges |> Enum.map(& &1.kind) |> Enum.uniq() |> Enum.sort()
 
-      assert kinds == [:goal, :sensor_input, :vote]
+      assert kinds == [:goal, :percept, :sensor_input, :vote]
     end
 
     test "every learning module has a goal arrow into the motor system" do
@@ -99,9 +132,19 @@ defmodule Monty.Studio.DiagramTest do
       diagram = Diagram.new(setup_for("tutorial/first_experiment"))
       view_finder = Diagram.node(diagram, "view_finder")
 
-      assert view_finder.linked? == false
-      assert view_finder.detail =~ "no percept input"
-      assert Diagram.node(diagram, "patch").linked? == true
+      assert view_finder.note == "no percept input"
+      assert view_finder.detail == "ExperimentSensorModule"
+      assert Diagram.node(diagram, "patch").note == nil
+    end
+
+    test "a box is as wide as the text in it, up to a limit" do
+      diagram = Diagram.new(setup_for("base_10simobj_surf_agent"))
+      motor = Diagram.node(diagram, "motor_system")
+
+      # "InformedPolicyRandomWalk" does not fit 176 units, and an ellipsis would
+      # hide the thing the reader came to see.
+      assert motor.width > 176
+      refute ExTbpMontyWeb.StudioComponents.truncate(motor.detail, motor.width) =~ "…"
     end
   end
 end
