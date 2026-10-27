@@ -8,6 +8,11 @@ updates:
     groups:
       hex:
         patterns: ["*"]
+    ignore:
+      # daisyui is a git dependency pinned to a release tag. Dependabot's mix
+      # updater cannot resolve git deps and fails the whole update job on it,
+      # so the tag is bumped by hand (mix hex.outdated still covers the rest).
+      - dependency-name: "daisyui"
 
   - package-ecosystem: npm
     directory: "/assets"
