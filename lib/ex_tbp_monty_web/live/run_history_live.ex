@@ -13,7 +13,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   use ExTbpMontyWeb, :live_view
 
-  alias Monty.Studio.RunHistory
+  alias Monty.Studio.{Replay, RunHistory}
+  alias Monty.Studio.Replay.Chart
 
   @impl true
   def mount(_params, _session, socket) do
@@ -37,13 +38,49 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp assign_run(%{"id" => id}, socket) do
     case RunHistory.get(id) do
       nil ->
-        {:noreply, assign(socket, run: nil) |> put_flash(:error, "That run is gone.")}
+        {:noreply,
+         assign(socket, run: nil, moment: nil) |> put_flash(:error, "That run is gone.")}
 
       run ->
         {:noreply,
          socket
          |> assign(run: run)
-         |> stream(:log, run.log, reset: true)}
+         |> stream(:log, run.log, reset: true)
+         |> assign_replay(run, Replay.last_step(run))}
+    end
+  end
+
+  # The replay starts where the run ended: a person opening a finished run wants
+  # to see what it came to, and rewinding is one drag away.
+  defp assign_replay(socket, run, step) do
+    step = step || Replay.first_step(run)
+    series = Replay.series(run)
+    series_id = socket.assigns[:series_id] || default_series(series)
+    window = Replay.window(run, socket.assigns[:window] || whole_run(run))
+
+    socket
+    |> assign(
+      moment: Replay.at(run, step),
+      step: step,
+      series: series,
+      series_id: series_id,
+      window: window,
+      chart: Chart.new(series_points(series, series_id), window: window, playhead: step),
+      playing: false
+    )
+  end
+
+  defp whole_run(run) do
+    {Replay.first_step(run) || 0, Replay.last_step(run) || 0}
+  end
+
+  defp default_series([first | _rest]), do: first.id
+  defp default_series([]), do: nil
+
+  defp series_points(series, id) do
+    case Enum.find(series, &(&1.id == id)) do
+      nil -> []
+      found -> found.points
     end
   end
 
@@ -150,6 +187,17 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         </div>
       </section>
 
+      <section :if={@run} id="replay-panel" class="space-y-1">
+        <ExTbpMontyWeb.StudioComponents.replay
+          moment={@moment}
+          chart={@chart}
+          series={@series}
+          series_id={@series_id}
+          recorded={length(Replay.steps(@run))}
+          playing={@playing}
+        />
+      </section>
+
       <section :if={@run} class="space-y-1">
         <h2 class="text-sm font-medium">Log</h2>
         <ul
@@ -176,7 +224,6 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     """
   end
 
-  @impl true
   def handle_event("ask_delete", %{"id" => id}, socket) do
     {:noreply, assign(socket, confirming: RunHistory.get(id))}
   end
@@ -191,6 +238,95 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       forget(socket, run)
     else
       _already_gone -> {:noreply, assign(socket, confirming: nil)}
+    end
+  end
+
+  # -- the replay ------------------------------------------------------------
+
+  @impl true
+  def handle_event("replay_seek", %{"step" => step}, %{assigns: %{run: run}} = socket) do
+    {:noreply, replay_to(socket, run, parse_step(step))}
+  end
+
+  def handle_event("replay_step", %{"delta" => delta}, %{assigns: %{run: run}} = socket) do
+    {:noreply, replay_to(socket, run, socket.assigns.step + parse_step(delta))}
+  end
+
+  def handle_event("replay_play", _params, %{assigns: %{run: run}} = socket) do
+    socket =
+      if Replay.last_step(run) == socket.assigns.step do
+        # Playing a run that is already at its end starts again from the top,
+        # which is what a person who pressed play wanted.
+        socket |> replay_to(run, Replay.first_step(run))
+      else
+        socket
+      end
+
+    {:noreply, assign(socket, playing: true) |> schedule_replay()}
+  end
+
+  def handle_event("replay_pause", _params, socket) do
+    {:noreply, assign(socket, playing: false)}
+  end
+
+  def handle_event("replay_zoom", %{"zoom" => zoom}, %{assigns: %{run: run}} = socket) do
+    window = Replay.zoom(run, socket.assigns.window, socket.assigns.step, zoom_of(zoom))
+    {:noreply, replay_window(socket, window)}
+  end
+
+  def handle_event("replay_series", %{"series" => id}, socket) do
+    {:noreply,
+     assign(socket, series_id: id)
+     |> replay_window(socket.assigns.window)}
+  end
+
+  @impl true
+  def handle_info(:replay_tick, %{assigns: %{run: run, playing: true}} = socket) do
+    next = socket.assigns.step + 1
+
+    if Replay.last_step(run) != nil and next <= Replay.last_step(run) do
+      {:noreply, socket |> replay_to(run, next) |> schedule_replay()}
+    else
+      {:noreply, assign(socket, playing: false)}
+    end
+  end
+
+  def handle_info(:replay_tick, socket), do: {:noreply, socket}
+
+  defp replay_to(socket, run, step) do
+    step = step |> max(Replay.first_step(run) || 0) |> min(Replay.last_step(run) || 0)
+    window = Replay.window(run, socket.assigns.window)
+    assign_replay(socket, run, step) |> assign(window: window)
+  end
+
+  defp replay_window(socket, window) do
+    points = series_points(socket.assigns.series, socket.assigns.series_id)
+
+    assign(socket,
+      window: window,
+      chart: Chart.new(points, window: window, playhead: socket.assigns.step)
+    )
+  end
+
+  defp schedule_replay(socket) do
+    Process.send_after(self(), :replay_tick, replay_tick_ms())
+    socket
+  end
+
+  defp replay_tick_ms, do: Application.get_env(:ex_tbp_monty, :studio_replay_tick_ms, 120)
+
+  # Three zooms, named: a button sends a string, and turning arbitrary strings
+  # into atoms is how a page leaks memory one click at a time.
+  defp zoom_of("in"), do: :in
+  defp zoom_of("out"), do: :out
+  defp zoom_of(_all), do: :all
+
+  defp parse_step(step) when is_integer(step), do: step
+
+  defp parse_step(step) do
+    case Integer.parse(to_string(step)) do
+      {number, _rest} -> number
+      :error -> 0
     end
   end
 
