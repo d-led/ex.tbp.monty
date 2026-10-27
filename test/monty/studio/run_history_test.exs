@@ -31,16 +31,35 @@ defmodule Monty.Studio.RunHistoryTest do
   end
 
   describe "a run in progress" do
-    test "collects its log one step at a time" do
+    test "collects its log, and what each step saw, one step at a time" do
       {:ok, run} = RunHistory.start(@attributes)
 
-      {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1})
-      {:ok, run} = RunHistory.record_step(run, %{"step" => 1, "goals" => 0})
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 1, "goals" => 0}, moment(1))
 
       assert Enum.map(run.log, & &1["step"]) == [0, 1]
+      assert Enum.map(run.timeline, & &1["step"]) == [0, 1]
 
-      assert RunHistory.get(run.id).log == run.log
+      recorded = RunHistory.get(run.id)
+      assert recorded.log == run.log
+      assert recorded.timeline == run.timeline
     end
+
+    test "collects a step's log and its timeline together, or neither" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      # A log that says step 4 happened while the timeline is still at 3 would
+      # be a replay that disagrees with itself.
+      assert length(run.log) == length(run.timeline)
+    end
+  end
+
+  # A step's moment: what the sensors were looking at, in Monty's units.
+  defp moment(step) do
+    %{
+      "step" => step,
+      "sensors" => %{"patch" => %{"location" => [step * 0.01, 0.0, 0.1], "value" => step * 0.01}}
+    }
   end
 
   describe "a run that ends" do

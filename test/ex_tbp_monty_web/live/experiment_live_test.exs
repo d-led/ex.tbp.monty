@@ -68,25 +68,25 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   end
 
   describe "during the run" do
-    test "each timestep is streamed as its own row", %{conn: conn} do
+    test "each step is streamed into the log as it happens", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=3")
 
       view |> element("#run") |> render_click()
+      perform_run(view)
 
-      # The page runs on its own clock; wait for the last step rather than
-      # sleeping for a guessed amount of time.
-      assert_streamed_steps(view, 3)
-      assert has_element?(view, "#steps-step-0")
-      assert has_element?(view, "#steps-step-2")
+      assert [%{step: 0}, %{step: 1}, %{step: 2}] = logged_steps(view)
+      assert [first_id | _rest] = logged_ids(view)
+      assert view |> element("#log-#{first_id}") |> render() =~ "queued: 3 step(s)"
     end
 
     test "each sensor has its own view, updated as the run steps", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
 
       view |> element("#run") |> render_click()
-      wait_for(view, "#frame-patch")
+      perform_run(view)
 
       # One panel per sensor, side by side, and the picture follows the percept.
+      assert has_element?(view, "#frame-patch")
       assert has_element?(view, "#frame-view_finder")
 
       patch = view |> element("#frame-patch") |> render()
@@ -94,14 +94,48 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert patch =~ "step 1"
     end
 
-    test "the log is streamed as it happens", %{conn: conn} do
+    test "the log filter keeps a line only if every word matches", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
 
       view |> element("#run") |> render_click()
-      wait_for(view, "#log-1")
+      perform_run(view)
 
-      assert has_element?(view, "#run-log")
-      assert view |> element("#log-0") |> render() =~ "step 0"
+      # Every word must be in the line, and the lines that were already there
+      # are filtered too — not only the ones that arrive after typing.
+      assert length(visible_lines(view)) > 1
+      view |> element("#log-filter") |> render_change(%{"filter" => "queued"})
+      assert [queued] = visible_lines(view)
+      assert queued =~ "queued: 2 step(s)"
+
+      # Two words, one of which no line has: nothing matches, rather than
+      # everything that matches either word.
+      view |> element("#log-filter") |> render_change(%{"filter" => "queued percepts"})
+      assert visible_lines(view) == []
+    end
+
+    test "a filter that matches nothing says so instead of going blank", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+      view |> element("#log-filter") |> render_change(%{"filter" => "nothingmatchesthis"})
+
+      assert has_element?(view, "#run-log-empty")
+      assert view |> element("#run-log-empty") |> render() =~ "no line matches"
+    end
+
+    test "opening the page again finds the run that is still going", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+
+      # A run that is queued but not performed: the page that was closed while
+      # it waited, and a page opened while it waits, show the same run.
+      view |> element("#run") |> render_click()
+      run_id = current_run_id(view)
+
+      {:ok, reopened, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+
+      assert current_run_id(reopened) == run_id
+      assert has_element?(reopened, "#open-history")
     end
   end
 
@@ -110,51 +144,88 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
 
       view |> element("#run") |> render_click()
-      wait_for(view, "#run-summary")
+      perform_run(view)
 
       assert render(view) =~ "After the run"
       assert has_element?(view, "#run-summary")
 
-      # The run is history now: its record, its steps and its summary are in
-      # the database, not only on the page.
+      # The run is history now: its record, its steps, its summary, what each
+      # step saw, and the log file it wrote are all off the page.
       assert [run] = RunHistory.list()
       assert run.status == "finished"
       assert run.experiment == "tutorial/first_experiment"
       assert length(run.log) == 2
+      assert length(run.timeline) == 2
       assert run.summary["steps"] == 2
       assert is_map(run.config)
+      assert File.exists?(run.log_path)
       assert has_element?(view, "#open-history")
     end
-  end
 
-  defp assert_streamed_steps(view, count, attempts \\ 200) do
-    cond do
-      has_element?(view, "#steps-step-#{count - 1}") ->
-        :ok
+    test "a run that is not there any more is recorded as failed, not left running" do
+      {:ok, record} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 2,
+          config: %{},
+          inputs: %{}
+        })
 
-      attempts == 0 ->
-        flunk(
-          "expected #{count} streamed steps, got: #{inspect(LazyHTML.from_fragment(render(view)) |> LazyHTML.filter("#steps") |> LazyHTML.text())}"
-        )
+      conn = Phoenix.ConnTest.build_conn()
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
 
-      true ->
-        render(view)
-        assert_streamed_steps(view, count, attempts - 1)
+      # The page followed the row, but no worker holds it: waiting for news that
+      # cannot come is the worst state a page can be in.
+      assert current_run_id(view) == record.id
+      view |> element("#stop") |> render_click()
+
+      assert RunHistory.get(record.id).status == "failed"
     end
   end
 
-  defp wait_for(view, selector, attempts \\ 200) do
-    cond do
-      has_element?(view, selector) ->
-        :ok
+  # The queue is manual in tests, so the page test performs the run itself
+  # rather than racing a queue: what is under test is the run and the page, not
+  # Oban's scheduler.
+  defp perform_run(view) do
+    job = %Oban.Job{args: %{"run_id" => current_run_id(view)}, attempt: 1}
+    assert {:ok, _record} = Monty.Studio.Jobs.Run.perform(job)
 
-      attempts == 0 ->
-        flunk("expected #{selector} to appear")
+    # The page learns about the run by message; let it drain them.
+    _ = :sys.get_state(view.pid)
+    :ok
+  end
 
-      true ->
-        render(view)
-        wait_for(view, selector, attempts - 1)
-    end
+  defp current_run_id(view) do
+    path = view |> element("#open-history") |> render() |> extract_href()
+    String.replace_prefix(path, "/runs/", "")
+  end
+
+  defp extract_href(html) do
+    [_, href] = Regex.run(~r/href="([^"]+)"/, html)
+    href
+  end
+
+  defp logged_ids(view) do
+    view |> rendered_lines() |> Enum.map(& &1.id)
+  end
+
+  defp logged_steps(view) do
+    ~r/step (\d+) ·/
+    |> Regex.scan(Enum.join(visible_lines(view), "\n"))
+    |> Enum.map(fn [_, step] -> %{step: String.to_integer(step)} end)
+  end
+
+  defp visible_lines(view) do
+    view |> rendered_lines() |> Enum.map(& &1.text)
+  end
+
+  # What the log actually renders, line by line: an id and its text. Reading the
+  # page's own output is the point — a filtered log is a fact about the HTML.
+  defp rendered_lines(view) do
+    ~r/<li id="log-(\d+)"[^>]*>([^<]*)<\/li>/
+    |> Regex.scan(render(view))
+    |> Enum.map(fn [_, id, text] -> %{id: id, text: text} end)
   end
 
   defp broken_config do

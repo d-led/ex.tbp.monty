@@ -35,10 +35,18 @@ defmodule Monty.Studio.RunHistory do
     |> Repo.insert()
   end
 
-  @doc "Appends one step to a run's log."
-  @spec record_step(Run.t(), map()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
-  def record_step(%Run{log: log} = run, entry) do
-    run |> Run.changeset(%{log: log ++ [entry]}) |> Repo.update()
+  @doc """
+  Appends one step to a run: what the modules reported and what they saw.
+
+  Both arrays are written in one update, so a step is either in the record or
+  not — a log that says step 4 happened while the timeline is still at 3 would
+  be a replay that disagrees with itself.
+  """
+  @spec record_step(Run.t(), map(), map()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
+  def record_step(%Run{log: log, timeline: timeline} = run, entry, moment) do
+    run
+    |> Run.changeset(%{log: log ++ [entry], timeline: timeline ++ [moment]})
+    |> Repo.update()
   end
 
   @doc """
@@ -88,13 +96,38 @@ defmodule Monty.Studio.RunHistory do
   @spec get(binary()) :: Run.t() | nil
   def get(id), do: Repo.get(Run, id)
 
-  @doc "Forgets a run. Its artifacts are not ours to delete."
+  @doc "Forgets a run, and the files it wrote. Monty's artifacts are not ours to delete."
   @spec delete(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
-  def delete(%Run{} = run), do: Repo.delete(run)
+  def delete(%Run{} = run) do
+    deleted = Repo.delete(run)
+    Monty.Studio.Artifacts.forget(run.id)
+    deleted
+  end
 
   @doc "How many runs are recorded."
   @spec count() :: non_neg_integer()
   def count, do: Repo.aggregate(Run, :count, :id)
+
+  @doc """
+  Remembers where this run's log file is.
+
+  The path is stored rather than derived so a run keeps pointing at its own
+  file even if the artifacts root is moved later.
+  """
+  @spec attach_log(Run.t(), Path.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
+  def attach_log(%Run{} = run, path) do
+    run |> Run.changeset(%{log_path: path}) |> Repo.update()
+  end
+
+  @doc "The run of an experiment that is still going, if there is one."
+  @spec running_for(String.t()) :: Run.t() | nil
+  def running_for(experiment) do
+    Run
+    |> where([run], run.experiment == ^experiment and run.status == "running")
+    |> order_by(desc: :inserted_at)
+    |> limit(1)
+    |> Repo.one()
+  end
 
   defp duration(nil, _finished_at), do: 0
   defp duration(started_at, finished_at), do: DateTime.diff(finished_at, started_at, :microsecond)

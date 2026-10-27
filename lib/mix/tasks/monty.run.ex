@@ -98,9 +98,9 @@ defmodule Mix.Tasks.Monty.Run do
   end
 
   defp step_through(run, history, opts, infos) do
-    {:ok, info, _observations, next_run} = Monty.Studio.Run.step(run)
+    {:ok, info, observations, next_run} = Monty.Studio.Run.step(run)
     print_step(info, opts)
-    history = if history, do: Monty.Studio.RunLog.record_step(history, info)
+    history = if history, do: Monty.Studio.RunLog.record_step(history, info, observations)
     infos = [info | infos]
 
     if Monty.Studio.Run.finished?(next_run) do

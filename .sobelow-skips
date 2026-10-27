@@ -6,12 +6,14 @@ Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/monty/prerequis
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/monty/prerequisites/download.ex:137,1ADF42
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/monty/studio/drafts.ex:44,263DF84
 Traversal.FileModule: Directory Traversal in `File.mkdir_p`,lib/monty/prerequisites/download.ex:154,1CC8B44
+Traversal.FileModule: Directory Traversal in `File.mkdir_p`,lib/monty/studio/artifacts.ex:47,3AA3113
 Traversal.FileModule: Directory Traversal in `File.open`,lib/monty/prerequisites/http_fetcher.ex:17,3287148
 Traversal.FileModule: Directory Traversal in `File.read`,lib/ex_tbp_monty/build_info.ex:156,17FC652
 Traversal.FileModule: Directory Traversal in `File.read`,lib/monty/config/composer.ex:91,1B828F0
 Traversal.FileModule: Directory Traversal in `File.read`,lib/monty/config/source.ex:110,5E4EAEA
 Traversal.FileModule: Directory Traversal in `File.read`,lib/monty/config/source.ex:131,199337A
 Traversal.FileModule: Directory Traversal in `File.read`,lib/monty/studio/drafts.ex:55,7A59B45
+Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/monty/studio/artifacts.ex:62,5A577BF
 Traversal.FileModule: Directory Traversal in `File.rm`,lib/monty/prerequisites/download.ex:159,7F74E
 Traversal.FileModule: Directory Traversal in `File.rm`,lib/monty/prerequisites/download.ex:160,1099F67
 Traversal.FileModule: Directory Traversal in `File.rm`,lib/monty/prerequisites/download.ex:164,74938D1
@@ -26,5 +28,7 @@ Traversal.FileModule: Directory Traversal in `File.stream!`,lib/monty/prerequisi
 Traversal.FileModule: Directory Traversal in `File.stream!`,lib/monty/prerequisites/download.ex:227,52E5C3C
 Traversal.FileModule: Directory Traversal in `File.stream!`,lib/monty/prerequisites/download.ex:271,AC7C5C
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/ex_tbp_monty/build_info.ex:118,4865D4A
+Traversal.FileModule: Directory Traversal in `File.write`,lib/monty/studio/artifacts.ex:56,66D8872
 Traversal.FileModule: Directory Traversal in `File.write`,lib/monty/studio/drafts.ex:47,173E5A3
-XSS.Raw: XSS,lib/ex_tbp_monty_web/live/experiment_live.ex:139,24D0ED6
+XSS.Raw: XSS,lib/ex_tbp_monty_web/components/studio_components.ex:294,5EE9AFC
+XSS.Raw: XSS,lib/ex_tbp_monty_web/live/experiment_live.ex:195,3500438

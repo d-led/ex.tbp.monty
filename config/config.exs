@@ -57,6 +57,14 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Experiment runs are jobs: a run that is queued survives the page that queued
+# it, and what it did lives in `studio_runs` rather than in a LiveView's memory.
+# Two at a time is a person's attention span, not a throughput decision.
+config :ex_tbp_monty, Oban,
+  engine: Oban.Engines.Basic,
+  repo: ExTbpMonty.Repo,
+  queues: [studio: 2]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

@@ -10,7 +10,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
   use Phoenix.Component
 
-  alias Monty.Studio.{Diagram, Finding, Summary}
+  alias Monty.Studio.{Diagram, Finding}
 
   @doc """
   Draws an experiment's wiring.
@@ -168,25 +168,29 @@ defmodule ExTbpMontyWeb.StudioComponents do
   def status_class(:excluded), do: "badge-warning"
   def status_class(_unknown), do: "badge-error"
 
-  @doc "The counts a run leaves behind."
-  attr :summary, Summary, required: true
+  @doc "The counts a run leaves behind, as the database stores them."
+  attr :summary, :map, required: true
 
   def summary(assigns) do
     ~H"""
     <section id="run-summary" class="space-y-2">
-      <h2 class="text-lg font-semibold tracking-tight">After the run</h2>
+      <h2 class="text-sm font-medium">After the run</h2>
 
       <dl class="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <.fact label="steps" value={Integer.to_string(@summary.steps)} />
-        <.fact label="total" value={duration(@summary.duration_us)} />
-        <.fact label="votes sent" value={Integer.to_string(@summary.votes_sent)} />
-        <.fact label="votes used" value={Integer.to_string(@summary.votes_used)} />
-        <.fact label="goals" value={Integer.to_string(@summary.goals)} />
-        <.fact label="actions" value={Integer.to_string(@summary.actions)} />
+        <.fact label="steps" value={to_string(@summary["steps"])} />
+        <.fact label="total" value={duration(@summary["duration_us"] || 0)} />
+        <.fact label="votes sent" value={to_string(@summary["votes_sent"])} />
+        <.fact label="votes used" value={to_string(@summary["votes_used"])} />
+        <.fact label="goals" value={to_string(@summary["goals"])} />
+        <.fact label="actions" value={to_string(@summary["actions"])} />
       </dl>
 
-      <p id="run-summary-never-updated" class="text-sm text-warning">
-        These learning modules never received input: {Enum.join(@summary.never_updated, ", ")}
+      <p
+        :if={@summary["never_updated"] not in [nil, []]}
+        id="run-summary-never-updated"
+        class="text-sm text-warning"
+      >
+        These learning modules never received input: {Enum.join(@summary["never_updated"], ", ")}
       </p>
     </section>
     """
@@ -196,6 +200,220 @@ defmodule ExTbpMontyWeb.StudioComponents do
   @spec duration(non_neg_integer()) :: String.t()
   def duration(microseconds) when microseconds < 1_000, do: "#{microseconds} µs"
   def duration(microseconds), do: "#{Float.round(microseconds / 1_000, 1)} ms"
+
+  @doc """
+  A finished run, step by step: the slider, the frames at that step, and a chart.
+
+  Replaying is reading, not running: the frames come from the observations the
+  run recorded, so what the slider shows is what happened. The chart's window
+  is what the zoom buttons move — the slider stays on whole timesteps.
+  """
+  attr :moment, :map, default: nil
+  attr :chart, :map, default: nil
+  attr :series, :list, default: []
+  attr :series_id, :string, default: nil
+  attr :recorded, :integer, default: 0
+  attr :playing, :boolean, default: false
+  attr :id, :string, default: "replay"
+
+  def replay(assigns) do
+    ~H"""
+    <section id={@id} class="space-y-1.5">
+      <header class="flex flex-wrap items-center gap-1.5">
+        <h2 class="text-sm font-medium">Replay</h2>
+
+        <div :if={@moment} class="join">
+          <button
+            id="replay-back"
+            phx-click="replay_step"
+            phx-value-delta="-1"
+            class="btn join-item btn-xs"
+            aria-label="Previous step"
+          >
+            ◀
+          </button>
+          <button
+            id="replay-play"
+            phx-click={if @playing, do: "replay_pause", else: "replay_play"}
+            class="btn join-item btn-xs btn-primary"
+            aria-label={if @playing, do: "Pause the replay", else: "Play the replay"}
+          >
+            {if @playing, do: "❚❚", else: "▶"}
+          </button>
+          <button
+            id="replay-forward"
+            phx-click="replay_step"
+            phx-value-delta="1"
+            class="btn join-item btn-xs"
+            aria-label="Next step"
+          >
+            ▶
+          </button>
+        </div>
+
+        <span :if={@moment} id="replay-step" class="badge badge-sm badge-ghost font-mono">
+          step {@moment.step}
+        </span>
+        <span :if={@moment && @moment.entry} class="text-xs text-base-content/60">
+          {duration(@moment.entry["duration_us"])}
+        </span>
+        <span class="ms-auto text-[11px] text-base-content/50">
+          {@recorded} recorded step(s)
+        </span>
+      </header>
+
+      <p :if={@moment == nil} id="replay-empty" class="text-sm text-base-content/60">
+        This run recorded no steps, so there is nothing to replay.
+      </p>
+
+      <form :if={@moment} id="replay-seek" phx-change="replay_seek" class="px-0.5">
+        <input
+          type="range"
+          name="step"
+          id="replay-slider"
+          min={@chart.from}
+          max={@chart.to}
+          value={@moment.step}
+          phx-debounce="0"
+          class="range range-xs range-primary w-full"
+          aria-label="Step"
+        />
+      </form>
+
+      <div :if={@moment} class="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div id="replay-frames" class="grid gap-1.5 sm:grid-cols-2">
+          <figure
+            :for={frame <- @moment.frames}
+            id={"replay-frame-#{frame.sensor_id}"}
+            class="rounded-field border border-base-300 bg-base-100 p-1.5 text-base-content"
+          >
+            <figcaption class="flex items-baseline justify-between px-0.5 pb-0.5 text-[11px] text-base-content/60">
+              <span class="font-mono">{frame.sensor_id}</span>
+              <span>{frame.note}</span>
+            </figcaption>
+            <div class="text-base-content/80">{Phoenix.HTML.raw(frame.data)}</div>
+          </figure>
+        </div>
+
+        <dl :if={@moment.entry} class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
+          <div>
+            <dt class="text-base-content/60">percepts</dt>
+            <dd class="font-mono">{Enum.join(@moment.entry["percepts"], ", ")}</dd>
+          </div>
+          <div>
+            <dt class="text-base-content/60">votes</dt>
+            <dd class="font-mono">
+              {@moment.entry["votes"]["used"]}/{@moment.entry["votes"]["sent"]}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-base-content/60">goals</dt>
+            <dd class="font-mono">{@moment.entry["goals"]}</dd>
+          </div>
+          <div>
+            <dt class="text-base-content/60">actions</dt>
+            <dd class="font-mono">{@moment.entry["actions"]}</dd>
+          </div>
+          <div class="col-span-2">
+            <dt class="text-base-content/60">inputs</dt>
+            <dd class="font-mono break-all">{inputs(@moment.entry)}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div :if={@chart} class="space-y-1 pt-0.5">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <form id="replay-series" phx-change="replay_series">
+            <select name="series" class="select select-xs" aria-label="Series to chart">
+              <option :for={series <- @series} value={series.id} selected={series.id == @series_id}>
+                {series.label}
+              </option>
+            </select>
+          </form>
+          <div class="join">
+            <button
+              id="replay-zoom-out"
+              phx-click="replay_zoom"
+              phx-value-zoom="out"
+              class="btn join-item btn-xs"
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <button
+              id="replay-zoom-in"
+              phx-click="replay_zoom"
+              phx-value-zoom="in"
+              class="btn join-item btn-xs"
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <button
+              id="replay-zoom-all"
+              phx-click="replay_zoom"
+              phx-value-zoom="all"
+              class="btn join-item btn-xs"
+              aria-label="Show the whole run"
+            >
+              all
+            </button>
+          </div>
+          <span class="text-[11px] text-base-content/50">
+            steps {@chart.from}–{@chart.to} · {format_value(@chart.min)} … {format_value(@chart.max)} {chart_unit(
+              @series,
+              @series_id
+            )}
+          </span>
+        </div>
+
+        <svg
+          id="replay-chart"
+          viewBox={"0 0 #{@chart.width} #{@chart.height}"}
+          preserveAspectRatio="none"
+          class="h-16 w-full rounded-field border border-base-300 bg-base-100 text-primary"
+          role="img"
+          aria-label="The selected series over the steps in the window"
+        >
+          <polyline
+            points={@chart.polyline}
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            vector-effect="non-scaling-stroke"
+          />
+          <line
+            :if={@chart.playhead}
+            x1={@chart.playhead}
+            y1="0"
+            x2={@chart.playhead}
+            y2={@chart.height}
+            stroke="currentColor"
+            stroke-opacity="0.35"
+            stroke-dasharray="2 2"
+            vector-effect="non-scaling-stroke"
+          />
+        </svg>
+      </div>
+    </section>
+    """
+  end
+
+  defp inputs(entry) do
+    entry
+    |> Map.get("inputs", %{})
+    |> Enum.map_join(" ", fn {module, count} -> "#{module}=#{count}" end)
+  end
+
+  defp format_value(value) when is_float(value), do: :erlang.float_to_binary(value, decimals: 2)
+  defp format_value(value), do: to_string(value)
+
+  defp chart_unit(series, id) do
+    case Enum.find(series, &(&1.id == id)) do
+      nil -> ""
+      found -> found.unit
+    end
+  end
 
   @doc """
   Trims a label to the box it sits in.

@@ -20,6 +20,8 @@ defmodule ExTbpMonty.Application do
       # One child per prerequisite download, restarted never: a download either
       # finishes or is started again deliberately.
       {DynamicSupervisor, name: ExTbpMonty.PrerequisitesSupervisor, strategy: :one_for_one},
+      # Experiment runs are queued jobs, so closing a page does not close a run.
+      {Oban, Application.fetch_env!(:ex_tbp_monty, Oban)},
       # Start to serve requests, typically the last entry
       ExTbpMontyWeb.Endpoint
     ]

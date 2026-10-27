@@ -10,7 +10,6 @@ defmodule Monty.Studio.RunLog do
   """
 
   alias Monty.Studio.{RunHistory, Setup, Summary}
-
   @doc "One timestep, as the database stores it."
   @spec entry(map()) :: map()
   def entry(info) do
@@ -22,6 +21,22 @@ defmodule Monty.Studio.RunLog do
       "goals" => info.goals,
       "actions" => length(info.actions),
       "duration_us" => info.duration_us
+    }
+  end
+
+  @doc """
+  One timestep's scene, as the database stores it.
+
+  The log says what the modules made of a step; this says what they were given.
+  Sensor observations are kept in Monty's own shape (`"location"` in metres), so
+  a replay redraws the frame a run actually saw rather than a re-simulation of
+  it: what is on the slider is history, not a guess.
+  """
+  @spec moment(map(), map()) :: map()
+  def moment(info, observations) do
+    %{
+      "step" => info.step,
+      "sensors" => Map.get(observations, agent_id(), %{})
     }
   end
 
@@ -82,12 +97,14 @@ defmodule Monty.Studio.RunLog do
     }
   end
 
-  @doc "Records a step and returns the updated history row."
-  @spec record_step(RunHistory.Run.t(), map()) :: RunHistory.Run.t()
-  def record_step(history, info) do
-    case RunHistory.record_step(history, entry(info)) do
+  @doc "Records a step — what was reported and what was seen — and returns the row."
+  @spec record_step(RunHistory.Run.t(), map(), map()) :: RunHistory.Run.t()
+  def record_step(history, info, observations) do
+    case RunHistory.record_step(history, entry(info), moment(info, observations)) do
       {:ok, history} -> history
       {:error, _changeset} -> history
     end
   end
+
+  defp agent_id, do: Monty.Simulators.Synthetic.Environment.agent_id()
 end

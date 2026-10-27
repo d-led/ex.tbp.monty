@@ -13,7 +13,7 @@ defmodule Monty.Studio.RunHistory.Run do
 
   import Ecto.Changeset
 
-  @statuses ~w(running finished failed)
+  @statuses ~w(running finished stopped failed)
 
   @primary_key {:id, :binary_id, autogenerate: true}
 
@@ -27,6 +27,8 @@ defmodule Monty.Studio.RunHistory.Run do
     field :inputs, :map, default: %{}
     field :summary, :map, default: %{}
     field :log, {:array, :map}, default: []
+    field :timeline, {:array, :map}, default: []
+    field :log_path, :string
     field :started_at, :utc_datetime_usec
     field :finished_at, :utc_datetime_usec
     field :duration_us, :integer, default: 0
@@ -54,6 +56,8 @@ defmodule Monty.Studio.RunHistory.Run do
       :inputs,
       :summary,
       :log,
+      :timeline,
+      :log_path,
       :started_at,
       :finished_at,
       :duration_us

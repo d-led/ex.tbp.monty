@@ -20,6 +20,12 @@ config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
   secret_key_base: "8Bd/prwl6iHqjiAqUmWCkUO+CbXzRmzqme3yAWn0IYPB2zeiTBN+98YpQdVfkKYN",
   server: false
 
+# Oban runs jobs by hand in tests, so a page test never races a queue.
+config :ex_tbp_monty, Oban,
+  testing: :manual,
+  queues: false,
+  plugins: false
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

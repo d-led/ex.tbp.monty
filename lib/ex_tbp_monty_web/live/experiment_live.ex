@@ -3,44 +3,91 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   One experiment: what it is before it runs, and what happened while it did.
 
   The page has three states and they are the same page. Before: the wiring
-  diagram, the checks, and the modules it names. During: a row per timestep,
-  streamed as the coordinator reports it, with the run's counters filling in.
-  After: the summary, including any learning module that never received input —
-  the failure that otherwise looks like success.
+  diagram, the checks, and the modules it names. During: sensor views and a log,
+  streamed as the run reports them. After: the run's counts, including any
+  learning module that never received input — the failure that otherwise looks
+  like success.
+
+  The page does not run anything itself. Pressing Run enqueues a job
+  (`Monty.Studio.Jobs.Run`) and the page watches that job's topic, so closing
+  the page does not close the run and reloading it picks the run back up. The
+  log on screen is the same text as the log file on disk.
+
+  The filter applies to the whole log rather than to arriving lines, and every
+  word typed must appear in a line for it to be shown.
   """
 
   use ExTbpMontyWeb, :live_view
 
   alias Monty.Studio
-  alias Monty.Studio.{Frames, Run, RunHistory, RunLog, Setup, Summary}
+  alias Monty.Studio.{Jobs, LogFilter, RunHistory, RunLog, Setup}
+
+  # A log is a thing a person reads back, not a database: the last few thousand
+  # lines are enough to scroll through a run and bounded enough that a runaway
+  # experiment cannot take the page with it.
+  @log_limit 2_000
 
   @impl true
   def mount(params, _session, socket) do
     case Studio.open(name_of(params)) do
       {:ok, opened} ->
-        {:ok,
-         socket
-         |> assign(
-           opened: opened,
-           error: nil,
-           run: nil,
-           history: nil,
-           summary: nil,
-           infos: [],
-           frames_sent: %{},
-           ticking: false,
-           steps: steps(params)
-         )
-         |> stream_configure(:steps, dom_id: &"steps-step-#{&1.step}")
-         |> stream_configure(:log, dom_id: &"log-#{&1.step}")
-         |> stream_configure(:frames, dom_id: &"frame-#{&1.sensor_id}")
-         |> stream(:steps, [])
-         |> stream(:log, [])
-         |> stream(:frames, [])}
+        {:ok, follow_running(assign_opened(socket, opened, steps(params)))}
 
       {:error, reason} ->
-        {:ok, assign(socket, opened: nil, error: reason, run: nil, summary: nil, infos: [])}
+        {:ok, assign(socket, opened: nil, error: reason, run_id: nil, lines: [], filter: "")}
     end
+  end
+
+  defp assign_opened(socket, opened, steps) do
+    socket
+    |> assign(
+      opened: opened,
+      error: nil,
+      steps: steps,
+      run_id: nil,
+      status: nil,
+      progress: {0, steps},
+      lines: [],
+      filter: "",
+      summary: nil,
+      log_path: nil
+    )
+    |> stream_configure(:frames, dom_id: &"frame-#{&1.sensor_id}")
+    |> stream(:frames, [])
+  end
+
+  # A run outlives its page, so a page that loads must find the run its
+  # experiment is in the middle of instead of pretending nothing is happening.
+  defp follow_running(%{assigns: %{opened: %{name: name}}} = socket) do
+    case RunHistory.running_for(name) do
+      nil -> socket
+      record -> follow(socket, record)
+    end
+  end
+
+  defp follow(socket, record) do
+    if connected?(socket),
+      do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
+
+    socket
+    |> assign(
+      run_id: record.id,
+      status: record.status,
+      progress: {length(record.timeline), record.steps},
+      log_path: record.log_path
+    )
+    |> seed_log(record)
+  end
+
+  # The lines a run already printed are in the record; showing the log from the
+  # beginning beats showing it from the moment this page opened.
+  defp seed_log(socket, record) do
+    lines =
+      record.log
+      |> Enum.map(fn entry -> line(entry["step"], RunLog.line(entry)) end)
+      |> Enum.take(-@log_limit)
+
+    assign(socket, lines: lines)
   end
 
   @impl true
@@ -59,6 +106,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   def render(assigns) do
+    assigns = assign(assigns, shown: LogFilter.apply(assigns.lines, assigns.filter))
+
     ~H"""
     <Layouts.app flash={@flash}>
       <header class="space-y-2">
@@ -105,20 +154,27 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           <button id="step" phx-click="step" class="btn btn-sm" disabled={!runable?(assigns)}>
             <.icon name="hero-forward-mini" class="size-4" /> One step
           </button>
-          <button :if={@run} id="stop" phx-click="stop" class="btn btn-ghost btn-sm">Stop</button>
-          <span :if={@run} id="run-progress" class="badge badge-ghost">
-            step {@run.step} / {@run.steps}
+          <button :if={@run_id} id="stop" phx-click="stop" class="btn btn-ghost btn-sm">Stop</button>
+          <span :if={@run_id} id="run-progress" class="badge badge-ghost">
+            step {elem(@progress, 0)} / {elem(@progress, 1)}
           </span>
+          <.link
+            :if={@run_id}
+            navigate={~p"/runs/#{@run_id}"}
+            id="open-history"
+            class="btn btn-ghost btn-xs"
+          >
+            History
+          </.link>
         </header>
 
         <p :if={not runable?(assigns)} id="run-blocked" class="text-sm text-error">
           Fix the errors above before running: this config would not start in Monty either.
         </p>
 
-        <p :if={@run == nil and runable?(assigns)} class="text-sm text-base-content/60">
-          A run uses the topology below with stand-in modules until the ported ones land: every
-          sensor and learning module is its own supervised process, wired exactly as the config
-          wires them.
+        <p :if={@run_id == nil and runable?(assigns)} class="text-sm text-base-content/60">
+          A run is a job: it keeps going if this page is closed, and its log and history are
+          written as it goes. It uses stand-in modules until the ported ones land.
         </p>
 
         <div id="frames" phx-update="stream" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -140,70 +196,41 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           </figure>
         </div>
 
-        <div id="steps" phx-update="stream" class="space-y-2">
-          <p id="steps-empty" class="hidden only:block text-sm text-base-content/60">
-            No timesteps yet.
-          </p>
-          <article
-            :for={{dom_id, info} <- @streams.steps}
-            id={dom_id}
-            class="rounded-box border border-base-300 bg-base-100 p-2.5"
-          >
-            <div class="flex items-baseline justify-between gap-4">
-              <h3 class="font-mono text-sm">step {info.step}</h3>
-              <span class="text-xs text-base-content/60">
-                {ExTbpMontyWeb.StudioComponents.duration(info.duration_us)}
-              </span>
-            </div>
-            <dl class="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
-              <div>
-                <dt class="text-base-content/60">percepts</dt>
-                <dd class="font-mono">{inspect(info.percept_ids)}</dd>
-              </div>
-              <div>
-                <dt class="text-base-content/60">inputs</dt>
-                <dd class="font-mono">{inspect(info.inputs)}</dd>
-              </div>
-              <div>
-                <dt class="text-base-content/60">votes</dt>
-                <dd class="font-mono">
-                  {info.votes.used}/{info.votes.sent}
-                  <span :if={info.votes.deadline_hit?} class="badge badge-warning badge-sm ml-1">
-                    deadline
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt class="text-base-content/60">goals</dt>
-                <dd class="font-mono">{info.goals}</dd>
-              </div>
-            </dl>
-          </article>
-        </div>
-
-        <div :if={@history} id="run-log-panel" class="space-y-1">
-          <div class="flex items-center justify-between">
+        <div :if={@run_id} id="run-log-panel" class="space-y-1">
+          <div class="flex flex-wrap items-center gap-2">
             <h3 class="text-sm font-medium">Log</h3>
-            <.link navigate={~p"/runs/#{@history.id}"} id="open-history" class="btn btn-ghost btn-xs">
-              History
-            </.link>
+            <form id="log-filter" phx-change="filter" phx-debounce="150" class="flex-1">
+              <input
+                type="search"
+                name="filter"
+                value={@filter}
+                placeholder="filter: every word must match"
+                class="input input-xs w-full max-w-sm font-mono"
+                aria-label="Filter the log: every word must appear in a line"
+              />
+            </form>
+            <span id="log-count" class="text-[11px] text-base-content/50">
+              {length(@shown)} of {length(@lines)} lines
+            </span>
+            <span :if={@log_path} class="font-mono text-[11px] text-base-content/40">
+              {@log_path}
+            </span>
           </div>
+
           <ul
             id="run-log"
-            phx-update="stream"
             class="max-h-56 overflow-auto rounded-field border border-base-300 bg-base-100 p-2 font-mono text-[11px] leading-5"
           >
-            <li id="run-log-empty" class="hidden only:block text-base-content/50">
-              no timesteps yet
+            <li id="run-log-empty" class="text-base-content/50">
+              {if @lines == [], do: "no lines yet", else: "no line matches this filter"}
             </li>
-            <li :for={{dom_id, entry} <- @streams.log} id={dom_id}>{entry.line}</li>
+            <li :for={line <- @shown} id={"log-#{line.id}"} class={line_class(line)}>
+              {line.text}
+            </li>
           </ul>
         </div>
 
-        <ExTbpMontyWeb.StudioComponents.summary
-          :if={@summary && @run && Run.finished?(@run)}
-          summary={@summary}
-        />
+        <ExTbpMontyWeb.StudioComponents.summary :if={@summary} summary={@summary} />
       </section>
 
       <section :if={@opened.yaml} class="space-y-2">
@@ -219,98 +246,136 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   @impl true
-  def handle_event("run", _params, %{assigns: %{opened: %{setup: setup}, steps: steps}} = socket) do
-    if Setup.valid?(setup) do
-      case Run.start(setup, steps: steps) do
-        {:ok, run} ->
-          socket =
-            socket
-            |> assign(run: run, infos: [], summary: nil, ticking: true)
-            |> record_start()
-            |> schedule_tick()
+  def handle_event("run", _params, %{assigns: %{opened: opened, steps: steps}} = socket) do
+    if Setup.valid?(opened.setup), do: start(socket, opened, steps), else: {:noreply, socket}
+  end
 
-          {:noreply, advance(socket)}
+  # One step is a run of one step: a person clicking it twice wants two runs to
+  # look at, not one run that pretends to have done two.
+  def handle_event("step", _params, %{assigns: %{opened: opened}} = socket) do
+    if Setup.valid?(opened.setup), do: start(socket, opened, 1), else: {:noreply, socket}
+  end
 
-        {:error, reason} ->
-          {:noreply, put_flash(socket, :error, "Could not start: #{inspect(reason)}")}
-      end
-    else
-      {:noreply, socket}
+  def handle_event("stop", _params, %{assigns: %{run_id: nil}} = socket), do: {:noreply, socket}
+
+  def handle_event("stop", _params, %{assigns: %{run_id: run_id}} = socket) do
+    case Jobs.Run.stop(run_id) do
+      :ok ->
+        {:noreply, push(socket, nil, "stopping: the run stops at its next step", :info)}
+
+      {:error, :not_found} ->
+        {:noreply,
+         socket
+         |> push(nil, "that run is not running any more", :warning)
+         |> settle(run_id)}
     end
   end
 
-  def handle_event("step", _params, %{assigns: %{run: nil, opened: %{setup: setup}}} = socket) do
-    if Setup.valid?(setup), do: start_one_step(socket, setup), else: {:noreply, socket}
+  def handle_event("filter", %{"filter" => text}, socket) do
+    {:noreply, assign(socket, filter: text)}
   end
-
-  def handle_event("step", _params, %{assigns: %{run: nil}} = socket), do: {:noreply, socket}
-
-  def handle_event("step", _params, socket), do: {:noreply, advance(socket)}
-
-  def handle_event("stop", _params, socket), do: {:noreply, stop(socket)}
 
   @impl true
-  def handle_info(:tick, %{assigns: %{ticking: true, run: run}} = socket) when run != nil do
-    socket = advance(socket)
-
-    if Run.finished?(socket.assigns.run) do
-      {:noreply, stop(socket)}
-    else
-      {:noreply, schedule_tick(socket)}
-    end
+  def handle_info({:studio, run_id, event}, %{assigns: %{run_id: run_id}} = socket) do
+    {:noreply, handle_studio(event, socket)}
   end
 
-  def handle_info(:tick, socket), do: {:noreply, socket}
+  def handle_info({:studio, _other_run, _event}, socket), do: {:noreply, socket}
 
-  @impl true
-  def terminate(_reason, socket) do
-    if run = socket.assigns[:run], do: Run.stop(run)
-    :ok
+  defp handle_studio({:started, steps}, socket) do
+    assign(socket, status: "running", progress: {0, steps})
   end
 
-  defp advance(%{assigns: %{run: run, infos: infos, opened: %{setup: setup}}} = socket) do
-    {:ok, info, observations, run} = Run.step(run)
-    infos = infos ++ [info]
-    summary = Summary.from_infos(infos, setup)
-
+  defp handle_studio({:step, %{line: text, step: step, frames: frames}}, socket) do
     socket
-    |> assign(run: run, infos: infos, summary: summary)
-    |> stream_insert(:steps, info)
-    |> send_frames(observations, info.step)
-    |> record_step(info)
-    |> maybe_finish(run, summary)
+    |> push(step, text, :info)
+    |> assign(progress: {step + 1, elem(socket.assigns.progress, 1)})
+    |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
   end
 
-  # Sensor frames are the most expensive thing a run sends, so they are
-  # throttled per sensor (a view finder should not queue behind a patch
-  # sensor). Everything about the policy lives in `Monty.Studio.Frames`.
-  defp send_frames(%{assigns: %{opened: opened}} = socket, observations, step) do
-    {frames, sent} =
-      Frames.for_step(
-        Setup.sensor_ids(opened.setup),
-        observations,
-        step,
-        socket.assigns.frames_sent,
-        now_ms(),
-        Frames.throttle_ms()
-      )
-
-    frames
-    |> Enum.reduce(assign(socket, frames_sent: sent), fn frame, socket ->
-      stream_insert(socket, :frames, frame)
-    end)
+  defp handle_studio({:finished, %{status: status, summary: summary}}, socket) do
+    assign(socket, status: status, summary: summary)
   end
 
-  defp now_ms, do: System.monotonic_time(:millisecond)
-
-  defp schedule_tick(socket) do
-    Process.send_after(self(), :tick, tick_ms())
-    assign(socket, ticking: true)
+  defp handle_studio({:failed, %{reason: reason}}, socket) do
+    socket
+    |> assign(status: "failed")
+    |> push(nil, "the run failed: #{inspect(reason)}", :error)
   end
 
-  # A page drives its own clock; how fast is configurable so a test does not
-  # speed up the experience to make it testable.
-  defp tick_ms, do: Application.get_env(:ex_tbp_monty, :studio_tick_ms, 120)
+  # -- starting a run --------------------------------------------------------
+
+  defp start(socket, opened, steps) do
+    case RunHistory.start(RunLog.attributes(opened, steps)) do
+      {:ok, record} ->
+        case Jobs.Run.enqueue_run(record) do
+          {:ok, _job} ->
+            Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
+
+            {:noreply,
+             socket
+             |> assign(
+               run_id: record.id,
+               status: "running",
+               progress: {0, steps},
+               summary: nil,
+               lines: [],
+               log_path: record.log_path
+             )
+             |> push(nil, "queued: #{steps} step(s) of #{opened.name}", :info)}
+
+          {:error, reason} ->
+            not_queued(socket, record, reason)
+        end
+
+      {:error, changeset} ->
+        {:noreply, push(socket, nil, "cannot record this run: #{describe(changeset)}", :error)}
+    end
+  end
+
+  # A run that cannot be queued is not a run: say so where the log is, because
+  # that is where somebody would look, and close the record with the reason.
+  defp not_queued(socket, record, reason) do
+    {:ok, _} = RunHistory.finish(record, %{"reason" => inspect(reason)}, "failed")
+    {:noreply, push(socket, nil, "could not queue the run: #{inspect(reason)}", :error)}
+  end
+
+  # -- the log ---------------------------------------------------------------
+
+  defp push(socket, step, text, level) do
+    line = line(step, text, level)
+    assign(socket, lines: Enum.take(socket.assigns.lines ++ [line], -@log_limit))
+  end
+
+  defp line(step, text, level \\ :info) do
+    %{id: System.unique_integer([:monotonic, :positive]), step: step, text: text, level: level}
+  end
+
+  defp line_class(%{level: :error}), do: "text-error"
+  defp line_class(%{level: :warning}), do: "text-warning"
+  defp line_class(_info), do: ""
+
+  # The page can hold a run id whose worker is gone — the VM restarted, the job
+  # was killed. Waiting for news that will never come is the worst state a page
+  # can be in, so say it happened.
+  defp settle(socket, run_id) do
+    case RunHistory.get(run_id) do
+      %{status: "running"} = record ->
+        {:ok, _} = RunHistory.finish(record, %{"reason" => "the run's job is gone"}, "failed")
+        assign(socket, status: "failed")
+
+      _finished_or_gone ->
+        socket
+    end
+  end
+
+  defp describe(%Ecto.Changeset{} = changeset) do
+    Enum.map_join(changeset.errors, ", ", fn {field, {message, _}} -> "#{field}: #{message}" end)
+  end
+
+  defp describe(reason), do: inspect(reason)
+
+  # -- helpers ---------------------------------------------------------------
 
   # The route is a glob, so the name arrives as its segments.
   defp name_of(%{"name" => segments}), do: segments |> List.wrap() |> Enum.join("/")
@@ -319,57 +384,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp steps(params) do
     case Integer.parse(to_string(params["steps"] || "")) do
       {count, ""} when count > 0 -> count
-      _default -> Run.default_steps()
+      _default -> Monty.Studio.Run.default_steps()
     end
-  end
-
-  defp start_one_step(socket, setup) do
-    case Run.start(setup, steps: socket.assigns.steps) do
-      {:ok, run} ->
-        socket = socket |> assign(run: run, infos: [], summary: nil) |> record_start()
-        {:noreply, advance(socket)}
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Could not start: #{inspect(reason)}")}
-    end
-  end
-
-  # -- history --------------------------------------------------------------
-
-  # The record exists before the first step, so a run that is stopped, or whose
-  # page is closed, still happened.
-  defp record_start(%{assigns: %{opened: opened, steps: steps}} = socket) do
-    case RunHistory.start(RunLog.attributes(opened, steps)) do
-      {:ok, history} -> assign(socket, history: history)
-      {:error, _changeset} -> socket
-    end
-  end
-
-  defp record_step(%{assigns: %{history: nil}} = socket, _info), do: socket
-
-  defp record_step(%{assigns: %{history: history}} = socket, info) do
-    entry = RunLog.entry(info)
-    history = RunLog.record_step(history, info)
-
-    socket
-    |> assign(history: history)
-    |> stream_insert(:log, %{step: info.step, line: RunLog.line(entry)})
-  end
-
-  defp maybe_finish(%{assigns: %{history: nil}} = socket, _run, _summary), do: socket
-
-  defp maybe_finish(socket, run, summary) do
-    if Run.finished?(run) do
-      {:ok, history} = RunHistory.finish(socket.assigns.history, RunLog.summary(summary))
-      assign(socket, history: history)
-    else
-      socket
-    end
-  end
-
-  defp stop(socket) do
-    if run = socket.assigns[:run], do: Run.stop(run)
-    assign(socket, ticking: false)
   end
 
   defp runable?(assigns) do
