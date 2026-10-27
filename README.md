@@ -29,6 +29,7 @@ hypothesis evidence and the vote telemetry as they happen.
 | `Monty.ModuleMap` — the module contract and its verification | done (131 modules: Monty + teleop, 3 implemented) |
 | `Monty.Runtime` — one process per sensor and learning module, step barriers, vote rounds with deadlines | done |
 | Synthetic environment and `/runs/demo` live run view | done |
+| `Monty.Prerequisites` — streaming downloads into Monty's data and model paths, `/prerequisites` view | done |
 | Evidence matching, motor policies, MuJoCo bridge, config editor | planned |
 
 ## Quick start
@@ -45,6 +46,24 @@ Monty's configs are read from a checkout of `tbp.monty`:
 export MONTY_SOURCE=../monty-orig   # default; any tbp.monty checkout works
 export TELEOP_SOURCE=../tbp.teleop # default; the teleop tool being replaced
 ```
+
+## Prerequisites
+
+Monty needs data and pretrained models before it can run an experiment. The
+`/prerequisites` page fetches them into the same places Monty uses, so a run
+started here finds the same files a run started from `run.py` would:
+
+| Variable | Default | Holds |
+| --- | --- | --- |
+| `MONTY_DATA` | `~/tbp/data` | datasets such as YCB |
+| `MONTY_MODELS` | `~/tbp/results/monty/pretrained_models` | pretrained models |
+| `MONTY_LOGS` | `~/tbp/results/monty/projects` | experiment logs |
+
+Downloads are streamed rather than buffered, so progress is shown as bytes
+arrive and a cancel stops the transfer at once. Bytes land in `<target>.part`
+and are renamed into place only when the transfer finished and the manifest's
+checksum matched; a failed or cancelled attempt leaves nothing that looks
+finished. The manifest is [priv/prerequisites.yaml](priv/prerequisites.yaml).
 
 ## Quality gates
 
