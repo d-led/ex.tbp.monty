@@ -1286,18 +1286,18 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer",
     package: "monty",
     python: "frameworks/models/evidence_matching/feature_evidence/scorer.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.FeatureEvidenceScorer",
         python: "FeatureEvidenceScorer"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.DefaultFeatureEvidenceScorer",
         python: "DefaultFeatureEvidenceScorer"
       }

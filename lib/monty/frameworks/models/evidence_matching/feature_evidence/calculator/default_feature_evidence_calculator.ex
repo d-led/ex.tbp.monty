@@ -71,6 +71,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.De
     end
   end
 
+  # numpy broadcasts a one-element list across every column of a multi-valued
+  # feature, which is how a tolerance written once applies to all of them.
+  defp broadcast([single], _offset), do: single
   defp broadcast(values, offset) when is_list(values), do: Enum.at(values, offset)
   defp broadcast(value, _offset) when is_number(value), do: value
 
