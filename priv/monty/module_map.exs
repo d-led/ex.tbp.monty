@@ -1722,7 +1722,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.ObjectModel",
     package: "monty",
     python: "frameworks/models/object_model.py",
