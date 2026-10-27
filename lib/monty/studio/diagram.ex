@@ -135,8 +135,9 @@ defmodule Monty.Studio.Diagram do
       label: sensor.id,
       detail: module_label(sensor.module, "sensor module"),
       # A sensor that feeds no learning module is not an error — a view finder
-      # is there for the motor policies — but it must not look like a missing
-      # arrow, so the box says so where it cannot be truncated away.
+      # is there to record a wide shot, not to be matched — but it must not
+      # look like a missing arrow, so the box says so where it cannot be
+      # truncated away.
       note: if(MapSet.member?(linked, sensor.id), do: nil, else: "no percept input"),
       status: sensor.module && sensor.module.status
     }

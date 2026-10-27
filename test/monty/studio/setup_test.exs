@@ -46,6 +46,12 @@ defmodule Monty.Studio.SetupTest do
   defp errors(setup), do: setup.findings |> Finding.at(:error) |> Enum.map(& &1.code)
   defp warnings(setup), do: setup.findings |> Finding.at(:warning) |> Enum.map(& &1.code)
 
+  defp finding(setup, code) do
+    setup.findings
+    |> Enum.find(&(&1.code == code)) ||
+      flunk("no finding #{inspect(code)}; got #{inspect(Enum.map(setup.findings, & &1.code))}")
+  end
+
   @base %{
     "monty" => "graph_exp1000_e3_t3",
     "monty/motor_system_config" => "distant_5",
@@ -157,10 +163,14 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "the mistakes Monty would only find later" do
-    test "a sensor nothing listens to is called out" do
+    test "a sensor no learning module matches on is explained, not raised as a mistake" do
       setup = setup_for("tutorial/first_experiment")
 
-      assert :sensor_unconnected in warnings(setup)
+      assert %Finding{level: :info, message: message, where: "view_finder"} =
+               finding(setup, :sensor_not_matched)
+
+      assert message =~ "feeds no learning module"
+      refute :sensor_unconnected in warnings(setup)
     end
 
     test "a feature the sensor does not produce is called out" do

@@ -604,9 +604,11 @@ defmodule Monty.Studio.Setup do
 
     for sensor <- setup.sensors, not MapSet.member?(connected, sensor.id) do
       Finding.new(
-        :warning,
-        :sensor_unconnected,
-        "#{sensor.id} feeds no learning module, so its percepts are produced and dropped.",
+        :info,
+        :sensor_not_matched,
+        "#{sensor.id} feeds no learning module, so nothing matches on its percepts. " <>
+          "Monty still steps it and can record its observations — a view finder is how an " <>
+          "experiment keeps a wide shot — and `sm_to_lm_matrix` is where it would be matched.",
         sensor.id
       )
     end
