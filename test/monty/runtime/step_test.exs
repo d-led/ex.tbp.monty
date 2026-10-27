@@ -211,15 +211,14 @@ defmodule Monty.Runtime.StepTest do
       Process.exit(original, :kill)
       assert_receive {:DOWN, ^ref, :process, ^original, :killed}
 
-      replacement =
-        eventually(fn ->
-          case Registry.lookup(key) do
-            [{pid, _}] when pid != original -> pid
-            _other -> nil
-          end
-        end)
+      # Wait for the supervisor itself to have handled the child's exit, rather
+      # than polling a clock: a system message is answered only after the exit
+      # message that came before it, so the replacement exists by then.
+      _ = :sys.get_state(Monty.Runtime.Model.via(model_id))
 
-      assert is_pid(replacement)
+      replacement = Registry.lookup(key)
+      assert [{pid, _}] = replacement
+      assert pid != original
       assert {:ok, _, info} = step(model_id)
       assert info.inputs == %{lm_0: 1}
       assert_receive {:learning_step, :lm_0, [_percept], :matching}
