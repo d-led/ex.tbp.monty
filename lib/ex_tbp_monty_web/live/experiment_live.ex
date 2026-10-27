@@ -12,7 +12,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   use ExTbpMontyWeb, :live_view
 
   alias Monty.Studio
-  alias Monty.Studio.{Frames, Run, RunHistory, Setup, Summary}
+  alias Monty.Studio.{Frames, Run, RunHistory, RunLog, Setup, Summary}
 
   @impl true
   def mount(params, _session, socket) do
@@ -339,23 +339,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # The record exists before the first step, so a run that is stopped, or whose
   # page is closed, still happened.
   defp record_start(%{assigns: %{opened: opened, steps: steps}} = socket) do
-    attributes = %{
-      experiment: opened.name,
-      source: to_string(opened.source),
-      steps: steps,
-      seed: opened.setup.seed,
-      config: opened.config,
-      inputs: %{
-        "groups" => opened.groups,
-        "seed" => opened.setup.seed,
-        "train_epochs" => opened.setup.epochs.train,
-        "eval_epochs" => opened.setup.epochs.eval,
-        "sensors" => Setup.sensor_ids(opened.setup),
-        "learning_modules" => Enum.map(opened.setup.learning_modules, & &1.id)
-      }
-    }
-
-    case RunHistory.start(attributes) do
+    case RunHistory.start(RunLog.attributes(opened, steps)) do
       {:ok, history} -> assign(socket, history: history)
       {:error, _changeset} -> socket
     end
@@ -364,65 +348,23 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp record_step(%{assigns: %{history: nil}} = socket, _info), do: socket
 
   defp record_step(%{assigns: %{history: history}} = socket, info) do
-    entry = log_entry(info)
+    entry = RunLog.entry(info)
+    history = RunLog.record_step(history, info)
 
-    case RunHistory.record_step(history, entry) do
-      {:ok, history} ->
-        socket
-        |> assign(history: history)
-        |> stream_insert(:log, %{step: info.step, line: log_line(entry)})
-
-      {:error, _changeset} ->
-        socket
-    end
+    socket
+    |> assign(history: history)
+    |> stream_insert(:log, %{step: info.step, line: RunLog.line(entry)})
   end
 
   defp maybe_finish(%{assigns: %{history: nil}} = socket, _run, _summary), do: socket
 
   defp maybe_finish(socket, run, summary) do
     if Run.finished?(run) do
-      {:ok, history} = RunHistory.finish(socket.assigns.history, summary_map(summary))
+      {:ok, history} = RunHistory.finish(socket.assigns.history, RunLog.summary(summary))
       assign(socket, history: history)
     else
       socket
     end
-  end
-
-  defp log_entry(info) do
-    %{
-      "step" => info.step,
-      "percepts" => Enum.map(info.percept_ids, &to_string/1),
-      "inputs" => Map.new(info.inputs, fn {module, count} -> {to_string(module), count} end),
-      "votes" => %{"sent" => info.votes.sent, "used" => info.votes.used},
-      "goals" => info.goals,
-      "actions" => length(info.actions),
-      "duration_us" => info.duration_us
-    }
-  end
-
-  defp log_line(entry) do
-    inputs =
-      entry["inputs"]
-      |> Enum.map_join(" ", fn {module, count} -> "#{module}=#{count}" end)
-
-    "step #{entry["step"]} · percepts #{Enum.join(entry["percepts"], ",")} · " <>
-      "inputs #{inputs} · votes #{entry["votes"]["used"]}/#{entry["votes"]["sent"]} · " <>
-      "goals #{entry["goals"]} · #{ExTbpMontyWeb.StudioComponents.duration(entry["duration_us"])}"
-  end
-
-  defp summary_map(summary) do
-    %{
-      "steps" => summary.steps,
-      "duration_us" => summary.duration_us,
-      "deadline_hits" => summary.deadline_hits,
-      "goals" => summary.goals,
-      "votes_sent" => summary.votes_sent,
-      "votes_used" => summary.votes_used,
-      "actions" => summary.actions,
-      "inputs" => summary.inputs,
-      "never_updated" => summary.never_updated,
-      "sensor_timeouts" => Enum.map(summary.sensor_timeouts, &to_string/1)
-    }
   end
 
   defp stop(socket) do
