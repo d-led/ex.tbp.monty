@@ -134,7 +134,9 @@ docs/                 architecture, config compatibility, module map, developer 
 
 [docs/developers.md](docs/developers.md) is the entry point for working on the
 code; [docs/architecture.md](docs/architecture.md) explains how a timestep
-runs.
+runs; [docs/roadmap.md](docs/roadmap.md) is the order the rest of Monty arrives
+in — the numeric core first, then the world, then the numbers that make it
+comparable.
 
 ## Licence
 
