@@ -1267,18 +1267,18 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator",
     package: "monty",
     python: "frameworks/models/evidence_matching/feature_evidence/calculator.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.FeatureEvidenceCalculator",
         python: "FeatureEvidenceCalculator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.DefaultFeatureEvidenceCalculator",
         python: "DefaultFeatureEvidenceCalculator"
       }
@@ -1305,13 +1305,13 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.AllSelector",
     package: "monty",
     python: "frameworks/models/evidence_matching/features_for_matching/all_selector.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.AllSelector.AllFeaturesForMatchingSelector",
         python: "AllFeaturesForMatchingSelector"
       }
@@ -1319,18 +1319,18 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.Selector",
     package: "monty",
     python: "frameworks/models/evidence_matching/features_for_matching/selector.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.Selector.FeaturesForMatchingSelector",
         python: "FeaturesForMatchingSelector"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.Selector.DefaultFeaturesForMatchingSelector",
         python: "DefaultFeaturesForMatchingSelector"
       }
