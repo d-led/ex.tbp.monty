@@ -1221,7 +1221,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.BurstSampling",
     package: "monty",
     python: "frameworks/models/evidence_matching/burst_sampling.py",
@@ -1232,7 +1232,7 @@
         python: "BurstSamplingTelemetry"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHypothesesUpdater",
         python: "BurstSamplingHypothesesUpdater"
       }
