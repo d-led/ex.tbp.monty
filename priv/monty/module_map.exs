@@ -1189,12 +1189,12 @@
     python: "frameworks/models/buffer.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer",
         python: "FeatureAtLocationBuffer"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Buffer.BufferEncoder",
         python: "BufferEncoder"
       }
@@ -1352,13 +1352,13 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.Hypotheses",
     package: "monty",
     python: "frameworks/models/evidence_matching/hypotheses.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.Hypotheses",
         python: "Hypotheses"
       }
