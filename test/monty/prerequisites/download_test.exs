@@ -33,6 +33,10 @@ defmodule Monty.Prerequisites.DownloadTest do
     Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Download.topic())
 
     on_exit(fn ->
+      # Stop any download still running before its directory disappears, so
+      # this test cannot leak a process into the next one.
+      Monty.Test.PrerequisiteDownloads.stop_all()
+
       if previous,
         do: System.put_env("MONTY_DATA", previous),
         else: System.delete_env("MONTY_DATA")

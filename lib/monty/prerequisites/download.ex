@@ -108,6 +108,8 @@ defmodule Monty.Prerequisites.Download do
 
   @impl true
   def init({prerequisite, opts}) do
+    path = Prerequisites.target_path(prerequisite)
+
     state = %{
       prerequisite: prerequisite,
       fetcher: Keyword.get(opts, :fetcher, fetcher()),
@@ -115,7 +117,10 @@ defmodule Monty.Prerequisites.Download do
       bytes: 0,
       total: nil,
       error: nil,
-      part: Prerequisites.target_path(prerequisite) <> ".part",
+      # The destination is decided once, when the download starts: a change to
+      # the environment variable afterwards must not move the file elsewhere.
+      path: path,
+      part: path <> ".part",
       task: nil,
       reported_bytes: 0,
       started_at: nil,
@@ -127,9 +132,8 @@ defmodule Monty.Prerequisites.Download do
 
   @impl true
   def handle_continue(:download, state) do
-    %{prerequisite: prerequisite, fetcher: fetcher, part: part} = state
+    %{prerequisite: prerequisite, fetcher: fetcher, part: part, path: path} = state
 
-    path = Prerequisites.target_path(prerequisite)
     File.mkdir_p!(Path.dirname(path))
 
     parent = self()
@@ -208,7 +212,7 @@ defmodule Monty.Prerequisites.Download do
   end
 
   defp complete(state, bytes) do
-    File.rename!(state.part, Prerequisites.target_path(state.prerequisite))
+    File.rename!(state.part, state.path)
 
     state = %{state | status: :done, bytes: bytes, finished_at: now()}
     broadcast(state)
@@ -256,7 +260,7 @@ defmodule Monty.Prerequisites.Download do
       status: state.status,
       bytes: state.bytes,
       total: state.total,
-      path: Prerequisites.target_path(state.prerequisite),
+      path: state.path,
       error: state.error,
       started_at: state.started_at,
       finished_at: state.finished_at

@@ -3,13 +3,17 @@ RCE.CodeModule: Code Execution in `Code.eval_file`,lib/monty/module_map.ex:66,11
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/ex_tbp_monty/build_info.ex:116,3055629
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/monty/prerequisites/download.ex:132,1756020
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/monty/prerequisites/download.ex:133,64EFF90
+Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/monty/prerequisites/download.ex:137,1ADF42
 Traversal.FileModule: Directory Traversal in `File.open`,lib/monty/prerequisites/http_fetcher.ex:17,3287148
 Traversal.FileModule: Directory Traversal in `File.read`,lib/ex_tbp_monty/build_info.ex:156,17FC652
 Traversal.FileModule: Directory Traversal in `File.read`,lib/monty/config/source.ex:110,5E4EAEA
 Traversal.FileModule: Directory Traversal in `File.rm`,lib/monty/prerequisites/download.ex:159,7F74E
 Traversal.FileModule: Directory Traversal in `File.rm`,lib/monty/prerequisites/download.ex:160,1099F67
+Traversal.FileModule: Directory Traversal in `File.rm`,lib/monty/prerequisites/download.ex:164,74938D1
 Traversal.FileModule: Directory Traversal in `File.rm`,lib/monty/prerequisites/download.ex:231,7465ADB
 Traversal.FileModule: Directory Traversal in `File.rm`,lib/monty/prerequisites/download.ex:232,3857880
+Traversal.FileModule: Directory Traversal in `File.rm`,lib/monty/prerequisites/download.ex:236,3ED4073
 Traversal.FileModule: Directory Traversal in `File.stream!`,lib/monty/prerequisites/download.ex:222,7151E
 Traversal.FileModule: Directory Traversal in `File.stream!`,lib/monty/prerequisites/download.ex:223,4303A87
+Traversal.FileModule: Directory Traversal in `File.stream!`,lib/monty/prerequisites/download.ex:227,52E5C3C
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/ex_tbp_monty/build_info.ex:118,4865D4A

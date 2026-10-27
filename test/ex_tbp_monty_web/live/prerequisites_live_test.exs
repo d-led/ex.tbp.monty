@@ -28,6 +28,8 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Download.topic())
 
     on_exit(fn ->
+      Monty.Test.PrerequisiteDownloads.stop_all()
+
       if previous,
         do: System.put_env("MONTY_DATA", previous),
         else: System.delete_env("MONTY_DATA")
