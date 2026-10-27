@@ -52,21 +52,6 @@ defmodule Monty.Runtime.StepTest do
     %{@agent => %{patch: %{"location" => [0.0, 0.0, 0.0]}}}
   end
 
-  defp eventually(fun, attempts \\ 200)
-
-  defp eventually(_fun, 0), do: nil
-
-  defp eventually(fun, attempts) do
-    case fun.() do
-      nil ->
-        :erlang.yield()
-        eventually(fun, attempts - 1)
-
-      value ->
-        value
-    end
-  end
-
   describe "the order of a step" do
     test "sensor modules are asked before learning modules, and the motor system last" do
       model_id = start_model()
