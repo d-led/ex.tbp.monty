@@ -1,0 +1,28 @@
+# What an experiment needs before it can run.
+#
+# `root` names the environment variable Monty itself uses, and `target` is
+# relative to it — the same places `docs/how-to-use-monty/getting-started.md`
+# tells a Python user to put these files:
+#
+#   MONTY_DATA    ~/tbp/data
+#   MONTY_MODELS  ~/tbp/results/monty/pretrained_models
+#   MONTY_LOGS    ~/tbp/results/monty/projects
+#
+# Entries are downloaded by /prerequisites in the UI, streamed to
+# `<target>.part` and moved into place only when the bytes and checksum match.
+prerequisites:
+  - id: pretrained_ycb_v13
+    title: Pretrained YCB models (v13)
+    description: >
+      Monty's pretrained models for inference experiments, unpacked into
+      ~/tbp/results/monty/pretrained_models/pretrained_ycb_v13.
+    url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v13.tgz
+    root: MONTY_MODELS
+    target: pretrained_ycb_v13.tgz
+
+  - id: pretrained_ycb_v13_zip
+    title: Pretrained YCB models (v13, zip)
+    description: The same archive as a zip, for tools that prefer it.
+    url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v13.zip
+    root: MONTY_MODELS
+    target: pretrained_ycb_v13.zip

@@ -17,6 +17,9 @@ defmodule ExTbpMonty.Application do
       {Registry, keys: :unique, name: Monty.Runtime.Registry},
       # One child per running model (module servers + step coordinator).
       {DynamicSupervisor, name: ExTbpMonty.ModelSupervisor, strategy: :one_for_one},
+      # One child per prerequisite download, restarted never: a download either
+      # finishes or is started again deliberately.
+      {DynamicSupervisor, name: ExTbpMonty.PrerequisitesSupervisor, strategy: :one_for_one},
       # Start to serve requests, typically the last entry
       ExTbpMontyWeb.Endpoint
     ]
