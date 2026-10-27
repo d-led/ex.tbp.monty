@@ -7,7 +7,7 @@ defmodule Monty.ModuleMapTest do
 
   describe "the naming rule" do
     test "a file becomes the module path it lives at" do
-      assert ModuleMap.module_for("frameworks/models/buffer.py") ==
+      assert ModuleMap.module_for("Monty", "frameworks/models/buffer.py") ==
                "Monty.Frameworks.Models.Buffer"
     end
 
@@ -26,23 +26,30 @@ defmodule Monty.ModuleMapTest do
     end
 
     test "a repeated directory and file name collapse into one segment" do
-      assert ModuleMap.module_for("frameworks/actions/actions.py") == "Monty.Frameworks.Actions"
+      assert ModuleMap.module_for("Monty", "frameworks/actions/actions.py") ==
+               "Monty.Frameworks.Actions"
 
-      assert ModuleMap.module_for("sensor_modules/sensor_module.py") ==
+      assert ModuleMap.module_for("Monty", "sensor_modules/sensor_module.py") ==
                "Monty.SensorModules.SensorModule"
     end
 
     test "a top-level file is a first-level namespace" do
-      assert ModuleMap.module_for("cmp.py") == "Monty.Cmp"
+      assert ModuleMap.module_for("Monty", "cmp.py") == "Monty.Cmp"
+    end
+
+    test "the teleop package gets its own namespace, one segment deep" do
+      assert ModuleMap.module_for("Teleop", "controls.py") == "Teleop.Controls"
+      assert ModuleMap.module_for("Teleop", "live_plotter.py") == "Teleop.LivePlotter"
     end
   end
 
   describe "the generated map" do
-    test "covers every Python file Monty ships" do
+    test "covers every Python file in both packages" do
       if File.dir?(Path.join(Monty.Config.Source.root(), "src/tbp/monty")) do
         assert {:ok, summary} = ModuleMap.verify()
         assert summary.modules > 100
-        assert summary.implemented >= 2
+        assert summary.by_package["monty"] > 100
+        assert summary.by_package["teleop"] >= 7
       end
     end
 

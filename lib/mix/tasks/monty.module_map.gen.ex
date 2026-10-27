@@ -1,22 +1,17 @@
 defmodule Mix.Tasks.Monty.ModuleMap.Gen do
-  @shortdoc "Regenerates priv/monty/module_map.exs from a Monty checkout"
+  @shortdoc "Regenerates priv/monty/module_map.exs from the Monty and teleop checkouts"
 
   @moduledoc """
-  Walks a Monty checkout and writes the map every other tool reads:
+  Walks the Python packages this application mirrors and writes the map every
+  other tool reads:
 
       mix monty.module_map.gen
-      mix monty.module_map.gen --source ../monty-orig
+      mix monty.module_map.gen --source ../monty-orig --teleop-source ../tbp.teleop
 
-  Each Python file becomes an entry with the Elixir module its path maps to,
-  its classes, and whether that Elixir module exists yet. The mapping rule is
-  the one in `docs/module-map.md`:
-
-      Monty.<CamelCase dirs>.<CamelCase file>.<Class>
-
-  with a repeated segment collapsed (`actions/actions.py` is
-  `Monty.Frameworks.Actions`, not `...Actions.Actions`), and the class dropped
-  when it repeats the file name (`cmp.py::Message` is `Monty.Cmp.Message`,
-  `hypotheses.py::Hypotheses` is `...EvidenceMatching.Hypotheses`).
+  Each file becomes an entry with the Elixir module its path maps to, its
+  classes, and whether that Elixir module exists yet. The rule is
+  `docs/module-map.md`: `Monty.<path>.<Class>` for `tbp/monty`,
+  `Teleop.<file>.<Class>` for `tbp/teleop`.
 
   Statuses survive a regeneration: an entry marked `excluded` with a reason
   stays excluded, and an entry whose module now exists becomes `implemented`.
@@ -24,94 +19,96 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
 
   use Mix.Task
 
-  alias Monty.Config.Source
   alias Monty.ModuleMap
 
   @map_path "priv/monty/module_map.exs"
 
   @impl true
   def run(args) do
-    {opts, _rest} = OptionParser.parse!(args, strict: [source: :string])
-    root = Keyword.get_lazy(opts, :source, fn -> Source.root() end)
-    package = Path.join([root, "src", "tbp", "monty"])
+    {opts, _rest} =
+      OptionParser.parse!(args, strict: [source: :string, teleop_source: :string])
 
-    unless File.dir?(package) do
-      Mix.raise("no Monty package at #{package}; pass --source")
-    end
-
-    existing = read_existing()
+    configure_sources(opts)
 
     entries =
-      package
-      |> python_files()
-      |> Enum.map(&entry(&1, package, existing))
-      |> Enum.sort_by(& &1.python)
+      ModuleMap.packages()
+      |> Enum.flat_map(&entries_for(&1, read_existing()))
+      |> Enum.sort_by(&{&1.package, &1.python})
 
     File.mkdir_p!(Path.dirname(@map_path))
     File.write!(@map_path, render(entries))
 
+    summary = ModuleMap.summary(entries)
+
     Mix.shell().info(
-      "#{@map_path}: #{length(entries)} modules, #{implemented(entries)} implemented"
+      "#{@map_path}: #{summary.modules} modules, #{summary.implemented} implemented " <>
+        inspect(summary.by_package, label: "per package")
     )
   end
 
-  defp python_files(package) do
-    Path.wildcard(Path.join(package, "**/*.py"))
-    |> Enum.reject(&(Path.basename(&1) == "__init__.py"))
-    |> Enum.sort()
+  defp configure_sources(opts) do
+    if source = opts[:source],
+      do: Application.put_env(:ex_tbp_monty, :monty_source, Path.expand(source))
+
+    if source = opts[:teleop_source],
+      do: Application.put_env(:ex_tbp_monty, :teleop_source, Path.expand(source))
   end
 
-  defp entry(path, package, existing) do
-    relative = Path.relative_to(path, package)
-    elixir = ModuleMap.module_for(relative)
-    classes = classes_in(path)
-    known = Map.get(existing, relative, %{})
+  defp entries_for(package, existing) do
+    Enum.map(ModuleMap.python_files(package), fn relative ->
+      elixir = ModuleMap.module_for(package.namespace, relative)
+      known = Map.get(existing, {package.name, relative}, %{})
 
-    %{
-      python: relative,
-      elixir: elixir,
-      status: status(known, elixir, relative),
-      reason: known[:reason] || default_reason(relative),
-      classes:
-        Enum.map(classes, fn class ->
-          %{
-            python: class,
-            elixir: ModuleMap.class_module(elixir, class, relative),
-            status: class_status(known, elixir, class, relative)
-          }
-        end)
-    }
+      %{
+        package: package.name,
+        python: relative,
+        elixir: elixir,
+        status: status(package.name, known, elixir, relative),
+        reason: known[:reason] || default_reason(package.name, relative),
+        classes:
+          for class <- classes_in(package, relative) do
+            %{
+              python: class,
+              elixir: ModuleMap.class_module(elixir, class, relative),
+              status: class_status(package.name, known, elixir, class, relative)
+            }
+          end
+      }
+    end)
   end
 
-  defp status(known, elixir, relative) do
+  defp status(package, known, elixir, relative) do
     cond do
       known[:status] == :excluded -> :excluded
-      tooling?(relative) -> :excluded
+      tooling?(package, relative) -> :excluded
       module_exists?(elixir) -> :implemented
       true -> :planned
     end
   end
 
-  defp class_status(known, elixir, class, relative) do
+  defp class_status(package, known, elixir, class, relative) do
     excluded_classes = Map.get(known, :excluded_classes, [])
 
     cond do
       class in excluded_classes -> :excluded
-      status(known, elixir, relative) == :excluded -> :excluded
+      status(package, known, elixir, relative) == :excluded -> :excluded
       module_exists?(ModuleMap.class_module(elixir, class, relative)) -> :implemented
       true -> :planned
     end
   end
 
-  # Hydra's own tooling lives in the package but is not part of the runtime;
-  # `Monty.Config` replaces it.
-  defp tooling?(relative), do: String.starts_with?(relative, "conf/")
+  # Hydra's own tooling lives in the Monty package but is not part of the
+  # runtime; `Monty.Config` replaces it.
+  defp tooling?("monty", relative), do: String.starts_with?(relative, "conf/")
+  defp tooling?(_package, _relative), do: false
 
-  defp default_reason(relative) do
-    if tooling?(relative),
+  defp default_reason("monty", relative) do
+    if tooling?("monty", relative),
       do: "Hydra config tooling; superseded by Monty.Config",
       else: nil
   end
+
+  defp default_reason(_package, _relative), do: nil
 
   defp module_exists?(module) do
     module
@@ -120,22 +117,24 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
     |> Code.ensure_loaded?()
   end
 
-  defp classes_in(path) do
-    path
+  defp classes_in(package, relative) do
+    dir = Path.join(package.root.(), package.relative)
+
+    dir
+    |> Path.join(relative)
     |> File.read!()
     |> then(&Regex.scan(~r/^class\s+([A-Z]\w*)/m, &1))
     |> Enum.map(fn [_, class] -> class end)
   end
-
-  defp implemented(entries),
-    do: Enum.count(entries, &(&1.status == :implemented))
 
   defp read_existing do
     if File.exists?(@map_path) do
       {entries, _binding} = Code.eval_file(@map_path)
 
       Map.new(entries, fn entry ->
-        {entry.python,
+        package = Map.get(entry, :package, "monty")
+
+        {{package, entry.python},
          %{
            status: entry.status,
            reason: entry[:reason],

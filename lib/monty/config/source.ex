@@ -40,6 +40,18 @@ defmodule Monty.Config.Source do
   def conf_dir(root \\ root()), do: Path.join([root, "src", "tbp", "monty", "conf"])
 
   @doc """
+  The teleop checkout to read from.
+
+  `TELEOP_SOURCE` wins; otherwise `../tbp.teleop` next to the project, which is
+  where the reference checkout lives in this workspace.
+  """
+  @spec teleop_root() :: Path.t()
+  def teleop_root do
+    Application.get_env(:ex_tbp_monty, :teleop_source) ||
+      Path.expand(System.get_env("TELEOP_SOURCE", "../tbp.teleop"))
+  end
+
+  @doc """
   Names of the experiments Monty ships, relative to the `experiment` group and
   without the `.yaml` suffix.
 
