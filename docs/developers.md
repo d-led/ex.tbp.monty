@@ -28,6 +28,11 @@ contract needs both checkouts (`MONTY_SOURCE` and `TELEOP_SOURCE`, default
   plain data, one-to-one with Python, tested directly. `Monty.Runtime.*` owns
   processes, routing and telemetry, and contains no algorithm. A GenServer
   callback that computes is a bug.
+* **Processes have a typed client API.** Call sites use
+  `SensorModuleServer.step(server, ...)` or
+  `LearningModuleServer.send_out_vote(server)`, never raw `GenServer.call/3`.
+  The client functions and the callbacks are separate sections of the module,
+  and every entry point carries a typespec.
 * **Configs are read, never invented.** The Hydra subset implemented in
   `Monty.Config` is exactly what Monty's tree uses. Adding a resolver or a
   default means finding the corresponding use in Monty's `conf/`, not

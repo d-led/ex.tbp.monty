@@ -51,6 +51,7 @@ export TELEOP_SOURCE=../tbp.teleop # default; the teleop tool being replaced
 ```bash
 scripts/quality.sh           # lint, the suite with coverage, the CRAP report
 scripts/quality.sh --fast    # static analysis only
+scripts/quality.sh --types   # ...and dialyzer (CI runs it as its own job)
 mix lint                     # warnings-as-errors, unused deps, format, credo --strict, sobelow
 mix cover                    # tests with coverage (threshold 85)
 mix complexity               # CRAP: 20 for the ported core, 30 for the web layer
