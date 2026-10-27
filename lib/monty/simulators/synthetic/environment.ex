@@ -19,28 +19,34 @@ defmodule Monty.Simulators.Synthetic.Environment do
   Observations and proprioceptive state for a step.
 
   Keys and units follow Monty: metres, sensor position relative to the agent,
-  agent position in the global frame.
+  agent position in the global frame. Every sensor the caller names sees the
+  same moving scene from its own offset, so an experiment with several sensors
+  gets several percepts per step — which is what its wiring expects.
   """
-  @spec observations(non_neg_integer()) :: {map(), map()}
-  def observations(step) do
+  @spec observations(non_neg_integer(), [String.t()]) :: {map(), map()}
+  def observations(step, sensor_ids \\ [@sensor_id]) do
+    sensor_ids = if sensor_ids == [], do: [@sensor_id], else: sensor_ids
     x = step * 0.01
 
     observations = %{
-      @agent_id => %{
-        @sensor_id => %{
-          "location" => [x, 0.0, 0.1],
-          "value" => x
-        }
-      }
+      @agent_id =>
+        Map.new(Enum.with_index(sensor_ids), fn {sensor_id, index} ->
+          {sensor_id, %{"location" => [x, 0.0, 0.1 + index * 0.01], "value" => x}}
+        end)
     }
 
     proprioceptive_state = %{
       @agent_id => %{
         "position" => [x, 0.0, 0.0],
         "rotation" => [1.0, 0.0, 0.0, 0.0],
-        "sensors" => %{
-          @sensor_id => %{"position" => [0.0, 0.0, 0.1], "rotation" => [1.0, 0.0, 0.0, 0.0]}
-        }
+        "sensors" =>
+          Map.new(Enum.with_index(sensor_ids), fn {sensor_id, index} ->
+            {sensor_id,
+             %{
+               "position" => [0.0, 0.0, 0.1 + index * 0.01],
+               "rotation" => [1.0, 0.0, 0.0, 0.0]
+             }}
+          end)
       }
     }
 
