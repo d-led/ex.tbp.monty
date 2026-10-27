@@ -20,7 +20,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   use ExTbpMontyWeb, :live_view
 
   alias Monty.Studio
-  alias Monty.Studio.{Jobs, LogFilter, RunHistory, RunLog, Setup}
+  alias Monty.Studio.{Jobs, LogFilter, Replay, RunHistory, RunLog, Setup}
 
   # A log is a thing a person reads back, not a database: the last few thousand
   # lines are enough to scroll through a run and bounded enough that a runaway
@@ -77,6 +77,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       log_path: record.log_path
     )
     |> seed_log(record)
+    |> watch()
   end
 
   # The lines a run already printed are in the record; showing the log from the
@@ -200,10 +201,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="text-sm font-medium">Log</h3>
             <form id="log-filter" phx-change="filter" phx-debounce="150" class="flex-1">
+              <%!-- The value is deliberately not bound: a run's log arrives
+              while a person is typing, and a re-render that rewrites the box
+              under their fingers is a filter that cannot be typed into. --%>
               <input
                 type="search"
                 name="filter"
-                value={@filter}
                 placeholder="filter: every word must match"
                 class="input input-xs w-full max-w-sm font-mono"
                 aria-label="Filter the log: every word must appear in a line"
@@ -221,7 +224,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             id="run-log"
             class="max-h-56 overflow-auto rounded-field border border-base-300 bg-base-100 p-2 font-mono text-[11px] leading-5"
           >
-            <li id="run-log-empty" class="text-base-content/50">
+            <%!-- An empty state is for a log with nothing in it, or a filter
+            that kept nothing. With no filter typed, every line matches, so
+            there is nothing to say. --%>
+            <li :if={@shown == []} id="run-log-empty" class="text-base-content/50">
               {if @lines == [], do: "no lines yet", else: "no line matches this filter"}
             </li>
             <li :for={line <- @shown} id={"log-#{line.id}"} class={line_class(line)}>
@@ -282,6 +288,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   def handle_info({:studio, _other_run, _event}, socket), do: {:noreply, socket}
 
+  def handle_info(:studio_poll, %{assigns: %{run_id: nil}} = socket), do: {:noreply, socket}
+
+  def handle_info(:studio_poll, socket) do
+    socket = reconcile(socket)
+
+    if socket.assigns.status == "running" do
+      {:noreply, watch(socket)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   defp handle_studio({:started, steps}, socket) do
     assign(socket, status: "running", progress: {0, steps})
   end
@@ -293,14 +311,84 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
   end
 
-  defp handle_studio({:finished, %{status: status, summary: summary}}, socket) do
-    assign(socket, status: status, summary: summary)
+  defp handle_studio({:finished, _summary}, socket) do
+    # The record is the truth about a finished run; the message only says it is
+    # time to look.
+    reconcile(socket)
   end
 
   defp handle_studio({:failed, %{reason: reason}}, socket) do
     socket
-    |> assign(status: "failed")
     |> push(nil, "the run failed: #{inspect(reason)}", :error)
+    |> reconcile()
+  end
+
+  # What the record says, applied to the page.
+  #
+  # A page can miss messages: the queue runs a run wherever a worker is free
+  # (another node, another release of this application), and a socket can blink.
+  # The row is written before the line is broadcast, so asking the row is always
+  # at least as new as the last message — which is why the page also polls it
+  # while a run is in flight, and stops as soon as the run is not running.
+  defp reconcile(%{assigns: %{run_id: nil}} = socket), do: socket
+
+  defp reconcile(%{assigns: %{run_id: run_id}} = socket) do
+    case RunHistory.get(run_id) do
+      nil ->
+        socket
+
+      record ->
+        socket
+        |> assign(
+          status: record.status,
+          progress: {length(record.log), record.steps},
+          log_path: record.log_path,
+          summary: if(record.summary == %{}, do: socket.assigns.summary, else: record.summary)
+        )
+        |> merge_lines(record)
+        |> merge_frames(record)
+    end
+  end
+
+  # A run that was reported from elsewhere never sent its pictures here, so the
+  # last frame of the record's timeline stands in: what the run saw at its last
+  # step is better than a panel that never filled in.
+  defp merge_frames(socket, record) do
+    if socket.assigns[:frames_seeded] do
+      socket
+    else
+      case Replay.at(record, Replay.last_step(record)) do
+        %{frames: frames} when frames != [] ->
+          socket
+          |> assign(frames_seeded: true)
+          |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
+
+        _no_frames ->
+          socket
+      end
+    end
+  end
+
+  # Lines already on screen stay where they are; lines the record has and the
+  # page does not are the ones that were missed.
+  defp merge_lines(socket, record) do
+    seen = socket.assigns.lines |> Enum.filter(& &1.step) |> length()
+
+    if seen >= length(record.log) do
+      socket
+    else
+      chatter = Enum.filter(socket.assigns.lines, &is_nil(&1.step))
+      recorded = Enum.map(record.log, fn entry -> line(entry["step"], RunLog.line(entry)) end)
+      assign(socket, lines: Enum.sort_by(recorded ++ chatter, & &1.id))
+    end
+  end
+
+  # Often enough that a run looks live, rarely enough to be nothing.
+  defp poll_ms, do: Application.get_env(:ex_tbp_monty, :studio_poll_ms, 500)
+
+  defp watch(socket) do
+    Process.send_after(self(), :studio_poll, poll_ms())
+    socket
   end
 
   # -- starting a run --------------------------------------------------------
@@ -308,10 +396,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp start(socket, opened, steps) do
     case RunHistory.start(RunLog.attributes(opened, steps)) do
       {:ok, record} ->
+        # Subscribe before enqueueing: the queue can start a job within
+        # milliseconds of the insert, and a run that finishes before the page
+        # listens is a run the page watched happen and never heard about.
+        Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
+
         case Jobs.Run.enqueue_run(record) do
           {:ok, _job} ->
-            Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
-
             {:noreply,
              socket
              |> assign(
@@ -322,7 +413,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                lines: [],
                log_path: record.log_path
              )
-             |> push(nil, "queued: #{steps} step(s) of #{opened.name}", :info)}
+             |> push(nil, "queued: #{steps} step(s) of #{opened.name}", :info)
+             |> watch()}
 
           {:error, reason} ->
             not_queued(socket, record, reason)

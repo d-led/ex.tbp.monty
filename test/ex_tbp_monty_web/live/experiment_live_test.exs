@@ -15,6 +15,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     Application.put_env(:ex_tbp_monty, :experiments_dir, tmp)
     Application.put_env(:ex_tbp_monty, :studio_tick_ms, 1)
     Application.put_env(:ex_tbp_monty, :studio_frame_throttle_ms, 0)
+    Application.put_env(:ex_tbp_monty, :studio_artifacts_dir, Path.join(tmp, "runs"))
+    Application.put_env(:ex_tbp_monty, :studio_poll_ms, 60_000)
 
     on_exit(fn ->
       Application.put_env(:ex_tbp_monty, :experiments_dir, previous_dir || "priv/experiments")
@@ -25,6 +27,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
         else: Application.delete_env(:ex_tbp_monty, :studio_frame_throttle_ms)
 
       Monty.Test.PrerequisiteDownloads.stop_all()
+      Application.delete_env(:ex_tbp_monty, :studio_artifacts_dir)
+      Application.delete_env(:ex_tbp_monty, :studio_poll_ms)
       File.rm_rf!(tmp)
     end)
 
@@ -124,6 +128,17 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert view |> element("#run-log-empty") |> render() =~ "no line matches"
     end
 
+    test "a log with no filter says nothing about matching", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # Every line matches an empty filter, so there is no empty state to show.
+      refute has_element?(view, "#run-log-empty")
+      assert visible_lines(view) |> length() > 1
+    end
+
     test "opening the page again finds the run that is still going", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
 
@@ -182,6 +197,46 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       assert RunHistory.get(record.id).status == "failed"
     end
+  end
+
+  describe "a run reported from elsewhere" do
+    test "the page catches up from the record", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+
+      view |> element("#run") |> render_click()
+      record = RunHistory.get(current_run_id(view))
+
+      # This is another node's worker: the record moves, this page hears
+      # nothing. The row is written before a line is broadcast, so the row is
+      # where the page gets the truth from when a message goes missing.
+      {:ok, record} = RunHistory.record_step(record, entry(0), moment(0))
+      {:ok, _record} = RunHistory.finish(record, %{"steps" => 1, "votes_used" => 1})
+
+      send(view.pid, :studio_poll)
+      _ = :sys.get_state(view.pid)
+
+      assert visible_lines(view) |> Enum.any?(&(&1 =~ "step 0"))
+      assert has_element?(view, "#run-summary")
+    end
+  end
+
+  defp entry(step) do
+    %{
+      "step" => step,
+      "percepts" => ["patch"],
+      "inputs" => %{"learning_module_0" => 1},
+      "votes" => %{"sent" => 1, "used" => 1},
+      "goals" => 1,
+      "actions" => 1,
+      "duration_us" => 100
+    }
+  end
+
+  defp moment(step) do
+    %{
+      "step" => step,
+      "sensors" => %{"patch" => %{"location" => [step * 0.01, 0.0, 0.1], "value" => 0.0}}
+    }
   end
 
   # The queue is manual in tests, so the page test performs the run itself

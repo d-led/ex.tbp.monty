@@ -231,3 +231,6 @@ backups/
 
 # Dialyzer PLTs are built locally and cached in CI
 /priv/plts/
+
+# Studio runs write their logs here; they are not source.
+/priv/studio_runs/
