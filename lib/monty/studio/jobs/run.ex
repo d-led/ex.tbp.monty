@@ -18,8 +18,8 @@ defmodule Monty.Studio.Jobs.Run do
 
   require Logger
 
-  alias Monty.Studio
   alias Monty.Simulators.Synthetic.{Camera, Environment}
+  alias Monty.Studio
   alias Monty.Studio.{Artifacts, Run, RunHistory, RunLog, Setup, Summary}
 
   @doc "Enqueues a run of `attributes` (see `RunLog.attributes/2`) and returns the job."
