@@ -147,3 +147,26 @@ from the page and from `mix monty.run`.
 No pretrained `.pt`/torch checkpoint import (graphs only, rebuild by running a
 training experiment); no Habitat; no GPU or EXLA requirement; no distributed
 clustering (the design keeps it possible); no WandB.
+
+## Decision: the pretrained library lives as long as the experiment
+
+Monty loads pretrained models per learning module and per episode; the same
+megabytes are read and parsed again for every episode of every epoch. We will not.
+
+- **Constructed once, at experiment start**, by the run worker, from the
+  experiment's configured model directory. One parse, one place that reports
+  "these models, from this path, loaded in this long".
+- **Handed to each episode as data.** A memory is an immutable value here, so a
+  thousand episodes referencing the same library cost a reference each, not a
+  copy. Nothing needs a process to guard it, which means nothing can be mutated
+  behind an experiment's back.
+- **Read-only for recognition.** Eval episodes match against the library and
+  never extend it, so there is nothing to leak into the next experiment.
+- **Training episodes write to their own memory**, seeded from the library, and
+  are persisted explicitly at the end of an epoch. A training run that crashes
+  half-way therefore cannot corrupt the library a later experiment starts from.
+- **A process only if loading becomes lazy**: a library too large to parse up
+  front becomes a reader with a read-only contract, not a mutable cache.
+
+"Constructed at experiment start" is therefore not a cache with a lifetime
+problem — it is the experiment's input, with the experiment's lifetime.
