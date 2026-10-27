@@ -41,7 +41,7 @@ defmodule Monty.Runtime.Model do
   end
 
   @doc "A `:via` name for a model's supervisor."
-  @spec via(atom() | String.t()) :: {:via, Registry, {atom(), term()}}
+  @spec via(atom() | String.t()) :: {:via, module(), {atom(), term()}}
   def via(model_id), do: Registry.via({:model, model_id})
 
   @doc """

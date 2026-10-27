@@ -39,8 +39,11 @@ defmodule ExTbpMonty.MixProject do
     ]
   end
 
+  # Build-only Mix tasks live outside lib/ so the test environment (and the
+  # types job) never sees them: they shell out to asset tooling that is only
+  # present when an image is being built.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(_), do: ["lib"]
+  defp elixirc_paths(_), do: ["lib", "mix_tasks"]
 
   defp package do
     [
@@ -116,8 +119,13 @@ defmodule ExTbpMonty.MixProject do
     [
       plt_core_path: "priv/plts",
       plt_local_path: "priv/plts",
-      plt_add_apps: [:mix],
-      flags: [:error_handling, :extra_return, :missing_return, :underspecs]
+      plt_add_apps: [:mix, :ex_unit],
+      # The types job is about the application. Mix tasks are build tooling
+      # that dialyzer cannot see in every environment (a dev-only asset
+      # library is absent under MIX_ENV=test), and tests are exercised by
+      # running them; warnings there would drown the signal.
+      exclude_paths: ["test/**"],
+      flags: [:error_handling, :extra_return, :missing_return]
     ]
   end
 

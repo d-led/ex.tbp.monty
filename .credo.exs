@@ -3,7 +3,7 @@
     %{
       name: "default",
       files: %{
-        included: ["lib/", "test/"],
+        included: ["lib/", "mix_tasks/", "test/"],
         excluded: [~r"/_build/", ~r"/deps/"]
       },
       strict: true,

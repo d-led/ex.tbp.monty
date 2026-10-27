@@ -25,12 +25,14 @@ defmodule ExTbpMonty.BuildInfo do
           version: String.t(),
           revision: String.t() | nil,
           built_at: String.t() | nil,
-          ci: %{
-            provider: String.t() | nil,
-            workflow: String.t() | nil,
-            run_number: String.t() | nil,
-            run_url: String.t() | nil
-          }
+          ci:
+            %{
+              provider: String.t() | nil,
+              workflow: String.t() | nil,
+              run_number: String.t() | nil,
+              run_url: String.t() | nil
+            }
+            | nil
         }
 
   @doc "The build the running release came from, read on first use."

@@ -34,18 +34,18 @@ defmodule Monty.Geometry do
   end
 
   @doc "Dot product of two 3-vectors."
-  @spec dot([number()], [number()]) :: float()
+  @spec dot([number()], [number()]) :: number()
   def dot([a1, a2, a3], [b1, b2, b3]), do: a1 * b1 + a2 * b2 + a3 * b3
 
   @doc "Multiplies a 3×3 matrix by a 3-vector."
-  @spec apply([[number()]], [number()]) :: [[float()]]
+  @spec apply([[number()]], [number()]) :: [number()]
   def apply(matrix, vector), do: Enum.map(matrix, &dot(&1, vector))
 
   @doc "Adds two 3-vectors."
-  @spec add([number()], [number()]) :: [[float()]]
+  @spec add([number()], [number()]) :: [number()]
   def add([a1, a2, a3], [b1, b2, b3]), do: [a1 + b1, a2 + b2, a3 + b3]
 
   @doc "Subtracts two 3-vectors."
-  @spec subtract([number()], [number()]) :: [[float()]]
+  @spec subtract([number()], [number()]) :: [number()]
   def subtract([a1, a2, a3], [b1, b2, b3]), do: [a1 - b1, a2 - b2, a3 - b3]
 end

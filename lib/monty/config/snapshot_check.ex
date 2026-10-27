@@ -24,7 +24,7 @@ defmodule Monty.Config.SnapshotCheck do
 
   Returns the number of experiments compared, or the differences found.
   """
-  @spec run(keyword()) :: {:ok, non_neg_integer()} | {:error, [difference()] | term()}
+  @spec run(keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
   def run(opts \\ []) do
     root = Keyword.get_lazy(opts, :source, fn -> Source.root() end)
     conf_dir = Source.conf_dir(root)
