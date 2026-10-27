@@ -33,6 +33,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   require Logger
 
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
+  alias Monty.Frameworks.Utils.SpatialArithmetics
 
   @pose_features ["pose_vectors", "pose_fully_defined"]
 
@@ -277,6 +278,31 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
       node_ids ->
         Map.new(values, fn {key, rows} -> {key, Enum.map(node_ids, &Enum.at(rows, &1))} end)
     end
+  end
+
+  @doc """
+  The pose vectors stored at every node of a graph, one 3×3 set per node.
+
+  A burst samples rotations by aligning these against what the sensor sees, so
+  it wants the whole set in one place rather than a node at a time — Monty's
+  `get_rotation_features_at_all_nodes`, which reshapes the flattened pose
+  vectors back into the three directions they are.
+  """
+  @spec get_rotation_features_at_all_nodes(t(), graph_id(), input_channel()) :: [
+          [SpatialArithmetics.vector()]
+        ]
+  def get_rotation_features_at_all_nodes(%__MODULE__{} = memory, graph_id, input_channel) do
+    memory
+    |> get_features_at_node(
+      graph_id,
+      input_channel,
+      get_graph_node_ids(memory, graph_id, input_channel),
+      [
+        "pose_vectors"
+      ]
+    )
+    |> Map.fetch!("pose_vectors")
+    |> Enum.map(&Enum.chunk_every(&1, 3))
   end
 
   @doc "The number of objects in memory."

@@ -106,6 +106,17 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemoryTest do
                "rgba" => [[0.0], [0.2]]
              }
     end
+
+    test "the pose vectors of every node come back as three directions each" do
+      memory = loaded(%{"mug" => model("mug", 2)})
+
+      pose = [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+
+      assert GraphMemory.get_rotation_features_at_all_nodes(memory, "mug", "patch") == [
+               pose,
+               pose
+             ]
+    end
   end
 
   describe "learning from observations" do
