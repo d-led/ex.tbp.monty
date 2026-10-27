@@ -81,17 +81,17 @@ defmodule Monty.Frameworks.Models.Buffer.BufferEncoder do
   defp encode_default(nil), do: nil
   defp encode_default(value) when is_atom(value), do: Atom.to_string(value)
   defp encode_default(values) when is_list(values), do: Enum.map(values, &encode/1)
-  defp encode_default(%_{} = unknown), do: raise_unknown(unknown)
+
+  defp encode_default(%_{} = unknown) do
+    raise ArgumentError,
+          "no encoder for #{inspect(type_of(unknown))}: register one with " <>
+            "#{inspect(__MODULE__)}.register/2"
+  end
+
   defp encode_default(%{} = map), do: Map.new(map, fn {key, value} -> {key, encode(value)} end)
 
   defp encode_default(otherpiece) do
     raise ArgumentError, "cannot encode #{inspect(otherpiece)} as JSON-compatible data"
-  end
-
-  defp raise_unknown(%module{}) do
-    raise ArgumentError,
-          "no encoder for #{inspect(module)}: register one with " <>
-            "#{inspect(__MODULE__)}.register/2"
   end
 
   defp type_of(%module{}), do: module
