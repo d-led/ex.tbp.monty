@@ -1366,18 +1366,18 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer",
     package: "monty",
     python: "frameworks/models/evidence_matching/hypotheses_displacer.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer.HypothesisDisplacerTelemetry",
         python: "HypothesisDisplacerTelemetry"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer",
         python: "HypothesesDisplacer"
       },
