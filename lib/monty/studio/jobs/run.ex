@@ -19,7 +19,8 @@ defmodule Monty.Studio.Jobs.Run do
   require Logger
 
   alias Monty.Studio
-  alias Monty.Studio.{Artifacts, Frames, Run, RunHistory, RunLog, Setup, Summary}
+  alias Monty.Simulators.Synthetic.{Camera, Environment}
+  alias Monty.Studio.{Artifacts, Run, RunHistory, RunLog, Setup, Summary}
 
   @doc "Enqueues a run of `attributes` (see `RunLog.attributes/2`) and returns the job."
   @spec enqueue(map()) :: {:ok, Oban.Job.t()} | {:error, term()}
@@ -136,11 +137,15 @@ defmodule Monty.Studio.Jobs.Run do
   end
 
   # Every sensor, every step: a queued run has no socket waiting on it, so the
-  # throttle that protects a live page has nothing to protect.
+  # throttle that protects a live page has nothing to protect. The frames are
+  # not thumbnails either — they are the same drawing a live page would get.
   defp frames_for(sensor_ids, observations, step) do
-    {frames, _sent} = Frames.for_step(sensor_ids, observations, step, %{}, 0, 0)
+    seen = Map.get(observations, Environment.agent_id(), %{})
 
-    Enum.map(frames, &Map.take(&1, [:sensor_id, :media_type, :data, :note]))
+    sensor_ids
+    |> Enum.filter(&Map.has_key?(seen, &1))
+    |> Enum.map(&Camera.frame(&1, seen[&1], step))
+    |> Enum.map(&Map.take(&1, [:sensor_id, :media_type, :data, :note]))
   end
 
   defp close(record, opened, outcome, infos, run_id) do

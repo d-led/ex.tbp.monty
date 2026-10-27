@@ -421,7 +421,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         end
 
       {:error, changeset} ->
-        {:noreply, push(socket, nil, "cannot record this run: #{describe(changeset)}", :error)}
+        {:noreply, push(socket, nil, "cannot record this run: #{changeset_errors(changeset)}", :error)}
     end
   end
 
@@ -461,11 +461,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
-  defp describe(%Ecto.Changeset{} = changeset) do
+  defp changeset_errors(%Ecto.Changeset{} = changeset) do
     Enum.map_join(changeset.errors, ", ", fn {field, {message, _}} -> "#{field}: #{message}" end)
   end
-
-  defp describe(reason), do: inspect(reason)
 
   # -- helpers ---------------------------------------------------------------
 
