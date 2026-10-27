@@ -32,6 +32,7 @@ defmodule ExTbpMontyWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    live "/runs/demo", RunsLive, :demo
   end
 
   # Other scopes may use custom stacks.
