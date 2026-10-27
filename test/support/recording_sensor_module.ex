@@ -6,7 +6,7 @@ defmodule Monty.Test.RecordingSensorModule do
   messages it receives, which is the same thing the runtime promises.
   """
 
-  @behaviour Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
+  use Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
 
   alias Monty.Test.Messages
 

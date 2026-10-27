@@ -6,7 +6,7 @@ defmodule Monty.Test.RecordingLearningModule do
   wiring it wants to prove without writing another module.
   """
 
-  @behaviour Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+  use Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
 
   def new(opts) do
     Map.merge(

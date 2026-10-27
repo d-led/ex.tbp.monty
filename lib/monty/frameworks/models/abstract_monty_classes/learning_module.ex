@@ -52,4 +52,25 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
   @callback reset_stm(state) :: state
 
   @optional_callbacks propose_goals: 1, propose_region: 1, get_output: 1
+
+  @doc """
+  Defaults for the parts not every learning module has: no goals, no region,
+  no output. `use` this behaviour and override what applies.
+  """
+  defmacro __using__(_opts) do
+    quote do
+      @behaviour Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+      def propose_goals(state), do: {[], state}
+
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+      def propose_region(state), do: {Monty.Cmp.AttentionRegion.empty(), state}
+
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+      def get_output(state), do: {nil, state}
+
+      defoverridable propose_goals: 1, propose_region: 1, get_output: 1
+    end
+  end
 end

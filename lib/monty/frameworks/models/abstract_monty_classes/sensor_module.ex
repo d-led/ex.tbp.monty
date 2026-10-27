@@ -38,4 +38,26 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.SensorModule do
   @callback propose_region(state) :: {AttentionRegion.t(), state}
 
   @optional_callbacks propose_goals: 1, propose_region: 1
+
+  @doc """
+  Defaults matching Monty's base `SensorModule`: a plain sensor proposes no
+  goals and attends to nothing.
+
+  A module `use`s this behaviour and overrides what it needs, which is how the
+  Python base class reads too — and why a module that implements
+  `propose_goals/1` does not have to fight a catch-all default clause.
+  """
+  defmacro __using__(_opts) do
+    quote do
+      @behaviour Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
+
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
+      def propose_goals(state), do: {[], state}
+
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
+      def propose_region(state), do: {Monty.Cmp.AttentionRegion.empty(), state}
+
+      defoverridable propose_goals: 1, propose_region: 1
+    end
+  end
 end

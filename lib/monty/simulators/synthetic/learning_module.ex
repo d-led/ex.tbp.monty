@@ -8,7 +8,7 @@ defmodule Monty.Simulators.Synthetic.LearningModule do
   the coordinator does not change — only this stand-in goes away.
   """
 
-  @behaviour Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+  use Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
 
   alias Monty.Cmp.{Goal, Message}
   alias Monty.Geometry.OrientationMatrix

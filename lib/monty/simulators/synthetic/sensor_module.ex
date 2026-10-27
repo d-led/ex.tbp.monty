@@ -8,7 +8,7 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
   implements the same behaviour a ported sensor module will.
   """
 
-  @behaviour Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
+  use Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
   alias Monty.Cmp.Message
   alias Monty.Geometry.SurfacePoseVectors
 
