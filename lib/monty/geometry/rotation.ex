@@ -221,7 +221,7 @@ defmodule Monty.Geometry.Rotation do
   defp axis_vector(:y), do: [0.0, 1.0, 0.0]
   defp axis_vector(:z), do: [0.0, 0.0, 1.0]
 
-  defp deg(radians), do: radians * :math.pi() / 180
+  defp deg(degrees), do: Math.degrees(degrees)
 
   defp rad_to_deg(radians), do: radians * 180 / :math.pi()
 

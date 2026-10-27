@@ -44,4 +44,15 @@ defmodule Monty.Math do
   @doc "How small an angle (in radians) counts as no rotation."
   @spec rotation_tolerance_radians() :: float()
   def rotation_tolerance_radians, do: @rotation_tolerance_radians
+
+  @doc """
+  An angle in degrees as radians.
+
+  Monty writes this conversion out at each use (`math.radians`, or `* pi / 180`
+  inside scipy calls); the arithmetic is the same either way, and having one
+  copy means a tolerance in degrees and a tolerance in radians cannot drift
+  apart.
+  """
+  @spec degrees(number()) :: float()
+  def degrees(degrees), do: degrees * :math.pi() / 180
 end

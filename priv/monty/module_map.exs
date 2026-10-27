@@ -1240,7 +1240,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.Channels",
     package: "monty",
     python: "frameworks/models/evidence_matching/channels.py",
@@ -2171,7 +2171,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Utils.GraphMatchingUtils",
     package: "monty",
     python: "frameworks/utils/graph_matching_utils.py",
