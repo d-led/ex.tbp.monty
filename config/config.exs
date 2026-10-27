@@ -50,9 +50,30 @@ config :tailwind,
   ]
 
 # Configure Elixir's Logger
+#
+# The metadata allow-list is the point: a line carries the identifiers a reader
+# needs to follow one run (or one download, or one job) through the log, and
+# nothing else. Anything not listed is dropped rather than printed as noise.
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  metadata: [
+    :request_id,
+    :experiment,
+    :run_id,
+    :job_id,
+    :download_id,
+    :module,
+    :sensor,
+    :step,
+    :status,
+    :reason,
+    :duration_us
+  ]
+
+# Phoenix logs every request and cannot be told to skip one; the replacement is
+# `ExTbpMontyWeb.Telemetry.RequestLog`, which logs one line per request and
+# nothing for the health probe.
+config :phoenix, :logger, false
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason

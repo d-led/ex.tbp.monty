@@ -5,6 +5,8 @@ defmodule ExTbpMonty.Application do
 
   use Application
 
+  require Logger
+
   @impl true
   def start(_type, _args) do
     children = [
@@ -29,7 +31,21 @@ defmodule ExTbpMonty.Application do
     # See https://elixir.hexdocs.pm/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: ExTbpMonty.Supervisor]
-    Supervisor.start_link(children, opts)
+
+    # Said once, at boot: which build this is, so a log from a container that
+    # started for someone else's deploy can still be identified.
+    Logger.info("build: #{ExTbpMonty.BuildInfo.description()}")
+
+    case Supervisor.start_link(children, opts) do
+      {:ok, pid} ->
+        # One log line per request, none for the health probe: Phoenix's own
+        # request logger is off in `config :phoenix, :logger`.
+        ExTbpMontyWeb.Telemetry.RequestLog.attach()
+        {:ok, pid}
+
+      error ->
+        error
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration

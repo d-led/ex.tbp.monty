@@ -28,6 +28,15 @@ defmodule ExTbpMontyWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # What a container runtime or a load balancer polls. It answers 200 and says
+  # nothing else: a probe that reports trouble by answering 503 is a probe whose
+  # absence from the request log means the application is up.
+  scope "/", ExTbpMontyWeb do
+    pipe_through :api
+
+    get "/health", HealthController, :show
+  end
+
   scope "/", ExTbpMontyWeb do
     pipe_through :browser
 

@@ -10,6 +10,10 @@ config :ex_tbp_monty, ExTbpMonty.Repo,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 
+# The studio shows what happened; the console keeps the structured log. SQL at
+# debug level is far too chatty to be useful in development.
+config :logger, level: :info
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
