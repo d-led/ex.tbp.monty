@@ -56,7 +56,10 @@ should move with every commit; when a mapped class is implemented,
    parallel columns plus `take/2` for the subset a module still believes), then
    `hypotheses_updater/` (`BurstSamplingHypothesesUpdater`, `Displacer`,
    `EvidenceSlopeTracker`). Property tests for evidence updates, fixtures for
-   the displacement.
+   the displacement. The pieces the updater is injected with are already ported:
+   `FeatureEvidence.Calculator` (**ported**: numeric, circular and categorical
+   comparisons, weighted per feature) and the two `FeaturesForMatching`
+   selectors (**ported**).
 4. **`graph_memory/`** — `GraphMemory`, `ObjectModel`, `features`/`locations`
    bookkeeping. Fixtures: a small graph saved by Monty, loaded identically.
 5. **`evidence_matching/learning_module.py`** — `EvidenceGraphLM`. The first real
