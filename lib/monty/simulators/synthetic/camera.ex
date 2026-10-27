@@ -71,7 +71,6 @@ defmodule Monty.Simulators.Synthetic.Camera do
     <line x1="0" y1="#{@height / 2}" x2="#{@width}" y2="#{@height / 2}" stroke="currentColor" stroke-opacity="0.15" stroke-dasharray="3 3"/>\
     <line x1="#{@width / 2}" y1="0" x2="#{@width / 2}" y2="#{@height}" stroke="currentColor" stroke-opacity="0.15" stroke-dasharray="3 3"/>\
     <circle cx="#{x}" cy="#{y}" r="5" fill="currentColor" opacity="0.75"/>\
-    <text x="4" y="12" font-size="8" fill="currentColor" opacity="0.6">step #{step}</text>\
     </svg>
     """
   end
