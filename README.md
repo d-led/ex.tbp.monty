@@ -65,6 +65,25 @@ Runs are recorded in Postgres the moment they start: the composed config, the
 inputs, the step log and the summary. Artifacts stay on the filesystem where
 Monty puts them, so forgetting a run forgets its history, not its model.
 
+Every page speaks Monty's vocabulary — sensor module, learning module,
+`sm_to_lm_matrix`, epochs, votes — because the point is that a Monty developer
+recognises the experiment and then notices the Elixir underneath it.
+
+### Headless
+
+The same experiments run without a browser, and are recorded the same way:
+
+```bash
+mix monty.run tutorial/first_experiment --steps 20
+mix monty.run randrot_noise_10distinctobj_5lms_dist_agent --steps 200 --no-record --quiet
+mix monty.bench tutorial/first_experiment randrot_noise_10distinctobj_5lms_dist_agent --repeat 5
+```
+
+`mix monty.run` exits non-zero when a config would not start. `mix monty.bench`
+times this port's timestep loop on real experiment shapes — not Monty's accuracy
+benchmarks (`benchmarks/*.csv`), which become comparable once the model modules
+are ported — and its numbers are what a `:tprof` profile should start from.
+
 ## Prerequisites
 
 Monty needs data and pretrained models before it can run an experiment. The
