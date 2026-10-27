@@ -11,12 +11,19 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     previous_dir = Application.get_env(:ex_tbp_monty, :experiments_dir)
     previous_tick = Application.get_env(:ex_tbp_monty, :studio_tick_ms)
+    previous_throttle = Application.get_env(:ex_tbp_monty, :studio_frame_throttle_ms)
     Application.put_env(:ex_tbp_monty, :experiments_dir, tmp)
     Application.put_env(:ex_tbp_monty, :studio_tick_ms, 1)
+    Application.put_env(:ex_tbp_monty, :studio_frame_throttle_ms, 0)
 
     on_exit(fn ->
       Application.put_env(:ex_tbp_monty, :experiments_dir, previous_dir || "priv/experiments")
       if previous_tick, do: Application.put_env(:ex_tbp_monty, :studio_tick_ms, previous_tick)
+
+      if previous_throttle,
+        do: Application.put_env(:ex_tbp_monty, :studio_frame_throttle_ms, previous_throttle),
+        else: Application.delete_env(:ex_tbp_monty, :studio_frame_throttle_ms)
+
       Monty.Test.PrerequisiteDownloads.stop_all()
       File.rm_rf!(tmp)
     end)
@@ -70,6 +77,20 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert_streamed_steps(view, 3)
       assert has_element?(view, "#steps-step-0")
       assert has_element?(view, "#steps-step-2")
+    end
+
+    test "each sensor has its own view, updated as the run steps", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+
+      view |> element("#run") |> render_click()
+      wait_for(view, "#frame-patch")
+
+      # One panel per sensor, side by side, and the picture follows the percept.
+      assert has_element?(view, "#frame-view_finder")
+
+      patch = view |> element("#frame-patch") |> render()
+      assert patch =~ "<svg"
+      assert patch =~ "step 1"
     end
 
     test "the log is streamed as it happens", %{conn: conn} do

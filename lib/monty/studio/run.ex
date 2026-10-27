@@ -63,7 +63,7 @@ defmodule Monty.Studio.Run do
   returned error: a step either produced a report or the run itself is broken,
   and pretending otherwise here would only move the decision.
   """
-  @spec step(t()) :: {:ok, map(), t()}
+  @spec step(t()) :: {:ok, map(), map(), t()}
   def step(%__MODULE__{model_id: model_id, setup: setup, step: step} = run) do
     {observations, proprioceptive_state} =
       Environment.observations(step, Setup.sensor_ids(setup))
@@ -71,7 +71,9 @@ defmodule Monty.Studio.Run do
     ctx = %{Monty.Context.new(seed(setup)) | step: step}
 
     {:ok, _actions, info} = Model.step(model_id, observations, proprioceptive_state, ctx)
-    {:ok, info, %{run | step: step + 1}}
+    # The observations come back with the report so a page can show what the
+    # modules saw, not just what they did with it.
+    {:ok, info, observations, %{run | step: step + 1}}
   end
 
   @doc "Whether the run has used its steps."

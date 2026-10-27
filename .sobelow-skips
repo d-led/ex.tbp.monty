@@ -23,3 +23,4 @@ Traversal.FileModule: Directory Traversal in `File.stream!`,lib/monty/prerequisi
 Traversal.FileModule: Directory Traversal in `File.stream!`,lib/monty/prerequisites/download.ex:227,52E5C3C
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/ex_tbp_monty/build_info.ex:118,4865D4A
 Traversal.FileModule: Directory Traversal in `File.write`,lib/monty/studio/drafts.ex:47,173E5A3
+XSS.Raw: XSS,lib/ex_tbp_monty_web/live/experiment_live.ex:139,24D0ED6

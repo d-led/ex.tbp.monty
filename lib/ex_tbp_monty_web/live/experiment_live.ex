@@ -12,7 +12,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   use ExTbpMontyWeb, :live_view
 
   alias Monty.Studio
-  alias Monty.Studio.{Run, RunHistory, Setup, Summary}
+  alias Monty.Studio.{Frames, Run, RunHistory, Setup, Summary}
 
   @impl true
   def mount(params, _session, socket) do
@@ -27,13 +27,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
            history: nil,
            summary: nil,
            infos: [],
+           frames_sent: %{},
            ticking: false,
            steps: steps(params)
          )
          |> stream_configure(:steps, dom_id: &"steps-step-#{&1.step}")
          |> stream_configure(:log, dom_id: &"log-#{&1.step}")
+         |> stream_configure(:frames, dom_id: &"frame-#{&1.sensor_id}")
          |> stream(:steps, [])
-         |> stream(:log, [])}
+         |> stream(:log, [])
+         |> stream(:frames, [])}
 
       {:error, reason} ->
         {:ok, assign(socket, opened: nil, error: reason, run: nil, summary: nil, infos: [])}
@@ -117,6 +120,25 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           sensor and learning module is its own supervised process, wired exactly as the config
           wires them.
         </p>
+
+        <div id="frames" phx-update="stream" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <p id="frames-empty" class="hidden only:block text-xs text-base-content/50">
+            Sensor views appear here as the run steps.
+          </p>
+          <figure
+            :for={{dom_id, frame} <- @streams.frames}
+            id={dom_id}
+            class="rounded-field border border-base-300 bg-base-100 p-1.5 text-base-content"
+          >
+            <figcaption class="flex items-baseline justify-between px-0.5 pb-1 text-[11px] text-base-content/60">
+              <span class="font-mono">{frame.sensor_id}</span>
+              <span>{frame.note}</span>
+            </figcaption>
+            <%!-- The frame is an SVG string this application generated, not
+            content from a request. --%>
+            <div class="text-base-content/80">{Phoenix.HTML.raw(frame.data)}</div>
+          </figure>
+        </div>
 
         <div id="steps" phx-update="stream" class="space-y-2">
           <p id="steps-empty" class="hidden only:block text-sm text-base-content/60">
@@ -247,16 +269,39 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   defp advance(%{assigns: %{run: run, infos: infos, opened: %{setup: setup}}} = socket) do
-    {:ok, info, run} = Run.step(run)
+    {:ok, info, observations, run} = Run.step(run)
     infos = infos ++ [info]
     summary = Summary.from_infos(infos, setup)
 
     socket
     |> assign(run: run, infos: infos, summary: summary)
     |> stream_insert(:steps, info)
+    |> send_frames(observations, info.step)
     |> record_step(info)
     |> maybe_finish(run, summary)
   end
+
+  # Sensor frames are the most expensive thing a run sends, so they are
+  # throttled per sensor (a view finder should not queue behind a patch
+  # sensor). Everything about the policy lives in `Monty.Studio.Frames`.
+  defp send_frames(%{assigns: %{opened: opened}} = socket, observations, step) do
+    {frames, sent} =
+      Frames.for_step(
+        Setup.sensor_ids(opened.setup),
+        observations,
+        step,
+        socket.assigns.frames_sent,
+        now_ms(),
+        Frames.throttle_ms()
+      )
+
+    frames
+    |> Enum.reduce(assign(socket, frames_sent: sent), fn frame, socket ->
+      stream_insert(socket, :frames, frame)
+    end)
+  end
+
+  defp now_ms, do: System.monotonic_time(:millisecond)
 
   defp schedule_tick(socket) do
     Process.send_after(self(), :tick, tick_ms())
