@@ -149,6 +149,42 @@ defmodule Monty.Geometry.Rotation do
     2 * half_angle
   end
 
+  @doc """
+  The weighted mean of several rotations: the rotation closest to all of them.
+
+  Averaging rotation *matrices* and calling the result a rotation gives
+  something that is not orthonormal, so the average is the rotation nearest to
+  the weighted sum — scipy's `Rotation.mean`, which is the chordal L2 mean.
+  Quaternions make that a dominant-eigenvector problem: the sum of weighted
+  outer products of the quaternions has the answer as its leading eigenvector.
+
+  The dominant eigenvector is found by power iteration. Where the two leading
+  eigenvalues tie, more than one rotation is equally close to the inputs and any
+  of them is a correct answer.
+  """
+  @spec mean([t()], [number()] | nil) :: t()
+  def mean(rotations, weights \\ nil) do
+    weights = weights || List.duplicate(1.0, length(rotations))
+
+    scatter =
+      rotations
+      |> Enum.zip(weights)
+      |> Enum.reduce(List.duplicate(List.duplicate(0.0, 4), 4), fn {rotation, weight}, sum ->
+        {w, x, y, z} = rotation.wxyz
+        quaternion = [w, x, y, z]
+
+        quaternion
+        |> outer_product()
+        |> Enum.map(fn row -> Enum.map(row, &(&1 * weight)) end)
+        |> add_matrices(sum)
+      end)
+
+    [w, x, y, z] = dominant_eigenvector(scatter, [1.0, 0.0, 0.0, 0.0])
+
+    {:ok, rotation} = from_quaternion({w, x, y, z})
+    rotation
+  end
+
   @doc "The quaternion `{w, x, y, z}`."
   @spec to_quaternion(t()) :: {float(), float(), float(), float()}
   def to_quaternion(%__MODULE__{wxyz: wxyz}), do: wxyz
@@ -233,5 +269,43 @@ defmodule Monty.Geometry.Rotation do
     if norm < Monty.Math.default_tolerance(),
       do: :zero,
       else: Enum.map(vector, &(&1 / norm))
+  end
+
+  defp outer_product(values) do
+    for first <- values, do: Enum.map(values, &(first * &1))
+  end
+
+  defp add_matrices(left, right) do
+    Enum.zip_with(left, right, fn left_row, right_row ->
+      Enum.zip_with(left_row, right_row, &(&1 + &2))
+    end)
+  end
+
+  # Power iteration on the 4x4 scatter matrix of the quaternions: the leading
+  # eigenvector is the rotation closest to all of them, in the chordal sense.
+  defp dominant_eigenvector(matrix, seed, iterations \\ 200) do
+    vector = normalised(seed)
+
+    Enum.reduce(1..iterations//1, vector, fn _iteration, vector ->
+      matrix
+      |> Enum.map(&dot_product(&1, vector))
+      |> normalised()
+    end)
+    |> case do
+      # A zero vector means every quaternion was zero, which cannot describe a
+      # rotation; the identity is the only honest answer left.
+      :zero -> [1.0, 0.0, 0.0, 0.0]
+      vector -> vector
+    end
+  end
+
+  defp dot_product(left, right) do
+    left |> Enum.zip(right) |> Enum.map(fn {a, b} -> a * b end) |> Enum.sum()
+  end
+
+  defp normalised(vector) do
+    length = :math.sqrt(dot_product(vector, vector))
+
+    if length < 1.0e-12, do: :zero, else: Enum.map(vector, &(&1 / length))
   end
 end

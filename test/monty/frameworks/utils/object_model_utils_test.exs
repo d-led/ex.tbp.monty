@@ -3,6 +3,7 @@ defmodule Monty.Frameworks.Utils.ObjectModelUtilsTest do
 
   alias Monty.Frameworks.Utils.ObjectModelUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
+  alias Monty.Geometry.Rotation
   alias Monty.Math
 
   @tolerance Math.default_tolerance()
@@ -146,6 +147,80 @@ defmodule Monty.Frameworks.Utils.ObjectModelUtilsTest do
     end
   end
 
+  describe "pose_vector_merge/4" do
+    test "merging a pose with itself changes nothing" do
+      pose = orthonormal_pose_vectors([0.0, 0.0, 1.0], [1.0, 0.0, 0.0])
+
+      assert_vectors_match(pose_vector_merge(pose, pose, 3, 5), pose)
+    end
+
+    test "the result is still a rotation, not a component-wise average" do
+      {:ok, first} = Rotation.from_axis_angle([0.0, 0.0, 1.0], 0.0)
+      {:ok, second} = Rotation.from_axis_angle([0.0, 0.0, 1.0], 1.0)
+
+      merged =
+        pose_vector_merge(flat(Rotation.to_matrix(first)), flat(Rotation.to_matrix(second)), 1, 1)
+
+      [normal, curvature_1, curvature_2] = Enum.chunk_every(merged, 3)
+      assert_in_delta SpatialArithmetics.magnitude(normal), 1.0, @tolerance
+      assert_in_delta SpatialArithmetics.dot(normal, curvature_1), 0.0, @tolerance
+      assert_in_delta SpatialArithmetics.dot(curvature_1, curvature_2), 0.0, @tolerance
+      # Halfway round a half-radian turn.
+      assert_in_delta SpatialArithmetics.get_angle_between(normal, [1.0, 0.0, 0.0]), 0.5, 1.0e-6
+    end
+  end
+
+  describe "pose_vector_mean/2" do
+    test "the same pose seen twice averages to itself" do
+      pose = orthonormal_pose_vectors([0.0, 0.0, 1.0], [1.0, 0.0, 0.0])
+
+      assert {mean_pose, true} = pose_vector_mean([pose, pose], [true, true])
+      assert_vectors_match(mean_pose, pose)
+    end
+
+    test "an observation with nothing in it is skipped" do
+      pose = orthonormal_pose_vectors([0.0, 0.0, 1.0], [1.0, 0.0, 0.0])
+      empty = List.duplicate(0.0, 9)
+
+      assert {mean_pose, true} = pose_vector_mean([empty, pose], [true, true])
+      assert_vectors_match(mean_pose, pose)
+    end
+
+    test "nothing observed means no pose at all" do
+      assert pose_vector_mean([List.duplicate(0.0, 9)], [false]) == {nil, false}
+    end
+
+    test "a surface seen from both sides is averaged on the side most observations share" do
+      up = orthonormal_pose_vectors([0.0, 0.0, 1.0], [1.0, 0.0, 0.0])
+      down = orthonormal_pose_vectors([0.0, 0.0, -1.0], [-1.0, 0.0, 0.0])
+
+      # The first observation is the odd one out; the three below it win.
+      assert {mean_pose, true} =
+               pose_vector_mean([up, down, down, down], [true, true, true, true])
+
+      assert_in_delta SpatialArithmetics.dot(Enum.take(mean_pose, 3), [0.0, 0.0, -1.0]),
+                      1.0,
+                      @tolerance
+    end
+
+    test "with one observation against two, Monty keeps the one, and so do we" do
+      up = orthonormal_pose_vectors([0.0, 0.0, 1.0], [1.0, 0.0, 0.0])
+      down = orthonormal_pose_vectors([0.0, 0.0, -1.0], [-1.0, 0.0, 0.0])
+
+      assert {mean_pose, true} = pose_vector_mean([down, up, up], [true, true, true])
+
+      assert_in_delta SpatialArithmetics.dot(Enum.take(mean_pose, 3), [0.0, 0.0, -1.0]),
+                      1.0,
+                      @tolerance
+    end
+
+    test "curvature directions are only averaged when the poses are fully defined" do
+      pose = orthonormal_pose_vectors([0.0, 0.0, 1.0], [1.0, 0.0, 0.0])
+
+      assert {_mean_pose, false} = pose_vector_mean([pose, pose], [false, false])
+    end
+  end
+
   describe "get_most_common_bool/1" do
     test "the majority wins" do
       assert get_most_common_bool([true, false, true])
@@ -197,6 +272,8 @@ defmodule Monty.Frameworks.Utils.ObjectModelUtilsTest do
                }
     end
   end
+
+  defp flat(rows), do: List.flatten(rows)
 
   defp assert_vectors_match(left, right) do
     Enum.zip(left, right)

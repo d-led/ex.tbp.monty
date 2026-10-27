@@ -24,6 +24,7 @@ defmodule Monty.Frameworks.Utils.ObjectModelUtils do
   """
 
   alias Monty.Frameworks.Utils.SpatialArithmetics
+  alias Monty.Geometry.Rotation
   alias Monty.Math
 
   @type locations :: [SpatialArithmetics.vector()]
@@ -122,6 +123,122 @@ defmodule Monty.Frameworks.Utils.ObjectModelUtils do
     curvature_2 = SpatialArithmetics.cross(normal, curvature_1)
 
     normal ++ curvature_1 ++ curvature_2
+  end
+
+  @doc """
+  Merge a newly averaged pose into the pose already stored, by weight.
+
+  Both are rotations, so they are averaged as rotations — not component-wise,
+  which would leave a matrix that is no longer a rotation.
+  """
+  @spec pose_vector_merge([number()], [number()], number(), number()) :: [float()]
+  def pose_vector_merge(new_pose_vecs, previous_pose_vecs, num_new_obs, num_previous_obs) do
+    [new_pose_vecs, previous_pose_vecs]
+    |> Enum.map(&as_rotation/1)
+    |> Rotation.mean([num_new_obs, num_previous_obs])
+    |> Rotation.to_matrix()
+    |> List.flatten()
+  end
+
+  @doc """
+  One representative pose from several observations of the same spot.
+
+  Two ambiguities have to be resolved first. A surface can be seen from either
+  side, so normals are counted by which half-sphere they point into — the one
+  spanned by the first observation's curvature directions — and the other side
+  is discarded rather than averaged in. And a curvature direction has no sign
+  (both point along the same axis), so those pointing the wrong way are flipped
+  before averaging.
+
+  The half-sphere rule inverts the count only when *fewer than half* agree
+  (`sum < len // 2`), so with three observations split one and two the single
+  agreeing observation wins. That is Monty's comparison, reproduced rather than
+  corrected: an experiment that averaged a different side would produce
+  different numbers from the Python.
+
+  Returns the flat nine-number pose, and whether the curvature directions were
+  used; when the poses are not fully defined they carry no information and the
+  first observation's direction is kept.
+  """
+  @spec pose_vector_mean([[number()]], [boolean()]) :: {[float()] | nil, boolean()}
+  def pose_vector_mean(pose_vecs, pose_fully_defined) do
+    case Enum.filter(pose_vecs, fn pose -> Enum.any?(pose, &(&1 != 0.0)) end) do
+      [] -> {nil, false}
+      observations -> mean_pose(observations, pose_fully_defined)
+    end
+  end
+
+  defp mean_pose(observations, pose_fully_defined) do
+    parts = Enum.map(observations, &split_pose/1)
+    [_first | _rest] = parts
+    {_normal, first_curvature_1, first_curvature_2} = hd(parts)
+
+    normals = Enum.map(parts, &elem(&1, 0))
+
+    normal_mean =
+      normals
+      |> Enum.zip(half_sphere_mask(normals, first_curvature_1, first_curvature_2))
+      |> Enum.filter(fn {_normal, keep?} -> keep? end)
+      |> Enum.map(fn {normal, _keep?} -> normal end)
+      |> mean_vector()
+      |> SpatialArithmetics.normalize()
+
+    if defined?(pose_fully_defined) do
+      curvature_1 =
+        parts
+        |> Enum.map(&elem(&1, 1))
+        |> Enum.map(&align_with(&1, first_curvature_2, normal_mean))
+        |> mean_vector()
+
+      {orthonormal_pose_vectors(normal_mean, curvature_1), true}
+    else
+      # The curvature directions are not trusted, so the first observation's
+      # direction is as good as any: they are not matched on anyway.
+      {orthonormal_pose_vectors(normal_mean, first_curvature_1), false}
+    end
+  end
+
+  # Which observations face the same way as the first one's tangent frame.
+  defp half_sphere_mask(normals, first_curvature_1, first_curvature_2) do
+    mask =
+      Enum.map(normals, fn normal ->
+        SpatialArithmetics.get_right_hand_angle(normal, first_curvature_1, first_curvature_2) > 0
+      end)
+
+    if Enum.count(mask, & &1) < div(length(mask), 2) or not Enum.any?(mask) do
+      Enum.map(mask, &(not &1))
+    else
+      mask
+    end
+  end
+
+  # A curvature direction has no sign: both ends describe the same axis, so the
+  # ones pointing against the majority are flipped before they are averaged in.
+  defp align_with(direction, reference, normal) do
+    if SpatialArithmetics.get_right_hand_angle(direction, reference, normal) < 0 do
+      Enum.map(direction, &(-1.0 * &1))
+    else
+      direction
+    end
+  end
+
+  defp split_pose(pose) do
+    {Enum.take(pose, 3), Enum.slice(pose, 3, 3), Enum.slice(pose, 6, 3)}
+  end
+
+  defp defined?(pose_fully_defined) do
+    Enum.count(pose_fully_defined, & &1) >= div(length(pose_fully_defined), 2)
+  end
+
+  defp mean_vector(vectors) do
+    vectors
+    |> Enum.zip_with(& &1)
+    |> Enum.map(&mean/1)
+  end
+
+  defp as_rotation(flat_pose_vecs) do
+    {:ok, rotation} = flat_pose_vecs |> Enum.chunk_every(3) |> Rotation.from_matrix()
+    rotation
   end
 
   @doc """
