@@ -1,6 +1,8 @@
 defmodule Monty.Studio.SetupTest do
   use ExUnit.Case, async: true
 
+  alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Simulators.Synthetic
   alias Monty.Studio.{Finding, Setup}
 
   # The four connectivity rules below are Monty's own: `MontyBase.__init__`
@@ -240,6 +242,31 @@ defmodule Monty.Studio.SetupTest do
 
     test "a target the map does not know is reported as unknown, not guessed" do
       assert %{status: :unknown} = Setup.describe_target("tbp.monty.nonexistent.Thing")
+    end
+  end
+
+  describe "the model a run starts" do
+    test "uses the ported module when the config targets one" do
+      setup = setup_from(@base)
+
+      spec = Setup.model_spec(setup, "model_0")
+
+      assert [%{module: EvidenceGraphLM, state: %EvidenceGraphLM{} = lm}] = spec.learning_modules
+
+      # Built from the experiment's own numbers, down to the memory it learns
+      # into: those are what make this a run of this experiment.
+      assert lm.max_match_distance == 0.01
+      assert lm.graph_memory.object_model_options[:max_size] == 0.3
+    end
+
+    test "falls back to the stand-in for a module this port has not written" do
+      # A displacement module: matching on point-pair features, which is not
+      # ported, so the stand-in runs and says so by being one.
+      setup = setup_from(%{@base | "monty/learning_module" => "displacement_1lm"})
+
+      spec = Setup.model_spec(setup, "model_0")
+
+      assert [%{module: Synthetic.LearningModule}] = spec.learning_modules
     end
   end
 end

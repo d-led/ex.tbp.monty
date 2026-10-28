@@ -17,6 +17,7 @@ defmodule Monty.Studio.Setup do
   does not produce — and a studio is worth more the earlier it says them.
   """
 
+  alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.ModuleMap
   alias Monty.Studio.Finding
 
@@ -58,7 +59,8 @@ defmodule Monty.Studio.Setup do
           module: module_description(),
           goal_generator: module_description() | nil,
           hypotheses_updater: module_description() | nil,
-          feature_weights: %{optional(String.t()) => map()} | nil
+          feature_weights: %{optional(String.t()) => map()} | nil,
+          config: map()
         }
 
   @type connection :: %{
@@ -208,19 +210,30 @@ defmodule Monty.Studio.Setup do
             state: Monty.Simulators.Synthetic.SensorModule.new(sensor.id)
           }
         end),
-      learning_modules:
-        Enum.map(setup.learning_modules, fn lm ->
-          %{
-            id: lm.id,
-            module: Monty.Simulators.Synthetic.LearningModule,
-            state: Monty.Simulators.Synthetic.LearningModule.new(lm.id)
-          }
-        end),
+      learning_modules: Enum.map(setup.learning_modules, &learning_module_spec/1),
       sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
       lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
       lm_to_lm_vote: inputs_by_learning_module(setup, :vote),
       motor: {Monty.Simulators.Synthetic.Motor, Monty.Simulators.Synthetic.Motor.new()}
     }
+  end
+
+  # What runs for one learning module: the ported module when the config targets
+  # one this port has written, and the stand-in otherwise. The config decides,
+  # because a module built from it is what makes a run a run of *this*
+  # experiment rather than of a topology that merely looks like it.
+  defp learning_module_spec(lm) do
+    case EvidenceGraphLM.from_config(lm.config) do
+      {:ok, state} ->
+        %{id: lm.id, module: EvidenceGraphLM, state: state}
+
+      {:error, _reason} ->
+        %{
+          id: lm.id,
+          module: Monty.Simulators.Synthetic.LearningModule,
+          state: Monty.Simulators.Synthetic.LearningModule.new(lm.id)
+        }
+    end
   end
 
   @doc "The sensor ids a run reads observations for."
@@ -262,7 +275,10 @@ defmodule Monty.Studio.Setup do
         module: describe_target(Map.get(lm, "_target_")),
         goal_generator: optional_describe_target(get_in(lm, ["gsg", "_target_"])),
         hypotheses_updater: optional_describe_target(Map.get(lm, "hypotheses_updater_class")),
-        feature_weights: Map.get(lm, "feature_weights", %{})
+        feature_weights: Map.get(lm, "feature_weights", %{}),
+        # Kept whole: a run builds its module from this, so the numbers an
+        # experiment writes are the numbers that run.
+        config: lm
       }
     end)
   end
