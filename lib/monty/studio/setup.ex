@@ -530,7 +530,23 @@ defmodule Monty.Studio.Setup do
         lm_count,
         "lm_to_lm_matrix"
       ) ++
-      range_findings(vote_matrix, lm_count, "lm_to_lm_vote_matrix")
+      range_findings(vote_matrix, lm_count, "lm_to_lm_vote_matrix") ++
+      goal_generator_findings(setup)
+  end
+
+  # Goal generation is what turns "I am not sure" into "look there next", and a
+  # reading of an object is not reproducible without it. No goal generator is
+  # ported yet, so a config that asks for one runs without goals — which is a
+  # different experiment, and has to say so rather than explore at random.
+  defp goal_generator_findings(setup) do
+    for lm <- setup.learning_modules, lm.goal_generator != nil do
+      Finding.new(
+        :warning,
+        :goal_generator_not_ported,
+        "#{lm.id} asks for a goal generator (#{lm.goal_generator.class}), which this port has not written: this run explores without goals.",
+        "experiment.config.monty_config.learning_modules.#{lm.key}.gsg"
+      )
+    end
   end
 
   defp missing_matrix(nil) do

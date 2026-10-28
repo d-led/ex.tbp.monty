@@ -245,6 +245,17 @@ defmodule Monty.Studio.SetupTest do
     end
   end
 
+  describe "what a run cannot yet do" do
+    test "says so when the config asks for a goal generator" do
+      setup = setup_from(@base)
+
+      finding = finding(setup, :goal_generator_not_ported)
+
+      assert finding.level == :warning
+      assert finding.message =~ "explores without goals"
+    end
+  end
+
   describe "the model a run starts" do
     test "uses the ported module when the config targets one" do
       setup = setup_from(@base)
