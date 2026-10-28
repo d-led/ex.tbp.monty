@@ -148,6 +148,11 @@ No pretrained `.pt`/torch checkpoint import (graphs only, rebuild by running a
 training experiment); no Habitat; no GPU or EXLA requirement; no distributed
 clustering (the design keeps it possible); no WandB.
 
+Two things that are not scope decisions but *later milestones* — Monty's
+parallel episodes and an episode against a live world — are worked out in
+[parallel-and-live.md](parallel-and-live.md): what is free here, what is not, and
+what each one is done when.
+
 ## Decision: the pretrained library lives as long as the experiment
 
 Monty loads pretrained models per learning module and per episode; the same
