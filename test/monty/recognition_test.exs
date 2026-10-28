@@ -12,9 +12,10 @@ defmodule Monty.RecognitionTest do
 
   use ExUnit.Case, async: true
 
+  alias Monty.Frameworks.Models.EvidenceMatching.GraphMemory.EvidenceGraphMemory
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
-  alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
+  alias Monty.Frameworks.Models.ObjectModel.{GraphObjectModel, GridObjectModel}
   alias Monty.Runtime.{Episode, LearningModuleServer, Model, Registry}
   alias Monty.Simulators.Synthetic.{Environment, Motor, SensorModule}
 
@@ -142,6 +143,31 @@ defmodule Monty.RecognitionTest do
       assert [x, 0.0, 0.1, rx, ry, rz, 1] = learning_module(model_id).detected_pose
       assert x >= 0.0 and x <= 0.12
       assert Enum.all?([rx, ry, rz], &(&1 == 0.0))
+    end
+  end
+
+  describe "learning into grid memory" do
+    test "the grid path learns an object and recognises it on the next pass" do
+      memory = EvidenceGraphMemory.new(max_graph_size: 1.0, num_model_voxels_per_dim: 100)
+      model_id = start_model(memory)
+      {environment, rewind} = walk()
+
+      Episode.run(model_id, environment, mode: :train, max_steps: 30)
+      rewind.()
+
+      recognised = Episode.run(model_id, environment, mode: :eval, max_steps: 30)
+
+      assert recognised.terminal_states == %{lm_0: :match}
+
+      assert %GridObjectModel{} =
+               model =
+               GraphMemory.get_graph(
+                 learning_module(model_id).graph_memory,
+                 "new_object0",
+                 @channel
+               )
+
+      assert GridObjectModel.num_nodes(model) >= 12
     end
   end
 

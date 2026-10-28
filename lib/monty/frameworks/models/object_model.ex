@@ -76,4 +76,16 @@ defmodule Monty.Frameworks.Models.ObjectModel do
 
   @doc "The columns holding one feature, as one row per node."
   @callback get_values_for_feature(model(), String.t()) :: [[float()]]
+
+  @doc """
+  The ids of the `count` nodes nearest each of `locations`.
+
+  Displacing asks this to find which stored nodes an unobserved pose would have
+  produced evidence from. Monty queries a KD-tree built over the graph; a grid
+  model's graph is a point cloud with no edges, so it answers the same question
+  by comparing distances.
+  """
+  @callback find_nearest_neighbors(model(), [location()], pos_integer()) :: [
+              [non_neg_integer()]
+            ]
 end

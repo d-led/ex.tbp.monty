@@ -201,7 +201,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   model this question through a `KDTree`; a graph answers it by measuring, which
   is the same answer at the sizes an object model has.
   """
-  @spec find_nearest_neighbors(t(), [location()], pos_integer()) :: [[non_neg_integer()]]
+  @impl true
   def find_nearest_neighbors(
         %__MODULE__{graph: %{pos: positions}},
         search_locations,

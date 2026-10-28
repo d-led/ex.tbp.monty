@@ -30,7 +30,6 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer.HypothesisDisplacerTelemetry
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
-  alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
   alias Monty.Geometry
@@ -196,7 +195,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
       GraphMemory.get_locations_in_graph(displacer.graph_memory, graph_id, input_channel)
 
     nearest =
-      GraphObjectModel.find_nearest_neighbors(
+      displacer.graph_memory.object_model.find_nearest_neighbors(
         graph,
         search_locations,
         min(displacer.max_nneighbors, length(channel_locations))

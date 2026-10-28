@@ -205,7 +205,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   model's graph is a point cloud, so there are no edges to walk — the same
   search, done by comparing distances.
   """
-  @spec find_nearest_neighbors(t(), [location()], pos_integer()) :: [[non_neg_integer()]]
+  @impl true
   def find_nearest_neighbors(%__MODULE__{} = model, search_locations, num_neighbors) do
     model
     |> as_graph_model()
