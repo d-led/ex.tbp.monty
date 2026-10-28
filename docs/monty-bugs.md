@@ -20,6 +20,7 @@ numbers; everything else changes where code lives or what an error looks like.
 | [1.3](#13-npall-on-the-top-two-ids-stricter-than-its-own-comment) | Same, over the top-two ids | Confirmed, and Monty's TODO names the fix | Reproduced on purpose, pinned by a test |
 | [1.4](#14-argsort-2-on-a-single-hypothesis) | `argsort(...)[-2]` on one hypothesis | Latent | Answers `{best, nil}` instead |
 | [1.5](#15-first_sensor-is-only-bound-inside-the-loop) | A name bound after its first read | Latent | Answers a value, not an unbound name |
+| [1.6](#16-jumptogo-saves-one-name-and-restores-another) | A checkpoint saves one attribute and restores a different one | Confirmed, only bites a resumed run | No checkpoint loading here |
 | [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
 | [2.2](#22-motor_only_step-travels-in-the-result) | A policy sets a flag on the motor system | Decision | The flag travels in the result |
 | [2.3](#23-the-motor-system-answers-with-itself) | The motor system mutates itself | Decision | It answers with its next version |
@@ -244,6 +245,57 @@ more time than spelling out the empty case would have.
 [`InformedPolicy.shared_sensor_rotation/1`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex)
 asks for the shared rotation with the empty case spelled out — the identity when
 there are none — so the failure mode is a value rather than an unbound name.
+
+## 1.6 `JumpToGoal` saves one name and restores another
+
+**What's wrong.** The jump state is saved from `_undo_actions` and restored into
+`_undo_jump_actions`, which nothing in `JumpToGoal` reads or writes. `is_jumping`
+is saved and never restored. So a policy restored from a checkpoint has no undo
+actions and does not know it was mid-jump.
+
+**The code.**
+[`motor_policies.py:463-478`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L463-L478),
+where the two names meet:
+
+```python
+def load_state_dict(self, memento: Memento) -> None:
+    self._agent_id = memento["agent_id"]
+    self._undo_action = memento["undo_action"]
+    self._is_undoing_jump = memento["is_undoing_jump"]
+    self._pre_jump_state = memento["pre_jump_state"]
+    self._undo_jump_actions = memento["undo_jump_actions"]
+
+def state_dict(self) -> Memento:
+    return {
+        "agent_id": self._agent_id,
+        "undo_action": self._undo_action,
+        "is_jumping": self._is_jumping,
+        "pre_jump_state": self._pre_jump_state,
+        "undo_jump_actions": self._undo_actions,
+    }
+```
+
+The actions the jump computes are stored in `_undo_actions`
+([line 662](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L662))
+and read from there when an undo is due; `_undo_jump_actions` appears nowhere else
+in the class, and `_is_undoing_jump` is written by `load_state_dict` and read by
+nothing.
+
+**What it should be.** One name for one thing, and every saved key restored:
+load into `_undo_actions`, restore `_is_jumping`, and drop `_is_undoing_jump` if
+the class does not use it. Which of the two names is the right one is Monty's
+call; that they differ is not.
+
+**Why it matters.** Only when a run is resumed from a checkpoint — mid-jump, the
+undo actions are lost, so a jump that landed badly cannot be undone and the
+sensor stays where it landed. Everywhere else this is invisible.
+
+**What this port does.** Nothing: `load_state_dict`/`state_dict` are absent, by
+the decision recorded in
+[`motor_policy.ex`](../lib/monty/frameworks/models/motor_policies/motor_policy.ex)
+— this port's checkpoint is the studio's own record of a run, not a memento
+handed back to a policy. If that changes, this defect is the reason to write the
+checkpoint test first.
 
 ---
 
