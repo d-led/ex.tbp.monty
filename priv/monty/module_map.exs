@@ -1733,12 +1733,12 @@
         python: "GraphObjectModel"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.ObjectModel.GridTooSmallError",
         python: "GridTooSmallError"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.ObjectModel.GridObjectModel",
         python: "GridObjectModel"
       }

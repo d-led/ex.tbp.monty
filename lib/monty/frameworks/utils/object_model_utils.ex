@@ -296,9 +296,11 @@ defmodule Monty.Frameworks.Utils.ObjectModelUtils do
 
   `feature_mapping` says which columns of `features` belong to which named
   feature; it is carried along untouched, because only the graph builder knows
-  how it was laid out.
+  how it was laid out. `features` is dense: one row per location, and a row's
+  columns are named by that mapping, so a graph can hold a pose (nine numbers)
+  and an HSV (three) side by side.
   """
-  @spec build_point_cloud_graph(locations(), map(), map()) :: map()
+  @spec build_point_cloud_graph(locations(), [list()], map()) :: map()
   def build_point_cloud_graph(locations, features, feature_mapping) do
     %{x: features, pos: locations, feature_mapping: feature_mapping}
   end

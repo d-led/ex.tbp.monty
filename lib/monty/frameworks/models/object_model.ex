@@ -9,10 +9,11 @@ defmodule Monty.Frameworks.Models.ObjectModel do
 
     * `Monty.Frameworks.Models.ObjectModel.GraphObjectModel` — **ported**: nodes,
       their features by column, and edges to the nearest neighbours;
-    * `...ObjectModel.GridObjectModel` — the voxel grid; it arrives with the
-      learning path, since recognition only ever reads a graph;
-    * `...ObjectModel.GridTooSmallError` — the grid's "this object does not fit"
-      answer.
+    * `...ObjectModel.GridObjectModel` — **ported**: the voxel grid that averages
+      what was seen in each voxel and thins the busiest ones into a graph, so
+      that one model is bounded in size and in resolution at once;
+    * `...ObjectModel.GridTooSmallError` — **ported**: the grid's "this object
+      does not fit" answer.
 
   What Monty keeps in `abstract_monty_classes.ObjectModel` is an empty base
   class, so there is nothing to mirror for it here beyond this namespace.
