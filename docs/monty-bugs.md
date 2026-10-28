@@ -1,32 +1,57 @@
-# Suspected bugs in Monty, and where this port differs
+# Monty's defects, and this port's decisions
 
-Two things can make an Elixir run disagree with a Python one: a defect upstream,
-and a decision here. This file records both in one place, because anyone
+Two things make an Elixir run disagree with a Python one: a defect upstream, and
+a decision here. Both are recorded here, in the same shape, because anyone
 comparing two sets of numbers needs them together.
 
-Every entry says where the code is, what looks wrong, and what this port does
-about it. Where Monty's own comments already acknowledge the problem, that is
-said too — an acknowledged quirk is a different thing from a defect nobody has
-noticed.
+**Read §2.1 and §2.5 before diffing any run.** They are the two that change the
+numbers; everything else changes where code lives or what an error looks like.
 
-Line numbers are for the `monty-orig` checkout this port is written against
-(`tbp.monty`, revised 2026-10). They will drift; the function names will not.
+## At a glance
 
-## How to read an entry
+| § | What | Status | What this port does |
+|---|------|--------|---------------------|
+| [1.1](#11-the-sanity-check-in-_compute_graph_mismatch-cannot-fail) | A sanity check that compares a value with itself | Confirmed | Ports the transform, drops the check |
+| [1.2](#12-npall-where-npany-is-meant-a-single-axis-rotation-is-never-a-pose-change) | `np.all` where `np.any` is meant | Confirmed | Reproduced on purpose, pinned by a test |
+| [1.3](#13-npall-on-the-top-two-ids-stricter-than-its-own-comment) | Same, over the top-two ids | Confirmed, acknowledged upstream | Reproduced on purpose, pinned by a test |
+| [1.4](#14-argsort-2-on-a-single-hypothesis) | `argsort(...)[-2]` on one hypothesis | Latent | Answers `{best, nil}` instead |
+| [1.5](#15-first_sensor-is-only-bound-inside-the-loop) | A name bound after its first read | Latent | Answers a value, not an unbound name |
+| [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
+| [2.2](#22-motor_only_step-travels-in-the-result) | A policy sets a flag on the motor system | Decision | The flag travels in the result |
+| [2.3](#23-the-motor-system-answers-with-itself) | The motor system mutates itself | Decision | It answers with its next version |
+| [2.4](#24-get_output1-answers-message-lm) | `get_output` answers a bare `Message` | Decision | `{message, module}`, like every step |
+| [2.5](#25-a-sampler-answers-the-stream-it-leaves-behind) | A sampler needs the stream it just used | Decision | Samplers answer `{action, rng}` |
+| [2.6](#26-get_top_two_pose_hypotheses_for_graph_id2-answers-best-nil) | The top-two lookup raises | Decision | Answers `{best, nil}` |
+| [2.7](#27-depth_at_center-lives-in-the-policy-namespace) | A 530-line module for one centre pixel | Decision | The read lives in the policy namespace |
+| [2.8](#28-small-vocabulary-differences) | Python's strings, objects, units | Decision | Atoms, tuples, Monty's units |
+| [2.9](#29-inheritance-becomes-public-functions-and-a-module-dispatched-hook) | Subclassing | Decision | Public function + module-dispatched hook |
 
-- **Confirmed** — the behaviour follows from the code alone, with no run needed.
-- **Latent** — a real defect, but something else currently stops it being
-  reached.
-- **Reproduced** — this port deliberately keeps the behaviour, so the numbers
-  stay comparable. Pinned by a test.
+Statuses mean:
+
+- **Confirmed** — the behaviour follows from the code alone.
+- **Latent** — a real defect, but something else currently stops it being reached.
+- **Reproduced** — this port keeps the behaviour on purpose, so numbers stay
+  comparable. Pinned by a test.
+
+## How the links work
+
+Monty's code is linked to
+[`thousandbrainsproject/tbp.monty` at `9130364`](https://github.com/thousandbrainsproject/tbp.monty/tree/91303642784ce176e2b8196c7bb990fef57688b6)
+— the revision `mix monty.config.snapshots` and `mix monty.module_map.verify`
+check against. Line numbers are pinned to it; the function names will outlive
+them. This port's code is linked relative to this file.
 
 ---
 
-# 1. Suspected bugs in Monty
+# 1. Defects in Monty
 
-## 1.1 The sanity check in `_compute_graph_mismatch` cannot fail — Confirmed
+## 1.1 The sanity check in `_compute_graph_mismatch` cannot fail
 
-`frameworks/models/goal_generation.py:672-682`:
+**What's wrong.** The check subtracts an expression from itself, so the
+difference is exactly zero and the assertion compares a value with itself.
+
+**The code.**
+[`goal_generation.py:672-682`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/goal_generation.py#L672-L682)
 
 ```python
 # Perform the same transformation to the estimated location (sanity check)
@@ -34,8 +59,7 @@ transformed_current_loc = top_mlh["rotation"].inv().apply(
     top_mlh["location"]
 ) - top_mlh["rotation"].inv().apply(top_mlh["location"])
 transformed_current_loc = (
-    second_mlh["rotation"].apply(transformed_current_loc)
-    + second_mlh["location"]
+    second_mlh["rotation"].apply(transformed_current_loc) + second_mlh["location"]
 )
 assert np.all(transformed_current_loc == second_mlh["location"]), (
     "Graph transformation to 2nd object reference frame not returning correct "
@@ -43,25 +67,32 @@ assert np.all(transformed_current_loc == second_mlh["location"]), (
 )
 ```
 
-The two operands of the subtraction are the same expression, so the difference
-is exactly zero, and the transformed value is exactly `second_mlh["location"]`.
-The assertion therefore compares a value with itself.
+**What it should be.** The check is meant to prove that the transform which puts
+the most likely object's graph into the second object's learned frame is the
+inverse of whatever built the graph in the first place. It should therefore
+round-trip a point that is *not* collapsed to zero — for example transform
+`top_mlh["location"]` into the second object's frame and back, and assert it
+returned.
 
-**Why it matters.** This is the only check that the corrective transform — the
-one that puts the most likely object's graph into the second object's learned
-frame before the two are compared — is the inverse of the transform that built
-the graph in the first place. If that ever stopped holding, the two graphs would
-be compared in different frames and the chosen "most disagreeing" point would be
-arbitrary, with nothing said.
+**Why it matters.** It is the only check that the two graphs are being compared
+in one frame. Without it, a broken transform would silently make the "most
+disagreeing" point arbitrary, and the goal generator would jump somewhere
+unrelated without saying so.
 
-**What this port does.** The transform itself is ported unchanged
-(`EvidenceGoalGenerator.into_frame/3`); the assertion is not recomputed, and the
-reason is in a comment there. Nothing about the numbers changes.
+**What this port does.** The transform is ported unchanged — see
+[`EvidenceGoalGenerator.into_frame/3`](../lib/monty/frameworks/models/goal_generation/evidence_goal_generator.ex) —
+and the assertion is not recomputed, with the reason in a comment there. Nothing
+about the numbers changes.
 
-## 1.2 `np.all` where `np.any` is meant: a single-axis rotation is never a pose change — Confirmed, reproduced
+## 1.2 `np.all` where `np.any` is meant: a single-axis rotation is never a pose change
 
-`frameworks/models/goal_generation.py:966-971`, in
-`_check_conditions_for_hypothesis_test`:
+**What's wrong.** `np.all` over three elementwise comparisons is true only when
+*all three* Euler angles differ, so a rotation about a single axis never counts
+as a pose change.
+
+**The code.**
+[`goal_generation.py:966-971`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/goal_generation.py#L966-L971),
+in `_check_conditions_for_hypothesis_test`:
 
 ```python
 if self.prev_top_mlhs is not None and np.all(
@@ -72,29 +103,29 @@ if self.prev_top_mlhs is not None and np.all(
     return True
 ```
 
-`np.all` over three elementwise comparisons is true only when *all three* Euler
-angles differ. A rotation about a single axis changes exactly one angle, so it
-is never seen as a change of pose — including the case the comment above it
-names ("we didn't find the mug handle following a previous jump, and have
-therefore eliminated a pose").
+**What it should be.** `np.any`, so that any changed angle is a changed pose. The
+comment above the block names exactly that case — "we didn't find the mug handle
+following a previous jump, and have therefore eliminated a pose" — and the
+TODOs above ask for an angle *threshold* "rather than it needing to be
+identical", both of which say "a difference counts".
 
-**Why it matters.** It changes *when* the agent spends a hypothesis-testing
-jump: some pose changes that should prompt a jump do not. The number of jumps,
-and therefore the path, differs from what the documented intent describes.
+**Why it matters.** It decides *when* the agent spends a hypothesis-testing
+jump. Some pose changes that should prompt one do not, so the number of jumps,
+and therefore the path, differs from the documented intent.
 
-**Monty's own notes.** The TODOs above this block ask for an angle *threshold*
-"rather than it needing to be identical", which suggests the authors meant "any
-difference counts". They do not mention `np.all`.
+**What this port does.** Reproduced exactly — correcting it here would make our
+runs diverge from Monty's, which is the one thing a comparison cannot afford.
+Pinned by the test "does not treat a turn about one axis as a new pose" in
+[`evidence_goal_generator_test.exs`](../test/monty/frameworks/models/goal_generation/evidence_goal_generator_test.exs).
 
-**What this port does.** Reproduced exactly, and pinned by the test
-"does not treat a turn about one axis as a new pose" in
-`test/monty/frameworks/models/goal_generation/evidence_goal_generator_test.exs`.
-Correcting it here would make our runs diverge from Monty's, which is the one
-thing a comparison cannot afford.
+## 1.3 `np.all` on the top-two ids, stricter than its own comment
 
-## 1.3 `np.all` on the top-two ids: stricter than its own comment — Confirmed, reproduced, acknowledged upstream
+**What's wrong.** The condition fires only when *both* ids change. A new
+runner-up under an unchanged leader is not a change as far as this code is
+concerned, though the comments on both sides of it say "change or shuffle".
 
-`frameworks/models/goal_generation.py:944-954`:
+**The code.**
+[`goal_generation.py:944-954`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/goal_generation.py#L944-L954)
 
 ```python
 # If the identities or *order* (i.e. which one is most likely)
@@ -106,52 +137,61 @@ thing a comparison cannot afford.
 if self.prev_top_mlhs is not None and np.all([...] != [top_id, second_id]):
 ```
 
-The comment describes "a change or shuffle", and the log line below repeats
-"change or shuffle in top-two MLH IDs". The code fires only when *both* ids have
-changed. A new runner-up, with the leader unchanged, is not a change as far as
-this condition is concerned.
+**What it should be.** `np.any`, as the TODO in the same block says. Monty knows;
+this is a known-if-reluctant state rather than an oversight.
 
-**Monty's own notes.** The TODO immediately above acknowledges it and names the
-fix (`np.any`). So this is a known, deliberate-if-reluctant state rather than an
-oversight.
+**Why it matters.** Same consequence as §1.2: fewer hypothesis-testing jumps than
+the heuristic describes. Together the two `np.all`s are the most likely reason
+an Elixir run and a Python run take different numbers of steps on the same
+object.
 
 **What this port does.** Reproduced, pinned by "does not jump when only one of
 the top two changes".
 
-## 1.4 `argsort(...)[-2]` on a single hypothesis — Latent
+## 1.4 `argsort(...)[-2]` on a single hypothesis
 
-`frameworks/models/evidence_matching/learning_module.py:758-763`:
+**What's wrong.** With one hypothesis the evidence array has length one, and
+`[-2]` raises `IndexError: index -2 is out of bounds`.
+
+**The code.**
+[`learning_module.py:758-763`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/evidence_matching/learning_module.py#L758-L763)
 
 ```python
 def get_top_two_pose_hypotheses_for_graph_id(self, graph_id):
     """Return top two hypotheses for a given graph_id."""
     mlh_for_graph = self._calculate_most_likely_hypothesis(graph_id)
     second_mlh_id = np.argsort(self._hypotheses[graph_id].evidence)[-2]
-    ...
 ```
 
-With one hypothesis the array is length one, and `[-2]` raises `IndexError:
-index -2 is out of bounds`.
+**What it should be.** Answer "there is no second best" rather than raise: guard
+the length, or sort once and take the last two when there are two.
 
-**Why it is latent.** Its only caller is
-`EvidenceGoalGenerator._compute_graph_mismatch`, and that is reached with
-`focus_on_pose` set only after a check that the object has more than one
-hypothesis (`goal_generation.py`, the two `if len(self.parent_lm._hypotheses[
-top_id].evidence) == 1: return False` guards). Nothing updates the hypothesis
-space between the guard and the call, so the crash is not reachable today. It
-becomes reachable as soon as those two pieces of code are separated — for
-example by computing goals in a later step than the gating decision.
+**Why it matters — and why it is latent.** Its only caller is
+`EvidenceGoalGenerator._compute_graph_mismatch`, reached with `focus_on_pose`
+only after two guards that the object has more than one hypothesis
+(`if len(...evidence) == 1: return False`). Nothing changes the hypothesis space
+between the guard and the call, so the crash is out of reach today. It becomes
+reachable the moment those two pieces of code are separated — for example by
+computing goals a step later than the gating decision.
 
-**What this port does.** `EvidenceGraphLM.get_top_two_pose_hypotheses_for_graph_id/2`
-answers `{best, nil}` for a single hypothesis instead of raising, and says so in
-its doc: "Monty's `argsort(...)[-2]` would fail on it". This is a divergence —
-but one that turns an exception into a value the caller must handle, so it is
-listed again in §2.6.
+**What this port does.** Answers `{best, nil}` for a single hypothesis instead of
+raising, and says so in the doc of
+[`EvidenceGraphLM.get_top_two_pose_hypotheses_for_graph_id/2`](../lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
+An exception becomes a value the caller must handle, which is a difference in
+its own right — see [§2.6](#26-get_top_two_pose_hypotheses_for_graph_id2-answers-best-nil).
 
-## 1.5 `first_sensor` is only bound inside the loop — Latent
+## 1.5 `first_sensor` is only bound inside the loop
 
-`frameworks/models/motor_policies.py:905-907` (the same pattern again at
-633-635, in `JumpToGoal`):
+**What's wrong.** `first_sensor` is assigned on the loop's first iteration and
+read after it. An agent reporting no sensors leaves it unbound, so the failure is
+an `UnboundLocalError` several lines later rather than the message the code
+intends.
+
+**The code.**
+[`motor_policies.py:905-907`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L905-L907)
+— the same pattern again at
+[`633-635`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L633-L635),
+in `JumpToGoal`:
 
 ```python
 for ii, current_sensor in enumerate(self._pre_jump_state.sensors):
@@ -163,175 +203,213 @@ for ii, current_sensor in enumerate(self._pre_jump_state.sensors):
     ), "Sensors are not identical in pose"
 ```
 
-If an agent reports no sensors, the loop body never runs, `first_sensor` is
-unbound, and the failure is an `UnboundLocalError` several lines later (in the
-undo-action construction) rather than the message the code intends. An agent
-with no sensors is itself nonsense, so this is a diagnostics defect, not a
-behavioural one.
+**What it should be.** Collect the rotations first and compare the collection, so
+the empty case is a decision the code makes rather than a name it forgot.
 
-**What this port does.** `InformedPolicy` asks for the sensors' shared rotation
-with an explicit empty case (`shared_sensor_rotation/1` answers the identity
-when there are none), so the failure mode is a value rather than an unbound
-name.
+**Why it matters.** Diagnostic only: an agent with no sensors is itself nonsense,
+so no numeric run is affected. It costs an hour to anyone debugging an odd
+environment.
 
-## Checked and found consistent
-
-Worth recording so the next reader does not repeat the audit. The first two are
-claims made in Monty's documentation; the rest are claims the code makes about
-itself.
-
-- `docs/how-monty-works/motor-system.md`: a selector chooses among policies, the
-  selector is what goals reach, and policies are the only things that produce
-  actions. That is the shape of `MotorPolicySelectors` and `MotorSystem` here,
-  and of the documented two selectors (`SinglePolicySelector`,
-  `DistantPolicySelector`).
-- `docs/how-monty-works/motor-system/policy.md`: "if the sensor patch moves off
-  the object, the previous action is reversed to make sure we stay on the
-  object" — that is exactly `InformedPolicy.__call__`, and its momentum
-  parameter `alpha` belongs to `InformedPolicyRandomWalk` (still planned, and
-  the default of `DistantPolicySelector`).
-- `get_output()` returns a `Message`, so `parent_lm.get_output().confidence` in
-  the evidence goal generator is correct *(see §2.4 for this port's divergence)*.
-- `threshold_possible_matches`, `x_percent_threshold` and the
-  `x_percent_scale_factor` application agree with their own comments.
-- `MotorSystem` stores each step's actions with the motor-system state they were
-  chosen in, resets that record per episode, and keeps the selector's own record
-  for `state_dict` — as its comments say.
+**What this port does.**
+[`InformedPolicy.shared_sensor_rotation/1`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex)
+asks for the shared rotation with the empty case spelled out — the identity when
+there are none — so the failure mode is a value rather than an unbound name.
 
 ---
 
 # 2. Where this port deliberately differs
 
-These are decisions, not defects. Each one is a place where two runs can differ
-without either being wrong — read them before diffing a Python run against an
-Elixir one.
+Decisions, not defects. Each is a place where two runs can differ without either
+being wrong.
 
-## 2.1 Random streams: the one most likely to change your numbers
+## 2.1 Random streams: the one that changes your numbers
 
-Monty threads a single mutable `RandomState` (`ctx.rng`) through every module in
-step order, so the numbers a module draws depend on how many draws every module
-before it made. This port derives a stream per module from the episode seed, the
-module id and the step (`Monty.Context.rng_for/2`), so modules cannot influence
-each other's draws and a step can be replayed alone.
+**The difference.** Monty threads one mutable `RandomState` (`ctx.rng`) through
+every module in step order, so what a module draws depends on how many draws
+everything before it made. This port derives a stream per module from the episode
+seed, the module id and the step.
 
-**Consequence.** With the same seed, an Elixir run and a Python run draw
+**The code.**
+[`motor_policies.py:217`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L217)
+is where a policy draws (`self.action_sampler.sample(self.agent_id, ctx.rng)`); a
+dozen other modules do the same with the same object.
+Ours: [`Context.rng_for/2`](../lib/monty/context.ex).
+
+**Why it is deliberate.** A single mutable stream across modules is exactly the
+kind of shared state an immutable, per-process design cannot carry without
+threading it through every function and every message. Deriving per module also
+lets a single step be replayed on its own, which is what the studio's replay
+uses.
+
+**What it costs.** With the same seed, an Elixir run and a Python run draw
 *different* random actions. Every policy that samples — `BasePolicy`,
-`InformedPolicy`, and `SurfacePolicy`'s `sample_move_forward` — will therefore
-walk a different path, and object recognition rates and step counts will differ
-even when the arithmetic is identical.
+`InformedPolicy`, `SurfacePolicy` — walks a different path, so recognition rates
+and step counts differ even when the arithmetic is identical.
 
-**What to compare instead.** The deterministic parts: matching evidence given the
-same percept sequence (that is what the pretrained replay does, to `5.5e-7`),
-hypothesis counts, and aggregate statistics over many episodes. A per-step,
-per-seed comparison needs a Monty-compatible single-stream mode, which is not
-built.
-
-Code site: `lib/monty/context.ex` (`rng_for/2`), whose moduledoc says the same.
+**What to compare instead.** The deterministic parts: evidence given the same
+percept sequence (that is what the pretrained replay does, to `5.5e-7`),
+hypothesis counts, and aggregates over many episodes. A per-step, per-seed
+comparison needs a Monty-compatible single-stream mode, which is not built.
 
 ## 2.2 `motor_only_step` travels in the result
 
-Monty hands the motor system to the selector (`fixme_provide_motor_system`) so a
-policy can set `motor_only_step` on it. Here the policy says it in the
-`MotorPolicyResult` and the motor system carries it. Same effect on the step; no
-shared mutable object.
+**The difference.** Monty hands the motor system to the selector
+(`fixme_provide_motor_system`) so a policy can set `motor_only_step` on it
+directly. Here the policy says it in the `MotorPolicyResult` and the motor system
+carries it.
 
-Code sites: `lib/monty/frameworks/models/motor_policies/motor_policy_result.ex`,
-`lib/monty/frameworks/models/motor_system.ex`.
+**The code.**
+[`motor_policies.py:1120-1125`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L1120-L1125)
+— the hack, in Monty's own words. Ours:
+[`motor_policy_result.ex`](../lib/monty/frameworks/models/motor_policies/motor_policy_result.ex)
+and [`motor_system.ex`](../lib/monty/frameworks/models/motor_system.ex).
+
+**Why it is deliberate.** The same effect on the step, with no shared mutable
+object between policy, selector and motor system.
 
 ## 2.3 The motor system answers with itself
 
-`MotorSystem.call/6` answers `{actions, motor_system}` rather than only the
-actions, because the record of what was decided has to live somewhere and a
-struct cannot be changed in place. The same holds for the selectors and policies.
+**The difference.** `MotorSystem.call/6` answers `{actions, motor_system}` rather
+than only the actions. Same for the selectors and the policies.
 
-Code sites: `lib/monty/frameworks/models/motor_system.ex`,
-`lib/monty/frameworks/models/motor_policy_selectors.ex`.
+**Why it is deliberate.** The record of what was decided has to live somewhere,
+and a struct cannot be changed in place. Monty mutates itself; this returns the
+next version of itself.
+
+**Where.** [`motor_system.ex`](../lib/monty/frameworks/models/motor_system.ex),
+[`motor_policy_selectors.ex`](../lib/monty/frameworks/models/motor_policy_selectors.ex).
 
 ## 2.4 `get_output/1` answers `{message, lm}`
 
-Monty's returns the `Message` alone. Ours answers it with the module, like every
-other step in this port. A caller that wants the confidence reads
-`elem(result, 0).confidence`.
+**The difference.** Monty's returns the `Message` alone; ours answers it with the
+module, like every other step in this port.
 
-Code site: `lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex`,
-`get_output/1`.
+**Why it is deliberate.** One calling convention for every step, so composing
+steps does not need to remember which ones answer bare values.
+
+**What to do about it.** A caller that wants the confidence reads
+`elem(result, 0).confidence`. See
+[`EvidenceGraphLM.get_output/1`](../lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
 
 ## 2.5 A sampler answers the stream it leaves behind
 
-Monty writes `self.action_sampler.sample(self.agent_id, ctx.rng)` and mutates
-`ctx.rng` in place, so one stream advances across the episode. Elixir has no
-mutable stream, so `ActionSampler.sample/3` answers `{action, rng}` and the
-caller threads it; the policies own the stream, starting it from the context on
-their first draw (`ActionSampler.stream/3`), and `reset/1` forgets it so the next
-episode starts where its step says.
+**The difference.** Monty writes `self.action_sampler.sample(self.agent_id,
+ctx.rng)` and mutates `ctx.rng` in place, so one stream advances across the
+episode. Here `ActionSampler.sample/3` answers `{action, rng}` and the caller
+threads it; a policy starts its stream from the context on the first draw and
+`reset/1` forgets it.
 
-**Consequence.** Nothing about which actions are drawn differs from Monty's
-arithmetic for a given stream — but the stream itself differs, for the reason in
-§2.1. A policy that samples twice in one step sees two different actions, as it
-does in Monty; this is why the state has to be threaded rather than rederived
-from the step, and `scripts/bench_samplers.exs` records that threading is also
-the cheaper of the two.
+**The code.** Monty:
+[`action_samplers.py:64-77`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/actions/action_samplers.py#L64-L77).
+Ours: [`action_sampler.ex`](../lib/monty/frameworks/actions/action_samplers/action_sampler.ex),
+used by [`base_policy.ex`](../lib/monty/frameworks/models/motor_policies/base_policy.ex),
+[`informed_policy.ex`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex)
+and [`surface_policy.ex`](../lib/monty/frameworks/models/motor_policies/surface_policy.ex).
 
-Code sites: `lib/monty/frameworks/actions/action_samplers/action_sampler.ex`,
-`lib/monty/frameworks/models/motor_policies/base_policy.ex`,
-`lib/monty/frameworks/models/motor_policies/informed_policy.ex`.
+**Why it is deliberate — and why it is not about speed.** A policy draws more
+than once in a step: `SurfacePolicy` samples a tangential direction and a
+distance, and the search draws a random angle. A stream keyed to the step alone
+would answer all of those draws with the same action, which is wrong rather than
+slow. `scripts/bench_samplers.exs` records that threading is also the cheaper
+option (1.0 µs against 1.4 µs per draw, in a ~39 ms step), but that is a
+tie-breaker, not the reason.
+
+**What it costs.** The same as §2.1: the numbers a draw produces are Monty's for
+a given stream, but the stream is not Monty's.
 
 ## 2.6 `get_top_two_pose_hypotheses_for_graph_id/2` answers `{best, nil}`
 
-See §1.4. Monty raises where this port returns a value.
+**The difference.** Monty raises where this port returns a value — see
+[§1.4](#14-argsort-2-on-a-single-hypothesis).
 
-Code site: `lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex`,
-`get_top_two_pose_hypotheses_for_graph_id/2`.
+**Why it is deliberate.** A goal generator running without a hypothesis to test
+is a normal state, not an exception, and a crash in the middle of an episode is
+worse than a goal that is not proposed.
+
+**Where.** [`evidence_graph_lm.ex`](../lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
 
 ## 2.7 `depth_at_center` lives in the policy namespace
 
-Monty keeps it in `frameworks/environments/positioning_procedures.py`, as a
-static method of `PositioningProcedure`. That module is 530 lines of good-view
-searching for distant agents, none of it needed yet, so the centre-pixel read
-lives in `Monty.Frameworks.Models.MotorPolicies` where both policies reach it —
-reading the same shape (`observations[agent_id][sensor_id]["depth"]`, centre
-pixel) — until an environment is ported and it can move to its mapped home.
+**The difference.** Monty keeps it in `positioning_procedures.py` as a static
+method of `PositioningProcedure`. Here it is
+[`MotorPolicies.depth_at_center/3`](../lib/monty/frameworks/models/motor_policies.ex),
+reading the same shape — `observations[agent_id][sensor_id]["depth"]`, centre
+pixel.
 
-Code site: `lib/monty/frameworks/models/motor_policies.ex`,
-`depth_at_center/3`, whose doc says the same.
+**The code.** Monty:
+[`positioning_procedures.py`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/environments/positioning_procedures.py)
+— 530 lines of good-view searching for distant agents, none of it needed yet.
+
+**Why it is deliberate.** The centre-pixel read is needed by two policies now, and
+the rest of the module waits for an environment to be ported. It moves to its
+mapped home then.
 
 ## 2.8 Small vocabulary differences
 
 - `PolicyStatus` is `:ready | :in_progress` here, `"ready" | "in_progress"`
   upstream; the strings appear only on a wire.
+  → [`policy_status.ex`](../lib/monty/frameworks/models/motor_policies/policy_status.ex)
 - `rotation_quat` is a `{w, x, y, z}` tuple here and a `quaternion` object there;
   `ActionJSONDecoder` converts on the way in from JSON lists.
+  → [`action_json_decoder.ex`](../lib/monty/frameworks/actions/action_json_decoder.ex)
 - `undo_last_action/1` raises `ArgumentError` where Monty raises `TypeError`, for
   the same reason and with the action named.
+  → [`motor_policies.ex`](../lib/monty/frameworks/models/motor_policies.ex)
 - Actions keep Monty's units (degrees, metres, `wxyz`), deliberately: an action
   built here must be the same object an environment there would perform.
+  → [`lib/monty/frameworks/actions/`](../lib/monty/frameworks/actions)
 
-Code sites: `lib/monty/frameworks/models/motor_policies/policy_status.ex`,
-`lib/monty/frameworks/actions/action_json_decoder.ex`,
-`lib/monty/frameworks/models/motor_policies.ex` (`undo_last_action/1`), and every
-module under `lib/monty/frameworks/actions/`, whose moduledocs state the units.
+**Why it is deliberate.** Atoms for closed sets, tuples for quaternions, and
+Monty's units throughout: the vocabulary stays Monty's where it would show up in
+a number, and becomes Elixir's where it would not.
 
 ## 2.9 Inheritance becomes public functions and a module-dispatched hook
 
-Monty's `SurfacePolicy` is an `InformedPolicy`: it inherits the jump machinery
-and overrides `__call__`, `reset` and `_handle_successful_jump`. Elixir structs
-do not inherit, so the port does two things Monty does not have to:
+**The difference.** Monty's `SurfacePolicy` is an `InformedPolicy`: it inherits
+the jump machinery and overrides `__call__`, `reset` and `_handle_successful_jump`.
+Elixir structs do not inherit, so the port does two things Monty does not have to:
 
-- the jump step is a public function of `InformedPolicy`,
-  `goal_driven_actions/4`, taking any policy that carries the jump fields (a
-  `jump_state` map) and answering the policy it leaves behind — this is what
-  `SurfacePolicy` calls instead of inheriting it;
-- Monty's `_handle_successful_jump` hook is dispatched to the policy's own
-  module through `MotorPolicies.successful_jump/1`, because a private function
-  cannot be overridden by another module's struct.
+- the jump step is a public `InformedPolicy.goal_driven_actions/4`, taking any
+  policy that carries the jump fields (a `jump_state` shape) and answering the
+  policy it leaves behind — what `SurfacePolicy` calls instead of inheriting;
+- Monty's `_handle_successful_jump` is `handle_successful_jump/1`, dispatched to
+  the policy's own module by `MotorPolicies.successful_jump/1`, because a private
+  function cannot be overridden by another module's struct.
 
-Nothing observable changes: the same step produces the same actions and the same
-policy state. What changes is where the code lives, and that the shared shape is
-checked by a type (`InformedPolicy.jump_state/0`) rather than by a class
-hierarchy.
+**The code.** Monty:
+[`motor_policies.py:1077-1100`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L1077-L1100)
+(`class SurfacePolicy(InformedPolicy)`). Ours:
+[`informed_policy.ex`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex),
+[`motor_policies.ex`](../lib/monty/frameworks/models/motor_policies.ex),
+[`motor_policy.ex`](../lib/monty/frameworks/models/motor_policies/motor_policy.ex)
+(the optional callback) and
+[`surface_policy.ex`](../lib/monty/frameworks/models/motor_policies/surface_policy.ex).
 
-Code sites: `lib/monty/frameworks/models/motor_policies/informed_policy.ex`,
-`lib/monty/frameworks/models/motor_policies.ex` (`successful_jump/1`),
-`lib/monty/frameworks/models/motor_policies/motor_policy.ex` (the optional
-callback), and `lib/monty/frameworks/models/motor_policies/surface_policy.ex`,
-which is the second user that made the extraction worth doing.
+**Why it is deliberate.** Nothing observable changes: the same step produces the
+same actions and the same policy state. What changes is where the code lives, and
+that the shared shape is a type (`InformedPolicy.jump_state/0`) rather than a
+class hierarchy.
+
+---
+
+# Checked and found consistent
+
+Recorded so the next reader does not repeat the audit. The first two are claims
+Monty's documentation makes; the rest are claims the code makes about itself.
+
+- [`docs/how-monty-works/motor-system.md`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/docs/how-monty-works/motor-system.md):
+  a selector chooses among policies, the selector is what goals reach, and
+  policies are the only things that produce actions — the shape of
+  [`MotorPolicySelectors`](../lib/monty/frameworks/models/motor_policy_selectors.ex)
+  and [`MotorSystem`](../lib/monty/frameworks/models/motor_system.ex) here.
+- [`docs/how-monty-works/motor-system/policy.md`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/docs/how-monty-works/motor-system/policy.md):
+  "if the sensor patch moves off the object, the previous action is reversed" is
+  `InformedPolicy`'s step exactly; the `alpha` momentum it describes belongs to
+  `InformedPolicyRandomWalk` (planned, and the default of `DistantPolicySelector`).
+- `get_output()` returning a `Message` makes `parent_lm.get_output().confidence`
+  correct in the evidence goal generator (see §2.4 for our shape).
+- `threshold_possible_matches`, `x_percent_threshold` and the
+  `x_percent_scale_factor` application agree with their own comments.
+- `MotorSystem` keeps each step's actions with the state they were chosen in,
+  resets that record per episode, and keeps the selector's own record for
+  `state_dict`, as its comments say.
