@@ -216,11 +216,18 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   def find_nearest_neighbors(
         %__MODULE__{graph: %{pos: positions}} = model,
         search_locations,
-        count
+        count,
+        options \\ []
       ) do
     capacity = min(count, length(positions))
+    tree = location_tree(model)
 
-    Enum.map(search_locations, &KdTree.nearest(location_tree(model), &1, capacity))
+    query =
+      if Keyword.get(options, :distance, false),
+        do: &KdTree.nearest_with_distances/3,
+        else: &KdTree.nearest/3
+
+    Enum.map(search_locations, &query.(tree, &1, capacity))
   end
 
   # The index over the graph's positions, built once with the graph rather than

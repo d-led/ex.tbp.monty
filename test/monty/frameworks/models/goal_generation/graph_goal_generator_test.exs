@@ -106,4 +106,54 @@ defmodule Monty.Frameworks.Models.GoalGeneration.GraphGoalGeneratorTest do
       end
     end
   end
+
+  describe "whether the goal in hand was achieved" do
+    # The buffer already holds this step's percept when the generator runs, so
+    # the previous step's is the one before last — which is what Monty compares
+    # against.
+    defp holding_a_goal(previous, current) do
+      buffer =
+        FeatureAtLocationBuffer.new()
+        |> FeatureAtLocationBuffer.append_input_percepts(previous)
+        |> FeatureAtLocationBuffer.append_input_percepts(current)
+
+      buffer = %{buffer | channel_sender_types: %{"patch" => :sm}}
+
+      %{
+        generator()
+        | parent_lm: %{buffer: buffer},
+          output_goal: goal([0.0, 0.0, 0.0])
+      }
+    end
+
+    defp holding_a_goal(previous), do: holding_a_goal(previous, percept("patch", [0.0, 0.0, 0.0]))
+
+    test "nothing is achieved when no goal was ever output" do
+      refute GraphGoalGenerator.output_goal_achieved?(
+               generator(),
+               [percept("patch", [0.1, 0.0, 0.0])]
+             )
+    end
+
+    test "the input moving says the agent went somewhere" do
+      assert GraphGoalGenerator.output_goal_achieved?(
+               holding_a_goal(percept("patch", [0.0, 0.0, 0.0])),
+               [percept("patch", [0.1, 0.0, 0.0])]
+             )
+    end
+
+    test "the input staying put says it did not" do
+      refute GraphGoalGenerator.output_goal_achieved?(
+               holding_a_goal(percept("patch", [0.0, 0.0, 0.0])),
+               [percept("patch", [0.001, 0.0, 0.0])]
+             )
+    end
+
+    test "a previous percept from another channel says nothing" do
+      refute GraphGoalGenerator.output_goal_achieved?(
+               holding_a_goal(percept("view", [0.0, 0.0, 0.0])),
+               [percept("patch", [0.1, 0.0, 0.0])]
+             )
+    end
+  end
 end

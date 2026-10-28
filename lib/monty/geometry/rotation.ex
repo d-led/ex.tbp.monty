@@ -116,24 +116,32 @@ defmodule Monty.Geometry.Rotation do
   """
   @spec to_euler_degrees(t(), non_neg_integer()) :: vector()
   def to_euler_degrees(%__MODULE__{} = rotation, decimal_places \\ 3) do
+    rotation
+    |> to_euler_radians()
+    |> Enum.map(&rad_to_deg/1)
+    |> Enum.map(&round_to(&1, decimal_places))
+  end
+
+  @doc """
+  The three Euler angles about the fixed x, y and z axes, in radians.
+
+  scipy's `as_euler("xyz")`, unrounded — which is what Monty compares when it
+  asks whether a pose has changed: any difference, however small, is a
+  difference. Use `to_euler_degrees/2` to show angles to a reader instead.
+  """
+  @spec to_euler_radians(t()) :: vector()
+  def to_euler_radians(%__MODULE__{} = rotation) do
     [[m00, m01, m02], [m10, m11, m12], [m20, m21, m22]] = to_matrix(rotation)
     sin_ry = -m20
-
-    angles =
-      if abs(sin_ry) < 1.0 - 1.0e-9 do
-        [
-          rad_to_deg(:math.atan2(m21, m22)),
-          rad_to_deg(:math.asin(sin_ry)),
-          rad_to_deg(:math.atan2(m10, m00))
-        ]
-      else
-        # Gimbal lock: the x and z axes have collapsed onto one another, so the
-        # split between them is arbitrary. scipy puts it all in x.
-        [rad_to_deg(:math.atan2(-m12, m11)), rad_to_deg(:math.asin(sin_ry)), 0.0]
-      end
-
     _ = {m01, m02, m12}
-    Enum.map(angles, &round_to(&1, decimal_places))
+
+    if abs(sin_ry) < 1.0 - 1.0e-9 do
+      [:math.atan2(m21, m22), :math.asin(sin_ry), :math.atan2(m10, m00)]
+    else
+      # Gimbal lock: the x and z axes have collapsed onto one another, so the
+      # split between them is arbitrary. scipy puts it all in x.
+      [:math.atan2(-m12, m11), :math.asin(sin_ry), 0.0]
+    end
   end
 
   @doc """

@@ -69,8 +69,32 @@ defmodule Monty.Frameworks.Utils.KdTree do
   def nearest_with_visits(:empty, _query, _count), do: {[], 0}
 
   def nearest_with_visits(tree, query, count) do
-    {{kept, _size}, visits} = search(tree, query, count, {[], 0}, 0)
+    {kept, visits} = query(tree, query, count)
     {kept |> Enum.reverse() |> Enum.map(fn {_distance, id} -> id end), visits}
+  end
+
+  @doc """
+  The `count` points nearest `query` with their distances, nearest first.
+
+  scipy answers this from the same call as the ids — `return_distance=True` —
+  and the distance is what a caller needs when it wants to compare answers
+  rather than use them: two objects differ most where one has a part the other
+  lacks, which shows up as a node far from everything in the other graph.
+  """
+  @spec nearest_with_distances(t(), point(), pos_integer()) :: [{float(), id()}]
+  def nearest_with_distances(:empty, _query, _count), do: []
+
+  def nearest_with_distances(tree, query, count) do
+    {kept, _visits} = query(tree, query, count)
+
+    kept
+    |> Enum.reverse()
+    |> Enum.map(fn {squared, id} -> {:math.sqrt(squared), id} end)
+  end
+
+  defp query(tree, query, count) do
+    {{kept, _size}, visits} = search(tree, query, count, {[], 0}, 0)
+    {kept, visits}
   end
 
   # `kept` is worst-first and holds at most `count` answers; `visits` counts the

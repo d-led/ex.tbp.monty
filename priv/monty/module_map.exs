@@ -1477,7 +1477,7 @@
         python: "GraphGoalGenerator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator",
         python: "EvidenceGoalGenerator"
       }

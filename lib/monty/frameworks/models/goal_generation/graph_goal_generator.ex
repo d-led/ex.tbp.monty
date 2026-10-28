@@ -47,7 +47,14 @@ defmodule Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator do
             driving_goal: nil,
             output_goal: nil
 
-  @type t :: %__MODULE__{}
+  @type t :: %__MODULE__{
+          parent_lm: map() | nil,
+          parent_output: (-> term()) | nil,
+          goal_tolerances: map(),
+          keep_output_goal: (-> boolean()) | nil,
+          driving_goal: Goal.t() | nil,
+          output_goal: Goal.t() | nil
+        }
 
   @doc """
   A generator with no goals yet.
@@ -71,7 +78,7 @@ defmodule Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator do
   The learning module this generator reads, or an error when there is none.
   """
   @impl true
-  @spec parent_lm(t()) :: struct()
+  @spec parent_lm(t()) :: map()
   def parent_lm(%__MODULE__{parent_lm: nil}) do
     raise ParentLMNotProvided
   end
@@ -85,7 +92,7 @@ defmodule Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator do
   to another object.
   """
   @impl true
-  @spec put_parent_lm(t(), struct()) :: t()
+  @spec put_parent_lm(t(), map()) :: t()
   def put_parent_lm(%__MODULE__{} = generator, parent_lm) do
     reset(%{generator | parent_lm: parent_lm})
   end
@@ -117,8 +124,15 @@ defmodule Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator do
   @impl true
   @spec reset(t()) :: t()
   def reset(%__MODULE__{} = generator) do
-    %{generator | driving_goal: nil, output_goal: nil}
-    |> log_goals(%{}, append: false, init_list: false)
+    generator = %{generator | driving_goal: nil, output_goal: nil}
+
+    case generator.parent_lm do
+      parent_lm when is_map(parent_lm) ->
+        log_goals(generator, parent_lm, %{}, append: false, init_list: false)
+
+      _no_parent_lm ->
+        generator
+    end
   end
 
   @doc """
@@ -164,15 +178,24 @@ defmodule Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator do
 
     with {:ok, channel} <- FeatureAtLocationBuffer.get_first_sensory_input_channel(buffer),
          {:ok, current} <- CommunicationUtils.get_percept_from_channel(observations, channel),
-         previous when not is_nil(previous) <-
-           FeatureAtLocationBuffer.get_previous_input_percepts(buffer),
-         {:ok, before} <- CommunicationUtils.get_percept_from_channel(previous, channel) do
-      messages_different?(current, before, generator.goal_tolerances)
+         previous when not is_nil(previous) <- previous_percept_on(buffer, channel) do
+      messages_different?(current, previous, generator.goal_tolerances)
     else
-      # No channel, no history, or the channel was not in them: nothing can be
-      # said about whether the goal was reached, and guessing "yes" would move
-      # the agent on without evidence.
+      # No channel, no history, or the same channel was not in it: nothing can
+      # be said about whether the goal was reached, and guessing "yes" would
+      # move the agent on without evidence.
       _ -> false
+    end
+  end
+
+  # Monty keeps one list of percepts per step and picks the channel out of the
+  # previous step's list. Our buffer keeps percepts flat, so the previous
+  # percept is only the one to compare against when it came over the same
+  # channel — which for one sensor per step is the same thing.
+  defp previous_percept_on(buffer, channel) do
+    case FeatureAtLocationBuffer.get_previous_input_percepts(buffer) do
+      %Message{sender_id: ^channel} = previous -> previous
+      _another_channel_or_none -> nil
     end
   end
 
@@ -231,15 +254,30 @@ defmodule Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator do
   # a subclass that would rather drop it says so with its own `:keep_output_goal`.
   defp keep_current_output_goal?(%__MODULE__{keep_output_goal: keep?}), do: keep?.()
 
-  defp buffer(%__MODULE__{} = generator) do
+  @doc """
+  The buffer this generator reads from and records into.
+
+  Goals are logged on the parent module's buffer rather than on the generator,
+  so that everything a step learned about a module is read from one place
+  afterwards.
+  """
+  @spec buffer(t()) :: FeatureAtLocationBuffer.t()
+  def buffer(%__MODULE__{} = generator) do
     generator |> parent_lm() |> Map.fetch!(:buffer)
   end
 
   # -- logging -------------------------------------------------------------
 
-  defp log_goal_state(%__MODULE__{output_goal: nil} = generator, _achieved?), do: generator
+  @doc """
+  Records whether the goal in hand was achieved on this step.
 
-  defp log_goal_state(%__MODULE__{} = generator, achieved?) do
+  The goal was set — and could have been achieved — on the previous step, which
+  is why the recorded matching step is the one before this.
+  """
+  @spec log_goal_state(t(), boolean()) :: t()
+  def log_goal_state(%__MODULE__{output_goal: nil} = generator, _achieved?), do: generator
+
+  def log_goal_state(%__MODULE__{} = generator, achieved?) do
     # The goal was set — and could have been achieved — on the previous step,
     # which is why the matching step is the one before this.
     match_step = FeatureAtLocationBuffer.get_num_matching_steps(buffer(generator)) - 1
@@ -255,6 +293,7 @@ defmodule Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator do
 
     log_goals(
       %{generator | output_goal: goal},
+      parent_lm(generator),
       %{
         "goal_states" => goal,
         "matching_step_when_output_goal_set" => match_step,
@@ -265,17 +304,17 @@ defmodule Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator do
     )
   end
 
-  defp log_goals(%__MODULE__{} = generator, stats, opts) do
-    buffer = buffer(generator)
-
+  defp log_goals(%__MODULE__{} = generator, parent_lm, stats, opts) do
     buffer =
-      FeatureAtLocationBuffer.update_stats(buffer, stats,
+      parent_lm
+      |> Map.fetch!(:buffer)
+      |> FeatureAtLocationBuffer.update_stats(stats,
         update_time: false,
         append: Keyword.fetch!(opts, :append),
         init_list: Keyword.fetch!(opts, :init_list)
       )
 
-    %{generator | parent_lm: Map.put(generator.parent_lm, :buffer, buffer)}
+    %{generator | parent_lm: Map.put(parent_lm, :buffer, buffer)}
   end
 
   @doc "The statistics this generator keeps on its parent's buffer."

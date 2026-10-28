@@ -723,6 +723,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   def get_all_known_object_ids(%__MODULE__{} = lm),
     do: GraphMemory.get_memory_ids(lm.graph_memory)
 
+  @doc """
+  The model stored for `model_id`, or one input channel of it.
+
+  `nil` returns everything memory holds for the object, keyed by channel; a
+  channel returns just that channel's model. Monty names this after graphs
+  because that is all memory used to hold, and keeps the name because the
+  callers read it as "the thing I compare against".
+  """
+  @spec get_graph(t(), graph_id(), String.t() | :first | nil) ::
+          %{optional(String.t()) => Monty.Frameworks.Models.ObjectModel.model()}
+          | Monty.Frameworks.Models.ObjectModel.model()
+  def get_graph(%__MODULE__{} = lm, model_id, input_channel \\ nil),
+    do: GraphMemory.get_graph(lm.graph_memory, model_id, input_channel)
+
   @doc "Monty has no scale detection yet; every object is at scale one."
   @spec get_object_scale(t(), graph_id()) :: 1
   def get_object_scale(%__MODULE__{}, _graph_id), do: 1
@@ -813,6 +827,22 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   @doc "The most likely hypothesis of one object, whether or not it is the best overall."
   @spec get_mlh_for_object(t(), graph_id()) :: mlh()
   def get_mlh_for_object(%__MODULE__{} = lm, graph_id), do: most_likely_hypothesis(lm, graph_id)
+
+  @doc """
+  How many hypotheses the module holds for one object.
+
+  Monty's goal generator reads `_hypotheses[graph_id].evidence` for this, and
+  its own comment marks the reach as a temporary measure. Here it is a question
+  the module answers: one hypothesis cannot be separated from itself, which is
+  the whole reason the goal generator asks.
+  """
+  @spec num_hypotheses(t(), graph_id()) :: non_neg_integer()
+  def num_hypotheses(%__MODULE__{} = lm, graph_id) do
+    case Map.get(lm.hypotheses, graph_id) do
+      %Hypotheses{evidence: evidence} -> length(evidence)
+      nil -> 0
+    end
+  end
 
   defp mlh_from_id(%__MODULE__{} = lm, graph_id, id) do
     hypotheses = Map.fetch!(lm.hypotheses, graph_id)

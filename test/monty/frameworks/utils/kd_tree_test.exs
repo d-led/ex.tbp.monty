@@ -80,6 +80,25 @@ defmodule Monty.Frameworks.Utils.KdTreeTest do
     end
   end
 
+  property "reports how far away each answer is" do
+    check all(
+            points <- list_of(point(), min_length: 1, max_length: 40) |> map(&indexed/1),
+            query <- point(),
+            count <- integer(1..10)
+          ) do
+      tree = KdTree.build(points)
+      with_distances = KdTree.nearest_with_distances(tree, query, count)
+
+      assert Enum.map(with_distances, fn {_distance, id} -> id end) ==
+               KdTree.nearest(tree, query, count)
+
+      assert Enum.all?(with_distances, fn {distance, id} ->
+               point = Enum.at(points, id) |> elem(0)
+               abs(distance - :math.sqrt(squared_distance(query, point))) < 1.0e-9
+             end)
+    end
+  end
+
   describe "what a query costs" do
     # The answers stay right even when pruning stops pruning — the tree simply
     # looks at everything — so the cost needs its own specification, or a

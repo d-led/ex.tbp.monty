@@ -207,10 +207,21 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   search, done by comparing distances.
   """
   @impl true
-  def find_nearest_neighbors(%__MODULE__{} = model, search_locations, num_neighbors) do
+  def find_nearest_neighbors(
+        %__MODULE__{} = model,
+        search_locations,
+        num_neighbors,
+        options \\ []
+      ) do
     capacity = min(num_neighbors, num_nodes(model))
+    tree = location_tree(model)
 
-    Enum.map(search_locations, &KdTree.nearest(location_tree(model), &1, capacity))
+    query =
+      if Keyword.get(options, :distance, false),
+        do: &KdTree.nearest_with_distances/3,
+        else: &KdTree.nearest/3
+
+    Enum.map(search_locations, &query.(tree, &1, capacity))
   end
 
   # The index over this model's node positions, kept with the graph it belongs

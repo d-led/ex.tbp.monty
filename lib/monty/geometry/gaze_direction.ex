@@ -11,7 +11,7 @@ defmodule Monty.Geometry.GazeDirection do
   @enforce_keys [:value]
   defstruct [:value]
 
-  @type t :: %__MODULE__{value: [[float()]]}
+  @type t :: %__MODULE__{value: [[float() | nil]]}
 
   @doc "The gaze direction: the negated surface normal."
   @spec direction(t()) :: [float()]

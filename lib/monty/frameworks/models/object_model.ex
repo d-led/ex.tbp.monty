@@ -84,8 +84,11 @@ defmodule Monty.Frameworks.Models.ObjectModel do
   produced evidence from. Monty queries a KD-tree built over the graph; a grid
   model's graph is a point cloud with no edges, so it answers the same question
   by comparing distances.
+
+  With `distance: true` each answer comes as `{distance, id}` instead of an id.
+  That is Monty's `return_distance` flag, and it exists for goal generation:
+  deciding where two objects most disagree needs the distances, not the ids.
   """
-  @callback find_nearest_neighbors(model(), [location()], pos_integer()) :: [
-              [non_neg_integer()]
-            ]
+  @callback find_nearest_neighbors(model(), [location()], pos_integer(), keyword()) ::
+              [[non_neg_integer()]] | [[{float(), non_neg_integer()}]]
 end

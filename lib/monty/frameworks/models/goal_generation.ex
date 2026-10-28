@@ -10,9 +10,10 @@ defmodule Monty.Frameworks.Models.GoalGeneration do
     * `...GoalGeneration.GraphGoalGenerator` — **ported**: the base generator,
       which checks whether the goal it last emitted was reached and emits the
       next one; on its own it emits nothing, meaning "just be more certain";
-    * `...GoalGeneration.EvidenceGoalGenerator` — **planned**: the generator an
+    * `...GoalGeneration.EvidenceGoalGenerator` — **ported**: the generator an
       evidence-based module uses to pick where to look, from the mismatch
-      between what it expects and what it sees.
+      between the graph of the object it believes in and the graph of the one
+      it cannot rule out.
 
   The behaviour these implement is
   `Monty.Frameworks.Models.AbstractMontyClasses.GoalGenerator`.
