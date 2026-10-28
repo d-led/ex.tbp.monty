@@ -52,6 +52,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
     TurnRight
   }
 
+  @pi :math.pi()
+
   @doc """
   The action that would undo `action`.
 
@@ -131,5 +133,48 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
     else
       policy
     end
+  end
+
+  @doc """
+  The signed change from one orientation to another, in radians.
+
+  Monty's `theta_change`: a plain subtraction with the loop-around corrected, so
+  that 0 to `3π/2` is a quarter turn back rather than three quarters forward.
+  """
+  @spec theta_change(float(), float()) :: float()
+  def theta_change(a, b), do: enforce_pi_bounds(a - b)
+
+  @doc """
+  The same angle, brought back between `-π` and `π`.
+
+  Monty's `enforce_pi_bounds`, as a loop of `±2π`: a plain `rem/2` would do it in
+  one step, but the loop is what the angles' meaning in Monty is, and it is what
+  the port follows.
+  """
+  @spec enforce_pi_bounds(float()) :: float()
+  def enforce_pi_bounds(theta) when theta > @pi, do: enforce_pi_bounds(theta - 2.0 * @pi)
+
+  def enforce_pi_bounds(theta) when theta < -@pi, do: enforce_pi_bounds(theta + 2.0 * @pi)
+
+  def enforce_pi_bounds(theta), do: theta
+
+  @doc """
+  The orientation a direction in the agent's plane points in, in radians.
+
+  Monty's `projected_angle_from_vec`: `atan2(x, y)`, in that order, because theta
+  of zero means "along +y" — up in the agent's frame — rather than "along +x".
+  """
+  @spec projected_angle_from_vec(Monty.Geometry.Rotation.vector()) :: float()
+  def projected_angle_from_vec([x, y, _z]), do: :math.atan2(x, y)
+
+  @doc """
+  The direction in the agent's plane that an orientation points in.
+
+  Monty's `projected_vec_from_angle`. The quarter-turn offsets on `cos` and `sin`
+  are what put theta of zero on +y and keep a tangential step in the plane.
+  """
+  @spec projected_vec_from_angle(float()) :: Monty.Geometry.Rotation.vector()
+  def projected_vec_from_angle(angle) do
+    [:math.cos(angle - :math.pi() / 2.0), :math.sin(angle + :math.pi() / 2.0), 0.0]
   end
 end

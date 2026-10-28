@@ -118,6 +118,30 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
           telemetry: SurfacePolicyTelemetry.t() | nil
         }
 
+  @typedoc """
+  A policy that can run the surface cycle: the fields the step reads.
+
+  `SurfacePolicy` and `SurfacePolicyCurvatureInformed` both carry them, which is
+  how Monty's inheritance is expressed here (`docs/monty-bugs.md` §2.9).
+  """
+  @type surface_state :: %{
+          required(:agent_id) => atom() | String.t(),
+          required(:rng) => :rand.state() | nil,
+          required(:alpha) => float(),
+          required(:desired_object_distance) => float(),
+          required(:use_goal_driven_actions) => boolean(),
+          required(:is_jumping) => boolean(),
+          required(:is_undoing_jump) => boolean(),
+          required(:pre_jump_state) => map() | nil,
+          required(:undo_jump_actions) => [Monty.Frameworks.Actions.Action.t()],
+          required(:attempting_to_find_object) => boolean(),
+          required(:tangential_angle) => float() | nil,
+          required(:touch_search_amount) => float(),
+          required(:last_surface_policy_action) => Monty.Frameworks.Actions.Action.t() | nil,
+          required(:telemetry) => term(),
+          optional(atom()) => term()
+        }
+
   @doc """
   A surface policy for `:agent_id`, with `:alpha` weighting new directions.
 
@@ -151,6 +175,27 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
           Cmp.Goal.t() | nil
         ) :: {MotorPolicyResult.t(), t()}
   def call(%__MODULE__{} = policy, ctx, observations, state, percept, goal) do
+    surface_step(policy, ctx, observations, state, percept, goal)
+  end
+
+  @doc """
+  One step of the surface cycle, for any policy that carries its fields.
+
+  Monty's `SurfacePolicy.__call__`, reached here through `call/6` and directly by
+  `SurfacePolicyCurvatureInformed`, which is a subclass there and a second struct
+  here (`docs/monty-bugs.md` §2.9). The tangential direction is the one part it
+  overrides, so that is asked of the policy's own module.
+  """
+  @spec surface_step(
+          surface_state(),
+          Monty.Context.t(),
+          map() | nil,
+          map(),
+          Cmp.Message.t() | nil,
+          Cmp.Goal.t() | nil
+        ) ::
+          {MotorPolicyResult.t(), surface_state()}
+  def surface_step(policy, ctx, observations, state, percept, goal) do
     policy = %{policy | telemetry: %SurfacePolicyTelemetry{}}
 
     case InformedPolicy.goal_driven_actions(policy, observations, state, goal) do
@@ -193,7 +238,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
 
   # -- the cycle ------------------------------------------------------------
 
-  defp searching?(%__MODULE__{} = policy, percept) do
+  defp searching?(policy, percept) do
     policy.attempting_to_find_object or coverage(percept) < @coverage_to_search
   end
 
@@ -278,7 +323,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
 
   defp move_tangentially(policy, ctx, state, percept) do
     {action, policy} = sample(policy, ctx, :sample_move_tangentially)
-    {direction, policy} = tangential_direction(policy, ctx, state)
+    {direction, policy} = policy.__struct__.tangential_direction(policy, ctx, state)
 
     {%{shorten(action, coverage(percept)) | direction: direction}, policy}
   end
@@ -432,10 +477,16 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
     {depth * :math.tan(radians), depth * (1.0 - :math.cos(radians)) / :math.cos(radians)}
   end
 
-  # A direction that is mostly the last one and partly new, in the agent's own
-  # frame, with theta = 0 pointing up rather than right — hence the quarter-turn
-  # offsets that Monty applies to x and y.
-  defp tangential_direction(policy, ctx, state) do
+  @doc """
+  A direction that is mostly the last one and partly new, in the agent's frame.
+
+  Monty's `SurfacePolicy.tangential_direction`, and the one method
+  `SurfacePolicyCurvatureInformed` overrides — hence public, and reached by the
+  policy's own module (`docs/monty-bugs.md` §2.9).
+  """
+  @spec tangential_direction(surface_state(), Monty.Context.t(), map()) ::
+          {Rotation.vector(), surface_state()}
+  def tangential_direction(policy, ctx, state) do
     {draw, rng} = ActionSamplers.uniform(stream(policy, ctx), 0.0, 1.0)
     new_target_direction = (draw - 0.5) * 2.0 * :math.pi()
 
@@ -444,13 +495,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
         new_target_direction * policy.alpha
 
     agent_rotation = state |> Map.fetch!(policy.agent_id) |> Map.fetch!(:rotation)
-
-    direction =
-      Rotation.apply(agent_rotation, [
-        :math.cos(angle - :math.pi() / 2.0),
-        :math.sin(angle + :math.pi() / 2.0),
-        0.0
-      ])
+    direction = Rotation.apply(agent_rotation, MotorPolicies.projected_vec_from_angle(angle))
 
     {direction, %{policy | rng: rng, tangential_angle: angle}}
   end
@@ -476,7 +521,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
     end
   end
 
-  defp sample(%__MODULE__{} = policy, ctx, function) do
+  defp sample(policy, ctx, function) do
     rng = stream(policy, ctx)
 
     {action, rng} =
@@ -489,7 +534,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
     {action, %{policy | rng: rng}}
   end
 
-  defp stream(%__MODULE__{} = policy, ctx),
+  defp stream(policy, ctx),
     do: ActionSampler.stream(policy.action_sampler, policy.rng, ctx)
 
   defp radians(degrees), do: degrees * :math.pi() / 180.0
