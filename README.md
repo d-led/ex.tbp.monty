@@ -136,7 +136,11 @@ docs/                 architecture, config compatibility, module map, MCP, devel
 code; [docs/architecture.md](docs/architecture.md) explains how a timestep
 runs; [docs/roadmap.md](docs/roadmap.md) is the order the rest of Monty arrives
 in — the numeric core first, then the world, then the numbers that make it
-comparable. [docs/mcp.md](docs/mcp.md) describes the MCP server at `POST /mcp`,
+comparable. [docs/monty-bugs.md](docs/monty-bugs.md) lists what looks wrong in
+Monty, and every place this port deliberately differs from it — read it before
+diffing an Elixir run against a Python one, because some differences are
+intended and some are upstream. [docs/mcp.md](docs/mcp.md) describes the MCP
+server at `POST /mcp`,
 which answers questions about Monty's docs, roadmap and code and can define and
 run an experiment from a conversation.
 

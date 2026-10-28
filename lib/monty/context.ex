@@ -9,6 +9,13 @@ defmodule Monty.Context do
   named module. Two runs with the same seed therefore draw the same numbers
   whether the modules are stepped one at a time or side by side.
 
+  **This is the one difference most likely to change an experiment's numbers.**
+  The same seed does not give the same sequence of random actions as a Python
+  run, because the streams are drawn for different consumers in a different
+  order; anything that samples — every policy that is not pre-defined — walks a
+  different path. `docs/monty-bugs.md` §2.1 says what to compare instead, and
+  what a Monty-compatible single-stream mode would take.
+
   The step is advanced by the coordinator, never by a module.
   """
 
