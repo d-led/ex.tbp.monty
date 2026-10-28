@@ -126,17 +126,19 @@ mix monty.module_map.verify  # every Monty file is mapped, every "implemented" m
 
 ```
 lib/monty/            the port: CMP, geometry, config, module map, (next) runtime
-lib/ex_tbp_monty/     the OTP application: repo, release plumbing
+lib/ex_tbp_monty/     the OTP application: repo, MCP server, release plumbing
 lib/ex_tbp_monty_web/ Phoenix endpoint, LiveViews, components
 priv/monty/           generated module map
-docs/                 architecture, config compatibility, module map, developer notes
+docs/                 architecture, config compatibility, module map, MCP, developer notes
 ```
 
 [docs/developers.md](docs/developers.md) is the entry point for working on the
 code; [docs/architecture.md](docs/architecture.md) explains how a timestep
 runs; [docs/roadmap.md](docs/roadmap.md) is the order the rest of Monty arrives
 in — the numeric core first, then the world, then the numbers that make it
-comparable.
+comparable. [docs/mcp.md](docs/mcp.md) describes the MCP server at `POST /mcp`,
+which answers questions about Monty's docs, roadmap and code and can define and
+run an experiment from a conversation.
 
 ## Licence
 

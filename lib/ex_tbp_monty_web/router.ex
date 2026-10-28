@@ -35,6 +35,13 @@ defmodule ExTbpMontyWeb.Router do
     pipe_through :api
 
     get "/health", HealthController, :show
+
+    # The MCP server: one JSON-RPC message in, one answer out. `GET` and
+    # `DELETE` are answered 405 by the controller, which is how a server
+    # declines the transport's optional stream and its sessions.
+    post "/mcp", McpController, :handle
+    get "/mcp", McpController, :stream
+    delete "/mcp", McpController, :terminate
   end
 
   scope "/", ExTbpMontyWeb do
