@@ -1752,12 +1752,12 @@
     python: "frameworks/models/salience/motor_policy.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.MotorPolicy.GoalCollocatedWithSensor",
         python: "GoalCollocatedWithSensor"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.MotorPolicy.LookAtGoal",
         python: "LookAtGoal"
       }
