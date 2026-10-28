@@ -234,3 +234,6 @@ backups/
 
 # Studio runs write their logs here; they are not source.
 /priv/studio_runs/
+
+# running the Monty recorder writes bytecode next to it
+scripts/__pycache__/
