@@ -44,6 +44,10 @@ defmodule Monty.Runtime.Model do
   @spec done?(atom() | String.t()) :: boolean()
   def done?(model_id), do: Step.done?(Registry.via({:step, model_id}))
 
+  @doc "The coordinator's state, for tests and the run inspector."
+  @spec state(atom() | String.t()) :: Monty.Runtime.Step.State.t()
+  def state(model_id), do: Step.state(Registry.via({:step, model_id}))
+
   @doc "Clears short-term memory for a new episode, keeping long-term memory."
   @spec reset_episode(atom() | String.t()) :: :ok
   def reset_episode(model_id), do: Step.reset_episode(Registry.via({:step, model_id}))
