@@ -179,6 +179,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   are passed to it; `:displacer` and `:scorer` are built here from the
   configuration above, so that every strategy sees the same comparison.
 
+  `:gsg` is the goal generator this module will drive, and is `nil` unless an
+  experiment supplies one — the same default Monty's evidence learning module
+  has, which takes a generator as an argument rather than creating one.
+
   Pose tolerances are added if the configuration does not name them: matching
   never runs without comparing poses, so a missing pose tolerance would silently
   mean "any pose matches".
