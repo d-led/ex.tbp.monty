@@ -151,6 +151,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   @type t :: %__MODULE__{}
 
+  # What an experiment's config names, and what those names mean here.
+  @evidence_graph_lm_target "tbp.monty.frameworks.models.evidence_matching.learning_module.EvidenceGraphLM"
+  @default_max_nneighbors 3
+  @hypotheses_updaters %{
+    "tbp.monty.frameworks.models.evidence_matching.hypotheses_updater.DefaultHypothesesUpdater" =>
+      DefaultHypothesesUpdater,
+    "tbp.monty.frameworks.models.evidence_matching.burst_sampling.BurstSamplingHypothesesUpdater" =>
+      Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHypothesesUpdater
+  }
+
   # -- construction --------------------------------------------------------
 
   @doc """
@@ -209,6 +219,61 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       }
 
       {:ok, lm |> build_updater() |> reset_stm()}
+    end
+  end
+
+  @doc """
+  A module built from an experiment's learning-module configuration.
+
+  Monty has no such function: Hydra instantiates the config's `_target_` with
+  the group's parameters, which arrive already composed. This reads the same
+  mapping — what an experiment writes under
+  `monty_config.learning_modules.learning_module_0` — and builds both the module
+  and the memory it learns into, so that an experiment's own numbers decide what
+  runs rather than a test's.
+
+  A target or an updater this port has not written is an error naming it, not a
+  module that would answer with something else's numbers.
+  """
+  @spec from_config(map()) :: {:ok, t()} | {:error, term()}
+  def from_config(config) when is_map(config) do
+    with :ok <- check_target(Map.get(config, "_target_", @evidence_graph_lm_target)),
+         {:ok, updater} <- updater_for(config) do
+      memory =
+        EvidenceGraphMemory.new(
+          max_nodes_per_graph: Map.get(config, "max_nodes_per_graph", 2000),
+          max_graph_size: Map.get(config, "max_graph_size", 0.3),
+          num_model_voxels_per_dim: Map.get(config, "num_model_voxels_per_dim", 50)
+        )
+
+      new(memory,
+        max_match_distance: Map.get(config, "max_match_distance", 0.01),
+        tolerances: Map.get(config, "tolerances", %{}),
+        feature_weights: Map.get(config, "feature_weights", %{}),
+        x_percent_threshold: Map.get(config, "x_percent_threshold", 10),
+        evidence_threshold_config: Map.get(config, "evidence_threshold_config", "all"),
+        learning_module_id: Map.get(config, "learning_module_id", "LM_0"),
+        max_nneighbors:
+          get_in(config, ["hypotheses_updater_args", "max_nneighbors"]) || @default_max_nneighbors,
+        hypotheses_updater: updater
+      )
+    end
+  end
+
+  defp check_target(@evidence_graph_lm_target), do: :ok
+
+  defp check_target(target), do: {:error, {:unsupported_learning_module, target}}
+
+  defp updater_for(config) do
+    case Map.get(config, "hypotheses_updater_class") do
+      nil ->
+        {:ok, DefaultHypothesesUpdater}
+
+      class ->
+        case Map.fetch(@hypotheses_updaters, class) do
+          {:ok, module} -> {:ok, module}
+          :error -> {:error, {:unsupported_hypotheses_updater, class}}
+        end
     end
   end
 
