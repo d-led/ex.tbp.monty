@@ -315,10 +315,18 @@ defmodule Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer do
     stats |> Map.get("lm_processed_steps", []) |> List.last() == true
   end
 
-  @doc "Whether the last sensation was on the object."
+  @doc """
+  Whether the last sensation was on the object.
+
+  Monty's message carries a boolean, and a recorded one may carry the same fact
+  as `1.0`/`0.0` — so the answer is the truth of what was stored rather than the
+  stored value itself, which callers then combine with `and`.
+  """
   @spec get_currently_on_object(t()) :: boolean()
   def get_currently_on_object(%__MODULE__{on_object: []}), do: false
-  def get_currently_on_object(%__MODULE__{on_object: on_object}), do: List.last(on_object)
+
+  def get_currently_on_object(%__MODULE__{on_object: on_object}),
+    do: List.last(on_object) not in [false, nil, 0, 0.0]
 
   @doc "Every location from the steps where at least one input was on the object."
   @spec get_all_locations_on_object(t()) :: [[float()]]
