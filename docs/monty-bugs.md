@@ -226,6 +226,8 @@ hypothesis counts, and aggregate statistics over many episodes. A per-step,
 per-seed comparison needs a Monty-compatible single-stream mode, which is not
 built.
 
+Code site: `lib/monty/context.ex` (`rng_for/2`), whose moduledoc says the same.
+
 ## 2.2 `motor_only_step` travels in the result
 
 Monty hands the motor system to the selector (`fixme_provide_motor_system`) so a
@@ -233,11 +235,17 @@ policy can set `motor_only_step` on it. Here the policy says it in the
 `MotorPolicyResult` and the motor system carries it. Same effect on the step; no
 shared mutable object.
 
+Code sites: `lib/monty/frameworks/models/motor_policies/motor_policy_result.ex`,
+`lib/monty/frameworks/models/motor_system.ex`.
+
 ## 2.3 The motor system answers with itself
 
 `MotorSystem.call/6` answers `{actions, motor_system}` rather than only the
 actions, because the record of what was decided has to live somewhere and a
 struct cannot be changed in place. The same holds for the selectors and policies.
+
+Code sites: `lib/monty/frameworks/models/motor_system.ex`,
+`lib/monty/frameworks/models/motor_policy_selectors.ex`.
 
 ## 2.4 `get_output/1` answers `{message, lm}`
 
@@ -245,17 +253,35 @@ Monty's returns the `Message` alone. Ours answers it with the module, like every
 other step in this port. A caller that wants the confidence reads
 `elem(result, 0).confidence`.
 
-## 2.5 A sampler is a function, for now
+Code site: `lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex`,
+`get_output/1`.
 
-`BasePolicy` and `InformedPolicy` take a sampler as `agent_id -> action`, so a
-sampler cannot advance a random stream between calls. This is under decision
-(two candidate shapes, one of which gives the sampler the `Context`). Until it is
-settled, treat sampler-driven behaviour as distributionally — not numerically —
-comparable.
+## 2.5 A sampler answers the stream it leaves behind
+
+Monty writes `self.action_sampler.sample(self.agent_id, ctx.rng)` and mutates
+`ctx.rng` in place, so one stream advances across the episode. Elixir has no
+mutable stream, so `ActionSampler.sample/3` answers `{action, rng}` and the
+caller threads it; the policies own the stream, starting it from the context on
+their first draw (`ActionSampler.stream/3`), and `reset/1` forgets it so the next
+episode starts where its step says.
+
+**Consequence.** Nothing about which actions are drawn differs from Monty's
+arithmetic for a given stream — but the stream itself differs, for the reason in
+§2.1. A policy that samples twice in one step sees two different actions, as it
+does in Monty; this is why the state has to be threaded rather than rederived
+from the step, and `scripts/bench_samplers.exs` records that threading is also
+the cheaper of the two.
+
+Code sites: `lib/monty/frameworks/actions/action_samplers/action_sampler.ex`,
+`lib/monty/frameworks/models/motor_policies/base_policy.ex`,
+`lib/monty/frameworks/models/motor_policies/informed_policy.ex`.
 
 ## 2.6 `get_top_two_pose_hypotheses_for_graph_id/2` answers `{best, nil}`
 
 See §1.4. Monty raises where this port returns a value.
+
+Code site: `lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex`,
+`get_top_two_pose_hypotheses_for_graph_id/2`.
 
 ## 2.7 `depth_at_center` lives in the policy
 
@@ -263,6 +289,9 @@ Monty keeps it in `frameworks/environments/positioning_procedures.py`. Here it i
 a private function in `InformedPolicy`, reading the same shape
 (`observations[agent_id][sensor_id]["depth"]`, centre pixel), until an
 environment is ported and it can move to its mapped home.
+
+Code site: `lib/monty/frameworks/models/motor_policies/informed_policy.ex`, whose
+moduledoc says the same.
 
 ## 2.8 Small vocabulary differences
 
@@ -274,3 +303,8 @@ environment is ported and it can move to its mapped home.
   the same reason and with the action named.
 - Actions keep Monty's units (degrees, metres, `wxyz`), deliberately: an action
   built here must be the same object an environment there would perform.
+
+Code sites: `lib/monty/frameworks/models/motor_policies/policy_status.ex`,
+`lib/monty/frameworks/actions/action_json_decoder.ex`,
+`lib/monty/frameworks/models/motor_policies.ex` (`undo_last_action/1`), and every
+module under `lib/monty/frameworks/actions/`, whose moduledocs state the units.

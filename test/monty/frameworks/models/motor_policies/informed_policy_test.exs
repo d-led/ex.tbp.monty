@@ -3,6 +3,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyTest do
 
   alias Monty.Cmp.{Goal, Message}
   alias Monty.Context
+  alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
   alias Monty.Frameworks.Actions.{SetAgentPose, SetSensorRotation, TurnLeft}
   alias Monty.Frameworks.Models.MotorPolicies.{InformedPolicy, MotorPolicyResult}
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
@@ -72,7 +73,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyTest do
       Keyword.merge(
         [
           agent_id: @agent,
-          action_sampler: fn @agent -> %TurnLeft{agent_id: @agent, rotation_degrees: 5.0} end
+          action_sampler: ConstantSampler.new(actions: [TurnLeft], rotation_degrees: 5.0)
         ],
         options
       )

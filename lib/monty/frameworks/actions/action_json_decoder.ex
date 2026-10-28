@@ -125,7 +125,8 @@ defmodule Monty.Frameworks.Actions.ActionJSONDecoder do
 
   # JSON carries a quaternion as four numbers, while a struct holds the tuple;
   # an action read straight out of another struct already has the tuple, and
-  # Monty's `tuple(...)` is likewise happy with both.
+  # Monty's `tuple(...)` is likewise happy with both. The tuple in place of a
+  # `quaternion` object is `docs/monty-bugs.md` §2.8.
   defp to_tuple(quaternion) when is_tuple(quaternion), do: quaternion
   defp to_tuple(quaternion) when is_list(quaternion), do: List.to_tuple(quaternion)
 end

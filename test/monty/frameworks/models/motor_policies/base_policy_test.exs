@@ -2,7 +2,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies.BasePolicyTest do
   use ExUnit.Case, async: true
 
   alias Monty.Context
-  alias Monty.Frameworks.Actions.LookDown
+  alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
+  alias Monty.Frameworks.Actions.{LookDown, MoveForward}
   alias Monty.Frameworks.Models.MotorPolicies.BasePolicy
   alias Monty.Frameworks.Models.MotorSystemState.AgentState
 
@@ -13,10 +14,31 @@ defmodule Monty.Frameworks.Models.MotorPolicies.BasePolicyTest do
     @agent => %AgentState{sensors: %{}, position: [0.0, 0.0, 0.0], rotation: nil}
   }
 
-  defp policy, do: BasePolicy.new(action_sampler: fn @agent -> @action end, agent_id: @agent)
+  defp sampler, do: ConstantSampler.new(actions: [LookDown], rotation_degrees: 30.0)
+
+  defp policy, do: BasePolicy.new(action_sampler: sampler(), agent_id: @agent)
+
+  # A sampler that can make either of two actions, so that a stream which is
+  # being threaded shows up in what the policy does.
+  defp wandering_policy do
+    BasePolicy.new(
+      action_sampler: ConstantSampler.new(actions: [LookDown, MoveForward]),
+      agent_id: @agent
+    )
+  end
 
   defp step(policy, goal \\ nil) do
     BasePolicy.call(policy, Context.new(0), %{}, @state, nil, goal)
+  end
+
+  defp actions_over(policy, steps) do
+    {actions, _policy} =
+      Enum.map_reduce(1..steps, policy, fn _step, policy ->
+        {%{actions: [action]}, policy} = step(policy)
+        {action, policy}
+      end)
+
+    actions
   end
 
   describe "taking a step" do
@@ -25,8 +47,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.BasePolicyTest do
     end
 
     test "asks the sampler for its own agent" do
-      sampler = fn agent_id -> %LookDown{agent_id: agent_id, rotation_degrees: 1.0} end
-      policy = BasePolicy.new(action_sampler: sampler, agent_id: "other_agent")
+      policy = BasePolicy.new(action_sampler: sampler(), agent_id: "other_agent")
 
       assert {%{actions: [%LookDown{agent_id: "other_agent"}]}, _policy} = step(policy)
     end
@@ -42,14 +63,27 @@ defmodule Monty.Frameworks.Models.MotorPolicies.BasePolicyTest do
     end
   end
 
-  describe "what it remembers" do
-    test "nothing, because a sample depends on the sampler and not on the episode" do
-      assert BasePolicy.state_dict(policy()) == %{}
+  describe "the stream it draws from" do
+    test "keeps drawing where the last step left off, so it can wander" do
+      actions = actions_over(wandering_policy(), 100)
+
+      assert actions |> Enum.map(& &1.__struct__) |> Enum.uniq() |> length() > 1
     end
 
-    test "and resetting it changes nothing" do
-      policy = policy()
-      assert BasePolicy.reset(policy) == policy
+    test "two policies on the same episode draw the same actions" do
+      assert actions_over(wandering_policy(), 10) == actions_over(wandering_policy(), 10)
+    end
+
+    test "resetting starts a new stream, so it draws as a fresh policy does" do
+      {_result, used} = step(wandering_policy())
+
+      assert actions_over(BasePolicy.reset(used), 10) == actions_over(wandering_policy(), 10)
+    end
+  end
+
+  describe "what it remembers" do
+    test "nothing, because what it draws is not worth reporting" do
+      assert BasePolicy.state_dict(policy()) == %{}
     end
   end
 end

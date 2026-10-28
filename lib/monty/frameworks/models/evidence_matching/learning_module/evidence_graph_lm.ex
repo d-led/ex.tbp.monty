@@ -960,7 +960,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   The best and second-best hypotheses of one object.
 
   `{best, nil}` when the object has a single hypothesis: there is no second
-  best, and Monty's `argsort(...)[-2]` would fail on it.
+  best, and Monty's `argsort(...)[-2]` would index past the end of a one-element
+  array. Monty raises there, so this is a deviation as well as a defect —
+  `docs/monty-bugs.md` §1.4 and §2.6.
   """
   @spec get_top_two_pose_hypotheses_for_graph_id(t(), graph_id()) :: {mlh(), mlh() | nil}
   def get_top_two_pose_hypotheses_for_graph_id(%__MODULE__{} = lm, graph_id) do
@@ -1513,6 +1515,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   `pass_message` is only true once the object is recognised — a guess is not
   something to build on. `object_id` is a stable number derived from the id, so
   the module above can match on it as a categorical feature.
+
+  Monty's returns the `Message` alone; this comes back with the module, like
+  every other step in this port (`docs/monty-bugs.md` §2.4).
   """
   @impl true
   @spec get_output(t()) :: {Message.t() | nil, t()}

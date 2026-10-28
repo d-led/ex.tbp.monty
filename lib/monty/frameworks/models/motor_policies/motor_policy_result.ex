@@ -8,6 +8,10 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult do
   how a policy affects the run without reaching into it. `telemetry` is the
   surface policy's own record of why it chose what it chose, kept because there
   is nowhere else for it to go yet, as Monty says of its own.
+
+  Monty lets a policy set `motor_only_step` on the motor system itself through a
+  `fixme_provide_motor_system` handout; here the policy says it in the result it
+  returns (`docs/monty-bugs.md` §2.2).
   """
 
   alias Monty.Frameworks.Models.MotorPolicies.PolicyStatus

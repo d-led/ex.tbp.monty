@@ -29,14 +29,15 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   `_should_undo_jump` reads `observations[agent_id][sensor_id]["depth"]` and
   takes its centre pixel, as Monty's positioning procedure does. That is the
   shape Monty's habitats report and the shape this reads; when an environment is
-  ported, the reader moves to `PositioningProcedures` where Monty keeps it.
+  ported, the reader moves to `PositioningProcedures` where Monty keeps it
+  (`docs/monty-bugs.md` §2.7).
   """
 
   @behaviour Monty.Frameworks.Models.MotorPolicies.MotorPolicy
 
   alias Monty.Cmp
-  alias Monty.Frameworks.Actions.SetAgentPose
-  alias Monty.Frameworks.Actions.SetSensorRotation
+  alias Monty.Frameworks.Actions.ActionSamplers.ActionSampler
+  alias Monty.Frameworks.Actions.{SetAgentPose, SetSensorRotation}
   alias Monty.Frameworks.Models.MotorPolicies
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
   alias Monty.Geometry.{GazeDirection, Rotation}
@@ -54,6 +55,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   @enforce_keys [:action_sampler, :agent_id]
   defstruct action_sampler: nil,
             agent_id: nil,
+            rng: nil,
             use_goal_driven_actions: false,
             undo_action: nil,
             is_jumping: false,
@@ -62,8 +64,9 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
             undo_jump_actions: []
 
   @type t :: %__MODULE__{
-          action_sampler: Monty.Frameworks.Models.MotorPolicies.BasePolicy.sampler(),
+          action_sampler: Monty.Frameworks.Actions.ActionSamplers.ActionSampler.t(),
           agent_id: atom() | String.t(),
+          rng: :rand.state() | nil,
           use_goal_driven_actions: boolean(),
           undo_action: Monty.Frameworks.Actions.Action.t() | nil,
           is_jumping: boolean(),
@@ -99,19 +102,19 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
           Cmp.Message.t() | nil,
           Cmp.Goal.t() | nil
         ) :: {MotorPolicyResult.t(), t()}
-  def call(%__MODULE__{} = policy, _ctx, observations, state, percept, goal) do
+  def call(%__MODULE__{} = policy, ctx, observations, state, percept, goal) do
     case goal_driven(policy, observations, state, goal) do
       {:result, result, policy} -> {result, policy}
-      {:continue, policy} -> off_object_recovery(policy, percept)
+      {:continue, policy} -> off_object_recovery(policy, ctx, percept)
     end
   end
 
   # -- staying on the object -----------------------------------------------
 
-  defp off_object_recovery(%__MODULE__{} = policy, percept) do
+  defp off_object_recovery(%__MODULE__{} = policy, ctx, percept) do
     cond do
       on_object?(percept) ->
-        action = policy.action_sampler.(policy.agent_id)
+        {action, policy} = sample(policy, ctx)
 
         {%MotorPolicyResult{actions: [action]},
          %{policy | undo_action: MotorPolicies.undo_last_action(action)}}
@@ -135,6 +138,15 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   # sampling is what a policy does when it is not recovering.
   defp on_object?(nil), do: true
   defp on_object?(%Cmp.Message{} = percept), do: Cmp.Message.on_object?(percept)
+
+  # The stream is threaded through the policy, as Monty threads it through the
+  # context (`docs/monty-bugs.md` §2.5).
+  defp sample(%__MODULE__{} = policy, ctx) do
+    rng = ActionSampler.stream(policy.action_sampler, policy.rng, ctx)
+    {action, rng} = ActionSampler.sample(policy.action_sampler, policy.agent_id, rng)
+
+    {action, %{policy | rng: rng}}
+  end
 
   # -- jumping --------------------------------------------------------------
 
@@ -314,7 +326,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   def reset(%__MODULE__{} = policy) do
     %__MODULE__{
       policy
-      | undo_action: nil,
+      | rng: nil,
+        undo_action: nil,
         is_jumping: false,
         is_undoing_jump: false,
         pre_jump_state: nil,

@@ -446,23 +446,23 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Actions.ActionSamplers",
     package: "monty",
     python: "frameworks/actions/action_samplers.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.ActionSamplers.ActionSampler",
         python: "ActionSampler"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.ActionSamplers.ConstantSampler",
         python: "ConstantSampler"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.ActionSamplers.UniformlyDistributedSampler",
         python: "UniformlyDistributedSampler"
       }

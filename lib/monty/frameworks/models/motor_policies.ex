@@ -57,7 +57,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
   `Action.undo`; the name here leaves the complaint out and the doc keeps it.
   Monty raises `TypeError` for anything else and so does this, as an
   `ArgumentError`: a policy configured with an action it cannot undo has nothing
-  sensible to do with a percept that left the object.
+  sensible to do with a percept that left the object. That is `docs/monty-bugs.md`
+  §2.8, along with the rest of the vocabulary differences.
   """
   @spec undo_last_action(Monty.Frameworks.Actions.Action.t()) ::
           Monty.Frameworks.Actions.Action.t()

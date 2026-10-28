@@ -25,6 +25,8 @@ defmodule Monty.Frameworks.Models.MotorSystem do
     * Monty's `fixme_provide_motor_system` handout is gone: a policy that wants
       `motor_only_step` set on the step says so in the `MotorPolicyResult` it
       returns, which this module then carries.
+
+  Both are recorded in `docs/monty-bugs.md` §2.2 and §2.3.
   """
 
   @behaviour Monty.Frameworks.Models.MotorSystem.RuntimeMotorSystem
