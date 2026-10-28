@@ -31,5 +31,16 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicy do
   @doc "What the policy recorded, for a run that wants to be read afterwards."
   @callback state_dict(t()) :: map()
 
+  @doc """
+  What to do once a jump has landed with the object in view.
+
+  Monty's `_handle_successful_jump`, which `SurfacePolicy` overrides; a policy
+  that does not care answers itself unchanged. The policy's own module is asked
+  for it (`docs/monty-bugs.md` §2.9).
+  """
+  @callback handle_successful_jump(t()) :: t()
+
+  @optional_callbacks handle_successful_jump: 1
+
   @type t :: struct()
 end

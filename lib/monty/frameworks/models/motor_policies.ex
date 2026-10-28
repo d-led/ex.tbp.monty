@@ -19,6 +19,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
     * `...MotorPolicies.InformedPolicy` — **ported**: sample while the sensor is
       on the object, step back while it is not, and jump to a goal when one
       arrives;
+    * `...MotorPolicies.SurfacePolicy` — **ported**: walk the surface of an
+      object, and search for it when it is lost;
     * `undo_last_action/1` — **ported**: the module-level function — Monty calls
       it `fixme_undo_last_action` — that turns an action into its opposite.
 
@@ -84,5 +86,43 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
     raise ArgumentError,
           "cannot undo #{inspect(action.__struct__)}: an informed policy samples only " <>
             "look up, look down, turn left, turn right, move forward and move tangentially"
+  end
+
+  @doc """
+  The depth at the centre pixel of a sensor's view.
+
+  Monty's `PositioningProcedure.depth_at_center`, a static method of a module
+  this port has not taken on. It lives here, where both policies can reach it,
+  until the environments are ported (`docs/monty-bugs.md` §2.7).
+  """
+  @spec depth_at_center(map(), atom() | String.t(), String.t()) :: float()
+  def depth_at_center(observations, agent_id, sensor_id) do
+    depth =
+      observations
+      |> Map.fetch!(agent_id)
+      |> Map.fetch!(sensor_id)
+      |> Map.fetch!("depth")
+
+    rows = length(depth)
+    columns = depth |> hd() |> length()
+
+    depth
+    |> Enum.at(div(rows, 2))
+    |> Enum.at(div(columns, 2))
+  end
+
+  @doc """
+  Ask a policy what it does now that a jump has landed.
+
+  Monty calls `self._handle_successful_jump()`, which a subclass overrides;
+  here the struct's module is asked instead (`docs/monty-bugs.md` §2.9).
+  """
+  @spec successful_jump(struct()) :: struct()
+  def successful_jump(%module{} = policy) do
+    if function_exported?(module, :handle_successful_jump, 1) do
+      module.handle_successful_jump(policy)
+    else
+      policy
+    end
   end
 end

@@ -283,15 +283,17 @@ See §1.4. Monty raises where this port returns a value.
 Code site: `lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex`,
 `get_top_two_pose_hypotheses_for_graph_id/2`.
 
-## 2.7 `depth_at_center` lives in the policy
+## 2.7 `depth_at_center` lives in the policy namespace
 
-Monty keeps it in `frameworks/environments/positioning_procedures.py`. Here it is
-a private function in `InformedPolicy`, reading the same shape
-(`observations[agent_id][sensor_id]["depth"]`, centre pixel), until an
-environment is ported and it can move to its mapped home.
+Monty keeps it in `frameworks/environments/positioning_procedures.py`, as a
+static method of `PositioningProcedure`. That module is 530 lines of good-view
+searching for distant agents, none of it needed yet, so the centre-pixel read
+lives in `Monty.Frameworks.Models.MotorPolicies` where both policies reach it —
+reading the same shape (`observations[agent_id][sensor_id]["depth"]`, centre
+pixel) — until an environment is ported and it can move to its mapped home.
 
-Code site: `lib/monty/frameworks/models/motor_policies/informed_policy.ex`, whose
-moduledoc says the same.
+Code site: `lib/monty/frameworks/models/motor_policies.ex`,
+`depth_at_center/3`, whose doc says the same.
 
 ## 2.8 Small vocabulary differences
 
@@ -308,3 +310,28 @@ Code sites: `lib/monty/frameworks/models/motor_policies/policy_status.ex`,
 `lib/monty/frameworks/actions/action_json_decoder.ex`,
 `lib/monty/frameworks/models/motor_policies.ex` (`undo_last_action/1`), and every
 module under `lib/monty/frameworks/actions/`, whose moduledocs state the units.
+
+## 2.9 Inheritance becomes public functions and a module-dispatched hook
+
+Monty's `SurfacePolicy` is an `InformedPolicy`: it inherits the jump machinery
+and overrides `__call__`, `reset` and `_handle_successful_jump`. Elixir structs
+do not inherit, so the port does two things Monty does not have to:
+
+- the jump step is a public function of `InformedPolicy`,
+  `goal_driven_actions/4`, taking any policy that carries the jump fields (a
+  `jump_state` map) and answering the policy it leaves behind — this is what
+  `SurfacePolicy` calls instead of inheriting it;
+- Monty's `_handle_successful_jump` hook is dispatched to the policy's own
+  module through `MotorPolicies.successful_jump/1`, because a private function
+  cannot be overridden by another module's struct.
+
+Nothing observable changes: the same step produces the same actions and the same
+policy state. What changes is where the code lives, and that the shared shape is
+checked by a type (`InformedPolicy.jump_state/0`) rather than by a class
+hierarchy.
+
+Code sites: `lib/monty/frameworks/models/motor_policies/informed_policy.ex`,
+`lib/monty/frameworks/models/motor_policies.ex` (`successful_jump/1`),
+`lib/monty/frameworks/models/motor_policies/motor_policy.ex` (the optional
+callback), and `lib/monty/frameworks/models/motor_policies/surface_policy.ex`,
+which is the second user that made the extraction worth doing.

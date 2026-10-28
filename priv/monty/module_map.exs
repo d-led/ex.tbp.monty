@@ -1608,7 +1608,7 @@
         python: "NaiveScanPolicy"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.SurfacePolicy",
         python: "SurfacePolicy"
       },

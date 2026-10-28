@@ -19,10 +19,11 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   at the centre of the view finder: more than a metre means nothing is there,
   and the jump is undone with the pose and sensor rotation it started from.
 
-  Monty's `_handle_successful_jump` hook is not here. Its only user is
-  `SurfacePolicy`, which is not ported yet; when it is, that is where its extra
-  state goes, and this module will grow the seam with its user rather than
-  guessing at the shape.
+  Monty's `_handle_successful_jump` hook is `handle_successful_jump/1`, a no-op
+  here and overridden by `SurfacePolicy`. The jump step itself,
+  `goal_driven_actions/4`, is public for the same reason: `SurfacePolicy` is a
+  subclass in Monty and a second struct here, so it calls the shared step rather
+  than inheriting it (`docs/monty-bugs.md` §2.9).
 
   ## What "empty space" means
 
@@ -75,6 +76,24 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
           undo_jump_actions: [Monty.Frameworks.Actions.Action.t()]
         }
 
+  @typedoc """
+  A policy that can be driven by goals: the fields the jump machinery reads.
+
+  Both policies have them, because Monty gives every subclass the jump state
+  through inheritance; here they are matched as a map instead
+  (`docs/monty-bugs.md` §2.9).
+  """
+  @type jump_state :: %{
+          required(:agent_id) => atom() | String.t(),
+          required(:use_goal_driven_actions) => boolean(),
+          required(:is_jumping) => boolean(),
+          required(:is_undoing_jump) => boolean(),
+          required(:pre_jump_state) =>
+            Monty.Frameworks.Models.MotorSystemState.AgentState.t() | nil,
+          required(:undo_jump_actions) => [Monty.Frameworks.Actions.Action.t()],
+          optional(atom()) => term()
+        }
+
   @doc """
   A policy that samples for `:agent_id`, and jumps when `:use_goal_driven_actions`.
   """
@@ -103,7 +122,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
           Cmp.Goal.t() | nil
         ) :: {MotorPolicyResult.t(), t()}
   def call(%__MODULE__{} = policy, ctx, observations, state, percept, goal) do
-    case goal_driven(policy, observations, state, goal) do
+    case goal_driven_actions(policy, observations, state, goal) do
       {:result, result, policy} -> {result, policy}
       {:continue, policy} -> off_object_recovery(policy, ctx, percept)
     end
@@ -150,50 +169,74 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
 
   # -- jumping --------------------------------------------------------------
 
-  defp goal_driven(
-         %__MODULE__{use_goal_driven_actions: false} = policy,
-         _observations,
-         _state,
-         _goal
-       ),
-       do: {:continue, policy}
+  # Monty reaches this through inheritance: `SurfacePolicy` is an
+  # `InformedPolicy` and calls `self._goal_driven_actions`. A struct cannot be
+  # a subclass of another, so the same step is a public function that takes any
+  # policy carrying the jump fields — both policies do, because Monty gives them
+  # both to every subclass (`docs/monty-bugs.md` §2.9).
+  @doc """
+  One step's worth of goal-driven work: judge a jump in flight, or start one.
 
-  defp goal_driven(%__MODULE__{} = policy, observations, state, goal) do
+  Answers `{:result, result, policy}` when the step is decided here, and
+  `{:continue, policy}` when the caller should go on to its own behaviour.
+  """
+  @spec goal_driven_actions(jump_state(), map() | nil, map(), Cmp.Goal.t() | nil) ::
+          {:result, MotorPolicyResult.t(), jump_state()} | {:continue, jump_state()}
+  def goal_driven_actions(
+        %{use_goal_driven_actions: false} = policy,
+        _observations,
+        _state,
+        _goal
+      ),
+      do: {:continue, policy}
+
+  def goal_driven_actions(policy, observations, state, goal) do
     case jump_outcome(policy, observations, state) do
       {:result, _result, _policy} = landed -> landed
       {:continue, policy} -> start_jump(policy, state, goal)
     end
   end
 
-  defp start_jump(%__MODULE__{} = policy, _state, nil), do: {:continue, policy}
+  defp start_jump(policy, _state, nil), do: {:continue, policy}
 
-  defp start_jump(%__MODULE__{} = policy, state, %Cmp.Goal{} = goal) do
+  defp start_jump(policy, state, %Cmp.Goal{} = goal) do
     {actions, policy} = jump(policy, state, goal)
     {:result, %MotorPolicyResult{actions: actions}, policy}
   end
 
-  defp jump_outcome(%__MODULE__{is_jumping: false} = policy, _observations, _state),
+  defp jump_outcome(%{is_jumping: false} = policy, _observations, _state),
     do: {:continue, policy}
 
-  defp jump_outcome(%__MODULE__{is_undoing_jump: true} = policy, _observations, state) do
+  defp jump_outcome(%{is_undoing_jump: true} = policy, _observations, state) do
     assert_undo_jump_was_successful(policy, state)
     {:continue, reset_jump_state(policy)}
   end
 
-  defp jump_outcome(%__MODULE__{} = policy, observations, _state) do
+  defp jump_outcome(policy, observations, _state) do
     if empty_space?(policy, observations) do
       {:result, %MotorPolicyResult{actions: policy.undo_jump_actions},
        %{policy | is_undoing_jump: true}}
     else
       # The object is in view, so the hypothesis test can go ahead from here.
-      {:continue, reset_jump_state(policy)}
+      {:continue, policy |> MotorPolicies.successful_jump() |> reset_jump_state()}
     end
   end
+
+  @doc """
+  What to do once a jump has landed with the object in view.
+
+  Monty's `_handle_successful_jump`, a no-op here and overridden by
+  `SurfacePolicy`; the policy's own module is asked, because a struct cannot
+  override a private function (`docs/monty-bugs.md` §2.9).
+  """
+  @impl true
+  @spec handle_successful_jump(t()) :: t()
+  def handle_successful_jump(%__MODULE__{} = policy), do: policy
 
   # Monty stores the agent's state before a jump so it can put it back, and
   # asserts that putting it back worked. The assertion is worth keeping: an
   # environment that cannot restore a pose breaks every later measurement.
-  defp jump(%__MODULE__{} = policy, state, %Cmp.Goal{} = goal) do
+  defp jump(policy, state, %Cmp.Goal{} = goal) do
     pre_jump = Map.fetch!(state, policy.agent_id)
     first_sensor_rotation = shared_sensor_rotation(pre_jump)
 
@@ -247,7 +290,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   # to be turned to face it: pitch up or down to its height, then yaw round to
   # its bearing. No roll, because which way is up does not matter for what the
   # sensor will see.
-  defp set_agent_pose_from_goal(%__MODULE__{} = policy, %Cmp.Goal{} = goal) do
+  defp set_agent_pose_from_goal(policy, %Cmp.Goal{} = goal) do
     [looking_x, looking_y, looking_z] = looking_direction(goal)
 
     yaw = :math.atan2(-looking_x, -looking_z)
@@ -272,30 +315,16 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
 
   defp radians_to_degrees(radians), do: radians * 180.0 / :math.pi()
 
-  defp empty_space?(%__MODULE__{} = policy, observations) do
-    depth_at_center(observations, policy.agent_id, @view_finder) >= @empty_space_depth
+  defp empty_space?(policy, observations) do
+    MotorPolicies.depth_at_center(observations, policy.agent_id, @view_finder) >=
+      @empty_space_depth
   end
 
-  defp depth_at_center(observations, agent_id, sensor_id) do
-    depth =
-      observations
-      |> Map.fetch!(agent_id)
-      |> Map.fetch!(sensor_id)
-      |> Map.fetch!("depth")
-
-    rows = length(depth)
-    columns = depth |> hd() |> length()
-
-    depth
-    |> Enum.at(div(rows, 2))
-    |> Enum.at(div(columns, 2))
-  end
-
-  defp assert_undo_jump_was_successful(%__MODULE__{pre_jump_state: nil}, _state) do
+  defp assert_undo_jump_was_successful(%{pre_jump_state: nil}, _state) do
     raise "an undo jump finished with no pre-jump state to check it against"
   end
 
-  defp assert_undo_jump_was_successful(%__MODULE__{} = policy, state) do
+  defp assert_undo_jump_was_successful(policy, state) do
     current = Map.fetch!(state, policy.agent_id)
     before = policy.pre_jump_state
 
@@ -308,7 +337,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
     end
   end
 
-  defp reset_jump_state(%__MODULE__{} = policy) do
+  defp reset_jump_state(policy) do
     %{
       policy
       | is_jumping: false,
@@ -322,9 +351,9 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
 
   @doc "Starts the next episode: no jump in flight, and no action to undo."
   @impl true
-  @spec reset(t()) :: t()
-  def reset(%__MODULE__{} = policy) do
-    %__MODULE__{
+  @spec reset(jump_state()) :: jump_state()
+  def reset(%{} = policy) do
+    %{
       policy
       | rng: nil,
         undo_action: nil,
