@@ -1613,7 +1613,7 @@
         python: "SurfacePolicy"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed",
         python: "SurfacePolicyCurvatureInformed"
       }

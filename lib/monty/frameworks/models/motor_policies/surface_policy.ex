@@ -219,8 +219,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
   telemetry rather than a curvature choice.
   """
   @impl true
-  @spec handle_successful_jump(t()) :: t()
-  def handle_successful_jump(%__MODULE__{} = policy) do
+  @spec handle_successful_jump(surface_state()) :: surface_state()
+  def handle_successful_jump(policy) do
     %{
       policy
       | last_surface_policy_action: %MoveTangentially{
@@ -323,7 +323,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
 
   defp move_tangentially(policy, ctx, state, percept) do
     {action, policy} = sample(policy, ctx, :sample_move_tangentially)
-    {direction, policy} = policy.__struct__.tangential_direction(policy, ctx, state)
+    {direction, policy} = policy.__struct__.tangential_direction(policy, ctx, state, percept)
 
     {%{shorten(action, coverage(percept)) | direction: direction}, policy}
   end
@@ -484,9 +484,9 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
   `SurfacePolicyCurvatureInformed` overrides — hence public, and reached by the
   policy's own module (`docs/monty-bugs.md` §2.9).
   """
-  @spec tangential_direction(surface_state(), Monty.Context.t(), map()) ::
+  @spec tangential_direction(surface_state(), Monty.Context.t(), map(), Cmp.Message.t() | nil) ::
           {Rotation.vector(), surface_state()}
-  def tangential_direction(policy, ctx, state) do
+  def tangential_direction(policy, ctx, state, _percept) do
     {draw, rng} = ActionSamplers.uniform(stream(policy, ctx), 0.0, 1.0)
     new_target_direction = (draw - 0.5) * 2.0 * :math.pi()
 
@@ -547,8 +547,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
 
   @doc "Starts the next episode: no jump in flight, and the search forgotten."
   @impl true
-  @spec reset(t()) :: t()
-  def reset(%__MODULE__{} = policy) do
+  @spec reset(surface_state()) :: surface_state()
+  def reset(policy) do
     %{
       InformedPolicy.reset(policy)
       | attempting_to_find_object: false,
