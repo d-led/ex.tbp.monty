@@ -36,7 +36,7 @@ defmodule Monty.Frameworks.Utils.KdTree do
   def build(points) do
     axis = widest_axis(points)
 
-    sorted = Enum.sort_by(points, fn {point, id} -> {Enum.at(point, axis), id} end)
+    sorted = Enum.sort_by(points, fn {point, id} -> {coordinate(point, axis), id} end)
     middle = div(length(sorted), 2)
     {{point, id}, left, right} = split_at(sorted, middle)
 
@@ -52,52 +52,58 @@ defmodule Monty.Frameworks.Utils.KdTree do
   def nearest(:empty, _query, _count), do: []
 
   def nearest(tree, query, count) do
-    tree
-    |> search(query, count, [])
-    |> Enum.map(fn {_distance, id} -> id end)
+    {best, _kept} = search(tree, query, count, {[], 0})
+
+    best |> Enum.reverse() |> Enum.map(fn {_distance, id} -> id end)
   end
 
-  # Closest first, and by id where two points are equally close: the answer a
-  # caller can reproduce.
-  defp search(:empty, _query, _count, best), do: best
+  # The kept answers, farthest first, with how many of `count` are in hand. The
+  # traversal visits every node within range of a query, so nothing here may
+  # walk the kept list: it is kept as its own worst-first list of at most
+  # `count`, and a candidate enters by dropping the farthest instead of by
+  # sorting and truncating.
+  defp search(:empty, _query, _count, kept), do: kept
 
-  defp search({point, id, axis, left, right}, query, count, best) do
-    best = insert(best, {squared_distance(query, point), id}, count)
+  defp search({point, id, axis, left, right}, query, count, {kept, size}) do
+    kept = keep(kept, size, count, {squared_distance(query, point), id})
 
-    difference = Enum.at(query, axis) - Enum.at(point, axis)
+    difference = coordinate(query, axis) - coordinate(point, axis)
     {near, far} = if difference <= 0, do: {left, right}, else: {right, left}
 
-    best = search(near, query, count, best)
+    kept = search(near, query, count, kept)
 
     # The far side is worth visiting only while it could still hold something
-    # closer than the worst point kept so far.
-    if length(best) < count or difference * difference <= worst(best) do
-      search(far, query, count, best)
+    # closer than the farthest answer kept so far — the head of the list, which
+    # is kept worst-first.
+    {[{worst, _worst_id} | _], size} = kept
+
+    if size < count or difference * difference <= worst do
+      search(far, query, count, kept)
     else
-      best
+      kept
     end
   end
 
-  defp insert(best, candidate, count) do
-    best
-    |> insert_sorted(candidate)
-    |> Enum.take(count)
+  # One candidate, worst-first: the farthest kept is dropped when the list is
+  # full. A candidate that is farther than that one costs one comparison.
+  defp keep([], _size, _count, candidate), do: {[candidate], 1}
+
+  defp keep(kept, size, count, candidate) do
+    [far | rest] = kept
+
+    cond do
+      size < count -> {Enum.sort([candidate | kept], :desc), size + 1}
+      candidate >= far -> {kept, size}
+      true -> {Enum.sort([candidate | rest], :desc), size}
+    end
   end
 
-  defp insert_sorted([], candidate), do: [candidate]
+  defp squared_distance([qx, qy, qz], [px, py, pz]) do
+    dx = qx - px
+    dy = qy - py
+    dz = qz - pz
 
-  defp insert_sorted([head | _] = sorted, candidate) when candidate <= head,
-    do: [candidate | sorted]
-
-  defp insert_sorted([head | rest], candidate),
-    do: [head | insert_sorted(rest, candidate)]
-
-  defp worst(best), do: best |> List.last() |> elem(0)
-
-  defp squared_distance(query, point) do
-    query
-    |> Enum.zip(point)
-    |> Enum.reduce(0.0, fn {a, b}, total -> total + (a - b) * (a - b) end)
+    dx * dx + dy * dy + dz * dz
   end
 
   defp split_at(list, middle) do
@@ -105,13 +111,30 @@ defmodule Monty.Frameworks.Utils.KdTree do
     {at, before, after_it}
   end
 
+  # The points' bounding box, found in one pass: asking each axis for its own
+  # extent walks every point three times, which at sixteen thousand nodes per
+  # graph is most of what building a tree costs.
   defp widest_axis(points) do
-    0..2
-    |> Enum.max_by(&spread(points, &1))
+    {low, high} = bounds(points)
+
+    [low, high]
+    |> Enum.zip()
+    |> Enum.map(fn {lowest, highest} -> highest - lowest end)
+    |> Enum.with_index()
+    |> Enum.max_by(fn {spread, _axis} -> spread end)
+    |> elem(1)
   end
 
-  defp spread(points, axis) do
-    values = Enum.map(points, fn {point, _id} -> Enum.at(point, axis) end)
-    Enum.max(values) - Enum.min(values)
+  defp bounds([{point, _id} | rest]) do
+    Enum.reduce(rest, {point, point}, fn {point, _id}, {low, high} ->
+      {lowest(low, point), highest(high, point)}
+    end)
   end
+
+  defp lowest([lx, ly, lz], [x, y, z]), do: [min(lx, x), min(ly, y), min(lz, z)]
+  defp highest([hx, hy, hz], [x, y, z]), do: [max(hx, x), max(hy, y), max(hz, z)]
+
+  defp coordinate([x, _, _], 0), do: x
+  defp coordinate([_, y, _], 1), do: y
+  defp coordinate([_, _, z], 2), do: z
 end

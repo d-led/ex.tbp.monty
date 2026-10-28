@@ -201,13 +201,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   defp keep_where(%__MODULE__{} = tracker, predicate) do
     {evidence, ages} =
       tracker.evidence
+      |> Enum.zip(tracker.ages)
       |> Enum.with_index()
-      |> Enum.reduce({[], []}, fn {window, index}, {evidence, ages} ->
+      |> Enum.reduce({[], []}, fn {{window, age}, index}, {evidence, ages} ->
         if predicate.(index, window),
-          do: {evidence ++ [window], ages ++ [Enum.at(tracker.ages, index)]},
+          do: {[window | evidence], [age | ages]},
           else: {evidence, ages}
       end)
 
-    %{tracker | evidence: evidence, ages: ages}
+    %{tracker | evidence: Enum.reverse(evidence), ages: Enum.reverse(ages)}
   end
 end

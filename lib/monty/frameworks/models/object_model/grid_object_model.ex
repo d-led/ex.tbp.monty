@@ -46,7 +46,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   """
 
   alias Monty.Frameworks.Models.ObjectModel.{GraphObjectModel, GridTooSmallError}
-  alias Monty.Frameworks.Utils.{ObjectModelUtils, SpatialArithmetics}
+  alias Monty.Frameworks.Utils.{KdTree, ObjectModelUtils, SpatialArithmetics}
 
   @behaviour Monty.Frameworks.Models.ObjectModel
 
@@ -64,6 +64,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
             location_grid: %{},
             feature_grid: %{},
             current_feature_mapping: %{},
+            location_tree: nil,
             use_original_graph: false
 
   @type voxel :: {integer(), integer(), integer()}
@@ -161,7 +162,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   @impl true
   @spec set_graph(t(), map()) :: {:ok, t()} | {:error, GridTooSmallError.t()}
   def set_graph(%__MODULE__{use_original_graph: true} = model, graph) do
-    {:ok, %{model | graph: graph}}
+    {:ok, %{model | graph: graph, location_tree: tree_of(graph)}}
   end
 
   def set_graph(%__MODULE__{} = model, %{pos: locations} = graph) do
@@ -207,10 +208,19 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   """
   @impl true
   def find_nearest_neighbors(%__MODULE__{} = model, search_locations, num_neighbors) do
-    model
-    |> as_graph_model()
-    |> GraphObjectModel.find_nearest_neighbors(search_locations, num_neighbors)
+    capacity = min(num_neighbors, num_nodes(model))
+
+    Enum.map(search_locations, &KdTree.nearest(location_tree(model), &1, capacity))
   end
+
+  # The index over this model's node positions, kept with the graph it belongs
+  # to: the positions only change when the model is rebuilt.
+  defp location_tree(%__MODULE__{location_tree: tree}) when not is_nil(tree), do: tree
+
+  defp location_tree(%__MODULE__{} = model), do: tree_of(model.graph)
+
+  defp tree_of(%{pos: positions}), do: positions |> Enum.with_index() |> KdTree.build()
+  defp tree_of(_no_graph), do: :empty
 
   @doc "The index of the edge between two nodes, or `nil`: a grid model has none."
   @spec edge_index_between(t(), non_neg_integer(), non_neg_integer()) :: nil
@@ -460,7 +470,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
 
     graph = ObjectModelUtils.build_point_cloud_graph(locations, rows, mapping)
 
-    %{model | graph: graph}
+    %{model | graph: graph, location_tree: tree_of(graph)}
   end
 
   # The busiest voxels win, and a tie goes to the lower voxel index so that two

@@ -62,11 +62,19 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   """
   @spec take(t(), [non_neg_integer()]) :: t()
   def take(%__MODULE__{} = hypotheses, indices) do
+    # One pass to tuples, then a constant-time lookup per index: reading them
+    # out of lists by index walks the list every time, which over a hypothesis
+    # space of thousands turns a selection into tens of millions of steps.
+    evidence = List.to_tuple(hypotheses.evidence)
+    locations = List.to_tuple(hypotheses.locations)
+    poses = List.to_tuple(hypotheses.poses)
+    possible = List.to_tuple(hypotheses.possible)
+
     %__MODULE__{
-      evidence: Enum.map(indices, &Enum.at(hypotheses.evidence, &1)),
-      locations: Enum.map(indices, &Enum.at(hypotheses.locations, &1)),
-      poses: Enum.map(indices, &Enum.at(hypotheses.poses, &1)),
-      possible: Enum.map(indices, &Enum.at(hypotheses.possible, &1))
+      evidence: Enum.map(indices, &elem(evidence, &1)),
+      locations: Enum.map(indices, &elem(locations, &1)),
+      poses: Enum.map(indices, &elem(poses, &1)),
+      possible: Enum.map(indices, &elem(possible, &1))
     }
   end
 end

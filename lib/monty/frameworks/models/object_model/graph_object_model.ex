@@ -43,7 +43,8 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   defstruct object_id: nil,
             graph: nil,
             k_n: nil,
-            graph_delta_thresholds: nil
+            graph_delta_thresholds: nil,
+            location_tree: nil
 
   @type location :: SpatialArithmetics.vector()
   @type graph :: %{required(atom()) => term()}
@@ -93,7 +94,13 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   def build_model(%__MODULE__{} = model, locations, features, k_n, graph_delta_thresholds) do
     graph = build_adjacency_graph(locations, features, k_n, graph_delta_thresholds, 0)
 
-    %{model | graph: graph, k_n: k_n, graph_delta_thresholds: graph_delta_thresholds}
+    %{
+      model
+      | graph: graph,
+        k_n: k_n,
+        graph_delta_thresholds: graph_delta_thresholds,
+        location_tree: tree_of(graph)
+    }
   end
 
   @doc """
@@ -141,7 +148,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
         num_nodes(model)
       )
 
-    {:ok, %{model | graph: graph}}
+    {:ok, %{model | graph: graph, location_tree: tree_of(graph)}}
   end
 
   @doc "The graph itself, or `nil` before the model has been built."
@@ -150,7 +157,9 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
 
   @doc "Replaces the graph, as when a pretrained model is loaded."
   @impl true
-  def set_graph(%__MODULE__{} = model, graph), do: {:ok, %{model | graph: graph}}
+  def set_graph(%__MODULE__{} = model, graph) do
+    {:ok, %{model | graph: graph, location_tree: tree_of(graph)}}
+  end
 
   @doc "One `[x, y, z]` per node."
   @impl true
@@ -205,19 +214,24 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   """
   @impl true
   def find_nearest_neighbors(
-        %__MODULE__{graph: %{pos: positions}},
+        %__MODULE__{graph: %{pos: positions}} = model,
         search_locations,
         count
       ) do
     capacity = min(count, length(positions))
 
-    tree =
-      positions
-      |> Enum.with_index()
-      |> KdTree.build()
-
-    Enum.map(search_locations, &KdTree.nearest(tree, &1, capacity))
+    Enum.map(search_locations, &KdTree.nearest(location_tree(model), &1, capacity))
   end
+
+  # The index over the graph's positions, built once with the graph rather than
+  # once per query: displacing asks it something for every hypothesis of every
+  # step, and the positions do not move while an episode is being matched.
+  defp location_tree(%__MODULE__{location_tree: tree}) when not is_nil(tree), do: tree
+
+  defp location_tree(%__MODULE__{graph: graph}), do: tree_of(graph)
+
+  defp tree_of(%{pos: positions}), do: positions |> Enum.with_index() |> KdTree.build()
+  defp tree_of(_no_graph), do: :empty
 
   @doc """
   The existing graph and the new observations, as one point cloud.
