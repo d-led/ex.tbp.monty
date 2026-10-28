@@ -1,8 +1,12 @@
-# Monty's defects, and this port's decisions
+# Suspected defects in Monty, and this port's decisions
 
-Two things make an Elixir run disagree with a Python one: a defect upstream, and
-a decision here. Both are recorded here, in the same shape, because anyone
-comparing two sets of numbers needs them together.
+Two things make an Elixir run disagree with a Python one: something in Monty
+that looks wrong, and a decision here. Both are recorded here, in the same
+shape, because anyone comparing two sets of numbers needs them together. The
+word *suspected* is doing work: each entry says what the code does, what its own
+comments say it means, and what evidence there is — a reader who knows the
+project better may well read the intent differently, and the code has not been
+reported upstream by us.
 
 **Read §2.1 and §2.5 before diffing any run.** They are the two that change the
 numbers; everything else changes where code lives or what an error looks like.
@@ -12,8 +16,8 @@ numbers; everything else changes where code lives or what an error looks like.
 | § | What | Status | What this port does |
 |---|------|--------|---------------------|
 | [1.1](#11-the-sanity-check-in-_compute_graph_mismatch-cannot-fail) | A sanity check that compares a value with itself | Confirmed | Ports the transform, drops the check |
-| [1.2](#12-npall-where-npany-is-meant-a-single-axis-rotation-is-never-a-pose-change) | `np.all` where `np.any` is meant | Confirmed | Reproduced on purpose, pinned by a test |
-| [1.3](#13-npall-on-the-top-two-ids-stricter-than-its-own-comment) | Same, over the top-two ids | Confirmed, acknowledged upstream | Reproduced on purpose, pinned by a test |
+| [1.2](#12-npall-over-euler-angles-a-single-axis-rotation-is-never-a-pose-change) | `np.all` over the three Euler angles | Confirmed, `np.any` is what the comments describe | Reproduced on purpose, pinned by a test |
+| [1.3](#13-npall-on-the-top-two-ids-stricter-than-its-own-comment) | Same, over the top-two ids | Confirmed, and Monty's TODO names the fix | Reproduced on purpose, pinned by a test |
 | [1.4](#14-argsort-2-on-a-single-hypothesis) | `argsort(...)[-2]` on one hypothesis | Latent | Answers `{best, nil}` instead |
 | [1.5](#15-first_sensor-is-only-bound-inside-the-loop) | A name bound after its first read | Latent | Answers a value, not an unbound name |
 | [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
@@ -29,7 +33,8 @@ numbers; everything else changes where code lives or what an error looks like.
 Statuses mean:
 
 - **Confirmed** — the behaviour follows from the code alone.
-- **Latent** — a real defect, but something else currently stops it being reached.
+- **Latent** — the behaviour looks wrong, but something else currently stops it
+  being reached.
 - **Reproduced** — this port keeps the behaviour on purpose, so numbers stay
   comparable. Pinned by a test.
 
@@ -39,11 +44,12 @@ Monty's code is linked to
 [`thousandbrainsproject/tbp.monty` at `9130364`](https://github.com/thousandbrainsproject/tbp.monty/tree/91303642784ce176e2b8196c7bb990fef57688b6)
 — the revision `mix monty.config.snapshots` and `mix monty.module_map.verify`
 check against. Line numbers are pinned to it; the function names will outlive
-them. This port's code is linked relative to this file.
+them. This port's code is linked relative to this file. Snippets are quoted
+verbatim, only dedented from Monty's nesting.
 
 ---
 
-# 1. Defects in Monty
+# 1. Suspected defects in Monty
 
 ## 1.1 The sanity check in `_compute_graph_mismatch` cannot fail
 
@@ -51,7 +57,7 @@ them. This port's code is linked relative to this file.
 difference is exactly zero and the assertion compares a value with itself.
 
 **The code.**
-[`goal_generation.py:672-682`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/goal_generation.py#L672-L682)
+[`goal_generation.py:671-682`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/goal_generation.py#L671-L682)
 
 ```python
 # Perform the same transformation to the estimated location (sanity check)
@@ -59,7 +65,8 @@ transformed_current_loc = top_mlh["rotation"].inv().apply(
     top_mlh["location"]
 ) - top_mlh["rotation"].inv().apply(top_mlh["location"])
 transformed_current_loc = (
-    second_mlh["rotation"].apply(transformed_current_loc) + second_mlh["location"]
+    second_mlh["rotation"].apply(transformed_current_loc)
+    + second_mlh["location"]
 )
 assert np.all(transformed_current_loc == second_mlh["location"]), (
     "Graph transformation to 2nd object reference frame not returning correct "
@@ -67,10 +74,9 @@ assert np.all(transformed_current_loc == second_mlh["location"]), (
 )
 ```
 
-**What it should be.** The check is meant to prove that the transform which puts
-the most likely object's graph into the second object's learned frame is the
-inverse of whatever built the graph in the first place. It should therefore
-round-trip a point that is *not* collapsed to zero — for example transform
+**What it should be.** The comment calls this a sanity check, so it should check
+what the comment claims: that the transform which puts the most likely object's
+graph into the second object's learned frame round-trips a point — transform
 `top_mlh["location"]` into the second object's frame and back, and assert it
 returned.
 
@@ -79,19 +85,20 @@ in one frame. Without it, a broken transform would silently make the "most
 disagreeing" point arbitrary, and the goal generator would jump somewhere
 unrelated without saying so.
 
-**What this port does.** The transform is ported unchanged — see
-[`EvidenceGoalGenerator.into_frame/3`](../lib/monty/frameworks/models/goal_generation/evidence_goal_generator.ex) —
-and the assertion is not recomputed, with the reason in a comment there. Nothing
-about the numbers changes.
+**What this port does.** The transform is ported unchanged, as
+`EvidenceGoalGenerator`'s private `into_frame/3` — see
+[`evidence_goal_generator.ex`](../lib/monty/frameworks/models/goal_generation/evidence_goal_generator.ex) —
+and the assertion is not recomputed, with the reason in a comment there.
+Nothing about the numbers changes.
 
-## 1.2 `np.all` where `np.any` is meant: a single-axis rotation is never a pose change
+## 1.2 `np.all` over Euler angles: a single-axis rotation is never a pose change
 
 **What's wrong.** `np.all` over three elementwise comparisons is true only when
 *all three* Euler angles differ, so a rotation about a single axis never counts
 as a pose change.
 
 **The code.**
-[`goal_generation.py:966-971`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/goal_generation.py#L966-L971),
+[`goal_generation.py:960-973`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/goal_generation.py#L960-L973),
 in `_check_conditions_for_hypothesis_test`:
 
 ```python
@@ -103,11 +110,13 @@ if self.prev_top_mlhs is not None and np.all(
     return True
 ```
 
-**What it should be.** `np.any`, so that any changed angle is a changed pose. The
-comment above the block names exactly that case — "we didn't find the mug handle
-following a previous jump, and have therefore eliminated a pose" — and the
-TODOs above ask for an angle *threshold* "rather than it needing to be
-identical", both of which say "a difference counts".
+**What it should be.** On the reading the comments support: `np.any`, so that any
+changed angle is a changed pose. The comment above the block names exactly that
+case — "we didn't find the mug handle following a previous jump, and have
+therefore eliminated a pose" — and the TODOs above ask for an angle *threshold*
+"rather than it needing to be identical", both of which say "a difference
+counts". If the intent was instead "only a change of all three angles counts",
+the comments are what is wrong.
 
 **Why it matters.** It decides *when* the agent spends a hypothesis-testing
 jump. Some pose changes that should prompt one do not, so the number of jumps,
@@ -122,10 +131,12 @@ Pinned by the test "does not treat a turn about one axis as a new pose" in
 
 **What's wrong.** The condition fires only when *both* ids change. A new
 runner-up under an unchanged leader is not a change as far as this code is
-concerned, though the comments on both sides of it say "change or shuffle".
+concerned. The comment above says "if the identities or *order* … of the top two
+MLH changes", and the log line inside says "change or shuffle in top-two MLH
+IDs" — neither says that both must change.
 
 **The code.**
-[`goal_generation.py:944-954`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/goal_generation.py#L944-L954)
+[`goal_generation.py:942-960`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/goal_generation.py#L942-L960)
 
 ```python
 # If the identities or *order* (i.e. which one is most likely)
@@ -134,16 +145,28 @@ concerned, though the comments on both sides of it say "change or shuffle".
 # place to test
 # TODO when optimizing, consider using np.any rather than np.all, i.e. as long
 # as there is any change in the top two MLH
-if self.prev_top_mlhs is not None and np.all([...] != [top_id, second_id]):
+if self.prev_top_mlhs is not None and np.all(
+    [
+        self.prev_top_mlhs[0]["graph_id"],
+        self.prev_top_mlhs[1]["graph_id"],
+    ]
+    != [top_id, second_id]
+):
+    logger.debug(
+        "Hypothesis jump indicated: change or shuffle in top-two MLH IDs"
+    )
+    return True
 ```
 
-**What it should be.** `np.any`, as the TODO in the same block says. Monty knows;
-this is a known-if-reluctant state rather than an oversight.
+**What it should be.** `np.any`, as the TODO in the same block says — unless the
+intent really is "only a change of both counts", in which case the comment and
+the log line are what is wrong. Either way the code and its own description
+disagree, and only Monty's authors can say which was meant.
 
 **Why it matters.** Same consequence as §1.2: fewer hypothesis-testing jumps than
-the heuristic describes. Together the two `np.all`s are the most likely reason
-an Elixir run and a Python run take different numbers of steps on the same
-object.
+the comment describes. The two `np.all`s are one reason an Elixir run and a
+Python run can take different numbers of steps on the same object — unless both
+read the intent as I do here and the comments are the thing that is wrong.
 
 **What this port does.** Reproduced, pinned by "does not jump when only one of
 the top two changes".
@@ -161,18 +184,25 @@ def get_top_two_pose_hypotheses_for_graph_id(self, graph_id):
     """Return top two hypotheses for a given graph_id."""
     mlh_for_graph = self._calculate_most_likely_hypothesis(graph_id)
     second_mlh_id = np.argsort(self._hypotheses[graph_id].evidence)[-2]
+    second_mlh = self._get_mlh_dict_from_id(graph_id, second_mlh_id)
+    return mlh_for_graph, second_mlh
 ```
 
 **What it should be.** Answer "there is no second best" rather than raise: guard
 the length, or sort once and take the last two when there are two.
 
 **Why it matters — and why it is latent.** Its only caller is
-`EvidenceGoalGenerator._compute_graph_mismatch`, reached with `focus_on_pose`
-only after two guards that the object has more than one hypothesis
-(`if len(...evidence) == 1: return False`). Nothing changes the hypothesis space
-between the guard and the call, so the crash is out of reach today. It becomes
-reachable the moment those two pieces of code are separated — for example by
-computing goals a step later than the gating decision.
+`EvidenceGoalGenerator._compute_graph_mismatch`, whose result is only used when
+`focus_on_pose` is set, and that flag is set only after a guard that returns
+early while the object still has a single hypothesis —
+[`goal_generation.py:900-904`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/goal_generation.py#L900-L904)
+and again at
+[`925-930`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/goal_generation.py#L925-L930):
+`if len(self.parent_lm._hypotheses[top_id].evidence) == 1: return False`. Nothing
+changes the hypothesis space between that guard and the call, so the crash is
+out of reach today. It becomes reachable the moment those two pieces of code are
+separated — for example by computing goals a step later than the gating
+decision.
 
 **What this port does.** Answers `{best, nil}` for a single hypothesis instead of
 raising, and says so in the doc of
@@ -188,9 +218,9 @@ an `UnboundLocalError` several lines later rather than the message the code
 intends.
 
 **The code.**
-[`motor_policies.py:905-907`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L905-L907)
+[`motor_policies.py:905-911`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L905-L911)
 — the same pattern again at
-[`633-635`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L633-L635),
+[`633-639`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L633-L639),
 in `JumpToGoal`:
 
 ```python
@@ -207,8 +237,8 @@ for ii, current_sensor in enumerate(self._pre_jump_state.sensors):
 the empty case is a decision the code makes rather than a name it forgot.
 
 **Why it matters.** Diagnostic only: an agent with no sensors is itself nonsense,
-so no numeric run is affected. It costs an hour to anyone debugging an odd
-environment.
+so no numeric run is affected. It costs whoever is debugging an odd environment
+more time than spelling out the empty case would have.
 
 **What this port does.**
 [`InformedPolicy.shared_sensor_rotation/1`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex)
@@ -219,8 +249,8 @@ there are none — so the failure mode is a value rather than an unbound name.
 
 # 2. Where this port deliberately differs
 
-Decisions, not defects. Each is a place where two runs can differ without either
-being wrong.
+Decisions, not suspected defects. Each is a place where two runs can differ
+without either being wrong.
 
 ## 2.1 Random streams: the one that changes your numbers
 
@@ -231,9 +261,11 @@ seed, the module id and the step.
 
 **The code.**
 [`motor_policies.py:217`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L217)
-is where a policy draws (`self.action_sampler.sample(self.agent_id, ctx.rng)`); a
-dozen other modules do the same with the same object.
-Ours: [`Context.rng_for/2`](../lib/monty/context.ex).
+is where a policy draws (`self.action_sampler.sample(self.agent_id, ctx.rng)`).
+Seventeen calls read `ctx.rng` across eight files — `motor_policies.py` ten
+times, the sensor modules and `goal_generation.py` once each — so everything
+that samples shares one stream. Ours:
+[`Context.rng_for/2`](../lib/monty/context.ex).
 
 **Why it is deliberate.** A single mutable stream across modules is exactly the
 kind of shared state an immutable, per-process design cannot carry without
@@ -247,9 +279,10 @@ uses.
 and step counts differ even when the arithmetic is identical.
 
 **What to compare instead.** The deterministic parts: evidence given the same
-percept sequence (that is what the pretrained replay does, to `5.5e-7`),
-hypothesis counts, and aggregates over many episodes. A per-step, per-seed
-comparison needs a Monty-compatible single-stream mode, which is not built.
+percept sequence (which the replay test asserts to a millionth, where the export's
+rounding puts it), hypothesis counts, and aggregates over many episodes. A
+per-step, per-seed comparison needs a Monty-compatible single-stream mode, which
+is not built.
 
 ## 2.2 `motor_only_step` travels in the result
 
@@ -300,7 +333,7 @@ threads it; a policy starts its stream from the context on the first draw and
 `reset/1` forgets it.
 
 **The code.** Monty:
-[`action_samplers.py:64-77`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/actions/action_samplers.py#L64-L77).
+[`action_samplers.py:61-71`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/actions/action_samplers.py#L61-L71).
 Ours: [`action_sampler.ex`](../lib/monty/frameworks/actions/action_samplers/action_sampler.ex),
 used by [`base_policy.ex`](../lib/monty/frameworks/models/motor_policies/base_policy.ex),
 [`informed_policy.ex`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex)
@@ -330,19 +363,17 @@ worse than a goal that is not proposed.
 
 ## 2.7 `depth_at_center` lives in the policy namespace
 
-**The difference.** Monty keeps it in `positioning_procedures.py` as a static
-method of `PositioningProcedure`. Here it is
+**The difference.** Monty keeps it in `positioning_procedures.py`, as a
+`@staticmethod` of `PositioningProcedure` at
+[line 75](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/environments/positioning_procedures.py#L75).
+Here it is
 [`MotorPolicies.depth_at_center/3`](../lib/monty/frameworks/models/motor_policies.ex),
 reading the same shape — `observations[agent_id][sensor_id]["depth"]`, centre
 pixel.
 
-**The code.** Monty:
-[`positioning_procedures.py`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/environments/positioning_procedures.py)
-— 530 lines of good-view searching for distant agents, none of it needed yet.
-
-**Why it is deliberate.** The centre-pixel read is needed by two policies now, and
-the rest of the module waits for an environment to be ported. It moves to its
-mapped home then.
+**Why it is deliberate.** That module is 530 lines of good-view searching for
+distant agents, none of it needed yet, and the centre-pixel read is needed by two
+policies now. It moves to its mapped home when an environment is ported.
 
 ## 2.8 Small vocabulary differences
 
@@ -352,8 +383,10 @@ mapped home then.
 - `rotation_quat` is a `{w, x, y, z}` tuple here and a `quaternion` object there;
   `ActionJSONDecoder` converts on the way in from JSON lists.
   → [`action_json_decoder.ex`](../lib/monty/frameworks/actions/action_json_decoder.ex)
-- `undo_last_action/1` raises `ArgumentError` where Monty raises `TypeError`, for
-  the same reason and with the action named.
+- Monty's `fixme_undo_last_action` raises `TypeError("Invalid action: …")`; ours
+  is `undo_last_action/1` and raises `ArgumentError` naming the kind of action it
+  was given. The `fixme_` prefix is Monty saying it would rather have
+  `Action.undo`, and the name here leaves the complaint out.
   → [`motor_policies.ex`](../lib/monty/frameworks/models/motor_policies.ex)
 - Actions keep Monty's units (degrees, metres, `wxyz`), deliberately: an action
   built here must be the same object an environment there would perform.
@@ -404,8 +437,8 @@ Monty's documentation makes; the rest are claims the code makes about itself.
   and [`MotorSystem`](../lib/monty/frameworks/models/motor_system.ex) here.
 - [`docs/how-monty-works/motor-system/policy.md`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/docs/how-monty-works/motor-system/policy.md):
   "if the sensor patch moves off the object, the previous action is reversed" is
-  `InformedPolicy`'s step exactly; the `alpha` momentum it describes belongs to
-  `InformedPolicyRandomWalk` (planned, and the default of `DistantPolicySelector`).
+  `InformedPolicy`'s step exactly. The `alpha` momentum that page describes
+  belongs to `InformedPolicyRandomWalk`, which is still planned here.
 - `get_output()` returning a `Message` makes `parent_lm.get_output().confidence`
   correct in the evidence goal generator (see §2.4 for our shape).
 - `threshold_possible_matches`, `x_percent_threshold` and the
