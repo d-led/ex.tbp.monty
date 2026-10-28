@@ -1542,18 +1542,18 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.MotorPolicies",
     package: "monty",
     python: "frameworks/models/motor_policies.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.NoGoalProvided",
         python: "NoGoalProvided"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.SurfacePolicyTelemetry",
         python: "SurfacePolicyTelemetry"
       },
@@ -1568,17 +1568,17 @@
         python: "MotorPolicyResult"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.RuntimeMotorPolicy",
         python: "RuntimeMotorPolicy"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.MotorPolicy",
         python: "MotorPolicy"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.BasePolicy",
         python: "BasePolicy"
       },

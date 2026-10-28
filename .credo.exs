@@ -12,7 +12,17 @@
         # `Design.AliasUsage` asks for aliases of every nested module; in this
         # codebase the fully qualified names are often clearer (and required in
         # templates), so it is noise rather than signal.
-        disabled: [{Credo.Check.Design.AliasUsage, []}],
+        #
+        # `Consistency.ExceptionNames` guesses an exception-naming convention
+        # from what is already there and then complains about the exceptions
+        # that do not follow it. Here the names are Monty's — `NoGoalProvided`,
+        # `GridTooSmallError`, `InvalidEvidenceThresholdConfig`,
+        # `ParentLMNotProvided` — and Module.for-module means they cannot be
+        # renamed to suit a heuristic.
+        disabled: [
+          {Credo.Check.Design.AliasUsage, []},
+          {Credo.Check.Consistency.ExceptionNames, []}
+        ],
         extra: [
           # Rendering and sync code has a few deliberately explicit branches;
           # these thresholds keep the checks useful instead of stylistic.
