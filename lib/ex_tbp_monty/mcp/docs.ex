@@ -108,6 +108,9 @@ defmodule ExTbpMonty.Mcp.Docs do
   One page: its text, and the headings a reader can jump to.
   """
   @spec read(String.t()) :: {:ok, content()} | {:error, :invalid_path | :not_found}
+  # The path is made relative to the docs root and refused if it climbs out of
+  # it, before anything is read.
+  # sobelow_skip ["Traversal.FileModule"]
   def read(path) do
     with {:ok, relative} <- inside_root(path) do
       case File.read(absolute(relative)) do
@@ -245,7 +248,7 @@ defmodule ExTbpMonty.Mcp.Docs do
     double_s? = String.ends_with?(word, "ss")
 
     if String.length(word) > 4 and String.ends_with?(word, "s") and not double_s? do
-      String.slice(word, 0, -1)
+      String.slice(word, 0, String.length(word) - 1)
     else
       word
     end

@@ -62,6 +62,9 @@ defmodule ExTbpMonty.Mcp.Experiments do
   module is told.
   """
   @spec option(String.t(), String.t()) :: {:ok, map()} | {:error, String.t()}
+  # `group` and `option` are matched against the catalog Monty ships before the
+  # path is built, so neither can carry a separator out of the config tree.
+  # sobelow_skip ["Traversal.FileModule"]
   def option(group, option) do
     if group in Catalog.groups() and option in Catalog.options(group) do
       path = Path.join([Source.conf_dir(), group, option <> ".yaml"])
@@ -113,7 +116,8 @@ defmodule ExTbpMonty.Mcp.Experiments do
          yaml: Blueprint.to_yaml(blueprint)
        }}
     else
-      {:error, reason} -> {:error, save_error(reason)}
+      # `draft_name/1` answers a sentence, `Drafts.save/1` a file-system reason.
+      {:error, reason} -> {:error, inspect(reason)}
     end
   end
 
@@ -340,9 +344,6 @@ defmodule ExTbpMonty.Mcp.Experiments do
     do: "`#{name}` cannot be recorded as a run: #{inspect(changeset.errors)}"
 
   defp error_message(reason, _name), do: inspect(reason)
-
-  defp save_error(%Ecto.Changeset{} = changeset), do: inspect(changeset.errors)
-  defp save_error(reason), do: inspect(reason)
 
   # A draft is a file named after the experiment, so the name has to be a file
   # name: no separators to climb out of the draft directory with.

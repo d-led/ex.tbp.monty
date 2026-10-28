@@ -55,6 +55,8 @@ defmodule ExTbpMonty.Mcp.Roadmap do
 
   @doc "The sections of the roadmap, and how many tasks each holds."
   @spec sections() :: [%{name: String.t(), title: String.t(), tasks: non_neg_integer()}]
+  # The paths are a wildcard over the roadmap directory; no caller supplies one.
+  # sobelow_skip ["Traversal.FileModule"]
   def sections do
     counts =
       @section_dir |> task_paths() |> Enum.flat_map(&load/1) |> Enum.frequencies_by(& &1.section)
@@ -80,6 +82,9 @@ defmodule ExTbpMonty.Mcp.Roadmap do
     |> Enum.sort()
   end
 
+  # Called with the paths `task_paths/1` wildcards inside the docs root, never
+  # with a path a caller chose.
+  # sobelow_skip ["Traversal.FileModule"]
   defp load(path) do
     case File.read(path) do
       {:ok, text} -> [parse(path, text)]
