@@ -121,7 +121,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       assert Map.keys(lm.hypotheses) == ["mug"]
       assert Hypotheses.count(lm.hypotheses["mug"]) == 6
-      assert Enum.all?(lm.hypotheses["mug"].evidence, &(&1 == 0.0))
+
+      # Every node starts at what its stored features are worth against this
+      # observation, and the node at the sensed location is the one that fits.
+      assert lm.hypotheses["mug"].evidence == [0.0, 0.0, 1.0, 0.0, 0.0, 1.0]
     end
 
     test "leaves the object possible, because nothing has ruled it out" do

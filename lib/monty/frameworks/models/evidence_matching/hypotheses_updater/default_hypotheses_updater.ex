@@ -19,8 +19,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
     * **fixed** — every node is tried with each configured rotation, which is
       what a `uniform` experiment means.
 
-  All of them start with evidence zero and `possible?: true`: nothing has been
-  ruled out yet, and the first observation decides.
+  All of them start with the evidence the first observation already gives them:
+  the feature evidence of the node they sit on. Nothing has been ruled out yet —
+  every node is a hypothesis — but a node whose colour and curvature look like
+  what the sensor just saw starts ahead of one that does not, which is what
+  Monty's first hypothesis space is worth.
 
   ## A channel that joins late
 
@@ -33,6 +36,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   @behaviour Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
 
   alias Monty.Frameworks.Models.EvidenceMatching.Channels
+
+  alias Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.DefaultFeatureEvidenceScorer
+
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
@@ -43,6 +49,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
 
   defstruct graph_memory: nil,
             displacer: nil,
+            scorer: nil,
             initial_possible_poses: nil,
             umbilical_num_poses: 8,
             initialised_channels: %{}
@@ -60,6 +67,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
     %__MODULE__{
       graph_memory: memory,
       displacer: Keyword.fetch!(options, :displacer),
+      scorer: Keyword.fetch!(options, :scorer),
       initial_possible_poses: Keyword.get(options, :initial_possible_poses, :first_observation),
       umbilical_num_poses: Keyword.get(options, :umbilical_num_poses, 8)
     }
@@ -218,30 +226,45 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
         |> Enum.map(&Rotation.to_matrix/1)
       end)
 
-    all_hypotheses(locations, rotations)
+    all_hypotheses(
+      locations,
+      rotations,
+      node_feature_evidence(updater, graph_id, input_channel, features)
+    )
   end
 
   defp initial_hypotheses(
          %__MODULE__{initial_possible_poses: poses} = updater,
-         _features,
+         features,
          graph_id,
          input_channel
        ) do
     locations = GraphMemory.get_locations_in_graph(updater.graph_memory, graph_id, input_channel)
     rotations = Enum.flat_map(poses, fn pose -> List.duplicate(pose, length(locations)) end)
 
-    all_hypotheses(locations, rotations)
+    all_hypotheses(
+      locations,
+      rotations,
+      node_feature_evidence(updater, graph_id, input_channel, features)
+    )
   end
 
-  # One location per rotation, in the order the rotations were built: all nodes
-  # for the first direction, then all nodes for the second, and so on.
-  defp all_hypotheses(locations, rotations) do
+  # What the first observation already says about each node: hypotheses start
+  # where the features put them, not at zero.
+  defp node_feature_evidence(updater, graph_id, input_channel, features) do
+    DefaultFeatureEvidenceScorer.evidence(updater.scorer, graph_id, input_channel, features)
+  end
+
+  # One location and one evidence value per rotation, in the order the rotations
+  # were built: all nodes for the first direction, then all nodes for the
+  # second, and so on.
+  defp all_hypotheses(locations, rotations, node_evidence) do
     repeats = div(length(rotations), length(locations))
 
     %Hypotheses{
       locations: locations |> List.duplicate(repeats) |> Enum.concat(),
       poses: rotations,
-      evidence: List.duplicate(0.0, length(rotations)),
+      evidence: node_evidence |> List.duplicate(repeats) |> Enum.concat(),
       possible: List.duplicate(true, length(rotations))
     }
   end

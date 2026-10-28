@@ -49,7 +49,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
         feature_evidence_scorer: scorer
       )
 
-    DefaultHypothesesUpdater.new(graph_memory, Keyword.merge([displacer: displacer], options))
+    DefaultHypothesesUpdater.new(
+      graph_memory,
+      Keyword.merge([displacer: displacer, scorer: scorer], options)
+    )
   end
 
   defp features do
@@ -68,10 +71,25 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
         )
 
       assert Hypotheses.count(started) == 6
-      assert Enum.all?(started.evidence, &(&1 == 0.0))
       assert Enum.all?(started.possible)
       assert telemetry == %{}
       assert MapSet.member?(updater.initialised_channels["mug"], "patch")
+    end
+
+    test "a node starts at the evidence its features are worth, not at zero" do
+      {_updater, started, _telemetry} =
+        DefaultHypothesesUpdater.update_evidence(
+          updater(),
+          Hypotheses.empty(),
+          features(),
+          "mug",
+          0.0
+        )
+
+      # The nodes hold rgba 0.0, 0.1 and 0.2 and the sensor saw 0.2, so only the
+      # third node starts with anything — once for each of the two poses a
+      # defined surface pose allows.
+      assert started.evidence == [0.0, 0.0, 1.0, 0.0, 0.0, 1.0]
     end
 
     test "fixed poses put every node under each configured rotation" do

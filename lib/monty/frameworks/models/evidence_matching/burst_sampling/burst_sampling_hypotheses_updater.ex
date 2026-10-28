@@ -47,10 +47,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
             scorer: nil,
             initial_possible_poses: nil,
             umbilical_num_poses: 8,
-            sampling_multiplier: 3,
-            burst_trigger_slope: 0.1,
-            burst_sampling_duration: 2,
-            deletion_trigger_slope: 0.0,
+            sampling_multiplier: 0.4,
+            burst_trigger_slope: 1.0,
+            burst_sampling_duration: 5,
+            deletion_trigger_slope: 0.5,
             sampling_burst_steps: 0,
             evidence_slope_trackers: %{},
             max_slope: 0.0
@@ -73,10 +73,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       scorer: Keyword.fetch!(options, :scorer),
       initial_possible_poses: Keyword.get(options, :initial_possible_poses),
       umbilical_num_poses: Keyword.get(options, :umbilical_num_poses, 8),
-      sampling_multiplier: Keyword.get(options, :sampling_multiplier, 3),
-      burst_trigger_slope: Keyword.get(options, :burst_trigger_slope, 0.1),
-      burst_sampling_duration: Keyword.get(options, :burst_sampling_duration, 2),
-      deletion_trigger_slope: Keyword.get(options, :deletion_trigger_slope, 0.0)
+      sampling_multiplier: Keyword.get(options, :sampling_multiplier, 0.4),
+      burst_trigger_slope: Keyword.get(options, :burst_trigger_slope, 1.0),
+      burst_sampling_duration: Keyword.get(options, :burst_sampling_duration, 5),
+      deletion_trigger_slope: Keyword.get(options, :deletion_trigger_slope, 0.5)
     }
   end
 

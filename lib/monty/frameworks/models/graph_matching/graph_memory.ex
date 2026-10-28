@@ -279,12 +279,18 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
     values =
       Map.new(keys, fn key -> {key, memory.object_model.get_values_for_feature(graph, key)} end)
 
+    # A row is looked up by node id, and a caller asking about many nodes asks
+    # about every node of a graph often enough that walking the list per id
+    # would dominate a matching step. Tuples make the lookup constant.
     case node_ids do
       node_id when is_integer(node_id) ->
-        Map.new(values, fn {key, rows} -> {key, Enum.at(rows, node_id)} end)
+        Map.new(values, fn {key, rows} -> {key, rows |> List.to_tuple() |> elem(node_id)} end)
 
       node_ids ->
-        Map.new(values, fn {key, rows} -> {key, Enum.map(node_ids, &Enum.at(rows, &1))} end)
+        Map.new(values, fn {key, rows} ->
+          tuple = List.to_tuple(rows)
+          {key, Enum.map(node_ids, &elem(tuple, &1))}
+        end)
     end
   end
 

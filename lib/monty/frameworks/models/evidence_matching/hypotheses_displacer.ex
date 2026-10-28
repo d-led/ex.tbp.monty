@@ -154,6 +154,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
     search_locations = Enum.map(to_test, &Enum.at(hypotheses.locations, &1))
     poses = Enum.map(to_test, &Enum.at(hypotheses.poses, &1))
 
+    # Where each tested hypothesis sits in the full set, so the update can be
+    # spread over every hypothesis without searching for them one at a time.
+    positions = to_test |> Enum.with_index() |> Map.new()
+
     Enum.reduce(input_channels, List.duplicate(0.0, Hypotheses.count(hypotheses)), fn channel,
                                                                                       totals ->
       channel_features = Map.fetch!(features, channel)
@@ -173,9 +177,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
       skipped_update = evidence |> Enum.min() |> max(0.0)
 
       Enum.map(Enum.with_index(totals), fn {total, index} ->
-        case Enum.find_index(to_test, &(&1 == index)) do
-          nil -> total + skipped_update
-          position -> total + Enum.at(evidence, position)
+        case Map.fetch(positions, index) do
+          :error -> total + skipped_update
+          {:ok, position} -> total + Enum.at(evidence, position)
         end
       end)
     end)
@@ -192,13 +196,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
     graph = GraphMemory.get_graph(displacer.graph_memory, graph_id, input_channel)
 
     channel_locations =
-      GraphMemory.get_locations_in_graph(displacer.graph_memory, graph_id, input_channel)
+      displacer.graph_memory
+      |> GraphMemory.get_locations_in_graph(graph_id, input_channel)
+      |> List.to_tuple()
 
     nearest =
       displacer.graph_memory.object_model.find_nearest_neighbors(
         graph,
         search_locations,
-        min(displacer.max_nneighbors, length(channel_locations))
+        min(displacer.max_nneighbors, tuple_size(channel_locations))
       )
 
     rotated = Enum.map(poses, fn pose -> rotate(channel_features["pose_vectors"], pose) end)
@@ -211,13 +217,19 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
         input_channel,
         channel_features
       )
+      |> List.to_tuple()
+
+    # Every hypothesis reads the pose features of its neighbours, so they are
+    # read once for the whole graph rather than once per hypothesis.
+    {all_node_poses, all_node_pose_flags} =
+      node_poses(displacer, graph_id, input_channel, tuple_size(channel_locations))
 
     Enum.zip_with([search_locations, rotated, nearest], fn [
                                                              search_location,
                                                              pose_vectors,
                                                              node_ids
                                                            ] ->
-      node_locations = Enum.map(node_ids, &Enum.at(channel_locations, &1))
+      node_locations = Enum.map(node_ids, &elem(channel_locations, &1))
 
       [distances] =
         GraphMatchingUtils.custom_distances(
@@ -229,22 +241,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
 
       too_far = Enum.map(distances, fn distance -> weight(displacer, distance) <= 0 end)
 
-      node_features =
-        GraphMemory.get_features_at_node(
-          displacer.graph_memory,
-          graph_id,
-          input_channel,
-          node_ids,
-          ["pose_vectors", "pose_fully_defined"]
-        )
-
       radius_evidence =
         pose_evidence(
           displacer,
           pose_vectors,
           channel_features["pose_fully_defined"],
-          node_features["pose_vectors"],
-          Enum.map(node_features["pose_fully_defined"], &hd/1),
+          Enum.map(node_ids, &elem(all_node_poses, &1)),
+          Enum.map(node_ids, &elem(all_node_pose_flags, &1)),
           input_channel
         )
 
@@ -254,10 +257,26 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
       |> Enum.map(fn {{evidence, node_id}, position} ->
         if Enum.at(too_far, position),
           do: @min_evidence,
-          else: evidence + Enum.at(node_feature_evidence, node_id)
+          else: evidence + elem(node_feature_evidence, node_id)
       end)
       |> Enum.max()
     end)
+  end
+
+  # One pose per node, flattened as stored, and whether that pose was fully
+  # defined — the two things the pose comparison reads.
+  defp node_poses(displacer, graph_id, input_channel, num_nodes) do
+    features =
+      displacer.graph_memory
+      |> GraphMemory.get_features_at_node(
+        graph_id,
+        input_channel,
+        Enum.to_list(0..(num_nodes - 1)//1),
+        ["pose_vectors", "pose_fully_defined"]
+      )
+
+    {List.to_tuple(Map.fetch!(features, "pose_vectors")),
+     features |> Map.fetch!("pose_fully_defined") |> Enum.map(&hd/1) |> List.to_tuple()}
   end
 
   # Pose evidence in [-1, 1]: surface normal and first curvature direction, each
