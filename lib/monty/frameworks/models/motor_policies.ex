@@ -21,6 +21,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
       arrives;
     * `...MotorPolicies.SurfacePolicy` — **ported**: walk the surface of an
       object, and search for it when it is lost;
+    * `...MotorPolicies.NaiveScanPolicy` — **ported**: scan the object in a
+      square spiral, one leg longer each time;
     * `undo_last_action/1` — **ported**: the module-level function — Monty calls
       it `fixme_undo_last_action` — that turns an action into its opposite.
 

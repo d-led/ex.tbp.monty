@@ -1603,7 +1603,7 @@
         python: "InformedPolicy"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.NaiveScanPolicy",
         python: "NaiveScanPolicy"
       },
