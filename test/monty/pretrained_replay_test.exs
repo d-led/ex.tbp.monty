@@ -27,6 +27,11 @@ defmodule Monty.PretrainedReplayTest do
 
   use ExUnit.Case, async: true
 
+  # Loading the exported library and replaying a hundred steps of Monty's own
+  # episode is minutes of work on a cold runner, not the one minute ExUnit
+  # allows by default.
+  @moduletag timeout: 300_000
+
   alias Monty.Context
   alias Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHypothesesUpdater
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM

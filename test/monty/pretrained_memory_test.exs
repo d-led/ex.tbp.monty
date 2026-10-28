@@ -19,6 +19,15 @@ defmodule Monty.PretrainedMemoryTest do
 
   @pretrained "test/fixtures/monty_pretrained_10distinctobj.jsonl.gz"
 
+  # Ten models and sixteen thousand nodes: slow enough on a cold runner that
+  # ExUnit's minute is not enough, and there is no reason to build it once per
+  # test.
+  @moduletag timeout: 300_000
+
+  setup_all do
+    {:ok, memory: MontyRecording.load_pretrained!(@pretrained)}
+  end
+
   # What the export reported, object by object, and therefore what a loaded
   # memory must still hold.
   @node_counts %{
@@ -34,8 +43,6 @@ defmodule Monty.PretrainedMemoryTest do
     "strawberry" => 829
   }
 
-  defp memory, do: MontyRecording.load_pretrained!(@pretrained)
-
   # The export is plain JSON, so a test can hold a loaded model to it.
   defp first_exported_node(object_id) do
     @pretrained
@@ -48,9 +55,7 @@ defmodule Monty.PretrainedMemoryTest do
   end
 
   describe "a memory exported from Monty" do
-    test "holds every object Monty trained, with every node it stored" do
-      memory = memory()
-
+    test "holds every object Monty trained, with every node it stored", %{memory: memory} do
       assert Enum.sort(GraphMemory.get_memory_ids(memory)) ==
                @node_counts |> Map.keys() |> Enum.sort()
 
@@ -60,9 +65,7 @@ defmodule Monty.PretrainedMemoryTest do
       end
     end
 
-    test "keeps the features the learning module matches on, and no others" do
-      memory = memory()
-
+    test "keeps the features the learning module matches on, and no others", %{memory: memory} do
       assert GraphMemory.get_feature_order(memory, "mug", "patch") ==
                ["hsv", "principal_curvatures_log"]
 
@@ -76,11 +79,11 @@ defmodule Monty.PretrainedMemoryTest do
       assert [_, _, _, _, _, _, _, _, _] = pose
     end
 
-    test "a node is where Monty put it, to the last exported digit" do
+    test "a node is where Monty put it, to the last exported digit", %{memory: memory} do
       assert [first_exported | _] = first_exported_node("mug")
 
       assert [^first_exported | _] =
-               GraphMemory.get_locations_in_graph(memory(), "mug", "patch")
+               GraphMemory.get_locations_in_graph(memory, "mug", "patch")
     end
   end
 
