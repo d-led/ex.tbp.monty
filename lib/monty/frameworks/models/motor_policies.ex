@@ -28,11 +28,11 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
     * `undo_last_action/1` — **ported**: the module-level function — Monty calls
       it `fixme_undo_last_action` — that turns an action into its opposite.
 
-  Still planned, in the order they are needed: `SurfacePolicy` (follow the
-  surface, which is what every surface-agent experiment uses), `JumpToGoal` and
-  the look-at policy that `DistantPolicySelector` routes to, then the policies
-  that are only for particular experiments (`PredefinedPolicy`,
-  `NaiveScanPolicy`, `InformedPolicyRandomWalk`) and
+  Still planned, in the order they are needed: `DistantPolicySelector` — the
+  distant agent's selector, which routes to `JumpToGoal`, to the look-at policy
+  (ported, under `Monty.Frameworks.Models.Salience.MotorPolicy` because that is
+  where Monty keeps it) and to a default policy — then the policies that exist
+  for one kind of experiment (`PredefinedPolicy`, `InformedPolicyRandomWalk`) and
   `SurfacePolicyCurvatureInformed`.
 
   A policy here is a struct plus the module named after it, so a policy can be
