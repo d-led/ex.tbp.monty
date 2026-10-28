@@ -1,11 +1,12 @@
 defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLMTest do
   use ExUnit.Case, async: true
 
-  alias Monty.Cmp.Message
+  alias Monty.Cmp.{Goal, Message}
   alias Monty.Context
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Geometry.OrientationMatrix
@@ -471,6 +472,65 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert length(pose) == 3
       assert [raw_pose | _more] = EvidenceGraphLM.get_possible_poses(lm, false)["mug"]
       assert length(raw_pose) == 3
+    end
+  end
+
+  describe "proposing goals" do
+    # The generator Monty's learning module owns, told to jump as soon as it is
+    # allowed so that a two-step episode is enough to see it happen.
+    defp asked_where_to_look do
+      EvidenceGoalGenerator.new(min_post_goal_success_steps: 0)
+    end
+
+    test "proposes nothing when it owns no goal generator" do
+      lm = learning_module(mug()) |> step([percept([0.2, 0.0, 0.0], [0.2])])
+
+      assert {[], _lm} = EvidenceGraphLM.propose_goals(lm)
+    end
+
+    test "proposes where its generator asked to look" do
+      lm =
+        mug()
+        |> learning_module(gsg: asked_where_to_look())
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+
+      assert {[%Goal{} = goal], _lm} = EvidenceGraphLM.propose_goals(lm)
+      assert goal.sender_type == :gsg
+      assert goal.sender_id == "LM_0"
+    end
+
+    test "has nothing to propose before the schedule allows a jump" do
+      lm =
+        mug()
+        |> learning_module(gsg: EvidenceGoalGenerator.new())
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+
+      assert {[], _lm} = EvidenceGraphLM.propose_goals(lm)
+    end
+
+    test "stays silent on a step in which it was given nothing" do
+      lm =
+        mug()
+        |> learning_module(gsg: asked_where_to_look())
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+        |> step([percept([0.2, 0.0, 0.0], [0.2])], false)
+
+      assert {[], _lm} = EvidenceGraphLM.propose_goals(lm)
+    end
+
+    test "forgets the goal when the episode's short-term memory is reset" do
+      lm =
+        mug()
+        |> learning_module(gsg: asked_where_to_look())
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+        |> EvidenceGraphLM.reset_stm()
+
+      assert {[], lm} = EvidenceGraphLM.propose_goals(lm)
+      assert lm.gsg.prev_top_mlhs == nil
+      assert lm.gsg.wait_factor == 1
     end
   end
 end

@@ -163,6 +163,17 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator do
     reset(%{generator | base: base})
   end
 
+  @doc """
+  The same generator, now reading `parent_lm` as it stands.
+
+  Someone driving this generator step by step has the module's current value
+  in hand and the generator has a copy; this swaps the copy without throwing
+  away the schedule. See `GraphGoalGenerator.point_at/2`.
+  """
+  @spec point_at(t(), map()) :: t()
+  def point_at(%__MODULE__{} = generator, parent_lm),
+    do: %{generator | base: GraphGoalGenerator.point_at(generator.base, parent_lm)}
+
   @doc "Receives the high-level goal to drive towards; unused, as in Monty."
   @impl true
   @spec set_driving_goal(t(), Goal.t() | nil) :: t()

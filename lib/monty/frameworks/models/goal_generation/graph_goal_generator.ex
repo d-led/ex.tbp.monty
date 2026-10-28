@@ -98,6 +98,17 @@ defmodule Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator do
   end
 
   @doc """
+  The same generator, now reading `parent_lm` as it stands.
+
+  Monty holds a pointer to its module and so sees every change to it for free.
+  A struct holds a copy, so whatever drives the generator hands it the module
+  again before each step — without resetting, because the schedule the
+  generator has built up still belongs to this module.
+  """
+  @spec point_at(t(), map()) :: t()
+  def point_at(%__MODULE__{} = generator, parent_lm), do: %{generator | parent_lm: parent_lm}
+
+  @doc """
   Receives the high-level goal to drive towards.
 
   Monty's experiments never set one yet, so this stays `nil`: the default goal

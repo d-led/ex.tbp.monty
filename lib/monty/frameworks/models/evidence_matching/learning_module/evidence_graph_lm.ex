@@ -66,7 +66,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   require Logger
 
   alias Monty.Cmp
-  alias Monty.Cmp.Message
+  alias Monty.Cmp.{Goal, Message}
 
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
 
@@ -108,6 +108,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
             hypotheses_updater: nil,
             mode: nil,
             buffer: nil,
+            gsg: nil,
             hypotheses: %{},
             hypotheses_updater_telemetry: %{},
             possible_matches: [],
@@ -215,7 +216,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         has_detailed_logger: Keyword.get(options, :has_detailed_logger, false),
         hypotheses_updater_module:
           Keyword.get(options, :hypotheses_updater, DefaultHypothesesUpdater),
-        hypotheses_updater_options: Keyword.get(options, :hypotheses_updater_options, [])
+        hypotheses_updater_options: Keyword.get(options, :hypotheses_updater_options, []),
+        gsg: Keyword.get(options, :gsg)
       }
 
       {:ok, lm |> build_updater() |> reset_stm()}
@@ -374,7 +376,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       current_mlh: mlh,
       previous_mlh: mlh
     })
+    |> reset_goal_generator()
     |> build_updater()
+  end
+
+  # Monty resets the goal generator with the rest of the short-term memory: a
+  # schedule built against another object's observations says nothing here.
+  defp reset_goal_generator(%__MODULE__{gsg: nil} = lm), do: lm
+
+  defp reset_goal_generator(%__MODULE__{} = lm) do
+    %{lm | gsg: lm.gsg.__struct__.reset(lm.gsg.__struct__.point_at(lm.gsg, lm))}
   end
 
   defp fresh_mlh do
@@ -411,7 +422,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
            {:ok, lm} <- store_step(lm, percepts) do
         lm = compute_possible_matches(lm, feature_percepts(percepts), moved?)
         lm = if lm.possible_matches == [], do: set_individual_ts(lm, :no_match), else: lm
-        {:ok, log_stats(lm, ctx)}
+        {:ok, log_stats(step_goal_generator(lm, ctx, feature_percepts(percepts)), ctx)}
       end
     end
   end
@@ -433,6 +444,36 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         store_step(lm, percepts)
       end
     end
+  end
+
+  @doc """
+  The goals this module's goal generator proposed, and none before it has one.
+
+  Monty only proposes after a step that processed an observation — a module
+  given nothing has nothing new to look at — so this repeats the goals only
+  when the step that produced them is the last one.
+  """
+  @impl true
+  @spec propose_goals(t()) :: {[Goal.t()], t()}
+  def propose_goals(%__MODULE__{gsg: nil} = lm), do: {[], lm}
+
+  def propose_goals(%__MODULE__{} = lm) do
+    if FeatureAtLocationBuffer.get_last_obs_processed(lm.buffer) do
+      {lm.gsg.__struct__.output_goals(lm.gsg), lm}
+    else
+      {[], lm}
+    end
+  end
+
+  # Monty's learning module owns its goal generator and steps it at the end of
+  # every matching step. The generator is handed this module's current value
+  # first: it holds a copy, and the schedule it has built up belongs to the
+  # module rather than to a step of it.
+  defp step_goal_generator(%__MODULE__{gsg: nil} = lm, _ctx, _percepts), do: lm
+
+  defp step_goal_generator(%__MODULE__{} = lm, ctx, percepts) do
+    gsg = lm.gsg.__struct__.point_at(lm.gsg, lm)
+    %{lm | gsg: gsg.__struct__.step(gsg, ctx, percepts)}
   end
 
   @doc """
