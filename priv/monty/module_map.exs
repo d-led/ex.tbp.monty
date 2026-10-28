@@ -1598,7 +1598,7 @@
         python: "JumpToGoal"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.InformedPolicy",
         python: "InformedPolicy"
       },
