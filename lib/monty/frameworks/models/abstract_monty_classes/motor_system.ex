@@ -24,4 +24,12 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.MotorSystem do
   Chooses the actions for this step and says whether it is motor-only.
   """
   @callback act(request(), state) :: {[action()], state, boolean()}
+
+  @doc """
+  Forgets what the previous episode taught, keeping the configuration.
+
+  Called between episodes: a policy that was mid-sequence (half a saccade, a
+  hypothesis test in progress) must not carry that into the next object.
+  """
+  @callback reset(state) :: state
 end

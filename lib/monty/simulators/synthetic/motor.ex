@@ -21,4 +21,7 @@ defmodule Monty.Simulators.Synthetic.Motor do
     {[action], %{state | steps_taken: state.steps_taken + 1, goals_seen: length(request.goals)},
      false}
   end
+
+  @impl true
+  def reset(state), do: %{state | goals_seen: 0}
 end

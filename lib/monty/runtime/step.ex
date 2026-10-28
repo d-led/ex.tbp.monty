@@ -19,10 +19,22 @@ defmodule Monty.Runtime.Step do
     * it gets another learning module's output only if it also got a sensor
       percept that step;
     * every module sends a vote before any module receives one;
-    * the action chosen at step *t* belongs to step *t+1*.
+    * the action chosen at step *t* belongs to step *t+1*;
+    * a module with no inputs is not stepped at all, and a step that reached
+      no module is not counted as a matching or exploratory step.
+
+  The coordinator is also the model Monty's experiment talks to
+  (`ExperimentMonty`): it owns the experiment mode, the step type, the step
+  counters, the terminal states, and the decision to stop. `MontyBase` keeps
+  that on the model and lets the experiment read it; here the experiment asks
+  for it (`done?/1`) and tells it what to do (`reset_episode/1`,
+  `set_experiment_mode/2`, `update_ltm/1`), because the coordinator is the
+  process that holds it.
   """
 
   use GenServer
+
+  require Logger
 
   alias Monty.Cmp.Message
   alias Monty.Runtime.{Barrier, LearningModuleServer, Registry, SensorModuleServer}
@@ -38,6 +50,9 @@ defmodule Monty.Runtime.Step do
           goals: non_neg_integer(),
           actions: [map()],
           sensor_timeouts: [atom()],
+          step_type: State.step_type(),
+          terminal_states: %{optional(atom()) => State.terminal_state()},
+          done?: boolean(),
           duration_us: non_neg_integer()
         }
 
@@ -67,6 +82,54 @@ defmodule Monty.Runtime.Step do
   @spec state(server()) :: State.t()
   def state(server), do: GenServer.call(server, :state, :infinity)
 
+  @doc """
+  Whether the model has concluded this episode.
+
+  Monty's `model.is_done`: set by the model when its match criterion is
+  satisfied, or by the experiment when it gives up on an episode.
+  """
+  @spec done?(server()) :: boolean()
+  def done?(server), do: GenServer.call(server, :done?, :infinity)
+
+  @doc """
+  Clears short-term memory for a new episode, keeping long-term memory.
+
+  Monty's `model.reset/0`: the modules forget the episode they just had, the
+  motor system forgets where it was in its policy, and the counters and
+  terminal states start again. The step type returns to matching — an episode
+  that starts by exploring is an experiment's choice, not a model's default.
+  """
+  @spec reset_episode(server()) :: :ok
+  def reset_episode(server), do: GenServer.call(server, :reset_episode, :infinity)
+
+  @doc "Tells the model and its modules whether this episode trains or evaluates."
+  @spec set_experiment_mode(
+          server(),
+          Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.mode()
+        ) ::
+          :ok
+  def set_experiment_mode(server, mode),
+    do: GenServer.call(server, {:set_experiment_mode, mode}, :infinity)
+
+  @doc """
+  Hands what the episode saw to long-term memory.
+
+  Called at the end of an episode: it is the only moment a training episode
+  writes to memory, and the only moment an evaluation episode could.
+  """
+  @spec update_ltm(server()) :: :ok
+  def update_ltm(server), do: GenServer.call(server, :update_ltm, :infinity)
+
+  @doc """
+  Ends the episode without a conclusion.
+
+  Monty's `deal_with_time_out`: the modules that never concluded are timed out,
+  so an episode's statistics say "no answer" rather than leaving them open, and
+  the model calls itself done.
+  """
+  @spec time_out(server()) :: :ok
+  def time_out(server), do: GenServer.call(server, :time_out, :infinity)
+
   # -- callbacks ------------------------------------------------------------
 
   @impl true
@@ -74,7 +137,7 @@ defmodule Monty.Runtime.Step do
 
   @impl true
   def handle_call({:step, observations, proprioceptive_state, ctx}, _from, %State{} = state) do
-    ctx = %{ctx | step: state.step}
+    ctx = %{ctx | step: state.step, mode: state.step_type}
     started_at = System.monotonic_time()
 
     {percepts, sensor_timeouts} = step_sensor_modules(state, observations, proprioceptive_state)
@@ -87,6 +150,8 @@ defmodule Monty.Runtime.Step do
     {actions, state} =
       step_motor_system(state, observations, proprioceptive_state, percepts, goals, ctx)
 
+    state = advance(state)
+
     info = %{
       step: state.step,
       percept_ids: percepts |> Map.keys() |> Enum.sort(),
@@ -95,11 +160,28 @@ defmodule Monty.Runtime.Step do
       goals: length(goals),
       actions: actions,
       sensor_timeouts: sensor_timeouts,
+      step_type: state.step_type,
+      terminal_states: state.terminal_states,
+      done?: state.done?,
       duration_us: elapsed_us(started_at)
     }
 
     emit(info)
     {:reply, {:ok, actions, info}, %{state | step: state.step + 1}}
+  end
+
+  def handle_call(:done?, _from, state), do: {:reply, state.done?, state}
+  def handle_call(:reset_episode, _from, state), do: {:reply, :ok, reset_episode_state(state)}
+  def handle_call(:update_ltm, _from, state), do: {:reply, :ok, update_ltm_state(state)}
+
+  # A global time-out ends the episode: an episode that ran out of steps did
+  # not recognise the object, so there is nothing to explore for either.
+  def handle_call(:time_out, _from, state) do
+    {:reply, :ok, %{time_out_undecided(state) | done?: true}}
+  end
+
+  def handle_call({:set_experiment_mode, mode}, _from, state) do
+    {:reply, :ok, set_experiment_mode_state(state, mode)}
   end
 
   def handle_call(:state, _from, state), do: {:reply, state, state}
@@ -164,19 +246,36 @@ defmodule Monty.Runtime.Step do
     requests =
       Enum.map(inputs, fn {lm_id, percepts} ->
         server = Registry.via({:learning_module, model_id, lm_id})
-        {lm_id, fn -> run_learning_step(server, percepts, ctx) end}
+        {lm_id, fn -> learn(server, percepts, ctx) end}
       end)
 
     Barrier.run(requests, timeout)
     :ok
   end
 
-  defp run_learning_step(server, percepts, %{mode: :exploratory} = ctx) do
-    LearningModuleServer.exploratory_step(server, percepts, ctx)
+  # Monty's `MontyForGraphMatching._step_learning_modules`: a module with no
+  # inputs is not stepped, and every module is told whether this step gave it
+  # something to learn from. A step that carried only a location is buffered
+  # but is not evidence, which is what keeps it out of the symmetry count.
+  defp learn(server, [], _ctx) do
+    LearningModuleServer.add_lm_processing_to_buffer_stats(server, false)
   end
 
-  defp run_learning_step(server, percepts, ctx) do
-    LearningModuleServer.matching_step(server, percepts, ctx)
+  defp learn(server, percepts, %{mode: :exploratory} = ctx) do
+    :ok = LearningModuleServer.exploratory_step(server, percepts, ctx)
+    record_processing(server, percepts)
+  end
+
+  defp learn(server, percepts, ctx) do
+    :ok = LearningModuleServer.matching_step(server, percepts, ctx)
+    record_processing(server, percepts)
+  end
+
+  defp record_processing(server, percepts) do
+    LearningModuleServer.add_lm_processing_to_buffer_stats(
+      server,
+      not Monty.Runtime.location_only_step?(percepts)
+    )
   end
 
   # A finite vote deadline closes the round with the votes that arrived; the
@@ -262,6 +361,189 @@ defmodule Monty.Runtime.Step do
 
     {actions, motor_state, motor_only?} = module.act(request, motor_state)
     {actions, %{state | motor_state: motor_state, motor_only?: motor_only?}}
+  end
+
+  # -- the model's own decisions --------------------------------------------
+  #
+  # Monty's `MontyForGraphMatching._set_step_type_and_check_if_done`, which runs
+  # at the end of every step: count the step, ask the modules whether they are
+  # done, and decide whether the episode switches to exploring or stops.
+
+  defp advance(%State{} = state) do
+    state = count_step(state)
+
+    case state.step_type do
+      :matching -> after_matching_step(state)
+      :exploratory -> after_exploratory_step(state)
+    end
+  end
+
+  defp count_step(%State{step_type: :matching} = state),
+    do: %{state | matching_steps: state.matching_steps + 1}
+
+  defp count_step(%State{step_type: :exploratory} = state),
+    do: %{state | exploratory_steps: state.exploratory_steps + 1}
+
+  defp after_matching_step(%State{} = state) do
+    if any_module_processed?(state) do
+      {state, matched?} = check_terminal_conditions(state)
+
+      if matched? do
+        state = time_out_undecided(state)
+
+        cond do
+          state.experiment_mode == :train ->
+            switch_to(state, :exploratory)
+
+          state.experiment_mode == :eval and state.matching_steps > state.min_eval_steps ->
+            %{state | done?: true}
+
+          true ->
+            state
+        end
+      else
+        state
+      end
+    else
+      # A step that reached no module is not evidence of anything, so it does
+      # not count towards the steps an episode's limits are measured in.
+      %{state | matching_steps: state.matching_steps - 1}
+    end
+  end
+
+  defp after_exploratory_step(%State{} = state) do
+    cond do
+      not any_module_processed?(state) ->
+        %{state | exploratory_steps: state.exploratory_steps - 1}
+
+      state.exploratory_steps >= state.num_exploratory_steps ->
+        %{state | done?: true}
+
+      true ->
+        state
+    end
+  end
+
+  defp any_module_processed?(%State{model_id: model_id} = state) do
+    state.learning_modules
+    |> Enum.map(&Registry.via({:learning_module, model_id, &1.id}))
+    |> Enum.any?(&LearningModuleServer.observation_processed?/1)
+  end
+
+  # Every module having given up is the one conclusion that needs no criterion:
+  # there is nothing to agree on, and no reason to keep stepping.
+  defp check_terminal_conditions(%State{} = state) do
+    cond do
+      all_modules_gave_up?(state) -> {state, true}
+      exceeded_min_steps?(state) -> state |> update_terminal_conditions() |> criterion_matched()
+      true -> {state, false}
+    end
+  end
+
+  defp all_modules_gave_up?(%State{} = state) do
+    Enum.all?(state.learning_modules, fn lm ->
+      Map.get(state.terminal_states, lm.id) == :no_match
+    end)
+  end
+
+  defp update_terminal_conditions(%State{model_id: model_id} = state) do
+    requests =
+      Enum.map(state.learning_modules, fn lm ->
+        server = Registry.via({:learning_module, model_id, lm.id})
+        {lm.id, fn -> LearningModuleServer.update_terminal_condition(server) end}
+      end)
+
+    %{replies: terminal_states} = Barrier.run(requests, state.call_timeout)
+    %{state | terminal_states: Map.merge(state.terminal_states, terminal_states)}
+  end
+
+  defp criterion_matched(%State{match_criterion: {module, argument}} = state) do
+    {state, module.matched?(state.terminal_states, argument)}
+  end
+
+  defp exceeded_min_steps?(%State{} = state), do: step_type_count(state) > min_steps(state)
+
+  defp step_type_count(%State{step_type: :matching} = state), do: state.matching_steps
+  defp step_type_count(%State{step_type: :exploratory} = state), do: state.exploratory_steps
+
+  defp min_steps(%State{step_type: :matching, experiment_mode: :train} = state),
+    do: state.min_train_steps
+
+  defp min_steps(%State{step_type: :matching, experiment_mode: :eval} = state),
+    do: state.min_eval_steps
+
+  defp min_steps(%State{step_type: :matching} = state), do: state.min_eval_steps
+
+  defp min_steps(%State{step_type: :exploratory} = state), do: state.num_exploratory_steps
+
+  # Monty's `_set_time_outs(global_time_out=False)`: the modules that never
+  # concluded take the episode's ending as theirs, so an episode has one
+  # answer per module rather than a mix of answers and silences. Already
+  # concluded modules keep what they concluded.
+  defp time_out_undecided(%State{step_type: :exploratory} = state), do: state
+
+  defp time_out_undecided(%State{model_id: model_id} = state) do
+    undecided =
+      for lm <- state.learning_modules, is_nil(Map.get(state.terminal_states, lm.id)), do: lm.id
+
+    Enum.reduce(undecided, state, fn lm_id, state ->
+      server = Registry.via({:learning_module, model_id, lm_id})
+      :ok = LearningModuleServer.set_terminal_state(server, :time_out)
+      put_in(state.terminal_states[lm_id], :time_out)
+    end)
+  end
+
+  defp switch_to(%State{} = state, step_type) do
+    Logger.debug("switching to #{step_type} after #{state.matching_steps} matching steps")
+    %{state | step_type: step_type}
+  end
+
+  # -- the episode boundary -------------------------------------------------
+
+  defp reset_episode_state(%State{model_id: model_id} = state) do
+    Enum.each(state.learning_modules, fn lm ->
+      LearningModuleServer.reset_stm(Registry.via({:learning_module, model_id, lm.id}))
+    end)
+
+    Enum.each(state.sensor_modules, fn sm ->
+      SensorModuleServer.reset(Registry.via({:sensor_module, model_id, sm.id}))
+    end)
+
+    %{
+      state
+      | motor_state: reset_motor(state.motor),
+        step_type: :matching,
+        matching_steps: 0,
+        exploratory_steps: 0,
+        terminal_states: %{},
+        done?: false,
+        step: 0
+    }
+  end
+
+  defp reset_motor(nil), do: nil
+
+  defp reset_motor({module, motor_state}) do
+    {module, module.reset(motor_state)}
+  end
+
+  defp set_experiment_mode_state(%State{model_id: model_id} = state, mode) do
+    Enum.each(state.learning_modules, fn lm ->
+      LearningModuleServer.set_experiment_mode(
+        Registry.via({:learning_module, model_id, lm.id}),
+        mode
+      )
+    end)
+
+    %{state | experiment_mode: mode, step_type: :matching}
+  end
+
+  defp update_ltm_state(%State{model_id: model_id} = state) do
+    Enum.each(state.learning_modules, fn lm ->
+      LearningModuleServer.update_ltm_from_stm(Registry.via({:learning_module, model_id, lm.id}))
+    end)
+
+    state
   end
 
   defp learning_servers(%State{model_id: model_id} = state, model_id) do

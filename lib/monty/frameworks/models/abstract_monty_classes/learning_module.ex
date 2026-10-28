@@ -58,6 +58,66 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
   @doc "Clears short-term memory before a new episode."
   @callback reset_stm(state) :: state
 
+  # -- what the model asks between steps ------------------------------------
+  #
+  # Monty's model reaches into a module to ask whether it processed this step's
+  # observation, whether it has concluded, and to tell it which mode the
+  # experiment is in. A ported module's state is opaque to the coordinator, so
+  # each question is a callback rather than an attribute read.
+
+  @typedoc """
+  What a module has concluded, or `nil` while it is still deciding.
+
+  `:no_match` means nothing in memory explains what it saw; `:time_out` that
+  the episode ended before it made up its mind; `:pose_time_out` that it chose
+  an object but never settled on a pose.
+  """
+  @type terminal_state :: :match | :no_match | :time_out | :pose_time_out | nil
+
+  @typedoc "Monty's `ExperimentMode`: training writes memory, evaluation does not."
+  @type mode :: :train | :eval | nil
+
+  @doc """
+  Records whether this step's observation reached the module.
+
+  `false` for a step the module was not given (no percepts for it, or percepts
+  with no features): such a step is not evidence, so it neither counts towards
+  symmetry nor justifies a vote.
+  """
+  @callback add_lm_processing_to_buffer_stats(state, boolean()) :: state
+
+  @doc "Whether the last observation buffered was one this module processed."
+  @callback observation_processed?(state) :: boolean()
+
+  @doc """
+  Checks the module's own terminal condition and reports what it concluded.
+
+  Called once per step in which the module processed an observation, so a
+  module that counts evidence of symmetry sees every step in which it could
+  have grown.
+  """
+  @callback update_terminal_condition(state) :: {state, terminal_state()}
+
+  @doc """
+  Sets the module's conclusion without asking it to reconsider.
+
+  The model uses this to time out the modules that have not concluded once the
+  system decision is made: they take part in the episode's statistics but claim
+  nothing.
+  """
+  @callback set_terminal_state(state, terminal_state()) :: state
+
+  @doc "Tells the module whether this episode trains or evaluates."
+  @callback set_experiment_mode(state, mode()) :: state
+
+  @doc """
+  Folds what the episode saw into long-term memory, at the end of an episode.
+
+  Only a training episode writes anything; the module decides that from the mode
+  it was given.
+  """
+  @callback update_ltm_from_stm(state) :: state
+
   @optional_callbacks propose_goals: 1, propose_region: 1, get_output: 1
 
   @doc """

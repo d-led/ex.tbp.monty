@@ -80,12 +80,16 @@ defmodule Monty.Runtime.StepTest do
   end
 
   describe "routing percepts" do
-    test "a percept that did not pass the filter is withheld" do
+    test "a percept that did not pass the filter is withheld, and the module is not stepped" do
       model_id = start_model(sensor_modules: [sensor_module(:patch, pass?: false)])
 
       assert {:ok, _, info} = step(model_id)
       assert info.inputs == %{lm_0: 0}
-      assert_receive {:learning_step, :lm_0, [], :matching}
+
+      # Monty skips a module it has nothing for, and tells it so: no step, and
+      # nothing to count as processed.
+      refute_received {:learning_step, _, _, _}
+      assert_receive {:lm_processing, :lm_0, false}
     end
 
     test "a module gets only the percepts its wiring names" do
@@ -182,6 +186,212 @@ defmodule Monty.Runtime.StepTest do
 
       assert_receive {:sensor_step, :patch, true, _observation}
       assert info.inputs == %{lm_0: 0}
+    end
+  end
+
+  describe "deciding the episode" do
+    test "an evaluation ends when a module recognises the object" do
+      model_id =
+        start_model(
+          experiment_mode: :eval,
+          learning_modules: [learning_module(:lm_0, terminal: :match)]
+        )
+
+      assert {:ok, _, info} = step(model_id)
+
+      assert info.terminal_states == %{lm_0: :match}
+      assert info.done?
+      assert Model.done?(model_id)
+    end
+
+    test "an evaluation waits out its minimum number of steps first" do
+      model_id =
+        start_model(
+          experiment_mode: :eval,
+          min_eval_steps: 2,
+          learning_modules: [learning_module(:lm_0, terminal: :match)]
+        )
+
+      {:ok, _, first} = step(model_id)
+      {:ok, _, second} = step(model_id)
+      {:ok, _, third} = step(model_id)
+
+      # Monty compares strictly: two steps is not yet "more than two".
+      refute first.done?
+      refute second.done?
+      assert third.done?
+    end
+
+    test "a training episode starts exploring once a module recognises the object" do
+      model_id =
+        start_model(
+          experiment_mode: :train,
+          num_exploratory_steps: 3,
+          learning_modules: [learning_module(:lm_0, terminal: :match)]
+        )
+
+      assert {:ok, _, info} = step(model_id)
+      assert info.step_type == :exploratory
+      refute info.done?
+
+      assert {:ok, _, _} = step(model_id)
+      assert_receive {:exploratory_step, :lm_0, _percepts, :exploratory}
+    end
+
+    test "an exploration that saw enough steps ends the episode" do
+      model_id =
+        start_model(
+          experiment_mode: :train,
+          num_exploratory_steps: 1,
+          learning_modules: [learning_module(:lm_0, terminal: :match)]
+        )
+
+      # The first step concludes, so the second is an exploratory step, and
+      # with one exploratory step required the episode is over.
+      {:ok, _, _} = step(model_id)
+      assert {:ok, _, info} = step(model_id)
+
+      assert info.step_type == :exploratory
+      assert info.done?
+    end
+
+    test "a module that never concluded is timed out when the episode ends" do
+      model_id =
+        start_model(
+          experiment_mode: :eval,
+          learning_modules: [learning_module(:lm_0, terminal: :match), learning_module(:lm_1)],
+          sm_to_lm: %{lm_0: [:patch], lm_1: [:patch]}
+        )
+
+      assert {:ok, _, info} = step(model_id)
+
+      assert info.terminal_states == %{lm_0: :match, lm_1: :time_out}
+      assert_receive {:set_terminal_state, :lm_1, :time_out}
+      refute_received {:set_terminal_state, :lm_0, _}
+    end
+
+    test "every module giving up is a conclusion without asking the criterion" do
+      model_id =
+        start_model(
+          experiment_mode: :eval,
+          learning_modules: [
+            learning_module(:lm_0, terminal: :no_match),
+            learning_module(:lm_1, terminal: :no_match)
+          ],
+          sm_to_lm: %{lm_0: [:patch], lm_1: [:patch]}
+        )
+
+      # The modules' own step is what concludes they cannot match, and the
+      # model reads their conclusions before it asks them again — so the end of
+      # an episode with nothing recognised lands one step later.
+      {:ok, _, first} = step(model_id)
+      refute first.done?
+      assert_receive {:update_terminal_condition, :lm_0}
+      assert_receive {:update_terminal_condition, :lm_1}
+
+      {:ok, _, second} = step(model_id)
+      assert second.done?
+      assert second.terminal_states == %{lm_0: :no_match, lm_1: :no_match}
+      refute_received {:update_terminal_condition, _}
+    end
+
+    test "a conclusion survives the steps that follow it" do
+      model_id =
+        start_model(
+          experiment_mode: :train,
+          num_exploratory_steps: 5,
+          learning_modules: [learning_module(:lm_0, terminal: :match)]
+        )
+
+      # The first step concludes and switches to exploring; the exploratory
+      # step asks nothing about terminal conditions, so the conclusion stays.
+      {:ok, _, first} = step(model_id)
+      {:ok, _, second} = step(model_id)
+
+      assert first.terminal_states == %{lm_0: :match}
+      assert second.terminal_states == %{lm_0: :match}
+      assert second.step_type == :exploratory
+      refute second.done?
+    end
+  end
+
+  describe "counting the steps that mattered" do
+    defp matching_steps(model_id), do: Step.state(Registry.via({:step, model_id})).matching_steps
+
+    test "a step that reached a module counts" do
+      model_id = start_model()
+
+      {:ok, _, _} = step(model_id)
+      assert matching_steps(model_id) == 1
+    end
+
+    test "a step that reached no module does not count" do
+      model_id = start_model(sensor_modules: [sensor_module(:patch, pass?: false)])
+
+      {:ok, _, _} = step(model_id)
+      assert matching_steps(model_id) == 0
+    end
+
+    test "a step that only carried a location does not count either" do
+      model_id = start_model(sensor_modules: [sensor_module(:patch, features?: false)])
+
+      {:ok, _, _} = step(model_id)
+      assert matching_steps(model_id) == 0
+    end
+  end
+
+  describe "the episode boundary" do
+    test "clearing the episode forgets its counters, conclusions and the done flag" do
+      model_id =
+        start_model(
+          experiment_mode: :eval,
+          learning_modules: [learning_module(:lm_0, terminal: :match)]
+        )
+
+      {:ok, _, _} = step(model_id)
+      assert Model.done?(model_id)
+
+      :ok = Model.reset_episode(model_id)
+      state = Step.state(Registry.via({:step, model_id}))
+
+      assert state.step == 0
+      assert state.matching_steps == 0
+      assert state.terminal_states == %{}
+      assert state.step_type == :matching
+      refute Model.done?(model_id)
+    end
+
+    test "the end of an episode hands the episode to long-term memory" do
+      model_id = start_model()
+
+      {:ok, _, _} = step(model_id)
+      :ok = Model.update_ltm(model_id)
+
+      assert_receive {:update_ltm, :lm_0}
+    end
+
+    test "the model can be told whether this episode trains or evaluates" do
+      model_id = start_model()
+
+      :ok = Model.set_experiment_mode(model_id, :train)
+
+      assert_receive {:set_experiment_mode, :lm_0, :train}
+      assert Step.state(Registry.via({:step, model_id})).experiment_mode == :train
+    end
+
+    test "a global time-out ends the episode and times out the undecided modules" do
+      model_id =
+        start_model(
+          experiment_mode: :eval,
+          learning_modules: [learning_module(:lm_0, terminal: :match), learning_module(:lm_1)],
+          sm_to_lm: %{lm_0: [:patch], lm_1: [:patch]}
+        )
+
+      {:ok, _, _} = step(model_id)
+      :ok = Model.time_out(model_id)
+
+      assert Model.done?(model_id)
+      assert_receive {:set_terminal_state, :lm_1, :time_out}
     end
   end
 

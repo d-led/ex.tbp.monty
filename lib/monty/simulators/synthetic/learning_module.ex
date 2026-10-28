@@ -82,5 +82,27 @@ defmodule Monty.Simulators.Synthetic.LearningModule do
   @impl true
   def reset_stm(state), do: %{state | percepts: [], votes_received: [], output: nil}
 
+  # A stand-in counts percepts and concludes nothing, so the model can run a
+  # whole episode with it but never sees it finish.
+  @impl true
+  def add_lm_processing_to_buffer_stats(state, processed),
+    do: Map.put(state, :processed, processed)
+
+  @impl true
+  def observation_processed?(state), do: Map.get(state, :processed, false)
+
+  @impl true
+  def update_terminal_condition(state), do: {state, nil}
+
+  @impl true
+  def set_terminal_state(state, terminal_state),
+    do: Map.put(state, :terminal_state, terminal_state)
+
+  @impl true
+  def set_experiment_mode(state, mode), do: Map.put(state, :mode, mode)
+
+  @impl true
+  def update_ltm_from_stm(state), do: state
+
   defp remember(state, percepts), do: %{state | percepts: state.percepts ++ percepts}
 end

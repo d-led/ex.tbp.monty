@@ -890,10 +890,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   episode going; a module that had concluded "match" and no longer can takes
   that back.
   """
-  @spec update_terminal_condition(t()) :: t()
+  @spec update_terminal_condition(t()) ::
+          {t(), Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.terminal_state()}
+  @impl true
   def update_terminal_condition(%__MODULE__{} = lm) do
     lm = if length(lm.possible_matches) == 1, do: lm, else: clear_possible(lm)
-    check_terminal_condition(lm)
+    lm = check_terminal_condition(lm)
+    {lm, lm.terminal_state}
   end
 
   defp check_terminal_condition(%__MODULE__{} = lm) do
@@ -1494,10 +1497,37 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # -- episodes ------------------------------------------------------------
 
   @doc "Monty's `set_experiment_mode`: decides whether episodes write to memory."
-  @spec set_experiment_mode(t(), mode()) :: t()
+  @impl true
+  @spec set_experiment_mode(
+          t(),
+          Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.mode()
+        ) :: t()
   def set_experiment_mode(%__MODULE__{} = lm, mode), do: %{lm | mode: mode}
 
+  @doc """
+  Takes the episode's ending as this module's, without asking it to reconsider.
+
+  Monty writes the module's `terminal_state` when the system has decided the
+  episode is over: a module that never concluded claims nothing, but it is not
+  left open either, so an episode has one answer per module.
+  """
+  @impl true
+  @spec set_terminal_state(
+          t(),
+          Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.terminal_state()
+        ) ::
+          t()
+  def set_terminal_state(%__MODULE__{} = lm, terminal_state),
+    do: %{lm | terminal_state: terminal_state}
+
+  @doc "Whether the last buffered observation was one this module processed."
+  @impl true
+  @spec observation_processed?(t()) :: boolean()
+  def observation_processed?(%__MODULE__{} = lm),
+    do: FeatureAtLocationBuffer.get_last_obs_processed(lm.buffer)
+
   @doc "Records whether this step's observation reached the learning module."
+  @impl true
   @spec add_lm_processing_to_buffer_stats(t(), boolean()) :: t()
   def add_lm_processing_to_buffer_stats(%__MODULE__{} = lm, processed) do
     %{
@@ -1518,6 +1548,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   turns observations into model coordinates. When nothing was detected in time,
   `detected_object` is `nil` and the memory is left alone.
   """
+  @impl true
   @spec update_ltm_from_stm(t()) :: t()
   def update_ltm_from_stm(%__MODULE__{mode: :train} = lm) do
     if FeatureAtLocationBuffer.size(lm.buffer) > 0 do

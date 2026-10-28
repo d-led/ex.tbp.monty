@@ -11,7 +11,10 @@ defmodule Monty.Test.RecordingSensorModule do
   alias Monty.Test.Messages
 
   def new(opts) do
-    Map.merge(%{pass?: true, location: [0.0, 0.0, 0.0], notify: self()}, Map.new(opts))
+    Map.merge(
+      %{pass?: true, features?: true, location: [0.0, 0.0, 0.0], notify: self()},
+      Map.new(opts)
+    )
   end
 
   @impl true
@@ -28,7 +31,8 @@ defmodule Monty.Test.RecordingSensorModule do
       Messages.percept(%{
         location: state.location,
         sender_id: to_string(state.id),
-        pass_message: state.pass? and not motor_only?
+        pass_message: state.pass? and not motor_only?,
+        process_features_in_lm: state.features?
       })
 
     {percept, state}

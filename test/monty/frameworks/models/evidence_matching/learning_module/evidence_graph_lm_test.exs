@@ -105,7 +105,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # A step followed by the terminal-condition check that the model runs after
   # every step.
   defp step_and_conclude(lm, percepts) do
-    lm |> step(percepts) |> EvidenceGraphLM.update_terminal_condition()
+    {lm, _terminal_state} =
+      lm |> step(percepts) |> EvidenceGraphLM.update_terminal_condition()
+
+    lm
   end
 
   defp best_evidence(lm, graph_id) do
@@ -424,12 +427,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   describe "an episode boundary" do
     test "clears the hypotheses and the conclusion but keeps the memory" do
-      lm =
-        learning_module(mug())
-        |> step([percept([0.2, 0.0, 0.0], [0.2])])
-        |> step([percept([0.2, 0.0, 0.0], [0.2])])
-        |> EvidenceGraphLM.update_terminal_condition()
-        |> EvidenceGraphLM.reset_stm()
+      concluded =
+        learning_module(mug(), required_symmetry_evidence: 1)
+        |> step_and_conclude([percept([0.2, 0.0, 0.0], [0.2])])
+        |> step_and_conclude([percept([0.2, 0.0, 0.0], [0.2])])
+        |> step_and_conclude([percept([0.2, 0.0, 0.0], [0.2])])
+
+      assert concluded.terminal_state == :match
+
+      lm = EvidenceGraphLM.reset_stm(concluded)
 
       assert lm.hypotheses == %{}
       assert lm.terminal_state == nil

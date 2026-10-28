@@ -40,6 +40,31 @@ defmodule Monty.Runtime.Model do
     Step.step(Registry.via({:step, model_id}), observations, proprioceptive_state, ctx)
   end
 
+  @doc "Whether the model has concluded this episode."
+  @spec done?(atom() | String.t()) :: boolean()
+  def done?(model_id), do: Step.done?(Registry.via({:step, model_id}))
+
+  @doc "Clears short-term memory for a new episode, keeping long-term memory."
+  @spec reset_episode(atom() | String.t()) :: :ok
+  def reset_episode(model_id), do: Step.reset_episode(Registry.via({:step, model_id}))
+
+  @doc "Tells the model and its modules whether this episode trains or evaluates."
+  @spec set_experiment_mode(
+          atom() | String.t(),
+          Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.mode()
+        ) :: :ok
+  def set_experiment_mode(model_id, mode) do
+    Step.set_experiment_mode(Registry.via({:step, model_id}), mode)
+  end
+
+  @doc "Hands what the episode saw to long-term memory."
+  @spec update_ltm(atom() | String.t()) :: :ok
+  def update_ltm(model_id), do: Step.update_ltm(Registry.via({:step, model_id}))
+
+  @doc "Ends the episode without a conclusion."
+  @spec time_out(atom() | String.t()) :: :ok
+  def time_out(model_id), do: Step.time_out(Registry.via({:step, model_id}))
+
   @doc "A `:via` name for a model's supervisor."
   @spec via(atom() | String.t()) :: {:via, module(), {atom(), term()}}
   def via(model_id), do: Registry.via({:model, model_id})

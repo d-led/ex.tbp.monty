@@ -10,4 +10,7 @@ defmodule Monty.Test.RecordingMotor do
     send(state.notify, {:motor, request.percept, request.goals})
     {[%{"action" => "noop"}], state, state.motor_only?}
   end
+
+  @impl true
+  def reset(state), do: state
 end

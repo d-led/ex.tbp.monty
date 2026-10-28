@@ -85,6 +85,35 @@ defmodule Monty.Runtime.LearningModuleServer do
   @spec reset_stm(server()) :: :ok
   def reset_stm(server), do: GenServer.call(server, :reset_stm, :infinity)
 
+  @doc "Records whether this step's observation reached the module."
+  @spec add_lm_processing_to_buffer_stats(server(), boolean()) :: :ok
+  def add_lm_processing_to_buffer_stats(server, processed),
+    do: GenServer.call(server, {:add_lm_processing_to_buffer_stats, processed}, :infinity)
+
+  @doc "Whether the last buffered observation was one this module processed."
+  @spec observation_processed?(server()) :: boolean()
+  def observation_processed?(server),
+    do: GenServer.call(server, :observation_processed?, :infinity)
+
+  @doc "Checks the module's terminal condition and replies with what it concluded."
+  @spec update_terminal_condition(server()) :: term()
+  def update_terminal_condition(server),
+    do: GenServer.call(server, :update_terminal_condition, :infinity)
+
+  @doc "Times the module out without asking it to reconsider."
+  @spec set_terminal_state(server(), term()) :: :ok
+  def set_terminal_state(server, terminal_state),
+    do: GenServer.call(server, {:set_terminal_state, terminal_state}, :infinity)
+
+  @doc "Tells the module whether this episode trains or evaluates."
+  @spec set_experiment_mode(server(), term()) :: :ok
+  def set_experiment_mode(server, mode),
+    do: GenServer.call(server, {:set_experiment_mode, mode}, :infinity)
+
+  @doc "Folds the episode into long-term memory, if it was a training episode."
+  @spec update_ltm_from_stm(server()) :: :ok
+  def update_ltm_from_stm(server), do: GenServer.call(server, :update_ltm_from_stm, :infinity)
+
   @doc "The module's own state, for tests and the run inspector."
   @spec state(server()) :: term()
   def state(server), do: GenServer.call(server, :state, :infinity)
@@ -134,6 +163,35 @@ defmodule Monty.Runtime.LearningModuleServer do
 
   def handle_call(:reset_stm, _from, server) do
     {:reply, :ok, %{server | state: server.module.reset_stm(server.state)}}
+  end
+
+  def handle_call({:add_lm_processing_to_buffer_stats, processed}, _from, server) do
+    state = server.module.add_lm_processing_to_buffer_stats(server.state, processed)
+    {:reply, :ok, %{server | state: state}}
+  end
+
+  def handle_call(:observation_processed?, _from, server) do
+    {:reply, server.module.observation_processed?(server.state), server}
+  end
+
+  def handle_call(:update_terminal_condition, _from, server) do
+    {state, terminal_state} = server.module.update_terminal_condition(server.state)
+    {:reply, terminal_state, %{server | state: state}}
+  end
+
+  def handle_call({:set_terminal_state, terminal_state}, _from, server) do
+    state = server.module.set_terminal_state(server.state, terminal_state)
+    {:reply, :ok, %{server | state: state}}
+  end
+
+  def handle_call({:set_experiment_mode, mode}, _from, server) do
+    state = server.module.set_experiment_mode(server.state, mode)
+    {:reply, :ok, %{server | state: state}}
+  end
+
+  def handle_call(:update_ltm_from_stm, _from, server) do
+    state = server.module.update_ltm_from_stm(server.state)
+    {:reply, :ok, %{server | state: state}}
   end
 
   def handle_call(:state, _from, server), do: {:reply, server.state, server}
