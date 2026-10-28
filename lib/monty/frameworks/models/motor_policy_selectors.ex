@@ -9,7 +9,7 @@ defmodule Monty.Frameworks.Models.MotorPolicySelectors do
       `call/5` answering a `MotorPolicyResult` and the selector it updated;
     * `...MotorPolicySelectors.SinglePolicySelector` — **ported**: one policy,
       given the highest-confidence goal of the step;
-    * `...MotorPolicySelectors.DistantPolicySelector` — **planned**: routes goals
+    * `...MotorPolicySelectors.DistantPolicySelector` — **ported**: routes goals
       that name an object to a jump policy, goals from a sensor module to a
       look-at policy, and everything else to a default.
 

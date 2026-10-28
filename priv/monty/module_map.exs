@@ -1642,7 +1642,7 @@
         python: "SinglePolicySelector"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicySelectors.DistantPolicySelector",
         python: "DistantPolicySelector"
       }
