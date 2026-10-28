@@ -470,13 +470,13 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Actions",
     package: "monty",
     python: "frameworks/actions/actions.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.Action",
         python: "Action"
       },
@@ -491,7 +491,7 @@
         python: "LookDownActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.LookDown",
         python: "LookDown"
       },
@@ -506,7 +506,7 @@
         python: "LookUpActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.LookUp",
         python: "LookUp"
       },
@@ -521,7 +521,7 @@
         python: "MoveForwardActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.MoveForward",
         python: "MoveForward"
       },
@@ -536,7 +536,7 @@
         python: "MoveTangentiallyActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.MoveTangentially",
         python: "MoveTangentially"
       },
@@ -551,7 +551,7 @@
         python: "OrientHorizontalActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.OrientHorizontal",
         python: "OrientHorizontal"
       },
@@ -566,7 +566,7 @@
         python: "OrientVerticalActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.OrientVertical",
         python: "OrientVertical"
       },
@@ -581,7 +581,7 @@
         python: "SetAgentPitchActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.SetAgentPitch",
         python: "SetAgentPitch"
       },
@@ -596,7 +596,7 @@
         python: "SetAgentPoseActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.SetAgentPose",
         python: "SetAgentPose"
       },
@@ -611,7 +611,7 @@
         python: "SetSensorPitchActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.SetSensorPitch",
         python: "SetSensorPitch"
       },
@@ -626,7 +626,7 @@
         python: "SetSensorPoseActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.SetSensorPose",
         python: "SetSensorPose"
       },
@@ -641,7 +641,7 @@
         python: "SetSensorRotationActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.SetSensorRotation",
         python: "SetSensorRotation"
       },
@@ -656,7 +656,7 @@
         python: "SetYawActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.SetYaw",
         python: "SetYaw"
       },
@@ -671,7 +671,7 @@
         python: "TurnLeftActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.TurnLeft",
         python: "TurnLeft"
       },
@@ -686,17 +686,17 @@
         python: "TurnRightActuator"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.TurnRight",
         python: "TurnRight"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.ActionJSONEncoder",
         python: "ActionJSONEncoder"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Actions.ActionJSONDecoder",
         python: "ActionJSONDecoder"
       }
