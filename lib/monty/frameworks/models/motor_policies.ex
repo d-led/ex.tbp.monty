@@ -23,6 +23,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
       object, and search for it when it is lost;
     * `...MotorPolicies.NaiveScanPolicy` — **ported**: scan the object in a
       square spiral, one leg longer each time;
+    * `...MotorPolicies.JumpToGoal` — **ported**: teleport to a goal, and undo
+      the teleport when it lands somewhere useless;
     * `undo_last_action/1` — **ported**: the module-level function — Monty calls
       it `fixme_undo_last_action` — that turns an action into its opposite.
 

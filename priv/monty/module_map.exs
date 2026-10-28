@@ -1593,7 +1593,7 @@
         python: "PredefinedPolicy"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.JumpToGoal",
         python: "JumpToGoal"
       },

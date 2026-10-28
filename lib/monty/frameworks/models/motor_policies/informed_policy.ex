@@ -268,10 +268,17 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
      }}
   end
 
-  # Every sensor an action moves is moved at once, so they all keep the
-  # orientation the jump was planned in. Monty asserts it rather than assuming
-  # it, and so does this.
-  defp shared_sensor_rotation(%{sensors: sensors}) do
+  @doc """
+  The orientation every sensor shares, or a refusal to plan a jump.
+
+  Every sensor an action moves is moved at once, so they all keep the
+  orientation the jump was planned in. Monty asserts it rather than assuming it,
+  and so does this — with the empty case spelled out, which Monty's loop does not
+  (`docs/monty-bugs.md` §1.5). Public because `JumpToGoal` needs the same check
+  and Monty writes it out twice (§2.9).
+  """
+  @spec shared_sensor_rotation(%{required(:sensors) => map()}) :: Rotation.t()
+  def shared_sensor_rotation(%{sensors: sensors}) do
     rotations = sensors |> Map.values() |> Enum.map(& &1.rotation) |> Enum.uniq()
 
     case rotations do
@@ -289,8 +296,19 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   # The goal's direction is where the agent should be looking, so the agent has
   # to be turned to face it: pitch up or down to its height, then yaw round to
   # its bearing. No roll, because which way is up does not matter for what the
-  # sensor will see.
-  defp set_agent_pose_from_goal(policy, %Cmp.Goal{} = goal) do
+  # sensor will see. Monty writes this out twice — here and in `JumpToGoal`,
+  # identically — so it is one public function (§2.9).
+  @doc """
+  The pose that looks along the goal's direction, from the goal's location.
+
+  Monty's `_derive_set_agent_pose_from_goal`, in both `InformedPolicy` and
+  `JumpToGoal`.
+  """
+  @spec set_agent_pose_from_goal(
+          %{required(:agent_id) => atom() | String.t(), optional(atom()) => term()},
+          Cmp.Goal.t()
+        ) :: SetAgentPose.t()
+  def set_agent_pose_from_goal(policy, %Cmp.Goal{} = goal) do
     [looking_x, looking_y, looking_z] = looking_direction(goal)
 
     yaw = :math.atan2(-looking_x, -looking_z)
