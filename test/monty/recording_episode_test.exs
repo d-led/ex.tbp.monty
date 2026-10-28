@@ -18,6 +18,11 @@ defmodule Monty.RecordingEpisodeTest do
 
   use ExUnit.Case, async: true
 
+  # The episode runs to its own conclusion over a hundred recorded steps, which
+  # takes about forty seconds here and over a minute on a CI runner. Trimming
+  # the episode would trim the claim, so the test gets the room it needs.
+  @moduletag timeout: 300_000
+
   alias Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHypothesesUpdater
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Runtime.{Episode, LearningModuleServer, Model, Registry}
