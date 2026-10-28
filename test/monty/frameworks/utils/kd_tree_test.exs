@@ -33,6 +33,27 @@ defmodule Monty.Frameworks.Utils.KdTreeTest do
 
   # Quarters rather than arbitrary floats: a grid of points produces plenty of
   # equally distant candidates, which is where a split can go wrong.
+
+  # The same points and the same query on every run: a cost specification that
+  # moved with the seed would not specify anything.
+  defp points(count) do
+    :rand.seed(:exsss, {11, 13, 17})
+
+    for id <- 0..(count - 1)//1,
+        do: {for(_ <- 1..3, do: :rand.uniform() * 0.3), id}
+  end
+
+  defp queries(count) do
+    for _ <- 1..count, do: for(_ <- 1..3, do: :rand.uniform() * 0.3)
+  end
+
+  defp query_cost(points_count) do
+    tree = points(points_count) |> KdTree.build()
+    [query] = queries(1)
+
+    KdTree.nearest_with_visits(tree, query, 5)
+  end
+
   defp coordinate, do: integer(-40..40) |> map(&(&1 / 4))
   defp point, do: list_of(coordinate(), length: 3)
 
@@ -56,6 +77,40 @@ defmodule Monty.Frameworks.Utils.KdTreeTest do
       tree = KdTree.build(points)
 
       assert length(KdTree.nearest(tree, query, 50)) == length(points)
+    end
+  end
+
+  describe "what a query costs" do
+    # The answers stay right even when pruning stops pruning — the tree simply
+    # looks at everything — so the cost needs its own specification, or a
+    # regression here is invisible: the suite passes and every step gets slower
+    # in proportion to how many nodes are stored.
+    test "looks at a small part of the tree rather than all of it" do
+      for n <- [1_000, 4_000, 16_000] do
+        {_ids, visits} = query_cost(n)
+
+        assert visits < div(n, 4),
+               "a query over #{n} points looked at #{visits} nodes, which is not pruning"
+      end
+    end
+
+    test "costs logarithmically more as the tree grows, not linearly" do
+      {_ids, small} = query_cost(1_000)
+      {_ids, large} = query_cost(16_000)
+
+      # Sixteen times the points is four levels deeper, so at most a small
+      # multiple of the work; linear scanning would be sixteen times as much.
+      assert large <= 3 * small,
+             "sixteen times the points cost #{Float.round(large / small, 2)} times the work"
+    end
+
+    test "still answers what comparing every point answers" do
+      points = points(2_000)
+      [query] = queries(1)
+
+      {ids, _visits} = KdTree.nearest_with_visits(KdTree.build(points), query, 5)
+
+      assert ids == comparing_every_point(points, query, 5)
     end
   end
 

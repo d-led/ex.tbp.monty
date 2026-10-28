@@ -52,40 +52,54 @@ defmodule Monty.Frameworks.Utils.KdTree do
   def nearest(:empty, _query, _count), do: []
 
   def nearest(tree, query, count) do
-    {best, _kept} = search(tree, query, count, {[], 0})
-
-    best |> Enum.reverse() |> Enum.map(fn {_distance, id} -> id end)
+    {ids, _visits} = nearest_with_visits(tree, query, count)
+    ids
   end
 
-  # The kept answers, farthest first, with how many of `count` are in hand. The
-  # traversal visits every node within range of a query, so nothing here may
-  # walk the kept list: it is kept as its own worst-first list of at most
-  # `count`, and a candidate enters by dropping the farthest instead of by
-  # sorting and truncating.
-  defp search(:empty, _query, _count, kept), do: kept
+  @doc """
+  The same answer as `nearest/3`, and how many nodes finding it took.
 
-  defp search({point, id, axis, left, right}, query, count, {kept, size}) do
+  The count is the point of a tree: a query is supposed to descend to the
+  region its answer is in and stop, so the number of nodes it looks at belongs
+  to the logarithm of the tree rather than to the number of points. A test can
+  hold it to that, which is the only way to notice if pruning stops pruning —
+  the answers stay right while the cost goes linear.
+  """
+  @spec nearest_with_visits(t(), point(), pos_integer()) :: {[id()], non_neg_integer()}
+  def nearest_with_visits(:empty, _query, _count), do: {[], 0}
+
+  def nearest_with_visits(tree, query, count) do
+    {{kept, _size}, visits} = search(tree, query, count, {[], 0}, 0)
+    {kept |> Enum.reverse() |> Enum.map(fn {_distance, id} -> id end), visits}
+  end
+
+  # `kept` is worst-first and holds at most `count` answers; `visits` counts the
+  # nodes this query has looked at.
+  defp search(:empty, _query, _count, kept, visits), do: {kept, visits}
+
+  defp search({point, id, axis, left, right}, query, count, {kept, size}, visits) do
     kept = keep(kept, size, count, {squared_distance(query, point), id})
 
     difference = coordinate(query, axis) - coordinate(point, axis)
     {near, far} = if difference <= 0, do: {left, right}, else: {right, left}
 
-    kept = search(near, query, count, kept)
+    {kept, visits} = search(near, query, count, kept, visits + 1)
 
     # The far side is worth visiting only while it could still hold something
     # closer than the farthest answer kept so far — the head of the list, which
-    # is kept worst-first.
+    # is kept worst-first. Comparing against the head itself, rather than its
+    # distance, silently compares a number with a tuple and never prunes.
     {[{worst, _worst_id} | _], size} = kept
 
     if size < count or difference * difference <= worst do
-      search(far, query, count, kept)
+      search(far, query, count, kept, visits)
     else
-      kept
+      {kept, visits}
     end
   end
 
   # One candidate, worst-first: the farthest kept is dropped when the list is
-  # full. A candidate that is farther than that one costs one comparison.
+  # full. A candidate farther than that one costs one comparison.
   defp keep([], _size, _count, candidate), do: {[candidate], 1}
 
   defp keep(kept, size, count, candidate) do
