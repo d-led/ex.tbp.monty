@@ -1170,7 +1170,7 @@
         python: "ObjectModel"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.AbstractMontyClasses.GoalGenerator",
         python: "GoalGenerator"
       },
@@ -1461,18 +1461,18 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.GoalGeneration",
     package: "monty",
     python: "frameworks/models/goal_generation.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.GoalGeneration.ParentLMNotProvided",
         python: "ParentLMNotProvided"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator",
         python: "GraphGoalGenerator"
       },
@@ -2125,7 +2125,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Utils.CommunicationUtils",
     package: "monty",
     python: "frameworks/utils/communication_utils.py",
