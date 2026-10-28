@@ -1558,12 +1558,12 @@
         python: "SurfacePolicyTelemetry"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.PolicyStatus",
         python: "PolicyStatus"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult",
         python: "MotorPolicyResult"
       },
@@ -1621,7 +1621,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.MotorPolicySelectors",
     package: "monty",
     python: "frameworks/models/motor_policy_selectors.py",
@@ -1632,12 +1632,12 @@
         python: "RuntimeMotorPolicySelector"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicySelectors.MotorPolicySelector",
         python: "MotorPolicySelector"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicySelectors.SinglePolicySelector",
         python: "SinglePolicySelector"
       },
@@ -1650,23 +1650,23 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.MotorSystem",
     package: "monty",
     python: "frameworks/models/motor_system.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorSystem.SurfacePolicyActionDetailsTelemetry",
         python: "SurfacePolicyActionDetailsTelemetry"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorSystem.RuntimeMotorSystem",
         python: "RuntimeMotorSystem"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorSystem",
         python: "MotorSystem"
       }
@@ -1674,28 +1674,28 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.MotorSystemState",
     package: "monty",
     python: "frameworks/models/motor_system_state.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorSystemState.SensorState",
         python: "SensorState"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorSystemState.AgentState",
         python: "AgentState"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorSystemState.ProprioceptiveState",
         python: "ProprioceptiveState"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorSystemState",
         python: "MotorSystemState"
       }
