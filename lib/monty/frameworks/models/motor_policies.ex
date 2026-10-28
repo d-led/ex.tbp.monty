@@ -23,17 +23,19 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
       object, and search for it when it is lost;
     * `...MotorPolicies.NaiveScanPolicy` — **ported**: scan the object in a
       square spiral, one leg longer each time;
+    * `...MotorPolicies.InformedPolicyRandomWalk` — **ported**: `InformedPolicy`'s
+      walk without the rest of it, which is the default the distant configs give
+      their selector;
     * `...MotorPolicies.JumpToGoal` — **ported**: teleport to a goal, and undo
       the teleport when it lands somewhere useless;
     * `undo_last_action/1` — **ported**: the module-level function — Monty calls
       it `fixme_undo_last_action` — that turns an action into its opposite.
 
-  Still planned, in the order they are needed: `DistantPolicySelector` — the
-  distant agent's selector, which routes to `JumpToGoal`, to the look-at policy
-  (ported, under `Monty.Frameworks.Models.Salience.MotorPolicy` because that is
-  where Monty keeps it) and to a default policy — then the policies that exist
-  for one kind of experiment (`PredefinedPolicy`, `InformedPolicyRandomWalk`) and
-  `SurfacePolicyCurvatureInformed`.
+  Still planned, in the order they are needed: `PredefinedPolicy` (replays an
+  action file) and `SurfacePolicyCurvatureInformed` (a surface policy that
+  follows principal curvature directions). `DistantPolicySelector`, the distant
+  agent's selector, is ported under
+  `Monty.Frameworks.Models.MotorPolicySelectors`.
 
   A policy here is a struct plus the module named after it, so a policy can be
   stored in a selector as a value and stepped without a process — the same shape

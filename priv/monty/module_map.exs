@@ -1583,7 +1583,7 @@
         python: "BasePolicy"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.MotorPolicies.InformedPolicyRandomWalk",
         python: "InformedPolicyRandomWalk"
       },

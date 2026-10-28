@@ -489,8 +489,11 @@ Monty's documentation makes; the rest are claims the code makes about itself.
   and [`MotorSystem`](../lib/monty/frameworks/models/motor_system.ex) here.
 - [`docs/how-monty-works/motor-system/policy.md`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/docs/how-monty-works/motor-system/policy.md):
   "if the sensor patch moves off the object, the previous action is reversed" is
-  `InformedPolicy`'s step exactly. The `alpha` momentum that page describes
-  belongs to `InformedPolicyRandomWalk`, which is still planned here.
+  `InformedPolicy`'s step exactly, and `InformedPolicyRandomWalk`'s too — the
+  `distant_2` and `distant_5` motor-system configs pass the latter as their
+  selector's `default`. The `alpha` momentum that page also mentions is
+  `SurfacePolicy`'s tangential-direction weighting, not the random walk's: a
+  random walk samples independently on every step.
 - `get_output()` returning a `Message` makes `parent_lm.get_output().confidence`
   correct in the evidence goal generator (see §2.4 for our shape).
 - `threshold_possible_matches`, `x_percent_threshold` and the
