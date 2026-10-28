@@ -66,13 +66,19 @@ defmodule Monty.PretrainedReplayTest do
   end
 
   # Every step, with what Monty held after it: one entry per recorded step, and
-  # `nil` for ours on the steps Monty's module was given nothing.
+  # `nil`-free from there on for the steps Monty's module was given nothing.
+  #
+  # A step keeps the two projections below — a handful of numbers each — and not
+  # the learning module itself. A module holds every hypothesis of every object,
+  # and an episode is a hundred and ten of them: keeping them all costs three
+  # and a half gigabytes of snapshots for numbers that fit on a page, which is
+  # what made this module the peak of the suite.
   defp replay do
     steps = MontyRecording.load!(@recording)
     monty = MontyRecording.evidence_over_steps!(@recording)
     counts = MontyRecording.hypothesis_counts!(@recording)
 
-    {lms, _last} =
+    {seen, last} =
       Enum.reduce(steps, {[], learning_module()}, fn
         [], {seen, lm} ->
           {[nil | seen], lm}
@@ -81,13 +87,19 @@ defmodule Monty.PretrainedReplayTest do
           {:ok, lm} = EvidenceGraphLM.matching_step(percepts, Context.new(0), lm)
           lm = EvidenceGraphLM.add_lm_processing_to_buffer_stats(lm, true)
           {lm, _terminal_state} = EvidenceGraphLM.update_terminal_condition(lm)
-          {[lm | seen], lm}
+          {[observation(lm) | seen], lm}
       end)
 
-    lms = Enum.reverse(lms)
-
-    %{lms: lms, monty: monty, counts: counts}
+    %{
+      steps: seen |> Enum.reverse() |> with_monty(monty, counts),
+      conclusion: %{
+        terminal_state: last.terminal_state,
+        detected_object: last.detected_object
+      }
+    }
   end
+
+  defp observation(lm), do: %{evidence: evidence(lm), hypotheses: hypotheses(lm)}
 
   defp evidence(lm) do
     {ids, evidences} = EvidenceGraphLM.evidence_for_each_graph(lm)
@@ -97,12 +109,18 @@ defmodule Monty.PretrainedReplayTest do
   defp hypotheses(lm),
     do: Map.new(lm.hypotheses, fn {id, hypotheses} -> {id, length(hypotheses.evidence)} end)
 
-  defp steps_with_evidence(replay) do
-    replay.lms
+  defp steps_with_evidence(replay), do: replay.steps
+
+  defp with_monty(observations, monty, counts) do
+    observations
     |> Enum.with_index()
-    |> Enum.reject(fn {lm, _index} -> lm == nil end)
-    |> Enum.map(fn {lm, index} ->
-      {index, lm, Enum.at(replay.monty, index), Enum.at(replay.counts, index)}
+    |> Enum.reject(fn {observation, _index} -> is_nil(observation) end)
+    |> Enum.map(fn {observation, index} ->
+      Map.merge(observation, %{
+        index: index,
+        monty: Enum.at(monty, index),
+        counts: Enum.at(counts, index)
+      })
     end)
   end
 
@@ -112,30 +130,28 @@ defmodule Monty.PretrainedReplayTest do
 
   describe "matching against Monty's pretrained memory" do
     test "the first observation's evidence is Monty's on every object", %{replay: replay} do
-      {_index, lm, monty, _counts} = replay |> steps_with_evidence() |> hd()
-      ours = evidence(lm)
+      first = hd(steps_with_evidence(replay))
 
-      assert Map.keys(ours) |> Enum.sort() == monty |> Map.keys() |> Enum.sort()
+      assert Map.keys(first.evidence) |> Enum.sort() == first.monty |> Map.keys() |> Enum.sort()
 
-      for {object_id, theirs} <- monty do
-        assert_in_delta ours[object_id], theirs, 1.0e-6, "#{object_id} evidence"
+      for {object_id, theirs} <- first.monty do
+        assert_in_delta first.evidence[object_id], theirs, 1.0e-6, "#{object_id} evidence"
       end
     end
 
     test "the hypothesis space stays Monty's, object by object", %{replay: replay} do
-      for {index, lm, _monty, counts} <- steps_with_evidence(replay) do
-        ours = hypotheses(lm)
+      for step <- steps_with_evidence(replay),
+          {object_id, theirs} <- step.counts,
+          Map.has_key?(step.hypotheses, object_id) do
+        # While nothing is pruned the two agree exactly. Once evidence slopes
+        # decide what survives, a slope is a difference of two nearly equal
+        # numbers, so the last digits of the evidence can keep or lose a
+        # hypothesis or two — never a different order of magnitude.
+        tolerance = max(2, div(theirs, 100))
+        ours = step.hypotheses[object_id]
 
-        for {object_id, theirs} <- counts, Map.has_key?(ours, object_id) do
-          # While nothing is pruned the two agree exactly. Once evidence slopes
-          # decide what survives, a slope is a difference of two nearly equal
-          # numbers, so the last digits of the evidence can keep or lose a
-          # hypothesis or two — never a different order of magnitude.
-          tolerance = max(2, div(theirs, 100))
-
-          assert abs(ours[object_id] - theirs) <= tolerance,
-                 "step #{index}: #{object_id} has #{ours[object_id]}, Monty #{theirs}"
-        end
+        assert abs(ours - theirs) <= tolerance,
+               "step #{step.index}: #{object_id} has #{ours}, Monty #{theirs}"
       end
     end
 
@@ -146,21 +162,22 @@ defmodule Monty.PretrainedReplayTest do
       # wander further, because losing a hypothesis is decided by comparing
       # slopes of nearly equal evidence, and that is where two implementations
       # can part company without either being wrong.
-      for {index, lm, monty, _counts} <- steps_with_evidence(replay),
-          Map.has_key?(monty, "mug") do
-        assert_in_delta evidence(lm)["mug"], monty["mug"], 2.0e-3, "step #{index}: mug evidence"
+      for step <- steps_with_evidence(replay), Map.has_key?(step.monty, "mug") do
+        assert_in_delta step.evidence["mug"],
+                        step.monty["mug"],
+                        2.0e-3,
+                        "step #{step.index}: mug evidence"
       end
     end
 
     test "the episode ends where Monty's ended", %{replay: replay} do
       monty = MontyRecording.final_state!(@recording)
-      lm = replay.lms |> Enum.reject(&is_nil/1) |> List.last()
 
       assert monty["terminal_state"] == "match"
-      assert lm.terminal_state == :match
+      assert replay.conclusion.terminal_state == :match
 
       assert monty["detected_object"] == "mug"
-      assert lm.detected_object == "mug"
+      assert replay.conclusion.detected_object == "mug"
     end
   end
 end
