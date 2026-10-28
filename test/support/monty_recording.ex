@@ -85,6 +85,27 @@ defmodule Monty.Test.MontyRecording do
   end
 
   @doc """
+  How many hypotheses Monty's module held per object after each step.
+
+  The number says whether two implementations are carrying the same space of
+  explanations — evidence can agree while the sets behind it do not.
+  """
+  @spec hypothesis_counts!(Path.t(), keyword()) :: [%{optional(String.t()) => non_neg_integer()}]
+  def hypothesis_counts!(path, options \\ []) do
+    module_id = Keyword.get(options, :learning_module, @default_learning_module)
+
+    path
+    |> File.stream!()
+    |> Enum.map(fn line ->
+      line
+      |> decode!()
+      |> get_in(["learning_modules", module_id, "state", "graphs"])
+      |> Kernel.||(%{})
+      |> Map.new(fn {graph_id, graph} -> {graph_id, graph["hypotheses"]} end)
+    end)
+  end
+
+  @doc """
   Loads a memory exported from Monty's pretrained models.
 
   `scripts/export_monty_pretrained.py` writes one object per line: its node

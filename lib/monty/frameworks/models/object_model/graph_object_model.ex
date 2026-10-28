@@ -35,6 +35,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   @behaviour Monty.Frameworks.Models.ObjectModel
 
   alias Monty.Frameworks.Utils.GraphMatchingUtils
+  alias Monty.Frameworks.Utils.KdTree
   alias Monty.Frameworks.Utils.ObjectModelUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
 
@@ -198,8 +199,9 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
 
   One list per search location, nearest first, ties going to the lower node id so
   that two runs of the same episode choose the same nodes. Monty asks its grid
-  model this question through a `KDTree`; a graph answers it by measuring, which
-  is the same answer at the sizes an object model has.
+  model this question through a `KDTree`; a graph answers it through the same
+  structure, built over its positions for the call — one per step, however many
+  hypotheses ask it something.
   """
   @impl true
   def find_nearest_neighbors(
@@ -207,16 +209,14 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
         search_locations,
         count
       ) do
-    count = min(count, length(positions))
+    capacity = min(count, length(positions))
 
-    Enum.map(search_locations, fn search_location ->
+    tree =
       positions
       |> Enum.with_index()
-      |> Enum.map(fn {position, index} -> {index, distance(search_location, position)} end)
-      |> Enum.sort_by(fn {index, distance} -> {distance, index} end)
-      |> Enum.take(count)
-      |> Enum.map(fn {index, _distance} -> index end)
-    end)
+      |> KdTree.build()
+
+    Enum.map(search_locations, &KdTree.nearest(tree, &1, capacity))
   end
 
   @doc """

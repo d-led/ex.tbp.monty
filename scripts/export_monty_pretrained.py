@@ -39,10 +39,9 @@ import json
 import torch
 
 FEATURES = ["hsv", "pose_vectors", "pose_fully_defined", "principal_curvatures_log"]
-ROUND_TO = 6
 
 
-def _column(graph, feature_mapping, name):
+def _column(graph, feature_mapping, name, decimals):
     """The columns of `graph.x` holding one feature, as a list of numbers."""
     try:
         first, last = feature_mapping[name]
@@ -50,7 +49,7 @@ def _column(graph, feature_mapping, name):
         raise SystemExit(f"the model has no {name!r} feature") from None
 
     return [
-        [round(float(value), ROUND_TO) for value in row]
+        [round(float(value), decimals) for value in row]
         for row in graph.x[:, first:last]
     ]
 
@@ -64,6 +63,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True, help="a pretrained model.pt")
     parser.add_argument("--out", required=True, help="where to write the JSONL file")
+    parser.add_argument(
+        "--decimals",
+        type=int,
+        default=6,
+        help="digits kept after the point; six keeps metres far below a voxel",
+    )
     arguments = parser.parse_args()
 
     with gzip.open(arguments.out, "wt") as out:
@@ -75,11 +80,11 @@ def main():
                     "object_id": object_id,
                     "input_channel": input_channel,
                     "positions": [
-                        [round(float(value), ROUND_TO) for value in position]
+                        [round(float(value), arguments.decimals) for value in position]
                         for position in graph.pos
                     ],
                     "features": {
-                        name: _column(graph, graph.feature_mapping, name)
+                        name: _column(graph, graph.feature_mapping, name, arguments.decimals)
                         for name in FEATURES
                     },
                 }
