@@ -17,5 +17,63 @@ defmodule Monty.Frameworks.Models.ObjectModel do
 
   What Monty keeps in `abstract_monty_classes.ObjectModel` is an empty base
   class, so there is nothing to mirror for it here beyond this namespace.
+
+  ## What every object model answers
+
+  `GridObjectModel` is a `GraphObjectModel` in Python — same interface, a grid
+  in front of the graph. Memory only ever asks a model these questions, so in
+  Elixir, where there is no inheritance to lean on, the same set is written out
+  as a behaviour and both models implement it:
+
+    * `new/2` — an empty model for an object id, told its options;
+    * `build_model/3` and `update_model/6` — add an episode's observations, or
+      extend what is there; both can refuse, because a grid can be too small;
+    * `set_graph/2` — take a pretrained graph as it was stored;
+    * `graph/1`, `positions/1`, `num_nodes/1`, `get_values_for_feature/2` — what
+      matching reads.
+
+  Refusals are `{:error, reason}` rather than exceptions, since "the object is
+  bigger than this model" is an answer a caller acts on (learn it anyway, log
+  it, model bigger next time) and not an accident.
   """
+
+  alias Monty.Frameworks.Utils.SpatialArithmetics
+
+  @type model :: struct()
+  @type location :: SpatialArithmetics.vector()
+  @type features :: %{optional(String.t()) => list()}
+  @type graph :: map()
+
+  @doc "An empty model for `object_id`."
+  @callback new(object_id :: String.t(), options :: keyword()) :: model()
+
+  @doc "The model built from one episode's observations."
+  @callback build_model(model(), [location()], features()) ::
+              {:ok, model()} | {:error, term()}
+
+  @doc "The model extended with one episode's observations."
+  @callback update_model(
+              model(),
+              [location()],
+              features(),
+              location(),
+              location(),
+              Monty.Geometry.Rotation.t()
+            ) ::
+              {:ok, model()} | {:error, term()}
+
+  @doc "The model holding a graph that was stored rather than built."
+  @callback set_graph(model(), graph()) :: {:ok, model()} | {:error, term()}
+
+  @doc "The graph matching reads, or `nil` before there is one."
+  @callback graph(model()) :: graph() | nil
+
+  @doc "One `[x, y, z]` per node."
+  @callback positions(model()) :: [location()]
+
+  @doc "The number of nodes."
+  @callback num_nodes(model()) :: non_neg_integer()
+
+  @doc "The columns holding one feature, as one row per node."
+  @callback get_values_for_feature(model(), String.t()) :: [[float()]]
 end

@@ -71,6 +71,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
 
   alias Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.DefaultFeatureEvidenceScorer
+  alias Monty.Frameworks.Models.EvidenceMatching.GraphMemory.EvidenceGraphMemory
 
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
@@ -299,7 +300,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       buffer: FeatureAtLocationBuffer.new(),
       hypotheses: %{},
       hypotheses_updater_telemetry: %{},
-      possible_matches: GraphMemory.get_memory_ids(memory),
+      possible_matches: EvidenceGraphMemory.get_initial_hypotheses(memory),
       symmetry_evidence: 0,
       terminal_state: nil,
       detected_object: nil,

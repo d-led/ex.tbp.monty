@@ -32,6 +32,8 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
 
   require Logger
 
+  @behaviour Monty.Frameworks.Models.ObjectModel
+
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Frameworks.Utils.ObjectModelUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
@@ -46,9 +48,22 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   @type graph :: %{required(atom()) => term()}
   @type t :: %__MODULE__{}
 
-  @doc "A model for `object_id`, with no graph yet."
-  @spec new(String.t()) :: t()
-  def new(object_id), do: %__MODULE__{object_id: object_id}
+  @doc """
+  A model for `object_id`, with no graph yet.
+
+  `:k_n` and `:graph_delta_thresholds` are how the graph will be built, so they
+  are the model's rather than the build's: memory knows both when it makes the
+  model, and a model extended later must link new nodes the way it linked the
+  old ones.
+  """
+  @impl true
+  def new(object_id, options \\ []) do
+    %__MODULE__{
+      object_id: object_id,
+      k_n: Keyword.get(options, :k_n),
+      graph_delta_thresholds: Keyword.get(options, :graph_delta_thresholds)
+    }
+  end
 
   @doc """
   Builds the graph from observations and links each node to its `k_n` nearest
@@ -57,7 +72,15 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   `k_n` is asked for as edges, so the neighbour count includes the node itself —
   `GraphMatchingUtils.correct_k_n/2` adjusts it for small graphs — and `nil`
   builds the point cloud without edges.
+
+  A plain graph cannot be too small for anything, so this never refuses; it
+  returns `{:ok, model}` because a grid model can, and memory treats both alike.
   """
+  @impl true
+  def build_model(%__MODULE__{} = model, locations, features) do
+    {:ok, build_model(model, locations, features, model.k_n, model.graph_delta_thresholds)}
+  end
+
   @spec build_model(
           t(),
           [location()],
@@ -79,6 +102,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   `object_location_rel_body` are the same physical spot seen in both, and the
   rotation between them is how the model reconciles the two.
   """
+  @impl true
   @spec update_model(
           t(),
           [location()],
@@ -87,7 +111,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
           location(),
           Monty.Geometry.Rotation.t()
         ) ::
-          t()
+          {:ok, t()}
   def update_model(
         %__MODULE__{} = model,
         locations,
@@ -116,23 +140,23 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
         num_nodes(model)
       )
 
-    %{model | graph: graph}
+    {:ok, %{model | graph: graph}}
   end
 
   @doc "The graph itself, or `nil` before the model has been built."
-  @spec graph(t()) :: graph() | nil
+  @impl true
   def graph(%__MODULE__{graph: graph}), do: graph
 
   @doc "Replaces the graph, as when a pretrained model is loaded."
-  @spec set_graph(t(), graph()) :: t()
-  def set_graph(%__MODULE__{} = model, graph), do: %{model | graph: graph}
+  @impl true
+  def set_graph(%__MODULE__{} = model, graph), do: {:ok, %{model | graph: graph}}
 
   @doc "One `[x, y, z]` per node."
-  @spec positions(t()) :: [location()]
+  @impl true
   def positions(%__MODULE__{graph: %{pos: positions}}), do: positions
 
   @doc "The number of nodes in the graph."
-  @spec num_nodes(t()) :: non_neg_integer()
+  @impl true
   def num_nodes(%__MODULE__{graph: %{pos: positions}}), do: length(positions)
   def num_nodes(%__MODULE__{graph: nil}), do: 0
 
@@ -146,7 +170,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   Monty hands out `x[:, start:end]`; this hands out the same thing as a list of
   rows, so a caller never has to know the column offsets of anything else.
   """
-  @spec get_values_for_feature(t(), String.t()) :: [[float()]]
+  @impl true
   def get_values_for_feature(%__MODULE__{graph: %{x: rows, feature_mapping: mapping}}, feature) do
     {first, last} = Map.fetch!(mapping, feature)
     Enum.map(rows, &Enum.slice(&1, first, last - first))

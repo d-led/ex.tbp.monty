@@ -32,6 +32,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
 
   require Logger
 
+  alias Monty.Frameworks.Models.ObjectModel
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Frameworks.Utils.SpatialArithmetics
 
@@ -39,6 +40,8 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
 
   defstruct graph_delta_thresholds: nil,
             k: nil,
+            object_model: GraphObjectModel,
+            object_model_options: [],
             models_in_memory: %{},
             feature_array: %{},
             feature_order: %{},
@@ -53,12 +56,20 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
 
   `:graph_delta_thresholds` decides when two observations are different enough
   to both be stored; `:k` how many neighbours each new node links to.
+
+  `:object_model` is the kind of model memory stores — a graph of every
+  observation, or a grid thinned into one — and `:object_model_options` is what
+  that kind was configured with. Monty spells the same choice as a subclass;
+  here it is a module and a keyword list, so nothing has to know which model it
+  is holding.
   """
   @spec new(keyword()) :: t()
   def new(options \\ []) do
     %__MODULE__{
       graph_delta_thresholds: Keyword.get(options, :graph_delta_thresholds),
       k: Keyword.get(options, :k),
+      object_model: Keyword.get(options, :object_model, GraphObjectModel),
+      object_model_options: Keyword.get(options, :object_model_options, []),
       features_to_use: Keyword.get(options, :features_to_use, %{})
     }
   end
@@ -155,7 +166,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   and Monty makes the same arbitrary choice.
   """
   @spec get_graph(t(), graph_id(), input_channel() | :first | nil) ::
-          %{optional(input_channel()) => GraphObjectModel.t()} | GraphObjectModel.t()
+          %{optional(input_channel()) => ObjectModel.model()} | ObjectModel.model()
   def get_graph(%__MODULE__{models_in_memory: models}, graph_id, nil),
     do: Map.fetch!(models, graph_id)
 
@@ -189,7 +200,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   @doc "The node locations of a graph."
   @spec get_locations_in_graph(t(), graph_id(), input_channel()) :: [[float()]]
   def get_locations_in_graph(%__MODULE__{} = memory, graph_id, input_channel) do
-    memory |> get_graph(graph_id, input_channel) |> GraphObjectModel.positions()
+    memory.object_model.positions(get_graph(memory, graph_id, input_channel))
   end
 
   @doc "Every model in memory, by object id."
@@ -220,10 +231,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   @doc "The node ids of a graph: `0..num_nodes-1`."
   @spec get_graph_node_ids(t(), graph_id(), input_channel()) :: [non_neg_integer()]
   def get_graph_node_ids(%__MODULE__{} = memory, graph_id, input_channel) do
-    count =
-      memory
-      |> get_graph(graph_id, input_channel)
-      |> GraphObjectModel.num_nodes()
+    count = memory.object_model.num_nodes(get_graph(memory, graph_id, input_channel))
 
     Enum.to_list(0..(count - 1)//1)
   end
@@ -241,7 +249,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   end
 
   def get_num_nodes_in_graph(%__MODULE__{} = memory, graph_id, input_channel) do
-    memory |> get_graph(graph_id, input_channel) |> GraphObjectModel.num_nodes()
+    memory.object_model.num_nodes(get_graph(memory, graph_id, input_channel))
   end
 
   @doc """
@@ -269,7 +277,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
     graph = get_graph(memory, graph_id, input_channel)
 
     values =
-      Map.new(keys, fn key -> {key, GraphObjectModel.get_values_for_feature(graph, key)} end)
+      Map.new(keys, fn key -> {key, memory.object_model.get_values_for_feature(graph, key)} end)
 
     case node_ids do
       node_id when is_integer(node_id) ->
@@ -348,25 +356,29 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   """
   @spec build_graph(t(), [[number()]], map(), graph_id(), input_channel()) :: t()
   def build_graph(%__MODULE__{} = memory, locations, features, graph_id, input_channel) do
-    model =
-      GraphObjectModel.new(graph_id)
-      |> GraphObjectModel.build_model(
-        locations,
-        features,
-        nil,
-        thresholds_for(memory, input_channel)
-      )
+    model = memory.object_model.new(graph_id, object_model_options(memory, input_channel))
 
-    memory
-    |> put_in(
-      [Access.key(:models_in_memory), graph_id],
-      Map.get(memory.models_in_memory, graph_id, %{})
-    )
-    |> put_in([Access.key(:models_in_memory), graph_id, input_channel], model)
-    |> then(fn memory ->
-      Logger.info("added graph #{graph_id} for #{input_channel}")
-      memory
-    end)
+    case memory.object_model.build_model(model, locations, features) do
+      {:ok, model} ->
+        memory
+        |> put_in(
+          [Access.key(:models_in_memory), graph_id],
+          Map.get(memory.models_in_memory, graph_id, %{})
+        )
+        |> put_in([Access.key(:models_in_memory), graph_id, input_channel], model)
+        |> then(fn memory ->
+          Logger.info("added graph #{graph_id} for #{input_channel}")
+          memory
+        end)
+
+      {:error, reason} ->
+        Logger.warning(
+          "not building #{graph_id} for #{input_channel}: " <>
+            "the model cannot hold it (#{inspect(reason)})"
+        )
+
+        memory
+    end
   end
 
   @doc """
@@ -396,18 +408,36 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
         location_rel_model,
         object_rotation
       ) do
-    model =
-      memory
-      |> get_graph(graph_id, input_channel)
-      |> GraphObjectModel.update_model(
-        locations,
-        features,
-        location_rel_model,
-        object_location_rel_body,
-        object_rotation
-      )
+    model = get_graph(memory, graph_id, input_channel)
 
-    put_in(memory, [Access.key(:models_in_memory), graph_id, input_channel], model)
+    case memory.object_model.update_model(
+           model,
+           locations,
+           features,
+           location_rel_model,
+           object_location_rel_body,
+           object_rotation
+         ) do
+      {:ok, model} ->
+        put_in(memory, [Access.key(:models_in_memory), graph_id, input_channel], model)
+
+      {:error, reason} ->
+        Logger.warning(
+          "not extending #{graph_id} for #{input_channel}: " <>
+            "the model cannot hold it (#{inspect(reason)})"
+        )
+
+        memory
+    end
+  end
+
+  # What memory knows about building one graph: the model's own configuration,
+  # plus the two things that are memory's (how many neighbours a node links to,
+  # and what counts as a different observation). A model reads the options it
+  # has a use for — a grid has no edges and so no `k_n`.
+  defp object_model_options(%__MODULE__{} = memory, input_channel) do
+    memory.object_model_options ++
+      [k_n: memory.k, graph_delta_thresholds: thresholds_for(memory, input_channel)]
   end
 
   defp thresholds_for(%__MODULE__{graph_delta_thresholds: nil}, _input_channel), do: nil

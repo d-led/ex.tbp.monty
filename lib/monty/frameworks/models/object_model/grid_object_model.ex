@@ -48,6 +48,8 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   alias Monty.Frameworks.Models.ObjectModel.{GraphObjectModel, GridTooSmallError}
   alias Monty.Frameworks.Utils.{ObjectModelUtils, SpatialArithmetics}
 
+  @behaviour Monty.Frameworks.Models.ObjectModel
+
   @in_bounds_fraction 0.9
 
   @enforce_keys [:object_id, :max_nodes, :max_size, :num_voxels_per_dim]
@@ -78,6 +80,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   keeps the switch for graphs that were learned elsewhere, which are matched
   against exactly as they were stored.
   """
+  @impl true
   @spec new(String.t(), keyword()) :: t()
   def new(object_id, options) do
     %__MODULE__{
@@ -99,6 +102,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   the grid: an object that big needs a bigger model, and storing the part that
   fits would store a lie.
   """
+  @impl true
   @spec build_model(t(), [location()], %{optional(String.t()) => list()}) ::
           {:ok, t()} | {:error, GridTooSmallError.t()}
   def build_model(%__MODULE__{} = model, locations, features) do
@@ -115,6 +119,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   rotation between them is how the model reconciles the two — the same
   transform a graph model applies before adding nodes.
   """
+  @impl true
   @spec update_model(
           t(),
           [location()],
@@ -153,6 +158,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   or folded into this model's grid, which re-thins it to this model's `max_nodes`
   and resolution.
   """
+  @impl true
   @spec set_graph(t(), map()) :: {:ok, t()} | {:error, GridTooSmallError.t()}
   def set_graph(%__MODULE__{use_original_graph: true} = model, graph) do
     {:ok, %{model | graph: graph}}
@@ -169,21 +175,24 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   # -- reading the model ----------------------------------------------------
 
   @doc "The graph the model currently holds, or `nil` before it has been built."
-  @spec graph(t()) :: map() | nil
+  @impl true
   def graph(%__MODULE__{graph: graph}), do: graph
 
+  @impl true
   @spec positions(t()) :: [location()]
   def positions(%__MODULE__{graph: nil}), do: []
 
   def positions(%__MODULE__{} = model),
     do: model |> as_graph_model() |> GraphObjectModel.positions()
 
+  @impl true
   @spec num_nodes(t()) :: non_neg_integer()
   def num_nodes(%__MODULE__{} = model), do: length(positions(model))
 
   @spec feature_ids_in_graph(t()) :: [String.t()]
   def feature_ids_in_graph(%__MODULE__{current_feature_mapping: mapping}), do: Map.keys(mapping)
 
+  @impl true
   @spec get_values_for_feature(t(), String.t()) :: [[float()]]
   def get_values_for_feature(%__MODULE__{} = model, feature) do
     model |> as_graph_model() |> GraphObjectModel.get_values_for_feature(feature)
@@ -210,7 +219,12 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   # The graph this model holds, seen through the graph model that knows how to
   # read one: the grid and the graph differ only in how the graph was chosen.
   defp as_graph_model(%__MODULE__{} = model) do
-    GraphObjectModel.new(model.object_id) |> GraphObjectModel.set_graph(model.graph)
+    {:ok, graph_model} =
+      model.object_id
+      |> GraphObjectModel.new()
+      |> GraphObjectModel.set_graph(model.graph)
+
+    graph_model
   end
 
   # -- filling the grid -----------------------------------------------------

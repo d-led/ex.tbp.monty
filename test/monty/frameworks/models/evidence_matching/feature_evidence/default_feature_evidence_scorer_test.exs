@@ -110,7 +110,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
       built = memory([0.2])
 
       graph = GraphMemory.get_graph(built, "mug", "patch")
-      stripped = GraphObjectModel.set_graph(graph, %{graph.graph | x: [[0.0, nil]]})
+      {:ok, stripped} = GraphObjectModel.set_graph(graph, %{graph.graph | x: [[0.0, nil]]})
 
       memory =
         built

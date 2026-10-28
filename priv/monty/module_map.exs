@@ -1338,13 +1338,13 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.EvidenceMatching.GraphMemory",
     package: "monty",
     python: "frameworks/models/evidence_matching/graph_memory.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.GraphMemory.EvidenceGraphMemory",
         python: "EvidenceGraphMemory"
       }

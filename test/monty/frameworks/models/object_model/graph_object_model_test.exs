@@ -8,8 +8,11 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModelTest do
   @tolerance Math.default_tolerance()
 
   defp model(locations, features, k_n \\ nil, thresholds \\ nil) do
-    GraphObjectModel.new("cone")
-    |> GraphObjectModel.build_model(locations, features, k_n, thresholds)
+    {:ok, built} =
+      GraphObjectModel.new("cone", k_n: k_n, graph_delta_thresholds: thresholds)
+      |> GraphObjectModel.build_model(locations, features)
+
+    built
   end
 
   describe "building a graph from observations" do
@@ -126,7 +129,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModelTest do
           0
         )
 
-      extended =
+      {:ok, extended} =
         GraphObjectModel.update_model(
           built,
           [[1.0, 0.0, 0.0]],
@@ -176,7 +179,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModelTest do
     end
 
     test "takes a graph as it is" do
-      loaded =
+      {:ok, loaded} =
         GraphObjectModel.set_graph(GraphObjectModel.new("cup"), %{
           pos: [[0.0, 0.0, 0.0]],
           x: [],
