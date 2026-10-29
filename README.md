@@ -144,7 +144,9 @@ in — the numeric core first, then the world, then the numbers that make it
 comparable. [docs/monty-bugs.md](docs/monty-bugs.md) lists what looks wrong in
 Monty, and every place this port deliberately differs from it — read it before
 diffing an Elixir run against a Python one, because some differences are
-intended and some are upstream. [docs/mcp.md](docs/mcp.md) describes the MCP
+intended and some are upstream; [docs/validation.md](docs/validation.md) is the
+other half, the list of numbers that have actually been compared with Monty and
+how closely they agreed. [docs/mcp.md](docs/mcp.md) describes the MCP
 server at `POST /mcp`,
 which answers questions about Monty's docs, roadmap and code and can define and
 run an experiment from a conversation.
