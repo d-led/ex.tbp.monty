@@ -143,6 +143,100 @@
    ]
   }
  ],
+ "random_walk": {
+  "translation_distance": 0.05,
+  "steps": [
+   {
+    "on_object": false,
+    "actions": [],
+    "undo_action": null
+   },
+   {
+    "on_object": true,
+    "actions": [
+     {
+      "action": "MoveForward",
+      "agent_id": "agent_id_0",
+      "rotation_degrees": null,
+      "constraint_degrees": null,
+      "distance": 0.05,
+      "direction": null
+     }
+    ],
+    "undo_action": {
+     "action": "MoveForward",
+     "agent_id": "agent_id_0",
+     "rotation_degrees": null,
+     "constraint_degrees": null,
+     "distance": -0.05,
+     "direction": null
+    }
+   },
+   {
+    "on_object": true,
+    "actions": [
+     {
+      "action": "MoveForward",
+      "agent_id": "agent_id_0",
+      "rotation_degrees": null,
+      "constraint_degrees": null,
+      "distance": 0.05,
+      "direction": null
+     }
+    ],
+    "undo_action": {
+     "action": "MoveForward",
+     "agent_id": "agent_id_0",
+     "rotation_degrees": null,
+     "constraint_degrees": null,
+     "distance": -0.05,
+     "direction": null
+    }
+   },
+   {
+    "on_object": false,
+    "actions": [
+     {
+      "action": "MoveForward",
+      "agent_id": "agent_id_0",
+      "rotation_degrees": null,
+      "constraint_degrees": null,
+      "distance": -0.05,
+      "direction": null
+     }
+    ],
+    "undo_action": {
+     "action": "MoveForward",
+     "agent_id": "agent_id_0",
+     "rotation_degrees": null,
+     "constraint_degrees": null,
+     "distance": 0.05,
+     "direction": null
+    }
+   },
+   {
+    "on_object": false,
+    "actions": [
+     {
+      "action": "MoveForward",
+      "agent_id": "agent_id_0",
+      "rotation_degrees": null,
+      "constraint_degrees": null,
+      "distance": 0.05,
+      "direction": null
+     }
+    ],
+    "undo_action": {
+     "action": "MoveForward",
+     "agent_id": "agent_id_0",
+     "rotation_degrees": null,
+     "constraint_degrees": null,
+     "distance": -0.05,
+     "direction": null
+    }
+   }
+  ]
+ },
  "undo": [
   {
    "action": {

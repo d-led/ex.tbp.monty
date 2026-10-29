@@ -45,7 +45,7 @@ import numpy as np  # noqa: E402
 import quaternion as qt  # noqa: E402
 
 try:
-    from tbp.monty.cmp import Goal  # noqa: E402
+    from tbp.monty.cmp import Goal, Message  # noqa: E402
     from tbp.monty.context import RuntimeContext  # noqa: E402
     from tbp.monty.frameworks.models.motor_policies import (  # noqa: E402
         JumpToGoal,
@@ -192,6 +192,24 @@ def _goals(goals):
     ]
 
 
+def _undo_record(action):
+    return None if action is None else _action_record(action)
+
+
+def _percept(on_object):
+    """The percept an informed policy reads: whether the sensor is on the object."""
+    return Message(
+        location=None,
+        morphological_features={"on_object": on_object},
+        non_morphological_features={},
+        confidence=1.0,
+        pass_message=True,
+        sender_id="patch",
+        sender_type="SM",
+        process_features_in_lm=False,
+    )
+
+
 def _action_record(action):
     return {
         "action": type(action).__name__,
@@ -246,6 +264,39 @@ def _look_at_goal(policy, pose, goals):
 def main():
     ctx = RuntimeContext(rng=np.random.RandomState(0))
     poses = [_with_quaternions(pose) for pose in POSES]
+
+    # -- the walk an informed policy makes on and off the object ------------
+    from tbp.monty.frameworks.actions.action_samplers import ConstantSampler  # noqa: PLC0415
+    from tbp.monty.frameworks.actions.actions import MoveForward  # noqa: PLC0415
+    from tbp.monty.frameworks.models.motor_policies import (  # noqa: PLC0415
+        InformedPolicyRandomWalk,
+    )
+
+    walk = InformedPolicyRandomWalk(
+        agent_id=AGENT,
+        action_sampler=ConstantSampler(
+            actions=[MoveForward], translation_distance=0.05
+        ),
+    )
+
+    # Off the object with nothing to undo, twice on it, then off it twice: the
+    # remembered action is inverted every time it is used.
+    walk_steps = []
+    for on_object in [False, True, True, False, False]:
+        result = walk(
+            RuntimeContext(rng=np.random.RandomState(0)),
+            {},
+            _state(poses[0]),
+            _percept(on_object),
+            None,
+        )
+        walk_steps.append(
+            {
+                "on_object": on_object,
+                "actions": [_action_record(action) for action in result.actions],
+                "undo_action": _undo_record(walk.state_dict()["undo_action"]),
+            }
+        )
 
     # -- the six actions an informed policy can take back -------------------
     from tbp.monty.frameworks.actions.actions import (  # noqa: PLC0415
@@ -354,6 +405,10 @@ def main():
         "agent_id": AGENT,
         "sensor_id": SENSOR,
         "poses": poses,
+        "random_walk": {
+            "translation_distance": 0.05,
+            "steps": walk_steps,
+        },
         "undo": undo,
         "not_undoable": not_undoable_record,
         "highest_confidence_goal": ranked,

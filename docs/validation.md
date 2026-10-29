@@ -55,6 +55,7 @@ they do.
 | `LookAtGoal` — the turn and the pitch | 4 agent poses (turned 0°, 30°, 120° with the sensor pitched, and tilted forward) × 5 goal locations, including one behind the agent and one across the body | `1e-9` degrees on both actions | `test/monty/frameworks/models/motor_policies/motor_policy_parity_test.exs` |
 | `LookAtGoal`'s refusal | a goal sitting on the sensor | the same `GoalCollocatedWithSensor` | same file |
 | `undo_last_action` (Monty's `fixme_undo_last_action`) | the six actions an informed policy samples — with constraint degrees on the looks and a direction on the tangential move — and one it cannot sample | the inverse's class and every field **exact**; a refusal where Monty raises `TypeError` (§2.8 of `monty-bugs.md`) | same file |
+| `InformedPolicyRandomWalk` | five steps of one walk with a constant sampler: off the object with nothing to undo, twice on it, twice off it | the action each step emits and the action it remembers, **exact** — the remembered action is inverted each time it is used, so a sensor that keeps leaving the object walks back and forth across the edge | same file |
 | `highest_confidence_goal` | distinct confidences, a tie (Monty's docstring promises the first), and one goal | which goal, **exact** | same file |
 | `SinglePolicySelector` and `DistantPolicySelector` | an LM goal outranking two SM goals through the single selector; two SM goals through the distant agent's routing; no goals at all | the actions Monty produced, `1e-9` degrees, and the policy that produced them | same file |
 

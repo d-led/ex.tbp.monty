@@ -16,11 +16,18 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
 
   use ExUnit.Case, async: true
 
-  alias Monty.Cmp.Goal
+  alias Monty.Cmp.{Goal, Message}
   alias Monty.Context
   alias Monty.Frameworks.Actions.{ActionSamplers.ConstantSampler, LookUp, MoveForward, TurnLeft}
   alias Monty.Frameworks.Models.MotorPolicies
-  alias Monty.Frameworks.Models.MotorPolicies.{BasePolicy, JumpToGoal, MotorPolicyResult}
+
+  alias Monty.Frameworks.Models.MotorPolicies.{
+    BasePolicy,
+    InformedPolicyRandomWalk,
+    JumpToGoal,
+    MotorPolicyResult
+  }
+
   alias Monty.Frameworks.Models.MotorPolicySelectors
   alias Monty.Frameworks.Models.MotorPolicySelectors.{DistantPolicySelector, SinglePolicySelector}
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
@@ -38,6 +45,40 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
 
   setup_all do
     {:ok, fixture: @fixture |> File.read!() |> Jason.decode!()}
+  end
+
+  test "an informed walk steps onto the object and back off it", %{fixture: fixture} do
+    %{"translation_distance" => distance, "steps" => steps} = fixture["random_walk"]
+
+    policy =
+      InformedPolicyRandomWalk.new(
+        agent_id: @agent,
+        action_sampler:
+          ConstantSampler.new(actions: [MoveForward], translation_distance: distance)
+      )
+
+    Enum.reduce(steps, policy, fn %{
+                                    "on_object" => on_object,
+                                    "actions" => expected,
+                                    "undo_action" => expected_undo
+                                  },
+                                  policy ->
+      {result, policy} =
+        InformedPolicyRandomWalk.call(
+          policy,
+          Context.new(0),
+          nil,
+          nil,
+          percept(on_object),
+          nil
+        )
+
+      assert Enum.map(result.actions, &action_fields/1) == expected,
+             "on_object #{on_object}: #{inspect(Enum.map(result.actions, &action_fields/1))}"
+
+      assert undo_of(policy) == expected_undo
+      policy
+    end)
   end
 
   test "an action is undone by itself with its amount negated", %{fixture: fixture} do
@@ -200,6 +241,25 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
   defp sender_type("SM"), do: :sm
   defp sender_type("LM"), do: :lm
   defp sender_type("GSG"), do: :gsg
+
+  defp percept(on_object?) do
+    {:ok, message} =
+      Message.new(
+        location: nil,
+        morphological_features: %{"on_object" => on_object?},
+        non_morphological_features: %{},
+        confidence: 1.0,
+        pass_message: true,
+        sender_id: "patch",
+        sender_type: :sm,
+        process_features_in_lm: false
+      )
+
+    message
+  end
+
+  defp undo_of(%InformedPolicyRandomWalk{undo_action: nil}), do: nil
+  defp undo_of(%InformedPolicyRandomWalk{undo_action: action}), do: action_fields(action)
 
   defp look_at(state, goal) do
     LookAtGoal.call(
