@@ -160,11 +160,65 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
 
   def gaussian_blur(image, sigma, truncate) do
     kernel = kernel(sigma, truncate)
+    rows = as_rows(image)
+    height = tuple_size(rows)
+    width = tuple_size(elem(rows, 0))
 
-    image
-    |> pad_replicate(div(length(kernel), 2))
-    |> Enum.map(&convolve(&1, kernel))
-    |> then(fn rows -> rows |> transpose() |> Enum.map(&convolve(&1, kernel)) |> transpose() end)
+    # Separable, as OpenCV does it: across each row, then down each column. The
+    # taps are resolved once — which source index, with what weight — because
+    # every pixel reads the same neighbourhood, and the image is turned into
+    # tuples so reading that neighbourhood is not a walk down a list.
+    across = taps(kernel, width)
+    down = taps(kernel, height)
+
+    horizontally =
+      List.to_tuple(
+        for y <- 0..(height - 1) do
+          row = elem(rows, y)
+          List.to_tuple(for x <- 0..(width - 1), do: dot(Enum.at(across, x), row))
+        end
+      )
+
+    vertically =
+      List.to_tuple(
+        for x <- 0..(width - 1) do
+          List.to_tuple(for y <- 0..(height - 1), do: elem(elem(horizontally, y), x))
+        end
+      )
+
+    for y <- 0..(height - 1) do
+      taps_y = Enum.at(down, y)
+
+      for x <- 0..(width - 1), do: dot(taps_y, elem(vertically, x))
+    end
+  end
+
+  # One window per position: the centre tap, and the symmetric pairs around it,
+  # each clamped to the edge — which is `BORDER_REPLICATE`, the edge pixel
+  # repeated outward. A Gaussian's weights are symmetric about its centre, so the
+  # pairs are folded here once and the filter does half the multiplications.
+  defp taps(kernel, length) do
+    weights = List.to_tuple(kernel)
+    pad = div(tuple_size(weights), 2)
+
+    for position <- 0..(length - 1) do
+      pairs =
+        for tap <- 0..(pad - 1) do
+          {clamp(position + tap - pad, 0, length - 1),
+           clamp(position + (2 * pad - tap) - pad, 0, length - 1), elem(weights, tap)}
+        end
+
+      {clamp(position, 0, length - 1), elem(weights, pad), pairs}
+    end
+  end
+
+  # The centre term plus each symmetric pair: the same sum as the windowed dot
+  # product, with half the work.
+  defp dot({middle_index, middle_weight, pairs}, values) do
+    Enum.reduce(pairs, middle_weight * elem(values, middle_index), fn {left, right, weight},
+                                                                      sum ->
+      sum + weight * (elem(values, left) + elem(values, right))
+    end)
   end
 
   defp kernel(sigma, truncate) do
@@ -178,40 +232,11 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
     Enum.map(weights, &(&1 / total))
   end
 
-  # The edge pixel repeated outward, which is `BORDER_REPLICATE`.
-  defp pad_replicate(rows, 0), do: rows
+  # Tuples, because every operation here reads the same pixel many times and a
+  # list is a walk from the front each time.
+  defp as_rows(image), do: image |> Enum.map(&List.to_tuple/1) |> List.to_tuple()
 
-  defp pad_replicate(rows, pad) do
-    rows
-    |> pad_axis(pad)
-    |> Enum.map(&pad_axis(&1, pad))
-  end
-
-  defp pad_axis(values, pad) do
-    [first | _rest] = values
-    [last | _rest] = Enum.reverse(values)
-    List.duplicate(first, pad) ++ values ++ List.duplicate(last, pad)
-  end
-
-  defp convolve(row, kernel) do
-    window = length(kernel)
-    width = length(row) - window + 1
-
-    Enum.map(0..(width - 1), fn start ->
-      row
-      |> Enum.slice(start, window)
-      |> Enum.zip(kernel)
-      |> Enum.reduce(0.0, fn {value, weight}, sum -> sum + value * weight end)
-    end)
-  end
-
-  defp transpose([]), do: []
-
-  defp transpose([first | _rest] = rows) do
-    first
-    |> Enum.with_index()
-    |> Enum.map(fn {_value, column} -> Enum.map(rows, &Enum.at(&1, column)) end)
-  end
+  defp at(rows, row, column), do: elem(elem(rows, row), column)
 
   @doc """
   Resizes a single-channel image to `{rows, columns}`.
@@ -247,29 +272,33 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
     end
   end
 
-  defp by_area(image, source, {rows, columns} = destination) do
-    for row <- 0..(rows - 1) do
-      for column <- 0..(columns - 1) do
-        area_average(image, source, destination, {row, column})
+  defp by_area(image, {source_rows, source_columns}, {rows, columns}) do
+    pixels = as_rows(image)
+    # The covered span of every destination row and column, once: each is the
+    # same for a whole row of pixels.
+    vertical = for row <- 0..(rows - 1), do: span(row, rows, source_rows)
+    horizontal = for column <- 0..(columns - 1), do: span(column, columns, source_columns)
+
+    for y <- 0..(rows - 1) do
+      y_span = Enum.at(vertical, y)
+
+      for x <- 0..(columns - 1) do
+        area_average(pixels, y_span, Enum.at(horizontal, x))
       end
     end
   end
 
   # Each destination pixel averages the source it covers, weighted by how much
   # of each source pixel that is.
-  defp area_average(image, {source_rows, source_columns}, {rows, columns}, {row, column}) do
-    y = span(row, rows, source_rows)
-    x = span(column, columns, source_columns)
-
+  defp area_average(pixels, y, x) do
     {weighted, weights} =
       for source_row <- y.first..y.last,
           source_column <- x.first..x.last,
           reduce: {0.0, 0.0} do
         {weighted, weights} ->
           coverage = coverage(source_row, y) * coverage(source_column, x)
-          value = image |> Enum.at(source_row) |> Enum.at(source_column)
 
-          {weighted + value * coverage, weights + coverage}
+          {weighted + at(pixels, source_row, source_column) * coverage, weights + coverage}
       end
 
     weighted / weights
@@ -298,29 +327,41 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
     end
   end
 
-  defp by_cubic(image, source, {rows, columns}) do
-    {source_rows, source_columns} = source
+  defp by_cubic(image, {source_rows, source_columns}, {rows, columns}) do
+    pixels = as_rows(image)
+
+    # Taps depend on the destination index and the two lengths, not on the other
+    # axis, so each axis is resolved once — into tuples, which every pixel then
+    # reads in constant time.
+    vertical = List.to_tuple(for row <- 0..(rows - 1), do: cubic_taps(row, rows, source_rows))
+
+    horizontal =
+      List.to_tuple(
+        for column <- 0..(columns - 1), do: cubic_taps(column, columns, source_columns)
+      )
 
     for row <- 0..(rows - 1) do
-      {offsets_y, weights_y} = cubic_taps(row, rows, source_rows)
+      {offsets_y, weights_y} = elem(vertical, row)
 
       for column <- 0..(columns - 1) do
-        {offsets_x, weights_x} = cubic_taps(column, columns, source_columns)
-
-        for {source_row, weight_y} <- Enum.zip(offsets_y, weights_y), reduce: 0.0 do
-          sum -> sum + weight_y * weighted_row(image, source_row, offsets_x, weights_x)
-        end
+        weighted(pixels, elem(horizontal, column), offsets_y, weights_y)
       end
     end
   end
 
-  defp weighted_row(image, source_row, offsets_x, weights_x) do
-    row = Enum.at(image, source_row)
+  # The four source rows, each weighted by the four source columns it reads.
+  defp weighted(pixels, {offsets_x, weights_x}, offsets_y, weights_y) do
+    width = tuple_size(offsets_x)
 
-    Enum.zip_with([offsets_x, weights_x], fn [column, weight] ->
-      Enum.at(row, column) * weight
+    Enum.reduce(0..(tuple_size(offsets_y) - 1), 0.0, fn tap_y, sum ->
+      row = elem(pixels, elem(offsets_y, tap_y))
+
+      sum +
+        Enum.reduce(0..(width - 1), 0.0, fn tap_x, across ->
+          across +
+            elem(weights_y, tap_y) * elem(weights_x, tap_x) * elem(row, elem(offsets_x, tap_x))
+        end)
     end)
-    |> Enum.sum()
   end
 
   # The four taps a destination coordinate reads, as offsets from the clamped
@@ -330,9 +371,9 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
     nearest = floor(coordinate)
     fraction = coordinate - nearest
 
-    offsets = for offset <- -1..2, do: clamp(nearest + offset, 0, source - 1)
+    offsets = List.to_tuple(for offset <- -1..2, do: clamp(nearest + offset, 0, source - 1))
 
-    {offsets, cubic_weights(fraction)}
+    {offsets, List.to_tuple(cubic_weights(fraction))}
   end
 
   # OpenCV's cubic, with A = -0.75. The last weight is the remainder, which is
