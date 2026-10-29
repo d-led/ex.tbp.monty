@@ -64,4 +64,46 @@ defmodule Monty.Frameworks.Actions.ActionSamplers do
 
     {[a, b, c], state}
   end
+
+  @doc """
+  The sampler a config describes.
+
+      action_sampler:
+        _target_: tbp.monty.frameworks.actions.action_samplers.ConstantSampler
+        actions:
+        - ${monty.class:tbp.monty.frameworks.actions.actions.MoveForward}
+        translation_distance: 0.004
+
+  The actions are named as classes too, so they resolve the same way the
+  sampler itself does. A parameter the sampler does not have is an error: the
+  config asked for behaviour this port cannot give, and answering something
+  else would make the run a different experiment.
+  """
+  @spec from_config(map()) :: Monty.Frameworks.Actions.ActionSamplers.ActionSampler.t()
+  def from_config(%{"_target_" => _target} = config) do
+    options =
+      config
+      |> Map.delete("_target_")
+      |> Enum.map(&sampler_option/1)
+
+    Monty.Config.Target.class!(config).new(options)
+  end
+
+  # Every parameter Monty's two samplers take.
+  @sampler_keys ~w(absolute_degrees direction location rotation_degrees
+                   translation_distance min_absolute_degrees max_absolute_degrees
+                   min_rotation_degrees max_rotation_degrees
+                   min_translation max_translation)
+
+  defp sampler_option({"actions", actions}),
+    do: {:actions, Enum.map(actions, &Monty.Config.Target.class!/1)}
+
+  defp sampler_option({"rotation_quat", quaternion}),
+    do: {:rotation_quat, List.to_tuple(quaternion)}
+
+  defp sampler_option({key, value}) when key in @sampler_keys,
+    do: {String.to_existing_atom(key), value}
+
+  defp sampler_option({key, _value}),
+    do: raise(ArgumentError, "a sampler takes no #{inspect(key)}")
 end

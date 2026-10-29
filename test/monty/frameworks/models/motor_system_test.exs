@@ -23,8 +23,17 @@ defmodule Monty.Frameworks.Models.MotorSystemTest do
 
   defp motor_system(result) do
     MotorSystem.new(
-      SinglePolicySelector.new(policy: fn _ctx, _obs, _state, _percept, _goal -> result end)
+      SinglePolicySelector.new(policy: Monty.Test.RecordingPolicy.new(result_options(result)))
     )
+  end
+
+  defp result_options(%MotorPolicyResult{} = result) do
+    [
+      actions: result.actions,
+      status: result.status,
+      motor_only_step: result.motor_only_step,
+      telemetry: result.telemetry
+    ]
   end
 
   defp step(motor_system) do
@@ -64,7 +73,11 @@ defmodule Monty.Frameworks.Models.MotorSystemTest do
       motor_system = MotorSystem.reset(motor_system)
 
       assert MotorSystem.action_sequence(motor_system) == []
-      assert MotorSystem.state_dict(motor_system) == %{selected_goals: []}
+
+      assert MotorSystem.state_dict(motor_system) == %{
+               policy: %{asked_about: []},
+               selected_goals: []
+             }
     end
   end
 
@@ -94,14 +107,10 @@ defmodule Monty.Frameworks.Models.MotorSystemTest do
     test "the goals its selector chose" do
       believed = %Goal{sender_id: "LM_0", sender_type: :gsg, confidence: 0.8}
 
-      MotorSystem.new(
-        SinglePolicySelector.new(
-          policy: fn _ctx, _obs, _state, _percept, _goal -> MotorPolicyResult.new() end
-        )
-      )
+      MotorSystem.new(SinglePolicySelector.new(policy: Monty.Test.RecordingPolicy.new()))
       |> MotorSystem.call(Context.new(0), nil, @proprioceptive_state, nil, [believed])
       |> then(fn {_actions, motor_system} -> MotorSystem.state_dict(motor_system) end)
-      |> then(&assert(&1 == %{selected_goals: [believed]}))
+      |> then(&assert(&1 == %{policy: %{asked_about: [believed]}, selected_goals: [believed]}))
     end
 
     test "the surface policy's account of why it chose them, step by step" do

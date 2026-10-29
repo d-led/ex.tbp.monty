@@ -350,17 +350,14 @@ defmodule Monty.Runtime.Step do
          ctx
        ) do
     {module, motor_state} = state.motor
+    percept = first_percept(state, percepts)
 
-    request = %{
-      ctx: ctx,
-      observations: observations,
-      proprioceptive_state: proprioceptive_state,
-      percept: first_percept(state, percepts),
-      goals: goals
-    }
+    {actions, motor_state} =
+      module.call(motor_state, ctx, observations, proprioceptive_state, percept, goals)
 
-    {actions, motor_state, motor_only?} = module.act(request, motor_state)
-    {actions, %{state | motor_state: motor_state, motor_only?: motor_only?}}
+    state = %{state | motor_state: motor_state, motor_only?: module.motor_only_step(motor_state)}
+
+    {actions, state}
   end
 
   # -- the model's own decisions --------------------------------------------

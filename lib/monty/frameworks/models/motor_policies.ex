@@ -33,9 +33,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
     * `undo_last_action/1` — **ported**: the module-level function — Monty calls
       it `fixme_undo_last_action` — that turns an action into its opposite.
 
-  Still planned: `SurfacePolicyCurvatureInformed`, a surface policy that follows
-  principal curvature directions. `DistantPolicySelector`, the distant agent's
-  selector, is ported under
+  Still planned: nothing — every class in Monty's `motor_policies.py` is ported.
+  `DistantPolicySelector`, the distant agent's selector, is ported under
   `Monty.Frameworks.Models.MotorPolicySelectors`.
 
   A policy here is a struct plus the module named after it, so a policy can be
@@ -177,4 +176,43 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
   def projected_vec_from_angle(angle) do
     [:math.cos(angle - :math.pi() / 2.0), :math.sin(angle + :math.pi() / 2.0), 0.0]
   end
+
+  # Every parameter the ported policies take.
+  @policy_keys ~w(agent_id sensor_id alpha pc_alpha desired_object_distance
+                 use_goal_driven_actions max_pc_bias_steps min_general_steps
+                 min_heading_steps file fixed_amount)
+
+  @doc """
+  The policy a config describes.
+
+      policy:
+        _target_: tbp.monty.frameworks.models.motor_policies.SurfacePolicyCurvatureInformed
+        agent_id: agent_id_0
+        alpha: 0.1
+        action_sampler:
+          _target_: ...ConstantSampler
+
+  The class decides which parameters are required: each policy's own `new/1`
+  fetches what it cannot do without, so a config that leaves one out fails here
+  rather than at the first step of the episode.
+  """
+  @spec from_config(map()) :: Monty.Frameworks.Models.MotorPolicies.MotorPolicy.t()
+  def from_config(%{"_target_" => _target} = config) do
+    options =
+      config
+      |> Map.delete("_target_")
+      |> Enum.map(&policy_option/1)
+
+    Monty.Config.Target.class!(config).new(options)
+  end
+
+  defp policy_option({"action_sampler", sampler}) do
+    {:action_sampler, Monty.Frameworks.Actions.ActionSamplers.from_config(sampler)}
+  end
+
+  defp policy_option({key, value}) when key in @policy_keys,
+    do: {String.to_existing_atom(key), value}
+
+  defp policy_option({key, _value}),
+    do: raise(ArgumentError, "a motor policy takes no #{inspect(key)}")
 end

@@ -63,6 +63,33 @@ defmodule Monty.Frameworks.Models.MotorSystem do
   def new(policy_selector), do: %__MODULE__{policy_selector: policy_selector}
 
   @doc """
+  The motor system a config describes.
+
+      motor_system_config:
+        _target_: tbp.monty.frameworks.models.motor_system.MotorSystem
+        policy_selector:
+          _target_: ...SinglePolicySelector
+          policy:
+            _target_: ...SurfacePolicyCurvatureInformed
+
+  A body is its selector and its policy, so the config is the whole description
+  of one: there is nothing here that a surface agent's config does not say.
+  """
+  @spec from_config(map()) :: t()
+  def from_config(%{"policy_selector" => selector_config} = config) do
+    config
+    |> Monty.Config.Target.class!()
+    |> then(fn
+      __MODULE__ ->
+        new(Monty.Frameworks.Models.MotorPolicySelectors.from_config(selector_config))
+
+      other ->
+        raise ArgumentError,
+              "#{inspect(other)} is a motor system this port has no builder for"
+    end)
+  end
+
+  @doc """
   Asks the selector for this step's actions, and remembers them.
 
   The state is the proprioceptive state as it arrived: Monty wraps it in a
