@@ -3,6 +3,7 @@ defmodule Monty.Studio.SetupTest do
 
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
   alias Monty.Frameworks.Models.SensorModules.{CameraSM, FeatureChangeFilter}
   alias Monty.SensorModules.SensorModule
   alias Monty.Simulators.Synthetic
@@ -326,6 +327,16 @@ defmodule Monty.Studio.SetupTest do
                Enum.find(spec.sensor_modules, &(&1.id == "patch"))
 
       assert %{module: ExperimentSensorModule, state: %SensorModule{transforms: []}} =
+               Enum.find(spec.sensor_modules, &(&1.id == "view_finder"))
+    end
+
+    test "runs the salience module a config gives its view finder" do
+      # `camera_dist_delta_salience`: a patch that measures the surface, and a
+      # view finder that proposes where to look instead — no percept, just goals.
+      spec =
+        "base_config_10distinctobj_dist_agent" |> setup_for() |> Setup.model_spec("model_0")
+
+      assert %{module: SalienceSM, state: %SalienceSM{sensor_module_id: "view_finder"}} =
                Enum.find(spec.sensor_modules, &(&1.id == "view_finder"))
     end
 

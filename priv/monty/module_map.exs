@@ -1842,7 +1842,7 @@
     python: "frameworks/models/salience/sensor_module.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.SensorModule.SalienceSM",
         python: "SalienceSM"
       }
@@ -1985,23 +1985,23 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.Salience.Telemetry",
     package: "monty",
     python: "frameworks/models/salience/telemetry.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Telemetry.SalienceSMTelemetry",
         python: "SalienceSMTelemetry"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Telemetry.NoopSalienceSMTelemetry",
         python: "NoopSalienceSMTelemetry"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Telemetry.DetailedSalienceSMTelemetry",
         python: "DetailedSalienceSMTelemetry"
       }
