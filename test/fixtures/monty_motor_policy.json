@@ -1,0 +1,640 @@
+{
+ "agent_id": "agent_id_0",
+ "sensor_id": "camera_id_0",
+ "poses": [
+  {
+   "name": "looking straight ahead",
+   "agent_position": [
+    0.0,
+    -0.1,
+    0.0
+   ],
+   "agent_rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sensor_position": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sensor_rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "agent_rotation_wxyz": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sensor_rotation_wxyz": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "name": "turned thirty degrees",
+   "agent_position": [
+    0.0,
+    -0.1,
+    0.0
+   ],
+   "agent_rotation": [
+    0.0,
+    30.0,
+    0.0
+   ],
+   "sensor_position": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sensor_rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "agent_rotation_wxyz": [
+    0.9659258262890683,
+    0.0,
+    0.25881904510252074,
+    0.0
+   ],
+   "sensor_rotation_wxyz": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "name": "turned a hundred and twenty, sensor pitched up",
+   "agent_position": [
+    0.3,
+    -0.2,
+    -0.4
+   ],
+   "agent_rotation": [
+    0.0,
+    120.0,
+    0.0
+   ],
+   "sensor_position": [
+    0.0,
+    0.05,
+    0.0
+   ],
+   "sensor_rotation": [
+    20.0,
+    0.0,
+    0.0
+   ],
+   "agent_rotation_wxyz": [
+    0.5000000000000001,
+    0.0,
+    0.8660254037844386,
+    0.0
+   ],
+   "sensor_rotation_wxyz": [
+    0.984807753012208,
+    0.17364817766693033,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "name": "sensor pitched up, agent tilted forward",
+   "agent_position": [
+    -0.2,
+    0.1,
+    0.5
+   ],
+   "agent_rotation": [
+    15.0,
+    -40.0,
+    0.0
+   ],
+   "sensor_position": [
+    0.0,
+    0.0,
+    0.1
+   ],
+   "sensor_rotation": [
+    25.0,
+    0.0,
+    0.0
+   ],
+   "agent_rotation_wxyz": [
+    0.9313102614771697,
+    0.1278885844191685,
+    -0.34103622511778275,
+    0.0
+   ],
+   "sensor_rotation_wxyz": [
+    0.9762960071199334,
+    0.21643961393810288,
+    0.0,
+    0.0
+   ]
+  }
+ ],
+ "highest_confidence_goal": [
+  {
+   "confidences": [
+    0.2,
+    0.9,
+    0.5
+   ],
+   "chosen": 1
+  },
+  {
+   "confidences": [
+    0.4,
+    0.4,
+    0.1
+   ],
+   "chosen": 0
+  },
+  {
+   "confidences": [
+    0.7
+   ],
+   "chosen": 0
+  }
+ ],
+ "look_at_goal": [
+  {
+   "pose": "looking straight ahead",
+   "goal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -0.0
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": 5.710593137499643
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "looking straight ahead",
+   "goal": [
+    0.5,
+    0.0,
+    -1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -26.56505117707799
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": 5.111089695288715
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "looking straight ahead",
+   "goal": [
+    -0.3,
+    0.4,
+    -0.8
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": 20.556045219583464
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": 30.33641561731118
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "looking straight ahead",
+   "goal": [
+    0.2,
+    -0.5,
+    -1.2
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -9.462322208025618
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": -18.200760264533322
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "looking straight ahead",
+   "goal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -180.0
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": 5.710593137499643
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "turned thirty degrees",
+   "goal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -29.999999999999996
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": 5.710593137499643
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "turned thirty degrees",
+   "goal": [
+    0.5,
+    0.0,
+    -1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -56.56505117707799
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": 5.111089695288715
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "turned thirty degrees",
+   "goal": [
+    -0.3,
+    0.4,
+    -0.8
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -9.443954780416531
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": 30.33641561731118
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "turned thirty degrees",
+   "goal": [
+    0.2,
+    -0.5,
+    -1.2
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -39.46232220802561
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": -18.200760264533322
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "turned thirty degrees",
+   "goal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": 150.0
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": 5.710593137499643
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "turned a hundred and twenty, sensor pitched up",
+   "goal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -93.434948822922
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": -3.398450400979763
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "turned a hundred and twenty, sensor pitched up",
+   "goal": [
+    0.5,
+    0.0,
+    -1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -138.434948822922
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": -2.4515993862077003
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "turned a hundred and twenty, sensor pitched up",
+   "goal": [
+    -0.3,
+    0.4,
+    -0.8
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -63.69006752597977
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": 19.76215915180505
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "turned a hundred and twenty, sensor pitched up",
+   "goal": [
+    0.2,
+    -0.5,
+    -1.2
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -112.87498365109819
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": -40.41044552165851
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "turned a hundred and twenty, sensor pitched up",
+   "goal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": 47.90524292298792
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": -12.048032073652054
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "sensor pitched up, agent tilted forward",
+   "goal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": 33.26466308788507
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": -43.11281782189739
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "sensor pitched up, agent tilted forward",
+   "goal": [
+    0.5,
+    0.0,
+    -1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": 14.961032806706337
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": -43.096462402595336
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "sensor pitched up, agent tilted forward",
+   "goal": [
+    -0.3,
+    0.4,
+    -0.8
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": 43.96045414539581
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": -25.460827984658945
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "sensor pitched up, agent tilted forward",
+   "goal": [
+    0.2,
+    -0.5,
+    -1.2
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": 27.914431139459577
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": -58.537271766707
+    }
+   ],
+   "motor_only_step": false
+  },
+  {
+   "pose": "sensor pitched up, agent tilted forward",
+   "goal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -118.83088879879166
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": -24.484363456832323
+    }
+   ],
+   "motor_only_step": false
+  }
+ ],
+ "collocated": {
+  "pose": "looking straight ahead",
+  "goal": [
+   0.0,
+   -0.1,
+   0.0
+  ],
+  "raises": "GoalCollocatedWithSensor"
+ },
+ "single_policy_selector": {
+  "goals": [
+   {
+    "location": [
+     0.5,
+     0.0,
+     -1.0
+    ],
+    "confidence": 0.3,
+    "sender_type": "SM"
+   },
+   {
+    "location": [
+     -0.3,
+     0.4,
+     -0.8
+    ],
+    "confidence": 0.8,
+    "sender_type": "LM"
+   },
+   {
+    "location": [
+     0.2,
+     -0.5,
+     -1.2
+    ],
+    "confidence": 0.6,
+    "sender_type": "SM"
+   }
+  ],
+  "actions": [
+   {
+    "action": "TurnLeft",
+    "rotation_degrees": 20.556045219583464
+   },
+   {
+    "action": "LookUp",
+    "rotation_degrees": 30.33641561731118
+   }
+  ]
+ },
+ "distant_policy_selector": {
+  "sm_goals": {
+   "goals": [
+    {
+     "location": [
+      0.5,
+      0.0,
+      -1.0
+     ],
+     "confidence": 0.1,
+     "sender_type": "SM"
+    },
+    {
+     "location": [
+      -0.3,
+      0.4,
+      -0.8
+     ],
+     "confidence": 0.9,
+     "sender_type": "SM"
+    }
+   ],
+   "actions": [
+    {
+     "action": "TurnLeft",
+     "rotation_degrees": -9.443954780416531
+    },
+    {
+     "action": "LookUp",
+     "rotation_degrees": 30.33641561731118
+    }
+   ]
+  },
+  "no_goals": {
+   "consulted_default": 1,
+   "actions": []
+  }
+ }
+}

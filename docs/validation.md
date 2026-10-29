@@ -52,6 +52,10 @@ they do.
 | `vocus2`: the colour channel's map **and** its centre pyramid, the depth channel's map, all four Gabor kernels, the orientation map, and the whole strategy's normalised map | a 32×32 view (bright blob, dark corner, hard edge) and a depth map with a near step and an empty pixel | `1e-4`; `1e-3` for the normalised strategy map | `test/monty/frameworks/models/salience/strategies/vocus2/vocus2_parity_test.exs` |
 | `SafeOperatingLimits` | six size/sigma triples, including each of the three rejections | the verdict, and which rejection fired | same file |
 | `SalienceSM` **end to end** — strategy, on-object reshape, inhibitor, weights, goals | three views of a moving sensor: 144 on-object pixels each, blob and point cloud shifted between steps so the inhibitor has somewhere new to suppress | goal locations and their order **exact**; salience and inhibitor weights `1e-6`; confidences within `0.5` of Monty's, because the dither is Monty's random stream and not the port's (§2.1) — measured worst `0.36` | `test/monty/frameworks/models/salience/sensor_module/salience_sm_parity_test.exs` |
+| `LookAtGoal` — the turn and the pitch | 4 agent poses (turned 0°, 30°, 120° with the sensor pitched, and tilted forward) × 5 goal locations, including one behind the agent and one across the body | `1e-9` degrees on both actions | `test/monty/frameworks/models/motor_policies/motor_policy_parity_test.exs` |
+| `LookAtGoal`'s refusal | a goal sitting on the sensor | the same `GoalCollocatedWithSensor` | same file |
+| `highest_confidence_goal` | distinct confidences, a tie (Monty's docstring promises the first), and one goal | which goal, **exact** | same file |
+| `SinglePolicySelector` and `DistantPolicySelector` | an LM goal outranking two SM goals through the single selector; two SM goals through the distant agent's routing; no goals at all | the actions Monty produced, `1e-9` degrees, and the policy that produced them | same file |
 
 ### The arithmetic this pins, by class
 
@@ -109,6 +113,17 @@ Saying this plainly matters more than the table above:
 - **Anything that samples.** The random-stream layout is deliberately different
   from Monty's (§2.1 of `monty-bugs.md`), so a run that samples walks a different
   path by design. Only its *rules* are verified, never its sequence of actions.
+- **The default policy's arithmetic.** `DistantPolicySelector` is verified for
+  *routing* — which goal reaches which policy, and what `LookAtGoal` answers —
+  but the fallback it hands the step to is `InformedPolicy`, which needs a
+  percept full of hypotheses, and Monty's hypotheses come from learning modules
+  that import `torch`. So the recording records the routing and nothing of the
+  fallback's own numbers; those are tested where they live, without Monty.
+- **An episode, end to end.** Monty's `Monty` class imports (its `experiment/`
+  half does not need `torch`), but `frameworks/models/object_model.py` pulls in
+  `torch` and `torch_geometric`, so a recorded Monty episode would need a second
+  full environment. Until then, an episode is compared piece by piece, never
+  whole.
 - **`TwoDSensorModule`**, which needs a dataset that is not present.
 - Known, documented differences that are *not* agreement: `rgb_to_lab` to
   `2.67/255` (§1.12), OpenCV's mixed-axis `INTER_AREA` (§1.13), and
@@ -125,6 +140,7 @@ Monty revision moves:
 | `test/fixtures/monty_evidence_slope_tracker.json` | `scripts/record_monty_evidence_matching.py` |
 | `test/fixtures/monty_feature_evidence.json` | `scripts/record_monty_feature_evidence.py` |
 | `test/fixtures/monty_salience_sm.json` | `scripts/record_monty_salience_sm.py` (needs `numpy-quaternion`, which the other recorders do not) |
+| `test/fixtures/monty_motor_policy.json` | `scripts/record_monty_motor_policy.py` |
 | `test/fixtures/monty_vocus2_images.json` | `scripts/record_monty_vocus2_images.py` |
 | `test/fixtures/monty_pyramids.json` | `scripts/record_monty_pyramids.py` |
 | `test/fixtures/monty_vocus2.json` | `scripts/record_monty_vocus2.py` |
