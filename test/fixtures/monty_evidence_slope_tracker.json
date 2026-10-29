@@ -1,0 +1,411 @@
+{
+  "histories": [
+    {
+      "window_size": 4,
+      "min_age": 2,
+      "steps": [
+        {
+          "op": "add_hyp",
+          "count": 3,
+          "total_size": 3,
+          "ages": [
+            0,
+            0,
+            0
+          ],
+          "removable": [
+            false,
+            false,
+            false
+          ],
+          "slopes": [
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "op": "update",
+          "values": [
+            0.0,
+            1.0,
+            2.0
+          ],
+          "num_channels": 1,
+          "total_size": 3,
+          "ages": [
+            1,
+            1,
+            1
+          ],
+          "removable": [
+            false,
+            false,
+            false
+          ],
+          "slopes": [
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "op": "update",
+          "values": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "num_channels": 1,
+          "total_size": 3,
+          "ages": [
+            2,
+            2,
+            2
+          ],
+          "removable": [
+            true,
+            true,
+            true
+          ],
+          "slopes": [
+            1.0,
+            0.0,
+            -1.0
+          ]
+        },
+        {
+          "op": "update",
+          "values": [
+            2.0,
+            1.0,
+            0.0
+          ],
+          "num_channels": 1,
+          "total_size": 3,
+          "ages": [
+            3,
+            3,
+            3
+          ],
+          "removable": [
+            true,
+            true,
+            true
+          ],
+          "slopes": [
+            1.0,
+            0.0,
+            -1.0
+          ]
+        },
+        {
+          "op": "update",
+          "values": [
+            3.0,
+            1.0,
+            -1.0
+          ],
+          "num_channels": 1,
+          "total_size": 3,
+          "ages": [
+            4,
+            4,
+            4
+          ],
+          "removable": [
+            true,
+            true,
+            true
+          ],
+          "slopes": [
+            1.0,
+            0.0,
+            -1.0
+          ]
+        },
+        {
+          "op": "select",
+          "threshold": 0.5,
+          "ids_to_retain": [
+            0
+          ],
+          "ids_to_remove": [
+            1,
+            2
+          ],
+          "total_size": 3,
+          "ages": [
+            4,
+            4,
+            4
+          ],
+          "removable": [
+            true,
+            true,
+            true
+          ],
+          "slopes": [
+            1.0,
+            0.0,
+            -1.0
+          ]
+        }
+      ]
+    },
+    {
+      "window_size": 3,
+      "min_age": 1,
+      "steps": [
+        {
+          "op": "add_hyp",
+          "count": 2,
+          "total_size": 2,
+          "ages": [
+            0,
+            0
+          ],
+          "removable": [
+            false,
+            false
+          ],
+          "slopes": [
+            null,
+            null
+          ]
+        },
+        {
+          "op": "update",
+          "values": [
+            0.0,
+            0.0
+          ],
+          "num_channels": 1,
+          "total_size": 2,
+          "ages": [
+            1,
+            1
+          ],
+          "removable": [
+            true,
+            true
+          ],
+          "slopes": [
+            null,
+            null
+          ]
+        },
+        {
+          "op": "update",
+          "values": [
+            3.0,
+            1.0
+          ],
+          "num_channels": 3,
+          "total_size": 2,
+          "ages": [
+            2,
+            2
+          ],
+          "removable": [
+            true,
+            true
+          ],
+          "slopes": [
+            1.0,
+            0.3333333333333333
+          ]
+        },
+        {
+          "op": "update",
+          "values": [
+            6.0,
+            2.0
+          ],
+          "num_channels": 3,
+          "total_size": 2,
+          "ages": [
+            3,
+            3
+          ],
+          "removable": [
+            true,
+            true
+          ],
+          "slopes": [
+            1.0,
+            0.3333333333333333
+          ]
+        },
+        {
+          "op": "select",
+          "threshold": 0.5,
+          "ids_to_retain": [
+            0
+          ],
+          "ids_to_remove": [
+            1
+          ],
+          "total_size": 2,
+          "ages": [
+            3,
+            3
+          ],
+          "removable": [
+            true,
+            true
+          ],
+          "slopes": [
+            1.0,
+            0.3333333333333333
+          ]
+        }
+      ]
+    },
+    {
+      "window_size": 3,
+      "min_age": 1,
+      "steps": [
+        {
+          "op": "add_hyp",
+          "count": 3,
+          "total_size": 3,
+          "ages": [
+            0,
+            0,
+            0
+          ],
+          "removable": [
+            false,
+            false,
+            false
+          ],
+          "slopes": [
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "op": "update",
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "num_channels": 1,
+          "total_size": 3,
+          "ages": [
+            1,
+            1,
+            1
+          ],
+          "removable": [
+            true,
+            true,
+            true
+          ],
+          "slopes": [
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "op": "update",
+          "values": [
+            1.0,
+            -1.0,
+            2.0
+          ],
+          "num_channels": 1,
+          "total_size": 3,
+          "ages": [
+            2,
+            2,
+            2
+          ],
+          "removable": [
+            true,
+            true,
+            true
+          ],
+          "slopes": [
+            1.0,
+            -1.0,
+            2.0
+          ]
+        },
+        {
+          "op": "remove_hyp",
+          "indices": [
+            1
+          ],
+          "total_size": 2,
+          "ages": [
+            2,
+            2
+          ],
+          "removable": [
+            true,
+            true
+          ],
+          "slopes": [
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "op": "update",
+          "values": [
+            2.0,
+            3.0
+          ],
+          "num_channels": 1,
+          "total_size": 2,
+          "ages": [
+            3,
+            3
+          ],
+          "removable": [
+            true,
+            true
+          ],
+          "slopes": [
+            1.0,
+            1.5
+          ]
+        },
+        {
+          "op": "select",
+          "threshold": 0.0,
+          "ids_to_retain": [
+            0,
+            1
+          ],
+          "ids_to_remove": [],
+          "total_size": 2,
+          "ages": [
+            3,
+            3
+          ],
+          "removable": [
+            true,
+            true
+          ],
+          "slopes": [
+            1.0,
+            1.5
+          ]
+        },
+        {
+          "op": "clear",
+          "total_size": 0,
+          "ages": [],
+          "removable": [],
+          "slopes": []
+        }
+      ]
+    }
+  ]
+}
