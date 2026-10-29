@@ -106,6 +106,11 @@ resolves through the module map, and each class's `from_config/1` reads the
 parameters it knows (`Monty.Config.Target`). A class the port has not written is
 an error, never a stand-in, so a run built from a config is a run of that config.
 
+The environment boundary is a port: `Monty.Simulators.Port.Protocol` is the
+contract and `Monty.Simulators.Port.Environment` owns the process, so the world
+can be MuJoCo, Habitat or a camera without touching the model. See
+[`simulator-port.md`](simulator-port.md).
+
 ## Observability
 
 `Monty.Runs.Log` keeps a bounded ring buffer in ETS and broadcasts on
