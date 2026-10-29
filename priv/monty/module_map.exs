@@ -726,7 +726,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.EnvironmentUtils.Transforms",
     package: "monty",
     python: "frameworks/environment_utils/transforms.py",
@@ -737,12 +737,12 @@
         python: "TransformContext"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.Transform",
         python: "Transform"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.MissingToMaxDepth",
         python: "MissingToMaxDepth"
       },
@@ -2253,7 +2253,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Utils.SensorProcessing",
     package: "monty",
     python: "frameworks/utils/sensor_processing.py",

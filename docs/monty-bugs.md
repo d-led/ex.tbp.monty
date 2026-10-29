@@ -340,17 +340,21 @@ returns the pixel as it is: no check for "no return".
 metre — search, or ask the world for a depth it trusts. Which is Monty's call;
 that 0 is not a distance is not.
 
-**Why it is suspected rather than observed.** In Monty's scenes the camera is
-always looking at *something*: MuJoCo and Habitat worlds are enclosed, so the
-centre pixel has a return and the branch is never taken on zero. It shows
-immediately in a world that is empty beyond the object: with a 2.5 cm object
-distance and a sensor 10 cm up, the agent backs away 13.5 cm per step, for ever.
+**Why it is suspected rather than observed.** Monty's experiments put a
+transform in front of the camera that removes the case:
+`MissingToMaxDepth(max_depth: 1)` replaces every depth of 0 with 1, and 1 is not
+less than 1, so the search branch runs as intended. The surf agent's own config
+says so —
+[`tests/conf/snapshots/base_config_10distinctobj_surf_agent.yaml:152-160`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/tests/conf/snapshots/base_config_10distinctobj_surf_agent.yaml#L152-L160).
+So the trap is latent: it needs a depth image that still has 0 in it — a raw
+sensor, or a transform chain that left `MissingToMaxDepth` out.
 
-**What this port does.** Reproduces the branch as it is. The stand-in world has
-no walls — there is nothing behind the object — so a surface agent that leaves
-the object does not find its way back, which is this defect showing itself; a
-simulator behind `Monty.Simulators.Port.Environment` shows the behaviour
-Monty's own runs show.
+**What this port does.** Reproduces the branch as it is, and ports the transform
+that moves the trap out of reach: `MissingToMaxDepth`
+([`missing_to_max_depth.ex`](../lib/monty/frameworks/environment_utils/transforms/missing_to_max_depth.ex))
+is built from the experiment's config and applied to observations before any
+module reads them (`Monty.Studio.Run`). Without it, a surface agent against a
+world whose miss is depth 0 backs away 13.5 cm per step.
 
 ---
 

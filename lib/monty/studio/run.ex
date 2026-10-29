@@ -13,6 +13,7 @@ defmodule Monty.Studio.Run do
   reports into what a page shows after it.
   """
 
+  alias Monty.Frameworks.EnvironmentUtils.Transforms
   alias Monty.Runtime.Model
   alias Monty.Simulators.Synthetic.Environment
   alias Monty.Studio.Setup
@@ -20,7 +21,15 @@ defmodule Monty.Studio.Run do
   @default_steps 12
 
   @enforce_keys [:model_id, :setup, :environment]
-  defstruct [:model_id, :setup, :environment, :steps, step: 0, pending_actions: []]
+  defstruct [
+    :model_id,
+    :setup,
+    :environment,
+    :steps,
+    step: 0,
+    pending_actions: [],
+    transforms: []
+  ]
 
   @type t :: %__MODULE__{
           model_id: String.t(),
@@ -28,7 +37,8 @@ defmodule Monty.Studio.Run do
           environment: Environment.t(),
           steps: pos_integer(),
           step: non_neg_integer(),
-          pending_actions: [Monty.Frameworks.Actions.Action.t()]
+          pending_actions: [Monty.Frameworks.Actions.Action.t()],
+          transforms: [struct()]
         }
 
   @doc """
@@ -53,6 +63,7 @@ defmodule Monty.Studio.Run do
            # The world starts where an episode starts, not where the last one
            # left it: a run is an episode.
            environment: Setup.world(setup),
+           transforms: Setup.built_transforms(setup),
            steps: Keyword.get(opts, :steps, @default_steps)
          }}
 
@@ -78,6 +89,9 @@ defmodule Monty.Studio.Run do
     {observations, proprioceptive_state, environment} =
       Environment.step(run.environment, run.pending_actions)
 
+    # What the world rendered, as the experiment says it should arrive: Monty
+    # runs its transform chain on the observations before any module sees them.
+    observations = Transforms.run(run.transforms, observations)
     ctx = %{Monty.Context.new(seed(setup)) | step: step}
 
     {:ok, actions, info} = Model.step(model_id, observations, proprioceptive_state, ctx)

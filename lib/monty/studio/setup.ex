@@ -27,6 +27,7 @@ defmodule Monty.Studio.Setup do
             environment: nil,
             motor_system: nil,
             motor_system_config: %{},
+            transforms: [],
             attention_system: nil,
             monty_args: %{},
             sensors: [],
@@ -96,6 +97,7 @@ defmodule Monty.Studio.Setup do
       environment: environment(config),
       motor_system: motor_system(monty_config),
       motor_system_config: Map.get(monty_config, "motor_system_config", %{}),
+      transforms: transforms(config),
       attention_system: describe_target(get_in(monty_config, ["attention_system", "_target_"])),
       monty_args: Map.get(monty_config, "monty_args", %{}),
       sensors: sensors,
@@ -407,6 +409,29 @@ defmodule Monty.Studio.Setup do
     Map.get(config, "train_env_interface_class") || Map.get(config, "eval_env_interface_class")
   end
 
+  # The transforms an experiment configures, in the order they run. They are the
+  # layer between what a simulator rendered and what a sensor module is given, so
+  # a run that skips one is a different experiment (`docs/monty-bugs.md` §1.7).
+  defp transforms(config) do
+    config
+    |> Map.get("environment", %{})
+    |> Map.get("transform", [])
+    |> List.wrap()
+  end
+
+  @doc """
+  The configured transforms this port can build, in the order they run.
+
+  A config may name transforms that are not ported — `DepthTo3DLocations` is the
+  usual one — and those are left out rather than approximated: the run then has
+  a sensor reading a depth image, and the setup says so as a finding.
+  """
+  @spec built_transforms(t()) :: [struct()]
+  def built_transforms(%__MODULE__{transforms: configs}) do
+    Enum.filter(configs, &Monty.Config.Target.implemented?/1)
+    |> Enum.map(&Monty.Frameworks.EnvironmentUtils.Transforms.from_config/1)
+  end
+
   defp object_names(args) do
     case Map.get(args, "objects") do
       list when is_list(list) -> Enum.map(list, &object_name/1)
@@ -500,6 +525,7 @@ defmodule Monty.Studio.Setup do
        ) ++
        ((setup.motor_system && [setup.motor_system.module, setup.motor_system.selector]) || []) ++
        ((setup.motor_system && Map.values(setup.motor_system.policies)) || []) ++
+       Enum.map(setup.transforms, &Monty.Studio.Setup.describe_target(get_in(&1, ["_target_"]))) ++
        [setup.attention_system])
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq_by(& &1.python)
