@@ -30,13 +30,15 @@ defmodule Monty.Simulators.Synthetic.Environment do
   @default_sensor "patch"
 
   @enforce_keys [:sensor_ids, :world]
-  defstruct [:sensor_ids, :world, scene: nil, views: %{}]
+  defstruct [:sensor_ids, :world, scene: nil, views: %{}, agent: nil, sensors: %{}]
 
   @type t :: %__MODULE__{
           sensor_ids: [Monty.Simulators.Environment.sensor_id()],
           world: Kinematics.t(),
           scene: Scene.t() | nil,
-          views: %{optional(Monty.Simulators.Environment.sensor_id()) => keyword()}
+          views: %{optional(Monty.Simulators.Environment.sensor_id()) => keyword()},
+          agent: Kinematics.pose() | nil,
+          sensors: %{optional(Monty.Simulators.Environment.sensor_id()) => Kinematics.pose()}
         }
 
   @impl true
@@ -49,6 +51,8 @@ defmodule Monty.Simulators.Synthetic.Environment do
   `:views` is a camera per sensor, keyed by sensor id, in the terms
   `Monty.Simulators.Synthetic.Scene.render/3` takes — a resolution, a zoom and a
   field of view. A sensor with no camera renders one ray down its own axis.
+  `:agent` and `:sensors` are where the episode starts, as an experiment's
+  simulator is configured.
 
   Geometry is a choice, not an assumption: with a scene the world renders depth,
   colour and semantic id for every sensor, which is what a ported surface policy
@@ -58,12 +62,18 @@ defmodule Monty.Simulators.Synthetic.Environment do
   @spec new([Monty.Simulators.Environment.sensor_id()], Scene.t() | nil, keyword()) :: t()
   def new(sensor_ids, scene, options \\ []) do
     sensor_ids = if sensor_ids == [], do: [@default_sensor], else: sensor_ids
+    agent = Keyword.get(options, :agent)
+    sensors = Keyword.get(options, :sensors, %{})
 
     %__MODULE__{
       sensor_ids: sensor_ids,
-      world: Kinematics.new(sensor_ids),
+      world: Kinematics.new(sensor_ids, agent: agent, sensors: sensors),
       scene: scene,
-      views: Map.new(Keyword.get(options, :views, %{}))
+      views: Map.new(Keyword.get(options, :views, %{})),
+      agent: agent,
+      # Kept so that a reset starts the episode where this one began, rather
+      # than wherever the last one ended.
+      sensors: sensors
     }
   end
 
@@ -83,8 +93,13 @@ defmodule Monty.Simulators.Synthetic.Environment do
 
   @impl true
   @spec reset(t()) :: t()
-  def reset(%__MODULE__{} = environment),
-    do: new(environment.sensor_ids, environment.scene, views: environment.views)
+  def reset(%__MODULE__{} = environment) do
+    new(environment.sensor_ids, environment.scene,
+      views: environment.views,
+      agent: environment.agent,
+      sensors: environment.sensors
+    )
+  end
 
   @doc "How the runtime addresses this environment's parts in a module spec."
   @spec agent_id() :: String.t()

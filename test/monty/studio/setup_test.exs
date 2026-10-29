@@ -93,6 +93,15 @@ defmodule Monty.Studio.SetupTest do
       assert setup.environment.objects == ["coneSolid"]
     end
 
+    test "the agent starts where the experiment starts it, with its sensors on it" do
+      setup = setup_for("base_10simobj_surf_agent")
+
+      assert setup.scene.agent.position == [0.0, 1.5, 0.1]
+      assert setup.scene.sensors["patch"].position == [0.0, 0.0, 0.0]
+      assert setup.scene.sensors["view_finder"].position == [0.0, 0.0, 0.03]
+      assert setup.scene.objects == [%{name: "coneSolid", position: [0.0, 1.5, -0.1]}]
+    end
+
     test "each sensor's camera is the one the experiment's agent declares" do
       setup = setup_for("base_10simobj_surf_agent")
 

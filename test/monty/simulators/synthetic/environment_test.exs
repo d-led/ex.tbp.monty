@@ -10,6 +10,7 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
   use ExUnit.Case, async: true
 
   alias Monty.Frameworks.Actions.{LookUp, MoveForward}
+  alias Monty.Geometry.Rotation
   alias Monty.Simulators.Synthetic.{Environment, Scene}
 
   @agent "agent_id_0"
@@ -127,6 +128,40 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
 
     refute Map.has_key?(seen, "depth")
     refute Map.has_key?(seen, "principal_curvatures")
+  end
+
+  describe "a world told where its episode starts" do
+    test "sees the object from there, through the camera it was given" do
+      environment =
+        Environment.new(["patch"], Scene.new(centre: [0.0, 1.5, -0.1]),
+          views: %{"patch" => [resolution: 3, hfov: 10.0, zoom: 10.0]},
+          agent: %{position: [0.0, 1.5, 0.1], rotation: Rotation.identity()},
+          sensors: %{"patch" => %{position: [0.0, 0.0, 0.0], rotation: Rotation.identity()}}
+        )
+
+      {observations, _proprioceptive_state, _environment} = Environment.step(environment, [])
+      patch = sensor(observations)
+
+      assert patch["location"] == [0.0, 1.5, 0.1]
+      # The object's surface is 5 cm in front of its centre, and the sensor is
+      # 20 cm in front of that: a decimetre and a half of empty space.
+      assert_in_delta patch["depth"] |> Enum.at(1) |> Enum.at(1), 0.15, 1.0e-12
+    end
+
+    test "and a reset starts the next episode there too" do
+      environment =
+        Environment.new(["patch"], Scene.new(),
+          agent: %{position: [0.0, 0.0, 0.5], rotation: Rotation.identity()},
+          sensors: %{"patch" => %{position: [0.0, 0.0, 0.0], rotation: Rotation.identity()}}
+        )
+
+      {_observations, _state, moved} =
+        Environment.step(environment, [%MoveForward{agent_id: @agent, distance: 0.4}])
+
+      {observations, _state, _environment} = Environment.step(Environment.reset(moved), [])
+
+      assert get_in(observations, ["agent_id_0", "patch", "location"]) == [0.0, 0.0, 0.5]
+    end
   end
 
   describe "a world seen through a patch" do

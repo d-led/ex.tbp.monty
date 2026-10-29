@@ -54,25 +54,26 @@ defmodule Monty.Simulators.Synthetic.Kinematics do
         }
 
   @doc """
-  A world with the agent at the origin and its sensors above it.
+  A world with the agent where the experiment starts it.
 
-  Sensors sit a decimetre up and a centimetre apart, which is where the
-  stand-in world has always put them; the spacing exists so that two sensors of
-  one agent see different places.
+  Options: `:agent`, the agent's start pose, and `:sensors`, a map of sensor id
+  to that sensor's pose relative to it — both as an experiment's simulator is
+  configured. A sensor the options do not place rides a decimetre back from the
+  agent and a centimetre apart from the others, which is the stand-in's own
+  geometry: a world with no scene description still needs two cameras to see two
+  places.
   """
-  @spec new([Monty.Simulators.Environment.sensor_id()]) :: t()
-  def new(sensor_ids) do
+  @spec new([Monty.Simulators.Environment.sensor_id()], keyword()) :: t()
+  def new(sensor_ids, options \\ []) do
+    placed = Keyword.get(options, :sensors, %{})
+
     %{
-      agent: %{position: [0.0, 0.0, 0.0], rotation: Rotation.identity()},
+      agent: pose(Keyword.get(options, :agent), origin()),
       sensors:
         sensor_ids
         |> Enum.with_index()
         |> Map.new(fn {sensor_id, index} ->
-          {sensor_id,
-           %{
-             position: [0.0, 0.0, @sensor_height + index * @sensor_spacing],
-             rotation: Rotation.identity()
-           }}
+          {sensor_id, pose(Map.get(placed, sensor_id), stand_in_pose(index))}
         end)
     }
   end
@@ -124,6 +125,18 @@ defmodule Monty.Simulators.Synthetic.Kinematics do
 
   # A move in the agent's own frame, in the world's: every step of an orbit is
   # taken after the one before it, so each uses the rotation the last one left.
+  defp origin, do: %{position: [0.0, 0.0, 0.0], rotation: Rotation.identity()}
+
+  defp stand_in_pose(index) do
+    %{
+      position: [0.0, 0.0, @sensor_height + index * @sensor_spacing],
+      rotation: Rotation.identity()
+    }
+  end
+
+  defp pose(nil, default), do: default
+  defp pose(%{} = pose, _default), do: pose
+
   defp translate_agent(world, offset) do
     agent = world.agent
 

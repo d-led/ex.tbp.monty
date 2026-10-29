@@ -18,6 +18,7 @@ defmodule Monty.Studio.Setup do
   """
 
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Geometry.Rotation
   alias Monty.ModuleMap
   alias Monty.Studio.Finding
 
@@ -30,6 +31,7 @@ defmodule Monty.Studio.Setup do
             monty_class: nil,
             environment: nil,
             cameras: %{},
+            scene: %{agent: nil, sensors: %{}, objects: []},
             motor_system: nil,
             motor_system_config: %{},
             transforms: [],
@@ -76,6 +78,22 @@ defmodule Monty.Studio.Setup do
   """
   @type camera :: [resolution: {pos_integer(), pos_integer()}, zoom: float(), hfov: float()]
 
+  @typedoc """
+  Where one body starts: a position in the world and the rotation from its own
+  frame to the world's.
+  """
+  @type pose :: %{position: [float()], rotation: Monty.Geometry.Rotation.t()}
+
+  @typedoc """
+  The place an experiment is run in, as its simulator is configured: where the
+  agent starts, where its sensors sit relative to it, and what is in front of it.
+  """
+  @type scene :: %{
+          agent: pose() | nil,
+          sensors: %{optional(String.t()) => pose()},
+          objects: [%{name: String.t() | nil, position: [float()]}]
+        }
+
   @type connection :: %{
           from: {:sensor | :learning_module, String.t()},
           to: {:sensor | :learning_module, String.t()},
@@ -107,6 +125,7 @@ defmodule Monty.Studio.Setup do
       monty_class: describe_target(Map.get(monty_config, "monty_class")),
       environment: environment(config),
       cameras: cameras(config),
+      scene: scene(config),
       motor_system: motor_system(monty_config),
       motor_system_config: Map.get(monty_config, "motor_system_config", %{}),
       transforms: transforms(config),
@@ -265,15 +284,32 @@ defmodule Monty.Studio.Setup do
   so a world rendering a different camera would disagree with it about which ray
   a pixel came from. A sensor whose experiment declares no camera renders one
   ray down its own axis.
+
+  It starts where the experiment starts it, too: `base_10simobj_surf_agent`
+  puts the agent 0.2 m from the object's centre with its patch camera on the
+  agent and its view finder 3 cm behind, and that is what a surface policy's
+  search expects to see — Monty's own `_move_to_visible_object` steps forward
+  from there until the view finder is at `desired_object_distance`, which is
+  what brings the patch within a finger's reach.
   """
   @spec world(t()) :: Monty.Simulators.Synthetic.Environment.t()
   def world(%__MODULE__{} = setup) do
     Monty.Simulators.Synthetic.Environment.new(
       sensor_ids(setup),
-      Monty.Simulators.Synthetic.Scene.new(),
-      views: setup.cameras
+      Monty.Simulators.Synthetic.Scene.new(centre: object_centre(setup)),
+      views: setup.cameras,
+      agent: setup.scene.agent,
+      sensors: setup.scene.sensors
     )
   end
+
+  # The stand-in world has one object. Where the experiment puts the first one is
+  # where the sphere goes; a config with no objects leaves it at the origin,
+  # which is where a world with nothing to say about scenes has always had it.
+  defp object_centre(%__MODULE__{scene: %{objects: [%{position: position} | _rest]}}),
+    do: position
+
+  defp object_centre(%__MODULE__{}), do: [0.0, 0.0, 0.0]
 
   # What runs for one learning module: the ported module when the config targets
   # one this port has written, and the stand-in otherwise. The config decides,
@@ -430,6 +466,70 @@ defmodule Monty.Studio.Setup do
   defp interface_class(config) do
     Map.get(config, "train_env_interface_class") || Map.get(config, "eval_env_interface_class")
   end
+
+  # Where a config's simulator puts everything. Habitat's `agent_args` give the
+  # agent a position and no rotation — the rotations it lists are the sensors',
+  # relative to the agent — and `env_init_args.objects` give the object a place
+  # 0.2 m in front of it.
+  defp scene(config) do
+    args = get_in(config, ["environment", "env_init_args"]) || %{}
+    agent_args = get_in(args, ["agents", "agent_args"]) || %{}
+
+    %{agent: agent_pose(agent_args), sensors: sensor_poses(agent_args), objects: objects(args)}
+  end
+
+  defp agent_pose(agent_args) do
+    case Map.get(agent_args, "position") do
+      [_x, _y, _z] = position ->
+        %{position: position, rotation: rotation(Map.get(agent_args, "rotation"))}
+
+      _absent ->
+        nil
+    end
+  end
+
+  defp sensor_poses(agent_args) do
+    sensor_ids = List.wrap(Map.get(agent_args, "sensor_ids"))
+    positions = List.wrap(Map.get(agent_args, "positions"))
+    rotations = List.wrap(Map.get(agent_args, "rotations"))
+
+    for {sensor_id, index} <- Enum.with_index(sensor_ids),
+        [_x, _y, _z] = position <- [Enum.at(positions, index)],
+        into: %{} do
+      {sensor_id, %{position: position, rotation: rotation(Enum.at(rotations, index))}}
+    end
+  end
+
+  defp objects(args) do
+    args
+    |> Map.get("objects")
+    |> List.wrap()
+    |> Enum.flat_map(fn
+      %{} = object ->
+        case Map.get(object, "position") do
+          [_x, _y, _z] = position -> [%{name: Map.get(object, "name"), position: position}]
+          _absent -> []
+        end
+
+      _scenery ->
+        []
+    end)
+  end
+
+  # A rotation in a config is a `wxyz` quaternion, as the rest of this port
+  # writes them. A config that has none means "not turned".
+  defp rotation([w, x, y, z])
+       when is_number(w) and is_number(x) and is_number(y) and is_number(z) do
+    case Rotation.from_quaternion({w * 1.0, x * 1.0, y * 1.0, z * 1.0}) do
+      {:ok, rotation} ->
+        rotation
+
+      {:error, reason} ->
+        raise ArgumentError, "a config declares a rotation that is not one: #{inspect(reason)}"
+    end
+  end
+
+  defp rotation(_absent), do: Rotation.identity()
 
   # What each sensor's camera is, from the agent a config asks its simulator for.
   # `resolutions` and `zooms` are listed in the agent's own sensor order, and the

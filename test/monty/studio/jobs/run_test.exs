@@ -47,13 +47,14 @@ defmodule Monty.Studio.Jobs.RunTest do
       {:ok, closed} = perform(record)
 
       [first, second] = closed.timeline
-      assert %{"patch" => %{"location" => first_location}} = first["sensors"]
-      assert %{"patch" => %{"location" => second_location}} = second["sensors"]
 
-      # The body the experiment names moves the agent, so successive steps see
-      # different places; a replay that lost that would be a slideshow of the
-      # same frame.
-      refute first_location == second_location
+      # A step is recorded with the sensors' places in Monty's units, and the
+      # first of them is where the experiment starts its agent — this config's
+      # own numbers, not the stand-in world's idea of where to stand.
+      assert first["step"] == 0
+      assert second["step"] == 1
+      assert %{"patch" => %{"location" => [0.0, 1.5, 0.2]}} = first["sensors"]
+      assert %{"patch" => %{"location" => _place}} = second["sensors"]
     end
 
     test "writes a log file beside the record, and points at it" do

@@ -50,6 +50,18 @@ point somewhere the surface is not.
 
 One pixel is the default, and it is a ray.
 
+Where the episode **starts** comes from the experiment too. `base_10simobj_surf_agent`
+puts the agent 0.2 m from the object's centre with its patch camera on the agent
+and its view finder 3 cm behind it, and the sphere goes where the config puts the
+object. That is what makes the body behave like Monty's: from there the surface
+policy's own `_move_to_visible_object` steps forward until the view finder is at
+`desired_object_distance`, which brings the patch within a finger's 5 cm reach,
+and only then does it start sampling movements along the surface. A world that
+started with its cameras already touching the object would never show that.
+
+The stand-in's own placement — a decimetre back, a centimetre apart — is only
+what a world with no scene description falls back to.
+
 The sensor makes of that what Monty's `CameraSM` makes of a depth image: a signed
 logarithm of the curvatures (`principal_curvatures_log`) and the centre pixel as
 hue, saturation and value (`hsv`, by the conversion `skimage` supplies and

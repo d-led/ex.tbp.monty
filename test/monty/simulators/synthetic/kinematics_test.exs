@@ -49,6 +49,35 @@ defmodule Monty.Simulators.Synthetic.KinematicsTest do
     |> Enum.each(fn {want, got} -> assert_in_delta got, want, delta end)
   end
 
+  describe "where a world starts" do
+    test "is where it is told: the agent's pose, and each sensor's offset from it" do
+      world =
+        Kinematics.new(["patch", "view_finder"],
+          agent: %{position: [0.0, 1.5, 0.1], rotation: Rotation.identity()},
+          sensors: %{
+            "patch" => %{position: [0.0, 0.0, 0.0], rotation: Rotation.identity()},
+            "view_finder" => %{position: [0.0, 0.0, 0.03], rotation: Rotation.identity()}
+          }
+        )
+
+      assert_at(world.agent.position, [0.0, 1.5, 0.1])
+      assert_at(sensor_position(world, "patch"), [0.0, 1.5, 0.1])
+      assert_at(sensor_position(world, "view_finder"), [0.0, 1.5, 0.13])
+    end
+
+    test "and a sensor it was told nothing about still sees its own place" do
+      world =
+        Kinematics.new(["patch", "view_finder"],
+          agent: %{position: [0.0, 0.0, 0.0], rotation: Rotation.identity()}
+        )
+
+      [_x, _y, patch_z] = sensor_position(world, "patch")
+      [_x, _y, finder_z] = sensor_position(world, "view_finder")
+
+      assert finder_z > patch_z
+    end
+  end
+
   describe "moving forward" do
     test "goes where the agent is looking, which is its local -z" do
       world = move(world(), [%MoveForward{agent_id: @agent, distance: 0.01}])
