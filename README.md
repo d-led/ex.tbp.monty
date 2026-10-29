@@ -15,6 +15,10 @@ Three promises shape everything here:
    motor system are BEAM processes exchanging CMP messages, so voting is a
    message round with an optional deadline rather than a blocking loop.
 
+What has actually been compared against Monty — which numbers, how closely, and
+what is still only a reading of the source — is in
+[docs/validation.md](docs/validation.md).
+
 The UI (LiveView + daisyUI) replaces hand-edited experiment configs and log
 files: browse and edit an experiment, launch a run, watch the step log, the
 hypothesis evidence and the vote telemetry as they happen.
@@ -26,12 +30,13 @@ hypothesis evidence and the vote telemetry as they happen.
 | Phoenix app, Postgres/Ecto/Oban, quality gates, release tooling | done |
 | `Monty.Cmp` — message, goal, attention region, wire form | done |
 | `Monty.Config` — Hydra composition, resolvers, snapshot parity | done (103/103) |
-| `Monty.ModuleMap` — the module contract and its verification | done (131 modules: Monty + teleop, 3 implemented) |
+| `Monty.ModuleMap` — the module contract and its verification | done (131 modules: Monty + teleop, 42 implemented) |
 | `Monty.Runtime` — one process per sensor and learning module, step barriers, vote rounds with deadlines | done |
 | Synthetic environment and `/runs/demo` live run view | done |
 | `Monty.Prerequisites` — streaming downloads into Monty's data and model paths, `/prerequisites` view | done |
 | `Monty.Studio` — faceted experiment index, setup preview and validation, builder, run history | done |
-| Ported sensor/learning modules, evidence matching, motor policies, MuJoCo bridge | planned |
+| Ported sensor/learning modules, evidence matching, motor policies | in progress — what agrees with Monty is listed in [docs/validation.md](docs/validation.md) |
+| MuJoCo/Habitat bridge | planned (needs the simulator installed) |
 
 ## Quick start
 

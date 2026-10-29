@@ -11,6 +11,10 @@ reported upstream by us.
 **Read §2.1 and §2.5 before diffing any run.** They are the two that change the
 numbers; everything else changes where code lives or what an error looks like.
 
+**What has actually been compared with Monty, and how closely it agreed, is in
+[`validation.md`](validation.md)** — this file records the differences the port
+keeps on purpose or suspects in Monty, that one records the agreements.
+
 ## At a glance
 
 | § | What | Status | What this port does |
