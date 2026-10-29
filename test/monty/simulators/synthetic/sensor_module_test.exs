@@ -45,7 +45,8 @@ defmodule Monty.Simulators.Synthetic.SensorModuleTest do
                "min_depth" => 0.05,
                "mean_depth" => 0.05,
                "object_coverage" => 1.0,
-               "principal_curvatures" => [-20.0, -20.0]
+               "principal_curvatures" => [-20.0, -20.0],
+               "principal_curvatures_log" => [-:math.log(21.0), -:math.log(21.0)]
              }
     end
 

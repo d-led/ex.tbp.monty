@@ -12,6 +12,7 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
 
   use Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
   alias Monty.Cmp.Message
+  alias Monty.Frameworks.Utils.SensorProcessing
   alias Monty.Geometry.SurfacePoseVectors
 
   # The features a world may report, by the names Monty's learning modules and
@@ -42,7 +43,7 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
         "pose_fully_defined" => pose_defined?,
         "on_object" => if(on_object?, do: 1.0, else: 0.0)
       },
-      non_morphological_features: Map.take(observation, @feature_keys),
+      non_morphological_features: features(observation),
       confidence: 1.0,
       pass_message: not motor_only?,
       process_features_in_lm: on_object?,
@@ -63,6 +64,21 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
     do: {SurfacePoseVectors.new(normal, direction_1, direction_2), true}
 
   defp pose_vectors(_observation), do: @undefined_pose
+
+  # A learning module configured for `principal_curvatures_log` expects the
+  # sensor to have scaled the curvatures: a signed logarithm, so that a convex
+  # surface stays negative and values near zero do not run off.
+  defp features(observation) do
+    features = Map.take(observation, @feature_keys)
+
+    case Map.get(features, "principal_curvatures") do
+      nil ->
+        features
+
+      curvatures ->
+        Map.put(features, "principal_curvatures_log", SensorProcessing.log_sign(curvatures))
+    end
+  end
 
   # A world that does not say is taken to be on the object: a world without
   # geometry reports everything it has as the thing in front of the sensor.
