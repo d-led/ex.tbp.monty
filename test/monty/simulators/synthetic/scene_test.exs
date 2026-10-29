@@ -78,4 +78,51 @@ defmodule Monty.Simulators.Synthetic.SceneTest do
       assert observation.rgba == nil
     end
   end
+
+  describe "a patch of rays, as a camera answers them" do
+    test "is as wide and as tall as its resolution" do
+      rendered = Scene.render(scene(), looking_down(), resolution: 5, field_of_view: 10.0)
+
+      assert length(rendered.depth) == 5
+      assert Enum.all?(rendered.depth, &(length(&1) == 5))
+      assert length(rendered.rgba) == 5
+      assert length(rendered.semantic) == 5
+    end
+
+    test "and its middle is the ray straight down the sensor's axis" do
+      rendered = Scene.render(scene(), looking_down(), resolution: 3, field_of_view: 10.0)
+
+      # The sensor is a decimetre up and the sphere's top is at the radius, so
+      # the middle sees five centimetres of it — as the single ray did.
+      centre = rendered.depth |> Enum.at(1) |> Enum.at(1)
+      assert_in_delta centre, 0.1 - @radius, 1.0e-12
+    end
+
+    test "and its edge pixels see the surface further away, at an angle" do
+      rendered = Scene.render(scene(), looking_down(), resolution: 3, field_of_view: 20.0)
+
+      corner = rendered.depth |> hd() |> hd()
+      centre = rendered.depth |> Enum.at(1) |> Enum.at(1)
+
+      assert corner > centre
+    end
+
+    test "a patch that hangs off the object has pixels that saw nothing" do
+      # Looking at the object's edge: the middle sees it, a side does not.
+      {:ok, rotation} = Rotation.from_axis_angle([0.0, 1.0, 0.0], :math.pi() / 4.0)
+
+      rendered =
+        Scene.render(
+          scene(),
+          %{position: [0.1, 0.0, 0.1], rotation: rotation},
+          resolution: 5,
+          field_of_view: 40.0
+        )
+
+      semantic = List.flatten(rendered.semantic)
+
+      assert 0.0 in semantic
+      assert 1.0 in semantic
+    end
+  end
 end

@@ -34,6 +34,14 @@ studio run of a surface experiment is `SurfacePolicyCurvatureInformed` choosing
 every action, the world moving by them, and the policy seeing the result on the
 next step.
 
+The scene renders a **patch**, not a single ray: `Scene.render/3` answers depth,
+colour and semantic images `resolution` pixels across a `field_of_view`, with
+the centre pixel on the sensor's own axis, as a pinhole camera does. The studio
+asks for five pixels across ten degrees — wide enough that the edges differ from
+the centre (so coverage is a fraction and `mean_depth` is a mean), narrow enough
+to sit on one surface. A one-pixel camera with no field of view is the default,
+which is what a ray is.
+
 The sensor makes of that what Monty's `CameraSM` makes of a depth image: a signed
 logarithm of the curvatures (`principal_curvatures_log`) and the centre pixel as
 hue, saturation and value (`hsv`, by the conversion `skimage` supplies and

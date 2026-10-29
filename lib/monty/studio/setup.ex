@@ -244,12 +244,21 @@ defmodule Monty.Studio.Setup do
   steer by (depth, a normal, curvatures), and no claim to be Monty's world. A
   simulator behind `Monty.Simulators.Port.Environment` replaces it when one can
   run here.
+
+  Its camera is five pixels across ten degrees: wide enough that the edge pixels
+  see a different part of the surface from the centre, which is what makes
+  coverage a fraction and ``mean_depth`` a mean, and narrow enough that the whole
+  patch sits on one surface of a five-centimetre sphere. The experiment's own
+  cameras are 64 pixels across a much narrower field, which no stand-in needs to
+  imitate — a patch that small would differ from its centre by well under a
+  millimetre.
   """
   @spec world(t()) :: Monty.Simulators.Synthetic.Environment.t()
   def world(%__MODULE__{} = setup) do
     Monty.Simulators.Synthetic.Environment.new(
       sensor_ids(setup),
-      Monty.Simulators.Synthetic.Scene.new()
+      Monty.Simulators.Synthetic.Scene.new(),
+      view: [resolution: 5, field_of_view: 10.0]
     )
   end
 

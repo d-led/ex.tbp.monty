@@ -110,8 +110,10 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
       seen = sensor(observations)
 
       # Depth 0 is what a depth image has where the camera saw nothing.
-      assert [[0.0]] = seen["depth"]
-      assert [[0.0]] = seen["semantic"]
+      assert [[depth]] = seen["depth"]
+      assert [[semantic_id]] = seen["semantic"]
+      assert depth == 0.0
+      assert semantic_id == 0.0
       assert seen["pose_vectors"] == nil
       assert seen["principal_curvatures"] == nil
     end
@@ -125,5 +127,39 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
 
     refute Map.has_key?(seen, "depth")
     refute Map.has_key?(seen, "principal_curvatures")
+  end
+
+  describe "a world seen through a patch" do
+    test "carries the image to the sensor, and the centre's surface with it" do
+      environment =
+        Environment.new(["patch"], Scene.new(radius: 0.05),
+          view: [resolution: 3, field_of_view: 10.0]
+        )
+
+      {observations, _proprioceptive_state, _environment} = Environment.step(environment, [])
+      patch = sensor(observations)
+
+      assert length(patch["depth"]) == 3
+      assert [normal, _direction_1, _direction_2] = patch["pose_vectors"]
+      assert_in_delta Enum.at(normal, 2), 1.0, 1.0e-12
+    end
+
+    test "and pitching the sensor takes the whole patch off the object" do
+      # Turning does not: the sensor sits above the agent, so it stays pointed
+      # at the object however the agent yaws. Pitching it is what looks away.
+      environment =
+        Environment.new(["patch"], Scene.new(radius: 0.05),
+          view: [resolution: 3, field_of_view: 10.0]
+        )
+
+      {_observations, _proprioceptive_state, environment} =
+        Environment.step(environment, [%LookUp{agent_id: @agent, rotation_degrees: 90.0}])
+
+      {observations, _proprioceptive_state, _environment} = Environment.step(environment, [])
+      patch = sensor(observations)
+
+      assert patch["pose_vectors"] == nil
+      assert List.flatten(patch["semantic"]) == List.duplicate(0.0, 9)
+    end
   end
 end

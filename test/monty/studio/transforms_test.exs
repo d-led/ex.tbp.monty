@@ -41,8 +41,9 @@ defmodule Monty.Studio.TransformsTest do
   end
 
   test "a miss is handed on as the furthest the sensor can see" do
-    # The world answers 0 where its ray missed; the transform turns that into
-    # "as far as the sensor can see" before any module reads it.
+    # The world answers 0 where a ray missed; the transform turns that into "as
+    # far as the sensor can see" before any module reads it. A patch means a
+    # partial miss is normal: some pixels see the object, some see nothing.
     {:ok, run} = Run.start(setup(), steps: 25)
 
     try do
@@ -52,10 +53,16 @@ defmodule Monty.Studio.TransformsTest do
           {run, [get_in(observations, ["agent_id_0", "patch"]) | seen]}
         end)
 
-      misses = Enum.filter(seen, &(&1["semantic"] == [[0.0]]))
+      pixels =
+        for observation <- seen,
+            {depth_row, semantic_row} <- Enum.zip(observation["depth"], observation["semantic"]),
+            {depth, semantic_id} <- Enum.zip(depth_row, semantic_row),
+            do: {depth, semantic_id}
 
-      assert misses != [], "no step missed the object, so nothing was transformed"
-      assert Enum.all?(misses, &(&1["depth"] == [[1.0]]))
+      assert Enum.any?(pixels, fn {depth, semantic_id} -> semantic_id == 0.0 and depth == 1.0 end),
+             "no pixel missed the object, so nothing was transformed"
+
+      refute Enum.any?(pixels, fn {depth, _semantic_id} -> depth == 0.0 end)
     after
       Run.stop(run)
     end

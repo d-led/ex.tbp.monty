@@ -30,12 +30,13 @@ defmodule Monty.Simulators.Synthetic.Environment do
   @default_sensor "patch"
 
   @enforce_keys [:sensor_ids, :world]
-  defstruct [:sensor_ids, :world, scene: nil]
+  defstruct [:sensor_ids, :world, scene: nil, view: []]
 
   @type t :: %__MODULE__{
           sensor_ids: [Monty.Simulators.Environment.sensor_id()],
           world: Kinematics.t(),
-          scene: Scene.t() | nil
+          scene: Scene.t() | nil,
+          view: keyword()
         }
 
   @impl true
@@ -43,17 +44,24 @@ defmodule Monty.Simulators.Synthetic.Environment do
   def new(sensor_ids), do: new(sensor_ids, nil)
 
   @doc """
-  A world looking at `scene`.
+  A world looking at `scene` through a view of `:resolution` pixels across and
+  `:field_of_view` degrees wide.
 
-  Geometry is a choice, not an assumption: with a scene the world reports depth,
-  a surface normal and principal curvatures for every sensor, which is what a
-  ported surface policy steers by; without one it reports only where the sensors
-  are, and a percept built from it says its pose is undefined.
+  Geometry is a choice, not an assumption: with a scene the world renders depth,
+  colour and semantic id for every sensor, which is what a ported surface policy
+  steers by; without one it reports only where the sensors are, and a percept
+  built from it says its pose is undefined.
   """
-  @spec new([Monty.Simulators.Environment.sensor_id()], Scene.t() | nil) :: t()
-  def new(sensor_ids, scene) do
+  @spec new([Monty.Simulators.Environment.sensor_id()], Scene.t() | nil, keyword()) :: t()
+  def new(sensor_ids, scene, options \\ []) do
     sensor_ids = if sensor_ids == [], do: [@default_sensor], else: sensor_ids
-    %__MODULE__{sensor_ids: sensor_ids, world: Kinematics.new(sensor_ids), scene: scene}
+
+    %__MODULE__{
+      sensor_ids: sensor_ids,
+      world: Kinematics.new(sensor_ids),
+      scene: scene,
+      view: Keyword.get(options, :view, [])
+    }
   end
 
   @doc """
@@ -72,7 +80,8 @@ defmodule Monty.Simulators.Synthetic.Environment do
 
   @impl true
   @spec reset(t()) :: t()
-  def reset(%__MODULE__{} = environment), do: new(environment.sensor_ids, environment.scene)
+  def reset(%__MODULE__{} = environment),
+    do: new(environment.sensor_ids, environment.scene, environment.view)
 
   @doc "How the runtime addresses this environment's parts in a module spec."
   @spec agent_id() :: String.t()
@@ -87,39 +96,40 @@ defmodule Monty.Simulators.Synthetic.Environment do
           {sensor_id,
            Map.merge(
              %{"location" => pose.position, "value" => x},
-             features(environment.scene, pose)
+             features(environment.scene, pose, environment.view)
            )}
         end)
     }
   end
 
   # A world with no scene can say nothing about a surface, so it says nothing.
-  defp features(nil, _pose), do: %{}
+  defp features(nil, _pose, _view), do: %{}
 
-  defp features(scene, pose), do: features(Scene.observe(scene, pose))
+  defp features(scene, pose, view), do: features(Scene.render(scene, pose, view))
 
-  # What a sensor sees, in the shape Monty's worlds answer in: a **one-pixel
-  # image** of depth, colour and semantic id, not a summary of one. Monty's own
-  # code indexes these images (`PositioningProcedure.depth_at_center` reads the
-  # centre pixel), so a world that answered a bare number would make any policy
-  # that looks at the image fail on this world and work on Monty's.
+  # What a sensor sees, in the shape Monty's worlds answer in: images of depth,
+  # colour and semantic id, not a summary of one. Monty's own code indexes these
+  # (`PositioningProcedure.depth_at_center` reads the centre pixel), so a world
+  # that answered a bare number would make any policy that looks at the image
+  # fail on this world and work on Monty's.
   #
-  # A ray that missed answers depth 0, which is what Monty's depth images use
-  # for "no return", and which its sensor modules read as "nothing there".
+  # A ray that missed answers depth 0, which is what Monty's depth images use for
+  # "no return", and an experiment's `MissingToMaxDepth` transform is what turns
+  # that into the furthest the sensor can see (`docs/monty-bugs.md` §1.7).
   #
-  # The surface it hit — the outward normal and the two curvatures — is answered
-  # here too, because this world knows it exactly. A camera would estimate them
-  # from the depth image (`sensor_processing.principal_curvatures/5`, not yet
-  # ported), so this is the one place where the stand-in knows more than a sensor
-  # could; `Monty.Simulators.Synthetic.SensorModule` is where that is turned into
-  # features.
-  defp features(observation) do
+  # The surface the centre ray hit — the outward normal and the two curvatures —
+  # is answered here too, because this world knows it exactly. A camera would
+  # estimate them from the depth image (`sensor_processing.principal_curvatures/5`,
+  # not yet ported), so this is the one place where the stand-in knows more than
+  # a sensor could; `Monty.Simulators.Synthetic.SensorModule` is where that is
+  # turned into features.
+  defp features(rendered) do
     %{
-      "depth" => [[observation.depth || 0.0]],
-      "rgba" => [[observation.rgba || [0.0, 0.0, 0.0, 1.0]]],
-      "semantic" => [[if(observation.on_object, do: 1.0, else: 0.0)]],
-      "principal_curvatures" => observation.principal_curvatures,
-      "pose_vectors" => pose_vectors(observation.pose_vectors)
+      "depth" => rendered.depth,
+      "rgba" => rendered.rgba,
+      "semantic" => rendered.semantic,
+      "principal_curvatures" => rendered.centre.principal_curvatures,
+      "pose_vectors" => pose_vectors(rendered.centre.pose_vectors)
     }
   end
 

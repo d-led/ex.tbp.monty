@@ -30,6 +30,10 @@ defmodule Monty.Simulators.Synthetic.Scene do
   @radius 0.05
   @rgb [0.2, 0.7, 0.2]
 
+  # What a depth image has where the camera saw nothing: no depth, and a colour
+  # that belongs to nothing.
+  @no_colour [0.0, 0.0, 0.0, 1.0]
+
   @enforce_keys [:centre, :radius, :rgb]
   defstruct [:centre, :radius, :rgb]
 
@@ -70,23 +74,75 @@ defmodule Monty.Simulators.Synthetic.Scene do
   end
 
   @doc """
-  What a sensor at `pose` sees.
+  What a sensor at `pose` sees through a camera of `:resolution` pixels across
+  and `:field_of_view` degrees wide.
 
   A sensor looks along its own **−z**, as Monty's do, so its pose is enough: no
-  separate gaze has to be passed in and kept consistent with it.
+  separate gaze has to be passed in and kept consistent with it. The centre
+  pixel of an odd resolution is the ray straight down that axis.
 
-  A ray that misses sees nothing: no depth, no colour, no surface. That is a
-  difference from Monty's worlds rather than a simplification — MuJoCo's scenes
-  are enclosed, so a camera pointed anywhere sees a floor, a wall or a ceiling at
-  some distance, and a surface agent's search for a lost object relies on that
-  (`docs/monty-bugs.md` §1.7). Here there is nothing behind the object, so a
-  surface agent that leaves it will not find its way back. Prefer a simulator
-  behind `Monty.Simulators.Port.Environment` for long surface runs.
+  A one-pixel camera at no field of view is the default, and it is a real
+  camera rather than a summary: depth, colour and semantic id come back as
+  images, which is the shape Monty's own code indexes.
+
+  A ray that misses sees nothing: depth 0, which is what a depth image has where
+  the camera saw nothing, and a semantic id of 0. That is a difference from
+  Monty's worlds rather than a simplification — theirs are enclosed, so a camera
+  pointed anywhere sees a floor, a wall or a ceiling at some distance, and a
+  surface agent's search for a lost object relies on that
+  (`docs/monty-bugs.md` §1.7). Here there is nothing behind the object.
+  """
+  @spec render(t(), %{position: Rotation.vector(), rotation: Rotation.t()}, keyword()) :: %{
+          depth: [[float()]],
+          rgba: [[[float()]]],
+          semantic: [[float()]],
+          centre: observation()
+        }
+  def render(%__MODULE__{} = scene, %{position: origin, rotation: rotation}, options \\ []) do
+    resolution = Keyword.get(options, :resolution, 1)
+    field_of_view = Keyword.get(options, :field_of_view, 0.0)
+
+    rows =
+      for row <- 0..(resolution - 1) do
+        for column <- 0..(resolution - 1) do
+          ray(origin, rotation, row, column, resolution, field_of_view)
+          |> then(&observation_of_ray(scene, &1))
+        end
+      end
+
+    %{
+      depth: Enum.map(rows, fn row -> Enum.map(row, &(&1.depth || 0.0)) end),
+      rgba: Enum.map(rows, fn row -> Enum.map(row, &(&1.rgba || @no_colour)) end),
+      semantic:
+        Enum.map(rows, fn row -> Enum.map(row, &if(&1.on_object, do: 1.0, else: 0.0)) end),
+      centre: rows |> Enum.at(div(resolution, 2)) |> Enum.at(div(resolution, 2))
+    }
+  end
+
+  @doc """
+  What the middle of the view sees.
+
+  The one thing a policy asks of a camera when it is not looking at the image:
+  how far away the thing in front of it is.
   """
   @spec observe(t(), %{position: Rotation.vector(), rotation: Rotation.t()}) :: observation()
-  def observe(%__MODULE__{} = scene, %{position: origin, rotation: rotation}) do
-    gaze = Rotation.apply(rotation, [0.0, 0.0, -1.0])
+  def observe(%__MODULE__{} = scene, pose), do: render(scene, pose).centre
 
+  # A pinhole camera: the ray through a pixel is its offset on the image plane
+  # at unit distance, turned into the sensor's own frame. Pixels sit at the
+  # middles of their cells, so the middle of an odd resolution is the axis.
+  defp ray(origin, rotation, row, column, resolution, field_of_view) do
+    half = :math.tan(radians(field_of_view) / 2.0)
+    step = if resolution > 1, do: 2.0 * half / resolution, else: 0.0
+
+    across = if resolution > 1, do: -half + step * (column + 0.5), else: 0.0
+    down = if resolution > 1, do: -half + step * (row + 0.5), else: 0.0
+
+    direction = Rotation.apply(rotation, SpatialArithmetics.normalize([across, down, -1.0]))
+    {origin, direction}
+  end
+
+  defp observation_of_ray(scene, {origin, gaze}) do
     case first_hit(scene, origin, gaze) do
       nil ->
         %{on_object: false, depth: nil, principal_curvatures: nil, pose_vectors: nil, rgba: nil}
@@ -101,6 +157,8 @@ defmodule Monty.Simulators.Synthetic.Scene do
         }
     end
   end
+
+  defp radians(degrees), do: degrees * :math.pi() / 180.0
 
   # The distance along the gaze to the surface, and where that is. A ray that
   # misses, or that only meets the sphere behind the sensor, sees nothing.
