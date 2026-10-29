@@ -19,14 +19,16 @@ defmodule Monty.Studio.Run do
 
   @default_steps 12
 
-  @enforce_keys [:model_id, :setup]
-  defstruct [:model_id, :setup, :steps, step: 0]
+  @enforce_keys [:model_id, :setup, :environment]
+  defstruct [:model_id, :setup, :environment, :steps, step: 0, pending_actions: []]
 
   @type t :: %__MODULE__{
           model_id: String.t(),
           setup: Setup.t(),
+          environment: Environment.t(),
           steps: pos_integer(),
-          step: non_neg_integer()
+          step: non_neg_integer(),
+          pending_actions: [Monty.Frameworks.Actions.Action.t()]
         }
 
   @doc """
@@ -48,6 +50,9 @@ defmodule Monty.Studio.Run do
          %__MODULE__{
            model_id: model_id,
            setup: setup,
+           # The world starts where an episode starts, not where the last one
+           # left it: a run is an episode.
+           environment: Environment.new(Setup.sensor_ids(setup)),
            steps: Keyword.get(opts, :steps, @default_steps)
          }}
 
@@ -59,21 +64,28 @@ defmodule Monty.Studio.Run do
   @doc """
   Runs one timestep, returning the report and the advanced run.
 
+  The world is stepped with the actions the model chose on the *previous* step,
+  and the report's observations come from *this* one: Monty's `Interface.step/1`
+  hands the environment the actions it was given last time, and the first step
+  of an episode is taken where the sensors already are.
+
   A failing module surfaces as an exit from the coordinator rather than a
   returned error: a step either produced a report or the run itself is broken,
   and pretending otherwise here would only move the decision.
   """
   @spec step(t()) :: {:ok, map(), map(), t()}
   def step(%__MODULE__{model_id: model_id, setup: setup, step: step} = run) do
-    {observations, proprioceptive_state} =
-      Environment.observations(step, Setup.sensor_ids(setup))
+    {observations, proprioceptive_state, environment} =
+      Environment.step(run.environment, run.pending_actions)
 
     ctx = %{Monty.Context.new(seed(setup)) | step: step}
 
-    {:ok, _actions, info} = Model.step(model_id, observations, proprioceptive_state, ctx)
+    {:ok, actions, info} = Model.step(model_id, observations, proprioceptive_state, ctx)
+
     # The observations come back with the report so a page can show what the
     # modules saw, not just what they did with it.
-    {:ok, info, observations, %{run | step: step + 1}}
+    {:ok, info, observations,
+     %{run | step: step + 1, environment: environment, pending_actions: actions}}
   end
 
   @doc "Whether the run has used its steps."

@@ -21,7 +21,9 @@ defmodule ExTbpMontyWeb.RunsLive do
   def mount(_params, _session, socket) do
     if connected?(socket), do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, topic())
 
-    {:ok, assign(socket, model: nil, step: 0) |> stream(:steps, [])}
+    {:ok,
+     assign(socket, model: nil, step: 0, environment: nil, pending_actions: [])
+     |> stream(:steps, [])}
   end
 
   @impl true
@@ -114,7 +116,15 @@ defmodule ExTbpMontyWeb.RunsLive do
 
     {:ok, _pid} = DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {Model, spec})
 
-    {:noreply, socket |> assign(model: model_id, step: 0) |> advance()}
+    {:noreply,
+     socket
+     |> assign(
+       model: model_id,
+       step: 0,
+       environment: Environment.new([:patch]),
+       pending_actions: []
+     )
+     |> advance()}
   end
 
   def handle_event("step", _params, %{assigns: %{model: nil}} = socket), do: {:noreply, socket}
@@ -133,9 +143,10 @@ defmodule ExTbpMontyWeb.RunsLive do
   end
 
   defp advance(socket) do
-    {observations, proprioceptive_state} = Environment.observations(socket.assigns.step)
+    {observations, proprioceptive_state, environment} =
+      Environment.step(socket.assigns.environment, socket.assigns.pending_actions)
 
-    {:ok, _actions, info} =
+    {:ok, actions, info} =
       Model.step(socket.assigns.model, observations, proprioceptive_state, Monty.Context.new(42))
 
     info = Map.put(info, :id, "step-#{info.step}")
@@ -147,7 +158,7 @@ defmodule ExTbpMontyWeb.RunsLive do
 
     socket
     |> stream_insert(:steps, info)
-    |> assign(step: socket.assigns.step + 1)
+    |> assign(step: socket.assigns.step + 1, environment: environment, pending_actions: actions)
   end
 
   defp topic, do: "monty:demo"

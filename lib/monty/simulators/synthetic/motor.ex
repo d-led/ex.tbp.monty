@@ -4,10 +4,17 @@ defmodule Monty.Simulators.Synthetic.Motor do
 
   The smallest thing that implements the ported motor system interface: it
   receives the first sensor module's percept and the filtered goals, and answers
-  the actions for the next environment step.
+  the actions for the next environment step — in the same vocabulary the ported
+  policies answer in, so the world behind it does not care which of the two is
+  driving.
   """
 
   @behaviour Monty.Frameworks.Models.MotorSystem.RuntimeMotorSystem
+
+  alias Monty.Frameworks.Actions.MoveForward
+
+  @agent_id "agent_id_0"
+  @step_distance 0.01
 
   @type state :: %{steps_taken: non_neg_integer(), goals_seen: non_neg_integer()}
 
@@ -16,7 +23,7 @@ defmodule Monty.Simulators.Synthetic.Motor do
 
   @impl true
   def call(state, _ctx, _observations, _proprioceptive_state, _percept, goals) do
-    action = %{"action" => "move_forward", "agent_id" => "agent_id_0", "distance" => 0.01}
+    action = %MoveForward{agent_id: @agent_id, distance: @step_distance}
 
     {[action], %{state | steps_taken: state.steps_taken + 1, goals_seen: length(goals)}}
   end

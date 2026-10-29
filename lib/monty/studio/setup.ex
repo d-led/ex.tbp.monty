@@ -215,11 +215,12 @@ defmodule Monty.Studio.Setup do
       lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
       lm_to_lm_vote: inputs_by_learning_module(setup, :vote),
       # The ported motor system builds from this config too
-      # (`Monty.Frameworks.Models.MotorSystem.from_config/1`), but the stand-in
-      # environment cannot execute what it would ask for: a policy answers
-      # `Monty.Frameworks.Actions` structs, and `Monty.Simulators.Synthetic.Environment`
-      # ignores actions entirely. A real body on a fake world would be fake
-      # progress, so the stand-in motor stays until a world consumes actions.
+      # (`Monty.Frameworks.Models.MotorSystem.from_config/1`), and the world now
+      # executes the actions it would ask for. What is still missing is the
+      # *sight* of one: `Monty.Simulators.Synthetic.SensorModule` reports a fixed
+      # pose and no depth, curvature or coverage, so a ported surface policy
+      # would be steering by numbers that are not there. The stand-in motor
+      # stays until the sensor has geometry to report.
       motor: {Monty.Simulators.Synthetic.Motor, Monty.Simulators.Synthetic.Motor.new()}
     }
   end

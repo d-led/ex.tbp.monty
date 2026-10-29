@@ -47,12 +47,12 @@ defmodule Monty.Studio.Jobs.RunTest do
       {:ok, closed} = perform(record)
 
       [first, second] = closed.timeline
-      assert %{"patch" => %{"location" => [x, _, _]}} = first["sensors"]
-      assert %{"patch" => %{"location" => [later, _, _]}} = second["sensors"]
+      assert %{"patch" => %{"location" => first_location}} = first["sensors"]
+      assert %{"patch" => %{"location" => second_location}} = second["sensors"]
 
-      # The synthetic world moves one centimetre per step; a replay that lost
-      # the movement would be a slideshow of the same frame.
-      assert_in_delta later - x, 0.01, 0.0001
+      # The synthetic body steps one centimetre forward per step; a replay that
+      # lost the movement would be a slideshow of the same frame.
+      assert_in_delta distance(first_location, second_location), 0.01, 0.0001
     end
 
     test "writes a log file beside the record, and points at it" do
@@ -153,5 +153,9 @@ defmodule Monty.Studio.Jobs.RunTest do
       refute File.dir?(Artifacts.dir(closed.id))
       assert RunHistory.get(closed.id) == nil
     end
+  end
+
+  defp distance([x1, y1, z1], [x2, y2, z2]) do
+    :math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2 + (z1 - z2) ** 2)
   end
 end

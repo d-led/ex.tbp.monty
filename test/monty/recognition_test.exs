@@ -17,7 +17,8 @@ defmodule Monty.RecognitionTest do
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.{GraphObjectModel, GridObjectModel}
   alias Monty.Runtime.{Episode, LearningModuleServer, Model, Registry}
-  alias Monty.Simulators.Synthetic.{Environment, Motor, SensorModule}
+  alias Monty.Simulators.Synthetic.{Environment, SensorModule}
+  alias Monty.Test.SurfaceWalkMotor
 
   @agent "agent_id_0"
   @channel "patch"
@@ -80,7 +81,7 @@ defmodule Monty.RecognitionTest do
       ],
       learning_modules: [%{id: :lm_0, module: EvidenceGraphLM, state: lm}],
       sm_to_lm: %{lm_0: [@channel]},
-      motor: {Motor, Motor.new()},
+      motor: {SurfaceWalkMotor, SurfaceWalkMotor.new()},
       num_exploratory_steps: 12
     }
 
@@ -89,16 +90,22 @@ defmodule Monty.RecognitionTest do
   end
 
   # The sensor walking along a surface, one centimetre per step, starting again
-  # at the beginning whenever the episode is rewound.
+  # at the beginning whenever the episode is rewound. The world is the runtime's
+  # own stand-in, stepped with the actions the body chose, so the walk is the
+  # body's doing rather than the clock's.
   defp walk do
-    {:ok, position} = Agent.start_link(fn -> 0 end)
+    {:ok, world} = Agent.start_link(fn -> Environment.new([@channel]) end)
 
-    environment = fn _actions ->
-      step = Agent.get_and_update(position, fn step -> {step, step + 1} end)
-      Environment.observations(step, [@channel])
+    environment = fn actions ->
+      Agent.get_and_update(world, fn environment ->
+        {observations, proprioceptive_state, environment} =
+          Environment.step(environment, actions)
+
+        {{observations, proprioceptive_state}, environment}
+      end)
     end
 
-    rewind = fn -> Agent.update(position, fn _step -> 0 end) end
+    rewind = fn -> Agent.update(world, &Environment.reset/1) end
 
     {environment, rewind}
   end

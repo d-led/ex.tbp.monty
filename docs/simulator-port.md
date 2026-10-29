@@ -15,6 +15,21 @@ Elixir side, both written and tested:
 Not done: the Python side. `test/support/probe_world.py` speaks the contract but
 is a probe, not a world — it answers with what it was sent.
 
+## The world the runtime develops against
+
+Until the peer exists, runs are stepped against
+`Monty.Simulators.Synthetic.Environment`, which implements the same idea as a
+value (`Monty.Simulators.Environment`): `new/1`, `step/2`, `reset/1`, answering
+`{observations, proprioceptive_state, world}`. It moves the agent by the actions
+the body chose — `Monty.Simulators.Synthetic.Kinematics` follows MuJoCo's
+conventions for the six actions it honours — and refuses the ones that need a
+surface instead of silently ignoring them.
+
+What it is not: geometry. Nothing is out there, so its observations are its own
+poses, and a run against it says nothing about a learned object. It exists to
+keep the runtime honest — the model's actions change what the model sees next —
+not to produce numbers comparable with Monty's.
+
 ## The contract
 
 Framing is a four-byte big-endian length then UTF-8 JSON, which is Erlang's
@@ -62,7 +77,12 @@ ability to run the simulator on another machine later.
 ## The next step
 
 Whoever installs MuJoCo or Habitat writes the peer against the contract above and
-points `Monty.Simulators.Port.Environment` at it. Then `Monty.Runtime.Step` can be
-driven by a real world, the ported motor system can replace
-`Monty.Simulators.Synthetic.Motor` in `Monty.Studio.Setup`, and
-`base_10simobj_surf_agent` becomes comparable with Monty's own numbers.
+points `Monty.Simulators.Port.Environment` at it — as a function for
+`Monty.Runtime.Episode`, or behind the same value-shaped interface as the
+stand-in world. Then `base_10simobj_surf_agent` becomes comparable with Monty's
+own numbers.
+
+Before that, the stand-in sensor has to earn its keep: it reports a fixed pose
+and no depth, curvature or coverage, which is why `Monty.Studio.Setup` still
+uses the stand-in motor rather than the ported surface policy. A world with an
+object in it is what gives a surface policy something to steer by.
