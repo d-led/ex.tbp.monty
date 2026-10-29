@@ -188,13 +188,16 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids do
     |> Pyramid.new()
   end
 
-  @doc "Combines pyramids by taking the strongest plane at each scale."
+  @doc "Combines pyramids by taking the strongest plane at each pixel."
   @spec combine_max([Pyramid.t()]) :: Pyramid.t()
-  def combine_max(pyramids), do: combine(pyramids, &Enum.max/1)
+  def combine_max(pyramids),
+    do: combine(pyramids, &elementwise(&1, fn values -> Enum.max(values) end))
 
-  @doc "Combines pyramids by averaging their planes."
+  @doc "Combines pyramids by averaging their planes at each pixel."
   @spec combine_mean([Pyramid.t()]) :: Pyramid.t()
-  def combine_mean(pyramids), do: combine(pyramids, &(Enum.sum(&1) / length(&1)))
+  def combine_mean(pyramids) do
+    combine(pyramids, &elementwise(&1, fn values -> Enum.sum(values) / length(values) end))
+  end
 
   @doc """
   Collapses a pyramid into one image, the shape of its finest scale.
@@ -216,6 +219,24 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids do
 
   defp plane(%Pyramid{planes: planes}, octave, scale) do
     planes |> Enum.at(octave) |> Enum.at(scale)
+  end
+
+  @doc "Collapses a pyramid by taking the strongest plane at each pixel."
+  @spec collapse_max(Pyramid.t()) :: plane()
+  def collapse_max(pyramid),
+    do: collapse(pyramid, &elementwise(&1, fn values -> Enum.max(values) end))
+
+  @doc "Collapses a pyramid by averaging its planes at each pixel."
+  @spec collapse_mean(Pyramid.t()) :: plane()
+  def collapse_mean(pyramid) do
+    collapse(pyramid, &elementwise(&1, fn values -> Enum.sum(values) / length(values) end))
+  end
+
+  # Reduces several planes at every pixel: rows first, then the values in them.
+  defp elementwise([single], _reducer), do: single
+
+  defp elementwise(planes, reducer) do
+    Enum.zip_with(planes, fn rows -> Enum.zip_with(rows, reducer) end)
   end
 
   defp difference(left, right) do

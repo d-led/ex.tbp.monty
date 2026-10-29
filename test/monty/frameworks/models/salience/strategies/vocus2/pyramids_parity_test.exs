@@ -68,12 +68,25 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.PyramidsParityTest 
   end
 
   test "combining two pyramids by maximum is Monty's", %{fixture: fixture} do
-    gaussian = Pyramids.gaussian_pyramid(fixture["image"], sigma: 1.0, n_scales: 3)
+    # Two pyramids of *different* images: combining a pyramid with itself would
+    # pass even if the combiner compared planes as values rather than pixels.
+    combined =
+      Pyramids.combine_max([
+        Pyramids.gaussian_pyramid(fixture["image"], sigma: 1.0, n_scales: 3),
+        Pyramids.gaussian_pyramid(fixture["combine_max"]["image"], sigma: 1.0, n_scales: 3)
+      ])
 
-    assert_close(
-      planes(Pyramids.combine_max([gaussian, gaussian])),
-      fixture["combine_max"]["expected"]
-    )
+    assert_close(planes(combined), fixture["combine_max"]["expected"])
+  end
+
+  test "combining two pyramids by mean is Monty's", %{fixture: fixture} do
+    combined =
+      Pyramids.combine_mean([
+        Pyramids.gaussian_pyramid(fixture["image"], sigma: 1.0, n_scales: 3),
+        Pyramids.gaussian_pyramid(fixture["combine_mean"]["image"], sigma: 1.0, n_scales: 3)
+      ])
+
+    assert_close(planes(combined), fixture["combine_mean"]["expected"])
   end
 
   test "collapsing a pyramid by summing its planes is Monty's", %{fixture: fixture} do

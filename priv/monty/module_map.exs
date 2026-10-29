@@ -1916,68 +1916,68 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2",
     package: "monty",
     python: "frameworks/models/salience/strategies/vocus2/vocus2.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.MapCombine",
         python: "MapCombine"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.WeightedSum",
         python: "WeightedSum"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.WeightedMean",
         python: "WeightedMean"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.OperatingLimits",
         python: "OperatingLimits"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.NoOperatingLimits",
         python: "NoOperatingLimits"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.SafeOperatingLimits",
         python: "SafeOperatingLimits"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalience",
         python: "ColorChannelSalience"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.DepthSalience",
         python: "DepthSalience"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.OrientationSalience",
         python: "OrientationSalience"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Vocus2SalienceConfig",
         python: "Vocus2SalienceConfig"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Normalize",
         python: "Normalize"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2",
         python: "Vocus2"
       }

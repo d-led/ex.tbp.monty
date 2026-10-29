@@ -57,7 +57,11 @@ def main():
     center, surround = pyramids.center_surround_pyramids(
         image, center_sigma=1.0, surround_sigma=2.5, n_scales=2
     )
-    combined = pyramids.pyramid_combine_max([gaussian, gaussian])
+    # A second pyramid of a *different* image: combining two identical pyramids
+    # would pass even if the combiner only compared planes as values.
+    other = pyramids.gaussian_pyramid(np.flip(image), sigma=1.0, n_scales=3)
+    combined = pyramids.pyramid_combine_max([gaussian, other])
+    combined_mean = pyramids.pyramid_combine_mean([gaussian, other])
     collapsed = pyramids.pyramid_collapse(gaussian, reduce=lambda imgs: np.sum(imgs, axis=0))
 
     fixture = {
@@ -83,7 +87,12 @@ def main():
             "expected": _planes(pyramids.laplacian_pyramid(gaussian)),
         },
         "combine_max": {
+            "image": np.flip(image).tolist(),
             "expected": _planes(combined),
+        },
+        "combine_mean": {
+            "image": np.flip(image).tolist(),
+            "expected": _planes(combined_mean),
         },
         "collapse_sum": {
             "expected": np.asarray(collapsed, dtype=np.float64).tolist(),

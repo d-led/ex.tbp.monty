@@ -28,6 +28,7 @@ numbers; everything else changes where code lives or what an error looks like.
 | [1.11](#111-the-rgb-blur-comment-names-the-wrong-kernel-size) | A comment says OpenCV picks `6*sigma + 1`; measured, it picks `8*sigma + 1` | Confirmed by measurement | Follows the code (OpenCV), not the comment |
 | [1.12](#112-lab-goes-through-opencvs-8-bit-tables) | `cvtColor` on a `uint8` image answers 8-bit Lab, so it quantises | Confirmed by measurement over every 8-bit colour | Floats; agrees to 2.67 of 255 |
 | [1.13](#113-cv2s-area-resize-does-something-else-when-only-one-axis-enlarges) | `INTER_AREA` with one axis enlarging is neither area nor linear | Confirmed by measurement; unreachable from Monty's pyramids | Answers the area average |
+| [1.14](#114-a-pixel-with-no-depth-becomes-the-nearest-patch-in-the-view) | A depth of zero, mapped to log-depth zero, is *above* every real depth | Suspected; masked by the depth transforms real configs use | Reproduced on purpose, pinned by a test |
 | [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
 | [2.2](#22-motor_only_step-travels-in-the-result) | A policy sets a flag on the motor system | Decision | The flag travels in the result |
 | [2.3](#23-the-motor-system-answers-with-itself) | The motor system mutates itself | Decision | It answers with its next version |
@@ -579,6 +580,44 @@ cubic enlargements.
 area and enlarges by cubic, so no Monty experiment reaches the mixed case. It
 would show in a strategy that resized an image to a shape larger on one axis
 only — none does today.
+
+---
+
+## 1.14 A pixel with no depth becomes the nearest patch in the view
+
+**What Monty does.** `DepthSalience.process` turns a depth image into
+`-log(depth)` and then removes the infinities:
+
+```python
+        image = -np.log(image).astype(np.float32)
+        image = np.nan_to_num(image, posinf=0.0)
+```
+([`vocus2/vocus2.py:316-317`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/salience/strategies/vocus2/vocus2.py#L316-L317))
+
+A depth of zero — nothing there — is exactly what produces the `+inf`, so this
+line decides what an empty pixel means to the depth channel. Mapping it to zero
+puts it at the **top** of the log-depth scale: a real depth of 2 m is about
+-0.69 here, so an empty pixel arrives 0.69 *nearer than everything else in the
+view*, and the centre/surround difference that follows is a strong positive
+response. The pixel is then one of the most salient in the map.
+
+**Why it is probably not what was meant.** The line is removing infinities, not
+choosing a meaning for absence; the natural reading of "no depth" is "no
+evidence", which would be a large positive log-depth — the bottom of the scale —
+or a mask. As written, a hole in the depth map is indistinguishable from an
+object held against the lens.
+
+**What this port does.** Reproduces it, arithmetic and consequence, because a
+number that differs from Monty's is worse than a number that agrees with a
+suspected defect. A test pins the behaviour: the empty corner answers a positive
+salience, lower than a real near step's but not zero, and
+`DepthSalience`'s docs say so at the code site.
+
+**Why it is latent for Monty's own experiments.** The transforms a camera runs
+before a salience module sees its depth — `MissingToMaxDepth` and
+`DepthTo3DLocations` — turn a missing reading into the maximum depth, not into
+zero, so the case is rare in a configured run and reachable mainly by a caller
+that hands a depth image straight to the strategy.
 
 ---
 
