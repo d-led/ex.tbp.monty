@@ -52,7 +52,7 @@ defmodule Monty.Studio.Run do
            setup: setup,
            # The world starts where an episode starts, not where the last one
            # left it: a run is an episode.
-           environment: Environment.new(Setup.sensor_ids(setup)),
+           environment: Setup.world(setup),
            steps: Keyword.get(opts, :steps, @default_steps)
          }}
 

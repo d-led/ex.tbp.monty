@@ -9,8 +9,8 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
 
   use ExUnit.Case, async: true
 
-  alias Monty.Frameworks.Actions.MoveForward
-  alias Monty.Simulators.Synthetic.Environment
+  alias Monty.Frameworks.Actions.{LookUp, MoveForward}
+  alias Monty.Simulators.Synthetic.{Environment, Scene}
 
   @agent "agent_id_0"
 
@@ -18,6 +18,10 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
 
   defp sensor_location(observations, sensor_id \\ "patch") do
     observations |> Map.fetch!(@agent) |> Map.fetch!(sensor_id) |> Map.fetch!("location")
+  end
+
+  defp sensor(observations, sensor_id \\ "patch") do
+    observations |> Map.fetch!(@agent) |> Map.fetch!(sensor_id)
   end
 
   test "an observation says where each sensor is in the world" do
@@ -41,9 +45,9 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
 
     agent = Map.fetch!(proprioceptive_state, @agent)
 
-    assert Enum.at(agent["position"], 2) == -0.01
+    assert Enum.at(agent.position, 2) == -0.01
     # The sensor has not moved relative to the agent it is mounted on.
-    assert Enum.at(get_in(agent, ["sensors", "patch", "position"]), 2) == 0.1
+    assert Enum.at(agent.sensors["patch"].position, 2) == 0.1
   end
 
   test "a step answers the world it leaves behind, so steps compose" do
@@ -71,5 +75,53 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
       Environment.step(Environment.new([]), [])
 
     assert Map.has_key?(Map.fetch!(observations, @agent), "patch")
+  end
+
+  describe "a world with something in it" do
+    test "reports the surface under the sensor, with the depth and the pose" do
+      environment = Environment.new(["patch"], Scene.new(radius: 0.05))
+
+      {observations, _proprioceptive_state, _environment} = Environment.step(environment, [])
+      seen = sensor(observations)
+
+      assert seen["on_object"]
+      assert_in_delta seen["min_depth"], 0.05, 1.0e-12
+      assert_in_delta seen["mean_depth"], 0.05, 1.0e-12
+      assert seen["object_coverage"] == 1.0
+
+      # The normal at the top of the sphere, and the two curvature directions.
+      [normal, direction_1, direction_2] = seen["pose_vectors"]
+      assert_in_delta Enum.at(normal, 2), 1.0, 1.0e-12
+      assert_in_delta Enum.at(direction_1, 2), 0.0, 1.0e-12
+      assert_in_delta Enum.at(direction_2, 2), 0.0, 1.0e-12
+
+      assert_in_delta hd(seen["principal_curvatures"]), -20.0, 1.0e-9
+    end
+
+    test "and a sensor that looks up sees nothing" do
+      # Turning the agent does not look away: the sensor sits above the agent,
+      # so it stays pointed at the object. Pitching it is what loses the view.
+      environment = Environment.new(["patch"], Scene.new(radius: 0.05))
+
+      {observations, _proprioceptive_state, _environment} =
+        Environment.step(environment, [%LookUp{agent_id: @agent, rotation_degrees: 90.0}])
+
+      seen = sensor(observations)
+
+      refute seen["on_object"]
+      assert seen["min_depth"] == nil
+      assert seen["object_coverage"] == 0.0
+      assert seen["pose_vectors"] == nil
+    end
+  end
+
+  test "a world with nothing in it says nothing about a surface" do
+    {observations, _proprioceptive_state, _environment} =
+      Environment.step(Environment.new(["patch"]), [])
+
+    seen = sensor(observations)
+
+    refute Map.has_key?(seen, "on_object")
+    refute Map.has_key?(seen, "principal_curvatures")
   end
 end

@@ -61,9 +61,17 @@ defmodule Monty.Frameworks.Models.MotorPolicySelectors do
     Monty.Config.Target.class!(config).new(options)
   end
 
-  defp selector_option({key, policy_config})
-       when key in ~w(policy jump_to_goal look_at_goal default),
-       do: {String.to_existing_atom(key), MotorPolicies.from_config(policy_config)}
+  defp selector_option({"policy", policy_config}),
+    do: {:policy, MotorPolicies.from_config(policy_config)}
+
+  defp selector_option({"jump_to_goal", policy_config}),
+    do: {:jump_to_goal, MotorPolicies.from_config(policy_config)}
+
+  defp selector_option({"look_at_goal", policy_config}),
+    do: {:look_at_goal, MotorPolicies.from_config(policy_config)}
+
+  defp selector_option({"default", policy_config}),
+    do: {:default, MotorPolicies.from_config(policy_config)}
 
   defp selector_option({key, _value}),
     do: raise(ArgumentError, "a policy selector takes no #{inspect(key)}")

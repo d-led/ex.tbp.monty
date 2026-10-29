@@ -349,11 +349,11 @@ defmodule Monty.Runtime.Step do
          goals,
          ctx
        ) do
-    {module, motor_state} = state.motor
+    {module, _initial_state} = state.motor
     percept = first_percept(state, percepts)
 
     {actions, motor_state} =
-      module.call(motor_state, ctx, observations, proprioceptive_state, percept, goals)
+      module.call(state.motor_state, ctx, observations, proprioceptive_state, percept, goals)
 
     state = %{state | motor_state: motor_state, motor_only?: module.motor_only_step(motor_state)}
 
@@ -520,9 +520,7 @@ defmodule Monty.Runtime.Step do
 
   defp reset_motor(nil), do: nil
 
-  defp reset_motor({module, motor_state}) do
-    {module, module.reset(motor_state)}
-  end
+  defp reset_motor({module, motor_state}), do: module.reset(motor_state)
 
   defp set_experiment_mode_state(%State{model_id: model_id} = state, mode) do
     Enum.each(state.learning_modules, fn lm ->

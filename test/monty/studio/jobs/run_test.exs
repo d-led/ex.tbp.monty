@@ -50,9 +50,10 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert %{"patch" => %{"location" => first_location}} = first["sensors"]
       assert %{"patch" => %{"location" => second_location}} = second["sensors"]
 
-      # The synthetic body steps one centimetre forward per step; a replay that
-      # lost the movement would be a slideshow of the same frame.
-      assert_in_delta distance(first_location, second_location), 0.01, 0.0001
+      # The body the experiment names moves the agent, so successive steps see
+      # different places; a replay that lost that would be a slideshow of the
+      # same frame.
+      refute first_location == second_location
     end
 
     test "writes a log file beside the record, and points at it" do
@@ -153,9 +154,5 @@ defmodule Monty.Studio.Jobs.RunTest do
       refute File.dir?(Artifacts.dir(closed.id))
       assert RunHistory.get(closed.id) == nil
     end
-  end
-
-  defp distance([x1, y1, z1], [x2, y2, z2]) do
-    :math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2 + (z1 - z2) ** 2)
   end
 end

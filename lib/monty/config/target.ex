@@ -47,9 +47,18 @@ defmodule Monty.Config.Target do
     end
   end
 
-  @doc "Whether every `_target_` in a config tree names a module this port has."
+  @doc """
+  Whether every `_target_` in a config tree names a module this port has.
+
+  Only the strings that name a class are looked at: a config's parameters are
+  mostly ordinary strings (`agent_id_0`, `all`), and treating those as class
+  names would call every experiment unbuilt.
+  """
   @spec implemented?(term()) :: boolean()
-  def implemented?(value) when is_binary(value), do: ported?(unwrap(value))
+  def implemented?(value) when is_binary(value) do
+    if class_reference?(value), do: ported?(unwrap(value)), else: true
+  end
+
   def implemented?(value) when is_list(value), do: Enum.all?(value, &implemented?/1)
 
   def implemented?(%{"_target_" => target} = config),
@@ -57,6 +66,10 @@ defmodule Monty.Config.Target do
 
   def implemented?(%{} = config), do: config |> Map.values() |> implemented?()
   def implemented?(_scalar), do: true
+
+  defp class_reference?("${monty.class:" <> _rest), do: true
+  defp class_reference?("tbp." <> _rest), do: true
+  defp class_reference?(_value), do: false
 
   defp ported?(python) do
     match?({:ok, %{status: :implemented}}, ModuleMap.resolve(python))

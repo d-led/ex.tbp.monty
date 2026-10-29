@@ -177,10 +177,22 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
     [:math.cos(angle - :math.pi() / 2.0), :math.sin(angle + :math.pi() / 2.0), 0.0]
   end
 
-  # Every parameter the ported policies take.
-  @policy_keys ~w(agent_id sensor_id alpha pc_alpha desired_object_distance
-                 use_goal_driven_actions max_pc_bias_steps min_general_steps
-                 min_heading_steps file fixed_amount)
+  # Every parameter the ported policies take, by the name it has in a config.
+  # Spelled out rather than looked up: a key turned into an atom at runtime only
+  # works if some loaded module happens to have made that atom already.
+  @policy_keys %{
+    "agent_id" => :agent_id,
+    "sensor_id" => :sensor_id,
+    "alpha" => :alpha,
+    "pc_alpha" => :pc_alpha,
+    "desired_object_distance" => :desired_object_distance,
+    "use_goal_driven_actions" => :use_goal_driven_actions,
+    "max_pc_bias_steps" => :max_pc_bias_steps,
+    "min_general_steps" => :min_general_steps,
+    "min_heading_steps" => :min_heading_steps,
+    "file" => :file,
+    "fixed_amount" => :fixed_amount
+  }
 
   @doc """
   The policy a config describes.
@@ -210,9 +222,10 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
     {:action_sampler, Monty.Frameworks.Actions.ActionSamplers.from_config(sampler)}
   end
 
-  defp policy_option({key, value}) when key in @policy_keys,
-    do: {String.to_existing_atom(key), value}
-
-  defp policy_option({key, _value}),
-    do: raise(ArgumentError, "a motor policy takes no #{inspect(key)}")
+  defp policy_option({key, value}) do
+    case Map.fetch(@policy_keys, key) do
+      {:ok, option} -> {option, value}
+      :error -> raise ArgumentError, "a motor policy takes no #{inspect(key)}"
+    end
+  end
 end

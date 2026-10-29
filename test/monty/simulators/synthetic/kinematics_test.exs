@@ -15,7 +15,9 @@ defmodule Monty.Simulators.Synthetic.KinematicsTest do
     LookUp,
     MoveForward,
     MoveTangentially,
+    OrientHorizontal,
     OrientVertical,
+    SetAgentPose,
     TurnLeft,
     TurnRight
   }
@@ -140,15 +142,59 @@ defmodule Monty.Simulators.Synthetic.KinematicsTest do
     end
   end
 
-  describe "an action the stand-in world cannot honour" do
-    test "is refused rather than quietly ignored" do
-      assert_raise ArgumentError, ~r/needs a surface/, fn ->
+  describe "orienting" do
+    test "vertically orbits the agent about its own axes: sideways, then outwards" do
+      world =
         move(world(), [
           %OrientVertical{
             agent_id: @agent,
             rotation_degrees: 0.0,
+            down_distance: 0.01,
+            forward_distance: 0.005
+          }
+        ])
+
+      assert_at(world.agent.position, [0.0, -0.01, -0.005])
+    end
+
+    test "horizontally the same way, sideways along x" do
+      world =
+        move(world(), [
+          %OrientHorizontal{
+            agent_id: @agent,
+            rotation_degrees: 0.0,
+            left_distance: 0.01,
+            forward_distance: 0.005
+          }
+        ])
+
+      assert_at(world.agent.position, [-0.01, 0.0, -0.005])
+    end
+
+    test "and the pitch in the middle decides which way the outwards step goes" do
+      world =
+        move(world(), [
+          %OrientVertical{
+            agent_id: @agent,
+            rotation_degrees: 90.0,
             down_distance: 0.0,
-            forward_distance: 0.0
+            forward_distance: 0.01
+          }
+        ])
+
+      # Pitched a quarter turn, a step along the agent's -z is a step along +y.
+      assert_at(world.agent.position, [0.0, 0.01, 0.0], 1.0e-9)
+    end
+  end
+
+  describe "an action the stand-in world cannot honour" do
+    test "is refused rather than quietly ignored" do
+      assert_raise ArgumentError, ~r/sets a pose outright/, fn ->
+        move(world(), [
+          %SetAgentPose{
+            agent_id: @agent,
+            location: [0.0, 0.0, 0.0],
+            rotation_quat: {1.0, 0.0, 0.0, 0.0}
           }
         ])
       end

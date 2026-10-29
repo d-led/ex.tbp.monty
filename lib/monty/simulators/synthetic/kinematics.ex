@@ -13,13 +13,16 @@ defmodule Monty.Simulators.Synthetic.Kinematics do
       agent stays where it points;
     * `MoveTangentially` moves along the action's `direction`, which is already a
       world vector: the surface policies rotate their heading by the agent's
-      rotation before they answer, so it must not be rotated again.
+      rotation before they answer, so it must not be rotated again;
+    * `OrientVertical` / `OrientHorizontal` orbit the agent about its own axes:
+      a side step, then a pitch or yaw, then a step along the agent's −Z. Monty's
+      actuator "ASSUMES" the distances were calculated to orbit the object, and
+      takes the surface into account not at all — so neither does this.
 
-  `OrientVertical` and `OrientHorizontal` cannot be honoured here: they align the
-  agent against a **surface**, and the stand-in world has no object to be near
-  and no surface normal to align with. Asking for one is an error rather than a
-  silent no-op — a world that quietly ignores an action makes an agent look
-  broken in a way that the log cannot explain.
+  What is not honoured: the actions that set a pose outright (`SetAgentPose`,
+  `SetSensorPose`, `SetYaw`, …). Asking for one is an error rather than a silent
+  no-op — a world that quietly ignores an action makes an agent look broken in a
+  way that the log cannot explain.
   """
 
   alias Monty.Frameworks.Actions.{
@@ -27,10 +30,13 @@ defmodule Monty.Simulators.Synthetic.Kinematics do
     LookUp,
     MoveForward,
     MoveTangentially,
+    OrientHorizontal,
+    OrientVertical,
     TurnLeft,
     TurnRight
   }
 
+  alias Monty.Frameworks.Utils.SpatialArithmetics
   alias Monty.Geometry.Rotation
 
   @sensor_height 0.1
@@ -76,11 +82,11 @@ defmodule Monty.Simulators.Synthetic.Kinematics do
   def step(world, actions), do: Enum.reduce(actions, world, &act/2)
 
   defp act(%MoveForward{distance: distance}, world) do
-    move_agent(world, local_to_world(world.agent, [0.0, 0.0, -distance]))
+    translate_agent(world, [0.0, 0.0, -distance])
   end
 
   defp act(%MoveTangentially{distance: distance, direction: direction}, world) do
-    move_agent(world, scale(unit(direction), distance))
+    move_agent(world, SpatialArithmetics.scale(SpatialArithmetics.normalize(direction), distance))
   end
 
   defp act(%TurnLeft{rotation_degrees: degrees}, world),
@@ -93,25 +99,55 @@ defmodule Monty.Simulators.Synthetic.Kinematics do
 
   defp act(%LookDown{rotation_degrees: degrees}, world), do: pitch_sensors(world, -degrees)
 
+  defp act(%OrientVertical{} = action, world) do
+    world
+    |> translate_agent([0.0, -action.down_distance, 0.0])
+    |> rotate_agent([1.0, 0.0, 0.0], action.rotation_degrees)
+    |> translate_agent([0.0, 0.0, -action.forward_distance])
+  end
+
+  defp act(%OrientHorizontal{} = action, world) do
+    world
+    |> translate_agent([-action.left_distance, 0.0, 0.0])
+    |> rotate_agent([0.0, 1.0, 0.0], -action.rotation_degrees)
+    |> translate_agent([0.0, 0.0, -action.forward_distance])
+  end
+
   defp act(action, _world) do
     raise ArgumentError,
-          "#{inspect(action.__struct__)} needs a surface to act on, and the " <>
-            "stand-in world has none; use a simulator behind " <>
+          "#{inspect(action.__struct__)} sets a pose outright, which the stand-in " <>
+            "world does not do; use a simulator behind " <>
             "Monty.Simulators.Port.Environment instead"
   end
 
   # -- the agent ------------------------------------------------------------
 
-  defp move_agent(world, offset) do
+  # A move in the agent's own frame, in the world's: every step of an orbit is
+  # taken after the one before it, so each uses the rotation the last one left.
+  defp translate_agent(world, offset) do
     agent = world.agent
-    %{world | agent: %{agent | position: add(agent.position, offset)}}
+
+    %{
+      world
+      | agent: %{
+          agent
+          | position: SpatialArithmetics.add(agent.position, local_to_world(agent, offset))
+        }
+    }
   end
 
-  defp turn_agent(world, degrees) do
+  defp move_agent(world, offset) do
     agent = world.agent
-    yaw = about([0.0, 1.0, 0.0], degrees)
+    %{world | agent: %{agent | position: SpatialArithmetics.add(agent.position, offset)}}
+  end
 
-    %{world | agent: %{agent | rotation: Rotation.multiply(agent.rotation, yaw)}}
+  defp turn_agent(world, degrees), do: rotate_agent(world, [0.0, 1.0, 0.0], degrees)
+
+  defp rotate_agent(world, axis, degrees) do
+    agent = world.agent
+    rotation = Rotation.multiply(agent.rotation, about(axis, degrees))
+
+    %{world | agent: %{agent | rotation: rotation}}
   end
 
   # A pitch belongs to the sensors: in Monty the agent keeps facing where it
@@ -130,15 +166,36 @@ defmodule Monty.Simulators.Synthetic.Kinematics do
   # -- reading the world ----------------------------------------------------
 
   @doc """
+  Where each sensor is and which way it faces, in the world.
+
+  The sensor's own frame is the agent's turned by however the sensor is mounted
+  on it, so raising the agent's yaw carries its cameras round too.
+  """
+  @spec sensor_world_poses(t()) :: %{
+          optional(Monty.Simulators.Environment.sensor_id()) => pose()
+        }
+  def sensor_world_poses(world) do
+    Map.new(world.sensors, fn {sensor_id, sensor} ->
+      {sensor_id,
+       %{
+         position:
+           SpatialArithmetics.add(
+             world.agent.position,
+             local_to_world(world.agent, sensor.position)
+           ),
+         rotation: Rotation.multiply(world.agent.rotation, sensor.rotation)
+       }}
+    end)
+  end
+
+  @doc """
   Where each sensor is, as the environment reports it.
   """
   @spec sensor_positions(t()) :: %{
           optional(Monty.Simulators.Environment.sensor_id()) => Rotation.vector()
         }
   def sensor_positions(world) do
-    Map.new(world.sensors, fn {sensor_id, sensor} ->
-      {sensor_id, add(world.agent.position, local_to_world(world.agent, sensor.position))}
-    end)
+    Map.new(sensor_world_poses(world), fn {sensor_id, pose} -> {sensor_id, pose.position} end)
   end
 
   @doc """
@@ -160,20 +217,4 @@ defmodule Monty.Simulators.Synthetic.Kinematics do
   end
 
   defp radians(degrees), do: degrees * :math.pi() / 180.0
-
-  defp add([a1, a2, a3], [b1, b2, b3]), do: [a1 + b1, a2 + b2, a3 + b3]
-
-  defp scale([x, y, z], factor), do: [x * factor, y * factor, z * factor]
-
-  # Monty's actuator assumes a unit direction; a policy that sent something else
-  # would otherwise move the agent by an amount nobody chose.
-  defp unit([x, y, z]) do
-    length = :math.sqrt(x * x + y * y + z * z)
-
-    if length == 0.0 do
-      raise ArgumentError, "a movement direction of zero length has no direction"
-    else
-      [x / length, y / length, z / length]
-    end
-  end
 end

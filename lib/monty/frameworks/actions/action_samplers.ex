@@ -89,11 +89,20 @@ defmodule Monty.Frameworks.Actions.ActionSamplers do
     Monty.Config.Target.class!(config).new(options)
   end
 
-  # Every parameter Monty's two samplers take.
-  @sampler_keys ~w(absolute_degrees direction location rotation_degrees
-                   translation_distance min_absolute_degrees max_absolute_degrees
-                   min_rotation_degrees max_rotation_degrees
-                   min_translation max_translation)
+  # Every parameter Monty's two samplers take, by the name it has in a config.
+  @sampler_keys %{
+    "absolute_degrees" => :absolute_degrees,
+    "direction" => :direction,
+    "location" => :location,
+    "rotation_degrees" => :rotation_degrees,
+    "translation_distance" => :translation_distance,
+    "min_absolute_degrees" => :min_absolute_degrees,
+    "max_absolute_degrees" => :max_absolute_degrees,
+    "min_rotation_degrees" => :min_rotation_degrees,
+    "max_rotation_degrees" => :max_rotation_degrees,
+    "min_translation" => :min_translation,
+    "max_translation" => :max_translation
+  }
 
   defp sampler_option({"actions", actions}),
     do: {:actions, Enum.map(actions, &Monty.Config.Target.class!/1)}
@@ -101,9 +110,10 @@ defmodule Monty.Frameworks.Actions.ActionSamplers do
   defp sampler_option({"rotation_quat", quaternion}),
     do: {:rotation_quat, List.to_tuple(quaternion)}
 
-  defp sampler_option({key, value}) when key in @sampler_keys,
-    do: {String.to_existing_atom(key), value}
-
-  defp sampler_option({key, _value}),
-    do: raise(ArgumentError, "a sampler takes no #{inspect(key)}")
+  defp sampler_option({key, value}) do
+    case Map.fetch(@sampler_keys, key) do
+      {:ok, option} -> {option, value}
+      :error -> raise ArgumentError, "a sampler takes no #{inspect(key)}"
+    end
+  end
 end

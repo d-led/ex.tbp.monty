@@ -23,25 +23,37 @@ defmodule Monty.Simulators.Synthetic.Environment do
 
   @behaviour Monty.Simulators.Environment
 
-  alias Monty.Geometry.Rotation
-  alias Monty.Simulators.Synthetic.Kinematics
+  alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
+  alias Monty.Simulators.Synthetic.{Kinematics, Scene}
 
   @agent_id "agent_id_0"
   @default_sensor "patch"
 
   @enforce_keys [:sensor_ids, :world]
-  defstruct [:sensor_ids, :world]
+  defstruct [:sensor_ids, :world, scene: nil]
 
   @type t :: %__MODULE__{
           sensor_ids: [Monty.Simulators.Environment.sensor_id()],
-          world: Kinematics.t()
+          world: Kinematics.t(),
+          scene: Scene.t() | nil
         }
 
   @impl true
   @spec new([Monty.Simulators.Environment.sensor_id()]) :: t()
-  def new(sensor_ids) do
+  def new(sensor_ids), do: new(sensor_ids, nil)
+
+  @doc """
+  A world looking at `scene`.
+
+  Geometry is a choice, not an assumption: with a scene the world reports depth,
+  a surface normal and principal curvatures for every sensor, which is what a
+  ported surface policy steers by; without one it reports only where the sensors
+  are, and a percept built from it says its pose is undefined.
+  """
+  @spec new([Monty.Simulators.Environment.sensor_id()], Scene.t() | nil) :: t()
+  def new(sensor_ids, scene) do
     sensor_ids = if sensor_ids == [], do: [@default_sensor], else: sensor_ids
-    %__MODULE__{sensor_ids: sensor_ids, world: Kinematics.new(sensor_ids)}
+    %__MODULE__{sensor_ids: sensor_ids, world: Kinematics.new(sensor_ids), scene: scene}
   end
 
   @doc """
@@ -55,37 +67,68 @@ defmodule Monty.Simulators.Synthetic.Environment do
   def step(%__MODULE__{} = environment, actions) do
     world = Kinematics.step(environment.world, actions)
 
-    {observations(world), proprioceptive_state(world), %{environment | world: world}}
+    {observations(environment, world), proprioceptive_state(world), %{environment | world: world}}
   end
 
   @impl true
   @spec reset(t()) :: t()
-  def reset(%__MODULE__{} = environment), do: new(environment.sensor_ids)
+  def reset(%__MODULE__{} = environment), do: new(environment.sensor_ids, environment.scene)
 
   @doc "How the runtime addresses this environment's parts in a module spec."
   @spec agent_id() :: String.t()
   def agent_id, do: @agent_id
 
-  defp observations(world) do
+  defp observations(environment, world) do
     [x, _y, _z] = world.agent.position
 
     %{
       @agent_id =>
-        Map.new(Kinematics.sensor_positions(world), fn {sensor_id, position} ->
-          {sensor_id, %{"location" => position, "value" => x}}
+        Map.new(Kinematics.sensor_world_poses(world), fn {sensor_id, pose} ->
+          {sensor_id,
+           Map.merge(
+             %{"location" => pose.position, "value" => x},
+             features(environment.scene, pose)
+           )}
         end)
     }
   end
 
+  # A world with no scene can say nothing about a surface, so it says nothing.
+  defp features(nil, _pose), do: %{}
+
+  defp features(scene, pose), do: features(Scene.observe(scene, pose))
+
+  # A one-pixel sensor sees one depth, and it is the nearest, the mean and the
+  # only one at once. Monty's surface sensor reports all three; so does this.
+  defp features(observation) do
+    %{
+      "on_object" => observation.on_object,
+      "depth" => observation.depth,
+      "mean_depth" => observation.depth,
+      "min_depth" => observation.depth,
+      "object_coverage" => if(observation.on_object, do: 1.0, else: 0.0),
+      "principal_curvatures" => observation.principal_curvatures,
+      "pose_vectors" => pose_vectors(observation.pose_vectors)
+    }
+  end
+
+  # Observations are logged and stored with the run, so the three vectors travel
+  # as lists: a tuple would be a scene's convenience leaking into a record.
+  defp pose_vectors(nil), do: nil
+  defp pose_vectors({normal, direction_1, direction_2}), do: [normal, direction_1, direction_2]
+
+  # Monty's worlds answer with `AgentState`/`SensorState`, and its motor system
+  # reads them as such, so that is the shape this one answers in too: a world
+  # that answered a different shape would make the body depend on which world it
+  # was given. The agent's pose is absolute, each sensor's is relative to it.
   defp proprioceptive_state(world) do
     %{
-      @agent_id => %{
-        "position" => world.agent.position,
-        "rotation" => Rotation.to_xyzw(world.agent.rotation),
-        "sensors" =>
+      @agent_id => %AgentState{
+        position: world.agent.position,
+        rotation: world.agent.rotation,
+        sensors:
           Map.new(Kinematics.sensor_poses(world), fn {sensor_id, sensor} ->
-            {sensor_id,
-             %{"position" => sensor.position, "rotation" => Rotation.to_xyzw(sensor.rotation)}}
+            {sensor_id, %SensorState{position: sensor.position, rotation: sensor.rotation}}
           end)
       }
     }

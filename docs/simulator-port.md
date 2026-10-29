@@ -22,13 +22,20 @@ Until the peer exists, runs are stepped against
 value (`Monty.Simulators.Environment`): `new/1`, `step/2`, `reset/1`, answering
 `{observations, proprioceptive_state, world}`. It moves the agent by the actions
 the body chose — `Monty.Simulators.Synthetic.Kinematics` follows MuJoCo's
-conventions for the six actions it honours — and refuses the ones that need a
-surface instead of silently ignoring them.
+conventions for the actions it honours — and refuses the ones it does not
+instead of silently ignoring them.
 
-What it is not: geometry. Nothing is out there, so its observations are its own
-poses, and a run against it says nothing about a learned object. It exists to
-keep the runtime honest — the model's actions change what the model sees next —
-not to produce numbers comparable with Monty's.
+It has one object in it: `Monty.Simulators.Synthetic.Scene`, a sphere, so a
+sensor reports a depth, an outward normal and two principal curvatures
+(`-1/radius`, as Monty's are for a convex surface). That is what a ported surface
+policy needs to steer by, and it is why `Monty.Studio.Setup` now builds the
+**body from the experiment's config**: a studio run of a surface experiment is
+`SurfacePolicyCurvatureInformed` choosing every action, the world moving by them,
+and the policy seeing the result on the next step.
+
+What it is not: Monty's world. A sphere's numbers are not MuJoCo's, so a run
+against it says whether the parts agree with each other — not whether they agree
+with Monty. Only the peer below can answer the second question.
 
 ## The contract
 
@@ -78,11 +85,9 @@ ability to run the simulator on another machine later.
 
 Whoever installs MuJoCo or Habitat writes the peer against the contract above and
 points `Monty.Simulators.Port.Environment` at it — as a function for
-`Monty.Runtime.Episode`, or behind the same value-shaped interface as the
-stand-in world. Then `base_10simobj_surf_agent` becomes comparable with Monty's
-own numbers.
+`Monty.Runtime.Episode`, or behind the same value-shaped interface the stand-in
+world implements. Its `proprioceptive_state` is parsed into
+`AgentState`/`SensorState` there, because that is the shape the body reads.
 
-Before that, the stand-in sensor has to earn its keep: it reports a fixed pose
-and no depth, curvature or coverage, which is why `Monty.Studio.Setup` still
-uses the stand-in motor rather than the ported surface policy. A world with an
-object in it is what gives a surface policy something to steer by.
+Then the sphere goes away, and `base_10simobj_surf_agent` becomes comparable with
+Monty's own numbers.

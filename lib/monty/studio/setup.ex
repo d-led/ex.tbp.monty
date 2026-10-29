@@ -26,6 +26,7 @@ defmodule Monty.Studio.Setup do
             monty_class: nil,
             environment: nil,
             motor_system: nil,
+            motor_system_config: %{},
             attention_system: nil,
             monty_args: %{},
             sensors: [],
@@ -94,6 +95,7 @@ defmodule Monty.Studio.Setup do
       monty_class: describe_target(Map.get(monty_config, "monty_class")),
       environment: environment(config),
       motor_system: motor_system(monty_config),
+      motor_system_config: Map.get(monty_config, "motor_system_config", %{}),
       attention_system: describe_target(get_in(monty_config, ["attention_system", "_target_"])),
       monty_args: Map.get(monty_config, "monty_args", %{}),
       sensors: sensors,
@@ -214,15 +216,39 @@ defmodule Monty.Studio.Setup do
       sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
       lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
       lm_to_lm_vote: inputs_by_learning_module(setup, :vote),
-      # The ported motor system builds from this config too
-      # (`Monty.Frameworks.Models.MotorSystem.from_config/1`), and the world now
-      # executes the actions it would ask for. What is still missing is the
-      # *sight* of one: `Monty.Simulators.Synthetic.SensorModule` reports a fixed
-      # pose and no depth, curvature or coverage, so a ported surface policy
-      # would be steering by numbers that are not there. The stand-in motor
-      # stays until the sensor has geometry to report.
-      motor: {Monty.Simulators.Synthetic.Motor, Monty.Simulators.Synthetic.Motor.new()}
+      motor: motor_spec(setup)
     }
+  end
+
+  # The body is the config's, when every class it names is ported: the motor
+  # system, the selector and every policy. Otherwise the stand-in drives, which
+  # moves the agent and leaves the percepts to the learning modules.
+  defp motor_spec(%__MODULE__{motor_system_config: config}) when map_size(config) > 0 do
+    if Monty.Config.Target.implemented?(config) do
+      {Monty.Frameworks.Models.MotorSystem,
+       Monty.Frameworks.Models.MotorSystem.from_config(config)}
+    else
+      {Monty.Simulators.Synthetic.Motor, Monty.Simulators.Synthetic.Motor.new()}
+    end
+  end
+
+  defp motor_spec(%__MODULE__{}),
+    do: {Monty.Simulators.Synthetic.Motor, Monty.Simulators.Synthetic.Motor.new()}
+
+  @doc """
+  The world this setup is run against.
+
+  The stand-in world with a sphere in it: enough for a ported surface policy to
+  steer by (depth, a normal, curvatures), and no claim to be Monty's world. A
+  simulator behind `Monty.Simulators.Port.Environment` replaces it when one can
+  run here.
+  """
+  @spec world(t()) :: Monty.Simulators.Synthetic.Environment.t()
+  def world(%__MODULE__{} = setup) do
+    Monty.Simulators.Synthetic.Environment.new(
+      sensor_ids(setup),
+      Monty.Simulators.Synthetic.Scene.new()
+    )
   end
 
   # What runs for one learning module: the ported module when the config targets
