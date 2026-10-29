@@ -160,10 +160,15 @@ Saying this plainly matters more than the table above:
   environment `tbp.monty` (Python 3.8.20, `torch` 1.13.1, `torch_geometric`
   2.1.0, `numpy` 1.23.5, `habitat_sim` 0.2.2) matching `environment_arm64.yml`,
   with YCB object meshes under `$MONTY_DATA` and pretrained models under
-  `$MONTY_MODELS`. `scripts/setup_monty_oracle.sh` builds a pip-only stand-in
-  where that environment is absent, with newer versions (§2.15 of
-  `monty-bugs.md`). **No Monty episode has been recorded or compared yet** — an
-  episode is still compared piece by piece, never whole.
+  `$MONTY_MODELS`. **Ten episodes of
+  `base_config_10distinctobj_dist_agent` have been recorded** from it —
+  `scripts/record_monty_episode.py`, 338 steps, every episode `correct` in 21–38
+  matching steps — but the port has not yet been replayed against *that*
+  recording; the episode it has been held to is
+  `monty_pretrained_episode.jsonl`, recorded earlier from the same class of
+  experiment. A new recording is not yet a comparison. `scripts/setup_monty_oracle.sh`
+  builds a pip-only stand-in where Monty's environment is absent, with newer
+  versions (§2.15 of `monty-bugs.md`).
 - **Distractors.** `OneObjectPerEpisodeInterface` computes which objects a
   distractor may be drawn from and refuses to place any (§2.16), because the
   stand-in world holds one object. A config that asks for distractors therefore

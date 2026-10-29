@@ -6,26 +6,35 @@ writes down every message a learning module was given and what the module made
 of it, so the Elixir implementation can be handed the same observations and
 held to the same answers.
 
-    python scripts/record_monty_episode.py \\
-        experiment=base_config_10distinctobj_surf_agent \\
-        +experiment.config.n_train_epochs=0 \\
-        +experiment.config.n_eval_epochs=1 \\
-        +experiment.config.step_hook={_target_: record_monty_episode.Recorder,out:recordings/eval.jsonl}
+It has to import the Monty checkout it is recording, so both path entries are
+absolute — a relative `src` resolves against the working directory and quietly
+picks whichever Monty the interpreter's own site-packages installed:
 
-The script runs inside the Monty checkout's environment (`conda activate
-tbp.monty`) with that checkout's `run.py` on the path, and adds its own
-directory to `sys.path` so Hydra can import `Recorder` by name.
+    MONTY=/path/to/monty-orig PORT=/path/to/ex.tbp.monty
+    PYTHONPATH="$MONTY/src:$PORT/scripts" \\
+        "$CONDA_PREFIX/bin/python" "$PORT/scripts/record_monty_episode.py" \\
+        --out /tmp/monty-episode/recording.jsonl \\
+        experiment=base_config_10distinctobj_dist_agent \\
+        logging=basic_info_monty_runs \\
+        constants.pretrained_dir="$MONTY_MODELS/pretrained_ycb_v10" \\
+        experiment.config.n_eval_epochs=1 \\
+        experiment.config.logging.output_dir=/tmp/monty-episode/rec
+
+Recorded against Monty at 9130364 in its pinned environment (Python 3.8.20,
+`torch` 1.13.1, `habitat_sim` 0.2.2): ten episodes of
+`base_config_10distinctobj_dist_agent`, 338 steps, every episode `correct` in
+21-38 matching steps.
 
 Each line of the output is one step:
 
-    {"episode_step": 0, "total_step": 0, "step_type": "matching_step",
-     "mode": "eval",
+    {"episode_step": 4, "total_step": 4, "step_type": "matching_step",
+     "mode": "ExperimentModes.EVAL",
      "learning_modules": {"learning_module_0": {"inputs": [...], "state": {...}}}}
 
 `inputs` are the messages the module was given on that step, in order, in the
 shape the cortical messaging protocol defines. `state` is what it concluded
 afterwards: the terminal state, the possible matches, and the most likely
-hypothesis. A new episode starts wherever `episode_step` is zero.
+hypothesis. A new episode starts wherever `episode_step` goes backwards.
 """
 
 from __future__ import annotations
