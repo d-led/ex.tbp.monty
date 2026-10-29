@@ -25,14 +25,15 @@ the body chose — `Monty.Simulators.Synthetic.Kinematics` follows MuJoCo's
 conventions for the actions it honours — and refuses the ones it does not
 instead of silently ignoring them.
 
-It has one object in it: `Monty.Simulators.Synthetic.Scene`, a sphere, so a
-sensor reports a depth, an outward normal and two principal curvatures
-(`-1/radius`, as Monty's are for a convex surface), and the colour it hit. That
-is what a ported surface policy needs to steer by, and it is why
-`Monty.Studio.Setup` now builds the **body from the experiment's config**: a
-studio run of a surface experiment is `SurfacePolicyCurvatureInformed` choosing
-every action, the world moving by them, and the policy seeing the result on the
-next step.
+It has one object in it: `Monty.Simulators.Synthetic.Scene`, a sphere, and it
+answers what a camera answers — depth, colour and semantic id — and nothing
+else. A sphere is the object because its surface is known in closed form, so the
+sensor's **estimate** of it can be checked: the patch fit returns −20.02 for a
+five-centimetre sphere's exact −20, and the policy steers by that estimate
+rather than by the world's answer. That is why `Monty.Studio.Setup` builds the
+**body from the experiment's config**: a studio run of a surface experiment is
+`SurfacePolicyCurvatureInformed` choosing every action, the world moving by them,
+and the policy seeing the result on the next step.
 
 The scene renders a **patch**, not a single ray: `Scene.render/3` answers depth,
 colour and semantic images from a pinhole camera, described the way Monty's own
@@ -62,12 +63,21 @@ started with its cameras already touching the object would never show that.
 The stand-in's own placement — a decimetre back, a centimetre apart — is only
 what a world with no scene description falls back to.
 
-The sensor makes of that what Monty's `CameraSM` makes of a depth image: a signed
-logarithm of the curvatures (`principal_curvatures_log`) and the centre pixel as
-hue, saturation and value (`hsv`, by the conversion `skimage` supplies and
+The sensor makes of that what Monty's `CameraSM` makes of a depth image. It reads
+the mask the transform left — coverage is the share of the patch on the surface
+the camera is pointed at, and `min_depth`/`mean_depth` are taken over those
+pixels — estimates the surface with `SensorProcessing.surface_normal_total_least_squares/4`
+and `SensorProcessing.principal_curvatures/4`, reports the curvatures and their
+signed logarithm, and takes the centre pixel as hue, saturation and value
+(`hsv`, by the conversion `skimage` supplies and
 `Monty.Frameworks.Utils.SensorProcessing.rgb2hsv/1` reproduces). The names are
 the ones `feature_weights` in Monty's configs use, so a learning module built
 from a config finds every feature it was told to weight.
+
+A sphere has one more thing to say about it: `|k1 - k2|` is under Monty's
+`pc1_is_pc2_threshold` of 10, so `pose_fully_defined` is false and a curvature
+direction is not offered as something to match on. Monty would say the same about
+a ball, and its own policies fall back to their non-curvature behaviour.
 
 What it is not: Monty's world. A sphere's numbers are not MuJoCo's, so a run
 against it says whether the parts agree with each other — not whether they agree

@@ -48,14 +48,12 @@ defmodule Monty.Simulators.Synthetic.Scene do
         }
 
   @typedoc """
-  What one sensor sees: whether it hit the object, how far away it is, the
-  surface it hit, and the colour at that point.
+  What one ray saw: whether it hit the object, how far away it is, and the
+  colour at that point.
   """
   @type observation :: %{
           on_object: boolean(),
           depth: float() | nil,
-          principal_curvatures: [float()] | nil,
-          pose_vectors: {Rotation.vector(), Rotation.vector(), Rotation.vector()} | nil,
           rgba: [float()] | nil
         }
 
@@ -141,12 +139,13 @@ defmodule Monty.Simulators.Synthetic.Scene do
   end
 
   @doc """
-  What the middle of the view sees.
+  The middle pixel of a view, as a camera would answer it.
 
-  The one thing a policy asks of a camera when it is not looking at the image:
-  how far away the thing in front of it is. The middle pixel of a wide patch is
-  not its axis — only a one-pixel camera or an odd count puts a pixel there —
-  so this renders rather than assuming.
+  Answers the depth, colour and semantic id of one pixel — what
+  `Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations` unprojects,
+  and what a policy asking "how far away is the thing in front of me?" reads. The
+  middle pixel of a wide patch is not its axis — only a one-pixel camera or an odd
+  count puts a pixel there — so this renders rather than assuming.
   """
   @spec observe(t(), %{position: Rotation.vector(), rotation: Rotation.t()}) :: observation()
   def observe(%__MODULE__{} = scene, pose), do: render(scene, pose).centre
@@ -187,18 +186,16 @@ defmodule Monty.Simulators.Synthetic.Scene do
   defp observation_of_ray(scene, {origin, gaze, axis_scale}) do
     case first_hit(scene, origin, gaze) do
       nil ->
-        %{on_object: false, depth: nil, principal_curvatures: nil, pose_vectors: nil, rgba: nil}
+        %{on_object: false, depth: nil, rgba: nil}
 
       {distance, point} ->
-        %{
-          on_object: true,
-          depth: distance * axis_scale,
-          principal_curvatures: curvatures(scene),
-          pose_vectors: surface_frame(outward_normal(scene, point)),
-          rgba: scene.rgb ++ [1.0]
-        }
+        %{on_object: true, depth: distance * axis_scale, rgba: colour(scene, point)}
     end
   end
+
+  # The colour of the surface at `point`. One object, one colour, so the point
+  # itself only matters for a scene that later has more than one.
+  defp colour(scene, _point), do: scene.rgb ++ [1.0]
 
   defp radians(degrees), do: degrees * :math.pi() / 180.0
 
@@ -223,26 +220,5 @@ defmodule Monty.Simulators.Synthetic.Scene do
           {distance, SpatialArithmetics.add(origin, SpatialArithmetics.scale(gaze, distance))}
       end
     end
-  end
-
-  defp outward_normal(scene, point) do
-    point |> SpatialArithmetics.subtract(scene.centre) |> SpatialArithmetics.normalize()
-  end
-
-  # A sphere curves the same amount in every direction, so both curvatures are
-  # the same number and either direction is a curvature direction.
-  defp curvatures(%__MODULE__{radius: radius}), do: [-1.0 / radius, -1.0 / radius]
-
-  defp surface_frame(normal) do
-    unit_normal = SpatialArithmetics.normalize(normal)
-    reference = if abs(Enum.at(unit_normal, 2)) < 0.9, do: [0.0, 0.0, 1.0], else: [1.0, 0.0, 0.0]
-
-    direction_1 =
-      SpatialArithmetics.cross(reference, unit_normal) |> SpatialArithmetics.normalize()
-
-    direction_2 =
-      SpatialArithmetics.cross(unit_normal, direction_1) |> SpatialArithmetics.normalize()
-
-    {unit_normal, direction_1, direction_2}
   end
 end

@@ -10,12 +10,13 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
   curvatures as a signed logarithm.
 
   The definitions are Monty's own: coverage and the depths come from the mask
-  the depth-to-points transform left in `"semantic_3d"`, and the middle of the
-  view is the pixel a sensor reports its location and colour at. The surface
-  itself — its normal and its curvatures — is still what the world says it hit.
-  A camera estimates those from the patch (`sensor_processing.principal_curvatures/5`),
-  which is the next thing to port; until then this is the one place where the
-  stand-in world knows more than a sensor could.
+  the depth-to-points transform left in `"semantic_3d"`, the middle of the view
+  is the pixel a sensor reports its location and colour at, and the surface —
+  its normal and its two principal curvatures — is **estimated** from that patch
+  with `SensorProcessing.surface_normal_total_least_squares/4` and
+  `SensorProcessing.principal_curvatures/4`, which is what Monty's `CameraSM`
+  does (`sensor_modules.py:288`, `366`). The world therefore reports only what a
+  camera reports: depth, colour and semantic id.
 
   It is a simulator-side module (Monty's `simulators/` are not part of the core),
   so it does not appear in the module map — but it implements the same behaviour
@@ -30,9 +31,14 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
   # Depth 0 is what a depth image has where the camera saw nothing.
   @no_return 0.0
 
-  # A pose that is not the world's, used when the world reports none.
-  @undefined_pose {SurfacePoseVectors.new([0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]),
-                   false}
+  # A pose that is not the patch's, used when the patch says nothing about the
+  # surface: no points, no plane, or a fit with too little to work on.
+  @undefined_pose SurfacePoseVectors.new([0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0])
+
+  # Monty's tolerance for calling a surface flat in one direction: two principal
+  # curvatures closer than this and their directions carry no information, so
+  # `pose_fully_defined` is false (`sensor_modules.py:194`, `290-294`).
+  @pc1_is_pc2_threshold 10.0
 
   @type state :: %{sensor_module_id: atom() | String.t(), pose: map() | nil}
 
@@ -44,17 +50,17 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
 
   @impl true
   def step(observation, motor_only?, state) do
-    {pose_vectors, pose_defined?} = pose_vectors(observation)
+    surface = surface(observation)
     on_object? = on_object?(observation)
 
     message = %{
       location: Map.get(observation, "location", [0.0, 0.0, 0.0]),
       morphological_features: %{
-        "pose_vectors" => pose_vectors,
-        "pose_fully_defined" => pose_defined?,
+        "pose_vectors" => Map.get(surface, :pose_vectors, @undefined_pose),
+        "pose_fully_defined" => Map.get(surface, :pose_fully_defined, false),
         "on_object" => if(on_object?, do: 1.0, else: 0.0)
       },
-      non_morphological_features: features(observation),
+      non_morphological_features: features(observation, surface),
       confidence: 1.0,
       pass_message: not motor_only?,
       process_features_in_lm: on_object?,
@@ -71,19 +77,63 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
   @impl true
   def reset(state), do: %{state | pose: nil}
 
-  defp pose_vectors(%{"pose_vectors" => [normal, direction_1, direction_2]}),
-    do: {SurfacePoseVectors.new(normal, direction_1, direction_2), true}
+  # The surface at the middle of the view, estimated from the points the
+  # depth-to-points transform left: the plane the neighbourhood lies in least
+  # badly, and the quadric fitted to it.
+  defp surface(observation) do
+    with {:ok, points, center_id} <- point_cloud(observation),
+         {normal, true} <-
+           SensorProcessing.surface_normal_total_least_squares(
+             points,
+             center_id,
+             view_direction(observation)
+           ),
+         {first, second, direction_1, direction_2, true} <-
+           SensorProcessing.principal_curvatures(points, center_id, normal) do
+      %{
+        pose_vectors: SurfacePoseVectors.new(normal, direction_1, direction_2),
+        pose_fully_defined: abs(first - second) >= @pc1_is_pc2_threshold,
+        principal_curvatures: [first, second]
+      }
+    else
+      _not_defined -> %{}
+    end
+  end
 
-  defp pose_vectors(_observation), do: @undefined_pose
+  # The patch's points and which row of them is the middle pixel. Monty takes a
+  # patch's width from its row count, `obs_dim = int(sqrt(len(obs_3d)))`; the
+  # depth image knows its own shape, so this uses that — and needs one row per
+  # pixel, which is what asking the transform for all of a patch's points means.
+  defp point_cloud(observation) do
+    points = Map.get(observation, "semantic_3d", [])
+    {height, width} = shape(Map.get(observation, "depth"))
+
+    if points != [] and length(points) == height * width,
+      do: {:ok, points, div(height, 2) * width + div(width, 2)},
+      else: :no_point_cloud
+  end
+
+  defp shape(image) when is_list(image) and image != [], do: {length(image), length(hd(image))}
+  defp shape(_no_image), do: {0, 0}
+
+  # The camera's own forward in the world: the third column of the frame the
+  # transform left, which is what Monty aligns a surface normal with
+  # (`sensor_modules.py:366`).
+  defp view_direction(observation) do
+    case Map.get(observation, "cam_to_world") do
+      [top, middle, bottom | _rest] -> [Enum.at(top, 2), Enum.at(middle, 2), Enum.at(bottom, 2)]
+      _no_frame -> [0.0, 0.0, -1.0]
+    end
+  end
 
   # What a camera module makes of the view. `principal_curvatures_log` is the
   # signed logarithm, so a convex surface stays negative and a curvature near
   # zero does not run off; `hsv` is the centre pixel, because that is the patch a
   # surface agent matches on.
-  defp features(observation) do
+  defp features(observation, surface) do
     %{"value" => Map.get(observation, "value")}
     |> Map.merge(depth_features(observation))
-    |> Map.merge(surface_features(observation))
+    |> Map.merge(surface_features(surface))
     |> Map.merge(colour_features(observation))
     |> Enum.reject(fn {_name, value} -> is_nil(value) end)
     |> Map.new()
@@ -132,18 +182,14 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
   defp mean([]), do: nil
   defp mean(values), do: Enum.sum(values) / length(values)
 
-  defp surface_features(observation) do
-    case Map.get(observation, "principal_curvatures") do
-      nil ->
-        %{}
-
-      curvatures ->
-        %{
-          "principal_curvatures" => curvatures,
-          "principal_curvatures_log" => SensorProcessing.log_sign(curvatures)
-        }
-    end
+  defp surface_features(%{principal_curvatures: curvatures}) do
+    %{
+      "principal_curvatures" => curvatures,
+      "principal_curvatures_log" => SensorProcessing.log_sign(curvatures)
+    }
   end
+
+  defp surface_features(_no_surface), do: %{}
 
   defp colour_features(observation) do
     case middle(Map.get(observation, "rgba")) do

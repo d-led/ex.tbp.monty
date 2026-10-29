@@ -91,13 +91,10 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
       assert_in_delta depth, 0.05, 1.0e-12
       assert [[1.0]] = seen["semantic"]
 
-      # The normal at the top of the sphere, and the two curvature directions.
-      [normal, direction_1, direction_2] = seen["pose_vectors"]
-      assert_in_delta Enum.at(normal, 2), 1.0, 1.0e-12
-      assert_in_delta Enum.at(direction_1, 2), 0.0, 1.0e-12
-      assert_in_delta Enum.at(direction_2, 2), 0.0, 1.0e-12
-
-      assert_in_delta hd(seen["principal_curvatures"]), -20.0, 1.0e-9
+      # Pictures only: the surface is what a sensor module estimates from
+      # them, and a world that reported it too would hide that estimate.
+      refute Map.has_key?(seen, "pose_vectors")
+      refute Map.has_key?(seen, "principal_curvatures")
     end
 
     test "and a sensor that looks up sees nothing" do
@@ -115,8 +112,6 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
       assert [[semantic_id]] = seen["semantic"]
       assert depth == 0.0
       assert semantic_id == 0.0
-      assert seen["pose_vectors"] == nil
-      assert seen["principal_curvatures"] == nil
     end
   end
 
@@ -127,7 +122,7 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
     seen = sensor(observations)
 
     refute Map.has_key?(seen, "depth")
-    refute Map.has_key?(seen, "principal_curvatures")
+    refute Map.has_key?(seen, "semantic")
   end
 
   describe "a world told where its episode starts" do
@@ -165,7 +160,7 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
   end
 
   describe "a world seen through a patch" do
-    test "carries the image to the sensor, and the centre's surface with it" do
+    test "carries a three-by-three image to the sensor" do
       environment =
         Environment.new(["patch"], Scene.new(radius: 0.05),
           views: %{"patch" => [resolution: 3, hfov: 10.0]}
@@ -175,8 +170,8 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
       patch = sensor(observations)
 
       assert length(patch["depth"]) == 3
-      assert [normal, _direction_1, _direction_2] = patch["pose_vectors"]
-      assert_in_delta Enum.at(normal, 2), 1.0, 1.0e-12
+      assert length(patch["semantic"]) == 3
+      assert Enum.all?(List.flatten(patch["semantic"]), &(&1 > 0.0))
     end
 
     test "and pitching the sensor takes the whole patch off the object" do
@@ -193,8 +188,8 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
       {observations, _proprioceptive_state, _environment} = Environment.step(environment, [])
       patch = sensor(observations)
 
-      assert patch["pose_vectors"] == nil
       assert List.flatten(patch["semantic"]) == List.duplicate(0.0, 9)
+      assert List.flatten(patch["depth"]) == List.duplicate(0.0, 9)
     end
   end
 end

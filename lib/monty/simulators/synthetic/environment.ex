@@ -128,7 +128,7 @@ defmodule Monty.Simulators.Synthetic.Environment do
   defp features(scene, pose, view), do: features(Scene.render(scene, pose, view))
 
   # What a sensor sees, in the shape Monty's worlds answer in: images of depth,
-  # colour and semantic id, not a summary of one. Monty's own code indexes these
+  # colour and semantic id, and nothing else. Monty's own code indexes these
   # (`PositioningProcedure.depth_at_center` reads the centre pixel), so a world
   # that answered a bare number would make any policy that looks at the image
   # fail on this world and work on Monty's.
@@ -137,26 +137,17 @@ defmodule Monty.Simulators.Synthetic.Environment do
   # "no return", and an experiment's `MissingToMaxDepth` transform is what turns
   # that into the furthest the sensor can see (`docs/monty-bugs.md` §1.7).
   #
-  # The surface the centre ray hit — the outward normal and the two curvatures —
-  # is answered here too, because this world knows it exactly. A camera would
-  # estimate them from the depth image (`sensor_processing.principal_curvatures/5`,
-  # not yet ported), so this is the one place where the stand-in knows more than
-  # a sensor could; `Monty.Simulators.Synthetic.SensorModule` is where that is
-  # turned into features.
+  # The surface — its normal and its curvatures — is *not* answered here. A camera
+  # reports an image, and a sensor module estimates the surface from it
+  # (`Monty.Frameworks.Utils.SensorProcessing`); a world that also told the sensor
+  # what the answer was would hide every mistake in that estimate.
   defp features(rendered) do
     %{
       "depth" => rendered.depth,
       "rgba" => rendered.rgba,
-      "semantic" => rendered.semantic,
-      "principal_curvatures" => rendered.centre.principal_curvatures,
-      "pose_vectors" => pose_vectors(rendered.centre.pose_vectors)
+      "semantic" => rendered.semantic
     }
   end
-
-  # Observations are logged and stored with the run, so the three vectors travel
-  # as lists: a tuple would be a scene's convenience leaking into a record.
-  defp pose_vectors(nil), do: nil
-  defp pose_vectors({normal, direction_1, direction_2}), do: [normal, direction_1, direction_2]
 
   # Monty's worlds answer with `AgentState`/`SensorState`, and its motor system
   # reads them as such, so that is the shape this one answers in too: a world

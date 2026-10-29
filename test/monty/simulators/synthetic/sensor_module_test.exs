@@ -11,8 +11,41 @@ defmodule Monty.Simulators.Synthetic.SensorModuleTest do
 
   use ExUnit.Case, async: true
 
+  alias Monty.Frameworks.EnvironmentUtils.Transforms
+  alias Monty.Frameworks.EnvironmentUtils.Transforms.{DepthTo3DLocations, MissingToMaxDepth}
   alias Monty.Frameworks.Utils.SensorProcessing
-  alias Monty.Simulators.Synthetic.SensorModule
+  alias Monty.Geometry.Rotation
+  alias Monty.Simulators.Synthetic.{Environment, Scene, SensorModule}
+
+  # One sensor's observation of a sphere, after the experiment's transforms have
+  # run — the patch a camera module is actually given.
+  defp patched_sphere do
+    scene = Scene.new(radius: 0.05)
+
+    world =
+      Environment.new(["patch"], scene,
+        views: %{"patch" => [resolution: 21, hfov: 90.0, zoom: 10.0]},
+        agent: %{position: [0.0, 0.0, 0.1], rotation: Rotation.identity()},
+        sensors: %{"patch" => %{position: [0.0, 0.0, 0.0], rotation: Rotation.identity()}}
+      )
+
+    {observations, state, _world} = Environment.step(world, [])
+
+    transforms = [
+      MissingToMaxDepth.new(agent_id: "agent_id_0", max_depth: 1.0),
+      DepthTo3DLocations.new(
+        agent_id: "agent_id_0",
+        sensor_ids: ["patch"],
+        resolutions: [{21, 21}],
+        zooms: 10.0,
+        get_all_points: true
+      )
+    ]
+
+    transforms
+    |> Transforms.run(observations, state)
+    |> get_in(["agent_id_0", "patch"])
+  end
 
   defp state, do: SensorModule.new("patch")
 
@@ -21,41 +54,40 @@ defmodule Monty.Simulators.Synthetic.SensorModuleTest do
     percept
   end
 
-  describe "a world that reports a surface" do
-    defp observation do
-      %{
-        "location" => [0.0, 0.0, 0.1],
-        "value" => 0.0,
-        "depth" => [[0.05]],
-        "semantic" => [[1.0]],
-        "principal_curvatures" => [-20.0, -20.0],
-        "pose_vectors" => [[0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]],
-        "rgba" => [[[0.0, 1.0, 0.0, 1.0]]]
-      }
+  describe "a world that reports a patch" do
+    test "gives a percept whose surface was estimated from it" do
+      # The world answers depth, colour and semantic id — nothing else. The
+      # surface is what a camera module makes of those, and on a five-centimetre
+      # sphere the answer is the sphere's own curvature.
+      percept = percept(patched_sphere())
+
+      assert percept.morphological_features["on_object"] == 1.0
+
+      # The sensor is above the sphere looking down at it, so the surface it is
+      # on faces back up.
+      [normal | _directions] = percept.morphological_features["pose_vectors"].value
+      assert_in_delta Enum.at(normal, 2), 1.0, 1.0e-6
+
+      [first, second] = percept.non_morphological_features["principal_curvatures"]
+      assert_in_delta first, -20.0, 1.0
+      assert_in_delta second, -20.0, 1.0
     end
 
-    test "gives a percept with that pose, defined" do
-      {percept, _state} = SensorModule.step(observation(), false, state())
-
-      assert percept.morphological_features["pose_fully_defined"]
-      assert percept.morphological_features["pose_vectors"] != nil
+    test "and says the curvature directions mean nothing when the surface curves both ways alike" do
+      # Monty's `pc1_is_pc2_threshold`: a sphere bends the same amount in every
+      # direction, so its curvature directions are arbitrary and a policy that
+      # followed them would be following noise (`sensor_modules.py:290-292`).
+      refute percept(patched_sphere()).morphological_features["pose_fully_defined"]
     end
 
-    test "and its features, under the names the policies and modules read" do
-      assert percept(observation()).non_morphological_features == %{
-               "value" => 0.0,
-               "min_depth" => 0.05,
-               "mean_depth" => 0.05,
-               "object_coverage" => 1.0,
-               "principal_curvatures" => [-20.0, -20.0],
-               "principal_curvatures_log" => [-:math.log(21.0), -:math.log(21.0)],
-               "rgba" => [0.0, 1.0, 0.0, 1.0],
-               "hsv" => [1.0 / 3.0, 1.0, 1.0]
-             }
-    end
+    test "and the features a learning module weights are there, under their own names" do
+      features = percept(patched_sphere()).non_morphological_features
 
-    test "and it goes on to the learning modules" do
-      assert percept(observation()).process_features_in_lm
+      assert Map.has_key?(features, "principal_curvatures")
+      assert Map.has_key?(features, "principal_curvatures_log")
+      assert Map.has_key?(features, "object_coverage")
+      assert Map.has_key?(features, "hsv")
+      assert features["object_coverage"] == 1.0
     end
   end
 

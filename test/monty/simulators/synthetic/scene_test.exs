@@ -41,29 +41,13 @@ defmodule Monty.Simulators.Synthetic.SceneTest do
       assert [0.1, 0.2, 0.3, 1.0] = observation.rgba
     end
 
-    test "and the surface it sees faces back at it" do
-      {normal, _direction_1, _direction_2} =
-        Scene.observe(scene(), looking_down()).pose_vectors
+    test "and nothing else: a camera reports an image, not a surface" do
+      # The normal and the curvatures are what a sensor module estimates from the
+      # patch; a world that also reported them would hide every mistake in that
+      # estimate (`Monty.Frameworks.Utils.SensorProcessing`).
+      observation = Scene.observe(scene(), looking_down())
 
-      assert_in_delta Enum.at(normal, 0), 0.0, 1.0e-12
-      assert_in_delta Enum.at(normal, 1), 0.0, 1.0e-12
-      assert_in_delta Enum.at(normal, 2), 1.0, 1.0e-12
-    end
-
-    test "and both curvatures are the sphere's own, negative as a convex surface is" do
-      [first, second] = Scene.observe(scene(), looking_down()).principal_curvatures
-
-      assert_in_delta first, -1.0 / @radius, 1.0e-12
-      assert_in_delta second, -1.0 / @radius, 1.0e-12
-    end
-
-    test "with a right-handed pair of curvature directions, as Monty guarantees" do
-      {normal, direction_1, direction_2} = Scene.observe(scene(), looking_down()).pose_vectors
-
-      # `dir2` is the right-hand partner of `dir1` about the normal, which is
-      # what makes `dir1 x dir2` point along it.
-      assert SpatialArithmetics.dot(SpatialArithmetics.cross(direction_1, direction_2), normal) >
-               0.0
+      assert observation |> Map.keys() |> Enum.sort() == [:depth, :on_object, :rgba]
     end
   end
 
@@ -73,8 +57,6 @@ defmodule Monty.Simulators.Synthetic.SceneTest do
 
       refute observation.on_object
       assert observation.depth == nil
-      assert observation.pose_vectors == nil
-      assert observation.principal_curvatures == nil
       assert observation.rgba == nil
     end
   end
