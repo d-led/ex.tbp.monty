@@ -54,7 +54,7 @@ defmodule Monty.Runtime.LearningModuleServerTest do
       LearningModuleServer.matching_step(server, [Messages.percept()], Context.new(1))
 
       assert %Monty.Cmp.Message{sender_type: :lm} = LearningModuleServer.get_output(server)
-      assert [%Monty.Cmp.Goal{sender_type: :gsg}] = LearningModuleServer.propose_goals(server)
+      assert [%Monty.Cmp.Goal{sender_type: :sm}] = LearningModuleServer.propose_goals(server)
     end
   end
 

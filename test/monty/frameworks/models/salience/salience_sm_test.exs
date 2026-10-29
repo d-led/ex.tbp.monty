@@ -49,6 +49,44 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMTest do
     SalienceSM.update_state(agent, SalienceSM.new("view_finder", options))
   end
 
+  defp agent do
+    %AgentState{
+      position: [0.0, 0.0, 0.0],
+      rotation: Rotation.identity(),
+      sensors: %{
+        "view_finder" => %SensorState{position: [0.0, 0.0, 0.0], rotation: Rotation.identity()}
+      }
+    }
+  end
+
+  # A sixteen by sixteen view with a bright blob and a near step in the depth:
+  # structure at two sizes, which is what an attention model has something to
+  # say about.
+  defp view_with_a_blob do
+    points =
+      for row <- 0..15, column <- 0..15 do
+        [column * 0.01, row * 0.01, -1.0, 1.0]
+      end
+
+    %{
+      "rgba" =>
+        for row <- 0..15 do
+          for column <- 0..15 do
+            if row in 4..7 and column in 4..7,
+              do: [230.0, 230.0, 230.0, 255.0],
+              else: [60.0, 60.0, 60.0, 255.0]
+          end
+        end,
+      "depth" =>
+        for row <- 0..15 do
+          for column <- 0..15 do
+            if row in 6..9 and column in 6..9, do: 0.5, else: 2.0
+          end
+        end,
+      "semantic_3d" => points
+    }
+  end
+
   describe "a view of an object" do
     test "proposes one goal per pixel on it, and none from off it" do
       {nil, sensor} = SalienceSM.step(observation(), false, ctx(), sensor())
@@ -221,8 +259,9 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMTest do
     end
 
     test "declines a strategy this port has not written" do
-      # `vocus2` is Monty's attention model and still to come; a config that asks
-      # for it must not be given a uniform view in its place.
+      # A bare `Vocus2` is not something an experiment writes — the class takes
+      # three built channel processors — so a config that names it is refused
+      # rather than given a uniform view in its place.
       assert {:error, {:unsupported_layer, "salience_strategy", target}} =
                SalienceSM.from_config(%{
                  "_target_" => "tbp.monty.frameworks.models.salience.sensor_module.SalienceSM",
@@ -234,5 +273,52 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMTest do
 
       assert target =~ "Vocus2"
     end
+  end
+
+  describe "a configuration that names VOCUS2" do
+    # The real thing, composed from Monty's own experiment rather than written
+    # out here: if the YAML's shape changes, this fails.
+    setup do
+      {:ok, view_finder: vocus2_view_finder()}
+    end
+
+    test "builds the strategy the experiment asks for", %{view_finder: view_finder} do
+      assert {:ok, sensor} = SalienceSM.from_config(view_finder)
+
+      assert {Monty.Frameworks.Models.Salience.Strategies.Vocus2, strategy} =
+               sensor.salience_strategy
+
+      # `camera_dist_vocus2.yaml`'s numbers, and the channel it turns off.
+      assert strategy.color.center_sigma == 1.0
+      assert strategy.color.surround_sigma == 6.5
+      assert strategy.color.n_scales == 2
+      assert strategy.color.max_octaves == 5
+      assert strategy.depth != nil
+      assert strategy.orientation == nil
+    end
+
+    test "proposes goals from the salience it computes", %{view_finder: view_finder} do
+      {:ok, sensor} = SalienceSM.from_config(view_finder)
+      sensor = SalienceSM.update_state(agent(), sensor)
+
+      {nil, sensor} = SalienceSM.step(view_with_a_blob(), false, ctx(), sensor)
+
+      {goals, _sensor} = SalienceSM.propose_goals(sensor)
+
+      # One goal per pixel on the object, and an empty region: `camera_dist_vocus2`
+      # names no segmentation strategy, so the sensor says where to look and not
+      # how much of the surface to attend to.
+      assert length(goals) == 16 * 16
+      assert Enum.all?(goals, &match?(%Goal{}, &1))
+      assert sensor.region == AttentionRegion.empty()
+    end
+  end
+
+  # Monty's `supervised_pre_training_10distinctobj_vocus2` view finder, composed
+  # from the YAML rather than transcribed.
+  defp vocus2_view_finder do
+    {:ok, tree} = Monty.Config.Composer.compose("supervised_pre_training_10distinctobj_vocus2")
+
+    get_in(tree, ["experiment", "config", "monty_config", "sensor_modules", "sensor_module_1"])
   end
 end

@@ -43,10 +43,14 @@ defmodule Monty.Simulators.Synthetic.LearningModule do
 
   @impl true
   def propose_goals(%{percepts: [%Message{location: location} | _]} = state) do
+    # A look-at goal, not a jump: a jump is how a module tests a *hypothesis*, and
+    # it needs the pose the hypothesis says to look from. This module has no
+    # hypotheses, so it can only say where it saw something — which is what a
+    # salience module says too, and what `LookAtGoal` acts on.
     goal = %Goal{
       location: location,
       sender_id: to_string(state.id),
-      sender_type: :gsg,
+      sender_type: :sm,
       confidence: 0.5,
       goal_tolerances: %{"location" => 0.015}
     }

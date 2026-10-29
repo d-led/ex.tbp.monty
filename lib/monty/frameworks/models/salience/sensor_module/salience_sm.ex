@@ -44,6 +44,8 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   alias Monty.Frameworks.Models.Salience.OnObjectObservation
   alias Monty.Frameworks.Models.Salience.ReturnInhibitor
   alias Monty.Frameworks.Models.Salience.Strategies.Uniform
+  alias Monty.Frameworks.Models.Salience.Strategies.Vocus2
+  alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.Vocus2SalienceConfig
   alias Monty.Frameworks.Models.Salience.Telemetry.NoopSalienceSMTelemetry
 
   # Monty's two factors, as its private methods write them: a visit takes three
@@ -106,6 +108,7 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   end
 
   @target "tbp.monty.frameworks.models.salience.sensor_module.SalienceSM"
+  @vocus2_config "tbp.monty.frameworks.models.salience.strategies.vocus2.vocus2.Vocus2SalienceConfig"
 
   @doc """
   The salience module a config entry describes, or why it is not this class's.
@@ -144,13 +147,13 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
     case Map.get(config, key) do
       nil -> {:ok, default && {default, default.new()}}
       %{"_target_" => target} when target == @target -> {:ok, {default, default.new()}}
-      %{"_target_" => target} -> built(key, target)
+      %{"_target_" => target} = spec -> built(key, target, spec)
     end
   end
 
   # Only the classes this port has written can be built; a config that names
   # another says so by failing to build, and `Setup` runs the stand-in.
-  defp built(key, target) do
+  defp built(key, target, spec) do
     case target do
       "tbp.monty.frameworks.models.salience.strategies.uniform.Uniform" ->
         {:ok, {Uniform, Uniform.new()}}
@@ -161,9 +164,34 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
       "tbp.monty.frameworks.models.salience.telemetry.NoopSalienceSMTelemetry" ->
         {:ok, {NoopSalienceSMTelemetry, NoopSalienceSMTelemetry.new()}}
 
+      "tbp.monty.frameworks.models.salience.strategies.vocus2.Vocus2.from_config" ->
+        vocus2(spec)
+
       _unsupported ->
         {:error, {:unsupported_layer, key, target}}
     end
+  end
+
+  # A VOCUS2 config names `Vocus2.from_config` rather than the class, because the
+  # class takes three built channel processors and no experiment writes those out;
+  # the numbers come from a `Vocus2SalienceConfig` beneath `config:`.
+  defp vocus2(%{"config" => %{"_target_" => @vocus2_config} = config}) do
+    {:ok,
+     {Vocus2,
+      Vocus2.from_config(
+        Vocus2SalienceConfig.new(
+          center_sigma: Map.get(config, "center_sigma", 3.0),
+          surround_sigma: Map.get(config, "surround_sigma", 5.0),
+          n_scales: Map.get(config, "n_scales", 2),
+          max_octaves: Map.get(config, "max_octaves", 5),
+          use_depth: Map.get(config, "use_depth", true),
+          use_orientation: Map.get(config, "use_orientation", true)
+        )
+      )}}
+  end
+
+  defp vocus2(spec) do
+    {:error, {:unsupported_layer, "salience_strategy", Map.get(spec, "config")}}
   end
 
   @impl true

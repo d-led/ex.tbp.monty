@@ -324,11 +324,26 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
     }
   end
 
-  defp looking_direction(%Cmp.Goal{morphological_features: features}) do
-    case Map.fetch!(features, "pose_vectors") do
-      %GazeDirection{} = gaze -> GazeDirection.direction(gaze)
-      other -> raise ArgumentError, "a jump needs a gaze direction, got #{inspect(other)}"
+  # A jump needs to know which way to face, which only a goal with a gaze
+  # direction can say. Monty indexes the goal's features and lets a `KeyError` or
+  # a `TypeError` out; this names the goal and the reason, because the usual
+  # cause is a goal from a module that had no pose to offer.
+  defp looking_direction(%Cmp.Goal{morphological_features: %{} = features} = goal) do
+    case Map.fetch(features, "pose_vectors") do
+      {:ok, %GazeDirection{} = gaze} ->
+        GazeDirection.direction(gaze)
+
+      _nothing_to_look_along ->
+        raise ArgumentError,
+              "a jump needs a gaze direction, and the goal from #{inspect(goal.sender_id)} " <>
+                "(#{inspect(goal.sender_type)}) has none"
     end
+  end
+
+  defp looking_direction(%Cmp.Goal{} = goal) do
+    raise ArgumentError,
+          "a jump needs a goal with features, and the goal from " <>
+            "#{inspect(goal.sender_id)} (#{inspect(goal.sender_type)}) has none"
   end
 
   defp radians_to_degrees(radians), do: radians * 180.0 / :math.pi()
