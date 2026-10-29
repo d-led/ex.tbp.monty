@@ -630,6 +630,29 @@ that hands a depth image straight to the strategy.
 Decisions, not suspected defects. Each is a place where two runs can differ
 without either being wrong.
 
+## 1.15 Monty's two Gaussians are not the same Gaussian
+
+**What.** The salience code blurs with OpenCV — `cv2.GaussianBlur`, kernel size
+`8σ+1` (§1.11), `BORDER_REFLECT_101` (§1.11) — and the positioning code smooths
+with SciPy — `scipy.ndimage.gaussian_filter(image, sigma, mode="constant")`, a
+kernel of radius `int(4σ + 0.5)`, normalised to one, applied separably with
+**zero** padding. Same mathematical object, different truncation, different edge
+rule, and a factor-of-two difference in how far the kernel reaches.
+
+**Why it matters to a port.** Both are now implemented, and reusing one for the
+other would be wrong by more than the smoothing: at σ = 1 the SciPy kernel has
+nine taps and the OpenCV one seventeen. The SciPy rule was measured against
+SciPy's own answer over an image of random values — worst difference `2e-16`
+over σ = 1, 2, 3 — before it was written down, and the recorded answers of
+`GetGoodView` check the whole of it, because the pixel the procedure aims at is
+the maximum of the smoothed mask.
+
+**A plateau is not a specification.** On a *symmetric* object the smoothed mask
+has a flat maximum, and which pixel NumPy's `argmax` returns is then a fact about
+summation order, not about Monty: two faithful implementations can disagree by a
+pixel. The fixture therefore uses a notched object, whose brightest pixel is
+clear of the runner-up by `0.02` of the mask's height.
+
 ## 2.1 Random streams: the one that changes your numbers
 
 **The difference.** Monty threads one mutable `RandomState` (`ctx.rng`) through
@@ -739,19 +762,22 @@ worse than a goal that is not proposed.
 
 **Where.** [`evidence_graph_lm.ex`](../lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
 
-## 2.7 `depth_at_center` lives in the policy namespace
+## 2.7 `depth_at_center` is a function, and the policies delegate to it
 
 **The difference.** Monty keeps it in `positioning_procedures.py`, as a
 `@staticmethod` of `PositioningProcedure` at
 [line 75](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/environments/positioning_procedures.py#L75).
 Here it is
-[`MotorPolicies.depth_at_center/3`](../lib/monty/frameworks/models/motor_policies.ex),
+[`PositioningProcedures.depth_at_center/3`](../lib/monty/frameworks/environments/positioning_procedures.ex),
 reading the same shape — `observations[agent_id][sensor_id]["depth"]`, centre
-pixel.
+pixel — and
+[`MotorPolicies.depth_at_center/3`](../lib/monty/frameworks/models/motor_policies.ex)
+delegates to it.
 
-**Why it is deliberate.** That module is 530 lines of good-view searching for
-distant agents, none of it needed yet, and the centre-pixel read is needed by two
-policies now. It moves to its mapped home when an environment is ported.
+**Why it is deliberate.** A behaviour cannot carry a static function, so the
+question lives with the procedures and the policies reach it through their own
+namespace, which is where the policies' code already asked it from while the
+environment layer was unported. The call sites read as they did.
 
 ## 2.8 Small vocabulary differences
 

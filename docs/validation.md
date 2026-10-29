@@ -57,6 +57,10 @@ they do.
 | `undo_last_action` (Monty's `fixme_undo_last_action`) | the six actions an informed policy samples — with constraint degrees on the looks and a direction on the tangential move — and one it cannot sample | the inverse's class and every field **exact**; a refusal where Monty raises `TypeError` (§2.8 of `monty-bugs.md`) | same file |
 | `InformedPolicyRandomWalk` | five steps of one walk with a constant sampler: off the object with nothing to undo, twice on it, twice off it | the action each step emits and the action it remembers, **exact** — the remembered action is inverted each time it is used, so a sensor that keeps leaving the object walks back and forth across the edge | same file |
 | `InformedPolicy`'s jump | a hypothesis jump from a recorded pose with a gaze-direction goal, the step where nothing is visible at the landing point, and the step after the undo | the `SetAgentPose` the goal derives — location and `wxyz` quaternion, `1e-9` — the `SetSensorRotation` that resets the sensor, the same two actions carrying the *pre-jump* pose back, and the walk resuming with a `MoveForward` | same file |
+| `GetGoodView`: the fraction of the view on an object, the turn and the pitch | a 16×16 view with two objects, four poses, and four relative locations | `1e-12` on the fractions; `1e-9` degrees on both rotations | `test/monty/frameworks/environments/positioning_procedures/get_good_view_parity_test.exs` |
+| `GetGoodView`: the pixel it aims at | a notched 16×16 object, smoothed with `scipy.ndimage.gaussian_filter` — a different Gaussian from OpenCV's (§1.15 of `monty-bugs.md`) | the location, `1e-12` metres | same file |
+| `GetGoodView`: whether the centre pixel is on the object, and whether to move | four views: close enough by percentage, close enough by distance, still far, and a target absent from a two-object scene, plus a one-object scene with nothing in it | the same verdicts, the same `MoveForward`, and the same `ObjectNotVisibleError` | same file |
+| `GetGoodView`: the state machine, replayed whole | two episodes — move, move, turn, done, and the extra turn a two-object scene takes first — with the procedure carried from step to step | every action in every step, and each step's `success`/`terminated`/`truncated` | same file |
 | `highest_confidence_goal` | distinct confidences, a tie (Monty's docstring promises the first), and one goal | which goal, **exact** | same file |
 | `SinglePolicySelector` and `DistantPolicySelector` | an LM goal outranking two SM goals through the single selector; two SM goals through the distant agent's routing; no goals at all | the actions Monty produced, `1e-9` degrees, and the policy that produced them | same file |
 
@@ -144,6 +148,7 @@ Monty revision moves:
 | `test/fixtures/monty_feature_evidence.json` | `scripts/record_monty_feature_evidence.py` |
 | `test/fixtures/monty_salience_sm.json` | `scripts/record_monty_salience_sm.py` (needs `numpy-quaternion`, which the other recorders do not) |
 | `test/fixtures/monty_motor_policy.json` | `scripts/record_monty_motor_policy.py` |
+| `test/fixtures/monty_positioning.json` | `scripts/record_monty_positioning.py` (needs `scipy`) |
 | `test/fixtures/monty_vocus2_images.json` | `scripts/record_monty_vocus2_images.py` |
 | `test/fixtures/monty_pyramids.json` | `scripts/record_monty_pyramids.py` |
 | `test/fixtures/monty_vocus2.json` | `scripts/record_monty_vocus2.py` |

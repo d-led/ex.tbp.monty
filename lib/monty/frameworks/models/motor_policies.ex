@@ -99,25 +99,14 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
   @doc """
   The depth at the centre pixel of a sensor's view.
 
-  Monty's `PositioningProcedure.depth_at_center`, a static method of a module
-  this port has not taken on. It lives here, where both policies can reach it,
-  until the environments are ported (`docs/monty-bugs.md` §2.7).
+  Monty's `PositioningProcedure.depth_at_center`, a static method of the
+  positioning protocol; the function lives with the procedures now and this is a
+  delegation, so a policy can ask the question without reaching into the
+  environment layer (`docs/monty-bugs.md` §2.7).
   """
   @spec depth_at_center(map(), atom() | String.t(), String.t()) :: float()
-  def depth_at_center(observations, agent_id, sensor_id) do
-    depth =
-      observations
-      |> Map.fetch!(agent_id)
-      |> Map.fetch!(sensor_id)
-      |> Map.fetch!("depth")
-
-    rows = length(depth)
-    columns = depth |> hd() |> length()
-
-    depth
-    |> Enum.at(div(rows, 2))
-    |> Enum.at(div(columns, 2))
-  end
+  defdelegate depth_at_center(observations, agent_id, sensor_id),
+    to: Monty.Frameworks.Environments.PositioningProcedures
 
   @doc """
   Ask a policy what it does now that a jump has landed.

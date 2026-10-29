@@ -848,38 +848,38 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Environments.PositioningProcedures",
     package: "monty",
     python: "frameworks/environments/positioning_procedures.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.ObjectNotVisibleError",
         python: "ObjectNotVisibleError"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.PositioningProcedureResult",
         python: "PositioningProcedureResult"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.PositioningProcedure",
         python: "PositioningProcedure"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.PositioningProcedureFactory",
         python: "PositioningProcedureFactory"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.GetGoodView",
         python: "GetGoodView"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Environments.PositioningProcedures.GetGoodViewFactory",
         python: "GetGoodViewFactory"
       }
