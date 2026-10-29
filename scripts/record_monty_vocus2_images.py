@@ -9,8 +9,10 @@ exactly and had to measure the rest, so this writes down what OpenCV answered.
 
 Needs an interpreter with OpenCV and numpy — Monty's own environment:
 
-    python3 \\
-        scripts/record_monty_vocus2_images.py
+    python3 scripts/record_monty_vocus2_images.py
+
+Needs an interpreter with Monty's dependencies, OpenCV included; see
+`docs/validation.md`.
 
 Writes `test/fixtures/monty_vocus2_images.json`.
 """
@@ -32,8 +34,9 @@ try:
     from tbp.monty.frameworks.models.salience.strategies.vocus2 import images  # noqa: E402
 except ModuleNotFoundError as error:  # pragma: no cover - the wrong interpreter
     raise SystemExit(
-        f"{error.name} is missing from {sys.executable}; run this with Monty's "
-        "environment, e.g. python3"
+        f"{error.name} is missing from {sys.executable}; run this with an "
+        "interpreter that has Monty's dependencies, OpenCV included "
+        "(see docs/validation.md)"
     ) from error
 
 OUT = Path(__file__).resolve().parents[1] / "test" / "fixtures" / "monty_vocus2_images.json"

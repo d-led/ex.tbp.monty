@@ -5,10 +5,10 @@ resize applied in a particular order with particular sigmas — the sort of thin
 that is easy to get subtly wrong and impossible to spot by eye. This runs
 Monty's own functions over small images and writes down what they answered.
 
-    python3 \\
-        scripts/record_monty_pyramids.py
+    python3 scripts/record_monty_pyramids.py
 
-Writes `test/fixtures/monty_pyramids.json`.
+Writes `test/fixtures/monty_pyramids.json`. Needs an interpreter with Monty's
+dependencies installed; see `docs/validation.md`.
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ try:
     from tbp.monty.frameworks.models.salience.strategies.vocus2 import pyramids  # noqa: E402
 except ModuleNotFoundError as error:  # pragma: no cover - the wrong interpreter
     raise SystemExit(
-        f"{error.name} is missing from {sys.executable}; run this with Monty's "
-        "environment, e.g. python3"
+        f"{error.name} is missing from {sys.executable}; run this with an "
+        "interpreter that has Monty's dependencies (see docs/validation.md)"
     ) from error
 
 OUT = Path(__file__).resolve().parents[1] / "test" / "fixtures" / "monty_pyramids.json"

@@ -29,8 +29,8 @@ only place a tolerance is allowed to be loose, and each says why it is.
 | | |
 |---|---|
 | Monty | `../monty-orig` at `9130364` — the revision `mix monty.config.snapshots` and `mix monty.module_map.verify` pin |
-| Interpreter | `python3`, which has numpy 2.4.1 and OpenCV 4.10.0 |
-| Why that interpreter | the Elixir repo's default `python3` is 3.12 and has no OpenCV; only the recorders that touch OpenCV need 3.13 |
+| Interpreter | Python 3.13 with numpy 2.4.1 and OpenCV 4.10.0 |
+| Why that interpreter | the repo's default `python3` is 3.12 and has no OpenCV; only the recorders that touch OpenCV need 3.13 |
 
 Monty's pure-numpy modules import and run here — 43 of them. The rest need
 `pandas`, `quaternion` or a simulator, which is why the checks below stop where
@@ -51,6 +51,7 @@ they do.
 | `pyramids`: octave resolutions, Gaussian pyramid, centre/surround, Laplacian, combine by maximum, combine by mean, collapse by sum | an 8×8 image with structure at two sizes: 4 octaves × 3 scales, every plane of every octave | `1e-4` | `test/monty/frameworks/models/salience/strategies/vocus2/pyramids_parity_test.exs` |
 | `vocus2`: the colour channel's map **and** its centre pyramid, the depth channel's map, all four Gabor kernels, the orientation map, and the whole strategy's normalised map | a 32×32 view (bright blob, dark corner, hard edge) and a depth map with a near step and an empty pixel | `1e-4`; `1e-3` for the normalised strategy map | `test/monty/frameworks/models/salience/strategies/vocus2/vocus2_parity_test.exs` |
 | `SafeOperatingLimits` | six size/sigma triples, including each of the three rejections | the verdict, and which rejection fired | same file |
+| `SalienceSM` **end to end** — strategy, on-object reshape, inhibitor, weights, goals | three views of a moving sensor: 144 on-object pixels each, blob and point cloud shifted between steps so the inhibitor has somewhere new to suppress | goal locations and their order **exact**; salience and inhibitor weights `1e-6`; confidences within `0.5` of Monty's, because the dither is Monty's random stream and not the port's (§2.1) — measured worst `0.36` | `test/monty/frameworks/models/salience/sensor_module/salience_sm_parity_test.exs` |
 
 ### The arithmetic this pins, by class
 
@@ -105,9 +106,6 @@ Saying this plainly matters more than the table above:
   step by step with a Monty run.
 - **The simulator peer.** Habitat and MuJoCo are not installed here, so the peer
   that would let the port drive Monty's own environments does not exist yet.
-- **The sensor→salience→motor chain end to end.** Its pieces are checked
-  individually (blur, resize, pyramids, VOCUS2, the decay field), but no recorded
-  episode carries a whole salience step to compare against.
 - **Anything that samples.** The random-stream layout is deliberately different
   from Monty's (§2.1 of `monty-bugs.md`), so a run that samples walks a different
   path by design. Only its *rules* are verified, never its sequence of actions.
@@ -126,6 +124,7 @@ Monty revision moves:
 | `test/fixtures/monty_salience_inhibitor.json`, `monty_on_object_observation.json` | `scripts/record_monty_salience.py` |
 | `test/fixtures/monty_evidence_slope_tracker.json` | `scripts/record_monty_evidence_matching.py` |
 | `test/fixtures/monty_feature_evidence.json` | `scripts/record_monty_feature_evidence.py` |
+| `test/fixtures/monty_salience_sm.json` | `scripts/record_monty_salience_sm.py` (needs `numpy-quaternion`, which the other recorders do not) |
 | `test/fixtures/monty_vocus2_images.json` | `scripts/record_monty_vocus2_images.py` |
 | `test/fixtures/monty_pyramids.json` | `scripts/record_monty_pyramids.py` |
 | `test/fixtures/monty_vocus2.json` | `scripts/record_monty_vocus2.py` |
@@ -135,8 +134,8 @@ Monty revision moves:
 Two rules, learned the hard way:
 
 - Run the recorders with an interpreter that has what they import. Those needing
-  OpenCV must use `python3`; the others are happy
-  with the repo's default.
+  OpenCV must use a Python 3.13 environment; the others are happy with the
+  repo's default.
 - Never tighten a tolerance to make a fixture pass, and never loosen one without
   saying in the test *why* the difference is not the port's. A too-generous
   tolerance hides a port bug; a too-tight one hides float32.

@@ -6,8 +6,10 @@ combined into one salience map. Its parts are small, but their numbers come from
 the pyramids and from Gabor filtering, and a mistake anywhere shows up only as a
 map that looks plausible.
 
-    python3 \\
-        scripts/record_monty_vocus2.py
+    python3 scripts/record_monty_vocus2.py
+
+Needs an interpreter with Monty's dependencies installed; see
+`docs/validation.md`.
 
 Writes `test/fixtures/monty_vocus2.json`.
 """
@@ -28,8 +30,8 @@ try:
     from tbp.monty.frameworks.models.salience.strategies.vocus2 import vocus2  # noqa: E402
 except ModuleNotFoundError as error:  # pragma: no cover - the wrong interpreter
     raise SystemExit(
-        f"{error.name} is missing from {sys.executable}; run this with Monty's "
-        "environment, e.g. python3"
+        f"{error.name} is missing from {sys.executable}; run this with an "
+        "interpreter that has Monty's dependencies (see docs/validation.md)"
     ) from error
 
 OUT = Path(__file__).resolve().parents[1] / "test" / "fixtures" / "monty_vocus2.json"
