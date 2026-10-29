@@ -83,15 +83,35 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
     |> Map.new()
   end
 
+  # Monty reads these off the *object*: `object_coverage` is the fraction of
+  # pixels whose semantic id is not background, and `min_depth`/`mean_depth` are
+  # the nearest and mean depth of those pixels only
+  # (`sensor_modules.py:213-216`, `308-312`). A pixel that returned a depth but
+  # is not on an object is scenery, and a sensor watching scenery is not on the
+  # object — the difference is what a surface agent's search turns on.
   defp depth_features(observation) do
     depths = observation |> Map.get("depth", []) |> List.flatten()
-    seen = Enum.reject(depths, &(&1 == @no_return))
+    on_object = on_object_depths(observation, depths)
 
     %{
-      "min_depth" => Enum.min(seen, fn -> nil end),
-      "mean_depth" => mean(seen),
-      "object_coverage" => if(depths == [], do: 0.0, else: length(seen) / length(depths))
+      "min_depth" => Enum.min(on_object, fn -> nil end),
+      "mean_depth" => mean(on_object),
+      "object_coverage" => if(depths == [], do: 0.0, else: length(on_object) / length(depths))
     }
+  end
+
+  # A world that reports no semantic image reports nothing but the object, so
+  # every pixel that returned is on it.
+  defp on_object_depths(observation, depths) do
+    case observation |> Map.get("semantic", []) |> List.flatten() do
+      [] ->
+        Enum.reject(depths, &(&1 == @no_return))
+
+      semantics ->
+        for {depth, semantic_id} <- Enum.zip(depths, semantics),
+            semantic_id > @no_return,
+            do: depth
+    end
   end
 
   defp mean([]), do: nil
