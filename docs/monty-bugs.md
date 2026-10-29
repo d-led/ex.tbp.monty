@@ -26,6 +26,8 @@ numbers; everything else changes where code lives or what an error looks like.
 | [1.9](#19-the-mean-is-divided-by-the-count-twice-in-the-plane-fit) | A mean divided by the count twice inflates the plane fit's scatter matrix | Suspected, nil for a centred neighbourhood | Reproduced on purpose, recorded at the code site |
 | [1.10](#110-the-pose-not-defined-flag-is-written-where-nothing-reads-it) | A "pose not defined" flag written to the wrong features dict | Suspected, needs a percept to be visible | Reproduced on purpose, pinned by a test |
 | [1.11](#111-the-rgb-blur-comment-names-the-wrong-kernel-size) | A comment says OpenCV picks `6*sigma + 1`; measured, it picks `8*sigma + 1` | Confirmed by measurement | Follows the code (OpenCV), not the comment |
+| [1.12](#112-lab-goes-through-opencvs-8-bit-tables) | `cvtColor` on a `uint8` image answers 8-bit Lab, so it quantises | Confirmed by measurement over every 8-bit colour | Floats; agrees to 2.67 of 255 |
+| [1.13](#113-cv2s-area-resize-does-something-else-when-only-one-axis-enlarges) | `INTER_AREA` with one axis enlarging is neither area nor linear | Confirmed by measurement; unreachable from Monty's pyramids | Answers the area average |
 | [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
 | [2.2](#22-motor_only_step-travels-in-the-result) | A policy sets a flag on the motor system | Decision | The flag travels in the result |
 | [2.3](#23-the-motor-system-answers-with-itself) | The motor system mutates itself | Decision | It answers with its next version |
@@ -512,6 +514,71 @@ float32 precision.
 leaves the kernel size at zero — they give a `sigma` and take the default kernel
 — so the difference is latent for Monty's own experiments, and would only show in
 a config that relies on the comment's arithmetic.
+
+---
+
+## 1.12 Lab goes through OpenCV's 8-bit tables
+
+**What Monty does.** `vocus2/images.py` converts an 8-bit RGB image to Lab and
+divides by 255 to bring it into `[0, 1]`:
+
+```python
+    return cv2.cvtColor(image, cv2.COLOR_RGB2Lab).astype(np.float32) / 255.0
+```
+([`vocus2/images.py:22-28`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/salience/strategies/vocus2/images.py#L22-L28))
+
+Because the input is `uint8`, OpenCV answers `CV_8U` — L from 0 to 255 for 0 to
+100, and a and b shifted by 128 — so the conversion quantises, and OpenCV's
+integer path is not the same arithmetic as the floating-point definition.
+
+**What this port does.** Computes the standard chain — sRGB gamma decode,
+OpenCV's D65 matrix, the Lab cube-root — in floating point, then applies the same
+`0..255` scaling and divides by 255. Measured against OpenCV 4.10 over all
+16,777,216 8-bit colours, the worst disagreement is **2.67 units of 255**, in the
+dark saturated corner: about one percent of the range.
+
+**Why it matters little.** The two opponent spaces, which are what VOCUS2's
+`a`/`b` channels actually use for colour opponency, are exact. Lab reaches the
+port only where a config names it as its colour converter, and a one-percent
+lightness difference moves a salience weight by about as much. Reproducing it
+exactly would mean reimplementing OpenCV's lookup tables, which is a different
+kind of promise than this port makes: it reproduces Monty's numbers, not
+OpenCV's rounding.
+
+---
+
+## 1.13 `cv2`'s area resize does something else when only one axis enlarges
+
+**What Monty does.** `vocus2/images.py::resize` is a thin wrapper over
+`cv2.resize`, and the pyramids use `INTER_AREA` to shrink by an octave and
+`INTER_CUBIC` to enlarge:
+
+```python
+def resize(
+    image: npt.NDArray[np.float32],
+    shape: tuple[int, int],
+    interpolation: int = cv2.INTER_AREA,
+) -> npt.NDArray[np.float32]:
+    return cv2.resize(image, (shape[1], shape[0]), interpolation=interpolation)
+```
+([`vocus2/images.py:64-69`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/salience/strategies/vocus2/images.py#L64-L69))
+
+Measured, `INTER_AREA` is the area average whenever the destination is no larger
+on either axis (checked in one and two dimensions). When the destination is
+larger on exactly one axis and smaller on the other, OpenCV answers something
+that is neither the area average nor the linear interpolation: a 3×8 image
+resized to 6×3 has 0.625 in its first pixel where the area average is 0.875.
+
+**What this port does.** Answers the area average in every case, which is what
+the name means. The parity fixture in
+[`images_parity_test.exs`](../test/monty/frameworks/models/salience/strategies/vocus2/images_parity_test.exs)
+pins the cases Monty reaches: an octave halving, a non-integer shrink, and three
+cubic enlargements.
+
+**Why it matters little, and where it would.** A pyramid only ever shrinks by
+area and enlarges by cubic, so no Monty experiment reaches the mixed case. It
+would show in a strategy that resized an image to a shape larger on one axis
+only — none does today.
 
 ---
 

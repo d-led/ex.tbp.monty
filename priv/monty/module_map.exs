@@ -1878,13 +1878,13 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images",
     package: "monty",
     python: "frameworks/models/salience/strategies/vocus2/images.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images.ColorSpaceConverter",
         python: "ColorSpaceConverter"
       }
