@@ -2,14 +2,20 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
   @moduledoc """
   A sensor module that turns an observation into a CMP message.
 
-  Stands in for `frameworks/models/sensor_modules.CameraSM` until feature
-  extraction is ported: it reads the one-pixel depth and colour images a world
-  reports and answers the features Monty's learning modules and policies read —
-  the nearest and the mean depth, how much of the view is on the object, the
-  colour as hue/saturation/value, and the curvatures as a signed logarithm. The
-  surface itself (its normal and its curvatures) is whatever the world says it
-  hit: a camera would estimate it from a depth image, and that estimator
-  (`sensor_processing.principal_curvatures/5`) is not ported yet.
+  Stands in for `frameworks/models/sensor_modules.CameraSM` until that class is
+  ported: it reads the depth, colour and mask images a world reports and answers
+  the features Monty's learning modules and policies read — the nearest and the
+  mean depth over the pixels on the surface, the share of the patch that is on
+  it, the colour at the middle of the view as hue/saturation/value, and the
+  curvatures as a signed logarithm.
+
+  The definitions are Monty's own: coverage and the depths come from the mask
+  the depth-to-points transform left in `"semantic_3d"`, and the middle of the
+  view is the pixel a sensor reports its location and colour at. The surface
+  itself — its normal and its curvatures — is still what the world says it hit.
+  A camera estimates those from the patch (`sensor_processing.principal_curvatures/5`),
+  which is the next thing to port; until then this is the one place where the
+  stand-in world knows more than a sensor could.
 
   It is a simulator-side module (Monty's `simulators/` are not part of the core),
   so it does not appear in the module map — but it implements the same behaviour
@@ -83,34 +89,43 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
     |> Map.new()
   end
 
-  # Monty reads these off the *object*: `object_coverage` is the fraction of
-  # pixels whose semantic id is not background, and `min_depth`/`mean_depth` are
-  # the nearest and mean depth of those pixels only
-  # (`sensor_modules.py:213-216`, `308-312`). A pixel that returned a depth but
+  # Monty reads these over the pixels that are **on the surface** the camera is
+  # pointed at: `object_coverage` is the share of `"semantic_3d"`'s rows whose
+  # mask column is not zero, and `min_depth`/`mean_depth` are the nearest and
+  # mean depth of the pixels those rows came from
+  # (`sensor_modules.py:213-218`, `308-312`). A pixel that returned a depth but
   # is not on an object is scenery, and a sensor watching scenery is not on the
   # object — the difference is what a surface agent's search turns on.
   defp depth_features(observation) do
-    depths = observation |> Map.get("depth", []) |> List.flatten()
-    on_object = on_object_depths(observation, depths)
+    depths = observation |> Map.get("depth") |> image_cells()
+
+    on_surface =
+      for {depth, mask} <- Enum.zip(depths, on_surface(observation, depths)),
+          mask > 0.0,
+          do: depth
 
     %{
-      "min_depth" => Enum.min(on_object, fn -> nil end),
-      "mean_depth" => mean(on_object),
-      "object_coverage" => if(depths == [], do: 0.0, else: length(on_object) / length(depths))
+      "min_depth" => Enum.min(on_surface, fn -> nil end),
+      "mean_depth" => mean(on_surface),
+      "object_coverage" => if(depths == [], do: 0.0, else: length(on_surface) / length(depths))
     }
   end
 
-  # A world that reports no semantic image reports nothing but the object, so
-  # every pixel that returned is on it.
-  defp on_object_depths(observation, depths) do
-    case observation |> Map.get("semantic", []) |> List.flatten() do
-      [] ->
-        Enum.reject(depths, &(&1 == @no_return))
+  # Which pixels the transform kept as on the surface. `"semantic_3d"` carries
+  # that mask as its fourth column; an observation that never went through the
+  # transform is read from its semantic image instead, and a world with no
+  # semantics at all reports nothing but the object, so every pixel that
+  # returned a depth is on it.
+  defp on_surface(observation, depths) do
+    case Map.get(observation, "semantic_3d") do
+      points when is_list(points) and points != [] and length(points) == length(depths) ->
+        Enum.map(points, &List.last/1)
 
-      semantics ->
-        for {depth, semantic_id} <- Enum.zip(depths, semantics),
-            semantic_id > @no_return,
-            do: depth
+      _absent_or_partial ->
+        case observation |> Map.get("semantic") |> image_cells() do
+          [] -> Enum.map(depths, &if(&1 == @no_return, do: 0.0, else: 1.0))
+          semantics -> Enum.map(semantics, &if(&1 > 0.0, do: 1.0, else: 0.0))
+        end
     end
   end
 
@@ -131,7 +146,7 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
   end
 
   defp colour_features(observation) do
-    case centre(Map.get(observation, "rgba")) do
+    case middle(Map.get(observation, "rgba")) do
       [red, green, blue | _alpha] = pixel ->
         %{"rgba" => pixel, "hsv" => SensorProcessing.rgb2hsv([red, green, blue])}
 
@@ -140,16 +155,27 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
     end
   end
 
-  defp centre([pixel]), do: pixel
-  defp centre(_not_an_image), do: nil
+  # The middle cell of an image: Monty's `center_id`, the pixel a sensor reports
+  # its location and its colour at, and the one whose surface the pose vectors
+  # belong to. A depth image's middle is a number and a colour image's is a
+  # pixel; both are what the middle row and column hold.
+  defp middle(image) when is_list(image) and image != [] do
+    row = Enum.at(image, div(length(image), 2))
+    Enum.at(row, div(length(row), 2))
+  end
 
-  # A pixel is on the object when the world's semantic id says so; a world that
-  # reports no semantic id is taken to be on it, because everything such a world
-  # reports is the thing in front of the sensor.
+  defp middle(_no_image), do: nil
+
+  # A pixel is on the object when the mask at the middle of the view says so; a
+  # world that reports no semantics is taken to be on it, because everything
+  # such a world reports is the thing in front of the sensor.
   defp on_object?(observation) do
-    case centre(Map.get(observation, "semantic")) do
-      [semantic_id] -> semantic_id > 0.0
-      _no_semantics -> Map.get(observation, "on_object", true)
+    case observation |> Map.get("semantic") |> middle() do
+      nil -> Map.get(observation, "on_object", true)
+      semantic_id -> semantic_id > 0.0
     end
   end
+
+  defp image_cells(nil), do: []
+  defp image_cells(image) when is_list(image), do: List.flatten(image)
 end

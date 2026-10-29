@@ -11,6 +11,7 @@ defmodule Monty.Simulators.Synthetic.SensorModuleTest do
 
   use ExUnit.Case, async: true
 
+  alias Monty.Frameworks.Utils.SensorProcessing
   alias Monty.Simulators.Synthetic.SensorModule
 
   defp state, do: SensorModule.new("patch")
@@ -29,7 +30,7 @@ defmodule Monty.Simulators.Synthetic.SensorModuleTest do
         "semantic" => [[1.0]],
         "principal_curvatures" => [-20.0, -20.0],
         "pose_vectors" => [[0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]],
-        "rgba" => [[0.0, 1.0, 0.0, 1.0]]
+        "rgba" => [[[0.0, 1.0, 0.0, 1.0]]]
       }
     end
 
@@ -55,6 +56,70 @@ defmodule Monty.Simulators.Synthetic.SensorModuleTest do
 
     test "and it goes on to the learning modules" do
       assert percept(observation()).process_features_in_lm
+    end
+  end
+
+  describe "a patch of more than one pixel" do
+    # Three by three: the middle sees the surface at five centimetres, one corner
+    # sees nothing.
+    defp patch(observation) do
+      Map.merge(
+        %{
+          "location" => [0.0, 0.0, 0.1],
+          "depth" => [[0.04, 0.04, 0.04], [0.04, 0.05, 0.04], [0.04, 0.04, 1.0]],
+          "semantic" => [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 0.0]],
+          "rgba" => List.duplicate(List.duplicate([0.0, 1.0, 0.0, 1.0], 3), 3)
+        },
+        observation
+      )
+    end
+
+    test "reads its colour at the middle of the view, not at the first pixel" do
+      green = [0.0, 1.0, 0.0, 1.0]
+      red = [1.0, 0.0, 0.0, 1.0]
+
+      features =
+        percept(
+          patch(%{"rgba" => [[green, green, green], [green, red, green], [green, green, green]]})
+        )
+        |> Map.fetch!(:non_morphological_features)
+
+      assert features["rgba"] == red
+      assert features["hsv"] == SensorProcessing.rgb2hsv([1.0, 0.0, 0.0])
+    end
+
+    test "and covers the share of it that is on the object" do
+      features = percept(patch(%{})) |> Map.fetch!(:non_morphological_features)
+
+      # Eight of nine pixels see the object; the ninth returned nothing.
+      assert_in_delta features["object_coverage"], 8 / 9, 1.0e-12
+      assert features["min_depth"] == 0.04
+      assert_in_delta features["mean_depth"], (7 * 0.04 + 0.05) / 8, 1.0e-12
+    end
+
+    test "and follows the mask the transform left, not the colours" do
+      # Only the pixel the transform kept as on-surface counts, whatever the
+      # semantic image would have said on its own.
+      on_surface = fn mask, depth -> [0.0, 0.0, depth, mask] end
+
+      kept = [
+        on_surface.(0.0, 0.04),
+        on_surface.(1.0, 0.02),
+        on_surface.(0.0, 0.04),
+        on_surface.(0.0, 0.04),
+        on_surface.(0.0, 0.04),
+        on_surface.(0.0, 0.04),
+        on_surface.(0.0, 0.04),
+        on_surface.(0.0, 0.04),
+        on_surface.(0.0, 0.04)
+      ]
+
+      features =
+        percept(patch(%{"semantic_3d" => kept})) |> Map.fetch!(:non_morphological_features)
+
+      assert_in_delta features["object_coverage"], 1 / 9, 1.0e-12
+      assert features["min_depth"] == 0.04
+      assert features["mean_depth"] == 0.04
     end
   end
 
