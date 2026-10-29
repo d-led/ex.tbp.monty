@@ -17,6 +17,7 @@ defmodule Monty.Studio.Setup do
   does not produce — and a studio is worth more the earlier it says them.
   """
 
+  alias Monty.Experiment.Environment.OneObjectPerEpisodeInterface
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
@@ -47,7 +48,8 @@ defmodule Monty.Studio.Setup do
             seed: nil,
             supervised_lm_ids: [],
             findings: [],
-            positioning: []
+            positioning: [],
+            object_names: nil
 
   @type module_description :: %{
           class: String.t() | nil,
@@ -134,6 +136,7 @@ defmodule Monty.Studio.Setup do
       motor_system_config: Map.get(monty_config, "motor_system_config", %{}),
       transforms: transforms(config),
       positioning: get_in(config, ["eval_env_interface_args", "positioning_procedures"]) || [],
+      object_names: get_in(config, ["eval_env_interface_args", "object_names"]),
       attention_system: describe_target(get_in(monty_config, ["attention_system", "_target_"])),
       monty_args: Map.get(monty_config, "monty_args", %{}),
       sensors: sensors,
@@ -660,17 +663,43 @@ defmodule Monty.Studio.Setup do
   is a thing to port with the worlds themselves, not before them.
   """
   @spec target_semantic_id(t()) :: integer()
-  def target_semantic_id(%__MODULE__{}), do: 1
+  def target_semantic_id(%__MODULE__{} = setup) do
+    interface = object_interface(setup)
+
+    case List.first(interface.object_names) do
+      nil ->
+        # A config that names no objects leaves the stand-in world's single
+        # sphere, and the scene stamps it 1. That is a fact about the stand-in —
+        # the one place in the prologue that is not Monty's arithmetic.
+        1
+
+      name ->
+        Map.fetch!(interface.semantic_label_to_id, name)
+    end
+  end
 
   @doc """
   How many objects the scene has besides the target.
 
   Monty's single-object scenes refuse to start when positioning never reaches the
   target; a cluttered scene may give up, because a run that starts slightly off is
-  still a run of the experiment.
+  still a run of the experiment. The count is the interface config's
+  `num_distractors` — a list of object names means none — not a guess from the
+  stand-in scene, which holds one object whatever the config says.
   """
   @spec distractors(t()) :: non_neg_integer()
-  def distractors(%__MODULE__{scene: %{objects: objects}}), do: max(length(objects) - 1, 0)
+  def distractors(%__MODULE__{} = setup), do: object_interface(setup).num_distractors
+
+  @doc """
+  The object interface the config describes, before any object is chosen.
+
+  Monty's mapping starts at one, so a one-object experiment's target is 1 — the
+  id the stand-in world stamps on its sphere, now derived rather than assumed.
+  """
+  @spec object_interface(t()) :: OneObjectPerEpisodeInterface.t()
+  def object_interface(%__MODULE__{object_names: names}) do
+    OneObjectPerEpisodeInterface.new(object_names: names || [])
+  end
 
   defp object_names(args) do
     case Map.get(args, "objects") do

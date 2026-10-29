@@ -221,7 +221,7 @@
         python: "Interface"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.Environment.OneObjectPerEpisodeInterface",
         python: "OneObjectPerEpisodeInterface"
       },

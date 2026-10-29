@@ -62,6 +62,7 @@ they do.
 | `GetGoodView`: whether the centre pixel is on the object, and whether to move | four views: close enough by percentage, close enough by distance, still far, and a target absent from a two-object scene, plus a one-object scene with nothing in it | the same verdicts, the same `MoveForward`, and the same `ObjectNotVisibleError` | same file |
 | `GetGoodView`: the state machine, replayed whole | two episodes — move, move, turn, done, and the extra turn a two-object scene takes first — with the procedure carried from step to step | every action in every step, and each step's `success`/`terminated`/`truncated` | same file |
 | `Interface` — the environment interface | a stub world that counts its steps and two transforms that report what they are handed | the *order*: each transform runs in the configured sequence, each sees the previous one's answer, each gets a pose and a stream, the world's pose comes back untouched, and a second step stays on the same world | `test/monty/experiment/environment/interface_test.exs` |
+| `OneObjectPerEpisodeInterface` — the semantic mapping, both directions, and which object an episode is about | three shapes of `object_names`: a plain list, a list with a repeated name, and a mapping with `targets_list`, `source_object_list` and `num_distractors`; then the object at index 1, the cycle past the end, and both out-of-range indices | the mapping **exact** (including the deduplication that leaves `object_names` with four entries and the source list with three); the parameters the scene is asked to add, attribute for attribute; the wrap to index 0; Monty's IndexError message | `test/monty/experiment/environment/one_object_per_episode_interface_test.exs` |
 | `highest_confidence_goal` | distinct confidences, a tie (Monty's docstring promises the first), and one goal | which goal, **exact** | same file |
 | `SinglePolicySelector` and `DistantPolicySelector` | an LM goal outranking two SM goals through the single selector; two SM goals through the distant agent's routing; no goals at all | the actions Monty produced, `1e-9` degrees, and the policy that produced them | same file |
 
@@ -129,6 +130,12 @@ Both the prologue and the episode go through `Monty.Experiment.Environment.Inter
 defined once. A step of a run is `Interface.step/2`, and the positioning
 procedures' actions step the same interface.
 
+Which object the episode is about, and which semantic id the world stamps on it,
+used to be a guess written into `Monty.Studio.Setup` ("the target is 1", "no
+distractors"). Both are `OneObjectPerEpisodeInterface`'s answers — the id from
+`semantic_label_to_id`, the count from the config's `num_distractors` — and are
+now asked of it (see §2.16 for what the stand-in world still decides).
+
 ## What is **not** verified
 
 Saying this plainly matters more than the table above:
@@ -147,11 +154,21 @@ Saying this plainly matters more than the table above:
   percept full of hypotheses, and Monty's hypotheses come from learning modules
   that import `torch`. So the recording records the routing and nothing of the
   fallback's own numbers; those are tested where they live, without Monty.
-- **An episode, end to end.** Monty's `Monty` class imports (its `experiment/`
-  half does not need `torch`), but `frameworks/models/object_model.py` pulls in
-  `torch` and `torch_geometric`, so a recorded Monty episode would need a second
-  full environment. Until then, an episode is compared piece by piece, never
-  whole.
+- **An episode, end to end.** `frameworks/models/object_model.py` pulls in
+  `torch` and `torch_geometric`, so a recorded Monty episode needs a second
+  interpreter. This machine has Monty's **own pinned one**: the conda
+  environment `tbp.monty` (Python 3.8.20, `torch` 1.13.1, `torch_geometric`
+  2.1.0, `numpy` 1.23.5, `habitat_sim` 0.2.2) matching `environment_arm64.yml`,
+  with YCB object meshes under `$MONTY_DATA` and pretrained models under
+  `$MONTY_MODELS`. `scripts/setup_monty_oracle.sh` builds a pip-only stand-in
+  where that environment is absent, with newer versions (§2.15 of
+  `monty-bugs.md`). **No Monty episode has been recorded or compared yet** — an
+  episode is still compared piece by piece, never whole.
+- **Distractors.** `OneObjectPerEpisodeInterface` computes which objects a
+  distractor may be drawn from and refuses to place any (§2.16), because the
+  stand-in world holds one object. A config that asks for distractors therefore
+  errors rather than running an evaluation that would silently be about a lone
+  object.
 - **`TwoDSensorModule`**, which needs a dataset that is not present.
 - Known, documented differences that are *not* agreement: `rgb_to_lab` to
   `2.67/255` (§1.12), OpenCV's mixed-axis `INTER_AREA` (§1.13), and
@@ -171,6 +188,7 @@ Monty revision moves:
 | `test/fixtures/monty_motor_policy.json` | `scripts/record_monty_motor_policy.py` |
 | `test/fixtures/monty_positioning.json` | `scripts/record_monty_positioning.py` (needs `scipy`) |
 | `test/fixtures/monty_interface.json` | `scripts/record_monty_interface.py` (needs `omegaconf`) |
+| `test/fixtures/monty_interface_objects.json` | `scripts/record_monty_interface_objects.py` (needs `omegaconf`) |
 | `test/fixtures/monty_vocus2_images.json` | `scripts/record_monty_vocus2_images.py` |
 | `test/fixtures/monty_pyramids.json` | `scripts/record_monty_pyramids.py` |
 | `test/fixtures/monty_vocus2.json` | `scripts/record_monty_vocus2.py` |
@@ -181,7 +199,11 @@ Two rules, learned the hard way:
 
 - Run the recorders with an interpreter that has what they import. Those needing
   OpenCV must use a Python 3.13 environment; the others are happy with the
-  repo's default.
+  repo's default. `scripts/setup_monty_oracle.sh` builds the one the full-Monty
+  recorders need where Monty's pinned conda environment is absent
+  (`VENV=.monty-oracle WITH_TORCH=1 ./scripts/setup_monty_oracle.sh`), and prints
+  the versions it installed, because they are newer than Monty's (§2.15 of
+  `monty-bugs.md`).
 - Never tighten a tolerance to make a fixture pass, and never loosen one without
   saying in the test *why* the difference is not the port's. A too-generous
   tolerance hides a port bug; a too-tight one hides float32.

@@ -238,3 +238,6 @@ backups/
 # running a recorder writes bytecode, and a .pyc embeds its source's absolute path
 __pycache__/
 *.pyc
+
+# the throwaway Python environment `scripts/setup_monty_oracle.sh` builds
+.monty-oracle/

@@ -973,6 +973,57 @@ dozen steps on the shipped configs — a studio run of
 `base_config_10distinctobj_dist_agent` takes 25 — so the bound only fires where
 Monty would have hung.
 
+## 2.15 Two recording environments, and only one of them is Monty's
+
+**What Monty does.** `environment_arm64.yml` pins `python=3.8`,
+`numpy<=1.23.5` (because `numpy >= 1.24` drops `np.long`), `quaternion=2023.0.3`
+(same reason), `scikit-learn=1.3.2`, `pytorch=1.13.1`, `pyg=2.1.0`,
+`pytorch-scatter=2.0.9`, `pytorch-sparse=0.6.15` and `habitat-sim=0.2.2`.
+
+**What this port records with.** Two interpreters, on purpose:
+
+- Monty's own conda environment `tbp.monty` — Python 3.8.20, `numpy` 1.23.5,
+  `quaternion` 2023.0.3, `scipy` 1.10.1, `scikit-learn` 1.3.2, `torch` 1.13.1,
+  `torch_geometric` 2.1.0, `torch_sparse` 0.6.15, `torch_scatter` 2.0.9,
+  `omegaconf` 2.3.0, `habitat_sim` 0.2.2 — which is the pin list above. Anything
+  that needs Monty's learning modules or its simulator is recorded here.
+- A throwaway Python 3.13 environment built by
+  [`scripts/setup_monty_oracle.sh`](../scripts/setup_monty_oracle.sh) for the
+  recorders that only need arithmetic: `numpy` 2.4.1, OpenCV 4.10.0,
+  `quaternion` 2024.0.13, `scipy` 1.18.1, `omegaconf` 2.4.0, `scikit-learn`
+  1.9.1, and `torch` 2.15.0 with `torch_geometric` 2.8.1 when asked for. Used
+  where the conda environment is absent, and never where a Monty answer is what
+  is being recorded.
+
+**Why.** The pinned environment exists here, so parity recordings are made in it;
+the pip environment removes the "install conda, then 3.8, then Habitat" cliff
+from any other machine, at the cost of recording a newer library's answers. The
+two are not interchangeable and a recording says which ran it.
+
+**What this does not license.** OpenCV is 4.13.0 in the pinned environment and
+4.10.0 in the pip one; the fixtures that compare against OpenCV (§1.12, §1.13,
+§1.15) were recorded under 4.10.0. Re-recording them in the pinned environment
+would be measuring 4.13.0, which is a different measurement, not a fresher one.
+
+## 2.16 Distractors are refused, not placed
+
+**What Monty does.** `OneObjectPerEpisodeInterface` adds the primary target, then
+draws `num_distractors` names from the source list — everything but the target —
+places them around it, and records for each whether it is the primary target.
+
+**What this port does.**
+[`OneObjectPerEpisodeInterface.place_distractors/2`](../lib/monty/experiment/environment/one_object_per_episode_interface.ex)
+answers `{:error, {:distractors_not_supported, n}}` for any `n > 0`, and
+`change_object_by_idx/3` passes that up. Everything above it is Monty's: which
+objects a distractor may be drawn from (`distractor_candidates/2`), the target's
+semantic id, and the attributes the scene is asked to add it with.
+
+**Why.** The stand-in world holds one object. Placing "distractors" it cannot
+hold, or quietly running an experiment that asked for a cluttered scene and got an
+empty one, would make a number that means something different from Monty's. A
+refusal is a run that says which feature is missing.
+
+
 ---
 
 # Checked and found consistent
