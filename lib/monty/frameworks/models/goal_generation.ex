@@ -18,4 +18,30 @@ defmodule Monty.Frameworks.Models.GoalGeneration do
   The behaviour these implement is
   `Monty.Frameworks.Models.AbstractMontyClasses.GoalGenerator`.
   """
+
+  alias Monty.Frameworks.Models.GoalGeneration.{EvidenceGoalGenerator, GraphGoalGenerator}
+
+  # The two generators a learning module's `gsg:` entry may name. Monty's file
+  # holds exactly three classes and the third is an error, so the list is closed.
+  @generators %{
+    "tbp.monty.frameworks.models.goal_generation.EvidenceGoalGenerator" => EvidenceGoalGenerator,
+    "tbp.monty.frameworks.models.goal_generation.GraphGoalGenerator" => GraphGoalGenerator
+  }
+
+  @doc """
+  The generator a config entry names, built from its own keys.
+
+  Monty instantiates the entry through Hydra and hands the learning module the
+  object; a module built from a config has to instantiate the entry itself, which
+  is what this does. A class this port has not written is an error rather than a
+  silent `nil`, so building a module cannot quietly drop the goals the experiment
+  asked for.
+  """
+  @spec from_config(map()) :: {:ok, struct()} | {:error, term()}
+  def from_config(%{} = config) do
+    case Map.fetch(@generators, Map.get(config, "_target_")) do
+      {:ok, generator} -> {:ok, generator.from_config(config)}
+      :error -> {:error, {:unsupported_goal_generator, Map.get(config, "_target_")}}
+    end
+  end
 end

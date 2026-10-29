@@ -75,6 +75,15 @@ defmodule Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator do
   end
 
   @doc """
+  The generator a config entry describes.
+
+  On its own it emits no goal, which is what an experiment that only wants a
+  learning module to keep matching asks for.
+  """
+  @spec from_config(map()) :: t()
+  def from_config(config), do: new(goal_tolerances: Map.get(config, "goal_tolerances"))
+
+  @doc """
   The learning module this generator reads, or an error when there is none.
   """
   @impl true

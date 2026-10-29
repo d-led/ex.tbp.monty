@@ -471,4 +471,38 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGeneratorTest do
       assert EvidenceGoalGenerator.output_goals(generator) == []
     end
   end
+
+  describe "from_config/1" do
+    test "takes its schedule from the entry an experiment writes" do
+      # `learning_module/evidence_1lm_nn5_dod0025.yaml`'s `gsg`, as composed.
+      generator =
+        EvidenceGoalGenerator.from_config(%{
+          "_target_" => "tbp.monty.frameworks.models.goal_generation.EvidenceGoalGenerator",
+          "goal_tolerances" => %{"location" => 0.015},
+          "elapsed_steps_factor" => 10,
+          "min_post_goal_success_steps" => 5,
+          "x_percent_scale_factor" => 0.75,
+          "desired_object_distance" => 0.025
+        })
+
+      assert generator.base.goal_tolerances == %{"location" => 0.015}
+      assert generator.elapsed_steps_factor == 10
+      assert generator.min_post_goal_success_steps == 5
+      assert generator.x_percent_scale_factor == 0.75
+      assert generator.desired_object_distance == 0.025
+    end
+
+    test "keeps Monty's defaults for what the entry leaves out" do
+      # Infinity, so an experiment that does not ask for hypothesis testing does
+      # not get it: the agent has to be told to gamble on a look elsewhere.
+      generator =
+        EvidenceGoalGenerator.from_config(%{
+          "_target_" => "tbp.monty.frameworks.models.goal_generation.EvidenceGoalGenerator"
+        })
+
+      assert generator.base.goal_tolerances == %{"location" => 0.015}
+      assert generator.min_post_goal_success_steps == :infinity
+      assert generator.wait_growth_multiplier == 2
+    end
+  end
 end

@@ -143,6 +143,30 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator do
     do: GraphGoalGenerator.put_parent_lm(base, parent_lm)
 
   @doc """
+  The generator a config entry describes.
+
+  The entry is Monty's `gsg:` under a learning module — `goal_tolerances` by
+  feature, then the schedule: how many steps without a goal before one is worth
+  trying, the `x` percent scale factor, how close to the object a goal counts as
+  reached, and how fast the wait between attempts grows.
+  """
+  @spec from_config(map()) :: t()
+  def from_config(config) do
+    new(
+      goal_tolerances: Map.get(config, "goal_tolerances"),
+      elapsed_steps_factor:
+        Map.get(config, "elapsed_steps_factor", @default_elapsed_steps_factor),
+      min_post_goal_success_steps: Map.get(config, "min_post_goal_success_steps", :infinity),
+      x_percent_scale_factor:
+        Map.get(config, "x_percent_scale_factor", @default_x_percent_scale_factor),
+      desired_object_distance:
+        Map.get(config, "desired_object_distance", @default_desired_object_distance),
+      wait_growth_multiplier:
+        Map.get(config, "wait_growth_multiplier", @default_wait_growth_multiplier)
+    )
+  end
+
+  @doc """
   The learning module this generator reads, or an error when there is none.
   """
   @impl true

@@ -128,6 +128,15 @@ defmodule Monty.Studio.DiagramTest do
       assert patch.status == :implemented
     end
 
+    test "a learning module box names the goal generator that decides where it looks" do
+      # Two experiments whose modules differ there are not the same experiment:
+      # one explores with goals, the other only matches.
+      diagram = Diagram.new(setup_for("base_config_10distinctobj_dist_agent"))
+
+      assert Diagram.node(diagram, "learning_module_0").detail ==
+               "EvidenceGraphLM · EvidenceGoalGenerator"
+    end
+
     test "a sensor with nothing to learn from says so, instead of looking broken" do
       diagram = Diagram.new(setup_for("tutorial/first_experiment"))
       view_finder = Diagram.node(diagram, "view_finder")

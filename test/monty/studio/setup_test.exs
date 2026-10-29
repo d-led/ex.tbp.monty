@@ -274,13 +274,11 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "what a run cannot yet do" do
-    test "says so when the config asks for a goal generator" do
-      setup = setup_from(@base)
-
-      finding = finding(setup, :goal_generator_not_ported)
-
-      assert finding.level == :warning
-      assert finding.message =~ "explores without goals"
+    test "says nothing about goals when the config's generator is ported" do
+      # It is: both of Monty's are, and the module built from the config gets
+      # the one it names, so the warning that a run explores without goals has
+      # nothing to say.
+      refute :goal_generator_not_ported in Enum.map(setup_from(@base).findings, & &1.code)
     end
   end
 

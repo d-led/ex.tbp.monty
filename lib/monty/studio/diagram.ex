@@ -148,10 +148,21 @@ defmodule Monty.Studio.Diagram do
       id: learning_module.id,
       kind: :learning_module,
       label: learning_module.id,
-      detail: module_label(learning_module.module, "learning module"),
+      detail: learning_module_detail(learning_module),
       note: nil,
       status: learning_module.module && learning_module.module.status
     }
+  end
+
+  # A module's goal generator decides where it asks to look next, so it is part
+  # of the wiring rather than a footnote: an experiment whose module has no
+  # generator explores at random, and the diagram should not look the same.
+  defp learning_module_detail(%{goal_generator: nil, module: module}),
+    do: module_label(module, "learning module")
+
+  defp learning_module_detail(%{goal_generator: goal_generator, module: module}) do
+    "#{module_label(module, "learning module")} · " <>
+      module_label(goal_generator, "goal generator")
   end
 
   defp motor_nodes(%Setup{motor_system: nil}), do: []

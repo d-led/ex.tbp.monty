@@ -12,6 +12,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   alias Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHypothesesUpdater
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GridObjectModel
 
@@ -80,6 +81,72 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert lm.graph_memory.object_model_options[:max_size] == 0.3
       assert lm.graph_memory.object_model_options[:num_voxels_per_dim] == 100
       assert lm.graph_memory.object_model_options[:max_nodes] == 2000
+    end
+
+    test "decides the goal generator, and the schedule it explores on" do
+      # `gsg` is the entry that turns "I cannot tell these apart" into "look
+      # there next"; without it the module only ever matches.
+      {:ok, lm} =
+        EvidenceGraphLM.from_config(
+          config(%{
+            "gsg" => %{
+              "_target_" => "tbp.monty.frameworks.models.goal_generation.EvidenceGoalGenerator",
+              "goal_tolerances" => %{"location" => 0.015},
+              "elapsed_steps_factor" => 10,
+              "min_post_goal_success_steps" => 5,
+              "x_percent_scale_factor" => 0.75,
+              "desired_object_distance" => 0.025
+            }
+          })
+        )
+
+      assert %EvidenceGoalGenerator{} = gsg = lm.gsg
+      assert gsg.base.goal_tolerances == %{"location" => 0.015}
+      assert gsg.elapsed_steps_factor == 10
+      assert gsg.min_post_goal_success_steps == 5
+      assert gsg.x_percent_scale_factor == 0.75
+      assert gsg.desired_object_distance == 0.025
+    end
+
+    test "points the generator at its module when an episode starts" do
+      # A generator reads its module's hypotheses, so the module hands itself
+      # over on reset — `point_at`/`put_parent_lm` in Monty. Without that the
+      # generator has nothing to compare and the run never looks anywhere.
+      {:ok, lm} =
+        EvidenceGraphLM.from_config(
+          config(%{
+            "gsg" => %{
+              "_target_" => "tbp.monty.frameworks.models.goal_generation.EvidenceGoalGenerator"
+            }
+          })
+        )
+
+      lm = EvidenceGraphLM.reset_stm(lm)
+
+      assert EvidenceGoalGenerator.parent_lm(lm.gsg).learning_module_id ==
+               lm.learning_module_id
+
+      assert {goals, _lm} = EvidenceGraphLM.propose_goals(lm)
+      assert goals == []
+    end
+
+    test "has no goal generator when the config asks for none" do
+      {:ok, lm} = EvidenceGraphLM.from_config(config())
+
+      assert lm.gsg == nil
+    end
+
+    test "a goal generator this port has not written leaves the module without one" do
+      # The module still matches — its graph is the valuable part — and
+      # `Setup` reports that the run explores without goals.
+      {:ok, lm} =
+        EvidenceGraphLM.from_config(
+          config(%{
+            "gsg" => %{"_target_" => "tbp.monty.frameworks.models.goal_generation.MyGenerator"}
+          })
+        )
+
+      assert lm.gsg == nil
     end
 
     test "a learning module this port has not written is refused by name" do

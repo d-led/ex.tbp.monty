@@ -77,6 +77,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypothesesUpdater
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule
+  alias Monty.Frameworks.Models.GoalGeneration
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Geometry
@@ -261,10 +262,25 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         learning_module_id: Map.get(config, "learning_module_id", "LM_0"),
         max_nneighbors:
           get_in(config, ["hypotheses_updater_args", "max_nneighbors"]) || @default_max_nneighbors,
-        hypotheses_updater: updater
+        hypotheses_updater: updater,
+        gsg: goal_generator(config)
       )
     end
   end
+
+  # Monty's Hydra instantiation builds the learning module's `gsg` entry and
+  # passes the object in; a module built from its own config builds the entry
+  # inside it. A generator class this port has not written leaves the module
+  # without one — and without goals, which is a different experiment, so
+  # `Monty.Studio.Setup` reports it rather than this crashing the build.
+  defp goal_generator(%{"gsg" => entry}) do
+    case GoalGeneration.from_config(entry) do
+      {:ok, generator} -> generator
+      {:error, _unsupported} -> nil
+    end
+  end
+
+  defp goal_generator(_config), do: nil
 
   defp check_target(@evidence_graph_lm_target), do: :ok
 
