@@ -193,9 +193,19 @@ Saying this plainly matters more than the table above:
   `priv/monty/libraries/`, the config's recognition policy, the real coordinator
   — with the recording standing in for the world. It is a probe and not a test
   because the two do **not** agree: the first episode uses all 43 of Monty's
-  steps without recognising the mug. What that difference is — feature weights, a
-  step's input routing, the memory as exported — is the next thing to measure,
-  and it is not yet known.
+  steps without recognising the mug.
+
+  What that difference is, measured with
+  `scripts/probe_dist_agent_evidence.exs`: **not the model.**
+  `scripts/probe_dist_agent_evidence.exs` gives the config's learning module —
+  the same memory, the same tolerances, the same weights — the recorded percepts
+  one step at a time, with no coordinator and no world. Its evidence matches
+  Monty's to every printed digit on every step (step 1: `mug=2.498 bowl=2.265
+  spoon=2.102` on both sides, and on through the episode), and it concludes
+  `:match "mug"` after the same 43 recorded steps. So the arithmetic, the
+  library export and the recognition policy all agree; what differs is how the
+  percept reaches the module when it travels through the coordinator's routing,
+  and that is where the next measurement goes.
 - **An episode, end to end.** `frameworks/models/object_model.py` pulls in
   `torch` and `torch_geometric`, so a recorded Monty episode needs a second
   interpreter. This machine has Monty's **own pinned one**: the conda
