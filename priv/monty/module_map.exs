@@ -1892,23 +1892,23 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids",
     package: "monty",
     python: "frameworks/models/salience/strategies/vocus2/pyramids.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.Pyramid",
         python: "Pyramid"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.PyramidCombine",
         python: "PyramidCombine"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.PyramidCollapse",
         python: "PyramidCollapse"
       }
