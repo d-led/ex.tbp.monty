@@ -160,7 +160,9 @@
       "rotation_degrees": null,
       "constraint_degrees": null,
       "distance": 0.05,
-      "direction": null
+      "direction": null,
+      "location": null,
+      "rotation_quat": null
      }
     ],
     "undo_action": {
@@ -169,7 +171,9 @@
      "rotation_degrees": null,
      "constraint_degrees": null,
      "distance": -0.05,
-     "direction": null
+     "direction": null,
+     "location": null,
+     "rotation_quat": null
     }
    },
    {
@@ -181,7 +185,9 @@
       "rotation_degrees": null,
       "constraint_degrees": null,
       "distance": 0.05,
-      "direction": null
+      "direction": null,
+      "location": null,
+      "rotation_quat": null
      }
     ],
     "undo_action": {
@@ -190,7 +196,9 @@
      "rotation_degrees": null,
      "constraint_degrees": null,
      "distance": -0.05,
-     "direction": null
+     "direction": null,
+     "location": null,
+     "rotation_quat": null
     }
    },
    {
@@ -202,7 +210,9 @@
       "rotation_degrees": null,
       "constraint_degrees": null,
       "distance": -0.05,
-      "direction": null
+      "direction": null,
+      "location": null,
+      "rotation_quat": null
      }
     ],
     "undo_action": {
@@ -211,7 +221,9 @@
      "rotation_degrees": null,
      "constraint_degrees": null,
      "distance": 0.05,
-     "direction": null
+     "direction": null,
+     "location": null,
+     "rotation_quat": null
     }
    },
    {
@@ -223,7 +235,9 @@
       "rotation_degrees": null,
       "constraint_degrees": null,
       "distance": 0.05,
-      "direction": null
+      "direction": null,
+      "location": null,
+      "rotation_quat": null
      }
     ],
     "undo_action": {
@@ -232,8 +246,154 @@
      "rotation_degrees": null,
      "constraint_degrees": null,
      "distance": -0.05,
-     "direction": null
+     "direction": null,
+     "location": null,
+     "rotation_quat": null
     }
+   }
+  ]
+ },
+ "jump": {
+  "pre_jump": {
+   "name": "looking straight ahead",
+   "agent_position": [
+    0.0,
+    -0.1,
+    0.0
+   ],
+   "agent_rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sensor_position": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sensor_rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "agent_rotation_wxyz": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sensor_rotation_wxyz": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "goal": {
+   "location": [
+    0.4,
+    0.5,
+    -0.6
+   ],
+   "direction": [
+    -0.6021414097779044,
+    0.2007138032593015,
+    -0.7727481425483107
+   ]
+  },
+  "steps": [
+   {
+    "step": "a hypothesis jump",
+    "actions": [
+     {
+      "action": "SetAgentPose",
+      "agent_id": "agent_id_0",
+      "rotation_degrees": null,
+      "constraint_degrees": null,
+      "distance": null,
+      "direction": null,
+      "location": [
+       0.4,
+       0.5,
+       -0.6
+      ],
+      "rotation_quat": [
+       0.9409036021924602,
+       0.09539683679509156,
+       0.3233038389121529,
+       -0.03277930224101801
+      ]
+     },
+     {
+      "action": "SetSensorRotation",
+      "agent_id": "agent_id_0",
+      "rotation_degrees": null,
+      "constraint_degrees": null,
+      "distance": null,
+      "direction": null,
+      "location": null,
+      "rotation_quat": [
+       1.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   {
+    "step": "nothing visible where it landed",
+    "actions": [
+     {
+      "action": "SetAgentPose",
+      "agent_id": "agent_id_0",
+      "rotation_degrees": null,
+      "constraint_degrees": null,
+      "distance": null,
+      "direction": null,
+      "location": [
+       0.0,
+       -0.1,
+       0.0
+      ],
+      "rotation_quat": [
+       1.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "action": "SetSensorRotation",
+      "agent_id": "agent_id_0",
+      "rotation_degrees": null,
+      "constraint_degrees": null,
+      "distance": null,
+      "direction": null,
+      "location": null,
+      "rotation_quat": [
+       1.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   {
+    "step": "back where it started",
+    "actions": [
+     {
+      "action": "MoveForward",
+      "agent_id": "agent_id_0",
+      "rotation_degrees": null,
+      "constraint_degrees": null,
+      "distance": 0.05,
+      "direction": null,
+      "location": null,
+      "rotation_quat": null
+     }
+    ]
    }
   ]
  },
@@ -245,7 +405,9 @@
     "rotation_degrees": 5.0,
     "constraint_degrees": 45.0,
     "distance": null,
-    "direction": null
+    "direction": null,
+    "location": null,
+    "rotation_quat": null
    },
    "undo": {
     "action": "LookDown",
@@ -253,7 +415,9 @@
     "rotation_degrees": -5.0,
     "constraint_degrees": 45.0,
     "distance": null,
-    "direction": null
+    "direction": null,
+    "location": null,
+    "rotation_quat": null
    }
   },
   {
@@ -263,7 +427,9 @@
     "rotation_degrees": -12.5,
     "constraint_degrees": 10.0,
     "distance": null,
-    "direction": null
+    "direction": null,
+    "location": null,
+    "rotation_quat": null
    },
    "undo": {
     "action": "LookUp",
@@ -271,7 +437,9 @@
     "rotation_degrees": 12.5,
     "constraint_degrees": 10.0,
     "distance": null,
-    "direction": null
+    "direction": null,
+    "location": null,
+    "rotation_quat": null
    }
   },
   {
@@ -281,7 +449,9 @@
     "rotation_degrees": 30.0,
     "constraint_degrees": null,
     "distance": null,
-    "direction": null
+    "direction": null,
+    "location": null,
+    "rotation_quat": null
    },
    "undo": {
     "action": "TurnLeft",
@@ -289,7 +459,9 @@
     "rotation_degrees": -30.0,
     "constraint_degrees": null,
     "distance": null,
-    "direction": null
+    "direction": null,
+    "location": null,
+    "rotation_quat": null
    }
   },
   {
@@ -299,7 +471,9 @@
     "rotation_degrees": -7.0,
     "constraint_degrees": null,
     "distance": null,
-    "direction": null
+    "direction": null,
+    "location": null,
+    "rotation_quat": null
    },
    "undo": {
     "action": "TurnRight",
@@ -307,7 +481,9 @@
     "rotation_degrees": 7.0,
     "constraint_degrees": null,
     "distance": null,
-    "direction": null
+    "direction": null,
+    "location": null,
+    "rotation_quat": null
    }
   },
   {
@@ -317,7 +493,9 @@
     "rotation_degrees": null,
     "constraint_degrees": null,
     "distance": 0.05,
-    "direction": null
+    "direction": null,
+    "location": null,
+    "rotation_quat": null
    },
    "undo": {
     "action": "MoveForward",
@@ -325,7 +503,9 @@
     "rotation_degrees": null,
     "constraint_degrees": null,
     "distance": -0.05,
-    "direction": null
+    "direction": null,
+    "location": null,
+    "rotation_quat": null
    }
   },
   {
@@ -339,7 +519,9 @@
      1.0,
      0.0,
      0.0
-    ]
+    ],
+    "location": null,
+    "rotation_quat": null
    },
    "undo": {
     "action": "MoveTangentially",
@@ -351,7 +533,9 @@
      1.0,
      0.0,
      0.0
-    ]
+    ],
+    "location": null,
+    "rotation_quat": null
    }
   }
  ],
@@ -361,7 +545,9 @@
   "rotation_degrees": 5.0,
   "constraint_degrees": null,
   "distance": null,
-  "direction": null
+  "direction": null,
+  "location": null,
+  "rotation_quat": null
  },
  "highest_confidence_goal": [
   {

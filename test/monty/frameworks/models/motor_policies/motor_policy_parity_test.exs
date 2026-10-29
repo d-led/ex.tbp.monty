@@ -23,6 +23,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
 
   alias Monty.Frameworks.Models.MotorPolicies.{
     BasePolicy,
+    InformedPolicy,
     InformedPolicyRandomWalk,
     JumpToGoal,
     MotorPolicyResult
@@ -32,7 +33,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
   alias Monty.Frameworks.Models.MotorPolicySelectors.{DistantPolicySelector, SinglePolicySelector}
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
   alias Monty.Frameworks.Models.Salience.MotorPolicy.{GoalCollocatedWithSensor, LookAtGoal}
-  alias Monty.Geometry.Rotation
+  alias Monty.Geometry.{GazeDirection, Rotation}
 
   @fixture Path.expand("../../../../fixtures/monty_motor_policy.json", __DIR__)
 
@@ -45,6 +46,40 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
 
   setup_all do
     {:ok, fixture: @fixture |> File.read!() |> Jason.decode!()}
+  end
+
+  test "a hypothesis jump poses the agent and its undo puts it back", %{fixture: fixture} do
+    %{"pre_jump" => pre_jump, "goal" => recorded_goal, "steps" => steps} = fixture["jump"]
+
+    state = jump_state(pre_jump)
+
+    policy =
+      InformedPolicy.new(
+        agent_id: @agent,
+        action_sampler: ConstantSampler.new(actions: [MoveForward], translation_distance: 0.05),
+        use_goal_driven_actions: true
+      )
+
+    goal =
+      goal(recorded_goal["location"], 1.0, :gsg)
+      |> Map.put(:morphological_features, %{
+        "pose_vectors" => %GazeDirection{
+          value: [recorded_goal["direction"], [nil, nil, nil], [nil, nil, nil]]
+        }
+      })
+
+    # The goal is only needed for the first step; the second judges where the
+    # jump landed, and the third finishes the recovery.
+    Enum.reduce(steps, policy, fn %{"step" => label, "actions" => expected}, policy ->
+      observations = %{@agent => %{"view_finder" => %{"depth" => depth(label)}}}
+      goal = if label == "a hypothesis jump", do: goal, else: nil
+
+      {result, policy} =
+        InformedPolicy.call(policy, Context.new(0), observations, state, percept(true), goal)
+
+      assert_close_records(Enum.map(result.actions, &action_fields/1), expected, label)
+      policy
+    end)
   end
 
   test "an informed walk steps onto the object and back off it", %{fixture: fixture} do
@@ -234,6 +269,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
 
   defp sender_id(:sm), do: @sensor
   defp sender_id(:lm), do: "LM_0"
+  defp sender_id(:gsg), do: "LM_0"
 
   defp goals(records),
     do: Enum.map(records, &goal(&1["location"], &1["confidence"], sender_type(&1["sender_type"])))
@@ -241,6 +277,37 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
   defp sender_type("SM"), do: :sm
   defp sender_type("LM"), do: :lm
   defp sender_type("GSG"), do: :gsg
+
+  # The agent a jump starts from, with the two sensors a distant agent carries
+  # sharing one orientation, which is what a jump restores.
+  defp jump_state(%{
+         "agent_position" => position,
+         "agent_rotation_wxyz" => agent_rotation,
+         "sensor_position" => sensor_position,
+         "sensor_rotation_wxyz" => sensor_rotation
+       }) do
+    %{
+      @agent => %AgentState{
+        position: position,
+        rotation: rotation(agent_rotation),
+        sensors: %{
+          "view_finder" => %SensorState{
+            position: sensor_position,
+            rotation: rotation(sensor_rotation)
+          },
+          "patch" => %SensorState{
+            position: sensor_position,
+            rotation: rotation(sensor_rotation)
+          }
+        }
+      }
+    }
+  end
+
+  # `_should_undo_jump` reads the centre pixel: 1.0 and up means nothing was
+  # there, so the jump is taken back.
+  defp depth("nothing visible where it landed"), do: List.duplicate(List.duplicate(1.5, 4), 4)
+  defp depth(_visible), do: List.duplicate(List.duplicate(0.5, 4), 4)
 
   defp percept(on_object?) do
     {:ok, message} =
@@ -332,9 +399,14 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
       "rotation_degrees" => Map.get(action, :rotation_degrees),
       "constraint_degrees" => Map.get(action, :constraint_degrees),
       "distance" => Map.get(action, :distance),
-      "direction" => Map.get(action, :direction)
+      "direction" => Map.get(action, :direction),
+      "location" => Map.get(action, :location),
+      "rotation_quat" => quaternion_list(Map.get(action, :rotation_quat))
     }
   end
+
+  defp quaternion_list(nil), do: nil
+  defp quaternion_list({w, x, y, z}), do: [w, x, y, z]
 
   defp module_of(name) do
     [__MODULE__, Monty.Frameworks.Actions]
@@ -345,6 +417,35 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
       module -> module
     end
   end
+
+  defp assert_close_records(actual, expected, label) do
+    assert length(actual) == length(expected),
+           "#{label}: expected #{length(expected)} actions, got #{length(actual)}"
+
+    Enum.zip(actual, expected)
+    |> Enum.each(fn {got, want} ->
+      assert map_size(got) == map_size(want), "#{label}: records differ in shape"
+
+      for {key, want_value} <- want do
+        assert_value(Map.fetch!(got, key), want_value, "#{label}.#{key}")
+      end
+    end)
+  end
+
+  # Quaternions and poses are computed on both sides from the same inputs, so a
+  # billionth is a difference in how the maths was written, not in the answer.
+  defp assert_value(got, want, label) when is_number(got) and is_number(want),
+    do: assert_in_delta(got, want, @degrees, label)
+
+  defp assert_value(got, want, label) when is_list(got) and is_list(want) do
+    assert length(got) == length(want), label
+
+    Enum.zip(got, want)
+    |> Enum.each(fn {got_value, want_value} -> assert_value(got_value, want_value, label) end)
+  end
+
+  defp assert_value(got, want, label),
+    do: assert(got == want, "#{label}: #{inspect(got)} is not #{inspect(want)}")
 
   defp assert_close(actual, expected, label \\ "") do
     assert length(actual) == length(expected),

@@ -196,6 +196,25 @@ def _undo_record(action):
     return None if action is None else _action_record(action)
 
 
+def _agent_state(pose, sensor_ids=("view_finder", "patch")):
+    """The agent a jump starts from, with the sensors a distant agent carries.
+
+    Monty asserts every sensor of an agent has the same rotation, because actions
+    move them together, so they are built from one rotation on purpose.
+    """
+    return AgentState(
+        position=np.array(pose["agent_position"], dtype=np.float64),
+        rotation=qt.quaternion(*pose["agent_rotation_wxyz"]),
+        sensors={
+            sensor_id: SensorState(
+                position=np.array(pose["sensor_position"], dtype=np.float64),
+                rotation=qt.quaternion(*pose["sensor_rotation_wxyz"]),
+            )
+            for sensor_id in sensor_ids
+        },
+    )
+
+
 def _percept(on_object):
     """The percept an informed policy reads: whether the sensor is on the object."""
     return Message(
@@ -211,6 +230,9 @@ def _percept(on_object):
 
 
 def _action_record(action):
+    rotation_quat = getattr(action, "rotation_quat", None)
+    location = getattr(action, "location", None)
+
     return {
         "action": type(action).__name__,
         "agent_id": action.agent_id,
@@ -218,8 +240,20 @@ def _action_record(action):
         "constraint_degrees": getattr(action, "constraint_degrees", None),
         "distance": getattr(action, "distance", None),
         "direction": (
-            None if getattr(action, "direction", None) is None
+            None
+            if getattr(action, "direction", None) is None
             else [float(coordinate) for coordinate in action.direction]
+        ),
+        "location": None if location is None else [float(c) for c in location],
+        "rotation_quat": (
+            None
+            if rotation_quat is None
+            else [
+                float(rotation_quat.w),
+                float(rotation_quat.x),
+                float(rotation_quat.y),
+                float(rotation_quat.z),
+            ]
         ),
     }
 
@@ -401,6 +435,79 @@ def main():
     assert len(default.calls) == 1, "no goals should reach the default policy exactly once"
     assert default.calls[0] is None, "the default policy is consulted with no goal"
 
+    # -- a hypothesis jump, its undo, and the step after it -----------------
+    from tbp.monty.frameworks.models.motor_policies import InformedPolicy  # noqa: PLC0415
+    from tbp.monty.geometry import GazeDirection  # noqa: PLC0415
+
+    from tbp.monty.frameworks.actions.actions import (  # noqa: PLC0415
+        SetAgentPose,
+        SetSensorRotation,
+    )
+
+    before = _agent_state(poses[0])
+    jump_state = MotorSystemState(ProprioceptiveState({AGENT: before}))
+
+    direction = np.array([-0.6, 0.2, -0.77])
+    direction = direction / np.linalg.norm(direction)
+    jump_goal = Goal(
+        location=np.array([0.4, 0.5, -0.6]),
+        morphological_features={
+            "pose_vectors": GazeDirection(
+                value=np.array([direction, [np.nan, np.nan, np.nan], [np.nan, np.nan, np.nan]])
+            )
+        },
+        non_morphological_features=None,
+        confidence=1.0,
+        pass_message=True,
+        sender_id="LM_0",
+        sender_type="GSG",
+        process_features_in_lm=False,
+        goal_tolerances=None,
+    )
+
+    # `_should_undo_jump` reads the centre pixel of the view finder: 1.0 and up
+    # means nothing was there, so the jump is taken back.
+    def view(depth):
+        return {AGENT: {"view_finder": {"depth": np.full((4, 4), depth)}}}
+
+    jump_policy = InformedPolicy(
+        agent_id=AGENT,
+        action_sampler=ConstantSampler(actions=[MoveForward], translation_distance=0.05),
+        use_goal_driven_actions=True,
+    )
+
+    jump_steps = []
+
+    def jump_step(label, observations, goal):
+        result = jump_policy(
+            RuntimeContext(rng=np.random.RandomState(0)),
+            observations,
+            jump_state,
+            _percept(True),
+            goal,
+        )
+        jump_steps.append(
+            {"step": label, "actions": [_action_record(a) for a in result.actions]}
+        )
+        return result
+
+    jumped = jump_step("a hypothesis jump", view(0.5), jump_goal)
+    assert [type(a).__name__ for a in jumped.actions] == [
+        SetAgentPose.__name__,
+        SetSensorRotation.__name__,
+    ], "a jump is a pose and a sensor rotation"
+
+    undone = jump_step("nothing visible where it landed", view(1.5), None)
+    assert [type(a).__name__ for a in undone.actions] == [
+        SetAgentPose.__name__,
+        SetSensorRotation.__name__,
+    ], "a failed jump is taken back the same way"
+
+    carried_on = jump_step("back where it started", view(0.5), None)
+    assert [type(a).__name__ for a in carried_on.actions] == [MoveForward.__name__], (
+        "after the undo the walk resumes"
+    )
+
     fixture = {
         "agent_id": AGENT,
         "sensor_id": SENSOR,
@@ -408,6 +515,14 @@ def main():
         "random_walk": {
             "translation_distance": 0.05,
             "steps": walk_steps,
+        },
+        "jump": {
+            "pre_jump": poses[0],
+            "goal": {
+                "location": [0.4, 0.5, -0.6],
+                "direction": [float(coordinate) for coordinate in direction],
+            },
+            "steps": jump_steps,
         },
         "undo": undo,
         "not_undoable": not_undoable_record,
