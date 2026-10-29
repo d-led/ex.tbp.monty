@@ -133,7 +133,7 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
     test "carries the image to the sensor, and the centre's surface with it" do
       environment =
         Environment.new(["patch"], Scene.new(radius: 0.05),
-          view: [resolution: 3, field_of_view: 10.0]
+          views: %{"patch" => [resolution: 3, hfov: 10.0]}
         )
 
       {observations, _proprioceptive_state, _environment} = Environment.step(environment, [])
@@ -149,7 +149,7 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
       # at the object however the agent yaws. Pitching it is what looks away.
       environment =
         Environment.new(["patch"], Scene.new(radius: 0.05),
-          view: [resolution: 3, field_of_view: 10.0]
+          views: %{"patch" => [resolution: 3, hfov: 10.0]}
         )
 
       {_observations, _proprioceptive_state, environment} =

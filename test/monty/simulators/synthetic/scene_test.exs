@@ -80,17 +80,17 @@ defmodule Monty.Simulators.Synthetic.SceneTest do
   end
 
   describe "a patch of rays, as a camera answers them" do
-    test "is as wide and as tall as its resolution" do
-      rendered = Scene.render(scene(), looking_down(), resolution: 5, field_of_view: 10.0)
+    test "is as tall and as wide as its resolution" do
+      rendered = Scene.render(scene(), looking_down(), resolution: {3, 5}, hfov: 10.0)
 
-      assert length(rendered.depth) == 5
+      assert length(rendered.depth) == 3
       assert Enum.all?(rendered.depth, &(length(&1) == 5))
-      assert length(rendered.rgba) == 5
-      assert length(rendered.semantic) == 5
+      assert length(rendered.rgba) == 3
+      assert length(rendered.semantic) == 3
     end
 
     test "and its middle is the ray straight down the sensor's axis" do
-      rendered = Scene.render(scene(), looking_down(), resolution: 3, field_of_view: 10.0)
+      rendered = Scene.render(scene(), looking_down(), resolution: 3, hfov: 10.0)
 
       # The sensor is a decimetre up and the sphere's top is at the radius, so
       # the middle sees five centimetres of it — as the single ray did.
@@ -99,12 +99,50 @@ defmodule Monty.Simulators.Synthetic.SceneTest do
     end
 
     test "and its edge pixels see the surface further away, at an angle" do
-      rendered = Scene.render(scene(), looking_down(), resolution: 3, field_of_view: 20.0)
+      rendered = Scene.render(scene(), looking_down(), resolution: 3, hfov: 20.0)
 
       corner = rendered.depth |> hd() |> hd()
       centre = rendered.depth |> Enum.at(1) |> Enum.at(1)
 
       assert corner > centre
+    end
+
+    test "narrowing the field of view brings the edge pixels in" do
+      wide = Scene.render(scene(), looking_down(), resolution: 3, hfov: 20.0)
+      narrow = Scene.render(scene(), looking_down(), resolution: 3, hfov: 20.0, zoom: 2.0)
+
+      corner_of = fn rendered -> rendered.depth |> hd() |> hd() end
+
+      # Twice the zoom is half the field across, so the corner ray meets the
+      # sphere closer to where the middle ray does.
+      assert corner_of.(narrow) < corner_of.(wide)
+      assert corner_of.(narrow) > narrow.depth |> Enum.at(1) |> Enum.at(1)
+    end
+
+    test "and its depth runs along the sensor's axis, as a depth camera reports it" do
+      # A 90-degree camera at four times zoom puts the corner of a three-by-three
+      # patch a quarter of a unit out on the image plane, which is still inside
+      # the horizon of a sphere five centimetres across seen from ten.
+      pose = looking_down()
+      rendered = Scene.render(scene(), pose, resolution: 3, hfov: 90.0, zoom: 4.0)
+      plane = 0.25
+
+      points =
+        for {depths, row} <- Enum.with_index(rendered.depth),
+            {depth, column} <- Enum.with_index(depths) do
+          across = plane * (column - 1)
+          down = plane * (1 - row)
+
+          # Monty's unprojection, `DepthTo3DLocations`: a pixel at `(x, y)` and
+          # depth `d` is the point `(x d, y d, -d)`. It reconstructs the surface
+          # only if the depth is the distance along the axis rather than along
+          # the ray.
+          Rotation.apply(pose.rotation, [across * depth, down * depth, -depth])
+          |> then(&SpatialArithmetics.add(pose.position, &1))
+        end
+
+      assert length(points) == 9
+      assert Enum.all?(points, &(abs(SpatialArithmetics.magnitude(&1) - @radius) < 1.0e-12))
     end
 
     test "a patch that hangs off the object has pixels that saw nothing" do
@@ -116,7 +154,7 @@ defmodule Monty.Simulators.Synthetic.SceneTest do
           scene(),
           %{position: [0.1, 0.0, 0.1], rotation: rotation},
           resolution: 5,
-          field_of_view: 40.0
+          hfov: 40.0
         )
 
       semantic = List.flatten(rendered.semantic)

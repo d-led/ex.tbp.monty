@@ -30,6 +30,10 @@ defmodule Monty.Simulators.Synthetic.Scene do
   @radius 0.05
   @rgb [0.2, 0.7, 0.2]
 
+  # Habitat's camera field of view, which is what Monty's Habitat agents get and
+  # what none of its configs override.
+  @hfov 90.0
+
   # What a depth image has where the camera saw nothing: no depth, and a colour
   # that belongs to nothing.
   @no_colour [0.0, 0.0, 0.0, 1.0]
@@ -74,16 +78,27 @@ defmodule Monty.Simulators.Synthetic.Scene do
   end
 
   @doc """
-  What a sensor at `pose` sees through a camera of `:resolution` pixels across
-  and `:field_of_view` degrees wide.
+  What a sensor at `pose` sees through a pinhole camera.
+
+  The camera is described the way Monty's own experiments describe it, so the
+  studio's world is the experiment's camera rather than one chosen here: a
+  `:resolution` of `{height, width}` pixels (a bare integer for a square patch),
+  a `:zoom`, and a field of view `:hfov` in degrees. Monty's Habitat agents give
+  a resolution and a zoom per sensor, and `DepthTo3DLocations` unprojects the
+  image with `fx = tan(hfov / 2) / zoom`, so a world that rendered a different
+  camera would make the transform disagree with it about which ray a pixel came
+  from.
 
   A sensor looks along its own **−z**, as Monty's do, so its pose is enough: no
-  separate gaze has to be passed in and kept consistent with it. The centre
-  pixel of an odd resolution is the ray straight down that axis.
+  separate gaze has to be passed in and kept consistent with it. Depth is
+  measured along that axis, as a depth sensor measures it — not along the ray —
+  so an off-axis pixel's depth is the distance to the plane through the surface
+  point, which is what the transform assumes when it unprojects.
 
-  A one-pixel camera at no field of view is the default, and it is a real
-  camera rather than a summary: depth, colour and semantic id come back as
-  images, which is the shape Monty's own code indexes.
+  One pixel is the default, and it is a real camera rather than a summary:
+  depth, colour and semantic id come back as images, which is the shape Monty's
+  own code indexes. With one pixel the grid has a single sample at the axis, so
+  the field of view does not matter.
 
   A ray that misses sees nothing: depth 0, which is what a depth image has where
   the camera saw nothing, and a semantic id of 0. That is a difference from
@@ -99,13 +114,19 @@ defmodule Monty.Simulators.Synthetic.Scene do
           centre: observation()
         }
   def render(%__MODULE__{} = scene, %{position: origin, rotation: rotation}, options \\ []) do
-    resolution = Keyword.get(options, :resolution, 1)
-    field_of_view = Keyword.get(options, :field_of_view, 0.0)
+    {height, width} = resolution(Keyword.get(options, :resolution, 1))
+
+    {fx, fy} =
+      focal_lengths(
+        {height, width},
+        Keyword.get(options, :hfov, @hfov),
+        Keyword.get(options, :zoom, 1.0)
+      )
 
     rows =
-      for row <- 0..(resolution - 1) do
-        for column <- 0..(resolution - 1) do
-          ray(origin, rotation, row, column, resolution, field_of_view)
+      for row <- 0..(height - 1) do
+        for column <- 0..(width - 1) do
+          ray(origin, rotation, row, column, {height, width}, {fx, fy})
           |> then(&observation_of_ray(scene, &1))
         end
       end
@@ -115,7 +136,7 @@ defmodule Monty.Simulators.Synthetic.Scene do
       rgba: Enum.map(rows, fn row -> Enum.map(row, &(&1.rgba || @no_colour)) end),
       semantic:
         Enum.map(rows, fn row -> Enum.map(row, &if(&1.on_object, do: 1.0, else: 0.0)) end),
-      centre: rows |> Enum.at(div(resolution, 2)) |> Enum.at(div(resolution, 2))
+      centre: rows |> Enum.at(div(height, 2)) |> Enum.at(div(width, 2))
     }
   end
 
@@ -123,34 +144,55 @@ defmodule Monty.Simulators.Synthetic.Scene do
   What the middle of the view sees.
 
   The one thing a policy asks of a camera when it is not looking at the image:
-  how far away the thing in front of it is.
+  how far away the thing in front of it is. The middle pixel of a wide patch is
+  not its axis — only a one-pixel camera or an odd count puts a pixel there —
+  so this renders rather than assuming.
   """
   @spec observe(t(), %{position: Rotation.vector(), rotation: Rotation.t()}) :: observation()
   def observe(%__MODULE__{} = scene, pose), do: render(scene, pose).centre
 
-  # A pinhole camera: the ray through a pixel is its offset on the image plane
-  # at unit distance, turned into the sensor's own frame. Pixels sit at the
-  # middles of their cells, so the middle of an odd resolution is the axis.
-  defp ray(origin, rotation, row, column, resolution, field_of_view) do
-    half = :math.tan(radians(field_of_view) / 2.0)
-    step = if resolution > 1, do: 2.0 * half / resolution, else: 0.0
-
-    across = if resolution > 1, do: -half + step * (column + 0.5), else: 0.0
-    down = if resolution > 1, do: -half + step * (row + 0.5), else: 0.0
-
-    direction = Rotation.apply(rotation, SpatialArithmetics.normalize([across, down, -1.0]))
-    {origin, direction}
+  # A pinhole camera in Monty's terms. `fx = tan(hfov / 2) / zoom` is the half
+  # width of the image plane at unit distance, which is exactly what Monty's
+  # `DepthTo3DLocations` inverts; `fy` differs from it only for a patch that is
+  # not square.
+  defp focal_lengths({height, width}, hfov, zoom) do
+    fx = :math.tan(radians(hfov) / 2.0) / zoom
+    {fx, fx * height / width}
   end
 
-  defp observation_of_ray(scene, {origin, gaze}) do
+  defp resolution({height, width}) when is_integer(height) and is_integer(width),
+    do: {height, width}
+
+  defp resolution(size) when is_integer(size) and size > 0, do: {size, size}
+
+  # The ray through a pixel, and how much shorter the depth along the sensor's
+  # axis is than the distance along the ray.
+  defp ray(origin, rotation, row, column, {height, width}, {fx, fy}) do
+    across = across(column, width) * fx
+    down = down(row, height) * fy
+    direction = Rotation.apply(rotation, SpatialArithmetics.normalize([across, down, -1.0]))
+
+    {origin, direction, 1.0 / :math.sqrt(1.0 + across * across + down * down)}
+  end
+
+  # Monty's pixel grid: `linspace(-1, 1, width)` across and
+  # `linspace(1, -1, height)` down, so the ends of the image are the ends of the
+  # grid. A single pixel is the axis.
+  defp across(column, width), do: grid(column, width)
+  defp down(row, height), do: -grid(row, height)
+
+  defp grid(_index, 1), do: 0.0
+  defp grid(index, count), do: -1.0 + 2.0 * index / (count - 1)
+
+  defp observation_of_ray(scene, {origin, gaze, axis_scale}) do
     case first_hit(scene, origin, gaze) do
       nil ->
         %{on_object: false, depth: nil, principal_curvatures: nil, pose_vectors: nil, rgba: nil}
 
-      {depth, point} ->
+      {distance, point} ->
         %{
           on_object: true,
-          depth: depth,
+          depth: distance * axis_scale,
           principal_curvatures: curvatures(scene),
           pose_vectors: surface_frame(outward_normal(scene, point)),
           rgba: scene.rgb ++ [1.0]
@@ -160,8 +202,8 @@ defmodule Monty.Simulators.Synthetic.Scene do
 
   defp radians(degrees), do: degrees * :math.pi() / 180.0
 
-  # The distance along the gaze to the surface, and where that is. A ray that
-  # misses, or that only meets the sphere behind the sensor, sees nothing.
+  # How far along the gaze the surface is, and where that is. A ray that misses,
+  # or that only meets the sphere behind the sensor, sees nothing.
   defp first_hit(scene, origin, gaze) do
     to_centre = SpatialArithmetics.subtract(origin, scene.centre)
     b = SpatialArithmetics.dot(gaze, to_centre)
@@ -174,8 +216,11 @@ defmodule Monty.Simulators.Synthetic.Scene do
       root = :math.sqrt(discriminant)
 
       case Enum.find([-b - root, -b + root], &(&1 > 0.0)) do
-        nil -> nil
-        depth -> {depth, SpatialArithmetics.add(origin, SpatialArithmetics.scale(gaze, depth))}
+        nil ->
+          nil
+
+        distance ->
+          {distance, SpatialArithmetics.add(origin, SpatialArithmetics.scale(gaze, distance))}
       end
     end
   end

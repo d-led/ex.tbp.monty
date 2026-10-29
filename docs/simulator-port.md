@@ -35,12 +35,20 @@ every action, the world moving by them, and the policy seeing the result on the
 next step.
 
 The scene renders a **patch**, not a single ray: `Scene.render/3` answers depth,
-colour and semantic images `resolution` pixels across a `field_of_view`, with
-the centre pixel on the sensor's own axis, as a pinhole camera does. The studio
-asks for five pixels across ten degrees — wide enough that the edges differ from
-the centre (so coverage is a fraction and `mean_depth` is a mean), narrow enough
-to sit on one surface. A one-pixel camera with no field of view is the default,
-which is what a ray is.
+colour and semantic images from a pinhole camera, described the way Monty's own
+experiments describe theirs — a resolution in pixels, a zoom, and Habitat's
+90-degree field of view. The studio reads those numbers out of the experiment's
+agent, so `base_10simobj_surf_agent` renders its patch 64 pixels across at ten
+times zoom, which is `fx = tan(hfov / 2) / zoom = 0.1` on the image plane.
+
+That is not decoration. `DepthTo3DLocations` unprojects a depth image with
+exactly those numbers, so a world rendering a different camera would make the
+transform disagree with it about which ray a pixel came from. Depth is measured
+along the sensor's axis rather than along the ray, as a depth camera measures
+it, for the same reason: unprojecting a ray distance as an axis depth puts the
+point somewhere the surface is not.
+
+One pixel is the default, and it is a ray.
 
 The sensor makes of that what Monty's `CameraSM` makes of a depth image: a signed
 logarithm of the curvatures (`principal_curvatures_log`) and the centre pixel as

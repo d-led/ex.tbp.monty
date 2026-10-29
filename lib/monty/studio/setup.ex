@@ -21,10 +21,15 @@ defmodule Monty.Studio.Setup do
   alias Monty.ModuleMap
   alias Monty.Studio.Finding
 
+  # What a Habitat camera sees across, and so what `DepthTo3DLocations` inverts.
+  # Monty's agents take a resolution and a zoom and no field of view.
+  @habitat_hfov 90.0
+
   defstruct name: nil,
             experiment_class: nil,
             monty_class: nil,
             environment: nil,
+            cameras: %{},
             motor_system: nil,
             motor_system_config: %{},
             transforms: [],
@@ -65,6 +70,12 @@ defmodule Monty.Studio.Setup do
           config: map()
         }
 
+  @typedoc """
+  One sensor's camera, in the terms its simulator states it: a resolution in
+  pixels, a zoom multiplier, and a field of view in degrees.
+  """
+  @type camera :: [resolution: {pos_integer(), pos_integer()}, zoom: float(), hfov: float()]
+
   @type connection :: %{
           from: {:sensor | :learning_module, String.t()},
           to: {:sensor | :learning_module, String.t()},
@@ -95,6 +106,7 @@ defmodule Monty.Studio.Setup do
       experiment_class: describe_target(Map.get(tree["experiment"] || %{}, "_target_")),
       monty_class: describe_target(Map.get(monty_config, "monty_class")),
       environment: environment(config),
+      cameras: cameras(config),
       motor_system: motor_system(monty_config),
       motor_system_config: Map.get(monty_config, "motor_system_config", %{}),
       transforms: transforms(config),
@@ -245,20 +257,21 @@ defmodule Monty.Studio.Setup do
   simulator behind `Monty.Simulators.Port.Environment` replaces it when one can
   run here.
 
-  Its camera is five pixels across ten degrees: wide enough that the edge pixels
-  see a different part of the surface from the centre, which is what makes
-  coverage a fraction and ``mean_depth`` a mean, and narrow enough that the whole
-  patch sits on one surface of a five-centimetre sphere. The experiment's own
-  cameras are 64 pixels across a much narrower field, which no stand-in needs to
-  imitate — a patch that small would differ from its centre by well under a
-  millimetre.
+  Each sensor looks through the camera its own experiment describes — the
+  resolution and zoom its agent is configured with, which for
+  `base_10simobj_surf_agent` is 64 pixels at ten times zoom for the patch and
+  64 at one times for the view finder. That is not a detail to round off: the
+  transform that turns a depth image into points unprojects with those numbers,
+  so a world rendering a different camera would disagree with it about which ray
+  a pixel came from. A sensor whose experiment declares no camera renders one
+  ray down its own axis.
   """
   @spec world(t()) :: Monty.Simulators.Synthetic.Environment.t()
   def world(%__MODULE__{} = setup) do
     Monty.Simulators.Synthetic.Environment.new(
       sensor_ids(setup),
       Monty.Simulators.Synthetic.Scene.new(),
-      view: [resolution: 5, field_of_view: 10.0]
+      views: setup.cameras
     )
   end
 
@@ -416,6 +429,32 @@ defmodule Monty.Studio.Setup do
 
   defp interface_class(config) do
     Map.get(config, "train_env_interface_class") || Map.get(config, "eval_env_interface_class")
+  end
+
+  # What each sensor's camera is, from the agent a config asks its simulator for.
+  # `resolutions` and `zooms` are listed in the agent's own sensor order, and the
+  # field of view is the simulator's — 90 degrees for Habitat — unless a config
+  # says otherwise, which none of Monty's do.
+  defp cameras(config) do
+    case get_in(config, ["environment", "env_init_args", "agents", "agent_args"]) do
+      %{} = args -> cameras_of(args)
+      _absent -> %{}
+    end
+  end
+
+  defp cameras_of(args) do
+    sensor_ids = List.wrap(Map.get(args, "sensor_ids"))
+    resolutions = List.wrap(Map.get(args, "resolutions"))
+    zooms = List.wrap(Map.get(args, "zooms"))
+    hfov = Map.get(args, "hfov", @habitat_hfov)
+
+    for {sensor_id, index} <- Enum.with_index(sensor_ids),
+        resolution = Enum.at(resolutions, index),
+        is_list(resolution) and length(resolution) == 2,
+        into: %{} do
+      {sensor_id,
+       [resolution: List.to_tuple(resolution), zoom: Enum.at(zooms, index) || 1.0, hfov: hfov]}
+    end
   end
 
   # The transforms an experiment configures, in the order they run. They are the

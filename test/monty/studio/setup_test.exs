@@ -93,6 +93,19 @@ defmodule Monty.Studio.SetupTest do
       assert setup.environment.objects == ["coneSolid"]
     end
 
+    test "each sensor's camera is the one the experiment's agent declares" do
+      setup = setup_for("base_10simobj_surf_agent")
+
+      assert setup.cameras["patch"] == [resolution: {64, 64}, zoom: 10.0, hfov: 90.0]
+      assert setup.cameras["view_finder"] == [resolution: {64, 64}, zoom: 1.0, hfov: 90.0]
+    end
+
+    test "a config that declares no agent has no cameras to render through" do
+      setup = Setup.new(%{"experiment" => %{"config" => %{}}})
+
+      assert setup.cameras == %{}
+    end
+
     test "a config Monty ships is not reported as broken" do
       setup = setup_for("tutorial/first_experiment")
 

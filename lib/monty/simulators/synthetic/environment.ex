@@ -30,13 +30,13 @@ defmodule Monty.Simulators.Synthetic.Environment do
   @default_sensor "patch"
 
   @enforce_keys [:sensor_ids, :world]
-  defstruct [:sensor_ids, :world, scene: nil, view: []]
+  defstruct [:sensor_ids, :world, scene: nil, views: %{}]
 
   @type t :: %__MODULE__{
           sensor_ids: [Monty.Simulators.Environment.sensor_id()],
           world: Kinematics.t(),
           scene: Scene.t() | nil,
-          view: keyword()
+          views: %{optional(Monty.Simulators.Environment.sensor_id()) => keyword()}
         }
 
   @impl true
@@ -44,8 +44,11 @@ defmodule Monty.Simulators.Synthetic.Environment do
   def new(sensor_ids), do: new(sensor_ids, nil)
 
   @doc """
-  A world looking at `scene` through a view of `:resolution` pixels across and
-  `:field_of_view` degrees wide.
+  A world looking at `scene`, each sensor through its own camera.
+
+  `:views` is a camera per sensor, keyed by sensor id, in the terms
+  `Monty.Simulators.Synthetic.Scene.render/3` takes — a resolution, a zoom and a
+  field of view. A sensor with no camera renders one ray down its own axis.
 
   Geometry is a choice, not an assumption: with a scene the world renders depth,
   colour and semantic id for every sensor, which is what a ported surface policy
@@ -60,7 +63,7 @@ defmodule Monty.Simulators.Synthetic.Environment do
       sensor_ids: sensor_ids,
       world: Kinematics.new(sensor_ids),
       scene: scene,
-      view: Keyword.get(options, :view, [])
+      views: Map.new(Keyword.get(options, :views, %{}))
     }
   end
 
@@ -81,7 +84,7 @@ defmodule Monty.Simulators.Synthetic.Environment do
   @impl true
   @spec reset(t()) :: t()
   def reset(%__MODULE__{} = environment),
-    do: new(environment.sensor_ids, environment.scene, environment.view)
+    do: new(environment.sensor_ids, environment.scene, views: environment.views)
 
   @doc "How the runtime addresses this environment's parts in a module spec."
   @spec agent_id() :: String.t()
@@ -96,11 +99,13 @@ defmodule Monty.Simulators.Synthetic.Environment do
           {sensor_id,
            Map.merge(
              %{"location" => pose.position, "value" => x},
-             features(environment.scene, pose, environment.view)
+             features(environment.scene, pose, camera(environment, sensor_id))
            )}
         end)
     }
   end
+
+  defp camera(environment, sensor_id), do: Map.get(environment.views, sensor_id, [])
 
   # A world with no scene can say nothing about a surface, so it says nothing.
   defp features(nil, _pose, _view), do: %{}

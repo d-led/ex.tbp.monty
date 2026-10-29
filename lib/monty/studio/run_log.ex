@@ -27,18 +27,31 @@ defmodule Monty.Studio.RunLog do
   @doc """
   One timestep's scene, as the database stores it.
 
-  The log says what the modules made of a step; this says what they were given.
-  Sensor observations are kept in Monty's own shape (`"location"` in metres), so
-  a replay redraws the frame a run actually saw rather than a re-simulation of
-  it: what is on the slider is history, not a guess.
+  The log says what the modules made of a step; this says where the sensors were
+  and what they reported. A sensor's observation is kept in Monty's own shape
+  (`"location"` in metres), so a replay redraws the frame a run actually saw
+  rather than a re-simulation of it: what is on the slider is history, not a
+  guess.
+
+  The camera's arrays are left out. They are one entry per pixel — on an
+  experiment's own 64×64 camera, a megabyte per step across two sensors — and
+  nothing reads them back: a replay draws a frame from where a sensor was. A
+  step that stored them would make the history table the largest thing in the
+  database to draw the same dot.
   """
   @spec moment(map(), map()) :: map()
   def moment(info, observations) do
     %{
       "step" => info.step,
-      "sensors" => Map.get(observations, agent_id(), %{})
+      "sensors" => observations |> Map.get(agent_id(), %{}) |> Map.new(&sensor_moment/1)
     }
   end
+
+  # The arrays a camera answers with, one entry per pixel.
+  @camera_arrays ["depth", "rgba", "semantic", "semantic_3d", "sensor_frame_data"]
+
+  defp sensor_moment({sensor_id, observation}),
+    do: {sensor_id, Map.drop(observation, @camera_arrays)}
 
   @doc "One timestep, as a line of text."
   @spec line(map()) :: String.t()
