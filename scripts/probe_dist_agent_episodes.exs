@@ -24,7 +24,6 @@ alias Monty.Test.MontyRecording
 recording = "test/fixtures/monty_dist_agent_10episodes.jsonl"
 experiment = "base_config_10distinctobj_dist_agent"
 channel = "patch"
-module_id = :lm_0
 
 {:ok, opened} = Monty.Studio.open(experiment)
 setup = opened.setup
@@ -36,9 +35,14 @@ conclusions = MontyRecording.episode_conclusions!(recording)
 replay = fn percepts ->
   id = "probe-#{System.unique_integer([:positive])}"
 
+  spec = Setup.model_spec(setup, id)
+  # Wiring the sensor to a module id the config did not build is a run where
+  # nothing is ever perceived — which looks exactly like a model that cannot
+  # recognise anything. Take the id the config gave the module.
+  module_id = hd(spec.learning_modules).id
+
   spec =
-    setup
-    |> Setup.model_spec(id)
+    spec
     |> Map.merge(%{
       sensor_modules: [
         %{

@@ -184,29 +184,25 @@ Saying this plainly matters more than the table above:
   percept full of hypotheses, and Monty's hypotheses come from learning modules
   that import `torch`. So the recording records the routing and nothing of the
   fallback's own numbers; those are tested where they live, without Monty.
-- **An episode, end to end — and the comparison that now exists, which does not
-  pass.** Ten episodes of `base_config_10distinctobj_dist_agent` are recorded
+- **An episode, end to end — and the first honest measurement of one.** Ten
+  episodes of `base_config_10distinctobj_dist_agent` are recorded
   (`test/fixtures/monty_dist_agent_10episodes.jsonl`: 43, 27, 28, 27, 36, 28, 40,
-  43, 35 and 31 steps, all `match`, on the ten YCB objects), and
-  `scripts/probe_dist_agent_episodes.exs` replays each of them through the port's
-  own composition — the config's learning module with the library in
-  `priv/monty/libraries/`, the config's recognition policy, the real coordinator
-  — with the recording standing in for the world. It is a probe and not a test
-  because the two do **not** agree: the first episode uses all 43 of Monty's
-  steps without recognising the mug.
+  43, 35 and 31 steps, all `match`, on the ten YCB objects), and two probes
+  replay them through the port's own composition — the config's learning module
+  with the library in `priv/monty/libraries/`, the config's recognition policy,
+  the real step coordinator — with the recording standing in for the world.
 
-  What that difference is, measured with
-  `scripts/probe_dist_agent_evidence.exs`: **not the model.**
-  `scripts/probe_dist_agent_evidence.exs` gives the config's learning module —
-  the same memory, the same tolerances, the same weights — the recorded percepts
-  one step at a time, with no coordinator and no world. Its evidence matches
-  Monty's to every printed digit on every step (step 1: `mug=2.498 bowl=2.265
-  spoon=2.102` on both sides, and on through the episode), and it concludes
-  `:match "mug"` after the same 43 recorded steps. So the arithmetic, the
-  library export and the recognition policy all agree; what differs is how the
-  percept reaches the module when it travels through the coordinator's routing,
-  and that is where the next measurement goes.
-- **An episode, end to end.** `frameworks/models/object_model.py` pulls in
+  What they measure, so far: the learning module the config builds reproduces
+  Monty's evidence to the printed digit on every step (step 0 `mug=0.879
+  bowl=0.822 mustard_bottle=0.806` on both sides; step 4 differs in the third
+  decimal, which is float ordering), **both on its own and through the
+  coordinator's routing** — `scripts/probe_dist_agent_evidence.exs` and
+  `scripts/probe_dist_agent_routing.exs`. The ten-episode replay itself
+  (`scripts/probe_dist_agent_episodes.exs`) has not finished a run here yet: a
+  full episode through the coordinator takes minutes rather than seconds, which
+  is the first thing to fix before its verdict means anything.
+- **An episode, end to end.**
+ `frameworks/models/object_model.py` pulls in
   `torch` and `torch_geometric`, so a recorded Monty episode needs a second
   interpreter. This machine has Monty's **own pinned one**: the conda
   environment `tbp.monty` (Python 3.8.20, `torch` 1.13.1, `torch_geometric`
