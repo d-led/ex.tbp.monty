@@ -17,6 +17,7 @@ defmodule Monty.Studio.Setup do
   does not produce — and a studio is worth more the earlier it says them.
   """
 
+  alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.SensorModules.CameraSM
   alias Monty.Geometry.Rotation
@@ -246,21 +247,19 @@ defmodule Monty.Studio.Setup do
     }
   end
 
-  # What runs for one sensor: Monty's own `CameraSM` when the config targets it,
-  # and a stand-in otherwise — Monty's surf experiments put the view finder
-  # behind `tbp.monty.experiment.sensor_module.ExperimentSensorModule`, a class
-  # of the newer sensor-module API that this port has not written yet.
+  # What runs for one sensor: the class its config targets, when this port has
+  # written it, and a stand-in otherwise.
   defp sensor_module_spec(sensor) do
-    case CameraSM.from_config(sensor.config) do
-      {:ok, state} ->
+    case ported_sensor_module(sensor.config) do
+      {:ok, module, state} ->
         %{
           id: sensor.id,
           agent_id: Monty.Simulators.Synthetic.Environment.agent_id(),
-          module: CameraSM,
+          module: module,
           state: state
         }
 
-      {:error, _reason} ->
+      :not_ported ->
         %{
           id: sensor.id,
           agent_id: Monty.Simulators.Synthetic.Environment.agent_id(),
@@ -268,6 +267,20 @@ defmodule Monty.Studio.Setup do
           state: Monty.Simulators.Synthetic.SensorModule.new(sensor.id, sensor_options(sensor))
         }
     end
+  end
+
+  # The sensor classes Monty's configs name — a patch is a `CameraSM`, a view
+  # finder is a transform-pipeline `ExperimentSensorModule` — and the port's own
+  # module for each. One that is none of them, or one whose transforms this port
+  # has not written, is a stand-in.
+  defp ported_sensor_module(config) do
+    [CameraSM, ExperimentSensorModule]
+    |> Enum.find_value(:not_ported, fn module ->
+      case module.from_config(config) do
+        {:ok, state} -> {:ok, module, state}
+        {:error, _not_this_class} -> nil
+      end
+    end)
   end
 
   # What a sensor some other class owns is given: the features its config

@@ -46,9 +46,6 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
     SnapshotTelemetry
   }
 
-  alias Monty.Frameworks.Utils.SpatialArithmetics
-  alias Monty.Geometry.Rotation
-
   @target "tbp.monty.frameworks.models.sensor_modules.CameraSM"
 
   @enforce_keys [:sensor_module_id, :features]
@@ -159,31 +156,7 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
 
   @impl true
   def update_state(%AgentState{} = agent, %__MODULE__{} = sm) do
-    sensor = sensor_state(agent, sm.sensor_module_id)
-
-    %__MODULE__{
-      sm
-      | pose: %SensorState{
-          position:
-            SpatialArithmetics.add(
-              agent.position,
-              Rotation.apply(agent.rotation, sensor.position)
-            ),
-          rotation: Rotation.multiply(agent.rotation, sensor.rotation)
-        }
-    }
-  end
-
-  defp sensor_state(%AgentState{sensors: sensors}, sensor_module_id) do
-    case Map.fetch(sensors, sensor_module_id) do
-      {:ok, sensor} ->
-        sensor
-
-      :error ->
-        raise ArgumentError,
-              "the agent has no sensor #{inspect(sensor_module_id)}; it has " <>
-                Enum.map_join(Map.keys(sensors), ", ", &inspect/1)
-    end
+    %__MODULE__{sm | pose: AgentState.sensor_pose(agent, sm.sensor_module_id)}
   end
 
   @impl true

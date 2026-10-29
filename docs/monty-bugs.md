@@ -36,6 +36,8 @@ numbers; everything else changes where code lives or what an error looks like.
 | [2.9](#29-inheritance-becomes-public-functions-and-a-module-dispatched-hook) | Subclassing | Decision | Public function + module-dispatched hook |
 | [2.10](#210-missing-coverage-counts-as-zero) | `features["object_coverage"]` raises when it was not asked for | Decision | A missing coverage is zero |
 | [2.11](#211-a-sensor-with-no-surface-answers-nil) | A sensor's step always answers a percept | Decision | No surface to see is `nil`, not a made-up location |
+| [2.12](#212-the-sensors-pose-is-composed-once) | Two classes compose a sensor's world pose | Decision | One function, two callers |
+| [2.13](#213-two-protocols-and-a-mutable-transform-become-one-behaviour-and-a-threaded-value) | Protocols for `isinstance`, and transforms that mutate themselves | Decision | The port's one sensor behaviour; a transform answers itself |
 
 Statuses mean:
 
@@ -713,6 +715,76 @@ observation that has not been through the transform — the view finder's
 observation, before a transform the port has not written runs — and a percept
 invented for it would carry a location that no pixel supports. A percept
 describing nothing is worse than no percept at all.
+
+---
+
+## 2.12 The sensor's pose is composed once
+
+**What Monty does.** The sensor's place in the world is the agent's pose with the
+sensor's own offset turned and added, and its rotation the two rotations
+multiplied. Monty writes those two lines in two classes —
+`CameraSM.update_state`
+([`sensor_modules.py:565-570`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/sensor_modules.py#L565-L570))
+and `SensorModule.update_state`
+([`sensor_module.py:193-198`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/sensor_modules/sensor_module.py#L193-L198)):
+
+```python
+        self._sensor_state = SensorState(
+            position=agent.position
+            + qt.rotate_vectors(agent.rotation, sensor.position),
+            rotation=agent.rotation * sensor.rotation,
+        )
+```
+
+**What this port does.** One function, `AgentState.sensor_pose/2`
+([`agent_state.ex`](../lib/monty/frameworks/models/motor_system_state/agent_state.ex)),
+which both sensor modules call. It also owns the error for an agent that has no
+such sensor, so the two classes cannot disagree about what that means.
+
+**Why it is deliberate.** The two copies are one rule, not two: a change to how a
+sensor is placed — a different offset convention, a normalised rotation — would
+have to be made twice in Monty, and a run that got it once would disagree with
+itself. Nothing observable moves: the same numbers come out of both callers, and
+a test pins the composition through each of them.
+
+---
+
+## 2.13 Two protocols and a mutable transform become one behaviour and a threaded value
+
+**What Monty does.** `tbp/monty/sensor_modules/sensor_module.py` declares
+`RuntimeSensorModule` and `Transform` as `Protocol`s, and
+`tbp/monty/experiment/sensor_module.py` declares `ResettableSensorModule` and
+`ExperimentTransform`. The protocols exist so a runtime can ask
+`isinstance(module, RuntimeSensorModule)` or
+`isinstance(transform, ExperimentTransform)` — structural typing, not a base
+class. And a transform is a mutable object: the sensor module calls it and the
+object keeps whatever it learned
+([`sensor_module.py:180-186`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/sensor_modules/sensor_module.py#L180-L186)).
+
+**What this port does.** Three things, all of them the same discipline the rest of
+the port follows:
+
+- a protocol that only asks "does this object have these functions?" is a
+  behaviour here, and the port has exactly one sensor behaviour —
+  `Monty.Frameworks.Models.AbstractMontyClasses.SensorModule`. So
+  `RuntimeSensorModule` and `ResettableSensorModule` do not become modules at all
+  (they are the only two classes marked `:excluded` in the module map for this
+  reason); a sensor module *is* something with `update_state/2`, `step/4` and
+  `reset/1`;
+- `Transform` is a behaviour, `Monty.SensorModules.SensorModule.Transform`, and a
+  transform that can also be reset declares the second one,
+  `Monty.Experiment.SensorModule.ExperimentTransform` — the same two callbacks,
+  which is what Monty's protocol pair means;
+- because an Elixir struct cannot be mutated, a transform answers the transform it
+  leaves behind: `call(transform, ctx, payload) :: {payload, transform}`, and the
+  sensor module keeps that one for the next step. A reset then has something to
+  reset, which is what `ExperimentTransform` is for.
+
+**Why it is deliberate.** Without the threading, a stateful transform — a
+smoothing filter, a background model — would be frozen at construction and would
+silently behave as if it were stateless. It is the same answer the port already
+gives for samplers (§2.5) and for every step in the runtime: the result comes out
+with the state it left.
 
 ---
 

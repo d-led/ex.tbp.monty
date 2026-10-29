@@ -20,8 +20,10 @@ defmodule Mix.Tasks.Monty.RunTest do
 
       assert output =~ "tutorial/first_experiment"
       assert output =~ "sensors: patch, view_finder"
-      assert output =~ "step 0 · percepts patch,view_finder"
-      assert output =~ "step 1 · percepts patch,view_finder"
+      # The view finder measures the scene and sends no percept, so the step log
+      # names only the sensor that made one.
+      assert output =~ "step 0 · percepts patch ·"
+      assert output =~ "step 1 · percepts patch ·"
       assert output =~ "2 steps in"
     end
 

@@ -3,17 +3,17 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
   A sensor module for a sensor whose config names a class this port has not
   written.
 
-  Monty's surf experiments name two sensor classes: their patch is a `CameraSM`
-  — [`Monty.Frameworks.Models.SensorModules.CameraSM`](../monty/frameworks/models/sensor_modules/camera_sm.ex)
-  here, with its noise layer and its snapshot telemetry — and their view finder is
-  an `ExperimentSensorModule` of Monty's newer sensor-module API, a pipeline of
-  transforms that this port has not written yet. This is what runs for the
-  second: the ported observation processor and percept filter behind the sensor's
-  config, so the run still reports the patch's features, and no noise, because
-  this quiet stand-in has none.
+  Monty's configs name four sensor classes: `CameraSM`, which is
+  [`Monty.Frameworks.Models.SensorModules.CameraSM`](../monty/frameworks/models/sensor_modules/camera_sm.ex),
+  `ExperimentSensorModule`, which is
+  [`Monty.Experiment.SensorModule.ExperimentSensorModule`](../monty/experiment/sensor_module/experiment_sensor_module.ex),
+  and the salience and 2D sensor modules, which are still to come. This is what
+  runs for the last two: the ported observation processor and percept filter
+  behind the sensor's config, so the run still reports the patch's features, and
+  no noise, because this quiet stand-in has none.
 
-  Use `CameraSM` for anything real. What this is for is running a config whose
-  other sensor names a class this port does not have, without pretending that
+  Use the ported class for anything real. What this is for is running a config
+  that names a sensor class this port does not have, without pretending that
   class ran.
   """
 

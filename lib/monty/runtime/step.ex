@@ -156,7 +156,14 @@ defmodule Monty.Runtime.Step do
 
     info = %{
       step: state.step,
-      percept_ids: percepts |> Map.keys() |> Enum.sort(),
+      # A sensor that answered nothing is not a percept: a view finder measures
+      # the scene for the motor system and sends none (`docs/monty-bugs.md`
+      # §2.11).
+      percept_ids:
+        percepts
+        |> Map.reject(fn {_id, percept} -> is_nil(percept) end)
+        |> Map.keys()
+        |> Enum.sort(),
       inputs: input_counts,
       votes: vote_info,
       goals: length(goals),

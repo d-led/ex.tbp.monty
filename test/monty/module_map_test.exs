@@ -77,11 +77,11 @@ defmodule Monty.ModuleMapTest do
     test "a Monty class resolves to the Elixir module that holds it" do
       assert {:ok,
               %{
-                class: "ExperimentSensorModule",
-                elixir: "Monty.Experiment.SensorModule.ExperimentSensorModule",
+                class: "HabitatEnvironment",
+                elixir: "Monty.Simulators.Habitat.Environment.HabitatEnvironment",
                 status: :planned
               }} =
-               ModuleMap.resolve("tbp.monty.experiment.sensor_module.ExperimentSensorModule")
+               ModuleMap.resolve("tbp.monty.simulators.habitat.environment.HabitatEnvironment")
     end
 
     test "a class this port has written comes back implemented" do

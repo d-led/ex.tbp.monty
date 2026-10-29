@@ -407,24 +407,24 @@
     ]
   },
   %{
-    reason: nil,
+    reason: "ResettableSensorModule is a Protocol for isinstance checks; the port's sensor behaviour already requires reset/1 (docs/monty-bugs.md §2.13)",
     status: :planned,
     elixir: "Monty.Experiment.SensorModule",
     package: "monty",
     python: "experiment/sensor_module.py",
     classes: [
       %{
-        status: :planned,
+        status: :excluded,
         elixir: "Monty.Experiment.SensorModule.ResettableSensorModule",
         python: "ResettableSensorModule"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.SensorModule.ExperimentTransform",
         python: "ExperimentTransform"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.SensorModule.ExperimentSensorModule",
         python: "ExperimentSensorModule"
       }
@@ -2363,34 +2363,34 @@
     classes: []
   },
   %{
-    reason: nil,
-    status: :planned,
+    reason: "RuntimeSensorModule is a Protocol for isinstance checks; the port has one sensor behaviour instead (docs/monty-bugs.md §2.13)",
+    status: :implemented,
     elixir: "Monty.SensorModules.SensorModule",
     package: "monty",
     python: "sensor_modules/sensor_module.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.SensorModules.SensorModule.Payload",
         python: "Payload"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.SensorModules.SensorModule.TransformContext",
         python: "TransformContext"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.SensorModules.SensorModule.Transform",
         python: "Transform"
       },
       %{
-        status: :planned,
+        status: :excluded,
         elixir: "Monty.SensorModules.SensorModule.RuntimeSensorModule",
         python: "RuntimeSensorModule"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.SensorModules.SensorModule",
         python: "SensorModule"
       }

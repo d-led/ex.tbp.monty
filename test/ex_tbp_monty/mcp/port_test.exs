@@ -4,7 +4,7 @@ defmodule ExTbpMonty.Mcp.PortTest do
   alias ExTbpMonty.Mcp.Port
 
   @implemented "tbp.monty.frameworks.models.evidence_matching.learning_module.EvidenceGraphLM"
-  @planned "tbp.monty.experiment.sensor_module.ExperimentSensorModule"
+  @planned "tbp.monty.simulators.habitat.environment.HabitatEnvironment"
 
   describe "looking up a module" do
     test "a class Monty's configs name resolves to the Elixir module and its verdict" do
@@ -21,7 +21,7 @@ defmodule ExTbpMonty.Mcp.PortTest do
       assert {:ok,
               %{
                 status: :planned,
-                elixir: "Monty.Experiment.SensorModule.ExperimentSensorModule"
+                elixir: "Monty.Simulators.Habitat.Environment.HabitatEnvironment"
               }} = Port.lookup(@planned)
     end
 

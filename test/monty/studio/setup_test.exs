@@ -1,8 +1,10 @@
 defmodule Monty.Studio.SetupTest do
   use ExUnit.Case, async: true
 
+  alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.SensorModules.{CameraSM, FeatureChangeFilter}
+  alias Monty.SensorModules.SensorModule
   alias Monty.Simulators.Synthetic
   alias Monty.Studio.{Finding, Setup}
 
@@ -250,7 +252,7 @@ defmodule Monty.Studio.SetupTest do
 
       assert [notice] = notices
       assert notice.message =~ "not ported yet"
-      assert notice.message =~ "ExperimentSensorModule"
+      assert notice.message =~ "HabitatEnvironment"
     end
 
     test "a class this port has written is reported as ported" do
@@ -259,10 +261,11 @@ defmodule Monty.Studio.SetupTest do
     end
 
     test "a class Monty ships but this port has not written yet is planned" do
-      # The view finder's class: Monty's newer sensor-module API, a pipeline of
-      # transforms.
+      # Habitat, the simulator Monty's own runs are embedded in.
       assert %{status: :planned} =
-               Setup.describe_target("tbp.monty.experiment.sensor_module.ExperimentSensorModule")
+               Setup.describe_target(
+                 "tbp.monty.simulators.habitat.environment.HabitatEnvironment"
+               )
     end
 
     test "a target the map does not know is reported as unknown, not guessed" do
@@ -315,17 +318,28 @@ defmodule Monty.Studio.SetupTest do
       assert {FeatureChangeFilter, %FeatureChangeFilter{}} = sensor.filter
     end
 
-    test "runs the stand-in for a sensor class this port has not written" do
-      # Monty's surf experiments put the view finder behind
-      # `ExperimentSensorModule`, a class of Monty's newer sensor-module API, and
-      # the patch behind a `CameraSM`, which this port has.
+    test "runs each sensor's own class when the config names two of them" do
+      # Monty's surf experiments: a patch that is a `CameraSM`, and a view finder
+      # that is a transform-pipeline `ExperimentSensorModule` — a camera that
+      # measures the scene for the motor system and sends no percept at all.
       spec = "base_10simobj_surf_agent" |> setup_for() |> Setup.model_spec("model_0")
 
       assert %{module: CameraSM} =
                Enum.find(spec.sensor_modules, &(&1.id == "patch"))
 
-      assert %{module: Synthetic.SensorModule} =
+      assert %{module: ExperimentSensorModule, state: %SensorModule{transforms: []}} =
                Enum.find(spec.sensor_modules, &(&1.id == "view_finder"))
+    end
+
+    test "runs the stand-in for a sensor class this port has not written" do
+      # The 2D sensor module of Monty's three-sensor configurations is still to
+      # come, so that config gets the stand-in rather than a camera that quietly
+      # behaves as if it were one.
+      setup = setup_from(%{@base | "monty/sensor_module" => "3sm_2d3d_dist"})
+
+      spec = Setup.model_spec(setup, "model_0")
+
+      assert Enum.any?(spec.sensor_modules, &match?(%{module: Synthetic.SensorModule}, &1))
     end
 
     test "falls back to the stand-in for a module this port has not written" do
