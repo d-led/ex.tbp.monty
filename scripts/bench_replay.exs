@@ -25,7 +25,7 @@ alias Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHypoth
 alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
 alias Monty.Test.MontyRecording
 
-pretrained = "test/fixtures/monty_pretrained_10distinctobj.jsonl.gz"
+pretrained = "priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz"
 recording = "test/fixtures/monty_pretrained_episode.jsonl"
 
 tolerances = %{"patch" => %{"hsv" => [0.1, 0.2, 0.2], "principal_curvatures_log" => [1.0, 1.0]}}

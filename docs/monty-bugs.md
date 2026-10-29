@@ -1049,6 +1049,32 @@ emits when a policy fires. They are the experiment's reporting, not its
 arithmetic; when the episode loop is wired to these policies, what it reports is
 its own concern.
 
+## 2.18 A memory arrives as an export, not as a pickle
+
+**What Monty does.** A pretrained learning module is a torch pickle (`.pt`)
+holding `GraphObjectModel`s; `MontyExperiment` loads it into the learning modules
+it has just built (`initialize_model` in `monty_experiment.py`).
+
+**What this port does.** `scripts/export_monty_pretrained.py` reads that pickle in
+Monty's own environment and writes the graphs out as JSONL —
+`priv/monty/libraries/<model>.jsonl.gz`, one object per line, positions and the
+four matched features per node, six decimals. `Monty.Studio.Memory` reads one
+back into a `GraphMemory`, and a run builds its learning module around it
+(`EvidenceGraphLM.from_config/2` takes an optional `:memory`). The library's
+README records which release and which command produced each file.
+
+**Why.** The port cannot read a torch pickle and should not learn how: what a
+model *is*, for matching, is a position per node and a row of features per node,
+and both are plain numbers. Exporting them once keeps `torch` out of the Elixir
+runtime entirely.
+
+**The consequence worth stating.** Decoding is about six seconds and the result
+is about four megabytes, so the decoded memory is cached per library path in
+`:persistent_term` and every run is handed a *copy* (about twenty milliseconds).
+The copy is not an optimisation detail: a run learns, so two runs sharing one
+memory would learn into each other's, which Monty never does — it loads the
+pickle afresh for each experiment.
+
 **And the mode.** `ExperimentMode` is an enum of the strings `"eval"` and
 `"train"` in Monty; here it is `:eval` and `:train`
 ([`ExperimentMode`](../lib/monty/frameworks/experiments/mode/experiment_mode.ex))

@@ -2,7 +2,7 @@ defmodule Monty.PretrainedMemoryTest do
   @moduledoc """
   Monty's pretrained object library, as memory the port can match against.
 
-  `test/fixtures/monty_pretrained_10distinctobj.jsonl.gz` is the memory Monty
+  `priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz` is the memory Monty
   trained for `surf_agent_1lm_10distinctobj`, exported from the torch pickle by
   `scripts/export_monty_pretrained.py`: ten YCB objects, sixteen thousand nodes,
   each with the features the evidence-based learning module compares. A model is
@@ -17,7 +17,7 @@ defmodule Monty.PretrainedMemoryTest do
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Test.MontyRecording
 
-  @pretrained "test/fixtures/monty_pretrained_10distinctobj.jsonl.gz"
+  @pretrained "priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz"
 
   # Ten models and sixteen thousand nodes: slow enough on a cold runner that
   # ExUnit's minute is not enough, and there is no reason to build it once per

@@ -31,7 +31,7 @@ defmodule Monty.RecordingEpisodeTest do
   alias Monty.Test.MontyRecording
 
   @recording "test/fixtures/monty_pretrained_episode.jsonl"
-  @pretrained "test/fixtures/monty_pretrained_10distinctobj.jsonl.gz"
+  @pretrained "priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz"
   @channel "patch"
   @agent "agent_id_0"
 

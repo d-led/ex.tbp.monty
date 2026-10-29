@@ -145,6 +145,17 @@ Monty's own default unioned with the ceiling, which is what `:max_steps` means �
 and the studio builds the policy its config names, falling back to `MontyIsDone`
 where a config names none, which is Monty's fallback too.
 
+A run also starts with Monty's own pretrained memory when its config names a
+model this machine has exported: `priv/monty/libraries/<model>.jsonl.gz`, loaded
+by `Monty.Studio.Memory` into the learning module the config describes
+(`priv/monty/libraries/README.md` records where the library came from and the
+command that produced it). A config that names a model with no library is not an
+error: the run starts empty and says so as a warning before it takes a step,
+because a run with nothing to recognise with cannot recognise anything, however
+long it runs. Loading is six seconds of gunzip and graph building, so the decoded
+memory is kept per library and each run is handed a copy — learning writes to it,
+and two runs must not share one (§2.18 of `monty-bugs.md`).
+
 What a run reports therefore changed: it says what its learning modules
 concluded, or that they were timed out. `tutorial/first_experiment` now ends
 after **one** step, and that is the config's own rule — its termination group is
@@ -217,7 +228,7 @@ Monty revision moves:
 | `test/fixtures/monty_vocus2_images.json` | `scripts/record_monty_vocus2_images.py` |
 | `test/fixtures/monty_pyramids.json` | `scripts/record_monty_pyramids.py` |
 | `test/fixtures/monty_vocus2.json` | `scripts/record_monty_vocus2.py` |
-| `test/fixtures/monty_pretrained_10distinctobj.jsonl.gz` | `scripts/export_monty_pretrained.py` |
+| `priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz` | `scripts/export_monty_pretrained.py` |
 | `test/fixtures/monty_*_episode.jsonl` | `scripts/record_monty_episode.py` (needs Monty's own environment and a simulator) |
 
 Two rules, learned the hard way:

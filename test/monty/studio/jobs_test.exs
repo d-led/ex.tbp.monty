@@ -7,7 +7,7 @@ defmodule Monty.Studio.JobsTest do
   schedules it.
   """
 
-  use ExTbpMontyWeb.ConnCase, async: false
+  use ExTbpMontyWeb.ConnCase, async: true
 
   alias Monty.Studio.{Jobs, RunHistory, RunLog}
 

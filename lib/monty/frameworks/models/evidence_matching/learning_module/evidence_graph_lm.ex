@@ -243,15 +243,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   module that would answer with something else's numbers.
   """
   @spec from_config(map()) :: {:ok, t()} | {:error, term()}
-  def from_config(config) when is_map(config) do
+  def from_config(config, options \\ []) when is_map(config) do
     with :ok <- check_target(Map.get(config, "_target_", @evidence_graph_lm_target)),
          {:ok, updater} <- updater_for(config) do
+      # An empty memory unless one is handed in: Monty loads a pretrained state
+      # dict into the module it has just built, which is the same thing one step
+      # earlier.
       memory =
-        EvidenceGraphMemory.new(
-          max_nodes_per_graph: Map.get(config, "max_nodes_per_graph", 2000),
-          max_graph_size: Map.get(config, "max_graph_size", 0.3),
-          num_model_voxels_per_dim: Map.get(config, "num_model_voxels_per_dim", 50)
-        )
+        Keyword.get_lazy(options, :memory, fn ->
+          EvidenceGraphMemory.new(
+            max_nodes_per_graph: Map.get(config, "max_nodes_per_graph", 2000),
+            max_graph_size: Map.get(config, "max_graph_size", 0.3),
+            num_model_voxels_per_dim: Map.get(config, "num_model_voxels_per_dim", 50)
+          )
+        end)
 
       new(memory,
         max_match_distance: Map.get(config, "max_match_distance", 0.01),

@@ -9,7 +9,7 @@ on, and nothing else — and writes one object per line, gzipped.
     python scripts/export_monty_pretrained.py \\
         --model ~/tbp/results/monty/pretrained_models/pretrained_ycb_v10/\\
 surf_agent_1lm_10distinctobj/pretrained/model.pt \\
-        --out test/fixtures/monty_pretrained_10distinctobj.jsonl.gz
+        --out priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz
 
 Each line is one object and input channel:
 

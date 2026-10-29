@@ -26,7 +26,7 @@ alias Monty.Frameworks.Models.GraphMatching.GraphMemory
 alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
 alias Monty.Test.MontyRecording
 
-pretrained = "test/fixtures/monty_pretrained_10distinctobj.jsonl.gz"
+pretrained = "priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz"
 neighbours = 5
 
 memory = MontyRecording.load_pretrained!(pretrained)

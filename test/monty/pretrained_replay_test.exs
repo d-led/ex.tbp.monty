@@ -4,7 +4,7 @@ defmodule Monty.PretrainedReplayTest do
 
   `test/fixtures/monty_pretrained_episode.jsonl` is one episode of Monty's
   `surf_agent_1lm_10distinctobj` recorded while it ran, and
-  `test/fixtures/monty_pretrained_10distinctobj.jsonl.gz` is the memory that
+  `priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz` is the memory that
   experiment matched against, exported from Monty's own torch pickle. Replaying
   the one through the other is the only check that says whether the port adds up
   the same numbers, as opposed to reaching the same conclusion by another route.
@@ -38,7 +38,7 @@ defmodule Monty.PretrainedReplayTest do
   alias Monty.Test.MontyRecording
 
   @recording "test/fixtures/monty_pretrained_episode.jsonl"
-  @pretrained "test/fixtures/monty_pretrained_10distinctobj.jsonl.gz"
+  @pretrained "priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz"
 
   # The tolerances and weights of the experiment the recording came from
   # (`learning_module/evidence_1lm_nn5_dod0025.yaml`), and its burst sampler.

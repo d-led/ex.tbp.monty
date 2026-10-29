@@ -7,7 +7,7 @@ defmodule ExTbpMontyWeb.JobsLiveTest do
   follow it to its record.
   """
 
-  use ExTbpMontyWeb.ConnCase, async: false
+  use ExTbpMontyWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
 

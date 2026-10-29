@@ -26,6 +26,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Geometry.Rotation
   alias Monty.ModuleMap
   alias Monty.Studio.Finding
+  alias Monty.Studio.Memory
 
   # What a Habitat camera sees across, and so what `DepthTo3DLocations` inverts.
   # Monty's agents take a resolution and a zoom and no field of view.
@@ -51,7 +52,8 @@ defmodule Monty.Studio.Setup do
             findings: [],
             positioning: [],
             object_names: nil,
-            recognition_policy: nil
+            recognition_policy: nil,
+            model_name_or_path: nil
 
   @type module_description :: %{
           class: String.t() | nil,
@@ -140,6 +142,7 @@ defmodule Monty.Studio.Setup do
       positioning: get_in(config, ["eval_env_interface_args", "positioning_procedures"]) || [],
       object_names: get_in(config, ["eval_env_interface_args", "object_names"]),
       recognition_policy: Map.get(config, "recognition_policy"),
+      model_name_or_path: Map.get(config, "model_name_or_path"),
       attention_system: describe_target(get_in(monty_config, ["attention_system", "_target_"])),
       monty_args: Map.get(monty_config, "monty_args", %{}),
       sensors: sensors,
@@ -248,7 +251,8 @@ defmodule Monty.Studio.Setup do
     %{
       model_id: model_id,
       sensor_modules: Enum.map(setup.sensors, &sensor_module_spec/1),
-      learning_modules: Enum.map(setup.learning_modules, &learning_module_spec/1),
+      learning_modules:
+        Enum.map(setup.learning_modules, &learning_module_spec(&1, memory_for(setup))),
       sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
       lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
       lm_to_lm_vote: inputs_by_learning_module(setup, :vote),
@@ -364,8 +368,16 @@ defmodule Monty.Studio.Setup do
   # one this port has written, and the stand-in otherwise. The config decides,
   # because a module built from it is what makes a run a run of *this*
   # experiment rather than of a topology that merely looks like it.
-  defp learning_module_spec(lm) do
-    case EvidenceGraphLM.from_config(lm.config) do
+  # A module with no pretrained memory is built the way Monty builds one before
+  # loading a state dict into it: with the empty memory the module makes itself.
+  defp learning_module_spec(lm, :none),
+    do: build_learning_module(lm, &EvidenceGraphLM.from_config/1)
+
+  defp learning_module_spec(lm, memory),
+    do: build_learning_module(lm, &EvidenceGraphLM.from_config(&1, memory: memory))
+
+  defp build_learning_module(lm, build) do
+    case build.(lm.config) do
       {:ok, state} ->
         %{id: lm.id, module: EvidenceGraphLM, state: state}
 
@@ -375,6 +387,25 @@ defmodule Monty.Studio.Setup do
           module: Monty.Simulators.Synthetic.LearningModule,
           state: Monty.Simulators.Synthetic.LearningModule.new(lm.id)
         }
+    end
+  end
+
+  @doc """
+  Monty's pretrained memory for the model this experiment names, if exported.
+
+  `:none` means an empty memory: either the config names no model, or this
+  machine has no exported library for it — and `memory_findings/1` says which,
+  because a run with no memory cannot recognise anything however long it runs.
+  """
+  @spec memory_for(t()) :: Monty.Frameworks.Models.GraphMatching.GraphMemory.t() | :none
+  def memory_for(%__MODULE__{model_name_or_path: nil}), do: :none
+
+  def memory_for(%__MODULE__{model_name_or_path: path}) do
+    with name when is_binary(name) <- Memory.name_of(path),
+         {:ok, memory} <- Memory.load(name) do
+      memory
+    else
+      _absent -> :none
     end
   end
 
@@ -825,7 +856,32 @@ defmodule Monty.Studio.Setup do
     module_findings(setup) ++
       connectivity_findings(setup, monty_config) ++
       wiring_findings(setup) ++
+      memory_findings(setup) ++
       settings_findings(config)
+  end
+
+  # A run with no memory cannot recognise anything, so it says so before it
+  # starts rather than reporting "no conclusion" after sixty steps.
+  defp memory_findings(%__MODULE__{model_name_or_path: nil}), do: []
+
+  defp memory_findings(%__MODULE__{model_name_or_path: path}) do
+    name = Memory.name_of(path)
+
+    if Memory.available?(name) do
+      []
+    else
+      [
+        Finding.new(
+          :warning,
+          :no_pretrained_memory,
+          "No exported memory for #{name || path}: this run starts with an empty " <>
+            "memory and cannot recognise anything. Export one with " <>
+            "scripts/export_monty_pretrained.py; exported here: " <>
+            Enum.join(Memory.available_libraries(), ", ") <> ".",
+          "model_name_or_path"
+        )
+      ]
+    end
   end
 
   # One line per experiment about what is not ported, not one per class: a
