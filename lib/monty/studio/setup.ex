@@ -46,7 +46,8 @@ defmodule Monty.Studio.Setup do
             epochs: %{},
             seed: nil,
             supervised_lm_ids: [],
-            findings: []
+            findings: [],
+            positioning: []
 
   @type module_description :: %{
           class: String.t() | nil,
@@ -132,6 +133,7 @@ defmodule Monty.Studio.Setup do
       motor_system: motor_system(monty_config),
       motor_system_config: Map.get(monty_config, "motor_system_config", %{}),
       transforms: transforms(config),
+      positioning: get_in(config, ["eval_env_interface_args", "positioning_procedures"]) || [],
       attention_system: describe_target(get_in(monty_config, ["attention_system", "_target_"])),
       monty_args: Map.get(monty_config, "monty_args", %{}),
       sensors: sensors,
@@ -625,6 +627,50 @@ defmodule Monty.Studio.Setup do
     Enum.filter(configs, &Monty.Config.Target.implemented?/1)
     |> Enum.map(&Monty.Frameworks.EnvironmentUtils.Transforms.from_config/1)
   end
+
+  @doc """
+  The positioning procedures the experiment asks for, or why one cannot be built.
+
+  A config that names none is Monty's "positioning is not configured": the run
+  starts wherever the world put the agent.
+  """
+  @spec positioning_procedures(t()) ::
+          {:ok, [Monty.Frameworks.Environments.PositioningProcedures.GetGoodViewFactory.t()]}
+          | {:error, term()}
+  def positioning_procedures(%__MODULE__{positioning: configs}) do
+    Enum.reduce_while(configs, {:ok, []}, fn config, {:ok, built} ->
+      case Monty.Frameworks.Environments.PositioningProcedures.GetGoodViewFactory.from_config(
+             config
+           ) do
+        {:ok, factory} -> {:cont, {:ok, [factory | built]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, built} -> {:ok, Enum.reverse(built)}
+      error -> error
+    end
+  end
+
+  @doc """
+  The semantic id of the object an episode is about.
+
+  The stand-in world has one sphere and stamps it `1` (`Scene.render/3`). Monty's
+  worlds number their objects as they are added (`create_semantic_mapping`), which
+  is a thing to port with the worlds themselves, not before them.
+  """
+  @spec target_semantic_id(t()) :: integer()
+  def target_semantic_id(%__MODULE__{}), do: 1
+
+  @doc """
+  How many objects the scene has besides the target.
+
+  Monty's single-object scenes refuse to start when positioning never reaches the
+  target; a cluttered scene may give up, because a run that starts slightly off is
+  still a run of the experiment.
+  """
+  @spec distractors(t()) :: non_neg_integer()
+  def distractors(%__MODULE__{scene: %{objects: objects}}), do: max(length(objects) - 1, 0)
 
   defp object_names(args) do
     case Map.get(args, "objects") do

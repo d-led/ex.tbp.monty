@@ -9,6 +9,7 @@ defmodule Monty.Frameworks.Environments.PositioningProcedures.PositioningProcedu
   to be built for it.
   """
 
-  @doc "A procedure for the object with this semantic id."
-  @callback create(factory :: term(), target_semantic_id :: integer()) :: term()
+  @doc "A procedure for the object with this semantic id, as `{module, state}`."
+  @callback create(factory :: term(), target_semantic_id :: integer()) ::
+              {module(), term()}
 end

@@ -130,12 +130,40 @@ defmodule Monty.Frameworks.Environments.PositioningProcedures.GetGoodViewParityT
     factory =
       GetGoodViewFactory.new(agent_id: fixture["agent_id"], sensor_id: fixture["sensor_id"])
 
-    procedure = GetGoodViewFactory.create(factory, fixture["target_semantic_id"])
+    {module, procedure} = GetGoodViewFactory.create(factory, fixture["target_semantic_id"])
 
+    assert module == GetGoodView
+    assert procedure.target_semantic_id == fixture["target_semantic_id"]
     assert procedure.good_view_distance == fixture["good_view_distance"]
     assert procedure.good_view_percentage == fixture["good_view_percentage"]
     refute procedure.multiple_objects_present
     assert procedure.allow_translation
+  end
+
+  test "a config entry becomes the factory Monty's config describes" do
+    {:ok, factory} =
+      GetGoodViewFactory.from_config(%{
+        "_target_" =>
+          "tbp.monty.frameworks.environments.positioning_procedures.GetGoodViewFactory",
+        "agent_id" => "agent_id_0",
+        "sensor_id" => "patch",
+        "allow_translation" => false,
+        "max_orientation_attempts" => 3
+      })
+
+    assert factory.sensor_id == "patch"
+    refute factory.allow_translation
+    assert factory.max_orientation_attempts == 3
+    assert factory.good_view_percentage == GetGoodView.good_view_percentage_default()
+  end
+
+  test "a procedure this port has not written is a config it refuses" do
+    assert GetGoodViewFactory.from_config(%{
+             "_target_" => "tbp.monty.frameworks.environments.positioning_procedures.TouchObject"
+           }) ==
+             {:error,
+              {:unsupported_procedure,
+               "tbp.monty.frameworks.environments.positioning_procedures.TouchObject"}}
   end
 
   # -- replaying a recorded episode ------------------------------------------

@@ -953,6 +953,28 @@ with the state it left.
 
 ---
 
+## 2.14 The positioning loop is bounded
+
+**What Monty does.** `ExperimentEnvironment.pre_episode` builds each configured
+positioning procedure and steps the environment until the procedure answers
+`terminated` or `truncated`, with no bound on the number of steps ([environment.py
+lines 240-267](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/experiment/environment.py#L240-L267)).
+A procedure that neither reaches the object nor gives up therefore hangs the
+experiment.
+
+**What this port does.**
+[`Monty.Runtime.Positioning.prepare/5`](../lib/monty/runtime/positioning.ex) stops
+after `:max_steps` (100 by default) and answers
+`{:error, {:positioning_did_not_finish, steps}}`.
+
+**Why.** A hang inside a supervised job is a wedged run that nobody can see; an
+error is a run that says what went wrong. Monty's own procedures finish in a few
+dozen steps on the shipped configs — a studio run of
+`base_config_10distinctobj_dist_agent` takes 25 — so the bound only fires where
+Monty would have hung.
+
+---
+
 # Checked and found consistent
 
 Recorded so the next reader does not repeat the audit. The first two are claims

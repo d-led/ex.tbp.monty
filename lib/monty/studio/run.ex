@@ -15,6 +15,7 @@ defmodule Monty.Studio.Run do
 
   alias Monty.Frameworks.EnvironmentUtils.Transforms
   alias Monty.Runtime.Model
+  alias Monty.Runtime.Positioning
   alias Monty.Simulators.Synthetic.Environment
   alias Monty.Studio.Setup
 
@@ -28,7 +29,8 @@ defmodule Monty.Studio.Run do
     :steps,
     step: 0,
     pending_actions: [],
-    transforms: []
+    transforms: [],
+    positioning: nil
   ]
 
   @type t :: %__MODULE__{
@@ -38,7 +40,8 @@ defmodule Monty.Studio.Run do
           steps: pos_integer(),
           step: non_neg_integer(),
           pending_actions: [Monty.Frameworks.Actions.Action.t()],
-          transforms: [struct()]
+          transforms: [struct()],
+          positioning: Monty.Runtime.Positioning.outcome() | nil
         }
 
   @doc """
@@ -54,22 +57,47 @@ defmodule Monty.Studio.Run do
 
     spec = Setup.model_spec(setup, model_id)
 
-    case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {Model, spec}) do
-      {:ok, _pid} ->
-        {:ok,
-         %__MODULE__{
-           model_id: model_id,
-           setup: setup,
-           # The world starts where an episode starts, not where the last one
-           # left it: a run is an episode.
-           environment: Setup.world(setup),
-           transforms: Setup.built_transforms(setup),
-           steps: Keyword.get(opts, :steps, @default_steps)
-         }}
+    with {:ok, factories} <- Setup.positioning_procedures(setup),
+         {:ok, world, positioning} <- position(setup, factories) do
+      case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {Model, spec}) do
+        {:ok, _pid} ->
+          {:ok,
+           %__MODULE__{
+             model_id: model_id,
+             setup: setup,
+             # The world starts where an episode starts, not where the last one
+             # left it: a run is an episode — and where that is, the positioning
+             # procedures have just decided.
+             environment: world,
+             transforms: Setup.built_transforms(setup),
+             positioning: positioning,
+             steps: Keyword.get(opts, :steps, @default_steps)
+           }}
 
-      {:error, reason} ->
-        {:error, reason}
+        {:error, reason} ->
+          {:error, reason}
+      end
     end
+  end
+
+  # Monty's `pre_episode`: the world is looked at and stepped until the agent is
+  # in front of the object, before the model sees anything. The steps taken here
+  # are the environment's, not the episode's, so the run's step counter starts at
+  # zero afterwards.
+  defp position(%Setup{} = setup, factories) do
+    transforms = Setup.built_transforms(setup)
+    ctx = Monty.Context.new(seed(setup))
+
+    observe = fn world, actions ->
+      {observations, proprioceptive_state, world} = Environment.step(world, actions)
+
+      {Transforms.run(transforms, observations, ctx, proprioceptive_state), proprioceptive_state,
+       world}
+    end
+
+    Positioning.prepare(factories, Setup.target_semantic_id(setup), Setup.world(setup), observe,
+      distractors: Setup.distractors(setup)
+    )
   end
 
   @doc """

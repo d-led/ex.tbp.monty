@@ -106,7 +106,22 @@ arithmetic amplifying float32 from the export.
 | What | Command | Result |
 |---|---|---|
 | Monty's Hydra YAML composes to the same tree | `mix monty.config.snapshots` | 103 of Monty's committed snapshots match |
-| Every Monty file has an Elixir module by the one naming rule | `mix monty.module_map.verify` | 131 modules, 42 implemented, 85 planned, 4 excluded |
+| Every Monty file has an Elixir module by the one naming rule | `mix monty.module_map.verify` | 131 modules, 43 implemented, 84 planned, 4 excluded |
+
+## Run: the prologue a studio run now has
+
+An episode no longer begins wherever the stand-in world left the agent. It begins
+where Monty's own positioning procedures put it: `Monty.Runtime.Positioning`
+replays `ExperimentEnvironment.pre_episode` — a fresh look, the procedure's
+actions, another look, until the procedure is finished — and only the last
+procedure's verdict decides whether the episode may start.
+
+What that means for a studio run of `base_config_10distinctobj_dist_agent`: both
+procedures from the config run (`view_finder`, which may walk towards the object,
+then `patch`, which may only turn), the world takes **25 steps** to position, and
+the run then starts from the pose they chose. The *procedure's* decisions are
+compared with Monty's in the table above; the loop itself is Monty's protocol
+replayed, not a recorded comparison, because it depends on a world.
 
 ## What is **not** verified
 

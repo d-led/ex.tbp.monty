@@ -49,17 +49,65 @@ defmodule Monty.Frameworks.Environments.PositioningProcedures.GetGoodViewFactory
     }
   end
 
+  @doc """
+  A procedure for `target_semantic_id`, as the module and state a behaviour is
+  called through.
+
+  `{module, state}` is how this port carries every behaviour implementation: a
+  struct says what a procedure is, and the module named after it is what knows how
+  to run it.
+  """
   @impl true
   def create(%__MODULE__{} = factory, target_semantic_id) do
-    GetGoodView.new(
-      agent_id: factory.agent_id,
-      sensor_id: factory.sensor_id,
-      target_semantic_id: target_semantic_id,
-      allow_translation: factory.allow_translation,
-      good_view_distance: factory.good_view_distance,
-      good_view_percentage: factory.good_view_percentage,
-      max_orientation_attempts: factory.max_orientation_attempts,
-      multiple_objects_present: factory.multiple_objects_present
-    )
+    {GetGoodView,
+     GetGoodView.new(
+       agent_id: factory.agent_id,
+       sensor_id: factory.sensor_id,
+       target_semantic_id: target_semantic_id,
+       allow_translation: factory.allow_translation,
+       good_view_distance: factory.good_view_distance,
+       good_view_percentage: factory.good_view_percentage,
+       max_orientation_attempts: factory.max_orientation_attempts,
+       multiple_objects_present: factory.multiple_objects_present
+     )}
+  end
+
+  @target "tbp.monty.frameworks.environments.positioning_procedures.GetGoodViewFactory"
+
+  @doc """
+  The factory a composed config entry describes, or why it is not one this port
+  can build.
+
+  Every shipped evaluation config lists two of these: a view finder allowed to
+  walk towards the object, and a patch camera that may only turn —
+  `allow_translation: false` — because by then the body is where it should be and
+  only the aim is wrong.
+  """
+  @spec from_config(map()) :: {:ok, t()} | {:error, term()}
+  def from_config(%{"_target_" => @target} = config) do
+    with {:ok, agent_id} <- fetch(config, "agent_id"),
+         {:ok, sensor_id} <- fetch(config, "sensor_id") do
+      {:ok,
+       new(
+         agent_id: agent_id,
+         sensor_id: sensor_id,
+         allow_translation: Map.get(config, "allow_translation", true),
+         good_view_distance:
+           Map.get(config, "good_view_distance", GetGoodView.good_view_distance_default()),
+         good_view_percentage:
+           Map.get(config, "good_view_percentage", GetGoodView.good_view_percentage_default()),
+         max_orientation_attempts: Map.get(config, "max_orientation_attempts", 1),
+         multiple_objects_present: Map.get(config, "multiple_objects_present", false)
+       )}
+    end
+  end
+
+  def from_config(%{"_target_" => target}), do: {:error, {:unsupported_procedure, target}}
+
+  defp fetch(config, key) do
+    case Map.fetch(config, key) do
+      {:ok, value} -> {:ok, value}
+      :error -> {:error, {:missing, key}}
+    end
   end
 end
