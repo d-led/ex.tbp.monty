@@ -28,34 +28,40 @@ defmodule Monty.Simulators.Synthetic.Scene do
 
   @centre [0.0, 0.0, 0.0]
   @radius 0.05
+  @rgb [0.2, 0.7, 0.2]
 
-  @enforce_keys [:centre, :radius]
-  defstruct [:centre, :radius]
+  @enforce_keys [:centre, :radius, :rgb]
+  defstruct [:centre, :radius, :rgb]
 
-  @type t :: %__MODULE__{centre: Rotation.vector(), radius: float()}
+  @type t :: %__MODULE__{centre: Rotation.vector(), radius: float(), rgb: [float()]}
 
   @typedoc """
-  What one sensor sees: whether it hit the object, how far away it is, and the
-  surface it hit.
+  What one sensor sees: whether it hit the object, how far away it is, the
+  surface it hit, and the colour at that point.
   """
   @type observation :: %{
           on_object: boolean(),
           depth: float() | nil,
           principal_curvatures: [float()] | nil,
-          pose_vectors: {Rotation.vector(), Rotation.vector(), Rotation.vector()} | nil
+          pose_vectors: {Rotation.vector(), Rotation.vector(), Rotation.vector()} | nil,
+          rgba: [float()] | nil
         }
 
   @doc """
-  A scene with `:radius` metres of sphere at `:centre`.
+  A scene with `:radius` metres of sphere at `:centre`, coloured `:rgb`.
 
   A centimetre-radius ball would be too small for a 2.5 cm standoff; Monty's
   objects are of the order of a few centimetres, so five is a fair stand-in.
+  The colour is arbitrary — there is one object and it is all one colour — but
+  it exists because Monty's sensor modules report `hsv`, and experiments weight
+  it: a world with no colour would leave that feature empty.
   """
   @spec new(keyword()) :: t()
   def new(options \\ []) do
     %__MODULE__{
       centre: Keyword.get(options, :centre, @centre),
-      radius: Keyword.get(options, :radius, @radius)
+      radius: Keyword.get(options, :radius, @radius),
+      rgb: Keyword.get(options, :rgb, @rgb)
     }
   end
 
@@ -71,14 +77,15 @@ defmodule Monty.Simulators.Synthetic.Scene do
 
     case first_hit(scene, origin, gaze) do
       nil ->
-        %{on_object: false, depth: nil, principal_curvatures: nil, pose_vectors: nil}
+        %{on_object: false, depth: nil, principal_curvatures: nil, pose_vectors: nil, rgba: nil}
 
       {depth, point} ->
         %{
           on_object: true,
           depth: depth,
           principal_curvatures: curvatures(scene),
-          pose_vectors: surface_frame(outward_normal(scene, point))
+          pose_vectors: surface_frame(outward_normal(scene, point)),
+          rgba: scene.rgb ++ [1.0]
         }
     end
   end

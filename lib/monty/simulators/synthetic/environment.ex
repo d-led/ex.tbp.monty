@@ -108,7 +108,8 @@ defmodule Monty.Simulators.Synthetic.Environment do
       "min_depth" => observation.depth,
       "object_coverage" => if(observation.on_object, do: 1.0, else: 0.0),
       "principal_curvatures" => observation.principal_curvatures,
-      "pose_vectors" => pose_vectors(observation.pose_vectors)
+      "pose_vectors" => pose_vectors(observation.pose_vectors),
+      "rgba" => observation.rgba
     }
   end
 

@@ -21,4 +21,30 @@ defmodule Monty.Frameworks.Utils.SensorProcessingTest do
                       1.0e-12
     end
   end
+
+  describe "a pixel as hue, saturation and value" do
+    test "puts the three primaries a third of the wheel apart" do
+      assert SensorProcessing.rgb2hsv([1.0, 0.0, 0.0]) == [0.0, 1.0, 1.0]
+
+      assert [green_hue, 1.0, 1.0] = SensorProcessing.rgb2hsv([0.0, 1.0, 0.0])
+      assert_in_delta green_hue, 1.0 / 3.0, 1.0e-12
+
+      assert [blue_hue, 1.0, 1.0] = SensorProcessing.rgb2hsv([0.0, 0.0, 1.0])
+      assert_in_delta blue_hue, 2.0 / 3.0, 1.0e-12
+    end
+
+    test "wraps hue round the wheel instead of going negative" do
+      # A red-dominant pixel just past blue: the wheel comes back to red.
+      assert [hue, _saturation, _value] = SensorProcessing.rgb2hsv([1.0, 0.0, 0.5])
+      assert_in_delta hue, 1.0 - 30.0 / 360.0, 1.0e-12
+    end
+
+    test "has no hue and no saturation for a grey pixel" do
+      assert [0.0, 0.0, 0.5] = SensorProcessing.rgb2hsv([0.5, 0.5, 0.5])
+    end
+
+    test "and nothing at all for black" do
+      assert SensorProcessing.rgb2hsv([0.0, 0.0, 0.0]) == [0.0, 0.0, 0.0]
+    end
+  end
 end

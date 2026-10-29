@@ -17,7 +17,7 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
 
   # The features a world may report, by the names Monty's learning modules and
   # policies read them under.
-  @feature_keys ~w(value depth mean_depth min_depth object_coverage principal_curvatures)
+  @feature_keys ~w(value depth mean_depth min_depth object_coverage principal_curvatures rgba)
 
   # A pose that is not the world's, used when the world reports none.
   @undefined_pose {SurfacePoseVectors.new([0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]),
@@ -67,16 +67,32 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
 
   # A learning module configured for `principal_curvatures_log` expects the
   # sensor to have scaled the curvatures: a signed logarithm, so that a convex
-  # surface stays negative and values near zero do not run off.
+  # surface stays negative and values near zero do not run off. A module
+  # configured for `hsv` expects the centre pixel as hue, saturation and value.
   defp features(observation) do
-    features = Map.take(observation, @feature_keys)
+    observation
+    |> Map.take(@feature_keys)
+    |> with_curvature_log()
+    |> with_hsv()
+  end
 
+  defp with_curvature_log(features) do
     case Map.get(features, "principal_curvatures") do
       nil ->
         features
 
       curvatures ->
         Map.put(features, "principal_curvatures_log", SensorProcessing.log_sign(curvatures))
+    end
+  end
+
+  defp with_hsv(features) do
+    case Map.get(features, "rgba") do
+      [red, green, blue | _alpha] ->
+        Map.put(features, "hsv", SensorProcessing.rgb2hsv([red, green, blue]))
+
+      _no_colour ->
+        features
     end
   end
 

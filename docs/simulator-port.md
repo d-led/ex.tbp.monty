@@ -27,11 +27,19 @@ instead of silently ignoring them.
 
 It has one object in it: `Monty.Simulators.Synthetic.Scene`, a sphere, so a
 sensor reports a depth, an outward normal and two principal curvatures
-(`-1/radius`, as Monty's are for a convex surface). That is what a ported surface
-policy needs to steer by, and it is why `Monty.Studio.Setup` now builds the
-**body from the experiment's config**: a studio run of a surface experiment is
-`SurfacePolicyCurvatureInformed` choosing every action, the world moving by them,
-and the policy seeing the result on the next step.
+(`-1/radius`, as Monty's are for a convex surface), and the colour it hit. That
+is what a ported surface policy needs to steer by, and it is why
+`Monty.Studio.Setup` now builds the **body from the experiment's config**: a
+studio run of a surface experiment is `SurfacePolicyCurvatureInformed` choosing
+every action, the world moving by them, and the policy seeing the result on the
+next step.
+
+The sensor makes of that what Monty's `CameraSM` makes of a depth image: a signed
+logarithm of the curvatures (`principal_curvatures_log`) and the centre pixel as
+hue, saturation and value (`hsv`, by the conversion `skimage` supplies and
+`Monty.Frameworks.Utils.SensorProcessing.rgb2hsv/1` reproduces). The names are
+the ones `feature_weights` in Monty's configs use, so a learning module built
+from a config finds every feature it was told to weight.
 
 What it is not: Monty's world. A sphere's numbers are not MuJoCo's, so a run
 against it says whether the parts agree with each other — not whether they agree

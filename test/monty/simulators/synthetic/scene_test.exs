@@ -34,6 +34,13 @@ defmodule Monty.Simulators.Synthetic.SceneTest do
       assert_in_delta observation.depth, 0.05, 1.0e-12
     end
 
+    test "and the colour of the surface it hit" do
+      observation =
+        Scene.observe(Scene.new(radius: @radius, rgb: [0.1, 0.2, 0.3]), looking_down())
+
+      assert [0.1, 0.2, 0.3, 1.0] = observation.rgba
+    end
+
     test "and the surface it sees faces back at it" do
       {normal, _direction_1, _direction_2} =
         Scene.observe(scene(), looking_down()).pose_vectors
@@ -68,6 +75,7 @@ defmodule Monty.Simulators.Synthetic.SceneTest do
       assert observation.depth == nil
       assert observation.pose_vectors == nil
       assert observation.principal_curvatures == nil
+      assert observation.rgba == nil
     end
   end
 end
