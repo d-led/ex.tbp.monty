@@ -242,7 +242,7 @@ defmodule Monty.Studio.Setup do
             id: sensor.id,
             agent_id: Monty.Simulators.Synthetic.Environment.agent_id(),
             module: Monty.Simulators.Synthetic.SensorModule,
-            state: Monty.Simulators.Synthetic.SensorModule.new(sensor.id)
+            state: Monty.Simulators.Synthetic.SensorModule.new(sensor.id, sensor_options(sensor))
           }
         end),
       learning_modules: Enum.map(setup.learning_modules, &learning_module_spec/1),
@@ -251,6 +251,18 @@ defmodule Monty.Studio.Setup do
       lm_to_lm_vote: inputs_by_learning_module(setup, :vote),
       motor: motor_spec(setup)
     }
+  end
+
+  # What the config says this sensor should report and when a point is worth
+  # sending on. A sensor some other class owns — the view finder in Monty's surf
+  # experiments is an `ExperimentSensorModule` — gets the features its config
+  # declares and no filter, because that is all this port's shell offers.
+  defp sensor_options(sensor) do
+    [
+      features: sensor.features,
+      delta_thresholds: sensor.delta_thresholds,
+      is_surface_sm: sensor.is_surface_sm
+    ]
   end
 
   # The body is the config's, when every class it names is ported: the motor
@@ -351,6 +363,8 @@ defmodule Monty.Studio.Setup do
         # resolved by Monty at run time; until then it is not a list of
         # features, and guessing would produce a finding about our guess.
         features_resolved?: is_list(declared_features),
+        delta_thresholds: Map.get(sensor, "delta_thresholds"),
+        is_surface_sm: Map.get(sensor, "is_surface_sm", false),
         module: describe_target(Map.get(sensor, "_target_"))
       }
     end)

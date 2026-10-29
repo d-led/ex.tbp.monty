@@ -17,8 +17,8 @@ defmodule Monty.RecognitionTest do
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.{GraphObjectModel, GridObjectModel}
   alias Monty.Runtime.{Episode, LearningModuleServer, Model, Registry}
-  alias Monty.Simulators.Synthetic.{Environment, SensorModule}
-  alias Monty.Test.SurfaceWalkMotor
+  alias Monty.Simulators.Synthetic.Environment
+  alias Monty.Test.{SurfaceWalkMotor, WorldSensor}
 
   @agent "agent_id_0"
   @channel "patch"
@@ -75,8 +75,8 @@ defmodule Monty.RecognitionTest do
         %{
           id: @channel,
           agent_id: @agent,
-          module: SensorModule,
-          state: SensorModule.new(@channel)
+          module: WorldSensor,
+          state: WorldSensor.new(@channel)
         }
       ],
       learning_modules: [%{id: :lm_0, module: EvidenceGraphLM, state: lm}],

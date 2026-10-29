@@ -2020,12 +2020,12 @@
         python: "SnapshotTelemetry"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.SensorModules.SurfaceNormalMethod",
         python: "SurfaceNormalMethod"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.SensorModules.ObservationProcessor",
         python: "ObservationProcessor"
       },
@@ -2050,17 +2050,17 @@
         python: "CameraSM"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.SensorModules.PerceptFilter",
         python: "PerceptFilter"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.SensorModules.PassthroughPerceptFilter",
         python: "PassthroughPerceptFilter"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.SensorModules.FeatureChangeFilter",
         python: "FeatureChangeFilter"
       }

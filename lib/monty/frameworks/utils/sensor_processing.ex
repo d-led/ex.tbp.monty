@@ -211,6 +211,23 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
   defp undefined_curvatures, do: {0.0, 0.0, [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], false}
 
   @doc """
+  A value clipped into a range and square-rooted, keeping its sign.
+
+  `scale_clip`, which brings a Gaussian or mean curvature into a range a learning
+  module can use and softens the outliers: the square root of anything clipped to
+  `[-clip, clip]`, signed as the input was.
+  """
+  @spec scale_clip(number(), number()) :: float()
+  def scale_clip(value, clip) do
+    clipped = value |> max(-clip) |> min(clip)
+    sign(clipped) * :math.sqrt(abs(clipped))
+  end
+
+  defp sign(value) when value < 0.0, do: -1.0
+  defp sign(value) when value > 0.0, do: 1.0
+  defp sign(_zero), do: 0.0
+
+  @doc """
   Every pixel's distance from the middle of the patch, in pixels.
 
   The patch is square, and its rows are one pixel each, so the width is the

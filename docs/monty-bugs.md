@@ -24,6 +24,7 @@ numbers; everything else changes where code lives or what an error looks like.
 | [1.7](#17-a-depth-of-zero-is-read-as-an-object-a-metre-away) | A depth of 0 (nothing there) read as "object within a metre" | Suspected, masked by the configured transform | Ports the transform that masks it, and applies it before any module reads |
 | [1.8](#18-the-pixel-grid-is-not-a-cameras-pixel-grid) | Unprojection samples the image's edges, not its pixel centres | Suspected, sub-millimetre at Monty's scale | Reproduced, and the stand-in world renders the same grid |
 | [1.9](#19-the-mean-is-divided-by-the-count-twice-in-the-plane-fit) | A mean divided by the count twice inflates the plane fit's scatter matrix | Suspected, nil for a centred neighbourhood | Reproduced on purpose, recorded at the code site |
+| [1.10](#110-the-pose-not-defined-flag-is-written-where-nothing-reads-it) | A "pose not defined" flag written to the wrong features dict | Suspected, needs a percept to be visible | Reproduced on purpose, pinned by a test |
 | [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
 | [2.2](#22-motor_only_step-travels-in-the-result) | A policy sets a flag on the motor system | Decision | The flag travels in the result |
 | [2.3](#23-the-motor-system-answers-with-itself) | The motor system mutates itself | Decision | It answers with its next version |
@@ -33,6 +34,7 @@ numbers; everything else changes where code lives or what an error looks like.
 | [2.7](#27-depth_at_center-lives-in-the-policy-namespace) | A 530-line module for one centre pixel | Decision | The read lives in the policy namespace |
 | [2.8](#28-small-vocabulary-differences) | Python's strings, objects, units | Decision | Atoms, tuples, Monty's units |
 | [2.9](#29-inheritance-becomes-public-functions-and-a-module-dispatched-hook) | Subclassing | Decision | Public function + module-dispatched hook |
+| [2.10](#210-missing-coverage-counts-as-zero) | `features["object_coverage"]` raises when it was not asked for | Decision | A missing coverage is zero |
 
 Statuses mean:
 
@@ -438,6 +440,47 @@ numpy against the covariance the comments describe, not from a Monty run.
 so a normal estimated here and one estimated by Monty move together, and records
 it at the code site.
 
+## 1.10 The "pose not defined" flag is written where nothing reads it
+
+**What's wrong.** A sensor module computes whether the curvature directions are
+meaningful — two principal curvatures that differ by less than
+`pc1_is_pc2_threshold` leave the directions arbitrary — and reports that as the
+morphological feature `pose_fully_defined`. When it could *not* do the fit at all
+(no curvature feature was requested, or no surface normal was found) it flags the
+percept anyway, but writes the flag into the **non-morphological** features:
+
+```python
+        else:
+            # Flag that PC directions are non-meaningful for e.g. downstream motor
+            # policies
+            features["pose_fully_defined"] = False
+```
+
+So a percept can carry `pose_fully_defined: False` in its features and
+`pose_fully_defined: True` among its morphological features at the same time, and
+a policy that reads the morphological one — which is where the same name is
+computed and where every other reader looks — sees neither. Monty's
+`Message.get_feature_by_name` searches the non-morphological features first, so a
+reader going through it sees the flag; a reader indexing
+`morphological_features` does not.
+
+**The code.**
+[`sensor_modules.py:339-343`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/sensor_modules.py#L339-L343).
+
+**What it should be.** `morphological_features["pose_fully_defined"] = False`,
+which is the dict the same quantity is written to a few lines earlier
+(`sensor_modules.py:294`).
+
+**Why it is suspected rather than observed.** For the experiments this port runs
+— a surface agent whose config asks for `principal_curvatures` — the `else` fires
+only when no surface normal could be fitted, and in that case
+`process_features_in_lm` is false as well, so the percept never reaches a learning
+module. The disagreement is visible on a percept, not in a result.
+
+**What this port does.** Reproduces it
+([`observation_processor.ex`](../lib/monty/frameworks/models/sensor_modules/observation_processor.ex)),
+with a test that pins the flag where Monty puts it.
+
 ---
 
 # 2. Where this port deliberately differs
@@ -615,6 +658,32 @@ Elixir structs do not inherit, so the port does two things Monty does not have t
 same actions and the same policy state. What changes is where the code lives, and
 that the shared shape is a type (`InformedPolicy.jump_state/0`) rather than a
 class hierarchy.
+
+---
+
+## 2.10 Missing coverage counts as zero
+
+**What Monty does.** A sensor module's percept is built from the middle pixel, and
+a surface sensor may still extract features with that pixel off the object as long
+as part of the patch is on it — so the condition reads the coverage it computed a
+few lines earlier:
+
+```python
+        if on_object or (self._is_surface_sm and features["object_coverage"] > 0):
+```
+
+`features["object_coverage"]` only exists if the config asked for that feature, so
+a surface sensor that declared some other features and whose middle pixel is off
+the object raises `KeyError`
+([`sensor_modules.py:222`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/sensor_modules.py#L222)).
+Every config Monty ships that sets `is_surface_sm: true` also asks for
+`object_coverage`, so the crash is latent there.
+
+**What this port does.** Reads a coverage that was not asked for as zero
+([`observation_processor.ex`](../lib/monty/frameworks/models/sensor_modules/observation_processor.ex)),
+which answers the same question — "is any of this patch on the object?" — without
+making a missing feature a crash. The percept itself still carries only the
+features the config declared.
 
 ---
 

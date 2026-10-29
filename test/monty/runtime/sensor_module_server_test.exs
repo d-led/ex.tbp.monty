@@ -9,9 +9,20 @@ defmodule Monty.Runtime.SensorModuleServerTest do
   end
 
   defp start_server(model_id, id) do
-    spec = %{id: id, model_id: model_id, module: SensorModule, state: SensorModule.new(id)}
+    state = SensorModule.new(id, features: ["on_object"])
+    spec = %{id: id, model_id: model_id, module: SensorModule, state: state}
     start_supervised!(Supervisor.child_spec({SensorModuleServer, spec}, id: {:sensor, id}))
     Registry.via({:sensor_module, model_id, id})
+  end
+
+  # One pixel, on the surface: a percept needs a point cloud to be made of
+  # (`Monty.Frameworks.Models.SensorModules.ObservationProcessor`).
+  defp observation do
+    %{
+      "location" => [0.1, 0.2, 0.3],
+      "depth" => [[0.05]],
+      "semantic_3d" => [[0.1, 0.2, 0.25, 1.0]]
+    }
   end
 
   describe "step/4" do
@@ -19,17 +30,17 @@ defmodule Monty.Runtime.SensorModuleServerTest do
       server = start_server(model_id, :patch)
       agent_state = %{"position" => [0.0, 0.0, 0.0]}
 
-      percept = SensorModuleServer.step(server, %{"location" => [0.1, 0.2, 0.3]}, agent_state)
+      percept = SensorModuleServer.step(server, observation(), agent_state)
 
       assert %Monty.Cmp.Message{sender_id: "patch", pass_message: true} = percept
-      assert percept.location == [0.1, 0.2, 0.3]
-      assert SensorModuleServer.state(server) == %{sensor_module_id: :patch, pose: agent_state}
+      assert percept.location == [0.1, 0.2, 0.25]
+      assert SensorModuleServer.state(server).pose == agent_state
     end
 
     test "withholds the percept on a motor-only step", %{model_id: model_id} do
       server = start_server(model_id, :patch)
 
-      percept = SensorModuleServer.step(server, %{"location" => [0.0, 0.0, 0.0]}, %{}, true)
+      percept = SensorModuleServer.step(server, observation(), %{}, true)
 
       refute percept.pass_message
     end
@@ -50,12 +61,10 @@ defmodule Monty.Runtime.SensorModuleServerTest do
     test "clears the recorded pose", %{model_id: model_id} do
       server = start_server(model_id, :patch)
 
-      SensorModuleServer.step(server, %{"location" => [0.0, 0.0, 0.0]}, %{
-        "position" => [1.0, 0.0, 0.0]
-      })
+      SensorModuleServer.step(server, observation(), %{"position" => [1.0, 0.0, 0.0]})
 
       assert :ok = SensorModuleServer.reset(server)
-      assert SensorModuleServer.state(server) == %{sensor_module_id: :patch, pose: nil}
+      assert SensorModuleServer.state(server).pose == nil
     end
   end
 end
