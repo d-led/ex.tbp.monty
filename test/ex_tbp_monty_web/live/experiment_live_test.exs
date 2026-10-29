@@ -37,9 +37,9 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
   describe "before the run" do
     test "the experiment is shown as a diagram of what it wires together", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/experiments/tutorial/first_experiment")
+      {:ok, view, html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
 
-      assert html =~ "tutorial/first_experiment"
+      assert html =~ "base_config_10distinctobj_dist_agent"
       assert has_element?(view, "#setup-diagram")
       assert has_element?(view, "#setup-diagram polyline[points]")
       assert has_element?(view, "#setup-findings")
@@ -73,7 +73,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
   describe "during the run" do
     test "each step is streamed into the log as it happens", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=3")
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=3")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -84,7 +85,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     end
 
     test "each sensor has its own view, updated as the run steps", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -99,7 +101,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     end
 
     test "the log filter keeps a line only if every word matches", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -118,7 +121,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     end
 
     test "a filter that matches nothing says so instead of going blank", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -129,7 +133,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     end
 
     test "a log with no filter says nothing about matching", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -140,14 +145,16 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     end
 
     test "opening the page again finds the run that is still going", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
 
       # A run that is queued but not performed: the page that was closed while
       # it waited, and a page opened while it waits, show the same run.
       view |> element("#run") |> render_click()
       run_id = current_run_id(view)
 
-      {:ok, reopened, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+      {:ok, reopened, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
 
       assert current_run_id(reopened) == run_id
       assert has_element?(reopened, "#open-history")
@@ -156,7 +163,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
   describe "after the run" do
     test "the summary reports what happened, including silence", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -168,7 +176,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # step saw, and the log file it wrote are all off the page.
       assert [run] = RunHistory.list()
       assert run.status == "finished"
-      assert run.experiment == "tutorial/first_experiment"
+      assert run.experiment == "base_config_10distinctobj_dist_agent"
       assert length(run.log) == 2
       assert length(run.timeline) == 2
       assert run.summary["steps"] == 2
@@ -180,7 +188,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     test "a run that is not there any more is recorded as failed, not left running" do
       {:ok, record} =
         RunHistory.start(%{
-          experiment: "tutorial/first_experiment",
+          experiment: "base_config_10distinctobj_dist_agent",
           source: "monty",
           steps: 2,
           config: %{},
@@ -188,7 +196,9 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
         })
 
       conn = Phoenix.ConnTest.build_conn()
-      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
 
       # The page followed the row, but no worker holds it: waiting for news that
       # cannot come is the worst state a page can be in.
@@ -201,7 +211,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
   describe "a run reported from elsewhere" do
     test "the page catches up from the record", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment?steps=2")
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
 
       view |> element("#run") |> render_click()
       record = RunHistory.get(current_run_id(view))

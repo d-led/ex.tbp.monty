@@ -81,7 +81,14 @@ defmodule Monty.Studio.RunLog do
       "actions" => summary.actions,
       "inputs" => summary.inputs,
       "never_updated" => summary.never_updated,
-      "sensor_timeouts" => Enum.map(summary.sensor_timeouts, &to_string/1)
+      "sensor_timeouts" => Enum.map(summary.sensor_timeouts, &to_string/1),
+      # What the last step concluded, with the module ids as strings: this is
+      # what makes "stopped after one step because the module said no_match"
+      # readable in the record, rather than looking like a run that gave up.
+      "outcome" =>
+        Map.new(summary.outcome, fn {id, terminal} ->
+          {to_string(id), terminal && to_string(terminal)}
+        end)
     }
   end
 

@@ -59,7 +59,9 @@ defmodule Mix.Tasks.Monty.Run do
     history = record(opened, run, opts)
     {infos, history, last_run} = step_through(run, history, opts, [])
 
-    summary = summary(infos, opened.setup)
+    # Read before the model is stopped: the ending a time-out gives an episode
+    # happens after the last step's report, and is part of what the run concluded.
+    summary = summary(infos, opened.setup, Monty.Studio.Run.conclusion(last_run))
     describe_run(finish(history, summary), summary)
     # Leave nothing running: a headless process should end when the run does.
     Monty.Studio.Run.stop(last_run)
@@ -116,7 +118,8 @@ defmodule Mix.Tasks.Monty.Run do
     end
   end
 
-  defp summary(infos, setup), do: Monty.Studio.Summary.from_infos(infos, setup)
+  defp summary(infos, setup, conclusion),
+    do: Monty.Studio.Summary.from_infos(infos, setup, conclusion)
 
   defp finish(nil, _summary), do: nil
 
@@ -157,6 +160,12 @@ defmodule Mix.Tasks.Monty.Run do
       [] -> :ok
       silent -> Mix.shell().info("  never received input: #{Enum.join(silent, ", ")}")
     end
+
+    # What the learning modules concluded, which is the question the experiment
+    # asked. A module that never answered is timed out rather than left blank.
+    Enum.each(summary.outcome, fn {id, conclusion} ->
+      Mix.shell().info("  #{id}: #{conclusion || "no conclusion"}")
+    end)
 
     case history do
       nil -> Mix.shell().info("  not recorded (--no-record)")

@@ -14,6 +14,8 @@ defmodule Monty.Studio.Run do
   """
 
   alias Monty.Experiment.Environment.Interface
+  alias Monty.Experiment.RecognitionPolicy
+  alias Monty.Experiment.RecognitionPolicy.{RecognitionCounter, RecognitionResult}
   alias Monty.Runtime.Model
   alias Monty.Runtime.Positioning
   alias Monty.Studio.Setup
@@ -28,7 +30,9 @@ defmodule Monty.Studio.Run do
     :steps,
     step: 0,
     pending_actions: [],
-    positioning: nil
+    positioning: nil,
+    policy: nil,
+    counter: nil
   ]
 
   @type t :: %__MODULE__{
@@ -38,7 +42,9 @@ defmodule Monty.Studio.Run do
           steps: pos_integer(),
           step: non_neg_integer(),
           pending_actions: [Monty.Frameworks.Actions.Action.t()],
-          positioning: Monty.Runtime.Positioning.outcome() | nil
+          positioning: Monty.Runtime.Positioning.outcome() | nil,
+          policy: Monty.Experiment.RecognitionPolicy.t() | nil,
+          counter: Monty.Experiment.RecognitionPolicy.RecognitionCounter.t() | nil
         }
 
   @doc """
@@ -55,6 +61,7 @@ defmodule Monty.Studio.Run do
     spec = Setup.model_spec(setup, model_id)
 
     with {:ok, factories} <- Setup.positioning_procedures(setup),
+         {:ok, policy} <- Setup.recognition_policy(setup),
          {:ok, interface, positioning} <- position(setup, factories) do
       case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {Model, spec}) do
         {:ok, _pid} ->
@@ -67,6 +74,8 @@ defmodule Monty.Studio.Run do
              # procedures have just decided.
              interface: interface,
              positioning: positioning,
+             policy: policy,
+             counter: RecognitionCounter.new(:eval),
              steps: Keyword.get(opts, :steps, @default_steps)
            }}
 
@@ -127,13 +136,60 @@ defmodule Monty.Studio.Run do
 
     # The observations come back with the report so a page can show what the
     # modules saw, not just what they did with it.
-    {:ok, info, observations,
-     %{run | step: step + 1, interface: interface, pending_actions: actions}}
+    run = %{
+      run
+      | step: step + 1,
+        interface: interface,
+        pending_actions: actions,
+        counter:
+          RecognitionCounter.count_step(
+            run.counter,
+            info.inputs != %{},
+            info.step_type == :exploratory
+          )
+    }
+
+    # Monty's `_recognition_complete` asks the policy and does what it asks for
+    # before the loop decides whether to go on — which is what makes a stopping
+    # decision's time-out reach the model, rather than being asked for and then
+    # never applied.
+    apply_reactions(run, decision(run))
+
+    {:ok, info, observations, run}
   end
 
-  @doc "Whether the run has used its steps."
+  @doc """
+  What the experiment's recognition policy makes of the run so far.
+
+  This is the question the experiment asks each step — `is_done` ends the run,
+  `time_out_lms` and `start_exploring` are the two things it can ask for
+  instead — and the answer is also what a run's summary can report.
+  """
+  @spec decision(t()) :: RecognitionResult.t()
+  def decision(%__MODULE__{policy: nil}), do: %RecognitionResult{}
+
+  def decision(%__MODULE__{policy: policy, counter: counter, model_id: model_id}) do
+    RecognitionPolicy.call(policy, model_view(model_id), counter)
+  end
+
+  @doc """
+  What the model concluded: each learning module's terminal state, if any.
+
+  Read from the model rather than from the last step's report, because the
+  ending an episode gets from a time-out happens after that report.
+  """
+  @spec conclusion(t()) :: %{optional(atom()) => term()}
+  def conclusion(%__MODULE__{model_id: model_id}), do: Model.state(model_id).terminal_states
+
+  @doc """
+  Whether the run is over: the experiment's policy, or this page's step budget.
+
+  The policy is the experiment's answer and the budget is the page's, so a run
+  that concludes early stops early, and one that never concludes still yields.
+  """
   @spec finished?(t()) :: boolean()
-  def finished?(%__MODULE__{step: step, steps: steps}), do: step >= steps
+  def finished?(%__MODULE__{step: step, steps: steps} = run),
+    do: step >= steps or decision(run).is_done
 
   @doc "Stops the run's processes; safe to call twice."
   @spec stop(t()) :: :ok | {:error, :not_found}
@@ -147,4 +203,23 @@ defmodule Monty.Studio.Run do
 
   defp seed(%Setup{seed: seed}) when is_integer(seed), do: seed
   defp seed(_setup), do: 0
+
+  # Monty's `_recognition_complete`: the two things a policy can ask for besides
+  # stopping.
+  defp apply_reactions(%__MODULE__{model_id: model_id}, decision) do
+    if decision.start_exploring, do: :ok = Model.switch_to_exploratory_step(model_id)
+    if decision.time_out_lms, do: :ok = Model.time_out(model_id)
+  end
+
+  # The four things a policy may read off the model (`docs/monty-bugs.md` §2.17).
+  defp model_view(model_id) do
+    state = Model.state(model_id)
+
+    %{
+      is_done: state.done?,
+      is_exploring: state.step_type == :exploratory,
+      matching_steps: state.matching_steps,
+      conclusions: Enum.map(state.learning_modules, &Map.get(state.terminal_states, &1.id))
+    }
+  end
 end

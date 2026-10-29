@@ -16,9 +16,9 @@ defmodule Mix.Tasks.Monty.RunTest do
 
   describe "a headless run" do
     test "steps the experiment and prints the same log the page streams" do
-      output = run_and_capture(["tutorial/first_experiment", "--steps", "2"])
+      output = run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "2"])
 
-      assert output =~ "tutorial/first_experiment"
+      assert output =~ "base_config_10distinctobj_dist_agent"
       assert output =~ "sensors: patch, view_finder"
       # The view finder measures the scene and sends no percept, so the step log
       # names only the sensor that made one.
@@ -28,10 +28,10 @@ defmodule Mix.Tasks.Monty.RunTest do
     end
 
     test "records the run, so a headless run is history like any other" do
-      output = run_and_capture(["tutorial/first_experiment", "--steps", "2"])
+      output = run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "2"])
 
       assert [run] = RunHistory.list()
-      assert run.experiment == "tutorial/first_experiment"
+      assert run.experiment == "base_config_10distinctobj_dist_agent"
       assert run.status == "finished"
       assert length(run.log) == 2
       assert run.summary["steps"] == 2
@@ -39,20 +39,22 @@ defmodule Mix.Tasks.Monty.RunTest do
     end
 
     test "leaves nothing running" do
-      run_and_capture(["tutorial/first_experiment", "--steps", "1"])
+      run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "1"])
 
       assert DynamicSupervisor.which_children(ExTbpMonty.ModelSupervisor) == []
     end
 
     test "--no-record keeps the database out of it" do
-      output = run_and_capture(["tutorial/first_experiment", "--steps", "1", "--no-record"])
+      output =
+        run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "1", "--no-record"])
 
       assert RunHistory.list() == []
       assert output =~ "not recorded"
     end
 
     test "--quiet prints the summary without the per-step lines" do
-      output = run_and_capture(["tutorial/first_experiment", "--steps", "2", "--quiet"])
+      output =
+        run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "2", "--quiet"])
 
       refute output =~ "step 0 ·"
       assert output =~ "2 steps in"

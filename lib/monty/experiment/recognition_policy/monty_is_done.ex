@@ -10,9 +10,15 @@ defmodule Monty.Experiment.RecognitionPolicy.MontyIsDone do
 
   alias Monty.Experiment.RecognitionPolicy.RecognitionResult
 
-  @doc "The policy, taking no configuration — which is why it cannot refuse one."
-  @spec new() :: {:ok, {module(), %{}}}
-  def new, do: {:ok, {__MODULE__, %{}}}
+  @doc """
+  The policy, taking no configuration.
+
+  Monty's constructor takes no arguments either; the empty option list is here
+  so that every policy is built the same way, and an option is still refused —
+  by the factory, before this is asked (`Monty.Experiment.RecognitionPolicy`).
+  """
+  @spec new(keyword()) :: {:ok, {module(), %{}}}
+  def new(_options \\ []), do: {:ok, {__MODULE__, %{}}}
 
   @doc "Done when the model says so; asks no other question."
   @spec call(map(), term(), map()) :: RecognitionResult.t()

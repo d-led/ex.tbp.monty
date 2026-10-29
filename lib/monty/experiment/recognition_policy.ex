@@ -66,4 +66,137 @@ defmodule Monty.Experiment.RecognitionPolicy do
   instance attributes, which is the same thing without the object.
   """
   @callback call(model(), RecognitionCounter.t(), state :: term()) :: RecognitionResult.t()
+
+  # The classes of `experiment/recognition_policy.py`, by the name a config
+  # writes after `tbp.monty.experiment.recognition_policy.`.
+  @policies %{
+    "AnyPolicy" => Monty.Experiment.RecognitionPolicy.AnyPolicy,
+    "MaxTotalSteps" => Monty.Experiment.RecognitionPolicy.MaxTotalSteps,
+    "MaximumSteps" => Monty.Experiment.RecognitionPolicy.MaximumSteps,
+    "MinEvalMaxTotalSteps" => Monty.Experiment.RecognitionPolicy.MinEvalMaxTotalSteps,
+    "MinimumLMs" => Monty.Experiment.RecognitionPolicy.MinimumLMs,
+    "MontyIsDone" => Monty.Experiment.RecognitionPolicy.MontyIsDone,
+    "NaiveScan" => Monty.Experiment.RecognitionPolicy.NaiveScan,
+    "ObjectRecognition" => Monty.Experiment.RecognitionPolicy.ObjectRecognition,
+    "StepLimit" => Monty.Experiment.RecognitionPolicy.StepLimit
+  }
+
+  @doc """
+  The policy a config names, built.
+
+  Takes Monty's own shape — a map with `_target_` and the policy's arguments —
+  and answers `{:ok, {module, state}}` or `{:error, message}`. `wrapped` and
+  `policies` are built first, so a wrapper over a policy, or an `AnyPolicy` over
+  several, comes out of the same call.
+
+  An option the policy does not have is refused rather than ignored: a config
+  written for a policy this port has not caught up with should say so, not run
+  a different policy.
+  """
+  @spec from_config(map()) :: {:ok, t()} | {:error, String.t()}
+  def from_config(%{"_target_" => target} = config) do
+    with {:ok, module} <- policy_module(target),
+         {:ok, options} <- config_options(module, config) do
+      module.new(options)
+    end
+  end
+
+  def from_config(config), do: {:error, "no recognition policy named in #{inspect(config)}"}
+
+  defp policy_module(target) do
+    name = target |> String.split(".") |> List.last()
+
+    case Map.fetch(@policies, name) do
+      {:ok, module} -> {:ok, module}
+      :error -> {:error, "no recognition policy named #{name}"}
+    end
+  end
+
+  defp config_options(module, config) do
+    options = Map.drop(config, ["_target_"])
+
+    with {:ok, nested} <- nested_options(options),
+         {:ok, plain} <- plain_options(module, options) do
+      {:ok, nested ++ plain}
+    end
+  end
+
+  # A wrapping or combining policy names its children as policies of their own.
+  defp nested_options(options) do
+    with {:ok, wrapped} <- nested(options, "wrapped"),
+         {:ok, policies} <- nested_policies(options) do
+      {:ok,
+       Enum.reject([{:wrapped, wrapped}, {:policies, policies}], fn {_key, value} ->
+         is_nil(value)
+       end)}
+    end
+  end
+
+  defp nested(options, "wrapped") do
+    case Map.fetch(options, "wrapped") do
+      {:ok, config} -> from_config(config)
+      :error -> {:ok, nil}
+    end
+  end
+
+  defp nested_policies(options) do
+    case Map.fetch(options, "policies") do
+      {:ok, configs} -> each_policy(configs)
+      :error -> {:ok, nil}
+    end
+  end
+
+  defp each_policy(configs) do
+    Enum.reduce_while(configs, {:ok, []}, fn config, {:ok, built} ->
+      case from_config(config) do
+        {:ok, policy} -> {:cont, {:ok, built ++ [policy]}}
+        {:error, message} -> {:halt, {:error, message}}
+      end
+    end)
+  end
+
+  # The options each policy takes, which are the keyword names its `new/1`
+  # reads. Monty passes them as keyword arguments, so a name a policy does not
+  # take is a `TypeError` there and a refusal here — a config written for a
+  # policy this port has not caught up with must say so.
+  @options %{
+    Monty.Experiment.RecognitionPolicy.AnyPolicy => [:policies],
+    Monty.Experiment.RecognitionPolicy.MaxTotalSteps => [:max_total_steps],
+    Monty.Experiment.RecognitionPolicy.MaximumSteps => [:max_train_steps, :max_eval_steps],
+    Monty.Experiment.RecognitionPolicy.MinEvalMaxTotalSteps => [
+      :wrapped,
+      :min_eval_steps,
+      :max_total_steps
+    ],
+    Monty.Experiment.RecognitionPolicy.MinimumLMs => [:min_lms],
+    Monty.Experiment.RecognitionPolicy.MontyIsDone => [],
+    Monty.Experiment.RecognitionPolicy.NaiveScan => [:fixed_amount],
+    Monty.Experiment.RecognitionPolicy.ObjectRecognition => [
+      :max_train_steps,
+      :max_eval_steps,
+      :max_total_steps
+    ],
+    Monty.Experiment.RecognitionPolicy.StepLimit => [
+      :min_train_steps,
+      :num_exploring_steps,
+      :max_train_steps,
+      :max_eval_steps
+    ]
+  }
+
+  defp plain_options(module, options) do
+    known = Map.fetch!(@options, module)
+
+    options
+    |> Map.drop(["wrapped", "policies"])
+    |> Enum.reduce_while({:ok, []}, fn {name, value}, {:ok, built} ->
+      atom = String.to_existing_atom(name)
+
+      if atom in known do
+        {:cont, {:ok, built ++ [{atom, value}]}}
+      else
+        {:halt, {:error, "unknown recognition policy option #{name}"}}
+      end
+    end)
+  end
 end

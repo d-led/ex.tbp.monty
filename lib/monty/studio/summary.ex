@@ -10,6 +10,12 @@ defmodule Monty.Studio.Summary do
   The one thing worth calling out is `never_updated`: a learning module that
   never received input during the whole run. It is the failure that looks like
   success — the run finishes, the page is green, and one module did nothing.
+
+  `outcome` is the other thing a finished run owes a reader: what the last step
+  concluded. It is the model's own terminal states — `:match`, `:no_match`,
+  `:time_out`, or `nil` for a module that never answered — because a run that
+  stopped after one step and a run that used its whole budget are not the same
+  result, and the numbers alone cannot tell them apart.
   """
 
   alias Monty.Studio.Setup
@@ -23,21 +29,36 @@ defmodule Monty.Studio.Summary do
             actions: 0,
             inputs: %{},
             never_updated: [],
-            sensor_timeouts: []
+            sensor_timeouts: [],
+            outcome: %{}
 
   @type t :: %__MODULE__{}
 
-  @doc "Folds the per-step reports into one summary."
-  @spec from_infos([map()], Setup.t() | nil) :: t()
-  def from_infos(infos, setup \\ nil) do
+  @doc """
+  Folds the per-step reports into one summary.
+
+  `conclusion` is the model's final terminal states, which is what a run owes its
+  record and which the per-step reports cannot supply: the ending a time-out
+  gives an episode happens after the last report. Left out, the last report's
+  own terminal states are used.
+  """
+  @spec from_infos([map()], Setup.t() | nil, map() | nil) :: t()
+  def from_infos(infos, setup \\ nil, conclusion \\ nil) do
     summary = Enum.reduce(infos, %__MODULE__{}, &add_step/2)
 
     %{
       summary
       | never_updated: never_updated(summary, setup),
-        sensor_timeouts: infos |> Enum.flat_map(&Map.get(&1, :sensor_timeouts, [])) |> Enum.uniq()
+        sensor_timeouts:
+          infos |> Enum.flat_map(&Map.get(&1, :sensor_timeouts, [])) |> Enum.uniq(),
+        outcome: if(is_nil(conclusion), do: outcome(infos), else: conclusion)
     }
   end
+
+  # What the last step concluded. A run with no steps has no outcome, which is
+  # not the same as a run whose modules all said nothing.
+  defp outcome([]), do: %{}
+  defp outcome(infos), do: infos |> List.last() |> Map.get(:terminal_states, %{})
 
   @doc "Average step duration in microseconds, or `nil` for a run with no steps."
   @spec average_step_us(t()) :: float() | nil

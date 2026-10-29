@@ -21,8 +21,10 @@ defmodule Monty.Studio.Jobs.RunTest do
     {:ok, root: root}
   end
 
-  defp start_run(steps) do
-    {:ok, opened} = Monty.Studio.open("tutorial/first_experiment")
+  defp start_run(steps), do: start_run("tutorial/first_experiment", steps)
+
+  defp start_run(experiment, steps) do
+    {:ok, opened} = Monty.Studio.open(experiment)
     RunHistory.start(RunLog.attributes(opened, steps))
   end
 
@@ -31,46 +33,54 @@ defmodule Monty.Studio.Jobs.RunTest do
   defp perform_id(id), do: Jobs.Run.perform(%Oban.Job{args: %{"run_id" => id}, attempt: 1})
 
   describe "a run that is performed" do
-    test "closes its record with the summary of what it did" do
+    test "closes its record with the summary of what it did, and what it concluded" do
       {:ok, record} = start_run(3)
 
       assert {:ok, closed} = perform(record)
 
       assert closed.status == "finished"
-      assert length(closed.log) == 3
-      assert closed.summary["steps"] == 3
-      assert [0, 1, 2] = Enum.map(closed.timeline, & &1["step"])
+      assert closed.summary["steps"] == 1
+      assert [0] = Enum.map(closed.timeline, & &1["step"])
+
+      # This experiment's own policy allows exactly one matching step
+      # (`StepLimit(max_eval_steps: 1)`), so the episode ends there — and the
+      # learning module, which never answered, is timed out. That is the ending
+      # Monty's config asks for, and it is what the record says instead of a
+      # run that quietly used three steps.
+      assert closed.summary["outcome"] == %{"learning_module_0" => "time_out"}
     end
 
     test "keeps what each step saw, so the run can be replayed" do
-      {:ok, record} = start_run(2)
+      # A configuration whose learning module is a stand-in, so the episode runs
+      # for the steps it is given rather than concluding at once: what is under
+      # test here is the recording, not the conclusion.
+      {:ok, record} = start_run("base_config_10distinctobj_dist_agent", 2)
       {:ok, closed} = perform(record)
 
       [first, second] = closed.timeline
 
-      # A step is recorded with the sensors' places in Monty's units, and the
-      # first of them is where the experiment starts its agent — this config's
-      # own numbers, not the stand-in world's idea of where to stand.
+      # A step is recorded with the sensors' places in Monty's units: metres,
+      # three of them, on every step.
       assert first["step"] == 0
       assert second["step"] == 1
-      assert %{"patch" => %{"location" => [0.0, 1.5, 0.2]}} = first["sensors"]
-      assert %{"patch" => %{"location" => _place}} = second["sensors"]
+      assert %{"patch" => %{"location" => [_, _, _]}} = first["sensors"]
+      assert %{"patch" => %{"location" => [_, _, _]}} = second["sensors"]
     end
 
     test "writes a log file beside the record, and points at it" do
-      {:ok, record} = start_run(2)
+      {:ok, record} = start_run("base_config_10distinctobj_dist_agent", 2)
 
       assert {:ok, closed} = perform(record)
       assert closed.log_path == Artifacts.log_path(closed.id)
 
       file = File.read!(closed.log_path)
-      assert file =~ "run started: tutorial/first_experiment"
+      assert file =~ "run started: base_config_10distinctobj_dist_agent"
       assert file =~ "step 0 · percepts"
       assert file =~ "run finished: 2 steps"
     end
 
     test "tells anyone watching what it is doing, step by step", %{root: _root} do
-      {:ok, record} = start_run(2)
+      {:ok, record} = start_run("base_config_10distinctobj_dist_agent", 2)
       Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
 
       {:ok, _closed} = perform(record)

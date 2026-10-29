@@ -18,6 +18,7 @@ defmodule Monty.Studio.Setup do
   """
 
   alias Monty.Experiment.Environment.OneObjectPerEpisodeInterface
+  alias Monty.Experiment.RecognitionPolicy
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
@@ -49,7 +50,8 @@ defmodule Monty.Studio.Setup do
             supervised_lm_ids: [],
             findings: [],
             positioning: [],
-            object_names: nil
+            object_names: nil,
+            recognition_policy: nil
 
   @type module_description :: %{
           class: String.t() | nil,
@@ -137,6 +139,7 @@ defmodule Monty.Studio.Setup do
       transforms: transforms(config),
       positioning: get_in(config, ["eval_env_interface_args", "positioning_procedures"]) || [],
       object_names: get_in(config, ["eval_env_interface_args", "object_names"]),
+      recognition_policy: Map.get(config, "recognition_policy"),
       attention_system: describe_target(get_in(monty_config, ["attention_system", "_target_"])),
       monty_args: Map.get(monty_config, "monty_args", %{}),
       sensors: sensors,
@@ -654,6 +657,22 @@ defmodule Monty.Studio.Setup do
       error -> error
     end
   end
+
+  @doc """
+  The experiment's recognition policy: what counts as the episode being over.
+
+  Monty's `termination` group writes `recognition_policy` into the experiment
+  config, and an experiment that names none gets `MontyIsDone`
+  (`monty_experiment.py`). That default is honoured here rather than left to the
+  run, so a config without a policy still ends the way it ends in Monty.
+  """
+  @spec recognition_policy(t()) ::
+          {:ok, Monty.Experiment.RecognitionPolicy.t()} | {:error, term()}
+  def recognition_policy(%__MODULE__{recognition_policy: nil}),
+    do: RecognitionPolicy.MontyIsDone.new()
+
+  def recognition_policy(%__MODULE__{recognition_policy: config}),
+    do: RecognitionPolicy.from_config(config)
 
   @doc """
   The semantic id of the object an episode is about.

@@ -91,10 +91,11 @@ defmodule Monty.Studio.Jobs.Run do
         broadcast(run_id, {:started, record.steps})
 
         {outcome, infos, record} = step_until_done(run_id, record, run, sensor_ids, [])
+        conclusion = Run.conclusion(run)
 
         Run.stop(run)
         Registry.unregister(Monty.Runtime.Registry, key(run_id))
-        close(record, opened, outcome, infos, run_id)
+        close(record, opened, outcome, infos, conclusion, run_id)
 
       {:error, reason} ->
         give_up(run_id, {:cannot_start, reason})
@@ -148,8 +149,8 @@ defmodule Monty.Studio.Jobs.Run do
     |> Enum.map(&Map.take(&1, [:sensor_id, :media_type, :data, :note]))
   end
 
-  defp close(record, opened, outcome, infos, run_id) do
-    summary = Summary.from_infos(Enum.reverse(infos), opened.setup)
+  defp close(record, opened, outcome, infos, conclusion, run_id) do
+    summary = Summary.from_infos(Enum.reverse(infos), opened.setup, conclusion)
     status = status_of(outcome)
 
     say(run_id, closing_line(outcome, infos, summary))
