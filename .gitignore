@@ -235,5 +235,6 @@ backups/
 # Studio runs write their logs here; they are not source.
 /priv/studio_runs/
 
-# running the Monty recorder writes bytecode next to it
-scripts/__pycache__/
+# running a recorder writes bytecode, and a .pyc embeds its source's absolute path
+__pycache__/
+*.pyc
