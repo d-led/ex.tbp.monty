@@ -45,6 +45,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
 
   @behaviour Monty.Frameworks.EnvironmentUtils.Transforms.Transform
 
+  alias Monty.Frameworks.EnvironmentUtils.Transforms.TransformContext
   alias Monty.Frameworks.Models.MotorSystemState.AgentState
   alias Monty.Geometry
   alias Monty.Geometry.Rotation
@@ -134,12 +135,12 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   end
 
   @impl true
-  @spec call(map(), t(), Monty.Frameworks.Models.MotorSystemState.ProprioceptiveState.t() | nil) ::
+  @spec call(map(), t(), Monty.Frameworks.EnvironmentUtils.Transforms.TransformContext.t()) ::
           map()
-  def call(observations, %__MODULE__{} = transform, state) do
+  def call(observations, %__MODULE__{} = transform, %TransformContext{} = ctx) do
     case Map.fetch(observations, transform.agent_id) do
       {:ok, sensors} ->
-        agent_state = agent_state(state, transform.agent_id)
+        agent_state = agent_state(ctx.state, transform.agent_id)
 
         transformed =
           transform.sensor_ids

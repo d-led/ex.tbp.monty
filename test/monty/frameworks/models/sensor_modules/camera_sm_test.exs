@@ -507,7 +507,7 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
     ]
 
     transforms
-    |> Transforms.run(observations, state)
+    |> Transforms.run(observations, Monty.Context.new(0), state)
     |> get_in(["agent_id_0", "patch"])
   end
 end

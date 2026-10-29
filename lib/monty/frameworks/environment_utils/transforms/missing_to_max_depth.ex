@@ -42,8 +42,9 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.MissingToMaxDepth do
   end
 
   @impl true
-  @spec call(map(), t(), Monty.Frameworks.EnvironmentUtils.Transforms.Transform.state()) :: map()
-  def call(observations, %__MODULE__{} = transform, _state) do
+  @spec call(map(), t(), Monty.Frameworks.EnvironmentUtils.Transforms.TransformContext.t()) ::
+          map()
+  def call(observations, %__MODULE__{} = transform, _ctx) do
     case Map.fetch(observations, transform.agent_id) do
       {:ok, sensors} -> Map.put(observations, transform.agent_id, transform(sensors, transform))
       :error -> observations

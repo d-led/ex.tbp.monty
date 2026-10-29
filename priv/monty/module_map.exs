@@ -732,7 +732,7 @@
     python: "frameworks/environment_utils/transforms.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.TransformContext",
         python: "TransformContext"
       },
@@ -747,17 +747,17 @@
         python: "MissingToMaxDepth"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.AddNoiseToRawDepthImage",
         python: "AddNoiseToRawDepthImage"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.GaussianSmoothing",
         python: "GaussianSmoothing"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.GaussianBlurRGB",
         python: "GaussianBlurRGB"
       },
@@ -767,7 +767,7 @@
         python: "DepthTo3DLocations"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.NoDepthSensorPresent",
         python: "NoDepthSensorPresent"
       }

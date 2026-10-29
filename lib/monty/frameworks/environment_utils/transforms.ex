@@ -3,18 +3,22 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms do
   What an experiment does to observations before anything reads them.
 
   Mirrors `tbp/monty/frameworks/environment_utils/transforms.py`, which holds the
-  transforms Monty's `env_interface_args` configure. What is ported so far:
+  transforms Monty's `env_interface_args` configure. Every class in it is ported:
 
-    * `...Transforms.Transform` — **ported**: the interface, `call/3`;
-    * `...Transforms.MissingToMaxDepth` — **ported**: depth where nothing was
-      seen becomes the furthest the sensor can see;
-    * `...Transforms.DepthTo3DLocations` — **ported**: a depth image becomes
-      points in the world, with a mask of which pixels are on the surface in the
-      middle of the view.
-
-  Still planned: `AddNoiseToRawDepthImage`, `GaussianSmoothing`,
-  `GaussianBlurRGB` and `NoDepthSensorPresent`. A config that names one of them
-  is reported by `Monty.Studio.Setup` rather than silently dropped.
+    * `...Transforms.TransformContext` — the stream and the proprioceptive state
+      a transform is given;
+    * `...Transforms.Transform` — the interface, `call/3`;
+    * `...Transforms.MissingToMaxDepth` — depth where nothing was seen becomes
+      the furthest the sensor can see;
+    * `...Transforms.AddNoiseToRawDepthImage` — a noisy camera, drawn from the
+      step's stream;
+    * `...Transforms.GaussianSmoothing` — the depth image, smoothed;
+    * `...Transforms.GaussianBlurRGB` — the colour image, blurred;
+    * `...Transforms.DepthTo3DLocations` — a depth image becomes points in the
+      world, with a mask of which pixels are on the surface in the middle of the
+      view;
+    * `...Transforms.NoDepthSensorPresent` — the error a depth transform raises
+      when a sensor has no depth.
 
   ## Why they matter here
 
@@ -29,6 +33,8 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms do
   `"cam_to_world"`, and its depth and coverage features are taken over pixels
   that are on the surface rather than over the whole patch.
   """
+
+  alias Monty.Frameworks.EnvironmentUtils.Transforms.TransformContext
 
   @doc """
   The transform a config describes.
@@ -59,11 +65,22 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms do
   need to know where the sensor was: a pixel's depth is a distance from
   something.
   """
-  @spec run([struct()], map(), Monty.Frameworks.EnvironmentUtils.Transforms.Transform.state()) ::
-          map()
-  def run(transforms, observations, state \\ nil) do
-    Enum.reduce(transforms, observations, fn %module{} = transform, observations ->
-      module.call(observations, transform, state)
+  @spec run([struct()], map(), Monty.Context.t() | nil, TransformContext.state()) :: map()
+  def run(transforms, observations, ctx \\ nil, state \\ nil) do
+    transforms
+    |> Enum.with_index()
+    |> Enum.reduce(observations, fn {%module{} = transform, index}, observations ->
+      module.call(observations, transform, context(ctx, state, index))
     end)
+  end
+
+  # Each transform draws from its own stream for the step — from the run's
+  # context, so the same episode seed sees the same noise, and two noise
+  # transforms in one chain do not draw the same numbers
+  # (`docs/monty-bugs.md` §2.1).
+  defp context(nil, state, _index), do: %TransformContext{rng: nil, state: state}
+
+  defp context(ctx, state, index) do
+    %TransformContext{rng: Monty.Context.rng_for(ctx, "transform:#{index}"), state: state}
   end
 end

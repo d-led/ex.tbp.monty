@@ -89,11 +89,13 @@ defmodule Monty.Studio.Run do
     {observations, proprioceptive_state, environment} =
       Environment.step(run.environment, run.pending_actions)
 
+    ctx = %{Monty.Context.new(seed(setup)) | step: step}
+
     # What the world rendered, as the experiment says it should arrive: Monty
     # runs its transform chain on the observations before any module sees them,
-    # and some of them need to know where the sensor was to place a pixel.
-    observations = Transforms.run(run.transforms, observations, proprioceptive_state)
-    ctx = %{Monty.Context.new(seed(setup)) | step: step}
+    # and some of them need to know where the sensor was to place a pixel — or,
+    # for a noisy camera, which stream to draw from.
+    observations = Transforms.run(run.transforms, observations, ctx, proprioceptive_state)
 
     {:ok, actions, info} = Model.step(model_id, observations, proprioceptive_state, ctx)
 

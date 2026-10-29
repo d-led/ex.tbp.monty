@@ -11,7 +11,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocationsTest do
 
   use ExUnit.Case, async: true
 
-  alias Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations
+  alias Monty.Frameworks.EnvironmentUtils.Transforms.{DepthTo3DLocations, TransformContext}
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
   alias Monty.Geometry.Rotation
 
@@ -207,7 +207,9 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocationsTest do
     transform = transform(Keyword.put(options, :sensor_ids, sensors))
     state = proprioceptive_state()
 
-    {DepthTo3DLocations.call(%{"agent_id_0" => seen}, transform, state), state}
+    ctx = %TransformContext{state: state}
+
+    {DepthTo3DLocations.call(%{"agent_id_0" => seen}, transform, ctx), state}
     |> then(fn {observations, state} ->
       %{observations: observations, proprioceptive_state: state}
     end)

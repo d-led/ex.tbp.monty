@@ -25,6 +25,7 @@ numbers; everything else changes where code lives or what an error looks like.
 | [1.8](#18-the-pixel-grid-is-not-a-cameras-pixel-grid) | Unprojection samples the image's edges, not its pixel centres | Suspected, sub-millimetre at Monty's scale | Reproduced, and the stand-in world renders the same grid |
 | [1.9](#19-the-mean-is-divided-by-the-count-twice-in-the-plane-fit) | A mean divided by the count twice inflates the plane fit's scatter matrix | Suspected, nil for a centred neighbourhood | Reproduced on purpose, recorded at the code site |
 | [1.10](#110-the-pose-not-defined-flag-is-written-where-nothing-reads-it) | A "pose not defined" flag written to the wrong features dict | Suspected, needs a percept to be visible | Reproduced on purpose, pinned by a test |
+| [1.11](#111-the-rgb-blur-comment-names-the-wrong-kernel-size) | A comment says OpenCV picks `6*sigma + 1`; measured, it picks `8*sigma + 1` | Confirmed by measurement | Follows the code (OpenCV), not the comment |
 | [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
 | [2.2](#22-motor_only_step-travels-in-the-result) | A policy sets a flag on the motor system | Decision | The flag travels in the result |
 | [2.3](#23-the-motor-system-answers-with-itself) | The motor system mutates itself | Decision | It answers with its next version |
@@ -483,6 +484,34 @@ module. The disagreement is visible on a percept, not in a result.
 **What this port does.** Reproduces it
 ([`observation_processor.ex`](../lib/monty/frameworks/models/sensor_modules/observation_processor.ex)),
 with a test that pins the flag where Monty puts it.
+
+## 1.11 The RGB blur comment names the wrong kernel size
+
+**What Monty does.** `GaussianBlurRGB` passes `(kernel_size, kernel_size)` to
+OpenCV, and its docstring says what OpenCV does when `kernel_size` is left at
+zero:
+
+```python
+            kernel_size: Kernel size for blur. If 0 (default), OpenCV auto-computes
+                from sigma using `6*sigma + 1` rounded to nearest odd. If specified,
+                must be odd.
+```
+
+Measured against OpenCV 4.10 on a float image, the kernel it picks is
+`8*sigma + 1`, rounded and forced odd — `sigma: 2` is seventeen pixels, not
+thirteen
+([`transforms.py:290-301`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/environment_utils/transforms.py#L290-L301)).
+
+**What this port does.** Follows the code, because the code is what decides the
+numbers: `GaussianBlurRGB` derives `round(8*sigma + 1)` and forces it odd, and a
+test pins the sizes OpenCV answers (`sigma: 1` → 9, `1.5` → 13, `2` → 17). The
+port's kernel was checked against `cv2.GaussianBlur` itself to `1.0e-7`, which is
+float32 precision.
+
+**Why it matters little, and where it would.** No config that uses this transform
+leaves the kernel size at zero — they give a `sigma` and take the default kernel
+— so the difference is latent for Monty's own experiments, and would only show in
+a config that relies on the comment's arithmetic.
 
 ---
 

@@ -12,7 +12,10 @@ defmodule Monty.Studio.TransformsTest do
 
   use ExUnit.Case, async: false
 
-  alias Monty.Frameworks.EnvironmentUtils.Transforms.{DepthTo3DLocations, MissingToMaxDepth}
+  alias Monty.Frameworks.EnvironmentUtils.Transforms
+  alias Monty.Frameworks.EnvironmentUtils.Transforms.{AddNoiseToRawDepthImage, DepthTo3DLocations}
+  alias Monty.Frameworks.EnvironmentUtils.Transforms.MissingToMaxDepth
+
   alias Monty.Studio.{Run, Setup}
 
   @experiment "base_config_10distinctobj_surf_agent"
@@ -47,6 +50,38 @@ defmodule Monty.Studio.TransformsTest do
     findings = setup().findings |> Enum.map(& &1.code)
 
     assert :modules_not_ported in findings
+  end
+
+  describe "a noisy experiment" do
+    # The noise transform is what makes a noisy-camera experiment noisy; the
+    # question a run has to answer is whether its noise is *its* noise, the same
+    # at the same seed and step.
+    defp noisy_setup do
+      {:ok, opened} = Monty.Studio.open("test/evidence_lm/noisy_sensor")
+      opened.setup
+    end
+
+    test "builds the noise transform its config names" do
+      assert [
+               %MissingToMaxDepth{},
+               %AddNoiseToRawDepthImage{sigma: 0.001},
+               %DepthTo3DLocations{}
+             ] = Setup.built_transforms(noisy_setup())
+    end
+
+    test "draws the same noise twice for the same seed and step, and other noise at the next step" do
+      # The property that makes a noisy run comparable with Monty's: the episode
+      # seed decides the noise, not the wall clock (`docs/monty-bugs.md` §2.1).
+      depth_and_noise = Enum.take(Setup.built_transforms(noisy_setup()), 2)
+      observations = %{"agent_id_0" => %{"patch" => %{"depth" => List.duplicate([0.2, 0.2], 2)}}}
+
+      at = fn step ->
+        Transforms.run(depth_and_noise, observations, %{Monty.Context.new(4) | step: step}, nil)
+      end
+
+      assert at.(2) == at.(2)
+      refute at.(2) == at.(3)
+    end
   end
 
   test "a miss is handed on as the furthest the sensor can see" do

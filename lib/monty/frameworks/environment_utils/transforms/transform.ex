@@ -13,16 +13,17 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.Transform do
   itself.
   """
 
+  alias Monty.Frameworks.EnvironmentUtils.Transforms.TransformContext
+
   @type t :: struct()
   @type observations :: map()
 
-  @typedoc """
-  Where the agents and their sensors were: what a transform needs to put a
-  pixel's depth where it belongs in the world. `nil` when a transform is run
-  without it.
-  """
-  @type state :: Monty.Frameworks.Models.MotorSystemState.ProprioceptiveState.t() | nil
+  @doc """
+  The observations, changed by `transform`.
 
-  @doc "The observations, changed by `transform`."
-  @callback call(observations(), t(), state()) :: observations()
+  The context carries what a transform may need beyond the observations: where
+  the agents and their sensors were, and the random stream this transform may
+  draw from at this step.
+  """
+  @callback call(observations(), t(), TransformContext.t()) :: observations()
 end
