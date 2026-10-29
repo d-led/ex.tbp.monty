@@ -1765,13 +1765,13 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.Salience.OnObjectObservation",
     package: "monty",
     python: "frameworks/models/salience/on_object_observation.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.OnObjectObservation",
         python: "OnObjectObservation"
       }
@@ -1779,28 +1779,28 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor",
     package: "monty",
     python: "frameworks/models/salience/return_inhibitor.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayKernel",
         python: "DecayKernel"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayKernelFactory",
         python: "DecayKernelFactory"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayField",
         python: "DecayField"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor",
         python: "ReturnInhibitor"
       }
@@ -1828,7 +1828,7 @@
     python: "frameworks/models/salience/segmentation/strategy.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Segmentation.Strategy.SegmentationStrategy",
         python: "SegmentationStrategy"
       }
@@ -1850,13 +1850,13 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.Salience.Strategies.Protocol",
     package: "monty",
     python: "frameworks/models/salience/strategies/protocol.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Protocol.SalienceStrategy",
         python: "SalienceStrategy"
       }
@@ -1864,13 +1864,13 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Models.Salience.Strategies.Uniform",
     package: "monty",
     python: "frameworks/models/salience/strategies/uniform.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.Salience.Strategies.Uniform",
         python: "Uniform"
       }
