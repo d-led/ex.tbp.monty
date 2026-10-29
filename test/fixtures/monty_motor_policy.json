@@ -143,6 +143,132 @@
    ]
   }
  ],
+ "undo": [
+  {
+   "action": {
+    "action": "LookDown",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": 5.0,
+    "constraint_degrees": 45.0,
+    "distance": null,
+    "direction": null
+   },
+   "undo": {
+    "action": "LookDown",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": -5.0,
+    "constraint_degrees": 45.0,
+    "distance": null,
+    "direction": null
+   }
+  },
+  {
+   "action": {
+    "action": "LookUp",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": -12.5,
+    "constraint_degrees": 10.0,
+    "distance": null,
+    "direction": null
+   },
+   "undo": {
+    "action": "LookUp",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": 12.5,
+    "constraint_degrees": 10.0,
+    "distance": null,
+    "direction": null
+   }
+  },
+  {
+   "action": {
+    "action": "TurnLeft",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": 30.0,
+    "constraint_degrees": null,
+    "distance": null,
+    "direction": null
+   },
+   "undo": {
+    "action": "TurnLeft",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": -30.0,
+    "constraint_degrees": null,
+    "distance": null,
+    "direction": null
+   }
+  },
+  {
+   "action": {
+    "action": "TurnRight",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": -7.0,
+    "constraint_degrees": null,
+    "distance": null,
+    "direction": null
+   },
+   "undo": {
+    "action": "TurnRight",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": 7.0,
+    "constraint_degrees": null,
+    "distance": null,
+    "direction": null
+   }
+  },
+  {
+   "action": {
+    "action": "MoveForward",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": null,
+    "constraint_degrees": null,
+    "distance": 0.05,
+    "direction": null
+   },
+   "undo": {
+    "action": "MoveForward",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": null,
+    "constraint_degrees": null,
+    "distance": -0.05,
+    "direction": null
+   }
+  },
+  {
+   "action": {
+    "action": "MoveTangentially",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": null,
+    "constraint_degrees": null,
+    "distance": 0.03,
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   "undo": {
+    "action": "MoveTangentially",
+    "agent_id": "agent_id_0",
+    "rotation_degrees": null,
+    "constraint_degrees": null,
+    "distance": -0.03,
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   }
+  }
+ ],
+ "not_undoable": {
+  "action": "OrientHorizontal",
+  "agent_id": "agent_id_0",
+  "rotation_degrees": 5.0,
+  "constraint_degrees": null,
+  "distance": null,
+  "direction": null
+ },
  "highest_confidence_goal": [
   {
    "confidences": [

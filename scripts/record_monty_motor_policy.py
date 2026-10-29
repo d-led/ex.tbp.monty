@@ -51,6 +51,7 @@ try:
         JumpToGoal,
         MotorPolicy,
         MotorPolicyResult,
+        fixme_undo_last_action,
     )
     from tbp.monty.frameworks.models.motor_policy_selectors import (  # noqa: E402
         DistantPolicySelector,
@@ -191,6 +192,20 @@ def _goals(goals):
     ]
 
 
+def _action_record(action):
+    return {
+        "action": type(action).__name__,
+        "agent_id": action.agent_id,
+        "rotation_degrees": getattr(action, "rotation_degrees", None),
+        "constraint_degrees": getattr(action, "constraint_degrees", None),
+        "distance": getattr(action, "distance", None),
+        "direction": (
+            None if getattr(action, "direction", None) is None
+            else [float(coordinate) for coordinate in action.direction]
+        ),
+    }
+
+
 class RecordingDefault(MotorPolicy):
     """Says only that the selector fell back to it, and with what goal."""
 
@@ -231,6 +246,41 @@ def _look_at_goal(policy, pose, goals):
 def main():
     ctx = RuntimeContext(rng=np.random.RandomState(0))
     poses = [_with_quaternions(pose) for pose in POSES]
+
+    # -- the six actions an informed policy can take back -------------------
+    from tbp.monty.frameworks.actions.actions import (  # noqa: PLC0415
+        LookDown,
+        LookUp,
+        MoveForward,
+        MoveTangentially,
+        OrientHorizontal,
+        TurnLeft,
+        TurnRight,
+    )
+
+    undoable = [
+        LookDown(agent_id=AGENT, rotation_degrees=5.0, constraint_degrees=45.0),
+        LookUp(agent_id=AGENT, rotation_degrees=-12.5, constraint_degrees=10.0),
+        TurnLeft(agent_id=AGENT, rotation_degrees=30.0),
+        TurnRight(agent_id=AGENT, rotation_degrees=-7.0),
+        MoveForward(agent_id=AGENT, distance=0.05),
+        MoveTangentially(agent_id=AGENT, distance=0.03, direction=(1.0, 0.0, 0.0)),
+    ]
+
+    undo = [
+        {"action": _action_record(action), "undo": _action_record(fixme_undo_last_action(action))}
+        for action in undoable
+    ]
+
+    # The policy samples only those six, so anything else has no inverse.
+    not_undoable = OrientHorizontal(agent_id=AGENT, rotation_degrees=5.0,
+                                   left_distance=0.004, forward_distance=0.004)
+    try:
+        fixme_undo_last_action(not_undoable)
+    except TypeError:
+        not_undoable_record = _action_record(not_undoable)
+    else:  # pragma: no cover - Monty's docstring promises the TypeError
+        raise AssertionError("Monty undid an action its docstring says it cannot")
 
     # -- which goal wins ---------------------------------------------------
     ranked = [
@@ -304,6 +354,8 @@ def main():
         "agent_id": AGENT,
         "sensor_id": SENSOR,
         "poses": poses,
+        "undo": undo,
+        "not_undoable": not_undoable_record,
         "highest_confidence_goal": ranked,
         "look_at_goal": look_at,
         "collocated": refused,

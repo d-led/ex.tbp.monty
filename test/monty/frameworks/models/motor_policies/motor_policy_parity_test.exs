@@ -19,6 +19,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
   alias Monty.Cmp.Goal
   alias Monty.Context
   alias Monty.Frameworks.Actions.{ActionSamplers.ConstantSampler, LookUp, MoveForward, TurnLeft}
+  alias Monty.Frameworks.Models.MotorPolicies
   alias Monty.Frameworks.Models.MotorPolicies.{BasePolicy, JumpToGoal, MotorPolicyResult}
   alias Monty.Frameworks.Models.MotorPolicySelectors
   alias Monty.Frameworks.Models.MotorPolicySelectors.{DistantPolicySelector, SinglePolicySelector}
@@ -37,6 +38,23 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
 
   setup_all do
     {:ok, fixture: @fixture |> File.read!() |> Jason.decode!()}
+  end
+
+  test "an action is undone by itself with its amount negated", %{fixture: fixture} do
+    for %{"action" => recorded, "undo" => expected} <- fixture["undo"] do
+      undo = MotorPolicies.undo_last_action(action_from(recorded))
+
+      assert action_fields(undo) == expected,
+             "undoing #{recorded["action"]} gave #{inspect(action_fields(undo))}"
+    end
+  end
+
+  test "an action an informed policy cannot sample has no inverse", %{fixture: fixture} do
+    %{"action" => "OrientHorizontal"} = fixture["not_undoable"]
+
+    assert_raise ArgumentError, fn ->
+      MotorPolicies.undo_last_action(action_from(fixture["not_undoable"]))
+    end
   end
 
   test "of several goals, the most confident is pursued", %{fixture: fixture} do
@@ -223,6 +241,50 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
 
   defp action("TurnLeft"), do: TurnLeft
   defp action("LookUp"), do: LookUp
+
+  # An action as the fixture records it: the struct, and the fields that tell one
+  # action from another.
+  defp action_from(%{"action" => name} = record) do
+    module = module_of(name)
+    known = struct(module)
+
+    attributes =
+      record
+      |> Map.take([
+        "agent_id",
+        "rotation_degrees",
+        "constraint_degrees",
+        "distance",
+        "direction",
+        "left_distance",
+        "forward_distance"
+      ])
+      |> Enum.map(fn {key, value} -> {String.to_existing_atom(key), value} end)
+      |> Enum.filter(fn {key, _value} -> Map.has_key?(known, key) end)
+
+    struct!(module, attributes)
+  end
+
+  defp action_fields(action) do
+    %{
+      "action" => action.__struct__ |> Module.split() |> List.last(),
+      "agent_id" => action.agent_id,
+      "rotation_degrees" => Map.get(action, :rotation_degrees),
+      "constraint_degrees" => Map.get(action, :constraint_degrees),
+      "distance" => Map.get(action, :distance),
+      "direction" => Map.get(action, :direction)
+    }
+  end
+
+  defp module_of(name) do
+    [__MODULE__, Monty.Frameworks.Actions]
+    |> Enum.map(&Module.concat(&1, name))
+    |> Enum.find(&Code.ensure_loaded?/1)
+    |> case do
+      nil -> raise ArgumentError, "no Elixir action named #{name}"
+      module -> module
+    end
+  end
 
   defp assert_close(actual, expected, label \\ "") do
     assert length(actual) == length(expected),
