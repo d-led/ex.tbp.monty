@@ -1,0 +1,9042 @@
+{
+ "monty": "tbp.monty.experiment.recognition_policy",
+ "policies": [
+  "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+  "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+  "MaxTotalSteps(20)",
+  "MaximumSteps(1000, 500)",
+  "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+  "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+  "MinimumLMs(1)",
+  "MinimumLMs(3)",
+  "MontyIsDone",
+  "NaiveScan(1)",
+  "NaiveScan(5)",
+  "NaiveScan(90)",
+  "ObjectRecognition(1000, 500, 6000)",
+  "StepLimit(20, 100, 1000, 500)"
+ ],
+ "recognition_status": {
+  "conclusions": [
+   "match",
+   "no_match",
+   "time_out"
+  ],
+  "default": {
+   "conclusion": null,
+   "telemetry": {}
+  }
+ },
+ "refusals": {
+  "MaxTotalSteps": {
+   "raises": "ValueError",
+   "message": "max_total_steps must be positive"
+  },
+  "MaximumSteps": {
+   "raises": "ValueError",
+   "message": "max_train_steps must be positive"
+  },
+  "MaximumSteps.eval": {
+   "raises": "ValueError",
+   "message": "max_eval_steps must be positive"
+  },
+  "MinimumLMs": {
+   "raises": "ValueError",
+   "message": "min_lms must be positive"
+  },
+  "NaiveScan": {
+   "raises": "ValueError",
+   "message": "fixed_amount must be positive"
+  },
+  "AnyPolicy": {
+   "raises": "ValueError",
+   "message": "no policies to check"
+  },
+  "ObjectRecognition.total": {
+   "raises": "ValueError",
+   "message": "max_total_steps must be positive"
+  },
+  "StepLimit.min": {
+   "raises": "ValueError",
+   "message": "min_train_steps must be non-negative"
+  },
+  "StepLimit.exploring": {
+   "raises": "ValueError",
+   "message": "num_exploring_steps must be non-negative"
+  },
+  "MinEvalMaxTotalSteps.min": {
+   "raises": "ValueError",
+   "message": "min_eval_steps must be non-negative"
+  },
+  "MinEvalMaxTotalSteps.total": {
+   "raises": "ValueError",
+   "message": "max_total_steps must be positive"
+  },
+  "MinEvalMaxTotalSteps.order": {
+   "raises": "ValueError",
+   "message": "min_eval_steps must be less than or equal to max_total_steps"
+  }
+ },
+ "decisions": [
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MontyIsDone",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaxTotalSteps(20)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MaximumSteps(1000, 500)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": true
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": true
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": true
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "StepLimit(20, 100, 1000, 500)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(1)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinimumLMs(3)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(1)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(5)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "NaiveScan(90)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "ObjectRecognition(1000, 500, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MaximumSteps, MaxTotalSteps])",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": false,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 5,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 5,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": true
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 499,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 499,
+    "matching_steps": 499,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 500,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 500,
+    "matching_steps": 500,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 72,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 73,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5999,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 6000,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8010,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 8011,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 0,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": true,
+    "is_exploring": false,
+    "matching_steps": 1,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1,
+    "matching_steps": 1,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 19,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 19,
+    "matching_steps": 19,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": true
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 20,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 20,
+    "matching_steps": 20,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": true
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 999,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 999,
+    "matching_steps": 999,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": true
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 1000,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 1000,
+    "matching_steps": 1000,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 5,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 99,
+    "matching_steps": 0,
+    "exploring_steps": 99,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 0
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 0,
+    "exploring_steps": 0,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 50,
+    "matching_steps": 0,
+    "exploring_steps": 50,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 1
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": false,
+    "is_exploring": false,
+    "matching_steps": 10,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 10,
+    "matching_steps": 10,
+    "exploring_steps": 0,
+    "mode": "EVAL"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": true,
+    "start_exploring": false
+   }
+  },
+  {
+   "policy": "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",
+   "model": {
+    "is_done": true,
+    "is_exploring": true,
+    "matching_steps": 0,
+    "matched_lms": 3
+   },
+   "counter": {
+    "step": 100,
+    "matching_steps": 0,
+    "exploring_steps": 100,
+    "mode": "TRAIN"
+   },
+   "result": {
+    "is_done": true,
+    "time_out_lms": false,
+    "start_exploring": false
+   }
+  }
+ ]
+}

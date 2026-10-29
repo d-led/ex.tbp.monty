@@ -320,68 +320,68 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Experiment.RecognitionPolicy",
     package: "monty",
     python: "experiment/recognition_policy.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy.RecognitionCounter",
         python: "RecognitionCounter"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy.RecognitionResult",
         python: "RecognitionResult"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy",
         python: "RecognitionPolicy"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy.MontyIsDone",
         python: "MontyIsDone"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy.MinEvalMaxTotalSteps",
         python: "MinEvalMaxTotalSteps"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy.MaxTotalSteps",
         python: "MaxTotalSteps"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy.MaximumSteps",
         python: "MaximumSteps"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy.StepLimit",
         python: "StepLimit"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy.MinimumLMs",
         python: "MinimumLMs"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy.NaiveScan",
         python: "NaiveScan"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy.ObjectRecognition",
         python: "ObjectRecognition"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionPolicy.AnyPolicy",
         python: "AnyPolicy"
       }
@@ -389,7 +389,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Experiment.RecognitionStatus",
     package: "monty",
     python: "experiment/recognition_status.py",
@@ -400,7 +400,7 @@
         python: "RecognitionConclusion"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.RecognitionStatus",
         python: "RecognitionStatus"
       }
@@ -936,7 +936,7 @@
     python: "frameworks/experiments/mode.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Experiments.Mode.ExperimentMode",
         python: "ExperimentMode"
       }

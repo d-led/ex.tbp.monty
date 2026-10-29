@@ -1023,6 +1023,39 @@ hold, or quietly running an experiment that asked for a cluttered scene and got 
 empty one, would make a number that means something different from Monty's. A
 refusal is a run that says which feature is missing.
 
+## 2.17 A recognition policy is given what it reads, not the model
+
+**What Monty does.** A policy is `__call__(self, model: MontyBase, count)`: it is
+handed the model object and reads whatever it likes off it — `model.is_done`,
+`model.is_exploring`, `model.matching_steps`, and
+`lm.recognition_status.conclusion` for each learning module. It also logs and
+telemeters every terminal decision through `logger.info` and `telemeter.info`.
+
+**What this port does.**
+[`Monty.Experiment.RecognitionPolicy`](../lib/monty/experiment/recognition_policy.ex)
+declares a model *view* — a map with exactly those four readings, the modules'
+conclusions flattened to a list — and each policy is a `{module, state}` pair
+dispatched by `RecognitionPolicy.call/3`. Constructors answer `{:ok, policy}` or
+`{:error, message}`, carrying Monty's `ValueError` sentences.
+
+**Why.** The decision is what has to be compared with Monty's, and a decision
+that can reach into live processes is a decision that cannot be recorded and
+replayed. `scripts/record_monty_recognition_policy.py` asks Monty's real classes
+448 questions over the same view; the port answers every one of them the same
+way.
+
+**What is therefore not compared.** The log lines and telemetry events Monty
+emits when a policy fires. They are the experiment's reporting, not its
+arithmetic; when the episode loop is wired to these policies, what it reports is
+its own concern.
+
+**And the mode.** `ExperimentMode` is an enum of the strings `"eval"` and
+`"train"` in Monty; here it is `:eval` and `:train`
+([`ExperimentMode`](../lib/monty/frameworks/experiments/mode/experiment_mode.ex))
+with `to_string/1` and `from_string/1` for the places a config or a log needs the
+string.
+
+
 
 ---
 
