@@ -23,6 +23,7 @@ numbers; everything else changes where code lives or what an error looks like.
 | [1.6](#16-jumptogo-saves-one-name-and-restores-another) | A checkpoint saves one attribute and restores a different one | Confirmed, only bites a resumed run | No checkpoint loading here |
 | [1.7](#17-a-depth-of-zero-is-read-as-an-object-a-metre-away) | A depth of 0 (nothing there) read as "object within a metre" | Suspected, masked by the configured transform | Ports the transform that masks it, and applies it before any module reads |
 | [1.8](#18-the-pixel-grid-is-not-a-cameras-pixel-grid) | Unprojection samples the image's edges, not its pixel centres | Suspected, sub-millimetre at Monty's scale | Reproduced, and the stand-in world renders the same grid |
+| [1.9](#19-the-mean-is-divided-by-the-count-twice-in-the-plane-fit) | A mean divided by the count twice inflates the plane fit's scatter matrix | Suspected, nil for a centred neighbourhood | Reproduced on purpose, recorded at the code site |
 | [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
 | [2.2](#22-motor_only_step-travels-in-the-result) | A policy sets a flag on the motor system | Decision | The flag travels in the result |
 | [2.3](#23-the-motor-system-answers-with-itself) | The motor system mutates itself | Decision | It answers with its next version |
@@ -399,6 +400,43 @@ and renders the stand-in world's image on the same grid
 ([`scene.ex`](../lib/monty/simulators/synthetic/scene.ex)) so that the two
 disagree about nothing. A test unprojects every pixel of a rendered patch and
 requires the points to land on the sphere.
+
+## 1.9 The mean is divided by the count twice in the plane fit
+
+**What's wrong.** `surface_normal_total_least_squares` builds the scatter matrix
+a total-least-squares plane fit is made of — the covariance of the patch's
+points — and subtracts the mean's outer product from the second moment. The mean
+it subtracts has already been averaged, and is then divided by the count again:
+
+```python
+p_mean = 1 / n_points * np.mean(x_mat, axis=0, keepdims=True).T
+m_mat = 1 / n_points * np.matmul(x_mat.T, x_mat) - np.matmul(p_mean, p_mean.T)
+```
+
+`np.mean` divides by `n_points` already, so `m_mat` is `C + (1 - 1/n²) μμᵀ`
+rather than the covariance `C`: the mean's outer product is under-subtracted by a
+factor, and the matrix is inflated along the direction of the neighbourhood's own
+offset from the origin. The eigenvector with the smallest eigenvalue is then not
+the normal of the best-fit plane in general.
+
+**The code.**
+[`sensor_processing.py:437-441`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/utils/sensor_processing.py#L437-L441).
+
+**What it should be.** `p_mean = np.mean(x_mat, axis=0, keepdims=True).T` — once.
+
+**Why it is suspected rather than observed.** The neighbourhood the fit uses is
+already expressed relative to the middle pixel (`center_neighbors` subtracts it),
+so for a symmetric neighbourhood `μ` is near zero and the difference is nil. It
+shows when the neighbourhood is one-sided — the middle pixel near the edge of the
+object, so that most of the patch is masked out — and even then it is small: on a
+five-centimetre sphere's patch at five centimetres, with a quarter-patch
+neighbourhood, the two estimates differ by about a degree. Measured here with
+numpy against the covariance the comments describe, not from a Monty run.
+
+**What this port does.** Reproduces the expression as it stands
+([`sensor_processing.ex`](../lib/monty/frameworks/utils/sensor_processing.ex)),
+so a normal estimated here and one estimated by Monty move together, and records
+it at the code site.
 
 ---
 
