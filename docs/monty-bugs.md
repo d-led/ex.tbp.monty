@@ -35,6 +35,7 @@ numbers; everything else changes where code lives or what an error looks like.
 | [2.8](#28-small-vocabulary-differences) | Python's strings, objects, units | Decision | Atoms, tuples, Monty's units |
 | [2.9](#29-inheritance-becomes-public-functions-and-a-module-dispatched-hook) | Subclassing | Decision | Public function + module-dispatched hook |
 | [2.10](#210-missing-coverage-counts-as-zero) | `features["object_coverage"]` raises when it was not asked for | Decision | A missing coverage is zero |
+| [2.11](#211-a-sensor-with-no-surface-answers-nil) | A sensor's step always answers a percept | Decision | No surface to see is `nil`, not a made-up location |
 
 Statuses mean:
 
@@ -684,6 +685,34 @@ Every config Monty ships that sets `is_surface_sm: true` also asks for
 which answers the same question — "is any of this patch on the object?" — without
 making a missing feature a crash. The percept itself still carries only the
 features the config declared.
+
+---
+
+## 2.11 A sensor with no surface answers `nil`
+
+**What Monty does.** `CameraSM.step` always answers a percept: the processor
+reads `observation["semantic_3d"]` and indexes its middle row, so an observation
+that never went through the depth-to-points transform raises `KeyError` rather
+than reporting nothing
+([`sensor_modules.py:196`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/sensor_modules.py#L196)).
+Monty's own environments always run the transform, so the path is never taken
+there.
+
+**What this port does.** `ObservationProcessor.process/2` answers
+`{:error, :no_point_cloud}`
+([`observation_processor.ex`](../lib/monty/frameworks/models/sensor_modules/observation_processor.ex))
+and `CameraSM.step/4` answers `nil`
+([`camera_sm.ex`](../lib/monty/frameworks/models/sensor_modules/camera_sm.ex)) —
+a sensor that saw no surface, which is a different thing from a sensor that saw a
+surface it could not fit. The runtime already has a shape for a sensor with
+nothing to say on a step: a module whose percept is `nil` contributes nothing to
+the learning modules' inputs.
+
+**Why it is deliberate.** The stand-in world in this port can answer an
+observation that has not been through the transform — the view finder's
+observation, before a transform the port has not written runs — and a percept
+invented for it would carry a location that no pixel supports. A percept
+describing nothing is worse than no percept at all.
 
 ---
 

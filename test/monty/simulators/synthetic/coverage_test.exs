@@ -12,7 +12,8 @@ defmodule Monty.Simulators.Synthetic.CoverageTest do
 
   use ExUnit.Case, async: true
 
-  alias Monty.Simulators.Synthetic.SensorModule
+  alias Monty.Context
+  alias Monty.Frameworks.Models.SensorModules.CameraSM
 
   # What a sensor's config asks it to report, and how it is built.
   @features ["object_coverage", "min_depth", "mean_depth"]
@@ -23,8 +24,10 @@ defmodule Monty.Simulators.Synthetic.CoverageTest do
   # surface with its middle pixel off the object as long as part of the patch is
   # on it (`sensor_modules.py:216-222`).
   defp percept(observation) do
-    sensor = SensorModule.new("patch", features: @features, is_surface_sm: true)
-    {percept, _state} = SensorModule.step(observation, false, sensor)
+    sensor =
+      CameraSM.new("patch", features: @features, is_surface_sm: true)
+
+    {percept, _state} = CameraSM.step(observation, false, Context.new(0), sensor)
 
     percept
   end

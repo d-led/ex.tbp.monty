@@ -53,9 +53,9 @@ defmodule Monty.Runtime.SensorModuleServer do
   One round trip rather than two: `update_state` exists for the module's sake,
   not for the caller's.
   """
-  @spec step(server(), map(), map(), boolean()) :: Message.t() | nil
-  def step(server, observation, agent_state, motor_only? \\ false) do
-    GenServer.call(server, {:step, observation, agent_state, motor_only?}, :infinity)
+  @spec step(server(), map(), map(), Monty.Context.t(), boolean()) :: Message.t() | nil
+  def step(server, observation, agent_state, ctx, motor_only? \\ false) do
+    GenServer.call(server, {:step, observation, agent_state, ctx, motor_only?}, :infinity)
   end
 
   @spec propose_goals(server()) :: [Goal.t()]
@@ -79,10 +79,10 @@ defmodule Monty.Runtime.SensorModuleServer do
   end
 
   @impl true
-  def handle_call({:step, observation, agent_state, motor_only?}, _from, server) do
+  def handle_call({:step, observation, agent_state, ctx, motor_only?}, _from, server) do
     %{module: module, state: state} = server
     state = module.update_state(agent_state, state)
-    {percept, state} = module.step(observation, motor_only?, state)
+    {percept, state} = module.step(observation, motor_only?, ctx, state)
 
     {:reply, percept, %{server | state: state}}
   end

@@ -25,8 +25,14 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.SensorModule do
   @doc """
   Turns one raw observation into a percept, or `nil` when the sensor has
   nothing to say this step.
+
+  The context is the run's — its step, its mode, and through
+  `Monty.Context.rng_for/2` the random stream this sensor draws from. Monty
+  passes one for the same reason (`CameraSM.step(ctx, ...)`): a sensor that adds
+  noise needs to know which run and which step it is adding it to.
   """
-  @callback step(observation(), boolean(), state) :: {Message.t() | nil, state}
+  @callback step(observation(), boolean(), Monty.Context.t(), state) ::
+              {Message.t() | nil, state}
 
   @doc "Clears short-term state for a new episode."
   @callback reset(state) :: state

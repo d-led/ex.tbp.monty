@@ -1,30 +1,20 @@
 defmodule Monty.Simulators.Synthetic.SensorModule do
   @moduledoc """
-  A sensor module: one observation in, one percept out.
+  A sensor module for a sensor whose config names a class this port has not
+  written.
 
-  Monty's `CameraSM` is this — an `ObservationProcessor` for the percept, a
-  message-noise layer, a percept filter, and snapshot telemetry. Both parts that
-  decide *what a percept says* are now ported, so this module is the thin shell
-  around them rather than a lookalike:
+  Monty's surf experiments name two sensor classes: their patch is a `CameraSM`
+  — [`Monty.Frameworks.Models.SensorModules.CameraSM`](../monty/frameworks/models/sensor_modules/camera_sm.ex)
+  here, with its noise layer and its snapshot telemetry — and their view finder is
+  an `ExperimentSensorModule` of Monty's newer sensor-module API, a pipeline of
+  transforms that this port has not written yet. This is what runs for the
+  second: the ported observation processor and percept filter behind the sensor's
+  config, so the run still reports the patch's features, and no noise, because
+  this quiet stand-in has none.
 
-    * `Monty.Frameworks.Models.SensorModules.ObservationProcessor` — **ported**:
-      the surface estimated from the patch, the features the config asked for,
-      the location and the two flags;
-    * `Monty.Frameworks.Models.SensorModules.FeatureChangeFilter` — **ported**:
-      whether this point differs enough from the last one sent to be worth
-      learning;
-    * `Monty.Frameworks.Models.SensorModules.PassthroughPerceptFilter` —
-      **ported**: what a sensor with no `delta_thresholds` uses instead.
-
-  Not ported, and so not here: `MessageNoise` and `DefaultMessageNoise` — noise
-  needs the runtime's random stream, which a sensor module is not given yet — and
-  `SnapshotTelemetry`, the raw-observation log. A config that asks for either gets
-  a finding from `Monty.Studio.Setup` rather than a module that quietly ignores
-  it.
-
-  It is a simulator-side module (Monty's `simulators/` are not part of the core),
-  so it does not appear in the module map — but it is the runtime shape a ported
-  `CameraSM` takes.
+  Use `CameraSM` for anything real. What this is for is running a config whose
+  other sensor names a class this port does not have, without pretending that
+  class ran.
   """
 
   use Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
@@ -84,7 +74,7 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
   def update_state(agent_state, state), do: %{state | pose: agent_state}
 
   @impl true
-  def step(observation, motor_only?, state) do
+  def step(observation, motor_only?, _ctx, state) do
     case ObservationProcessor.process(state.processor, observation) do
       {:ok, percept} ->
         percept = if motor_only?, do: %{percept | pass_message: false}, else: percept

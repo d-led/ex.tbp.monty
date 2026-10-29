@@ -2015,7 +2015,7 @@
     python: "frameworks/models/sensor_modules.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.SensorModules.SnapshotTelemetry",
         python: "SnapshotTelemetry"
       },
@@ -2030,22 +2030,22 @@
         python: "ObservationProcessor"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.SensorModules.MessageNoise",
         python: "MessageNoise"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.SensorModules.NoMessageNoise",
         python: "NoMessageNoise"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.SensorModules.DefaultMessageNoise",
         python: "DefaultMessageNoise"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.SensorModules.CameraSM",
         python: "CameraSM"
       },

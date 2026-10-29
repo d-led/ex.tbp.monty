@@ -125,7 +125,7 @@ defmodule Monty.Studio.DiagramTest do
 
       assert patch.label == "patch"
       assert patch.detail == "CameraSM"
-      assert patch.status == :planned
+      assert patch.status == :implemented
     end
 
     test "a sensor with nothing to learn from says so, instead of looking broken" do

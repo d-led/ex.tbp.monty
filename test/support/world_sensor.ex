@@ -34,7 +34,7 @@ defmodule Monty.Test.WorldSensor do
   def update_state(_agent_state, state), do: state
 
   @impl true
-  def step(observation, motor_only?, state) do
+  def step(observation, motor_only?, _ctx, state) do
     message = %{
       location: Map.get(observation, "location", [0.0, 0.0, 0.0]),
       morphological_features: %{

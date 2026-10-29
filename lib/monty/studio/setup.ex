@@ -18,6 +18,7 @@ defmodule Monty.Studio.Setup do
   """
 
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Frameworks.Models.SensorModules.CameraSM
   alias Monty.Geometry.Rotation
   alias Monty.ModuleMap
   alias Monty.Studio.Finding
@@ -236,15 +237,7 @@ defmodule Monty.Studio.Setup do
   def model_spec(%__MODULE__{} = setup, model_id) do
     %{
       model_id: model_id,
-      sensor_modules:
-        Enum.map(setup.sensors, fn sensor ->
-          %{
-            id: sensor.id,
-            agent_id: Monty.Simulators.Synthetic.Environment.agent_id(),
-            module: Monty.Simulators.Synthetic.SensorModule,
-            state: Monty.Simulators.Synthetic.SensorModule.new(sensor.id, sensor_options(sensor))
-          }
-        end),
+      sensor_modules: Enum.map(setup.sensors, &sensor_module_spec/1),
       learning_modules: Enum.map(setup.learning_modules, &learning_module_spec/1),
       sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
       lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
@@ -253,10 +246,32 @@ defmodule Monty.Studio.Setup do
     }
   end
 
-  # What the config says this sensor should report and when a point is worth
-  # sending on. A sensor some other class owns — the view finder in Monty's surf
-  # experiments is an `ExperimentSensorModule` — gets the features its config
-  # declares and no filter, because that is all this port's shell offers.
+  # What runs for one sensor: Monty's own `CameraSM` when the config targets it,
+  # and a stand-in otherwise — Monty's surf experiments put the view finder
+  # behind `tbp.monty.experiment.sensor_module.ExperimentSensorModule`, a class
+  # of the newer sensor-module API that this port has not written yet.
+  defp sensor_module_spec(sensor) do
+    case CameraSM.from_config(sensor.config) do
+      {:ok, state} ->
+        %{
+          id: sensor.id,
+          agent_id: Monty.Simulators.Synthetic.Environment.agent_id(),
+          module: CameraSM,
+          state: state
+        }
+
+      {:error, _reason} ->
+        %{
+          id: sensor.id,
+          agent_id: Monty.Simulators.Synthetic.Environment.agent_id(),
+          module: Monty.Simulators.Synthetic.SensorModule,
+          state: Monty.Simulators.Synthetic.SensorModule.new(sensor.id, sensor_options(sensor))
+        }
+    end
+  end
+
+  # What a sensor some other class owns is given: the features its config
+  # declares, and no filter, because that is all the stand-in offers.
   defp sensor_options(sensor) do
     [
       features: sensor.features,
@@ -363,6 +378,9 @@ defmodule Monty.Studio.Setup do
         # resolved by Monty at run time; until then it is not a list of
         # features, and guessing would produce a finding about our guess.
         features_resolved?: is_list(declared_features),
+        # The entry as the config writes it, which is what a ported sensor
+        # module is built from.
+        config: sensor,
         delta_thresholds: Map.get(sensor, "delta_thresholds"),
         is_surface_sm: Map.get(sensor, "is_surface_sm", false),
         module: describe_target(Map.get(sensor, "_target_"))

@@ -2,6 +2,7 @@ defmodule Monty.Studio.SetupTest do
   use ExUnit.Case, async: true
 
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Frameworks.Models.SensorModules.{CameraSM, FeatureChangeFilter}
   alias Monty.Simulators.Synthetic
   alias Monty.Studio.{Finding, Setup}
 
@@ -249,7 +250,7 @@ defmodule Monty.Studio.SetupTest do
 
       assert [notice] = notices
       assert notice.message =~ "not ported yet"
-      assert notice.message =~ "CameraSM"
+      assert notice.message =~ "ExperimentSensorModule"
     end
 
     test "a class this port has written is reported as ported" do
@@ -258,8 +259,10 @@ defmodule Monty.Studio.SetupTest do
     end
 
     test "a class Monty ships but this port has not written yet is planned" do
+      # The view finder's class: Monty's newer sensor-module API, a pipeline of
+      # transforms.
       assert %{status: :planned} =
-               Setup.describe_target("tbp.monty.frameworks.models.sensor_modules.CameraSM")
+               Setup.describe_target("tbp.monty.experiment.sensor_module.ExperimentSensorModule")
     end
 
     test "a target the map does not know is reported as unknown, not guessed" do
@@ -290,6 +293,39 @@ defmodule Monty.Studio.SetupTest do
       # into: those are what make this a run of this experiment.
       assert lm.max_match_distance == 0.01
       assert lm.graph_memory.object_model_options[:max_size] == 0.3
+    end
+
+    test "runs the sensor class the config targets, when this port has it" do
+      spec = @base |> setup_from() |> Setup.model_spec("model_0")
+
+      assert %{module: CameraSM, state: %CameraSM{} = sensor} =
+               Enum.find(spec.sensor_modules, &(&1.id == "patch"))
+
+      # Built from the config's own keys: the features it declared and the filter
+      # it asked for.
+      assert sensor.features == [
+               "pose_vectors",
+               "pose_fully_defined",
+               "on_object",
+               "object_coverage",
+               "hsv",
+               "principal_curvatures_log"
+             ]
+
+      assert {FeatureChangeFilter, %FeatureChangeFilter{}} = sensor.filter
+    end
+
+    test "runs the stand-in for a sensor class this port has not written" do
+      # Monty's surf experiments put the view finder behind
+      # `ExperimentSensorModule`, a class of Monty's newer sensor-module API, and
+      # the patch behind a `CameraSM`, which this port has.
+      spec = "base_10simobj_surf_agent" |> setup_for() |> Setup.model_spec("model_0")
+
+      assert %{module: CameraSM} =
+               Enum.find(spec.sensor_modules, &(&1.id == "patch"))
+
+      assert %{module: Synthetic.SensorModule} =
+               Enum.find(spec.sensor_modules, &(&1.id == "view_finder"))
     end
 
     test "falls back to the stand-in for a module this port has not written" do

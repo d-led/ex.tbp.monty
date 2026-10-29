@@ -140,7 +140,9 @@ defmodule Monty.Runtime.Step do
     ctx = %{ctx | step: state.step, mode: state.step_type}
     started_at = System.monotonic_time()
 
-    {percepts, sensor_timeouts} = step_sensor_modules(state, observations, proprioceptive_state)
+    {percepts, sensor_timeouts} =
+      step_sensor_modules(state, observations, proprioceptive_state, ctx)
+
     {outputs, _output_timeouts} = gather_outputs(state)
     {inputs, input_counts} = route_inputs(state, percepts, outputs)
 
@@ -188,7 +190,12 @@ defmodule Monty.Runtime.Step do
 
   # -- phases ---------------------------------------------------------------
 
-  defp step_sensor_modules(%State{model_id: model_id} = state, observations, proprioceptive_state) do
+  defp step_sensor_modules(
+         %State{model_id: model_id} = state,
+         observations,
+         proprioceptive_state,
+         ctx
+       ) do
     requests =
       Enum.map(state.sensor_modules, fn sm ->
         request = fn ->
@@ -196,6 +203,7 @@ defmodule Monty.Runtime.Step do
             Registry.via({:sensor_module, model_id, sm.id}),
             observation_for(observations, sm),
             Map.get(proprioceptive_state, sm.agent_id, %{}),
+            ctx,
             state.motor_only?
           )
         end

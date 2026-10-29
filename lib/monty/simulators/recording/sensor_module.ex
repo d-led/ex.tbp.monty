@@ -36,7 +36,7 @@ defmodule Monty.Simulators.Recording.SensorModule do
   def update_state(_agent_state, state), do: state
 
   @impl true
-  def step(_observation, _motor_only?, state) do
+  def step(_observation, _motor_only?, _ctx, state) do
     case state.percepts do
       [percept | rest] -> {percept, %{state | percepts: rest}}
       [] -> {nil, state}

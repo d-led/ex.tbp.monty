@@ -14,8 +14,9 @@ defmodule ExTbpMontyWeb.RunsLive do
 
   use ExTbpMontyWeb, :live_view
 
+  alias Monty.Frameworks.Models.SensorModules.CameraSM
   alias Monty.Runtime.Model
-  alias Monty.Simulators.Synthetic.{Environment, LearningModule, Motor, SensorModule}
+  alias Monty.Simulators.Synthetic.{Environment, LearningModule, Motor}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -104,8 +105,8 @@ defmodule ExTbpMontyWeb.RunsLive do
         %{
           id: :patch,
           agent_id: Environment.agent_id(),
-          module: SensorModule,
-          state: SensorModule.new(:patch)
+          module: CameraSM,
+          state: CameraSM.new(:patch, features: ["on_object", "hsv"])
         }
       ],
       learning_modules: [%{id: :lm_0, module: LearningModule, state: LearningModule.new(:lm_0)}],

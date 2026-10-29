@@ -24,7 +24,7 @@ defmodule Monty.Test.RecordingSensorModule do
   end
 
   @impl true
-  def step(observation, motor_only?, state) do
+  def step(observation, motor_only?, _ctx, state) do
     send(state.notify, {:sensor_step, state.id, motor_only?, observation})
 
     percept =
