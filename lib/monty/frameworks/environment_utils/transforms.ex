@@ -5,15 +5,16 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms do
   Mirrors `tbp/monty/frameworks/environment_utils/transforms.py`, which holds the
   transforms Monty's `env_interface_args` configure. What is ported so far:
 
-    * `...Transforms.Transform` — **ported**: the interface, `call/2`;
+    * `...Transforms.Transform` — **ported**: the interface, `call/3`;
     * `...Transforms.MissingToMaxDepth` — **ported**: depth where nothing was
-      seen becomes the furthest the sensor can see.
+      seen becomes the furthest the sensor can see;
+    * `...Transforms.DepthTo3DLocations` — **ported**: a depth image becomes
+      points in the world, with a mask of which pixels are on the surface in the
+      middle of the view.
 
-  Still planned: `DepthTo3DLocations`, `AddNoiseToRawDepthImage`,
-  `GaussianSmoothing`, `RandomJitter` and the rest. A config that names one of
-  them is reported by `Monty.Studio.Setup` rather than silently dropped: the
-  transforms that run are the ones this port has, and a run without
-  `DepthTo3DLocations` is a run whose sensor reads a depth image directly.
+  Still planned: `AddNoiseToRawDepthImage`, `GaussianSmoothing`,
+  `GaussianBlurRGB` and `NoDepthSensorPresent`. A config that names one of them
+  is reported by `Monty.Studio.Setup` rather than silently dropped.
 
   ## Why they matter here
 
@@ -22,6 +23,11 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms do
   view is nearer than a metre — a 0 would be read as an object at zero distance
   (`docs/monty-bugs.md` §1.7). Monty's experiments configure the transform; a
   world that reports 0 and applies nothing is a different experiment.
+
+  `DepthTo3DLocations` is what makes a sensor module's input a point cloud
+  rather than an image: Monty's own modules read `"semantic_3d"` and
+  `"cam_to_world"`, and its depth and coverage features are taken over pixels
+  that are on the surface rather than over the whole patch.
   """
 
   @doc """
@@ -49,11 +55,15 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms do
 
   Monty's transforms run in sequence, each seeing what the one before it left —
   `MissingToMaxDepth` then `DepthTo3DLocations`, and never the other way round.
+  The proprioceptive state goes with the observations because some transforms
+  need to know where the sensor was: a pixel's depth is a distance from
+  something.
   """
-  @spec run([struct()], map()) :: map()
-  def run(transforms, observations) do
+  @spec run([struct()], map(), Monty.Frameworks.EnvironmentUtils.Transforms.Transform.state()) ::
+          map()
+  def run(transforms, observations, state \\ nil) do
     Enum.reduce(transforms, observations, fn %module{} = transform, observations ->
-      module.call(observations, transform)
+      module.call(observations, transform, state)
     end)
   end
 end

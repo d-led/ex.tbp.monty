@@ -12,7 +12,7 @@ defmodule Monty.Studio.TransformsTest do
 
   use ExUnit.Case, async: false
 
-  alias Monty.Frameworks.EnvironmentUtils.Transforms.MissingToMaxDepth
+  alias Monty.Frameworks.EnvironmentUtils.Transforms.{DepthTo3DLocations, MissingToMaxDepth}
   alias Monty.Studio.{Run, Setup}
 
   @experiment "base_config_10distinctobj_surf_agent"
@@ -29,9 +29,18 @@ defmodule Monty.Studio.TransformsTest do
            ]
   end
 
-  test "and builds the ones this port has, leaving the rest out rather than approximating" do
-    assert [%MissingToMaxDepth{agent_id: "agent_id_0", max_depth: 1}] =
-             Setup.built_transforms(setup())
+  test "and builds them, in the order they run" do
+    assert [
+             %MissingToMaxDepth{agent_id: "agent_id_0", max_depth: 1},
+             %DepthTo3DLocations{} = point_cloud
+           ] = Setup.built_transforms(setup())
+
+    # The cameras the config declares: a patch at ten times zoom, a view finder
+    # at one. What the world renders is what this unprojects.
+    assert [patch, view_finder] = point_cloud.intrinsics
+    assert_in_delta patch.fx, 0.1, 1.0e-12
+    assert_in_delta view_finder.fx, 1.0, 1.0e-12
+    assert point_cloud.depth_clip_sensors == [0]
   end
 
   test "a transform the port has not written is reported, not silently dropped" do
@@ -44,27 +53,42 @@ defmodule Monty.Studio.TransformsTest do
     # The world answers 0 where a ray missed; the transform turns that into "as
     # far as the sensor can see" before any module reads it. A patch means a
     # partial miss is normal: some pixels see the object, some see nothing.
-    {:ok, run} = Run.start(setup(), steps: 25)
+    {patch, view_finder} = look_for(25)
+
+    # The view finder is not a finger, so a miss is a metre away in it.
+    assert Enum.any?(view_finder, fn {depth, semantic_id} ->
+             semantic_id == 0.0 and depth == 1.0
+           end),
+           "no pixel of the view finder missed the object, so nothing was transformed"
+
+    # The patch is a finger, which reaches five centimetres: a miss is as far as
+    # the finger goes, and no pixel of it is ever at zero distance.
+    refute Enum.any?(patch, fn {depth, _semantic_id} -> depth == 0.0 end)
+    assert Enum.all?(patch, fn {depth, _semantic_id} -> depth <= 0.05 end)
+  end
+
+  # Every pixel every sensor saw over a run, as `{depth, semantic id}`.
+  defp look_for(steps) do
+    {:ok, run} = Run.start(setup(), steps: steps)
 
     try do
-      {_run, seen} =
-        Enum.reduce(1..25, {run, []}, fn _step, {run, seen} ->
+      {patch, view_finder, _run} =
+        Enum.reduce(1..steps, {[], [], run}, fn _step, {patch, view_finder, run} ->
           {:ok, _info, observations, run} = Run.step(run)
-          {run, [get_in(observations, ["agent_id_0", "patch"]) | seen]}
+
+          {[pixels(get_in(observations, ["agent_id_0", "patch"])) | patch],
+           [pixels(get_in(observations, ["agent_id_0", "view_finder"])) | view_finder], run}
         end)
 
-      pixels =
-        for observation <- seen,
-            {depth_row, semantic_row} <- Enum.zip(observation["depth"], observation["semantic"]),
-            {depth, semantic_id} <- Enum.zip(depth_row, semantic_row),
-            do: {depth, semantic_id}
-
-      assert Enum.any?(pixels, fn {depth, semantic_id} -> semantic_id == 0.0 and depth == 1.0 end),
-             "no pixel missed the object, so nothing was transformed"
-
-      refute Enum.any?(pixels, fn {depth, _semantic_id} -> depth == 0.0 end)
+      {List.flatten(patch), List.flatten(view_finder)}
     after
       Run.stop(run)
     end
+  end
+
+  defp pixels(observation) do
+    for {depth_row, semantic_row} <- Enum.zip(observation["depth"], observation["semantic"]),
+        {depth, semantic_id} <- Enum.zip(depth_row, semantic_row),
+        do: {depth, semantic_id}
   end
 end

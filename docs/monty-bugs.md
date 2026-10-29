@@ -21,7 +21,8 @@ numbers; everything else changes where code lives or what an error looks like.
 | [1.4](#14-argsort-2-on-a-single-hypothesis) | `argsort(...)[-2]` on one hypothesis | Latent | Answers `{best, nil}` instead |
 | [1.5](#15-first_sensor-is-only-bound-inside-the-loop) | A name bound after its first read | Latent | Answers a value, not an unbound name |
 | [1.6](#16-jumptogo-saves-one-name-and-restores-another) | A checkpoint saves one attribute and restores a different one | Confirmed, only bites a resumed run | No checkpoint loading here |
-| [1.7](#17-a-depth-of-zero-is-read-as-an-object-a-metre-away) | A depth of 0 (nothing there) read as "object within a metre" | Suspected, masked by enclosed scenes | The stand-in world has a wall, so a miss still has a depth |
+| [1.7](#17-a-depth-of-zero-is-read-as-an-object-a-metre-away) | A depth of 0 (nothing there) read as "object within a metre" | Suspected, masked by the configured transform | Ports the transform that masks it, and applies it before any module reads |
+| [1.8](#18-the-pixel-grid-is-not-a-cameras-pixel-grid) | Unprojection samples the image's edges, not its pixel centres | Suspected, sub-millimetre at Monty's scale | Reproduced, and the stand-in world renders the same grid |
 | [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
 | [2.2](#22-motor_only_step-travels-in-the-result) | A policy sets a flag on the motor system | Decision | The flag travels in the result |
 | [2.3](#23-the-motor-system-answers-with-itself) | The motor system mutates itself | Decision | It answers with its next version |
@@ -355,6 +356,49 @@ that moves the trap out of reach: `MissingToMaxDepth`
 is built from the experiment's config and applied to observations before any
 module reads them (`Monty.Studio.Run`). Without it, a surface agent against a
 world whose miss is depth 0 backs away 13.5 cm per step.
+
+## 1.8 The pixel grid is not a camera's pixel grid
+
+**What's wrong.** A depth image is unprojected with a grid that runs from −1 to
++1 over the *pixels*, not over the pixel *centres*:
+
+```python
+x, y = np.meshgrid(
+    np.linspace(-1, 1, self.w[i]), np.linspace(1, -1, self.h[i])
+)
+```
+
+The first sample lands on the image's left edge and the last on its right one. A
+camera's first pixel centre is half a pixel in from the edge, so the grid is a
+half pixel too far left at one edge, a half pixel too far right at the other,
+and `w / (w - 1)` too wide — 64/63 for the 64-pixel patches Monty's experiments
+use. Everything unprojected inherits both errors: a surface point is displaced
+by about `fx · depth / w`, and the patch's middle pixel — the one a sensor module
+reports the surface normal and the principal curvatures at — sits `1/64` of the
+half-width off the sensor's own axis rather than `1/128`.
+
+**The code.**
+[`transforms.py:597-599`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/environment_utils/transforms.py#L597-L599)
+and the `center_id` that both `SensorModule` and
+`MontyForEvidenceGraphMatching` compute as `half_obs_dim + obs_dim * half_obs_dim`
+([`sensor_modules.py:207-210`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/sensor_modules.py#L207-L210)).
+
+**What it should be.** `linspace(-1 + 1/w, 1 - 1/w, w)` — the pixel centres —
+which is what the simulator that produced the image rendered.
+
+**Why it is suspected rather than observed.** At Monty's surface scale the
+displacement is microscopic: for a patch at ten times zoom on an object 5 cm
+away, `fx · depth / w` is 78 µm and the off-axis centre is 1.6 mm out. Nothing
+in a Monty run would notice. It is recorded because it is visible the moment the
+world and the transform have to agree with each other, which is what this port's
+stand-in simulator does.
+
+**What this port does.** Reproduces Monty's grid in the transform
+([`depth_to_3dlocations.ex`](../lib/monty/frameworks/environment_utils/transforms/depth_to_3d_locations.ex)),
+and renders the stand-in world's image on the same grid
+([`scene.ex`](../lib/monty/simulators/synthetic/scene.ex)) so that the two
+disagree about nothing. A test unprojects every pixel of a rendered patch and
+requires the points to land on the sphere.
 
 ---
 

@@ -22,20 +22,20 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.MissingToMaxDepthTest do
   defp depth(observations), do: get_in(observations, ["agent_id_0", "patch", "depth"])
 
   test "a pixel that saw nothing becomes the furthest the sensor can see" do
-    transformed = MissingToMaxDepth.call(observations([[0.0]]), transform())
+    transformed = MissingToMaxDepth.call(observations([[0.0]]), transform(), nil)
 
     assert depth(transformed) == [[1.0]]
   end
 
   test "and a pixel that saw something is left alone" do
-    transformed = MissingToMaxDepth.call(observations([[0.05]]), transform())
+    transformed = MissingToMaxDepth.call(observations([[0.05]]), transform(), nil)
 
     assert depth(transformed) == [[0.05]]
   end
 
   test "every pixel of an image is looked at" do
     transformed =
-      MissingToMaxDepth.call(observations([[0.0, 0.2], [0.3, 0.0]]), transform())
+      MissingToMaxDepth.call(observations([[0.0, 0.2], [0.3, 0.0]]), transform(), nil)
 
     assert depth(transformed) == [[1.0, 0.2], [0.3, 1.0]]
   end
@@ -43,7 +43,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.MissingToMaxDepthTest do
   test "a threshold says what counts as missing" do
     # A sensor that reports a small depth for noise needs a threshold above it.
     transformed =
-      MissingToMaxDepth.call(observations([[0.01, 0.5]]), transform(threshold: 0.05))
+      MissingToMaxDepth.call(observations([[0.01, 0.5]]), transform(threshold: 0.05), nil)
 
     assert depth(transformed) == [[1.0, 0.5]]
   end
@@ -51,13 +51,13 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.MissingToMaxDepthTest do
   test "a sensor the transform was not for is left alone" do
     observations = %{"agent_id_1" => %{"patch" => %{"depth" => [[0.0]]}}}
 
-    assert MissingToMaxDepth.call(observations, transform()) == observations
+    assert MissingToMaxDepth.call(observations, transform(), nil) == observations
   end
 
   test "and an observation with no depth at all is not given one" do
     observations = %{"agent_id_0" => %{"patch" => %{"rgba" => []}}}
 
-    assert MissingToMaxDepth.call(observations, transform()) == observations
+    assert MissingToMaxDepth.call(observations, transform(), nil) == observations
   end
 
   describe "from a config" do

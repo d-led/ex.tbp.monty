@@ -762,7 +762,7 @@
         python: "GaussianBlurRGB"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations",
         python: "DepthTo3DLocations"
       },
