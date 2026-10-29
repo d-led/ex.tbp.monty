@@ -94,11 +94,17 @@ against Monty numbers, and what keeps the port reviewable by Monty's team.
 | learning module → learning module (top-down) | `Message` with `sender_type: :lm` |
 | learning module ↔ learning module (vote) | per-object pose hypotheses plus the sender's `sensed_pose_rel_body` |
 | learning module → motor system | `Monty.Cmp.Goal` |
-| motor system → environment | a list of actions (Monty's `ActionJSONEncoder` shape) |
+| motor system → environment | a list of `Monty.Frameworks.Actions` structs |
 
 Units and conventions are Monty's: metres, degrees in actions, quaternions
 scalar-first (`wxyz`), semantic id `0` for background, sensor poses relative to
 the agent, agent poses absolute.
+
+The body is read out of the experiment's own `motor_system_config`: the
+`_target_` of the motor system, of the policy selector and of every policy
+resolves through the module map, and each class's `from_config/1` reads the
+parameters it knows (`Monty.Config.Target`). A class the port has not written is
+an error, never a stand-in, so a run built from a config is a run of that config.
 
 ## Observability
 

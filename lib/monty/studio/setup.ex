@@ -214,6 +214,12 @@ defmodule Monty.Studio.Setup do
       sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
       lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
       lm_to_lm_vote: inputs_by_learning_module(setup, :vote),
+      # The ported motor system builds from this config too
+      # (`Monty.Frameworks.Models.MotorSystem.from_config/1`), but the stand-in
+      # environment cannot execute what it would ask for: a policy answers
+      # `Monty.Frameworks.Actions` structs, and `Monty.Simulators.Synthetic.Environment`
+      # ignores actions entirely. A real body on a fake world would be fake
+      # progress, so the stand-in motor stays until a world consumes actions.
       motor: {Monty.Simulators.Synthetic.Motor, Monty.Simulators.Synthetic.Motor.new()}
     }
   end
