@@ -93,9 +93,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           <h1 class="text-3xl font-semibold tracking-tight">Runs</h1>
           <p class="text-sm text-base-content/70">
             Every run is recorded when it starts: which experiment, with which config and
-            inputs, and how it ended.
+            inputs, and how it ended. A run has nothing to show here until its job
+            starts — the <.link navigate={~p"/jobs"} class="link link-primary">queue</.link>
+            is where a waiting or failing run is visible.
           </p>
         </div>
+        <.link navigate={~p"/jobs"} class="btn btn-ghost btn-sm">Queue</.link>
         <.link navigate={~p"/"} class="btn btn-ghost btn-sm">Experiments</.link>
       </header>
 

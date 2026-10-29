@@ -1,15 +1,21 @@
 defmodule ExTbpMontyWeb.RunsLive do
   @moduledoc """
-  A live view of one synthetic Monty run.
+  A hand-stepped wiring demo: one sensor, one learning module, one motor system.
 
-  The page exists to prove the runtime is observable: every step is a real
-  timestep through the supervised module processes, and what the coordinator
-  reports — percepts, learning-module inputs, votes used, goals, actions — is
-  streamed to the page as it happens.
+  This page is not an experiment and produces no results. It exists to make the
+  runtime observable: it starts three module processes, keeps no config, no world
+  and no memory, and advances exactly one timestep per click, printing what the
+  coordinator reports on that step — percepts, learning-module inputs, votes
+  used, goals and actions. Reading it tells you the processes are alive and
+  talking; it tells you nothing about how well Monty recognises an object.
 
-  The run is started per browser session under `ExTbpMonty.ModelSupervisor`,
-  and the page drives the clock (one step per click) so a test never has to
-  wait for a timer.
+  For that, run an experiment: `/runs` (or `mix monty.run <experiment>`) composes
+  a real config, positions the agent with Monty's positioning procedures, runs
+  the episode and records what it decided.
+
+  The run is started per browser session under `ExTbpMonty.ModelSupervisor`, and
+  the page drives the clock (one step per click) so a test never has to wait for
+  a timer.
   """
 
   use ExTbpMontyWeb, :live_view
@@ -33,10 +39,15 @@ defmodule ExTbpMontyWeb.RunsLive do
     <Layouts.app flash={@flash}>
       <section class="mx-auto max-w-4xl space-y-6">
         <header class="space-y-2">
-          <h1 class="text-3xl font-semibold tracking-tight">Monty runtime</h1>
+          <h1 class="text-3xl font-semibold tracking-tight">Wiring demo</h1>
           <p class="text-base-content/70">
-            A synthetic run: one sensor module, one learning module and a motor system,
-            each its own supervised process. Every click advances exactly one timestep.
+            Three supervised module processes and a clock you click. This page has
+            no config, no world and no memory, so it reports <em>that</em>
+            the
+            modules talk to each other — not how well anything is recognised. For
+            results, run an experiment from
+            <.link navigate={~p"/runs"} class="link link-primary">Runs</.link>
+            or <code>mix monty.run &lt;experiment&gt;</code>.
           </p>
         </header>
 

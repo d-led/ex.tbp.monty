@@ -3,7 +3,14 @@ defmodule ExTbpMontyWeb.RunsLiveTest do
 
   import Phoenix.LiveViewTest
 
-  describe "the synthetic run" do
+  describe "the wiring demo" do
+    test "says it produces no results and points at the pages that do", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/runs/demo")
+
+      assert render(view) =~ "no config, no world and no memory"
+      assert has_element?(view, "a[href='/runs']")
+    end
+
     test "offers a start button and no steps before it is used", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/runs/demo")
 

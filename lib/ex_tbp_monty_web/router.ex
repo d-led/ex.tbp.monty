@@ -56,6 +56,8 @@ defmodule ExTbpMontyWeb.Router do
     live "/runs/demo", RunsLive, :demo
     live "/runs", RunHistoryLive, :index
     live "/runs/:id", RunHistoryLive, :show
+    # The queue a run waits in before it has anything to report.
+    live "/jobs", JobsLive, :index
     live "/prerequisites", PrerequisitesLive, :index
   end
 
