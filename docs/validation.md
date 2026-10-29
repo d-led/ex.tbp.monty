@@ -137,6 +137,15 @@ distractors"). Both are `OneObjectPerEpisodeInterface`'s answers — the id from
 `semantic_label_to_id`, the count from the config's `num_distractors` — and are
 now asked of it (see §2.16 for what the stand-in world still decides).
 
+An episode also ends the way Monty's does now: `Monty.Runtime.Episode` asks a
+recognition policy each step instead of counting to a budget, and applies the two
+reactions a policy can ask for (`start_exploring`, `time_out_lms`). The default
+is `AnyPolicy([MontyIsDone, MaxTotalSteps])` — Monty's own default unioned with
+the ceiling, which is what `:max_steps` means. `Monty.Studio.Run` still stops on
+the session budget the page is given; wiring the studio's loop to the same policy
+is the next step, and it will change what a run does with no memory, because an
+untrained model answers `no_match` and Monty stops there.
+
 ## What is **not** verified
 
 Saying this plainly matters more than the table above:

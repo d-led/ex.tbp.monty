@@ -123,12 +123,23 @@ defmodule Monty.Runtime.Step do
   @doc """
   Ends the episode without a conclusion.
 
-  Monty's `deal_with_time_out`: the modules that never concluded are timed out,
-  so an episode's statistics say "no answer" rather than leaving them open, and
-  the model calls itself done.
+  Monty's `deal_with_time_out` with `global_time_out=True`: the modules that
+  never concluded are timed out, so an episode's statistics say "no answer"
+  rather than leaving them open, and the model calls itself done.
   """
   @spec time_out(server()) :: :ok
   def time_out(server), do: GenServer.call(server, :time_out, :infinity)
+
+  @doc """
+  Switches the model into exploratory mode.
+
+  Monty's `model.switch_to_exploratory_step()`, which a recognition policy asks
+  for with `start_exploring` — how a training episode keeps moving over an
+  object it has already recognised.
+  """
+  @spec switch_to_exploratory_step(server()) :: :ok
+  def switch_to_exploratory_step(server),
+    do: GenServer.call(server, :switch_to_exploratory, :infinity)
 
   # -- callbacks ------------------------------------------------------------
 
@@ -187,6 +198,10 @@ defmodule Monty.Runtime.Step do
   # not recognise the object, so there is nothing to explore for either.
   def handle_call(:time_out, _from, state) do
     {:reply, :ok, %{time_out_undecided(state) | done?: true}}
+  end
+
+  def handle_call(:switch_to_exploratory, _from, %State{} = state) do
+    {:reply, :ok, switch_to(state, :exploratory)}
   end
 
   def handle_call({:set_experiment_mode, mode}, _from, state) do

@@ -69,6 +69,11 @@ defmodule Monty.Runtime.Model do
   @spec time_out(atom() | String.t()) :: :ok
   def time_out(model_id), do: Step.time_out(Registry.via({:step, model_id}))
 
+  @doc "Switches the model into exploratory mode."
+  @spec switch_to_exploratory_step(atom() | String.t()) :: :ok
+  def switch_to_exploratory_step(model_id),
+    do: Step.switch_to_exploratory_step(Registry.via({:step, model_id}))
+
   @doc "A `:via` name for a model's supervisor."
   @spec via(atom() | String.t()) :: {:via, module(), {atom(), term()}}
   def via(model_id), do: Registry.via({:model, model_id})

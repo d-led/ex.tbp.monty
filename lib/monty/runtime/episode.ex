@@ -20,17 +20,29 @@ defmodule Monty.Runtime.Episode do
   all the model needs of a world, so a recorded stream of observations, a
   simulator, and a Python environment behind a port are all the same thing here.
 
-  ## Why the step limit is outside the model
+  ## Why the step limit is a policy
 
-  The model ends an episode when its columns agree, and a model that never
-  agrees would run for ever. Monty's experiment wraps the model's own decision
-  in a policy that also counts steps (`MaxTotalSteps`, `MinEvalMaxTotalSteps`);
-  this is that limit, kept where the experiment's limits belong.
+  Monty's experiment does not stop an episode by counting steps; it asks a
+  recognition policy (`MaxTotalSteps`, `MinEvalMaxTotalSteps`,
+  `ObjectRecognition`, and `AnyPolicy` over them), and the policy also decides
+  whether undecided modules should be timed out and whether the episode should
+  start exploring. So this loop asks the same question, through the same
+  policies: `:max_steps` is sugar for `MaxTotalSteps`, and `:policy` takes any
+  of them.
   """
 
   require Logger
 
   alias Monty.Context
+  alias Monty.Experiment.RecognitionPolicy
+
+  alias Monty.Experiment.RecognitionPolicy.{
+    AnyPolicy,
+    MaxTotalSteps,
+    MontyIsDone,
+    RecognitionCounter
+  }
+
   alias Monty.Runtime.Model
 
   @default_max_steps 1_000
@@ -52,6 +64,8 @@ defmodule Monty.Runtime.Episode do
   Options:
 
     * `:mode` — `:train` or `:eval`; training writes to memory at the end;
+    * `:policy` — a recognition policy, as `{module, state}`; defaults to
+      `MaxTotalSteps` over `:max_steps`;
     * `:max_steps` — how many steps the episode may take before it is timed out;
     * `:seed` — the episode's seed, carried in the context.
 
@@ -61,13 +75,21 @@ defmodule Monty.Runtime.Episode do
   @spec run(atom() | String.t(), environment(), keyword()) :: result()
   def run(model_id, environment, options \\ []) do
     mode = Keyword.get(options, :mode, :eval)
-    max_steps = Keyword.get(options, :max_steps, @default_max_steps)
+    policy = policy(options)
     ctx = Context.new(Keyword.get(options, :seed, 0))
 
     :ok = Model.reset_episode(model_id)
     :ok = Model.set_experiment_mode(model_id, mode)
 
-    result = step_until_done(model_id, environment, ctx, max_steps, %{steps: 0, infos: []})
+    result =
+      step_until_done(
+        model_id,
+        environment,
+        ctx,
+        policy,
+        RecognitionCounter.new(mode),
+        %{steps: 0, infos: []}
+      )
 
     if mode == :train, do: :ok = Model.update_ltm(model_id)
 
@@ -76,31 +98,85 @@ defmodule Monty.Runtime.Episode do
     Map.put(result, :terminal_states, Model.state(model_id).terminal_states)
   end
 
-  defp step_until_done(model_id, environment, ctx, max_steps, run) do
-    cond do
-      Model.done?(model_id) ->
-        Logger.debug("episode ended after #{run.steps} steps")
+  # The default is Monty's own: `MontyIsDone`, unioned with the step ceiling the
+  # experiment allows. `:max_steps` is not a second mechanism — it is that
+  # ceiling, which is exactly `MaxTotalSteps`.
+  defp policy(options) do
+    case Keyword.fetch(options, :policy) do
+      {:ok, policy} ->
+        policy
 
-        %{steps: run.steps, done?: true, timed_out?: false, infos: Enum.reverse(run.infos)}
+      :error ->
+        {:ok, done} = MontyIsDone.new()
 
-      run.steps >= max_steps ->
-        Logger.warning("episode timed out after #{run.steps} steps")
-        :ok = Model.time_out(model_id)
+        {:ok, ceiling} =
+          MaxTotalSteps.new(max_total_steps: Keyword.get(options, :max_steps, @default_max_steps))
 
-        %{steps: run.steps, done?: true, timed_out?: true, infos: Enum.reverse(run.infos)}
-
-      true ->
-        {observations, proprioceptive_state} = environment.(last_actions(run))
-
-        {:ok, actions, info} =
-          Model.step(model_id, observations, proprioceptive_state, ctx)
-
-        step_until_done(model_id, environment, ctx, max_steps, %{
-          steps: run.steps + 1,
-          infos: [info | run.infos],
-          last_actions: actions
-        })
+        {:ok, policy} = AnyPolicy.new(policies: [done, ceiling])
+        policy
     end
+  end
+
+  # Monty's `while not complete(count)`: ask the policy, do both things it can
+  # ask for besides stopping, and only then take another step. Applying the
+  # reactions before the check is what makes `start_exploring` reach the next
+  # step, and what lets a policy time the lagging modules out and still end.
+  defp step_until_done(model_id, environment, ctx, policy, counter, run) do
+    decision = RecognitionPolicy.call(policy, view(model_id), counter)
+    apply_reactions(model_id, decision)
+
+    if decision.is_done do
+      finish(decision, run)
+    else
+      step_once(model_id, environment, ctx, policy, counter, run)
+    end
+  end
+
+  defp step_once(model_id, environment, ctx, policy, counter, run) do
+    {observations, proprioceptive_state} = environment.(last_actions(run))
+
+    {:ok, actions, info} = Model.step(model_id, observations, proprioceptive_state, ctx)
+
+    step_until_done(
+      model_id,
+      environment,
+      ctx,
+      policy,
+      RecognitionCounter.count_step(counter, info.inputs != %{}, info.step_type == :exploratory),
+      %{steps: run.steps + 1, infos: [info | run.infos], last_actions: actions}
+    )
+  end
+
+  # The policy's own word for the ending: `time_out_lms` is what Monty calls
+  # `deal_with_time_out`, the ending an episode gets when it ran out of steps
+  # rather than recognising anything.
+  defp finish(decision, run) do
+    if decision.time_out_lms do
+      Logger.warning("episode timed out after #{run.steps} steps")
+      %{steps: run.steps, done?: true, timed_out?: true, infos: Enum.reverse(run.infos)}
+    else
+      Logger.debug("episode ended after #{run.steps} steps")
+      %{steps: run.steps, done?: true, timed_out?: false, infos: Enum.reverse(run.infos)}
+    end
+  end
+
+  # Monty's `_recognition_complete`: the two things a policy can ask for besides
+  # stopping.
+  defp apply_reactions(model_id, decision) do
+    if decision.start_exploring, do: :ok = Model.switch_to_exploratory_step(model_id)
+    if decision.time_out_lms, do: :ok = Model.time_out(model_id)
+  end
+
+  # The four things a policy may read off the model (`docs/monty-bugs.md` §2.17).
+  defp view(model_id) do
+    state = Model.state(model_id)
+
+    %{
+      is_done: state.done?,
+      is_exploring: state.step_type == :exploratory,
+      matching_steps: state.matching_steps,
+      conclusions: Enum.map(state.learning_modules, &Map.get(state.terminal_states, &1.id))
+    }
   end
 
   # Monty's first step is taken with no action: the environment is asked for

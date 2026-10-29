@@ -1,6 +1,7 @@
 defmodule Monty.Runtime.EpisodeTest do
   use ExUnit.Case, async: true
 
+  alias Monty.Experiment.RecognitionPolicy.{ObjectRecognition, StepLimit}
   alias Monty.Runtime.{Episode, Model}
   alias Monty.Test.{RecordingLearningModule, RecordingMotor, RecordingSensorModule}
 
@@ -116,6 +117,36 @@ defmodule Monty.Runtime.EpisodeTest do
       assert first.steps == 2
       assert length(second.infos) == 2
       assert hd(second.infos).step == 0
+    end
+  end
+
+  describe "the recognition policy" do
+    test "decides when the episode stops, not a step budget" do
+      model_id = start_model()
+
+      {:ok, policy} =
+        ObjectRecognition.new(max_train_steps: 1000, max_eval_steps: 3, max_total_steps: 100)
+
+      result = Episode.run(model_id, environment(), mode: :eval, policy: policy, max_steps: 500)
+
+      # Three matching steps: the policy's limit, well below the ceiling that
+      # would have been used had the budget been the thing that stopped it.
+      assert result.steps == 3
+      assert result.timed_out?
+    end
+
+    test "asks for exploration, and the next step is exploratory" do
+      model_id = start_model()
+
+      {:ok, policy} =
+        StepLimit.new(min_train_steps: 1, max_train_steps: 1000, max_eval_steps: 500)
+
+      result = Episode.run(model_id, environment(), mode: :train, policy: policy)
+
+      # The module never concludes, so nothing but the policy could have asked
+      # for this: one matching step is enough for it to want to explore.
+      assert Enum.map(result.infos, & &1.step_type) == [:matching, :exploratory]
+      assert Model.state(model_id).step_type == :exploratory
     end
   end
 end
