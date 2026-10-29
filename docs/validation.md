@@ -184,6 +184,18 @@ Saying this plainly matters more than the table above:
   percept full of hypotheses, and Monty's hypotheses come from learning modules
   that import `torch`. So the recording records the routing and nothing of the
   fallback's own numbers; those are tested where they live, without Monty.
+- **An episode, end to end — and the comparison that now exists, which does not
+  pass.** Ten episodes of `base_config_10distinctobj_dist_agent` are recorded
+  (`test/fixtures/monty_dist_agent_10episodes.jsonl`: 43, 27, 28, 27, 36, 28, 40,
+  43, 35 and 31 steps, all `match`, on the ten YCB objects), and
+  `scripts/probe_dist_agent_episodes.exs` replays each of them through the port's
+  own composition — the config's learning module with the library in
+  `priv/monty/libraries/`, the config's recognition policy, the real coordinator
+  — with the recording standing in for the world. It is a probe and not a test
+  because the two do **not** agree: the first episode uses all 43 of Monty's
+  steps without recognising the mug. What that difference is — feature weights, a
+  step's input routing, the memory as exported — is the next thing to measure,
+  and it is not yet known.
 - **An episode, end to end.** `frameworks/models/object_model.py` pulls in
   `torch` and `torch_geometric`, so a recorded Monty episode needs a second
   interpreter. This machine has Monty's **own pinned one**: the conda
@@ -224,6 +236,7 @@ Monty revision moves:
 | `test/fixtures/monty_positioning.json` | `scripts/record_monty_positioning.py` (needs `scipy`) |
 | `test/fixtures/monty_interface.json` | `scripts/record_monty_interface.py` (needs `omegaconf`) |
 | `test/fixtures/monty_interface_objects.json` | `scripts/record_monty_interface_objects.py` (needs `omegaconf`) |
+| `test/fixtures/monty_dist_agent_10episodes.jsonl` | `scripts/record_monty_episode.py` — ten episodes of `base_config_10distinctobj_dist_agent`, recorded in Monty's own environment (the command is in the "An episode, end to end" note below) |
 | `test/fixtures/monty_recognition_policy.json` | `scripts/record_monty_recognition_policy.py` (imports Monty's policy module, so it needs Monty's own environment) |
 | `test/fixtures/monty_vocus2_images.json` | `scripts/record_monty_vocus2_images.py` |
 | `test/fixtures/monty_pyramids.json` | `scripts/record_monty_pyramids.py` |

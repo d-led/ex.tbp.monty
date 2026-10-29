@@ -44,6 +44,62 @@ defmodule Monty.Test.MontyRecording do
   end
 
   @doc """
+  Every episode in a recording, each as per-step percepts.
+
+  An episode is where `episode_step` stops increasing: Monty runs its episodes
+  back to back in one process, so the recording is a single stream with the
+  counter restarting. One experiment over ten objects is ten episodes, and each
+  of them is a separate run here — which is the point of comparing them.
+  """
+  @spec episodes!(Path.t(), keyword()) :: [[[Message.t()]]]
+  def episodes!(path, options \\ []) do
+    module_id = Keyword.get(options, :learning_module, @default_learning_module)
+
+    path
+    |> File.stream!()
+    |> Enum.map(&decode!/1)
+    |> Enum.chunk_while(
+      [],
+      fn record, steps ->
+        if steps != [] and record["episode_step"] <= hd(steps)["episode_step"] do
+          {:cont, Enum.reverse(steps), [record]}
+        else
+          {:cont, [record | steps]}
+        end
+      end,
+      fn steps -> {:cont, Enum.reverse(steps), []} end
+    )
+    |> Enum.map(fn episode -> Enum.map(episode, &steps_percepts(&1, module_id)) end)
+  end
+
+  @doc """
+  The conclusion of every episode in a recording: what each episode's module
+  answered at its last step.
+  """
+  @spec episode_conclusions!(Path.t(), keyword()) :: [map()]
+  def episode_conclusions!(path, options \\ []) do
+    module_id = Keyword.get(options, :learning_module, @default_learning_module)
+
+    path
+    |> File.stream!()
+    |> Enum.map(&decode!/1)
+    |> Enum.chunk_while(
+      [],
+      fn record, steps ->
+        if steps != [] and record["episode_step"] <= hd(steps)["episode_step"] do
+          {:cont, Enum.reverse(steps), [record]}
+        else
+          {:cont, [record | steps]}
+        end
+      end,
+      fn steps -> {:cont, Enum.reverse(steps), []} end
+    )
+    |> Enum.map(fn episode ->
+      episode |> List.last() |> get_in(["learning_modules", module_id, "state"])
+    end)
+  end
+
+  @doc """
   The state Monty's module was in after its last step.
 
   What a recording is *compared against*: the conclusion, the object it named,
