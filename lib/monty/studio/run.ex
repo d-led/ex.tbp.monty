@@ -13,34 +13,31 @@ defmodule Monty.Studio.Run do
   reports into what a page shows after it.
   """
 
-  alias Monty.Frameworks.EnvironmentUtils.Transforms
+  alias Monty.Experiment.Environment.Interface
   alias Monty.Runtime.Model
   alias Monty.Runtime.Positioning
-  alias Monty.Simulators.Synthetic.Environment
   alias Monty.Studio.Setup
 
   @default_steps 12
 
-  @enforce_keys [:model_id, :setup, :environment]
+  @enforce_keys [:model_id, :setup, :interface]
   defstruct [
     :model_id,
     :setup,
-    :environment,
+    :interface,
     :steps,
     step: 0,
     pending_actions: [],
-    transforms: [],
     positioning: nil
   ]
 
   @type t :: %__MODULE__{
           model_id: String.t(),
           setup: Setup.t(),
-          environment: Environment.t(),
+          interface: Interface.t(),
           steps: pos_integer(),
           step: non_neg_integer(),
           pending_actions: [Monty.Frameworks.Actions.Action.t()],
-          transforms: [struct()],
           positioning: Monty.Runtime.Positioning.outcome() | nil
         }
 
@@ -58,7 +55,7 @@ defmodule Monty.Studio.Run do
     spec = Setup.model_spec(setup, model_id)
 
     with {:ok, factories} <- Setup.positioning_procedures(setup),
-         {:ok, world, positioning} <- position(setup, factories) do
+         {:ok, interface, positioning} <- position(setup, factories) do
       case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {Model, spec}) do
         {:ok, _pid} ->
           {:ok,
@@ -68,8 +65,7 @@ defmodule Monty.Studio.Run do
              # The world starts where an episode starts, not where the last one
              # left it: a run is an episode — and where that is, the positioning
              # procedures have just decided.
-             environment: world,
-             transforms: Setup.built_transforms(setup),
+             interface: interface,
              positioning: positioning,
              steps: Keyword.get(opts, :steps, @default_steps)
            }}
@@ -85,19 +81,27 @@ defmodule Monty.Studio.Run do
   # are the environment's, not the episode's, so the run's step counter starts at
   # zero afterwards.
   defp position(%Setup{} = setup, factories) do
-    transforms = Setup.built_transforms(setup)
-    ctx = Monty.Context.new(seed(setup))
+    interface =
+      Interface.new(
+        env: Setup.world(setup),
+        # A fresh world for the next episode, which is Monty's `env.reset()`.
+        reset: fn -> Setup.world(setup) end,
+        transforms: Setup.built_transforms(setup),
+        seed: seed(setup)
+      )
 
-    observe = fn world, actions ->
-      {observations, proprioceptive_state, world} = Environment.step(world, actions)
+    observe = fn interface, actions -> Interface.step(interface, actions) end
 
-      {Transforms.run(transforms, observations, ctx, proprioceptive_state), proprioceptive_state,
-       world}
+    case Positioning.prepare(
+           factories,
+           Setup.target_semantic_id(setup),
+           interface,
+           observe,
+           distractors: Setup.distractors(setup)
+         ) do
+      {:ok, positioned, outcome} -> {:ok, positioned, outcome}
+      {:error, reason} -> {:error, reason}
     end
-
-    Positioning.prepare(factories, Setup.target_semantic_id(setup), Setup.world(setup), observe,
-      distractors: Setup.distractors(setup)
-    )
   end
 
   @doc """
@@ -114,23 +118,17 @@ defmodule Monty.Studio.Run do
   """
   @spec step(t()) :: {:ok, map(), map(), t()}
   def step(%__MODULE__{model_id: model_id, setup: setup, step: step} = run) do
-    {observations, proprioceptive_state, environment} =
-      Environment.step(run.environment, run.pending_actions)
+    {observations, proprioceptive_state, interface} =
+      Interface.step(run.interface, run.pending_actions)
 
     ctx = %{Monty.Context.new(seed(setup)) | step: step}
-
-    # What the world rendered, as the experiment says it should arrive: Monty
-    # runs its transform chain on the observations before any module sees them,
-    # and some of them need to know where the sensor was to place a pixel — or,
-    # for a noisy camera, which stream to draw from.
-    observations = Transforms.run(run.transforms, observations, ctx, proprioceptive_state)
 
     {:ok, actions, info} = Model.step(model_id, observations, proprioceptive_state, ctx)
 
     # The observations come back with the report so a page can show what the
     # modules saw, not just what they did with it.
     {:ok, info, observations,
-     %{run | step: step + 1, environment: environment, pending_actions: actions}}
+     %{run | step: step + 1, interface: interface, pending_actions: actions}}
   end
 
   @doc "Whether the run has used its steps."

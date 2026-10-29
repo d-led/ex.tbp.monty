@@ -216,7 +216,7 @@
     python: "experiment/environment.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Experiment.Environment.Interface",
         python: "Interface"
       },

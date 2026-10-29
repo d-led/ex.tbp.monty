@@ -61,6 +61,7 @@ they do.
 | `GetGoodView`: the pixel it aims at | a notched 16×16 object, smoothed with `scipy.ndimage.gaussian_filter` — a different Gaussian from OpenCV's (§1.15 of `monty-bugs.md`) | the location, `1e-12` metres | same file |
 | `GetGoodView`: whether the centre pixel is on the object, and whether to move | four views: close enough by percentage, close enough by distance, still far, and a target absent from a two-object scene, plus a one-object scene with nothing in it | the same verdicts, the same `MoveForward`, and the same `ObjectNotVisibleError` | same file |
 | `GetGoodView`: the state machine, replayed whole | two episodes — move, move, turn, done, and the extra turn a two-object scene takes first — with the procedure carried from step to step | every action in every step, and each step's `success`/`terminated`/`truncated` | same file |
+| `Interface` — the environment interface | a stub world that counts its steps and two transforms that report what they are handed | the *order*: each transform runs in the configured sequence, each sees the previous one's answer, each gets a pose and a stream, the world's pose comes back untouched, and a second step stays on the same world | `test/monty/experiment/environment/interface_test.exs` |
 | `highest_confidence_goal` | distinct confidences, a tie (Monty's docstring promises the first), and one goal | which goal, **exact** | same file |
 | `SinglePolicySelector` and `DistantPolicySelector` | an LM goal outranking two SM goals through the single selector; two SM goals through the distant agent's routing; no goals at all | the actions Monty produced, `1e-9` degrees, and the policy that produced them | same file |
 
@@ -123,6 +124,11 @@ the run then starts from the pose they chose. The *procedure's* decisions are
 compared with Monty's in the table above; the loop itself is Monty's protocol
 replayed, not a recorded comparison, because it depends on a world.
 
+Both the prologue and the episode go through `Monty.Experiment.Environment.Interface`
+— Monty's own layer — so "step the world and transform what came back" is
+defined once. A step of a run is `Interface.step/2`, and the positioning
+procedures' actions step the same interface.
+
 ## What is **not** verified
 
 Saying this plainly matters more than the table above:
@@ -164,6 +170,7 @@ Monty revision moves:
 | `test/fixtures/monty_salience_sm.json` | `scripts/record_monty_salience_sm.py` (needs `numpy-quaternion`, which the other recorders do not) |
 | `test/fixtures/monty_motor_policy.json` | `scripts/record_monty_motor_policy.py` |
 | `test/fixtures/monty_positioning.json` | `scripts/record_monty_positioning.py` (needs `scipy`) |
+| `test/fixtures/monty_interface.json` | `scripts/record_monty_interface.py` (needs `omegaconf`) |
 | `test/fixtures/monty_vocus2_images.json` | `scripts/record_monty_vocus2_images.py` |
 | `test/fixtures/monty_pyramids.json` | `scripts/record_monty_pyramids.py` |
 | `test/fixtures/monty_vocus2.json` | `scripts/record_monty_vocus2.py` |

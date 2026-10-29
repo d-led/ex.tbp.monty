@@ -1,0 +1,86 @@
+{
+ "reset": {
+  "calls": [
+   {
+    "transform": "first",
+    "saw": [
+     "from reset"
+    ],
+    "has_state": true,
+    "has_rng": true
+   },
+   {
+    "transform": "second",
+    "saw": [
+     "from reset",
+     "first"
+    ],
+    "has_state": true,
+    "has_rng": true
+   }
+  ],
+  "environment_resets": 1
+ },
+ "step": {
+  "calls": [
+   {
+    "transform": "first",
+    "saw": [
+     "after 1 steps"
+    ],
+    "has_state": true,
+    "has_rng": true
+   },
+   {
+    "transform": "second",
+    "saw": [
+     "after 1 steps",
+     "first"
+    ],
+    "has_state": true,
+    "has_rng": true
+   }
+  ],
+  "observations": [
+   "after 1 steps",
+   "first",
+   "second"
+  ],
+  "state": {
+   "state": "stepped"
+  },
+  "environment_steps": [
+   []
+  ]
+ },
+ "second step": {
+  "calls": [
+   {
+    "transform": "first",
+    "saw": [
+     "after 2 steps"
+    ],
+    "has_state": true,
+    "has_rng": true
+   },
+   {
+    "transform": "second",
+    "saw": [
+     "after 2 steps",
+     "first"
+    ],
+    "has_state": true,
+    "has_rng": true
+   }
+  ],
+  "observations": [
+   "after 2 steps",
+   "first",
+   "second"
+  ],
+  "environment_steps": [
+   [],
+   []
+  ]
+ }
+}

@@ -48,7 +48,7 @@ defmodule Monty.Studio.PortedBodyTest do
       assert [first | _rest] = run.pending_actions
       assert %{"action" => _name, "agent_id" => "agent_id_0"} = ActionJSONEncoder.encode(first)
 
-      assert run.environment.world.agent.position != [0.0, 0.0, 0.0]
+      assert run.interface.env.world.agent.position != [0.0, 0.0, 0.0]
     after
       Run.stop(run)
     end
