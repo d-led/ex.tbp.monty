@@ -1,10 +1,12 @@
 defmodule Monty.Simulators.Synthetic.SensorModuleTest do
   @moduledoc """
-  A percept says what the world said, and says so when the world says nothing.
+  A percept says what the image said, and what the world could not say.
 
   The difference matters downstream: a surface policy follows curvature only
   when the pose is fully defined, so a sensor that claimed a pose it does not
-  have would have the policy steering by an invented surface.
+  have would have the policy steering by an invented surface — and a learning
+  module configured for `hsv` or `principal_curvatures_log` needs those names to
+  be there, computed the way a camera module computes them.
   """
 
   use ExUnit.Case, async: true
@@ -23,13 +25,11 @@ defmodule Monty.Simulators.Synthetic.SensorModuleTest do
       %{
         "location" => [0.0, 0.0, 0.1],
         "value" => 0.0,
-        "on_object" => true,
-        "min_depth" => 0.05,
-        "mean_depth" => 0.05,
-        "object_coverage" => 1.0,
+        "depth" => [[0.05]],
+        "semantic" => [[1.0]],
         "principal_curvatures" => [-20.0, -20.0],
         "pose_vectors" => [[0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]],
-        "rgba" => [0.0, 1.0, 0.0, 1.0]
+        "rgba" => [[0.0, 1.0, 0.0, 1.0]]
       }
     end
 
@@ -58,11 +58,23 @@ defmodule Monty.Simulators.Synthetic.SensorModuleTest do
     end
   end
 
-  describe "a world that reports nothing" do
-    test "gives a percept whose pose is explicitly not defined" do
-      percept = percept(%{"location" => [0.1, 0.2, 0.3]})
+  describe "a camera that saw nothing where it was pointed" do
+    test "reports no depth, and no coverage" do
+      # Depth 0 is what a depth image has where the camera saw nothing.
+      features =
+        percept(%{"location" => [0.0, 0.0, 0.0], "depth" => [[0.0]], "semantic" => [[0.0]]})
 
-      refute percept.morphological_features["pose_fully_defined"]
+      refute Map.has_key?(features.non_morphological_features, "min_depth")
+      assert features.non_morphological_features["object_coverage"] == 0.0
+      refute features.process_features_in_lm
+    end
+  end
+
+  describe "a world that reports nothing at all" do
+    test "gives a percept whose pose is explicitly not defined" do
+      refute percept(%{"location" => [0.1, 0.2, 0.3]}).morphological_features[
+               "pose_fully_defined"
+             ]
     end
 
     test "and is still taken to be on the object it is looking at" do

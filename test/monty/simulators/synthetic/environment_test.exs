@@ -78,16 +78,17 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
   end
 
   describe "a world with something in it" do
-    test "reports the surface under the sensor, with the depth and the pose" do
+    test "reports the surface under the sensor as a one-pixel image, and its geometry" do
       environment = Environment.new(["patch"], Scene.new(radius: 0.05))
 
       {observations, _proprioceptive_state, _environment} = Environment.step(environment, [])
       seen = sensor(observations)
 
-      assert seen["on_object"]
-      assert_in_delta seen["min_depth"], 0.05, 1.0e-12
-      assert_in_delta seen["mean_depth"], 0.05, 1.0e-12
-      assert seen["object_coverage"] == 1.0
+      # Monty's code indexes these images, so a world answers an image even when
+      # its sensor has a single pixel.
+      assert [[depth]] = seen["depth"]
+      assert_in_delta depth, 0.05, 1.0e-12
+      assert [[1.0]] = seen["semantic"]
 
       # The normal at the top of the sphere, and the two curvature directions.
       [normal, direction_1, direction_2] = seen["pose_vectors"]
@@ -108,10 +109,11 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
 
       seen = sensor(observations)
 
-      refute seen["on_object"]
-      assert seen["min_depth"] == nil
-      assert seen["object_coverage"] == 0.0
+      # Depth 0 is what a depth image has where the camera saw nothing.
+      assert [[0.0]] = seen["depth"]
+      assert [[0.0]] = seen["semantic"]
       assert seen["pose_vectors"] == nil
+      assert seen["principal_curvatures"] == nil
     end
   end
 
@@ -121,7 +123,7 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
 
     seen = sensor(observations)
 
-    refute Map.has_key?(seen, "on_object")
+    refute Map.has_key?(seen, "depth")
     refute Map.has_key?(seen, "principal_curvatures")
   end
 end

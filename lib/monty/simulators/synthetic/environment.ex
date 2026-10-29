@@ -98,18 +98,28 @@ defmodule Monty.Simulators.Synthetic.Environment do
 
   defp features(scene, pose), do: features(Scene.observe(scene, pose))
 
-  # A one-pixel sensor sees one depth, and it is the nearest, the mean and the
-  # only one at once. Monty's surface sensor reports all three; so does this.
+  # What a sensor sees, in the shape Monty's worlds answer in: a **one-pixel
+  # image** of depth, colour and semantic id, not a summary of one. Monty's own
+  # code indexes these images (`PositioningProcedure.depth_at_center` reads the
+  # centre pixel), so a world that answered a bare number would make any policy
+  # that looks at the image fail on this world and work on Monty's.
+  #
+  # A ray that missed answers depth 0, which is what Monty's depth images use
+  # for "no return", and which its sensor modules read as "nothing there".
+  #
+  # The surface it hit — the outward normal and the two curvatures — is answered
+  # here too, because this world knows it exactly. A camera would estimate them
+  # from the depth image (`sensor_processing.principal_curvatures/5`, not yet
+  # ported), so this is the one place where the stand-in knows more than a sensor
+  # could; `Monty.Simulators.Synthetic.SensorModule` is where that is turned into
+  # features.
   defp features(observation) do
     %{
-      "on_object" => observation.on_object,
-      "depth" => observation.depth,
-      "mean_depth" => observation.depth,
-      "min_depth" => observation.depth,
-      "object_coverage" => if(observation.on_object, do: 1.0, else: 0.0),
+      "depth" => [[observation.depth || 0.0]],
+      "rgba" => [[observation.rgba || [0.0, 0.0, 0.0, 1.0]]],
+      "semantic" => [[if(observation.on_object, do: 1.0, else: 0.0)]],
       "principal_curvatures" => observation.principal_curvatures,
-      "pose_vectors" => pose_vectors(observation.pose_vectors),
-      "rgba" => observation.rgba
+      "pose_vectors" => pose_vectors(observation.pose_vectors)
     }
   end
 

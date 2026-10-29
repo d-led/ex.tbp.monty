@@ -3,11 +3,17 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
   A sensor module that turns an observation into a CMP message.
 
   Stands in for `frameworks/models/sensor_modules.CameraSM` until feature
-  extraction is ported: it reports what the world said rather than inventing it,
-  so a world with geometry gives a percept with a surface and a world without
-  gives one whose pose is explicitly undefined. It is a simulator-side module
-  (Monty's `simulators/` are not part of the core), so it does not appear in the
-  module map — but it implements the same behaviour a ported sensor module will.
+  extraction is ported: it reads the one-pixel depth and colour images a world
+  reports and answers the features Monty's learning modules and policies read —
+  the nearest and the mean depth, how much of the view is on the object, the
+  colour as hue/saturation/value, and the curvatures as a signed logarithm. The
+  surface itself (its normal and its curvatures) is whatever the world says it
+  hit: a camera would estimate it from a depth image, and that estimator
+  (`sensor_processing.principal_curvatures/5`) is not ported yet.
+
+  It is a simulator-side module (Monty's `simulators/` are not part of the core),
+  so it does not appear in the module map — but it implements the same behaviour
+  a ported sensor module will.
   """
 
   use Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
@@ -15,9 +21,8 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
   alias Monty.Frameworks.Utils.SensorProcessing
   alias Monty.Geometry.SurfacePoseVectors
 
-  # The features a world may report, by the names Monty's learning modules and
-  # policies read them under.
-  @feature_keys ~w(value depth mean_depth min_depth object_coverage principal_curvatures rgba)
+  # Depth 0 is what a depth image has where the camera saw nothing.
+  @no_return 0.0
 
   # A pose that is not the world's, used when the world reports none.
   @undefined_pose {SurfacePoseVectors.new([0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]),
@@ -65,38 +70,66 @@ defmodule Monty.Simulators.Synthetic.SensorModule do
 
   defp pose_vectors(_observation), do: @undefined_pose
 
-  # A learning module configured for `principal_curvatures_log` expects the
-  # sensor to have scaled the curvatures: a signed logarithm, so that a convex
-  # surface stays negative and values near zero do not run off. A module
-  # configured for `hsv` expects the centre pixel as hue, saturation and value.
+  # What a camera module makes of the view. `principal_curvatures_log` is the
+  # signed logarithm, so a convex surface stays negative and a curvature near
+  # zero does not run off; `hsv` is the centre pixel, because that is the patch a
+  # surface agent matches on.
   defp features(observation) do
-    observation
-    |> Map.take(@feature_keys)
-    |> with_curvature_log()
-    |> with_hsv()
+    %{"value" => Map.get(observation, "value")}
+    |> Map.merge(depth_features(observation))
+    |> Map.merge(surface_features(observation))
+    |> Map.merge(colour_features(observation))
+    |> Enum.reject(fn {_name, value} -> is_nil(value) end)
+    |> Map.new()
   end
 
-  defp with_curvature_log(features) do
-    case Map.get(features, "principal_curvatures") do
+  defp depth_features(observation) do
+    depths = observation |> Map.get("depth", []) |> List.flatten()
+    seen = Enum.reject(depths, &(&1 == @no_return))
+
+    %{
+      "min_depth" => Enum.min(seen, fn -> nil end),
+      "mean_depth" => mean(seen),
+      "object_coverage" => if(depths == [], do: 0.0, else: length(seen) / length(depths))
+    }
+  end
+
+  defp mean([]), do: nil
+  defp mean(values), do: Enum.sum(values) / length(values)
+
+  defp surface_features(observation) do
+    case Map.get(observation, "principal_curvatures") do
       nil ->
-        features
+        %{}
 
       curvatures ->
-        Map.put(features, "principal_curvatures_log", SensorProcessing.log_sign(curvatures))
+        %{
+          "principal_curvatures" => curvatures,
+          "principal_curvatures_log" => SensorProcessing.log_sign(curvatures)
+        }
     end
   end
 
-  defp with_hsv(features) do
-    case Map.get(features, "rgba") do
-      [red, green, blue | _alpha] ->
-        Map.put(features, "hsv", SensorProcessing.rgb2hsv([red, green, blue]))
+  defp colour_features(observation) do
+    case centre(Map.get(observation, "rgba")) do
+      [red, green, blue | _alpha] = pixel ->
+        %{"rgba" => pixel, "hsv" => SensorProcessing.rgb2hsv([red, green, blue])}
 
       _no_colour ->
-        features
+        %{}
     end
   end
 
-  # A world that does not say is taken to be on the object: a world without
-  # geometry reports everything it has as the thing in front of the sensor.
-  defp on_object?(observation), do: Map.get(observation, "on_object", true)
+  defp centre([pixel]), do: pixel
+  defp centre(_not_an_image), do: nil
+
+  # A pixel is on the object when the world's semantic id says so; a world that
+  # reports no semantic id is taken to be on it, because everything such a world
+  # reports is the thing in front of the sensor.
+  defp on_object?(observation) do
+    case centre(Map.get(observation, "semantic")) do
+      [semantic_id] -> semantic_id > 0.0
+      _no_semantics -> Map.get(observation, "on_object", true)
+    end
+  end
 end

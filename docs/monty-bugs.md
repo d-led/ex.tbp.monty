@@ -21,6 +21,7 @@ numbers; everything else changes where code lives or what an error looks like.
 | [1.4](#14-argsort-2-on-a-single-hypothesis) | `argsort(...)[-2]` on one hypothesis | Latent | Answers `{best, nil}` instead |
 | [1.5](#15-first_sensor-is-only-bound-inside-the-loop) | A name bound after its first read | Latent | Answers a value, not an unbound name |
 | [1.6](#16-jumptogo-saves-one-name-and-restores-another) | A checkpoint saves one attribute and restores a different one | Confirmed, only bites a resumed run | No checkpoint loading here |
+| [1.7](#17-a-depth-of-zero-is-read-as-an-object-a-metre-away) | A depth of 0 (nothing there) read as "object within a metre" | Suspected, masked by enclosed scenes | The stand-in world has a wall, so a miss still has a depth |
 | [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
 | [2.2](#22-motor_only_step-travels-in-the-result) | A policy sets a flag on the motor system | Decision | The flag travels in the result |
 | [2.3](#23-the-motor-system-answers-with-itself) | The motor system mutates itself | Decision | It answers with its next version |
@@ -296,6 +297,60 @@ the decision recorded in
 — this port's checkpoint is the studio's own record of a run, not a memento
 handed back to a policy. If that changes, this defect is the reason to write the
 checkpoint test first.
+
+---
+
+## 1.7 A depth of zero is read as an object a metre away
+
+**What's wrong.** A surface agent that cannot see the object is supposed to
+search for it. Before it searches, `_touch_object` reads the depth at the centre
+pixel and treats *anything* closer than a metre as the object to move onto. A
+depth image reports 0 where the camera saw nothing — Monty's own convention
+elsewhere: `sensor_processing` drops points whose depth is 0, and `CameraSM`
+reports `min_depth` and `mean_depth` over the ones that are not 0. So a view with
+nothing in it takes the "move onto it" branch, and the distance comes out
+negative, because the object distance and the sensor's height are both positive.
+The agent backs away from the emptiness, every step, for as long as the view
+stays empty.
+
+**The code.**
+[`motor_policies.py:1163-1179`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L1163-L1179):
+
+```python
+depth_at_center = PositioningProcedure.depth_at_center(
+    agent_id=self.agent_id,
+    observations=observations,
+    sensor_id=view_sensor_id,
+)
+if depth_at_center < 1.0:
+    distance = (
+        depth_at_center
+        - self.desired_object_distance
+        - state[self.agent_id].sensors[view_sensor_id].position[2]
+    )
+    ...
+    return MoveForward(agent_id=self.agent_id, distance=distance)
+```
+
+`PositioningProcedure.depth_at_center`
+([`positioning_procedures.py:76-94`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/environments/positioning_procedures.py#L76-L94))
+returns the pixel as it is: no check for "no return".
+
+**What it should be.** Decide what a depth of 0 means before comparing it with a
+metre — search, or ask the world for a depth it trusts. Which is Monty's call;
+that 0 is not a distance is not.
+
+**Why it is suspected rather than observed.** In Monty's scenes the camera is
+always looking at *something*: MuJoCo and Habitat worlds are enclosed, so the
+centre pixel has a return and the branch is never taken on zero. It shows
+immediately in a world that is empty beyond the object: with a 2.5 cm object
+distance and a sensor 10 cm up, the agent backs away 13.5 cm per step, for ever.
+
+**What this port does.** Reproduces the branch as it is. The stand-in world has
+no walls — there is nothing behind the object — so a surface agent that leaves
+the object does not find its way back, which is this defect showing itself; a
+simulator behind `Monty.Simulators.Port.Environment` shows the behaviour
+Monty's own runs show.
 
 ---
 

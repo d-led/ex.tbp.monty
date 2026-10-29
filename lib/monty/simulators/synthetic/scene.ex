@@ -33,7 +33,11 @@ defmodule Monty.Simulators.Synthetic.Scene do
   @enforce_keys [:centre, :radius, :rgb]
   defstruct [:centre, :radius, :rgb]
 
-  @type t :: %__MODULE__{centre: Rotation.vector(), radius: float(), rgb: [float()]}
+  @type t :: %__MODULE__{
+          centre: Rotation.vector(),
+          radius: float(),
+          rgb: [float()]
+        }
 
   @typedoc """
   What one sensor sees: whether it hit the object, how far away it is, the
@@ -70,6 +74,14 @@ defmodule Monty.Simulators.Synthetic.Scene do
 
   A sensor looks along its own **−z**, as Monty's do, so its pose is enough: no
   separate gaze has to be passed in and kept consistent with it.
+
+  A ray that misses sees nothing: no depth, no colour, no surface. That is a
+  difference from Monty's worlds rather than a simplification — MuJoCo's scenes
+  are enclosed, so a camera pointed anywhere sees a floor, a wall or a ceiling at
+  some distance, and a surface agent's search for a lost object relies on that
+  (`docs/monty-bugs.md` §1.7). Here there is nothing behind the object, so a
+  surface agent that leaves it will not find its way back. Prefer a simulator
+  behind `Monty.Simulators.Port.Environment` for long surface runs.
   """
   @spec observe(t(), %{position: Rotation.vector(), rotation: Rotation.t()}) :: observation()
   def observe(%__MODULE__{} = scene, %{position: origin, rotation: rotation}) do
