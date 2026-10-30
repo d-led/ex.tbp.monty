@@ -1079,7 +1079,9 @@ it has just built (`initialize_model` in `monty_experiment.py`).
 **What this port does.** `scripts/export_monty_pretrained.py` reads that pickle in
 Monty's own environment and writes the graphs out as JSONL —
 `priv/monty/libraries/<model>.jsonl.gz`, one object per line, positions and the
-four matched features per node, six decimals. `Monty.Studio.Memory` reads one
+four matched features per node, every number at full precision (these files were
+once rounded to six decimals, and `docs/validation.md` records what that cost).
+`Monty.Studio.Memory` reads one
 back into a `GraphMemory`, and a run builds its learning module around it
 (`EvidenceGraphLM.from_config/2` takes an optional `:memory`). The library's
 README records which release and which command produced each file.

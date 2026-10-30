@@ -357,18 +357,32 @@ turned "where this hypothesis sits" into numbers:
    frame row and the rotated sensed row. The port normalised both first. With
    rows of length `0.995`–`1.004` that is not the same angle, and `arccos` near
    zero is where a thousandth of a cosine is a hundredth of a radian.
+After both, the port and Monty were still `1e-5` apart, and the rest of that was
+the memory: `scripts/export_monty_pretrained.py` wrote positions and features
+rounded to six decimals, "far below anything a voxel or a tolerance can tell
+apart". The replay says otherwise — a node frame a millionth short is a pose a
+millionth wrong on every step, and a millionth is the size of the difference
+between many nodes' scores. Exported at full precision, `c_lego_duplo`'s
+hypotheses agree with Monty's **bit for bit**: the sorted evidence differs by
+`0.0` after the first observation and by `4.4e-16` after the second, and the best
+evidence is `1.572131863` on both sides. The libraries are 2.3 times larger, and
+they are the graph Monty holds.
 
-After both: every one of the 1524 hypotheses agrees to `1.1e-5`, none by more
-than a thousandth, and the best evidence is `1.572131035` against Monty's
-`1.572131863`. Over the episode, nine of ten objects agree to `1e-5` relative;
-`golf_ball` — the one object whose pose is *not* fully defined, so whose poses
-are the eight umbilical directions — still parts at `8 %`, which is the next
-difference to find.
+One difference is left in that episode, and it is not arithmetic: `golf_ball`'s
+node selection. On a sphere most nodes score an observation identically, and the
+sampler keeps the `k` best — so when a dozen nodes tie exactly, *which* dozen a
+run keeps is decided by `np.argsort`, whose order among equal values is its
+quicksort's and nothing more. Monty kept nodes 13, 47, 49, 62 and 73 of
+`golf_ball`; the port kept 80, 144, 171, 286 and 295 — all ten hypotheses at
+evidence `0.342740286`, so both sets are equally well explained and neither is
+wrong. It still matters: the sphere's evidence then parts by `0.5 %` at step 6 and
+`2.8 %` at step 7, because different nodes are different places.
 
 The lesson is the one the `hsv` value channel taught: a measured quantity is not
 a mathematical one. A frame is three measured directions, a pose needs no more
-than a matrix, and `arccos` of a cosine that was never normalised is still an
-angle Monty believes.
+than a matrix, `arccos` of a cosine that was never normalised is still an angle
+Monty believes — and a number written down at six decimals is not the number the
+model was built from.
 
 ## The stream: Monty's numbers, and where the paths still part
 

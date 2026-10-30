@@ -87,10 +87,18 @@ python scripts/export_monty_pretrained.py \
 
 The exporter's docstring is the specification of the format; briefly, each line
 is `{"object_id": …, "input_channel": "patch", "positions": [[x, y, z], …],
-"features": {…}}`, positions and features rounded to six decimals (micrometres —
-far below what a voxel or a tolerance can tell apart), and the stored graph is
-exported as stored rather than rebuilt, because that is what the evidence module
-loads.
+"features": {…}}`, every number at full precision so the port reads the same
+bits Monty holds, and the stored graph is exported as stored rather than rebuilt,
+because that is what the evidence module loads.
+
+Full precision is not a luxury. These files were once written at six decimals,
+on the reasoning that micrometres are far below anything a voxel or a tolerance
+can tell apart. Measured against Monty's own recording of an episode, they are
+not: a node's frame a millionth short turns into a pose a millionth wrong, that
+pose rotates every step's displacement, and where many nodes match an observation
+equally well — a sphere — a rounding-sized difference picks a different node at
+the cut-off. That cost one object `8 %` of its evidence. The files are 2.3 times
+larger as a result, and they are the exact graph.
 
 **One oddity worth knowing.** A gzip archive records the name of the file it was
 created from, and that name is the one the export had at the time —
