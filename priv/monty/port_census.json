@@ -1,0 +1,2882 @@
+{
+  "tbp/monty/attention/attention_system.py::AttentionSystem": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "AttentionSystem",
+    "fields": [],
+    "file": "tbp/monty/attention/attention_system.py",
+    "kind": "protocol",
+    "line": 34,
+    "methods": []
+  },
+  "tbp/monty/attention/attention_system.py::DefaultAttentionSystem": {
+    "bases": [
+      "AttentionSystem"
+    ],
+    "behaviour": "some",
+    "class": "DefaultAttentionSystem",
+    "fields": [
+      "WEIGHT_EXPIRATION_TOLERANCE",
+      "_voxel_size",
+      "_weight_pooler",
+      "_decay",
+      "_merge",
+      "_goal_filter",
+      "_grid"
+    ],
+    "file": "tbp/monty/attention/attention_system.py",
+    "kind": "class",
+    "line": 59,
+    "methods": [
+      "__init__",
+      "expire",
+      "step",
+      "reset",
+      "state_dict",
+      "_voxelize_attention_regions",
+      "_pool_weights"
+    ]
+  },
+  "tbp/monty/attention/attention_system.py::NoopAttentionSystem": {
+    "bases": [
+      "AttentionSystem"
+    ],
+    "behaviour": "some",
+    "class": "NoopAttentionSystem",
+    "fields": [],
+    "file": "tbp/monty/attention/attention_system.py",
+    "kind": "class",
+    "line": 44,
+    "methods": [
+      "step",
+      "state_dict"
+    ]
+  },
+  "tbp/monty/attention/decay.py::LinearWeightDecay": {
+    "bases": [
+      "VoxelGridWeightDecay"
+    ],
+    "behaviour": "some",
+    "class": "LinearWeightDecay",
+    "fields": [
+      "_rate"
+    ],
+    "file": "tbp/monty/attention/decay.py",
+    "kind": "class",
+    "line": 36,
+    "methods": [
+      "__init__",
+      "__call__"
+    ]
+  },
+  "tbp/monty/attention/decay.py::NoopDecay": {
+    "bases": [
+      "VoxelGridWeightDecay"
+    ],
+    "behaviour": "none",
+    "class": "NoopDecay",
+    "fields": [],
+    "file": "tbp/monty/attention/decay.py",
+    "kind": "class",
+    "line": 25,
+    "methods": []
+  },
+  "tbp/monty/attention/decay.py::VoxelGridWeightDecay": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "VoxelGridWeightDecay",
+    "fields": [],
+    "file": "tbp/monty/attention/decay.py",
+    "kind": "protocol",
+    "line": 21,
+    "methods": []
+  },
+  "tbp/monty/attention/goal_filter.py::GoalFilter": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "GoalFilter",
+    "fields": [],
+    "file": "tbp/monty/attention/goal_filter.py",
+    "kind": "protocol",
+    "line": 19,
+    "methods": []
+  },
+  "tbp/monty/attention/goal_filter.py::HardGoalFilter": {
+    "bases": [
+      "GoalFilter"
+    ],
+    "behaviour": "some",
+    "class": "HardGoalFilter",
+    "fields": [],
+    "file": "tbp/monty/attention/goal_filter.py",
+    "kind": "class",
+    "line": 43,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/attention/goal_filter.py::NoopGoalFilter": {
+    "bases": [
+      "GoalFilter"
+    ],
+    "behaviour": "some",
+    "class": "NoopGoalFilter",
+    "fields": [],
+    "file": "tbp/monty/attention/goal_filter.py",
+    "kind": "class",
+    "line": 23,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/attention/merge.py::Union": {
+    "bases": [
+      "VoxelGridMerge"
+    ],
+    "behaviour": "some",
+    "class": "Union",
+    "fields": [],
+    "file": "tbp/monty/attention/merge.py",
+    "kind": "class",
+    "line": 34,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/attention/merge.py::VoxelGridMerge": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "VoxelGridMerge",
+    "fields": [],
+    "file": "tbp/monty/attention/merge.py",
+    "kind": "protocol",
+    "line": 30,
+    "methods": []
+  },
+  "tbp/monty/attention/telemetry.py::AttentionSystemTelemetry": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "AttentionSystemTelemetry",
+    "fields": [],
+    "file": "tbp/monty/attention/telemetry.py",
+    "kind": "protocol",
+    "line": 23,
+    "methods": []
+  },
+  "tbp/monty/attention/telemetry.py::DefaultAttentionSystemTelemetry": {
+    "bases": [
+      "AttentionSystemTelemetry"
+    ],
+    "behaviour": "some",
+    "class": "DefaultAttentionSystemTelemetry",
+    "fields": [],
+    "file": "tbp/monty/attention/telemetry.py",
+    "kind": "class",
+    "line": 47,
+    "methods": [
+      "__init__",
+      "reset",
+      "grid",
+      "proposed_grid",
+      "state_dict"
+    ]
+  },
+  "tbp/monty/attention/telemetry.py::NoopAttentionSystemTelemetry": {
+    "bases": [
+      "AttentionSystemTelemetry"
+    ],
+    "behaviour": "some",
+    "class": "NoopAttentionSystemTelemetry",
+    "fields": [],
+    "file": "tbp/monty/attention/telemetry.py",
+    "kind": "class",
+    "line": 33,
+    "methods": [
+      "state_dict"
+    ]
+  },
+  "tbp/monty/attention/voxel_grid.py::VoxelGrid": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "VoxelGrid",
+    "fields": [
+      "_voxel_size",
+      "_data"
+    ],
+    "file": "tbp/monty/attention/voxel_grid.py",
+    "kind": "class",
+    "line": 82,
+    "methods": [
+      "empty",
+      "from_pandas",
+      "__init__",
+      "voxel_size",
+      "to_pandas",
+      "weights_at_points",
+      "weights",
+      "__len__"
+    ]
+  },
+  "tbp/monty/attention/weight_pooler.py::WeightPooler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "WeightPooler",
+    "fields": [],
+    "file": "tbp/monty/attention/weight_pooler.py",
+    "kind": "protocol",
+    "line": 14,
+    "methods": []
+  },
+  "tbp/monty/context.py::RuntimeContext": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "RuntimeContext",
+    "fields": [
+      "rng",
+      "suppress_runtime_errors"
+    ],
+    "file": "tbp/monty/context.py",
+    "kind": "dataclass",
+    "line": 16,
+    "methods": []
+  },
+  "tbp/monty/experiment/environment.py::OmniglotInterface": {
+    "bases": [
+      "OneObjectPerEpisodeInterface"
+    ],
+    "behaviour": "some",
+    "class": "OmniglotInterface",
+    "fields": [],
+    "file": "tbp/monty/experiment/environment.py",
+    "kind": "class",
+    "line": 396,
+    "methods": [
+      "__init__",
+      "post_episode",
+      "post_epoch",
+      "cycle_object",
+      "change_object_by_idx"
+    ]
+  },
+  "tbp/monty/experiment/environment.py::SaccadeOnImageFromStreamInterface": {
+    "bases": [
+      "SaccadeOnImageInterface"
+    ],
+    "behaviour": "some",
+    "class": "SaccadeOnImageFromStreamInterface",
+    "fields": [],
+    "file": "tbp/monty/experiment/environment.py",
+    "kind": "class",
+    "line": 578,
+    "methods": [
+      "__init__",
+      "pre_epoch",
+      "post_episode",
+      "post_epoch",
+      "cycle_scene",
+      "change_scene_by_idx"
+    ]
+  },
+  "tbp/monty/experiment/environment.py::SaccadeOnImageInterface": {
+    "bases": [
+      "OneObjectPerEpisodeInterface"
+    ],
+    "behaviour": "some",
+    "class": "SaccadeOnImageInterface",
+    "fields": [],
+    "file": "tbp/monty/experiment/environment.py",
+    "kind": "class",
+    "line": 485,
+    "methods": [
+      "__init__",
+      "post_episode",
+      "post_epoch",
+      "cycle_object",
+      "change_object_by_idx"
+    ]
+  },
+  "tbp/monty/experiment/learning_module.py::ExperimentLearningModule": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "ExperimentLearningModule",
+    "fields": [],
+    "file": "tbp/monty/experiment/learning_module.py",
+    "kind": "protocol",
+    "line": 20,
+    "methods": []
+  },
+  "tbp/monty/experiment/monty.py::ExperimentMonty": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "ExperimentMonty",
+    "fields": [],
+    "file": "tbp/monty/experiment/monty.py",
+    "kind": "protocol",
+    "line": 21,
+    "methods": []
+  },
+  "tbp/monty/experiment/motor_system.py::ExperimentMotorPolicy": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "ExperimentMotorPolicy",
+    "fields": [],
+    "file": "tbp/monty/experiment/motor_system.py",
+    "kind": "protocol",
+    "line": 59,
+    "methods": []
+  },
+  "tbp/monty/experiment/motor_system.py::ExperimentMotorPolicySelector": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "ExperimentMotorPolicySelector",
+    "fields": [],
+    "file": "tbp/monty/experiment/motor_system.py",
+    "kind": "protocol",
+    "line": 35,
+    "methods": []
+  },
+  "tbp/monty/experiment/motor_system.py::ExperimentMotorSystem": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "ExperimentMotorSystem",
+    "fields": [],
+    "file": "tbp/monty/experiment/motor_system.py",
+    "kind": "protocol",
+    "line": 19,
+    "methods": []
+  },
+  "tbp/monty/experiment/recognition_status.py::RecognitionConclusion": {
+    "bases": [
+      "Enum"
+    ],
+    "behaviour": "none",
+    "class": "RecognitionConclusion",
+    "fields": [],
+    "file": "tbp/monty/experiment/recognition_status.py",
+    "kind": "enum",
+    "line": 21,
+    "methods": []
+  },
+  "tbp/monty/experiment/sensor_modules/telemetry.py::Snapshot": {
+    "bases": [
+      "ExperimentTransform"
+    ],
+    "behaviour": "some",
+    "class": "Snapshot",
+    "fields": [
+      "_reset"
+    ],
+    "file": "tbp/monty/experiment/sensor_modules/telemetry.py",
+    "kind": "class",
+    "line": 22,
+    "methods": [
+      "__call__",
+      "reset"
+    ]
+  },
+  "tbp/monty/frameworks/actions/actions.py::LookDownActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "LookDownActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 125,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::LookDownActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "LookDownActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 129,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::LookUpActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "LookUpActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 156,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::LookUpActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "LookUpActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 160,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::MoveForwardActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "MoveForwardActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 187,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::MoveForwardActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "MoveForwardActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 193,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::MoveTangentiallyActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "MoveTangentiallyActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 214,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::MoveTangentiallyActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "MoveTangentiallyActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 220,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::OrientHorizontalActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "OrientHorizontalActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 248,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::OrientHorizontalActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "OrientHorizontalActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 254,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::OrientVerticalActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "OrientVerticalActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 287,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::OrientVerticalActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "OrientVerticalActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 293,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetAgentPitchActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetAgentPitchActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 326,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetAgentPitchActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetAgentPitchActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 332,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetAgentPoseActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetAgentPoseActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 358,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetAgentPoseActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetAgentPoseActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 364,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetSensorPitchActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetSensorPitchActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 395,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetSensorPitchActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetSensorPitchActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 401,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetSensorPoseActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetSensorPoseActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 426,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetSensorPoseActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetSensorPoseActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 432,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetSensorRotationActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetSensorRotationActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 463,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetSensorRotationActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetSensorRotationActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 469,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetYawActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetYawActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 490,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::SetYawActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SetYawActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 494,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::TurnLeftActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "TurnLeftActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 515,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::TurnLeftActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "TurnLeftActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 519,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::TurnRightActionSampler": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "TurnRightActionSampler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 540,
+    "methods": []
+  },
+  "tbp/monty/frameworks/actions/actions.py::TurnRightActuator": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "TurnRightActuator",
+    "fields": [],
+    "file": "tbp/monty/frameworks/actions/actions.py",
+    "kind": "protocol",
+    "line": 544,
+    "methods": []
+  },
+  "tbp/monty/frameworks/environment_utils/server.py::MontyRequestHandler": {
+    "bases": [
+      "SimpleHTTPRequestHandler"
+    ],
+    "behaviour": "some",
+    "class": "MontyRequestHandler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environment_utils/server.py",
+    "kind": "class",
+    "line": 28,
+    "methods": [
+      "do_PUT"
+    ]
+  },
+  "tbp/monty/frameworks/environments/environment.py::Environment": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "Environment",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environments/environment.py",
+    "kind": "protocol",
+    "line": 54,
+    "methods": []
+  },
+  "tbp/monty/frameworks/environments/environment.py::ObjectEnvironment": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "ObjectEnvironment",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environments/environment.py",
+    "kind": "protocol",
+    "line": 81,
+    "methods": []
+  },
+  "tbp/monty/frameworks/environments/environment.py::ObjectInfo": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "ObjectInfo",
+    "fields": [
+      "object_id",
+      "semantic_id"
+    ],
+    "file": "tbp/monty/frameworks/environments/environment.py",
+    "kind": "dataclass",
+    "line": 47,
+    "methods": []
+  },
+  "tbp/monty/frameworks/environments/environment.py::ResettableEnvironment": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "ResettableEnvironment",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environments/environment.py",
+    "kind": "protocol",
+    "line": 122,
+    "methods": []
+  },
+  "tbp/monty/frameworks/environments/environment.py::SimulatedEnvironment": {
+    "bases": [
+      "Environment",
+      "ResettableEnvironment",
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SimulatedEnvironment",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environments/environment.py",
+    "kind": "protocol",
+    "line": 134,
+    "methods": []
+  },
+  "tbp/monty/frameworks/environments/environment.py::SimulatedObjectEnvironment": {
+    "bases": [
+      "Environment",
+      "ObjectEnvironment",
+      "ResettableEnvironment",
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "SimulatedObjectEnvironment",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environments/environment.py",
+    "kind": "protocol",
+    "line": 138,
+    "methods": []
+  },
+  "tbp/monty/frameworks/environments/object_init_samplers.py::Default": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "Default",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environments/object_init_samplers.py",
+    "kind": "class",
+    "line": 38,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/frameworks/environments/object_init_samplers.py::MultiObjectNames": {
+    "bases": [
+      "TypedDict"
+    ],
+    "behaviour": "none",
+    "class": "MultiObjectNames",
+    "fields": [
+      "targets_list",
+      "source_object_list",
+      "num_distractors"
+    ],
+    "file": "tbp/monty/frameworks/environments/object_init_samplers.py",
+    "kind": "typed_dict",
+    "line": 24,
+    "methods": []
+  },
+  "tbp/monty/frameworks/environments/object_init_samplers.py::ObjectInitParams": {
+    "bases": [
+      "TypedDict"
+    ],
+    "behaviour": "none",
+    "class": "ObjectInitParams",
+    "fields": [
+      "position",
+      "rotation",
+      "scale",
+      "euler_rotation",
+      "quat_rotation"
+    ],
+    "file": "tbp/monty/frameworks/environments/object_init_samplers.py",
+    "kind": "typed_dict",
+    "line": 30,
+    "methods": []
+  },
+  "tbp/monty/frameworks/environments/object_init_samplers.py::Predefined": {
+    "bases": [
+      "Default"
+    ],
+    "behaviour": "some",
+    "class": "Predefined",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environments/object_init_samplers.py",
+    "kind": "class",
+    "line": 58,
+    "methods": [
+      "__init__",
+      "__call__",
+      "__len__",
+      "all_combinations_of_params"
+    ]
+  },
+  "tbp/monty/frameworks/environments/object_init_samplers.py::RandomRotation": {
+    "bases": [
+      "Default"
+    ],
+    "behaviour": "some",
+    "class": "RandomRotation",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environments/object_init_samplers.py",
+    "kind": "class",
+    "line": 113,
+    "methods": [
+      "__init__",
+      "__call__"
+    ]
+  },
+  "tbp/monty/frameworks/environments/two_d_data.py::OmniglotEnvironment": {
+    "bases": [
+      "SimulatedEnvironment"
+    ],
+    "behaviour": "some",
+    "class": "OmniglotEnvironment",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environments/two_d_data.py",
+    "kind": "class",
+    "line": 52,
+    "methods": [
+      "__init__",
+      "step",
+      "_observations",
+      "_state",
+      "switch_to_object",
+      "reset",
+      "load_new_character_data",
+      "get_image_patch",
+      "motor_to_locations",
+      "close"
+    ]
+  },
+  "tbp/monty/frameworks/environments/two_d_data.py::SaccadeOnImageEnvironment": {
+    "bases": [
+      "SimulatedEnvironment"
+    ],
+    "behaviour": "some",
+    "class": "SaccadeOnImageEnvironment",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environments/two_d_data.py",
+    "kind": "class",
+    "line": 263,
+    "methods": [
+      "__init__",
+      "step",
+      "_observations",
+      "_state",
+      "switch_to_object",
+      "reset",
+      "load_new_scene_data",
+      "load_depth_data",
+      "process_depth_data",
+      "load_rgb_data",
+      "get_3d_scene_point_cloud",
+      "get_3d_coordinates_from_pixel_indices",
+      "get_move_area",
+      "get_next_loc",
+      "get_image_patch",
+      "close"
+    ]
+  },
+  "tbp/monty/frameworks/environments/two_d_data.py::SaccadeOnImageFromStreamEnvironment": {
+    "bases": [
+      "SaccadeOnImageEnvironment"
+    ],
+    "behaviour": "some",
+    "class": "SaccadeOnImageFromStreamEnvironment",
+    "fields": [],
+    "file": "tbp/monty/frameworks/environments/two_d_data.py",
+    "kind": "class",
+    "line": 700,
+    "methods": [
+      "__init__",
+      "switch_to_scene",
+      "load_new_scene_data"
+    ]
+  },
+  "tbp/monty/frameworks/experiments/hooks.py::NoOpStepHook": {
+    "bases": [
+      "StepHook"
+    ],
+    "behaviour": "some",
+    "class": "NoOpStepHook",
+    "fields": [],
+    "file": "tbp/monty/frameworks/experiments/hooks.py",
+    "kind": "class",
+    "line": 67,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/frameworks/experiments/hooks.py::StepHook": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "StepHook",
+    "fields": [],
+    "file": "tbp/monty/frameworks/experiments/hooks.py",
+    "kind": "protocol",
+    "line": 25,
+    "methods": []
+  },
+  "tbp/monty/frameworks/experiments/object_recognition_experiments.py::MontyObjectRecognitionExperiment": {
+    "bases": [
+      "MontyExperiment"
+    ],
+    "behaviour": "some",
+    "class": "MontyObjectRecognitionExperiment",
+    "fields": [],
+    "file": "tbp/monty/frameworks/experiments/object_recognition_experiments.py",
+    "kind": "class",
+    "line": 23,
+    "methods": [
+      "pre_episode"
+    ]
+  },
+  "tbp/monty/frameworks/experiments/pretraining_experiments.py::MontySupervisedObjectPretrainingExperiment": {
+    "bases": [
+      "MontyExperiment"
+    ],
+    "behaviour": "some",
+    "class": "MontySupervisedObjectPretrainingExperiment",
+    "fields": [],
+    "file": "tbp/monty/frameworks/experiments/pretraining_experiments.py",
+    "kind": "class",
+    "line": 28,
+    "methods": [
+      "__init__",
+      "setup_experiment",
+      "pre_episode",
+      "post_episode",
+      "_pass_target_info_to_model",
+      "post_epoch",
+      "train",
+      "evaluate"
+    ]
+  },
+  "tbp/monty/frameworks/experiments/profile.py::ProfileExperimentMixin": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "ProfileExperimentMixin",
+    "fields": [
+      "profile_dir"
+    ],
+    "file": "tbp/monty/frameworks/experiments/profile.py",
+    "kind": "class",
+    "line": 42,
+    "methods": [
+      "__init_subclass__",
+      "make_profile_dir",
+      "setup_experiment",
+      "run_episode",
+      "train",
+      "evaluate",
+      "close"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/exp_logger.py::BaseMontyLogger": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "BaseMontyLogger",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/exp_logger.py",
+    "kind": "class",
+    "line": 78,
+    "methods": [
+      "__init__",
+      "close"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/exp_logger.py::LoggingCallbackHandler": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "LoggingCallbackHandler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/exp_logger.py",
+    "kind": "class",
+    "line": 21,
+    "methods": [
+      "__init__",
+      "logger_list",
+      "pre_episode",
+      "post_episode",
+      "pre_epoch",
+      "post_epoch",
+      "pre_train",
+      "post_train",
+      "pre_eval",
+      "post_eval",
+      "close",
+      "call_event"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/exp_logger.py::TestLogger": {
+    "bases": [
+      "BaseMontyLogger"
+    ],
+    "behaviour": "some",
+    "class": "TestLogger",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/exp_logger.py",
+    "kind": "class",
+    "line": 118,
+    "methods": [
+      "__init__",
+      "pre_episode",
+      "post_episode",
+      "pre_epoch",
+      "post_epoch",
+      "pre_train",
+      "post_train",
+      "pre_eval",
+      "post_eval",
+      "close",
+      "__deepcopy__"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/graph_matching_loggers.py::BasicGraphMatchingLogger": {
+    "bases": [
+      "BaseMontyLogger"
+    ],
+    "behaviour": "some",
+    "class": "BasicGraphMatchingLogger",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/graph_matching_loggers.py",
+    "kind": "class",
+    "line": 55,
+    "methods": [
+      "__init__",
+      "flush",
+      "log_episode",
+      "maybe_log",
+      "post_episode",
+      "update_episode_data",
+      "update_overall_stats",
+      "get_formatted_overall_stats"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/graph_matching_loggers.py::DetailedGraphMatchingLogger": {
+    "bases": [
+      "BasicGraphMatchingLogger"
+    ],
+    "behaviour": "some",
+    "class": "DetailedGraphMatchingLogger",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/graph_matching_loggers.py",
+    "kind": "class",
+    "line": 498,
+    "methods": [
+      "__init__",
+      "log_episode",
+      "post_episode",
+      "update_episode_data"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/graph_matching_loggers.py::SelectiveEvidenceLogger": {
+    "bases": [
+      "BasicGraphMatchingLogger"
+    ],
+    "behaviour": "some",
+    "class": "SelectiveEvidenceLogger",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/graph_matching_loggers.py",
+    "kind": "class",
+    "line": 578,
+    "methods": [
+      "__init__",
+      "log_episode",
+      "post_episode",
+      "update_episode_data"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/monty_handlers.py::BasicCSVStatsHandler": {
+    "bases": [
+      "MontyHandler"
+    ],
+    "behaviour": "some",
+    "class": "BasicCSVStatsHandler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/monty_handlers.py",
+    "kind": "class",
+    "line": 202,
+    "methods": [
+      "log_level",
+      "__init__",
+      "report_episode",
+      "move_columns_to_front"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/monty_handlers.py::DetailedJSONHandler": {
+    "bases": [
+      "MontyHandler"
+    ],
+    "behaviour": "some",
+    "class": "DetailedJSONHandler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/monty_handlers.py",
+    "kind": "class",
+    "line": 64,
+    "methods": [
+      "__init__",
+      "log_level",
+      "_should_save_episode",
+      "get_detailed_stats",
+      "report_episode",
+      "_save_per_episode",
+      "_save_all"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/monty_handlers.py::MontyHandler": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "MontyHandler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/monty_handlers.py",
+    "kind": "abc",
+    "line": 40,
+    "methods": []
+  },
+  "tbp/monty/frameworks/loggers/wandb_handlers.py::BasicWandbChartStatsHandler": {
+    "bases": [
+      "WandbHandler"
+    ],
+    "behaviour": "some",
+    "class": "BasicWandbChartStatsHandler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/wandb_handlers.py",
+    "kind": "class",
+    "line": 225,
+    "methods": [
+      "log_level",
+      "report_episode",
+      "get_safe_columns_per_lm"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/wandb_handlers.py::BasicWandbTableStatsHandler": {
+    "bases": [
+      "WandbHandler"
+    ],
+    "behaviour": "some",
+    "class": "BasicWandbTableStatsHandler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/wandb_handlers.py",
+    "kind": "class",
+    "line": 120,
+    "methods": [
+      "log_level",
+      "report_episode"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/wandb_handlers.py::DetailedWandbHandler": {
+    "bases": [
+      "WandbHandler"
+    ],
+    "behaviour": "some",
+    "class": "DetailedWandbHandler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/wandb_handlers.py",
+    "kind": "class",
+    "line": 268,
+    "methods": [
+      "post_init",
+      "get_episode_frames",
+      "report_episode"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/wandb_handlers.py::DetailedWandbMarkedObsHandler": {
+    "bases": [
+      "DetailedWandbHandler"
+    ],
+    "behaviour": "some",
+    "class": "DetailedWandbMarkedObsHandler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/wandb_handlers.py",
+    "kind": "class",
+    "line": 312,
+    "methods": [
+      "post_init",
+      "get_episode_frames"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/wandb_handlers.py::DetailedWandbTableStatsHandler": {
+    "bases": [
+      "BasicWandbTableStatsHandler"
+    ],
+    "behaviour": "some",
+    "class": "DetailedWandbTableStatsHandler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/wandb_handlers.py",
+    "kind": "class",
+    "line": 170,
+    "methods": [
+      "__init__",
+      "log_level",
+      "report_episode"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/wandb_handlers.py::WandbHandler": {
+    "bases": [
+      "MontyHandler"
+    ],
+    "behaviour": "some",
+    "class": "WandbHandler",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/wandb_handlers.py",
+    "kind": "class",
+    "line": 85,
+    "methods": [
+      "__init__",
+      "log_level"
+    ]
+  },
+  "tbp/monty/frameworks/loggers/wandb_handlers.py::WandbWrapper": {
+    "bases": [
+      "MontyHandler"
+    ],
+    "behaviour": "some",
+    "class": "WandbWrapper",
+    "fields": [],
+    "file": "tbp/monty/frameworks/loggers/wandb_handlers.py",
+    "kind": "class",
+    "line": 30,
+    "methods": [
+      "__init__",
+      "wandb_init",
+      "report_episode",
+      "log_level",
+      "close"
+    ]
+  },
+  "tbp/monty/frameworks/models/abstract_monty_classes.py::AgentObservations": {
+    "bases": [
+      "Dict"
+    ],
+    "behaviour": "none",
+    "class": "AgentObservations",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/abstract_monty_classes.py",
+    "kind": "class",
+    "line": 46,
+    "methods": []
+  },
+  "tbp/monty/frameworks/models/abstract_monty_classes.py::LMMemory": {
+    "bases": [
+      "Snapshotable"
+    ],
+    "behaviour": "none",
+    "class": "LMMemory",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/abstract_monty_classes.py",
+    "kind": "abc",
+    "line": 437,
+    "methods": []
+  },
+  "tbp/monty/frameworks/models/abstract_monty_classes.py::Monty": {
+    "bases": [
+      "ExperimentMonty",
+      "RuntimeMonty",
+      "Snapshotable"
+    ],
+    "behaviour": "some",
+    "class": "Monty",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/abstract_monty_classes.py",
+    "kind": "abc",
+    "line": 125,
+    "methods": [
+      "_matching_step",
+      "_exploratory_step"
+    ]
+  },
+  "tbp/monty/frameworks/models/abstract_monty_classes.py::ObjectModel": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "ObjectModel",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/abstract_monty_classes.py",
+    "kind": "abc",
+    "line": 461,
+    "methods": []
+  },
+  "tbp/monty/frameworks/models/abstract_monty_classes.py::Observations": {
+    "bases": [
+      "Dict"
+    ],
+    "behaviour": "none",
+    "class": "Observations",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/abstract_monty_classes.py",
+    "kind": "class",
+    "line": 52,
+    "methods": []
+  },
+  "tbp/monty/frameworks/models/abstract_monty_classes.py::RuntimeLearningModule": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "RuntimeLearningModule",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/abstract_monty_classes.py",
+    "kind": "protocol",
+    "line": 293,
+    "methods": []
+  },
+  "tbp/monty/frameworks/models/abstract_monty_classes.py::RuntimeMonty": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "RuntimeMonty",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/abstract_monty_classes.py",
+    "kind": "protocol",
+    "line": 58,
+    "methods": []
+  },
+  "tbp/monty/frameworks/models/displacement_matching.py::DisplacementGraphLM": {
+    "bases": [
+      "GraphLM"
+    ],
+    "behaviour": "some",
+    "class": "DisplacementGraphLM",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/displacement_matching.py",
+    "kind": "class",
+    "line": 36,
+    "methods": [
+      "__init__",
+      "init_from_ltm",
+      "get_unique_pose_if_available",
+      "get_object_rotation",
+      "get_object_scale",
+      "_compute_possible_matches",
+      "_update_possible_matches",
+      "_make_predictions",
+      "_predict_using_displacements",
+      "_get_prediction_error",
+      "_add_displacements",
+      "_select_features_to_use",
+      "_add_detailed_stats"
+    ]
+  },
+  "tbp/monty/frameworks/models/displacement_matching.py::DisplacementGraphMemory": {
+    "bases": [
+      "GraphMemory"
+    ],
+    "behaviour": "some",
+    "class": "DisplacementGraphMemory",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/displacement_matching.py",
+    "kind": "class",
+    "line": 453,
+    "methods": [
+      "__init__",
+      "get_initial_hypotheses",
+      "load_state_dict",
+      "_build_graph"
+    ]
+  },
+  "tbp/monty/frameworks/models/evidence_matching/burst_sampling.py::BurstSamplingTelemetry": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "BurstSamplingTelemetry",
+    "fields": [
+      "displacer_telemetry",
+      "added_ids",
+      "ages",
+      "evidence_slopes",
+      "removed_ids",
+      "max_slope"
+    ],
+    "file": "tbp/monty/frameworks/models/evidence_matching/burst_sampling.py",
+    "kind": "dataclass",
+    "line": 61,
+    "methods": []
+  },
+  "tbp/monty/frameworks/models/evidence_matching/hypotheses_displacer.py::DefaultHypothesesDisplacer": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "DefaultHypothesesDisplacer",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/evidence_matching/hypotheses_displacer.py",
+    "kind": "class",
+    "line": 95,
+    "methods": [
+      "__init__",
+      "displace_hypotheses",
+      "compute_evidence",
+      "_calculate_evidence_for_new_locations",
+      "_get_node_distance_weights",
+      "_get_pose_evidence_matrix"
+    ]
+  },
+  "tbp/monty/frameworks/models/feature_location_matching.py::FeatureGraphLM": {
+    "bases": [
+      "GraphLM"
+    ],
+    "behaviour": "some",
+    "class": "FeatureGraphLM",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/feature_location_matching.py",
+    "kind": "class",
+    "line": 40,
+    "methods": [
+      "__init__",
+      "_init_FeatureGraphLM",
+      "init_from_ltm",
+      "reset_stm",
+      "send_out_vote",
+      "receive_votes",
+      "get_unique_pose_if_available",
+      "get_object_rotation",
+      "_check_for_symmetry",
+      "_enough_symmetry_evidence_accumulated",
+      "_update_possible_matches",
+      "_update_matches_using_features",
+      "_get_new_possible_paths_and_poses",
+      "_match_pose_dependent_features",
+      "_remove_object_from_matches",
+      "_remove_inconsistent_objects",
+      "_get_possible_recent_paths",
+      "_get_informed_possible_poses",
+      "_add_detailed_stats"
+    ]
+  },
+  "tbp/monty/frameworks/models/feature_location_matching.py::FeatureGraphMemory": {
+    "bases": [
+      "GraphMemory"
+    ],
+    "behaviour": "some",
+    "class": "FeatureGraphMemory",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/feature_location_matching.py",
+    "kind": "class",
+    "line": 690,
+    "methods": [
+      "__init__",
+      "get_initial_hypotheses",
+      "get_rotation_features_at_node",
+      "get_nodes_with_matching_features",
+      "_match_all_node_features"
+    ]
+  },
+  "tbp/monty/frameworks/models/graph_matching.py::GraphLM": {
+    "bases": [
+      "LearningModule"
+    ],
+    "behaviour": "some",
+    "class": "GraphLM",
+    "fields": [
+      "_goals",
+      "possible_paths",
+      "detected_rotation_r"
+    ],
+    "file": "tbp/monty/frameworks/models/graph_matching.py",
+    "kind": "class",
+    "line": 497,
+    "methods": [
+      "__init__",
+      "_init_GraphLM",
+      "init_from_ltm",
+      "reset_stm",
+      "fixme_reset_ground_truth",
+      "matching_step",
+      "exploratory_step",
+      "update_ltm_from_stm",
+      "fixme_update_ground_truth",
+      "send_out_vote",
+      "receive_votes",
+      "get_output",
+      "propose_goals",
+      "propose_region",
+      "update_terminal_condition",
+      "recognition_status",
+      "set_experiment_mode",
+      "set_detected_object",
+      "get_possible_matches",
+      "get_possible_paths",
+      "get_possible_locations",
+      "get_possible_poses",
+      "get_object_scale",
+      "get_all_known_object_ids",
+      "get_graph",
+      "get_input_channels_in_graph",
+      "set_individual_ts",
+      "collect_stats_to_save",
+      "add_lm_processing_to_buffer_stats",
+      "state_dict",
+      "load_state_dict",
+      "_compute_possible_matches",
+      "_update_memory",
+      "_update_target_graph_mapping",
+      "_agent_moved_since_reset",
+      "_add_displacements",
+      "_select_features_to_use",
+      "_add_votes_to_buffer_stats",
+      "_add_detailed_stats"
+    ]
+  },
+  "tbp/monty/frameworks/models/graph_matching.py::MontyForGraphMatching": {
+    "bases": [
+      "MontyBase"
+    ],
+    "behaviour": "some",
+    "class": "MontyForGraphMatching",
+    "fields": [
+      "_match_criterion"
+    ],
+    "file": "tbp/monty/frameworks/models/graph_matching.py",
+    "kind": "class",
+    "line": 47,
+    "methods": [
+      "__init__",
+      "fixme_set_ground_truth",
+      "send_vote_to_lm",
+      "update_stats_after_vote",
+      "check_if_any_lms_updated",
+      "deal_with_time_out",
+      "check_terminal_conditions",
+      "load_state_dict_from_parallel",
+      "_step_learning_modules",
+      "_combine_votes",
+      "_vote",
+      "_set_step_type_and_check_if_done",
+      "_set_stepwise_targets",
+      "_set_time_outs"
+    ]
+  },
+  "tbp/monty/frameworks/models/mixins/no_reset_evidence.py::HypothesesUpdaterGraphTelemetry": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "HypothesesUpdaterGraphTelemetry",
+    "fields": [
+      "hypotheses_updater",
+      "evidence",
+      "rotations",
+      "locations",
+      "pose_errors"
+    ],
+    "file": "tbp/monty/frameworks/models/mixins/no_reset_evidence.py",
+    "kind": "dataclass",
+    "line": 29,
+    "methods": []
+  },
+  "tbp/monty/frameworks/models/mixins/no_reset_evidence.py::TheoreticalLimitLMLoggingMixin": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "TheoreticalLimitLMLoggingMixin",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/mixins/no_reset_evidence.py",
+    "kind": "class",
+    "line": 52,
+    "methods": [
+      "__init_subclass__",
+      "_add_detailed_stats",
+      "_hypotheses_updater_telemetry",
+      "_graph_telemetry",
+      "_theoretical_limit_target_object_pose_error",
+      "_mlh_target_object_pose_error"
+    ]
+  },
+  "tbp/monty/frameworks/models/monty_base.py::MontyBase": {
+    "bases": [
+      "Monty"
+    ],
+    "behaviour": "some",
+    "class": "MontyBase",
+    "fields": [
+      "_is_done"
+    ],
+    "file": "tbp/monty/frameworks/models/monty_base.py",
+    "kind": "class",
+    "line": 43,
+    "methods": [
+      "__init__",
+      "step",
+      "aggregate_sensory_inputs",
+      "motor_only_step",
+      "_step_learning_modules",
+      "_collect_inputs_to_lm",
+      "_combine_inputs",
+      "_vote",
+      "_pass_goals",
+      "_step_motor_system",
+      "_set_step_type_and_check_if_done",
+      "set_experiment_mode",
+      "reset",
+      "snapshot",
+      "restore",
+      "update_ltm",
+      "load_state_dict",
+      "state_dict",
+      "get_observations",
+      "is_motor_only_step",
+      "is_exploring",
+      "is_done",
+      "set_done",
+      "min_steps",
+      "step_type_count",
+      "exceeded_min_steps",
+      "reset_episode_steps",
+      "update_step_counters",
+      "switch_to_matching_step",
+      "switch_to_exploratory_step"
+    ]
+  },
+  "tbp/monty/frameworks/models/motor_policy_selectors.py::RuntimeMotorPolicySelector": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "RuntimeMotorPolicySelector",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/motor_policy_selectors.py",
+    "kind": "protocol",
+    "line": 58,
+    "methods": []
+  },
+  "tbp/monty/frameworks/models/no_reset_evidence_matching.py::MontyForNoResetEvidenceGraphMatching": {
+    "bases": [
+      "MontyForEvidenceGraphMatching"
+    ],
+    "behaviour": "some",
+    "class": "MontyForNoResetEvidenceGraphMatching",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/no_reset_evidence_matching.py",
+    "kind": "class",
+    "line": 40,
+    "methods": [
+      "__init__",
+      "snapshot",
+      "restore",
+      "reset",
+      "fixme_set_ground_truth",
+      "_reset_terminal_states",
+      "_reset_modules_buffers"
+    ]
+  },
+  "tbp/monty/frameworks/models/no_reset_evidence_matching.py::NoResetEvidenceGraphLM": {
+    "bases": [
+      "TheoreticalLimitLMLoggingMixin",
+      "EvidenceGraphLM"
+    ],
+    "behaviour": "some",
+    "class": "NoResetEvidenceGraphLM",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/no_reset_evidence_matching.py",
+    "kind": "class",
+    "line": 148,
+    "methods": [
+      "__init__",
+      "_init_NoResetEvidenceGraphLM",
+      "reset_stm",
+      "state_dict",
+      "load_state_dict",
+      "_add_displacements",
+      "_displace_hypotheses",
+      "matching_step",
+      "exploratory_step",
+      "_agent_moved_since_reset"
+    ]
+  },
+  "tbp/monty/frameworks/models/salience/segmentation/slic_merge.py::SlicMerge": {
+    "bases": [
+      "SegmentationStrategy"
+    ],
+    "behaviour": "some",
+    "class": "SlicMerge",
+    "fields": [
+      "_n_seeds",
+      "_compactness",
+      "_max_iter",
+      "_sigma",
+      "_min_size_factor",
+      "_max_size_factor",
+      "_merge_threshold"
+    ],
+    "file": "tbp/monty/frameworks/models/salience/segmentation/slic_merge.py",
+    "kind": "class",
+    "line": 25,
+    "methods": [
+      "__init__",
+      "__call__",
+      "create_mask",
+      "build_adjacency_graph",
+      "extract_region_colors",
+      "compute_superpixel_mean_colors",
+      "_merge_regions",
+      "_segment_image"
+    ]
+  },
+  "tbp/monty/frameworks/models/two_d_sensor_module.py::TwoDSensorModule": {
+    "bases": [
+      "SensorModule"
+    ],
+    "behaviour": "some",
+    "class": "TwoDSensorModule",
+    "fields": [],
+    "file": "tbp/monty/frameworks/models/two_d_sensor_module.py",
+    "kind": "class",
+    "line": 58,
+    "methods": [
+      "__init__",
+      "reset",
+      "update_state",
+      "state_dict",
+      "step",
+      "_extract_2d_edge",
+      "_update_tangent_frame",
+      "_update_2d_position_and_displacement"
+    ]
+  },
+  "tbp/monty/frameworks/sensors.py::Resolution2D": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "Resolution2D",
+    "fields": [
+      "width",
+      "height"
+    ],
+    "file": "tbp/monty/frameworks/sensors.py",
+    "kind": "dataclass",
+    "line": 21,
+    "methods": []
+  },
+  "tbp/monty/frameworks/sensors.py::SensorConfig": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "SensorConfig",
+    "fields": [
+      "resolution",
+      "position",
+      "rotation",
+      "zoom",
+      "semantic"
+    ],
+    "file": "tbp/monty/frameworks/sensors.py",
+    "kind": "dataclass",
+    "line": 29,
+    "methods": []
+  },
+  "tbp/monty/frameworks/utils/dataclass_utils.py::Dataclass": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "Dataclass",
+    "fields": [
+      "__dataclass_fields__"
+    ],
+    "file": "tbp/monty/frameworks/utils/dataclass_utils.py",
+    "kind": "protocol",
+    "line": 21,
+    "methods": []
+  },
+  "tbp/monty/frameworks/utils/edge_detection.py::EdgeDetector": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "EdgeDetector",
+    "fields": [],
+    "file": "tbp/monty/frameworks/utils/edge_detection.py",
+    "kind": "class",
+    "line": 154,
+    "methods": [
+      "__init__",
+      "__call__",
+      "_compute_sobel_gradients",
+      "_compute_per_pixel_structure_tensors",
+      "_compute_center_weights",
+      "_aggregate_tensor",
+      "_compute_center_offset",
+      "_passes_center_check",
+      "_is_geometric_edge"
+    ]
+  },
+  "tbp/monty/frameworks/utils/edge_detection.py::EdgeFeatures": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "EdgeFeatures",
+    "fields": [
+      "angle",
+      "strength",
+      "coherence",
+      "is_geometric_edge",
+      "has_edge"
+    ],
+    "file": "tbp/monty/frameworks/utils/edge_detection.py",
+    "kind": "dataclass",
+    "line": 144,
+    "methods": []
+  },
+  "tbp/monty/frameworks/utils/edge_detection.py::StructureTensor": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "StructureTensor",
+    "fields": [
+      "xx",
+      "yy",
+      "xy"
+    ],
+    "file": "tbp/monty/frameworks/utils/edge_detection.py",
+    "kind": "dataclass",
+    "line": 100,
+    "methods": [
+      "eigenvalues",
+      "gradient_theta",
+      "edge_strength",
+      "coherence",
+      "edge_angle"
+    ]
+  },
+  "tbp/monty/frameworks/utils/live_plotter.py::LivePlotter": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "LivePlotter",
+    "fields": [],
+    "file": "tbp/monty/frameworks/utils/live_plotter.py",
+    "kind": "class",
+    "line": 23,
+    "methods": [
+      "initialize_online_plotting",
+      "hardcoded_assumptions",
+      "show_observations",
+      "show_view_finder",
+      "show_patch",
+      "show_mlh",
+      "add_text",
+      "setup_camera_ax",
+      "setup_sensor_ax",
+      "setup_mlh_ax"
+    ]
+  },
+  "tbp/monty/frameworks/utils/object_model_utils.py::NumpyGraph": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "NumpyGraph",
+    "fields": [],
+    "file": "tbp/monty/frameworks/utils/object_model_utils.py",
+    "kind": "class",
+    "line": 30,
+    "methods": [
+      "__init__"
+    ]
+  },
+  "tbp/monty/frameworks/utils/plot_utils_dev.py::PolicyPlot": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "PolicyPlot",
+    "fields": [],
+    "file": "tbp/monty/frameworks/utils/plot_utils_dev.py",
+    "kind": "class",
+    "line": 741,
+    "methods": [
+      "__init__",
+      "plot_core_object",
+      "derive_policy_details",
+      "plot_movement_step",
+      "check_failed_jump",
+      "add_lm_processing",
+      "add_sensor_scatter",
+      "plot_up_to_step",
+      "plot_animation",
+      "visualize_plot"
+    ]
+  },
+  "tbp/monty/memento.py::Snapshotable": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "Snapshotable",
+    "fields": [],
+    "file": "tbp/monty/memento.py",
+    "kind": "protocol",
+    "line": 16,
+    "methods": []
+  },
+  "tbp/monty/observations.py::SensorObservation": {
+    "bases": [
+      "TypedDict"
+    ],
+    "behaviour": "none",
+    "class": "SensorObservation",
+    "fields": [
+      "rgba",
+      "depth",
+      "semantic",
+      "semantic_3d",
+      "sensor_frame_data",
+      "cam_to_world",
+      "pixel_loc",
+      "raw"
+    ],
+    "file": "tbp/monty/observations.py",
+    "kind": "typed_dict",
+    "line": 17,
+    "methods": []
+  },
+  "tbp/monty/simulators/habitat/actions.py::ActuationVecSpec": {
+    "bases": [
+      "ActuationSpec"
+    ],
+    "behaviour": "none",
+    "class": "ActuationVecSpec",
+    "fields": [
+      "amount",
+      "constraint"
+    ],
+    "file": "tbp/monty/simulators/habitat/actions.py",
+    "kind": "class",
+    "line": 36,
+    "methods": []
+  },
+  "tbp/monty/simulators/habitat/actions.py::MoveForward": {
+    "bases": [
+      "SceneNodeControl"
+    ],
+    "behaviour": "some",
+    "class": "MoveForward",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actions.py",
+    "kind": "class",
+    "line": 200,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actions.py::MoveTangentially": {
+    "bases": [
+      "SceneNodeControl"
+    ],
+    "behaviour": "some",
+    "class": "MoveTangentially",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actions.py",
+    "kind": "class",
+    "line": 206,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actions.py::OrientHorizontal": {
+    "bases": [
+      "SceneNodeControl"
+    ],
+    "behaviour": "some",
+    "class": "OrientHorizontal",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actions.py",
+    "kind": "class",
+    "line": 214,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actions.py::OrientVertical": {
+    "bases": [
+      "SceneNodeControl"
+    ],
+    "behaviour": "some",
+    "class": "OrientVertical",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actions.py",
+    "kind": "class",
+    "line": 224,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actions.py::SetAgentPitch": {
+    "bases": [
+      "SceneNodeControl"
+    ],
+    "behaviour": "some",
+    "class": "SetAgentPitch",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actions.py",
+    "kind": "class",
+    "line": 99,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actions.py::SetAgentPose": {
+    "bases": [
+      "SceneNodeControl"
+    ],
+    "behaviour": "some",
+    "class": "SetAgentPose",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actions.py",
+    "kind": "class",
+    "line": 173,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actions.py::SetSensorPitch": {
+    "bases": [
+      "SceneNodeControl"
+    ],
+    "behaviour": "some",
+    "class": "SetSensorPitch",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actions.py",
+    "kind": "class",
+    "line": 76,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actions.py::SetSensorPose": {
+    "bases": [
+      "SceneNodeControl"
+    ],
+    "behaviour": "some",
+    "class": "SetSensorPose",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actions.py",
+    "kind": "class",
+    "line": 129,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actions.py::SetSensorRotation": {
+    "bases": [
+      "SceneNodeControl"
+    ],
+    "behaviour": "some",
+    "class": "SetSensorRotation",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actions.py",
+    "kind": "class",
+    "line": 157,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actions.py::SetYaw": {
+    "bases": [
+      "SceneNodeControl"
+    ],
+    "behaviour": "some",
+    "class": "SetYaw",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actions.py",
+    "kind": "class",
+    "line": 58,
+    "methods": [
+      "__call__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actuator.py::HabitatActuator": {
+    "bases": [
+      "HabitatActuatorRequirements"
+    ],
+    "behaviour": "some",
+    "class": "HabitatActuator",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actuator.py",
+    "kind": "class",
+    "line": 47,
+    "methods": [
+      "action_name",
+      "to_habitat",
+      "actuate_look_down",
+      "actuate_look_up",
+      "actuate_move_forward",
+      "actuate_move_tangentially",
+      "actuate_orient_horizontal",
+      "actuate_orient_vertical",
+      "actuate_set_agent_pitch",
+      "actuate_set_agent_pose",
+      "actuate_set_sensor_pitch",
+      "actuate_set_sensor_pose",
+      "actuate_set_sensor_rotation",
+      "actuate_set_yaw",
+      "actuate_turn_left",
+      "actuate_turn_right"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actuator.py::HabitatActuatorRequirements": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "HabitatActuatorRequirements",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actuator.py",
+    "kind": "protocol",
+    "line": 41,
+    "methods": []
+  },
+  "tbp/monty/simulators/habitat/actuator.py::InvalidActionName": {
+    "bases": [
+      "Exception"
+    ],
+    "behaviour": "some",
+    "class": "InvalidActionName",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actuator.py",
+    "kind": "exception",
+    "line": 172,
+    "methods": [
+      "__init__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/actuator.py::NoActionParameters": {
+    "bases": [
+      "Exception"
+    ],
+    "behaviour": "some",
+    "class": "NoActionParameters",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/actuator.py",
+    "kind": "exception",
+    "line": 179,
+    "methods": [
+      "__init__"
+    ]
+  },
+  "tbp/monty/simulators/habitat/agents.py::HabitatAgent": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "HabitatAgent",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/agents.py",
+    "kind": "class",
+    "line": 45,
+    "methods": [
+      "__init__",
+      "get_spec",
+      "initialize",
+      "process_observations"
+    ]
+  },
+  "tbp/monty/simulators/habitat/agents.py::MultiSensorAgent": {
+    "bases": [
+      "HabitatAgent"
+    ],
+    "behaviour": "some",
+    "class": "MultiSensorAgent",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/agents.py",
+    "kind": "class",
+    "line": 231,
+    "methods": [
+      "__init__",
+      "get_spec",
+      "initialize"
+    ]
+  },
+  "tbp/monty/simulators/habitat/agents.py::SingleSensorAgent": {
+    "bases": [
+      "HabitatAgent"
+    ],
+    "behaviour": "some",
+    "class": "SingleSensorAgent",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/agents.py",
+    "kind": "class",
+    "line": 392,
+    "methods": [
+      "__init__",
+      "get_spec",
+      "initialize"
+    ]
+  },
+  "tbp/monty/simulators/habitat/environment.py::AgentConfig": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "AgentConfig",
+    "fields": [
+      "agent_type",
+      "agent_args"
+    ],
+    "file": "tbp/monty/simulators/habitat/environment.py",
+    "kind": "dataclass",
+    "line": 84,
+    "methods": []
+  },
+  "tbp/monty/simulators/habitat/environment.py::HabitatAgentArgs": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "HabitatAgentArgs",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/environment.py",
+    "kind": "class",
+    "line": 66,
+    "methods": []
+  },
+  "tbp/monty/simulators/habitat/sensors.py::RGBDSensorConfig": {
+    "bases": [
+      "SensorConfig"
+    ],
+    "behaviour": "some",
+    "class": "RGBDSensorConfig",
+    "fields": [
+      "resolution",
+      "zoom"
+    ],
+    "file": "tbp/monty/simulators/habitat/sensors.py",
+    "kind": "dataclass",
+    "line": 68,
+    "methods": [
+      "get_specs"
+    ]
+  },
+  "tbp/monty/simulators/habitat/sensors.py::SemanticSensorConfig": {
+    "bases": [
+      "SensorConfig"
+    ],
+    "behaviour": "some",
+    "class": "SemanticSensorConfig",
+    "fields": [
+      "resolution",
+      "zoom"
+    ],
+    "file": "tbp/monty/simulators/habitat/sensors.py",
+    "kind": "dataclass",
+    "line": 121,
+    "methods": [
+      "get_specs"
+    ]
+  },
+  "tbp/monty/simulators/habitat/sensors.py::SensorConfig": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "SensorConfig",
+    "fields": [
+      "sensor_id",
+      "position",
+      "rotation"
+    ],
+    "file": "tbp/monty/simulators/habitat/sensors.py",
+    "kind": "dataclass",
+    "line": 33,
+    "methods": [
+      "get_specs",
+      "process_observations"
+    ]
+  },
+  "tbp/monty/simulators/habitat/simulator.py::HabitatSim": {
+    "bases": [
+      "HabitatActuator",
+      "SimulatedObjectEnvironment"
+    ],
+    "behaviour": "some",
+    "class": "HabitatSim",
+    "fields": [],
+    "file": "tbp/monty/simulators/habitat/simulator.py",
+    "kind": "class",
+    "line": 93,
+    "methods": [
+      "__init__",
+      "initialize_agent",
+      "remove_all_objects",
+      "add_object",
+      "_bounding_corners",
+      "non_conflicting_vector",
+      "check_viewpoint_collision",
+      "find_non_colliding_positions",
+      "num_objects",
+      "action_space",
+      "get_agent",
+      "step",
+      "observations",
+      "process_observations",
+      "states",
+      "reset",
+      "close",
+      "__enter__",
+      "__exit__"
+    ]
+  },
+  "tbp/monty/simulators/mujoco/agents.py::Agent": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "Agent",
+    "fields": [
+      "id"
+    ],
+    "file": "tbp/monty/simulators/mujoco/agents.py",
+    "kind": "protocol",
+    "line": 84,
+    "methods": []
+  },
+  "tbp/monty/simulators/mujoco/agents.py::Axis": {
+    "bases": [
+      "IntEnum"
+    ],
+    "behaviour": "none",
+    "class": "Axis",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/agents.py",
+    "kind": "enum",
+    "line": 75,
+    "methods": []
+  },
+  "tbp/monty/simulators/mujoco/agents.py::DistantAgent": {
+    "bases": [
+      "Agent"
+    ],
+    "behaviour": "some",
+    "class": "DistantAgent",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/agents.py",
+    "kind": "class",
+    "line": 384,
+    "methods": [
+      "__init__",
+      "state",
+      "observations",
+      "reset",
+      "__repr__",
+      "actuate_set_agent_pose",
+      "actuate_set_sensor_rotation",
+      "actuate_move_forward",
+      "actuate_turn_right",
+      "actuate_turn_left",
+      "actuate_look_up",
+      "actuate_look_down"
+    ]
+  },
+  "tbp/monty/simulators/mujoco/agents.py::Embodiment": {
+    "bases": [
+      "Agent"
+    ],
+    "behaviour": "some",
+    "class": "Embodiment",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/agents.py",
+    "kind": "class",
+    "line": 101,
+    "methods": [
+      "__init__",
+      "position",
+      "position",
+      "rotation",
+      "rotation",
+      "_sensor_pitch",
+      "_sensor_pitch",
+      "observations",
+      "state",
+      "reset",
+      "move_along_local_axis",
+      "yaw",
+      "pitch",
+      "pitch_sensor",
+      "set_pose",
+      "set_sensor_rotation"
+    ]
+  },
+  "tbp/monty/simulators/mujoco/agents.py::NoopAgent": {
+    "bases": [
+      "Agent"
+    ],
+    "behaviour": "some",
+    "class": "NoopAgent",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/agents.py",
+    "kind": "class",
+    "line": 345,
+    "methods": [
+      "__init__",
+      "state",
+      "observations",
+      "reset",
+      "__repr__"
+    ]
+  },
+  "tbp/monty/simulators/mujoco/agents.py::SurfaceAgent": {
+    "bases": [
+      "Agent"
+    ],
+    "behaviour": "some",
+    "class": "SurfaceAgent",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/agents.py",
+    "kind": "class",
+    "line": 484,
+    "methods": [
+      "__init__",
+      "state",
+      "observations",
+      "reset",
+      "__repr__",
+      "actuate_move_forward",
+      "actuate_orient_horizontal",
+      "actuate_orient_vertical",
+      "actuate_move_tangentially",
+      "actuate_set_agent_pose",
+      "actuate_set_sensor_rotation"
+    ]
+  },
+  "tbp/monty/simulators/mujoco/objects.py::InvalidObjectMetadata": {
+    "bases": [
+      "Exception"
+    ],
+    "behaviour": "none",
+    "class": "InvalidObjectMetadata",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/objects.py",
+    "kind": "exception",
+    "line": 23,
+    "methods": []
+  },
+  "tbp/monty/simulators/mujoco/objects.py::ObjectMetadata": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "ObjectMetadata",
+    "fields": [
+      "refpos",
+      "refquat",
+      "scale"
+    ],
+    "file": "tbp/monty/simulators/mujoco/objects.py",
+    "kind": "dataclass",
+    "line": 28,
+    "methods": []
+  },
+  "tbp/monty/simulators/mujoco/objects.py::ObjectMetadataDecoder": {
+    "bases": [
+      "JSONDecoder"
+    ],
+    "behaviour": "some",
+    "class": "ObjectMetadataDecoder",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/objects.py",
+    "kind": "class",
+    "line": 45,
+    "methods": [
+      "__init__",
+      "decode"
+    ]
+  },
+  "tbp/monty/simulators/mujoco/simulator.py::ActuateMethodMissing": {
+    "bases": [
+      "RuntimeError"
+    ],
+    "behaviour": "some",
+    "class": "ActuateMethodMissing",
+    "fields": [
+      "agent_class",
+      "method_name"
+    ],
+    "file": "tbp/monty/simulators/mujoco/simulator.py",
+    "kind": "exception",
+    "line": 146,
+    "methods": [
+      "__init__"
+    ]
+  },
+  "tbp/monty/simulators/mujoco/simulator.py::DataPathNotConfigured": {
+    "bases": [
+      "RuntimeError"
+    ],
+    "behaviour": "none",
+    "class": "DataPathNotConfigured",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/simulator.py",
+    "kind": "exception",
+    "line": 142,
+    "methods": []
+  },
+  "tbp/monty/simulators/mujoco/simulator.py::MissingObjectModel": {
+    "bases": [
+      "RuntimeError"
+    ],
+    "behaviour": "none",
+    "class": "MissingObjectModel",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/simulator.py",
+    "kind": "exception",
+    "line": 134,
+    "methods": []
+  },
+  "tbp/monty/simulators/mujoco/simulator.py::MissingObjectTexture": {
+    "bases": [
+      "RuntimeError"
+    ],
+    "behaviour": "none",
+    "class": "MissingObjectTexture",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/simulator.py",
+    "kind": "exception",
+    "line": 138,
+    "methods": []
+  },
+  "tbp/monty/simulators/mujoco/simulator.py::ModelMetadata": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "ModelMetadata",
+    "fields": [
+      "mesh_name",
+      "material_name"
+    ],
+    "file": "tbp/monty/simulators/mujoco/simulator.py",
+    "kind": "dataclass",
+    "line": 108,
+    "methods": []
+  },
+  "tbp/monty/simulators/mujoco/simulator.py::MuJoCoAgentFactory": {
+    "bases": [
+      "Protocol"
+    ],
+    "behaviour": "none",
+    "class": "MuJoCoAgentFactory",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/simulator.py",
+    "kind": "protocol",
+    "line": 115,
+    "methods": []
+  },
+  "tbp/monty/simulators/mujoco/simulator.py::MuJoCoSimulator": {
+    "bases": [
+      "SimulatedObjectEnvironment"
+    ],
+    "behaviour": "some",
+    "class": "MuJoCoSimulator",
+    "fields": [
+      "spec",
+      "model",
+      "data",
+      "id_to_semantic_id",
+      "_data_path",
+      "_raise_actuate_missing",
+      "_agent_partials",
+      "_agents",
+      "_loaded_custom_types",
+      "_object_count",
+      "_renderers"
+    ],
+    "file": "tbp/monty/simulators/mujoco/simulator.py",
+    "kind": "class",
+    "line": 159,
+    "methods": [
+      "__init__",
+      "_recompile",
+      "_initialize_new_spec",
+      "_configure_spec_settings",
+      "_configure_lights",
+      "renderer_for_res",
+      "_create_agents",
+      "_max_sensor_resolution",
+      "remove_all_objects",
+      "add_object",
+      "_add_custom_object",
+      "_load_custom_object",
+      "_add_primitive_object",
+      "observations",
+      "states",
+      "step",
+      "reset",
+      "close",
+      "_close_renderers",
+      "__enter__",
+      "__exit__",
+      "_default_id_mapping"
+    ]
+  },
+  "tbp/monty/simulators/mujoco/simulator.py::UnknownObjectType": {
+    "bases": [
+      "RuntimeError"
+    ],
+    "behaviour": "none",
+    "class": "UnknownObjectType",
+    "fields": [],
+    "file": "tbp/monty/simulators/mujoco/simulator.py",
+    "kind": "exception",
+    "line": 130,
+    "methods": []
+  },
+  "tbp/monty/simulators/tacto/agents.py::TactoFingerAgent": {
+    "bases": [
+      "HabitatAgent"
+    ],
+    "behaviour": "some",
+    "class": "TactoFingerAgent",
+    "fields": [],
+    "file": "tbp/monty/simulators/tacto/agents.py",
+    "kind": "class",
+    "line": 29,
+    "methods": [
+      "__init__",
+      "get_spec"
+    ]
+  },
+  "tbp/monty/simulators/tacto/config.py::Camera": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "Camera",
+    "fields": [
+      "position",
+      "orientation",
+      "yfov",
+      "znear",
+      "lightIDList"
+    ],
+    "file": "tbp/monty/simulators/tacto/config.py",
+    "kind": "dataclass",
+    "line": 61,
+    "methods": []
+  },
+  "tbp/monty/simulators/tacto/config.py::Force": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "Force",
+    "fields": [
+      "enable",
+      "range_force",
+      "max_deformation"
+    ],
+    "file": "tbp/monty/simulators/tacto/config.py",
+    "kind": "dataclass",
+    "line": 125,
+    "methods": []
+  },
+  "tbp/monty/simulators/tacto/config.py::Gel": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "Gel",
+    "fields": [
+      "origin",
+      "width",
+      "height",
+      "curvature",
+      "curvatureMax",
+      "R",
+      "countW",
+      "mesh"
+    ],
+    "file": "tbp/monty/simulators/tacto/config.py",
+    "kind": "dataclass",
+    "line": 36,
+    "methods": []
+  },
+  "tbp/monty/simulators/tacto/config.py::Lights": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "Lights",
+    "fields": [
+      "origin",
+      "polar",
+      "colors",
+      "intensities",
+      "spot",
+      "shadow",
+      "coords",
+      "xs",
+      "rs",
+      "thetas"
+    ],
+    "file": "tbp/monty/simulators/tacto/config.py",
+    "kind": "dataclass",
+    "line": 80,
+    "methods": [
+      "__post_init__"
+    ]
+  },
+  "tbp/monty/simulators/tacto/config.py::Noise": {
+    "bases": [],
+    "behaviour": "none",
+    "class": "Noise",
+    "fields": [
+      "mean",
+      "std"
+    ],
+    "file": "tbp/monty/simulators/tacto/config.py",
+    "kind": "dataclass",
+    "line": 112,
+    "methods": []
+  },
+  "tbp/monty/simulators/tacto/config.py::TactoSensorSpec": {
+    "bases": [],
+    "behaviour": "some",
+    "class": "TactoSensorSpec",
+    "fields": [
+      "name",
+      "camera",
+      "gel",
+      "lights",
+      "noise",
+      "force"
+    ],
+    "file": "tbp/monty/simulators/tacto/config.py",
+    "kind": "dataclass",
+    "line": 141,
+    "methods": [
+      "__post_init__",
+      "from_yaml"
+    ]
+  },
+  "tbp/monty/simulators/tacto/sensors.py::TactoSensor": {
+    "bases": [
+      "SensorConfig"
+    ],
+    "behaviour": "some",
+    "class": "TactoSensor",
+    "fields": [
+      "resolution",
+      "config",
+      "_depths"
+    ],
+    "file": "tbp/monty/simulators/tacto/sensors.py",
+    "kind": "dataclass",
+    "line": 31,
+    "methods": [
+      "__post_init__",
+      "get_specs",
+      "process_observations"
+    ]
+  },
+  "tbp/monty/telemetry/formatters.py::JsonFormatter": {
+    "bases": [
+      "Formatter"
+    ],
+    "behaviour": "some",
+    "class": "JsonFormatter",
+    "fields": [],
+    "file": "tbp/monty/telemetry/formatters.py",
+    "kind": "class",
+    "line": 17,
+    "methods": [
+      "format"
+    ]
+  },
+  "tbp/monty/telemetry/publishers.py::TelemetryPublisher": {
+    "bases": [
+      "Logger"
+    ],
+    "behaviour": "some",
+    "class": "TelemetryPublisher",
+    "fields": [],
+    "file": "tbp/monty/telemetry/publishers.py",
+    "kind": "class",
+    "line": 19,
+    "methods": [
+      "__init__",
+      "_log_event",
+      "log",
+      "emit",
+      "debug",
+      "info",
+      "warning",
+      "warn",
+      "error",
+      "exception",
+      "critical"
+    ]
+  },
+  "tbp/monty/telemetry/schemas.py::TelemetryEvent": {
+    "bases": [
+      "TelemetrySchema"
+    ],
+    "behaviour": "none",
+    "class": "TelemetryEvent",
+    "fields": [],
+    "file": "tbp/monty/telemetry/schemas.py",
+    "kind": "class",
+    "line": 42,
+    "methods": []
+  },
+  "tbp/monty/telemetry/schemas.py::TelemetrySchema": {
+    "bases": [
+      "BaseModel"
+    ],
+    "behaviour": "some",
+    "class": "TelemetrySchema",
+    "fields": [
+      "VERSION",
+      "kind"
+    ],
+    "file": "tbp/monty/telemetry/schemas.py",
+    "kind": "class",
+    "line": 18,
+    "methods": [
+      "validate_kind",
+      "__str__"
+    ]
+  }
+}
