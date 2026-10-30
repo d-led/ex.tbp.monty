@@ -5,23 +5,36 @@ Monty](https://github.com/thousandbrainsproject/tbp.monty) in Elixir/Phoenix.
 
 Three promises shape everything here:
 
-1. **The same modules.** A Python file maps to an Elixir module by one rule
-   ([docs/module-map.md](docs/module-map.md)), and a test fails when a Monty
-   file has no entry.
-2. **The same experiment configs.** Monty's Hydra/OmegaConf YAML is read
-   unchanged; all 103 of Monty's committed config snapshots compose to the same
-   tree here (`mix monty.config.snapshots`).
-3. **Processes instead of a loop.** Sensor modules, learning modules and the
-   motor system are BEAM processes exchanging CMP messages, so voting is a
-   message round with an optional deadline rather than a blocking loop.
+1. **Same modules.** Python `path/file.py::Class` becomes
+   `Monty.Path.File.Class` by one rule
+   ([docs/module-map.md](docs/module-map.md)), and
+   `mix monty.module_map.verify` fails when a Monty file has no entry.
+2. **Same configs.** Monty's Hydra/OmegaConf YAML is read unchanged; all 103
+   committed snapshots compose to the same tree here
+   (`mix monty.config.snapshots`).
+3. **Processes, not a loop.** Sensors, learning modules and the motor system are
+   BEAM processes exchanging CMP messages, so voting is a message round with a
+   deadline rather than a blocking loop.
 
-What has actually been compared against Monty — which numbers, how closely, and
-what is still only a reading of the source — is in
-[docs/validation.md](docs/validation.md).
+**Believe the receipts, not the claims.** What has actually been compared with
+Monty — which numbers, how closely, what is still only a reading of the source —
+is [docs/validation.md](docs/validation.md). Every deliberate difference is
+[docs/monty-bugs.md](docs/monty-bugs.md); read it before diffing an Elixir run
+against a Python one.
 
-The UI (LiveView + daisyUI) replaces hand-edited experiment configs and log
-files: browse and edit an experiment, launch a run, watch the step log, the
-hypothesis evidence and the vote telemetry as they happen.
+## TL;DR
+
+```bash
+docker compose up -d     # Postgres 17 on :6432
+mix setup                # deps, database, assets
+mix phx.server           # http://localhost:4000
+```
+
+No browser needed: `mix monty.run tutorial/first_experiment --steps 20`.
+
+The UI (LiveView + daisyUI) replaces hand-edited configs and log files: browse
+and edit an experiment, launch a run, watch the step log, the hypothesis
+evidence and the vote telemetry as they happen.
 
 ## Status
 
@@ -30,28 +43,27 @@ hypothesis evidence and the vote telemetry as they happen.
 | Phoenix app, Postgres/Ecto/Oban, quality gates, release tooling | done |
 | `Monty.Cmp` — message, goal, attention region, wire form | done |
 | `Monty.Config` — Hydra composition, resolvers, snapshot parity | done (103/103) |
-| `Monty.ModuleMap` — the module contract and its verification | done (131 modules: Monty + teleop, 42 implemented) |
+| `Monty.ModuleMap` — the module contract and its verification | done — 131 modules, 46 implemented |
 | `Monty.Runtime` — one process per sensor and learning module, step barriers, vote rounds with deadlines | done |
-| Synthetic environment and `/runs/demo` live run view | done |
-| `Monty.Prerequisites` — streaming downloads into Monty's data and model paths, `/prerequisites` view | done |
-| `Monty.Studio` — faceted experiment index, setup preview and validation, builder, run history | done |
-| Ported sensor/learning modules, evidence matching, motor policies | in progress — what agrees with Monty is listed in [docs/validation.md](docs/validation.md) |
-| MuJoCo/Habitat bridge | planned (needs the simulator installed) |
+| Synthetic world (`Monty.Simulators.Synthetic.*`) and the `/runs/demo` live view | done |
+| `Monty.Prerequisites` — streaming downloads into Monty's own data and model paths, `/prerequisites` view | done |
+| `Monty.Studio` — faceted index, setup preview and validation, builder, run history, job queue | done |
+| Ported sensor/learning modules, evidence matching, motor policies | in progress — see [docs/validation.md](docs/validation.md) |
+| MuJoCo/Habitat world | Elixir side done (`Monty.Simulators.Port.*`); the Python peer is not — [docs/simulator-port.md](docs/simulator-port.md) |
 
-## Quick start
+The counts are a snapshot; `mix monty.module_map.verify` prints the current ones.
 
-```bash
-docker compose up -d          # Postgres 17 on :6432
-mix setup                     # deps, database, assets
-mix phx.server                # http://localhost:4000
-```
+## Configure the checkouts
 
-Monty's configs are read from a checkout of `tbp.monty`:
+Monty's configs — and the module map — are read from checkouts:
 
 ```bash
 export MONTY_SOURCE=../monty-orig   # default; any tbp.monty checkout works
 export TELEOP_SOURCE=../tbp.teleop # default; the teleop tool being replaced
 ```
+
+The config tests need `MONTY_SOURCE`, the module map needs both. Without them
+they fail rather than pass quietly.
 
 ## The studio
 
@@ -60,23 +72,25 @@ script:
 
 | Page | What it is for |
 | --- | --- |
-| `/` | every experiment Monty ships, faceted by agent, module count, learning module and starting point, with the filters in the URL |
-| `/experiments/*name` | one experiment: its wiring diagram, what the checks say, the config, and a run that streams its steps and its log |
+| `/` | every experiment Monty ships, faceted by agent, module count, learning module and starting point — the filters live in the URL |
+| `/experiments/*name` | one experiment: wiring diagram, what the checks say, the config, and a run that streams steps and log |
 | `/build` | an experiment from the least input — a name is enough — previewed by composing the config it would write |
-| `/runs` | every run, with the config snapshot and inputs it was given, its summary and its log; delete asks first |
+| `/runs` | every run with its config snapshot, inputs, summary and log; delete asks first |
+| `/runs/demo` | a live run against the synthetic world |
+| `/jobs` | the Oban queue — where a run is before it has a decision to show |
 | `/prerequisites` | the data and models an experiment needs, downloaded into Monty's own paths |
 
-Runs are recorded in Postgres the moment they start: the composed config, the
-inputs, the step log and the summary. Artifacts stay on the filesystem where
-Monty puts them, so forgetting a run forgets its history, not its model.
+Runs are recorded in Postgres the moment they start — composed config, inputs,
+step log, summary. Artifacts stay on the filesystem where Monty puts them, so
+forgetting a run forgets its history, not its model.
 
 Every page speaks Monty's vocabulary — sensor module, learning module,
-`sm_to_lm_matrix`, epochs, votes — because the point is that a Monty developer
-recognises the experiment and then notices the Elixir underneath it.
+`sm_to_lm_matrix`, epochs, votes — so a Monty developer recognises the
+experiment and then notices the Elixir underneath it.
 
 ### Headless
 
-The same experiments run without a browser, and are recorded the same way:
+Same experiments, no browser, recorded the same way:
 
 ```bash
 mix monty.run tutorial/first_experiment --steps 20
@@ -84,16 +98,21 @@ mix monty.run randrot_noise_10distinctobj_5lms_dist_agent --steps 200 --no-recor
 mix monty.bench tutorial/first_experiment randrot_noise_10distinctobj_5lms_dist_agent --repeat 5
 ```
 
-`mix monty.run` exits non-zero when a config would not start. `mix monty.bench`
-times this port's timestep loop on real experiment shapes — not Monty's accuracy
-benchmarks (`benchmarks/*.csv`), which become comparable once the model modules
-are ported — and its numbers are what a `:tprof` profile should start from.
+* `mix monty.run` — `--steps N` (default 12), `--seed N`,
+  `--record`/`--no-record`, `--quiet`. Recorded by default, so a headless run
+  turns up in `/runs`. Exits 1 when the config would not start, so it is usable
+  from CI.
+* `mix monty.bench` — `--steps N`, `--repeat N` (reported as the median),
+  `--json`. Times **this port's timestep loop** — supervision, barriers, the vote
+  round, reporting — not accuracy; Monty's `benchmarks/*.csv` only become
+  comparable once the model modules are ported. Nothing is recorded. Its numbers
+  are what a `:tprof` profile should start from.
 
 ## Prerequisites
 
-Monty needs data and pretrained models before it can run an experiment. The
-`/prerequisites` page fetches them into the same places Monty uses, so a run
-started here finds the same files a run started from `run.py` would:
+Monty needs data and pretrained models before it can run. `/prerequisites`
+fetches them into the same places Monty uses, so a run started here finds the
+same files a run started from `run.py` would:
 
 | Variable | Default | Holds |
 | --- | --- | --- |
@@ -101,55 +120,74 @@ started here finds the same files a run started from `run.py` would:
 | `MONTY_MODELS` | `~/tbp/results/monty/pretrained_models` | pretrained models |
 | `MONTY_LOGS` | `~/tbp/results/monty/projects` | experiment logs |
 
-Downloads are streamed rather than buffered, so progress is shown as bytes
-arrive and a cancel stops the transfer at once. Bytes land in `<target>.part`
-and are renamed into place only when the transfer finished and the manifest's
-checksum matched; a failed or cancelled attempt leaves nothing that looks
-finished. The manifest is [priv/prerequisites.yaml](priv/prerequisites.yaml).
+* Downloads are **streamed**, so progress is bytes arriving and a cancel stops
+  the transfer at once.
+* Bytes land in `<target>.part`, and are renamed into place only when the
+  transfer finished *and* the manifest's checksum matched. A failed or cancelled
+  attempt leaves nothing that looks finished.
+* The manifest is [priv/prerequisites.yaml](priv/prerequisites.yaml).
 
 ## Quality gates
 
 ```bash
-mix ecto.migrate             # run history needs its table
-scripts/quality.sh           # lint, the suite with coverage, the CRAP report
-scripts/quality.sh --fast    # static analysis only
-scripts/quality.sh --types   # ...and dialyzer (CI runs it as its own job)
-mix lint                     # warnings-as-errors, unused deps, format, credo --strict, sobelow
-mix cover                    # tests with coverage (threshold 85)
-mix complexity               # CRAP: 20 for the ported core, 30 for the web layer
-mix dialyzer                 # types, run as its own CI job
+mix precommit                 # everything CI runs (scripts/quality.sh)
+scripts/quality.sh            # lint, the suite with coverage, the CRAP report
+scripts/quality.sh --fast     # static analysis only
+scripts/quality.sh --no-tests # reuse the exported coverage, re-rank only
+scripts/quality.sh --types    # ...and dialyzer (CI runs it as its own job)
+mix lint                      # warnings-as-errors, unused deps, format, credo --strict, sobelow
+mix cover                     # tests with coverage (threshold 85)
+mix complexity                # CRAP: 20 for the ported core, 30 for the web layer
+mix dialyzer                  # types, run as its own CI job
 ```
 
 Two gates are specific to this project:
 
 ```bash
-mix monty.config.snapshots   # compose all 103 experiments, compare to Monty's snapshots
+mix monty.config.snapshots   # compose all 103 experiments, compare with Monty's snapshots
+mix monty.module_map.gen     # rewrite priv/monty/module_map.exs from the checkouts
 mix monty.module_map.verify  # every Monty file is mapped, every "implemented" module exists
 ```
+
+**The module map is generated, not hand-written.**
+`priv/monty/module_map.exs` holds one entry per Python file: the Elixir module
+it maps to, a status, and its classes. `gen` re-derives all of it and flips an
+entry to `implemented` by loading the Elixir module; only human decisions
+(`excluded` plus a reason, `excluded_classes`) survive a regeneration, and
+`--reset-decisions` throws even those away.
+
+`verify` fails on a Monty file with no entry, an `implemented` entry whose
+module is missing, or an `excluded` entry with no reason. It does **not** diff
+the committed file against a fresh `gen`, so run `gen` after writing a module.
 
 ## Layout
 
 ```
-lib/monty/            the port: CMP, geometry, config, module map, (next) runtime
-lib/ex_tbp_monty/     the OTP application: repo, MCP server, release plumbing
-lib/ex_tbp_monty_web/ Phoenix endpoint, LiveViews, components
-priv/monty/           generated module map
-docs/                 architecture, config compatibility, module map, MCP, developer notes
+lib/monty/               the port: CMP, config, geometry, models, runtime, studio
+lib/monty/runtime/       processes only — step barriers, vote rounds, routing
+lib/monty/studio/        experiments, setups, run history (the app's domain)
+lib/monty/simulators/    the world: synthetic, port protocol, recordings
+lib/ex_tbp_monty/        the OTP application: repo, MCP server, release plumbing
+lib/ex_tbp_monty_web/    Phoenix endpoint, LiveViews, components
+priv/monty/              generated module map, exported pretrained libraries
+priv/prerequisites.yaml  what a run downloads, checksummed
+docs/                    architecture, config compatibility, module map, MCP, validation
 ```
 
-[docs/developers.md](docs/developers.md) is the entry point for working on the
-code; [docs/architecture.md](docs/architecture.md) explains how a timestep
-runs; [docs/roadmap.md](docs/roadmap.md) is the order the rest of Monty arrives
-in — the numeric core first, then the world, then the numbers that make it
-comparable. [docs/monty-bugs.md](docs/monty-bugs.md) lists what looks wrong in
-Monty, and every place this port deliberately differs from it — read it before
-diffing an Elixir run against a Python one, because some differences are
-intended and some are upstream; [docs/validation.md](docs/validation.md) is the
-other half, the list of numbers that have actually been compared with Monty and
-how closely they agreed. [docs/mcp.md](docs/mcp.md) describes the MCP
-server at `POST /mcp`,
-which answers questions about Monty's docs, roadmap and code and can define and
-run an experiment from a conversation.
+## Where to read next
+
+| Doc | Answers |
+| --- | --- |
+| [docs/developers.md](docs/developers.md) | how do I work on this? invariants, tests, gates — **start here** |
+| [docs/architecture.md](docs/architecture.md) | what happens in one timestep? |
+| [docs/module-map.md](docs/module-map.md) | where is that Python file here? |
+| [docs/config-compatibility.md](docs/config-compatibility.md) | which Hydra features are implemented, and how far parity goes |
+| [docs/validation.md](docs/validation.md) | what has been compared with Monty, and how closely |
+| [docs/monty-bugs.md](docs/monty-bugs.md) | what looks wrong upstream, and every deliberate difference |
+| [docs/simulator-port.md](docs/simulator-port.md) | where the world lives, and what is still Python |
+| [docs/parallel-and-live.md](docs/parallel-and-live.md) | parallel episodes and a live world — designed, not built |
+| [docs/roadmap.md](docs/roadmap.md) | the order the rest of Monty arrives in |
+| [docs/mcp.md](docs/mcp.md) | `POST /mcp` — ask this app about Monty's docs, roadmap and code, and define and run an experiment from a conversation |
 
 ## Licence
 
