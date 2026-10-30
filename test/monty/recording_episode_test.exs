@@ -28,6 +28,7 @@ defmodule Monty.RecordingEpisodeTest do
   alias Monty.Runtime.{Episode, LearningModuleServer, Model, Registry}
   alias Monty.Simulators.Recording
   alias Monty.Simulators.Synthetic.Motor
+  alias Monty.Studio.Setup
   alias Monty.Test.MontyRecording
 
   @recording "test/fixtures/monty_pretrained_episode.jsonl"
@@ -113,6 +114,75 @@ defmodule Monty.RecordingEpisodeTest do
       assert result.done?
       assert result.terminal_states == %{lm_0: :match}
       assert learning_module_state(model_id).detected_object == "mug"
+    end
+  end
+
+  # The claim this whole comparison exists for: an episode of Monty's own
+  # evaluation, composed from Monty's own config, ending where Monty's ended.
+  #
+  # The recordings were made with `constants.pretrained_dir` overridden to
+  # `pretrained_ycb_v10` (`docs/validation.md`), so the setup's model path names
+  # that release: a run must recognise with the memory Monty used, not with
+  # whatever a config resolves to today.
+  describe "an episode of Monty's ten-episode evaluation" do
+    @experiment "base_config_10distinctobj_dist_agent"
+    @episodes "test/fixtures/monty_dist_agent_10episodes.jsonl"
+    @recorded_model "/models/pretrained_ycb_v10/surf_agent_1lm_10distinctobj/pretrained/"
+
+    # The bowl's episode: the shortest of the ten that Monty concluded, and one
+    # the port reaches in the same number of steps.
+    test "ends on the object Monty named, after the steps Monty took" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+      setup = %{opened.setup | model_name_or_path: @recorded_model}
+      percepts = @episodes |> MontyRecording.episodes!() |> Enum.at(1)
+
+      model_id = "bowl-#{System.unique_integer([:positive])}"
+      spec = Setup.model_spec(setup, model_id)
+      module_id = hd(spec.learning_modules).id
+
+      spec =
+        spec
+        |> Map.merge(%{
+          sensor_modules: [
+            %{
+              id: @channel,
+              agent_id: @agent,
+              module: Recording.SensorModule,
+              state:
+                Recording.SensorModule.new(
+                  @channel,
+                  Enum.map(percepts, fn
+                    [] -> nil
+                    [percept | _rest] -> percept
+                  end)
+                )
+            }
+          ],
+          sm_to_lm: %{module_id => [@channel]},
+          lm_to_lm_vote: %{module_id => []}
+        })
+        # The recording holds what the sensors saw, not where the agent stood,
+        # so Monty's own motor system has nothing here to plan a jump from.
+        |> Map.drop([:motor])
+
+      start_supervised!(Supervisor.child_spec({Model, spec}, id: model_id))
+
+      # The ceiling is the recording's length: a run that does not conclude on
+      # its own steps is reported as a time-out, not left to invent steps the
+      # recording never had.
+      result =
+        Episode.run(
+          model_id,
+          fn _actions -> {%{@agent => %{}}, %{}} end,
+          mode: :eval,
+          max_steps: length(percepts)
+        )
+
+      assert result.steps == length(percepts)
+      assert result.terminal_states == %{module_id => :match}
+
+      state = LearningModuleServer.state(Registry.via({:learning_module, model_id, module_id}))
+      assert state.detected_object == "bowl"
     end
   end
 end

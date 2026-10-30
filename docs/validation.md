@@ -227,12 +227,23 @@ Saying this plainly matters more than the table above:
   `record_monty_episode.py` wraps Monty's `_check_for_unique_poses` to keep the
   symmetry count, the pose-count, the two maxima it compares and, when they are
   few enough, the pose ids — and `scripts/probe_episode_conclusion.exs` prints
-  both sides of them step by step. That is how the dice was placed: at its last
-  step Monty's symmetry count reaches five and the port's resets to zero, while
-  both hold 26-28 possible poses whose evidence agrees to the second decimal.
-  A difference of one or two poses in that set, from evidence agreeing only to
-  rounding, is what the 90%-overlap rule is sensitive to, and it is the one
-  episode left.
+  both sides of them step by step. That is how the dice was placed, and the
+  numbers are exact (`scripts/probe_pose_sets.exs`): on its last step both sides
+  keep the same 24 poses out of their previous step's, but the port holds 28 in
+  total and Monty 26 — so the 90%-overlap rule reads 24/28 = 0.86 for the port
+  and 24/26 = 0.92 for Monty, and where Monty's symmetry count reaches five the
+  port's starts again. The two extra poses are ones whose evidence sits inside
+  20% of the best here and outside it there, and the two implementations'
+  evidence agrees only to about `2e-4` relative (`29.44` against `29.46`): a
+  boundary case, not a different rule. Chasing it means matching Monty's
+  arithmetic to the last bit, which is the one thing this episode asks for.
+
+  The claim itself is a test now: "an episode of Monty's ten-episode evaluation
+  ends on the object Monty named, after the steps Monty took"
+  (`test/monty/recording_episode_test.exs`) replays the bowl — the shortest of
+  the nine that agree — through the config's own composition with the recorded
+  release's memory, and takes 27 steps to the bowl. It fails if a run is not
+  given the experiment's `min_eval_steps` (21 steps instead of 27).
 
   An episode costs tens of seconds, not milliseconds: a step is 0.8–1.9 s at this
   memory size, and that is the learning module's own matching, not the runtime —
