@@ -172,8 +172,7 @@
     classes: []
   },
   %{
-    reason:
-      "Sensor-mount grid layout; used only by Monty's unit-test resources, not by a config",
+    reason: "Sensor-mount grid layout; used only by Monty's unit-test resources, not by a config",
     status: :excluded,
     elixir: "Monty.Conf.MakeEnvironment",
     package: "monty",
@@ -416,8 +415,7 @@
     python: "experiment/sensor_module.py",
     classes: [
       %{
-        reason:
-          "A Protocol for isinstance checks; the port's sensor behaviour already requires reset/1 (docs/monty-bugs.md §2.13)",
+        reason: "A Protocol for isinstance checks; the port's sensor behaviour already requires reset/1 (docs/monty-bugs.md §2.13)",
         status: :excluded,
         elixir: "Monty.Experiment.SensorModule.ResettableSensorModule",
         python: "ResettableSensorModule"
@@ -948,7 +946,7 @@
   },
   %{
     reason: nil,
-    status: :planned,
+    status: :implemented,
     elixir: "Monty.Frameworks.Experiments.MontyExperiment",
     package: "monty",
     python: "frameworks/experiments/monty_experiment.py",
@@ -2389,8 +2387,7 @@
         python: "Transform"
       },
       %{
-        reason:
-          "A Protocol for a sensor module's runtime interface; its members are the processes behind Monty.Runtime (docs/monty-bugs.md §2.13)",
+        reason: "A Protocol for a sensor module's runtime interface; its members are the processes behind Monty.Runtime (docs/monty-bugs.md §2.13)",
         status: :excluded,
         elixir: "Monty.SensorModules.SensorModule.RuntimeSensorModule",
         python: "RuntimeSensorModule"

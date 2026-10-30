@@ -43,7 +43,7 @@ evidence and the vote telemetry as they happen.
 | Phoenix app, Postgres/Ecto/Oban, quality gates, release tooling | done |
 | `Monty.Cmp` — message, goal, attention region, wire form | done |
 | `Monty.Config` — Hydra composition, resolvers, snapshot parity | done (103/103) |
-| `Monty.ModuleMap` — the module contract and its verification | done — 131 modules, 46 implemented |
+| `Monty.ModuleMap` — the module contract and its verification | done — 131 modules, 47 implemented |
 | `Monty.Runtime` — one process per sensor and learning module, step barriers, vote rounds with deadlines | done |
 | Synthetic world (`Monty.Simulators.Synthetic.*`) and the `/runs/demo` live view | done |
 | `Monty.Prerequisites` — streaming downloads into Monty's own data and model paths, `/prerequisites` view | done |
