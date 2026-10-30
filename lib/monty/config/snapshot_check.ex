@@ -91,6 +91,19 @@ defmodule Monty.Config.SnapshotCheck do
     if left == right, do: [], else: [{path, left, right}]
   end
 
+  @doc """
+  Every experiment Monty ships a snapshot for, by name.
+
+  The snapshot directory is the list of experiments Monty itself ran, which is
+  what makes it the right place to ask "which experiments are there" — not a
+  wildcard over the conf tree, which also finds groups and modules.
+  """
+  @spec names(Path.t() | nil) :: [String.t()]
+  def names(root \\ nil) do
+    root = root || Source.root()
+    snapshot_names(Path.join([root, "tests", "conf", "snapshots"]))
+  end
+
   defp snapshot_names(snapshots_dir) do
     snapshots_dir
     |> Path.join("*.yaml")
