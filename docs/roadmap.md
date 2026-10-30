@@ -82,6 +82,14 @@ should move with every commit; when a mapped class is implemented,
    page says which of the two it got.
 9. **`experiments/`** — `MontyExperiment`, `MontySupervisedObjectPretraining…`,
    `MontyObjectRecognition…`: epochs, episodes, recognition policy, hooks.
+   **Episode loop done:** `Monty.Frameworks.Experiments.MontyExperiment.run_episode_steps/2`
+   is Monty's `run_episode_steps`, and `Monty.Studio.Jobs.Run` drives every run
+   through it — the step, the policy and the counter stay where they are, and the
+   loop is the experiment's again. A stop and a step that dies come back as an
+   outcome rather than an exception, which is the one place this port's needs go
+   beyond Monty's. Epochs are not written: `MontyObjectRecognitionExperiment` only
+   overrides `pre_episode` to call a base hook that is `pass` in Monty, so the
+   subclass follows the epoch loop rather than leading it.
 
 **Done when**: `base_config_10distinctobj_dist_agent` reports `ported here 12/12`
 and a run of it is the ported pipeline, not stand-ins.

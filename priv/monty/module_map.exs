@@ -950,7 +950,7 @@
     python: "frameworks/experiments/monty_experiment.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Experiments.MontyExperiment",
         python: "MontyExperiment"
       }

@@ -18,6 +18,7 @@ defmodule Monty.Studio.Jobs.Run do
 
   require Logger
 
+  alias Monty.Frameworks.Experiments.MontyExperiment
   alias Monty.Simulators.Synthetic.{Camera, Environment}
   alias Monty.Studio
   alias Monty.Studio.{Artifacts, Run, RunHistory, RunLog, Setup, Summary}
@@ -90,7 +91,16 @@ defmodule Monty.Studio.Jobs.Run do
 
         broadcast(run_id, {:started, record.steps})
 
-        {outcome, infos, record} = step_until_done(run_id, record, run, sensor_ids, [])
+        {outcome, infos, {run, record}} =
+          MontyExperiment.run_episode_steps(
+            {run, record},
+            %{
+              step: &step_once(run_id, &1, sensor_ids),
+              finished?: fn {run, _record} -> Run.finished?(run) end,
+              stopped?: &stop_requested?/0
+            }
+          )
+
         conclusion = Run.conclusion(run)
 
         Run.stop(run)
@@ -104,30 +114,27 @@ defmodule Monty.Studio.Jobs.Run do
 
   # A step either reports or the run is broken. A broken step is recorded with
   # the reason it died, because a page that says "running" for ever is a page
-  # nobody trusts.
-  defp step_until_done(run_id, record, run, sensor_ids, infos) do
-    receive do
-      :stop -> {:stopped, infos, record}
-    after
-      0 ->
-        if Run.finished?(run) do
-          {:finished, infos, record}
-        else
-          step(run_id, record, run, sensor_ids, infos)
-        end
-    end
-  end
-
-  defp step(run_id, record, run, sensor_ids, infos) do
+  # nobody trusts. What the loop does with that — and with a caller's stop — is
+  # `MontyExperiment.run_episode_steps/2`, which is Monty's episode loop.
+  defp step_once(run_id, {run, record}, sensor_ids) do
     {:ok, info, observations, run} = Run.step(run)
     beliefs = Run.beliefs(run)
     record = RunLog.record_step(record, info, observations, beliefs)
     emit(run_id, info, observations, sensor_ids, beliefs)
-    step_until_done(run_id, record, run, sensor_ids, [info | infos])
+    {:ok, info, {run, record}}
   catch
     :exit, reason ->
       say(run_id, "step #{run.step} died: #{inspect(reason)}")
-      {{:crashed, run.step, reason}, infos, record}
+      {:error, reason}
+  end
+
+  # The stop lands in this process's mailbox because this process owns the clock.
+  defp stop_requested? do
+    receive do
+      :stop -> true
+    after
+      0 -> false
+    end
   end
 
   defp emit(run_id, info, observations, sensor_ids, beliefs) do

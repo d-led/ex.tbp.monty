@@ -2,10 +2,17 @@ defmodule Monty.Runtime.Episode do
   @moduledoc """
   One episode: a model stepped against an environment until it concludes.
 
-  Mirrors the episode loop of `MontyExperiment.run_episode_steps`
-  (`frameworks/experiments/monty_experiment.py`), without the experiment's data
-  loading, epochs and loggers — those belong to whatever is running episodes,
-  and this module is what is left when they are taken away:
+  The loop is `MontyExperiment.run_episode_steps`, which this port also has as
+  `Monty.Frameworks.Experiments.MontyExperiment.run_episode_steps/2` — that is
+  the one a studio run goes through, because a studio run also has a caller who
+  may stop it and steps whose reports are recorded. This module is the same loop
+  for a caller that has neither, and it answers a different question: it reports
+  `done?` and `timed_out?` separately, so a test or a probe can say which ending
+  an episode got, rather than only that it ended.
+
+  What the loop does, without the experiment's data loading, epochs and loggers
+  — those belong to whatever is running episodes, and this module is what is left
+  when they are taken away:
 
     * clear the model's short-term memory and tell it whether the episode trains
       or evaluates;
