@@ -2,34 +2,47 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.BasicCSVStatsHandler do
   @moduledoc """
   `tbp/monty/frameworks/loggers/monty_handlers.py::BasicCSVStatsHandler`.
 
-  The file Monty leaves behind after an epoch: one row per learning module per
-  episode, appended to `eval_stats.csv` (or `train_stats.csv`), with the columns a
-  reader compares held at the front and the header written once per file. An
-  existing file is renamed to `_old` rather than appended to, which is Monty's
-  `maybe_rename_existing_file` — a run that quietly grew last run's numbers would
-  make every comparison after it a guess.
+  The file Monty leaves behind after an episode: one row per learning module,
+  appended to `train_stats.csv` or `eval_stats.csv`, with the columns a reader
+  compares held at the front and the header written once per file. An existing
+  file is renamed to `_old` rather than appended to, which is Monty's
+  `maybe_rename_existing_file` — a run that quietly grew the last run's numbers
+  would make every comparison after it a guess.
 
-  ## What is filled, and what is not yet
+  ## The shape of a report
 
-  Monty builds these rows from a stats dictionary its loggers accumulate during
-  the episode (`Monty.get_episode_stats`), and this port does not have that
-  dictionary yet. So a handler here is given the stats a caller does have and
-  writes the columns it names; a column it does not name is written as an empty
-  cell rather than guessed at. A blank cell is a fact — "this port did not compute
-  it" — where a zero would be a lie that reads like a measurement.
+  Monty hands a handler the log dictionary its loggers accumulate, not a
+  preformatted table:
+
+      %{"BASIC" => %{"train_stats" => %{0 => %{"LM_0" => stats, "SM_0" => stats}}}}
+
+  Only the `LM_*` components become rows (`lm_stats_to_dataframe` filters exactly
+  that way), the file is named from the mode, and `lm_id` is the row's own
+  component id. `Monty.Frameworks.Loggers.GraphMatchingLoggers` is what fills the
+  dictionary in Monty; until it is ported, a caller — or a test — passes the
+  dictionary itself.
+
+  A column the episode does not carry is written as an empty cell rather than
+  guessed at: a blank cell is a fact — "this run did not compute it" — where a
+  zero would be a measurement nobody made.
 
   The column order is Monty's own, so a diff of two files is a diff of values and
-  not of layout.
+  not of layout, and a cell is written the way pandas writes it (`1.5`, `True`,
+  `[0.1, 0.2]`), so a file from here and a file from Monty are comparable.
   """
 
-  defstruct path: nil, reported?: false
+  alias Monty.Frameworks.Experiments.Mode.ExperimentMode
+  alias Monty.Frameworks.Loggers.MontyHandlers.MontyHandler
 
-  @typedoc "A handler bound to one CSV, and whether it has written its header."
-  @type t :: %__MODULE__{path: Path.t(), reported?: boolean()}
+  @behaviour MontyHandler
+
+  defstruct reports_per_file: %{}
+
+  @typedoc "Monty's `reports_per_file`: how many reports each output file has had."
+  @type t :: %__MODULE__{reports_per_file: %{optional(Path.t()) => non_neg_integer()}}
 
   # Monty's `BasicCSVStatsHandler.top_columns`, in its order, for the case where
-  # the run knows what it believed (the other branch is the same list without the
-  # columns about the most likely object).
+  # the run knows what it believed.
   @top_columns [
     "primary_performance",
     "stepwise_performance",
@@ -51,94 +64,180 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.BasicCSVStatsHandler do
     "most_likely_rotation"
   ]
 
-  @doc "The columns, in the order Monty writes them, ending with the module id."
-  @spec columns([String.t()]) :: [String.t()]
-  def columns(extra_keys \\ []) do
-    # A key the named columns already cover is not repeated, however many modules
-    # in the episode carry it.
-    extra = extra_keys |> Enum.reject(&(&1 in @top_columns or &1 == "lm_id")) |> Enum.uniq()
+  # The other branch: the same list without the columns about the most likely
+  # object, which a run that never formed a hypothesis does not have.
+  @top_columns_without_object [
+    "primary_performance",
+    "stepwise_performance",
+    "num_steps",
+    "rotation_error",
+    "result",
+    "primary_target_object",
+    "stepwise_target_object",
+    "time",
+    "symmetry_evidence",
+    "monty_steps",
+    "monty_matching_steps",
+    "primary_target_position",
+    "primary_target_rotation_euler"
+  ]
 
-    @top_columns ++ ["lm_id"] ++ extra
+  @doc "`MontyHandler.log_level/0`: this handler filters out the BASIC stats."
+  @impl MontyHandler
+  @spec log_level() :: :basic
+  def log_level, do: :basic
+
+  @doc "A handler that has not written anything yet."
+  @spec new() :: t()
+  def new, do: %__MODULE__{}
+
+  @doc "The columns, in the order Monty writes them, with the module id last."
+  @spec columns([{String.t(), map()}]) :: [String.t()]
+  def columns(rows) do
+    present =
+      rows
+      |> Enum.flat_map(fn {_id, stats} -> Enum.map(Map.keys(stats), &to_string/1) end)
+      |> Enum.uniq()
+
+    named =
+      if "most_likely_object" in present, do: @top_columns, else: @top_columns_without_object
+
+    named ++ Enum.reject(present, &(&1 in named or &1 == "lm_id")) ++ ["lm_id"]
   end
 
-  @doc "The header line for a file whose rows carry these keys."
-  @spec header([String.t()]) :: String.t()
-  def header(extra_keys \\ []), do: line(columns(extra_keys))
+  @doc "The header line for a file whose rows carry these stats."
+  @spec header([{String.t(), map()}]) :: String.t()
+  def header(rows), do: line(columns(rows))
 
   @doc """
   One row: the module's id and whatever of its stats this run has.
 
   `stats` is keyed by column name. Anything absent is an empty cell.
   """
-  @spec row(String.t() | atom(), map()) :: String.t()
-  def row(module_id, stats) do
+  @spec row(String.t(), map()) :: String.t()
+  def row(module_id, stats), do: row(module_id, stats, columns([{module_id, stats}]))
+
+  @doc "One row, in the columns already worked out for the file."
+  @spec row(String.t(), map(), [String.t()]) :: String.t()
+  def row(module_id, stats, columns) do
     stats = Map.new(stats, fn {key, value} -> {to_string(key), value} end)
 
-    stats
-    |> Map.keys()
-    |> columns()
+    columns
     |> Enum.map(fn
-      "lm_id" -> cell(to_string(module_id))
-      key -> cell(Map.get(stats, key))
+      "lm_id" -> cell(module_id)
+      column -> cell(Map.get(stats, column))
     end)
     |> line()
   end
 
-  @doc "A handler that reports into `path`."
-  @spec new(Path.t()) :: t()
-  def new(path) do
-    if File.exists?(path), do: rename_existing(path)
-    %__MODULE__{path: path}
-  end
-
   @doc """
-  Appends one episode's rows, writing the header only for a new file.
+  Writes one episode's rows into `<output_dir>/<mode>_stats.csv`.
 
-  `episode` is a map of learning-module id to that module's stats — Monty's
-  `{LM_0: stats, LM_1: stats}` for one episode. Monty counts its writes per file
-  (`reports_per_file`) so the header belongs to the first one and nothing is
-  renamed after it; the struct carries that state, as everything else here
-  carries state in a value.
+  `data` is Monty's log dictionary — `%{"BASIC" => %{"train_stats" => ...}}` —
+  and `episode` is the local episode number, which Monty takes and does not use
+  for the CSV: one file holds every episode, which is why the header belongs to
+  the first write only. Monty counts its writes per file (`reports_per_file`), so
+  a handler that wrote `train_stats.csv` and is then asked for `eval_stats.csv`
+  starts each file properly; the struct carries that state, as everything else
+  here carries state in a value.
   """
-  # The path is the run's own results directory, chosen when the handler was
-  # made, not a name a page hands in.
+  # The path is the run's own results directory plus the mode's file name, and
+  # the mode is a two-value atom, so nothing here can leave that directory.
   # sobelow_skip ["Traversal.FileModule"]
-  @spec report(t(), %{optional(String.t() | atom()) => map()}) :: {:ok, t()}
-  def report(%__MODULE__{} = handler, episode) do
-    rows = Enum.map(episode, fn {module_id, stats} -> row(module_id, stats) end)
-    keys = Enum.flat_map(episode, fn {_id, stats} -> Map.keys(stats) end)
+  @impl MontyHandler
+  @spec report_episode(t(), map(), Path.t(), non_neg_integer(), ExperimentMode.t(), map()) ::
+          {:ok, t()}
+  def report_episode(
+        %__MODULE__{} = handler,
+        data,
+        output_dir,
+        _episode,
+        mode,
+        _episodes_to_total
+      ) do
+    path = Path.join(output_dir, "#{ExperimentMode.to_string(mode)}_stats.csv")
+    {handler, first?} = count_report(handler, path)
 
-    body = Enum.join(rows, "\n") <> "\n"
-    content = if handler.reported?, do: body, else: header(keys) <> "\n" <> body
+    rows = data |> stats(mode) |> rows()
+    columns = columns(rows)
+    body = Enum.map_join(rows, fn {id, lm_stats} -> row(id, lm_stats, columns) <> "\n" end)
 
-    File.mkdir_p!(Path.dirname(handler.path))
-    File.write!(handler.path, content, [:append])
+    File.mkdir_p!(output_dir)
+    File.write!(path, if(first?, do: line(columns) <> "\n" <> body, else: body), [:append])
 
-    {:ok, %{handler | reported?: true}}
+    {:ok, handler}
   end
 
   @doc "Nothing is held open: a report has written its rows already."
-  @spec close(%__MODULE__{}) :: :ok
+  @impl MontyHandler
+  @spec close(t()) :: :ok
   def close(%__MODULE__{}), do: :ok
 
-  # `maybe_rename_existing_file`: one `_old`, not a pile of them. The path is
-  # the handler's own file, for the same reason as `report/2`.
+  # The BASIC logs for this mode, in Monty's shape: episode -> component -> stats.
+  defp stats(data, mode) do
+    data
+    |> Map.get("BASIC", %{})
+    |> Map.get("#{ExperimentMode.to_string(mode)}_stats", %{})
+  end
+
+  # `lm_stats_to_dataframe`: only the learning modules become rows. A sensor
+  # module's stats are not a row in the file a reader compares.
+  defp rows(stats) do
+    for {_episode, components} <- stats,
+        {component_id, lm_stats} <- components,
+        is_binary(component_id) and String.starts_with?(component_id, "LM_"),
+        do: {component_id, lm_stats}
+  end
+
+  # `maybe_rename_existing_file` on the first report for a file, and the count
+  # every report after it: a file that already exists belongs to the last run.
   # sobelow_skip ["Traversal.FileModule"]
-  defp rename_existing(path) do
-    old = Path.rootname(path) <> "_old" <> Path.extname(path)
-    if File.exists?(old), do: File.rm!(old)
-    File.rename!(path, old)
+  defp count_report(handler, path) do
+    case Map.fetch(handler.reports_per_file, path) do
+      :error ->
+        maybe_rename_existing_file(path)
+
+        {%{handler | reports_per_file: Map.put(handler.reports_per_file, path, 0)}, true}
+
+      {:ok, reports} ->
+        {%{handler | reports_per_file: Map.put(handler.reports_per_file, path, reports + 1)},
+         false}
+    end
+  end
+
+  # One `_old`, not a pile of them.
+  # sobelow_skip ["Traversal.FileModule"]
+  defp maybe_rename_existing_file(path) do
+    if File.exists?(path) do
+      old = Path.rootname(path) <> "_old" <> Path.extname(path)
+      if File.exists?(old), do: File.rm!(old)
+      File.rename!(path, old)
+    end
+
+    :ok
   end
 
   defp line(cells), do: Enum.join(cells, ",")
 
+  # A cell is written the way pandas writes it, so a file from here and a file
+  # from Monty can be diffed: an absent value is empty, a boolean is `True`, a
+  # list is `[0.1, 0.2]` with single quotes around its strings.
   defp cell(nil), do: ""
+  defp cell(true), do: "True"
+  defp cell(false), do: "False"
   defp cell(value) when is_binary(value), do: quotable(value)
+  defp cell(value) when is_list(value), do: value |> python() |> quotable()
+  defp cell(value) when is_integer(value), do: Integer.to_string(value)
+  defp cell(value) when is_float(value), do: to_string(value)
+  defp cell(value) when is_atom(value), do: Atom.to_string(value)
+  defp cell(value), do: value |> inspect() |> quotable()
 
-  defp cell(value) when is_list(value),
-    do: value |> Enum.map_join(" ", &to_string/1) |> quotable()
-
-  defp cell(value), do: to_string(value)
+  defp python(value) when is_binary(value), do: "'" <> String.replace(value, "'", "\\'") <> "'"
+  defp python(nil), do: "None"
+  defp python(true), do: "True"
+  defp python(false), do: "False"
+  defp python(value) when is_list(value), do: "[" <> Enum.map_join(value, ", ", &python/1) <> "]"
+  defp python(value), do: to_string(value)
 
   # A cell holding a comma, a quote or a newline is quoted, the way a CSV is; a
   # plain one is not, because quoting everything would make a diff noisy.

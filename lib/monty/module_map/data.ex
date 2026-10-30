@@ -1028,17 +1028,17 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/loggers/exp_logger.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
           elixir: "Monty.Frameworks.Loggers.ExpLogger.LoggingCallbackHandler",
           python: "LoggingCallbackHandler"
         },
         %{
-          status: :planned,
+          status: :implemented,
           elixir: "Monty.Frameworks.Loggers.ExpLogger.BaseMontyLogger",
           python: "BaseMontyLogger"
         },
         %{
-          status: :planned,
+          status: :implemented,
           elixir: "Monty.Frameworks.Loggers.ExpLogger.TestLogger",
           python: "TestLogger"
         }
@@ -1076,7 +1076,7 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/loggers/monty_handlers.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
           elixir: "Monty.Frameworks.Loggers.MontyHandlers.MontyHandler",
           python: "MontyHandler"
         },
