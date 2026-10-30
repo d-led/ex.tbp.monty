@@ -24,10 +24,10 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
 
   ## The dither
 
-  Monty draws it from the runtime's `rng`; here it comes from
-  `Monty.Context.rng_for/2`, so a run is reproducible from its episode seed and
-  two salience modules do not draw the same numbers (`docs/monty-bugs.md`
-  §2.1).
+  Monty draws it from the runtime's one `rng`; here it comes from the episode's
+  one stream (`Monty.Random.Stream`, reached as `ctx.rng`), in the same order and
+  from the same NumPy state, so a salience module dithers its scores with the
+  numbers Monty's would (`docs/monty-bugs.md` §2.1).
 
   ## What is not here
 
@@ -39,7 +39,6 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   use Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
 
   alias Monty.Cmp.{AttentionRegion, Goal}
-  alias Monty.Context
   alias Monty.Frameworks.Models.MotorSystemState.AgentState
   alias Monty.Frameworks.Models.Salience.OnObjectObservation
   alias Monty.Frameworks.Models.Salience.ReturnInhibitor
@@ -47,7 +46,7 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.Vocus2SalienceConfig
   alias Monty.Frameworks.Models.Salience.Telemetry.NoopSalienceSMTelemetry
-
+  alias Monty.Random.Stream
   # Monty's two factors, as its private methods write them: a visit takes three
   # quarters of a pixel's salience away, and the dither is a twentieth.
   @decay_factor 0.75
@@ -282,13 +281,11 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
 
   defp dither([], _ctx, _id), do: []
 
-  defp dither(scores, ctx, sensor_module_id) do
-    {noise, _rng} =
-      Enum.map_reduce(scores, Context.rng_for(ctx, sensor_module_id), fn _score, rng ->
-        # `:rand.normal_s/3` takes a variance where numpy takes a standard
-        # deviation, hence the squaring.
-        :rand.normal_s(0.0, @randomness_factor * @randomness_factor, rng)
-      end)
+  # One draw per score, from the episode's stream — `ctx.rng.normal(loc=0,
+  # scale=0.05, size=...)` — and the order it draws in decides which region the
+  # agent turns towards, so the stream has to be Monty's (`Monty.Random.Stream`).
+  defp dither(scores, ctx, _sensor_module_id) do
+    noise = Stream.normals(ctx.rng, length(scores), 0.0, @randomness_factor)
 
     Enum.zip_with([scores, noise], fn [score, amount] -> score + amount end)
   end

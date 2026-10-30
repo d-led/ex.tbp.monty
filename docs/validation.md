@@ -175,15 +175,12 @@ Saying this plainly matters more than the table above:
   against Monty's own world — `scripts/probe_world_episodes.exs`, below — and
   there every episode so far ends on the object Monty names, in a number of
   steps that is Monty's only up to the random-stream difference below.
-- **The path of anything that samples.** The random-stream layout is deliberately
-  different from Monty's (§2.1 of `monty-bugs.md`): the same episode seed does
-  not give the same sequence of random actions, so a run walks a different path
-  over the same object. Monty's first random saccade of
-  `base_config_10distinctobj_dist_agent` is `turn_left 16.78°` + `look_up 20.80°`
-  and the port's is `turn_left -33.06°` + `look_up 11.29°`
-  (`scripts/probe_world_episodes.exs` writes the actions, and the recording
-  carries Monty's). Its *rules* are verified; its sequence of actions and
-  therefore its step counts are not.
+- **The path of a run, past its first steps.** The model's draws are Monty's now
+  (§2.1 of `monty-bugs.md`), and the first action of an episode is Monty's to the
+  last digit — but from some later step the two runs part, and two of ten episodes
+  of the comparison above agree on their step count. Two draw sites are still on
+  their own stream (`DepthTo3DLocations` noise and a camera's message noise), and
+  neither is in the config compared here, so that is not yet the explanation.
 - **The simulator peer in CI.** Habitat and MuJoCo need Monty's pinned conda
   environment, so the peer that drives Monty's own environments runs here as a
   probe and not as a test: no CI job has that interpreter.
@@ -314,36 +311,49 @@ minute, `scripts/probe_world_episodes.exs`:
 
 | episode | object | Monty's steps | the port's steps |
 |---|---|---|---|
-| 1 | mug | 21 | 22 |
-| 2 | bowl | 28 | 37 |
-| 3 | potted_meat_can | 28 | 31 |
-| 4 | spoon | 26 | 30 |
-| 5 | strawberry | 42 | 46 |
-| 6 | mustard_bottle | 21 | 27 |
-| 7 | dice | 35 | **35** |
-| 8 | golf_ball | 50 | 44 |
-| 9 | c_lego_duplo | 47 | 38 |
-| 10 | banana | 29 | 21 |
+| 1 | mug | 21 | **21** |
+| 2 | bowl | 28 | 27 |
+| 3 | potted_meat_can | 28 | **28** |
+| 4 | spoon | 26 | 36 |
+| 5 | strawberry | 42 | 40 |
+| 6 | mustard_bottle | 21 | 34 |
+| 7 | dice | 35 | 38 |
+| 8 | golf_ball | 50 | 37 |
+| 9 | c_lego_duplo | 47 | 46 |
+| 10 | banana | 29 | 45 |
 
 Monty's column is its `monty_steps` in `eval_stats.csv`, reproduced episode for
 episode by `scripts/record_monty_episode.py`; the port's is `Episode.run/3`'s
 `steps`, and both runs use the same `episode_seed` per episode (the peer prints
-it). So: **ten of ten episodes end on the object Monty names, and one of the ten
-takes exactly Monty's number of steps.** The reason for the rest is on the first
-step — Monty asks the world for `turn_left 16.78°` + `look_up 20.80°`, the port
-asks for `turn_left -33.06°` + `look_up 11.29°`, which is §2.1: the port gives
-each module its own stream per step where Python threads one `RandomState`, so
-the same seed draws different numbers and the agent walks a different path over
-the same object. Two things on that path are worth knowing: Monty reseeds per
-episode, so an epoch is ten different streams, and until
-`Monty.Frameworks.Experiments.Seed` existed every episode of a run drew the same
-numbers; and the reseeding is why episode 1 alone used to agree, a shared stream
-happening to be right for the first episode and wrong for the rest.
+it). So: **ten of ten episodes end on the object Monty names, and two of the ten
+take exactly Monty's number of steps.**
 
-What is not tried: matching Monty's stream. §2.1 says what it would take — one
-stream per episode threaded in Python's order — and it is the difference that has
-to go before a live run can be compared step by step rather than conclusion by
-conclusion.
+## The stream: Monty's numbers, and where the paths still part
+
+The random stream is Monty's now. `Monty.Random.Numpy` is MT19937 seeded as NumPy
+seeds it, `random_sample` and `normal` as NumPy computes them — including the
+spare draw `normal` keeps in its state — and it is held to NumPy's own numbers
+for three seeds rather than to its statistics. `Monty.Random.Stream` is the one
+stream an episode draws from: a process per model, reseeded when the episode's
+seed changes, drawn by whatever is stepped next. The salience module's dither and
+the goal generator's coin flip — the two things that draw in this config — take
+their numbers from it, in Monty's order, because the coordinator now steps its
+sensor modules one at a time instead of in a barrier: a barrier would decide which
+module drew first by which call arrived first.
+
+The first action says the stream is right. Monty asks the world for
+`turn_left 16.782644145270698°` + `look_up 20.802956601860625°`; so does the port,
+to the last digit (`scripts/probe_world_episodes.exs` writes the port's actions,
+`scripts/record_monty_episode.py` records Monty's). Before the stream it asked for
+`turn_left -33.06°` + `look_up 11.29°`, and the episode it walked was a different
+one.
+
+Episodes 1 and 3 then agree with Monty step for step, and the rest do not — so the
+stream was necessary and is not sufficient. What is left is a per-step question,
+not a per-episode one: from some step onward the port draws a different *number of
+times* or in a different order than Monty, or sees a different percept at the same
+step, and the two trajectories part. Both sides now log their actions step by
+step, so that is a diff to read rather than a hypothesis to hold.
 
 ## Re-recording anything in this file
 

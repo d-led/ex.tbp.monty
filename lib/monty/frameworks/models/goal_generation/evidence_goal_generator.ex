@@ -54,6 +54,7 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator do
   alias Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator
   alias Monty.Frameworks.Utils.{CommunicationUtils, SpatialArithmetics}
   alias Monty.Geometry.{GazeDirection, Rotation}
+  alias Monty.Random.Stream
 
   # Monty's constructor defaults.
   @default_elapsed_steps_factor 10
@@ -358,10 +359,7 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator do
     |> Enum.all?(fn {now, before} -> now != before end)
   end
 
-  defp coin_flip(%Context{} = ctx) do
-    {roll, _state} = :rand.uniform_s(Context.rng_for(ctx, :evidence_goal_generator))
-    roll
-  end
+  defp coin_flip(%Context{} = ctx), do: Stream.random(ctx.rng)
 
   # -- generating ----------------------------------------------------------
 

@@ -46,7 +46,8 @@ defmodule Monty.Runtime.Step.State do
             done?: false,
             vote_timeout: @default_timeout,
             call_timeout: @default_timeout,
-            step: 0
+            step: 0,
+            episode_seed: nil
 
   @type id :: atom() | String.t()
   @type step_type :: :matching | :exploratory
@@ -84,7 +85,8 @@ defmodule Monty.Runtime.Step.State do
           done?: boolean(),
           vote_timeout: timeout(),
           call_timeout: timeout(),
-          step: non_neg_integer()
+          step: non_neg_integer(),
+          episode_seed: non_neg_integer() | nil
         }
 
   @doc "Builds the coordinator state from a model spec."

@@ -13,7 +13,7 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMTest do
   use ExUnit.Case, async: true
 
   alias Monty.Cmp.{AttentionRegion, Goal}
-  alias Monty.Context
+  alias Monty.EpisodeStream
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
   alias Monty.Frameworks.Models.Salience.ReturnInhibitor
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
@@ -34,7 +34,7 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMTest do
     }
   end
 
-  defp ctx(seed \\ 0), do: Context.new(seed)
+  defp ctx(seed \\ 0), do: EpisodeStream.context(seed)
 
   # A module told where its sensor is, which is what a run does on every step.
   defp sensor(options \\ []) do

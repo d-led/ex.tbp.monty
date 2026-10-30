@@ -101,11 +101,16 @@ benchmarks rather than after.
 - `Monty.Simulators.Synthetic.Camera` is the boundary that changes last: it
   returns PNG bytes instead of SVG, and no page changes.
 
+The random stream is Monty's too: `Monty.Random.Numpy` is NumPy's generator and
+`Monty.Random.Stream` is the one stream an episode draws from, so an episode's
+first action is Monty's to the last digit (`docs/validation.md`). What is left is
+the middle of an episode: two of ten episodes of the comparison end on Monty's
+step, and the rest walk a path that parts from it later on. That is a diff of two
+action logs, not a design.
+
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
-loop, and its step count is Monty's — which needs the single-stream mode that
-`monty-bugs.md` §2.1 describes. The world half is done; the stream half is the
-remaining obstacle, and it is the one to do next.
+loop, and its step count is Monty's for every episode of the epoch.
 
 ## Phase 3 — benchmarks and profiles
 

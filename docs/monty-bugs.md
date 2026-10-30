@@ -653,48 +653,56 @@ summation order, not about Monty: two faithful implementations can disagree by a
 pixel. The fixture therefore uses a notched object, whose brightest pixel is
 clear of the runner-up by `0.02` of the mask's height.
 
-## 2.1 Random streams: the one that changes your numbers
+## 2.1 Random streams: one stream per episode, NumPy's numbers
 
 **The difference.** Monty threads one mutable `RandomState` (`ctx.rng`) through
 every module in step order, so what a module draws depends on how many draws
-everything before it made. This port derives a stream per module from the episode
-seed, the module id and the step.
+everything before it made. This port used to derive a stream per module from the
+episode seed, the module id and the step, and it no longer does: the episode's
+one stream is `Monty.Random.Stream`, seeded with the episode's seed and drawn by
+whatever the coordinator steps next.
 
 **The code.**
 [`motor_policies.py:217`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L217)
 is where a policy draws (`self.action_sampler.sample(self.agent_id, ctx.rng)`).
 Seventeen calls read `ctx.rng` across eight files — `motor_policies.py` ten
 times, the sensor modules and `goal_generation.py` once each — so everything
-that samples shares one stream. Ours:
-[`Context.rng_for/2`](../lib/monty/context.ex).
+that samples shares one stream. Ours: `Monty.Random.Stream` (the stream) and
+`Monty.Random.Numpy` (the generator), reached from a module as `ctx.rng`.
 
-**Why it is deliberate.** A single mutable stream across modules is exactly the
-kind of shared state an immutable, per-process design cannot carry without
-threading it through every function and every message. Deriving per module also
-lets a single step be replayed on its own, which is what the studio's replay
-uses.
+**Why a process is the faithful translation.** A single mutable object shared by
+everything in a step is what the BEAM calls a process. The alternative — a value
+threaded through every module call — would have every module answer its advanced
+stream, so the coordinator's step would be rewritten for a number generator. The
+process keeps the modules pure and the ordering property exact.
 
-**What it costs.** With the same seed, an Elixir run and a Python run draw
-*different* random actions. Every policy that samples — `BasePolicy`,
-`InformedPolicy`, `SurfacePolicy` — walks a different path, so recognition rates
-and step counts differ even when the arithmetic is identical.
+**What it costs, and what it does not.** A draw is a call, and a step's draws
+come in the order the modules are stepped. That is why the coordinator now steps
+sensor modules one at a time: with a barrier, which module drew first would be
+decided by which call arrived first. Monty's own loop is one call after another
+for the same reason, so a step's *numbers* are unaffected — a step's *wall clock*
+is the sum of the sensor modules rather than the slowest.
 
 **Measured.** Against Monty's own world
-(`scripts/probe_world_episodes.exs`, `base_config_10distinctobj_dist_agent`), the
-episode seed itself is now Monty's — `Monty.Frameworks.Experiments.Seed` gives
-`1170100843` for episode 0, the number in Monty's own `episode_seed` column — and
-the first action of that episode still differs: Monty asks for
-`turn_left 16.78°` + `look_up 20.80°`, the port for `turn_left -33.06°` +
-`look_up 11.29°`. Across Monty's ten-object eval epoch the object agrees ten times
-out of ten and the step counts agree once — the dice, at 35 steps — with Monty at
-21/28/28/26/42/21/35/50/47/29 against the port's 22/37/31/30/46/27/35/44/38/21.
-This is the only remaining reason a live run cannot be compared step by step.
+(`scripts/probe_world_episodes.exs`, `base_config_10distinctobj_dist_agent`), with
+`Monty.Frameworks.Experiments.Seed` giving the episode seed Monty's own
+`episode_seed` column: the first action of the first episode is
+`turn_left 16.782644145270698°` + `look_up 20.802956601860625°` in both. Before
+the stream it was `turn_left -33.06°` + `look_up 11.29°` — the salience module's
+dither, drawn from a stream that was not Monty's, pushing `LookAtGoal` towards a
+different point of the same view.
 
-**What to compare instead.** The deterministic parts: evidence given the same
-percept sequence (which the replay test asserts to a millionth, where the export's
-rounding puts it), hypothesis counts, and aggregates over many episodes. A
-per-step, per-seed comparison needs a Monty-compatible single-stream mode, which
-is not built.
+**What is still not Monty's.** Two episodes of ten then agree with Monty step for
+step (21 and 28 steps), and eight do not: 21/27/28/36/40/34/38/37/46/45 here
+against 21/28/28/26/42/21/35/50/47/29. The first action being equal and the third
+episode being equal means the difference is not the generator; it appears later,
+and the candidates are a draw that happens at a different step, a different number
+of draws in a step, or a percept that already differs. Two draw sites also still
+derive their own stream and are not in this comparison — `DepthTo3DLocations`
+noise and a camera's message noise — as is every `ActionSampler` stream
+(`ActionSampler.stream/3`), which the config's `ConstantSampler` never reaches.
+Both runs now log their actions step by step, so the next step is a diff of the
+two sequences rather than a hypothesis.
 
 ## 2.2 `motor_only_step` travels in the result
 

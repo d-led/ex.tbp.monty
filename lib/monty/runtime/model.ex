@@ -7,7 +7,8 @@ defmodule Monty.Runtime.Model do
   with `restart: :permanent`, the coordinator is last, and the strategy is
   `:one_for_one` — a module that dies is replaced while the coordinator keeps
   its step count, because it addresses modules by registered name rather than
-  by pid.
+  by pid. The episode's random stream (`Monty.Random.Stream`) is a child too:
+  it outlives a step and a module, and dies with the model.
 
   `start_link/1` takes the model id plus the module specs:
 
@@ -105,9 +106,10 @@ defmodule Monty.Runtime.Model do
     model_id = options.model_id
 
     children =
-      Enum.map(options.sensor_modules, fn spec ->
-        {Monty.Runtime.SensorModuleServer, Map.put(spec, :model_id, model_id)}
-      end) ++
+      [{Monty.Random.Stream, %{model_id: model_id}}] ++
+        Enum.map(options.sensor_modules, fn spec ->
+          {Monty.Runtime.SensorModuleServer, Map.put(spec, :model_id, model_id)}
+        end) ++
         Enum.map(options.learning_modules, fn spec ->
           {Monty.Runtime.LearningModuleServer, Map.put(spec, :model_id, model_id)}
         end) ++

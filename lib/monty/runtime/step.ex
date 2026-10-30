@@ -160,7 +160,15 @@ defmodule Monty.Runtime.Step do
 
   @impl true
   def handle_call({:step, observations, proprioceptive_state, ctx}, _from, %State{} = state) do
-    ctx = %{ctx | step: state.step, mode: state.step_type}
+    state = start_stream_if_new_episode(state, ctx)
+
+    ctx = %{
+      ctx
+      | step: state.step,
+        mode: state.step_type,
+        rng: Monty.Random.Stream.via(state.model_id)
+    }
+
     started_at = System.monotonic_time()
 
     {percepts, sensor_timeouts} =
@@ -225,29 +233,47 @@ defmodule Monty.Runtime.Step do
 
   # -- phases ---------------------------------------------------------------
 
+  # An episode's first step names its seed in the context, and a seed the stream
+  # has not been started on yet is a new episode: Monty reseeds there, in
+  # `MontyExperiment.pre_episode`, and the numbers of one episode must not depend
+  # on how many draws the one before it made.
+  defp start_stream_if_new_episode(%State{episode_seed: seed} = state, %{episode_seed: seed}),
+    do: state
+
+  defp start_stream_if_new_episode(%State{model_id: model_id} = state, %{episode_seed: seed}) do
+    :ok = Monty.Random.Stream.reseed(Monty.Random.Stream.via(model_id), seed)
+
+    %{state | episode_seed: seed}
+  end
+
   defp step_sensor_modules(
          %State{model_id: model_id} = state,
          observations,
          proprioceptive_state,
          ctx
        ) do
-    requests =
-      Enum.map(state.sensor_modules, fn sm ->
-        request = fn ->
-          SensorModuleServer.step(
-            Registry.via({:sensor_module, model_id, sm.id}),
-            observation_for(observations, sm),
-            Map.get(proprioceptive_state, sm.agent_id, %{}),
-            ctx,
-            state.motor_only?
-          )
-        end
+    # One at a time, because an episode draws from one random stream and a
+    # sensor module may draw (the salience module dithers its scores): asking
+    # them together would let the scheduler decide the numbers. Monty's own
+    # loop is one call after another for the same reason.
+    state.sensor_modules
+    |> Enum.map(fn sm ->
+      {sm.id,
+       fn ->
+         SensorModuleServer.step(
+           Registry.via({:sensor_module, model_id, sm.id}),
+           observation_for(observations, sm),
+           Map.get(proprioceptive_state, sm.agent_id, %{}),
+           ctx,
+           state.motor_only?
+         )
+       end}
+    end)
+    |> Enum.reduce({%{}, []}, fn request, {percepts, timed_out} ->
+      %{replies: reply, timed_out: late} = Barrier.run([request], state.call_timeout)
 
-        {sm.id, request}
-      end)
-
-    %{replies: percepts, timed_out: timed_out} = Barrier.run(requests, state.call_timeout)
-    {percepts, timed_out}
+      {Map.merge(percepts, reply), timed_out ++ late}
+    end)
   end
 
   defp gather_outputs(%State{model_id: model_id} = state) do

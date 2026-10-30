@@ -25,6 +25,7 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMParityTest do
   use ExUnit.Case, async: true
 
   alias Monty.Context
+  alias Monty.EpisodeStream
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
   alias Monty.Frameworks.Models.Salience.OnObjectObservation
   alias Monty.Frameworks.Models.Salience.ReturnInhibitor
@@ -92,7 +93,7 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMParityTest do
   # through: the goals after the first step are not the goals after the third.
   defp step(fixture) do
     strategy = {Vocus2, strategy(fixture)}
-    ctx = Context.new(0)
+    ctx = EpisodeStream.context(0)
 
     {modules, _last} =
       Enum.map_reduce(

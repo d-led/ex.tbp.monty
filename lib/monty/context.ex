@@ -2,25 +2,22 @@ defmodule Monty.Context do
   @moduledoc """
   What a module needs to know about the run it is part of.
 
-  Mirrors `tbp/monty/context.py::RuntimeContext`, with one deliberate
-  difference: Python threads a single mutable `RandomState` through every
-  module, which serialises whichever module draws next. Here the context
-  carries the episode seed and the step, and `rng_for/2` derives a stream for a
-  named module. Two runs with the same seed therefore draw the same numbers
-  whether the modules are stepped one at a time or side by side.
+  Mirrors `tbp/monty/context.py::RuntimeContext`. Python threads one mutable
+  `RandomState` through every module; here `rng` is the handle of the episode's
+  one stream (`Monty.Random.Stream`), and a module draws from it in the order it
+  is stepped — so the draws are NumPy's, in Monty's order, and a run is still a
+  function of its episode seed.
 
-  **This is the one difference most likely to change an experiment's numbers.**
-  The same seed does not give the same sequence of random actions as a Python
-  run, because the streams are drawn for different consumers in a different
-  order; anything that samples — every policy that is not pre-defined — walks a
-  different path. `docs/monty-bugs.md` §2.1 says what to compare instead, and
-  what a Monty-compatible single-stream mode would take.
+  `rng_for/2` is the older arrangement, kept for the sites that have not been
+  moved onto the stream yet (the environment's noise transforms and the message
+  noise of a camera, which draw per module per step). It is a different set of
+  numbers by construction, and `docs/monty-bugs.md` §2.1 lists what is left.
 
   The step is advanced by the coordinator, never by a module.
   """
 
   @enforce_keys [:episode_seed]
-  defstruct episode_seed: 0, step: 0, mode: :matching, suppress_runtime_errors: false
+  defstruct episode_seed: 0, step: 0, mode: :matching, suppress_runtime_errors: false, rng: nil
 
   @type mode :: :matching | :exploratory
 
@@ -28,7 +25,8 @@ defmodule Monty.Context do
           episode_seed: non_neg_integer(),
           step: non_neg_integer(),
           mode: mode(),
-          suppress_runtime_errors: boolean()
+          suppress_runtime_errors: boolean(),
+          rng: GenServer.server() | nil
         }
 
   @doc "A context for the first step of an episode."

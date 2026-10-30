@@ -2,7 +2,7 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGeneratorTest do
   use ExUnit.Case, async: true
 
   alias Monty.Cmp.{Goal, Message}
-  alias Monty.Context
+  alias Monty.EpisodeStream
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
@@ -121,7 +121,7 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGeneratorTest do
   defp decide(generator, buffer, seed \\ 1) do
     generator
     |> with_buffer(buffer)
-    |> EvidenceGoalGenerator.check_conditions_for_hypothesis_test(Context.new(seed))
+    |> EvidenceGoalGenerator.check_conditions_for_hypothesis_test(EpisodeStream.context(seed))
   end
 
   defp mlh(graph_id, rotation) do
@@ -432,7 +432,8 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGeneratorTest do
         generator(lm, min_post_goal_success_steps: 3)
         |> with_buffer(buffer(4, channels: %{"patch" => :sm}))
 
-      stepped = EvidenceGoalGenerator.step(generator, Context.new(1), [percept([0.0, 0.0, 0.0])])
+      stepped =
+        EvidenceGoalGenerator.step(generator, EpisodeStream.context(1), [percept([0.0, 0.0, 0.0])])
 
       assert [%Goal{} = goal] = EvidenceGoalGenerator.output_goals(stepped)
       assert goal.info["hypothesis_to_test"].graph_id == "mug"
@@ -449,7 +450,8 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGeneratorTest do
         |> with_buffer(buffer(100, channels: %{"patch" => :sm}))
         |> with_goal_in_hand(goal())
 
-      stepped = EvidenceGoalGenerator.step(generator, Context.new(1), [percept([0.0, 0.0, 0.0])])
+      stepped =
+        EvidenceGoalGenerator.step(generator, EpisodeStream.context(1), [percept([0.0, 0.0, 0.0])])
 
       assert EvidenceGoalGenerator.output_goals(stepped) == []
     end
