@@ -2531,7 +2531,7 @@
         python: "AgentConfig"
       },
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Simulators.Habitat.Environment.HabitatEnvironment",
         python: "HabitatEnvironment"
       }

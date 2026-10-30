@@ -79,7 +79,7 @@ defmodule Monty.ModuleMapTest do
               %{
                 class: "HabitatEnvironment",
                 elixir: "Monty.Simulators.Habitat.Environment.HabitatEnvironment",
-                status: :planned
+                status: :implemented
               }} =
                ModuleMap.resolve("tbp.monty.simulators.habitat.environment.HabitatEnvironment")
     end

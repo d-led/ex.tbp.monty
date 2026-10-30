@@ -214,10 +214,11 @@ defmodule Monty.Studio.Run do
   def finished?(%__MODULE__{step: step, steps: steps} = run),
     do: step >= steps or decision(run).is_done
 
-  @doc "Stops the run's processes; safe to call twice."
-  @spec stop(t()) :: :ok | {:error, :not_found}
-  def stop(%__MODULE__{model_id: model_id}) do
+  @doc "Stops the run's processes — the model and the world it steps; safe to call twice."
+  @spec stop(t()) :: :ok
+  def stop(%__MODULE__{model_id: model_id, interface: interface}) do
     Monty.Runtime.Model.stop(model_id)
+    Monty.Simulators.Environment.stop(interface.env)
   end
 
   @doc "How many steps a run of this experiment takes by default."

@@ -46,10 +46,10 @@ defmodule Monty.Studio.TransformsTest do
     assert point_cloud.depth_clip_sensors == [0]
   end
 
-  test "a transform the port has not written is reported, not silently dropped" do
-    findings = setup().findings |> Enum.map(& &1.code)
+  test "a transform turns into a module here, so none is silently dropped" do
+    setup = setup()
 
-    assert :modules_not_ported in findings
+    assert length(Setup.built_transforms(setup)) == length(setup.transforms)
   end
 
   describe "a noisy experiment" do

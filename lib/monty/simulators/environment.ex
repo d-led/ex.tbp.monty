@@ -37,17 +37,38 @@ defmodule Monty.Simulators.Environment do
   @type sensor_id :: atom() | String.t()
 
   @doc """
-  A world for the sensors an experiment has.
+  A world, from what the experiment knows to build one.
 
   Monty's `Interface` is configured with the agent and its sensors, and reports
-  every sensor it was given on every step, so an environment is built from that
-  list rather than discovering sensors as it goes.
+  every sensor it was given on every step, so a world that renders a scene is
+  built from that list rather than discovering sensors as it goes. A world that
+  is a simulator behind a port takes more than the sensors — an experiment name
+  picks the scene — so what a world is built from is its own to say.
   """
-  @callback new(sensor_ids :: [sensor_id()]) :: t()
+  @callback new(what :: term()) :: t()
 
   @doc "The world after `actions`, with what the sensors now see."
   @callback step(t(), [Action.t()]) :: {observations :: map(), proprioceptive_state :: map(), t()}
 
   @doc "The world a fresh episode starts in."
   @callback reset(t()) :: t()
+
+  @doc """
+  Closes the world, if it is something that can be closed.
+
+  A world kept in a value has nothing behind it. A world that is a simulator
+  process does — a peer that outlives its run is a process nobody will ask about
+  again — so it answers `stop/1`, and a run stops its world the same way it stops
+  its model.
+  """
+  @callback stop(t()) :: :ok
+
+  @optional_callbacks stop: 1
+
+  @spec stop(t()) :: :ok
+  def stop(env) do
+    if function_exported?(env.__struct__, :stop, 1),
+      do: env.__struct__.stop(env),
+      else: :ok
+  end
 end

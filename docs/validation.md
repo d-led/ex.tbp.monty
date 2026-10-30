@@ -299,6 +299,13 @@ positioning procedure and its rng, reseeded per episode from `episode_seed` as
 `MontyExperiment.pre_episode` does. It logs each episode's seed and target to
 stderr, out of the pipe's way, so a run can be told which episode it is in.
 
+`Monty.Simulators.Habitat.Environment.HabitatEnvironment` is that world under
+Monty's own name, and what a studio run steps when the application is configured
+with `world_simulator: :habitat`: it holds no scene, starts the peer on its first
+step and closes it when the run stops, so a step is one round trip and the world
+the run sees is Monty's own. Until it is configured, a run steps this port's
+synthetic scene, and the setup page warns that its numbers are not Monty's.
+
 What comes back is decoded on this side: `Protocol.proprioceptive_state/1` turns
 Monty's maps into the port's `AgentState`/`SensorState` (`wxyz` quaternion to a
 `Monty.Geometry.Rotation`), so the motor system can act on them, and an action

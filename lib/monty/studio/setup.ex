@@ -25,6 +25,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Frameworks.Models.SensorModules.CameraSM
   alias Monty.Geometry.Rotation
   alias Monty.ModuleMap
+  alias Monty.Simulators.Habitat.Environment.HabitatEnvironment
   alias Monty.Studio.Finding
   alias Monty.Studio.Memory
 
@@ -36,6 +37,7 @@ defmodule Monty.Studio.Setup do
             experiment_class: nil,
             monty_class: nil,
             environment: nil,
+            world: :synthetic,
             cameras: %{},
             scene: %{agent: nil, sensors: %{}, objects: []},
             motor_system: nil,
@@ -115,7 +117,8 @@ defmodule Monty.Studio.Setup do
   @doc """
   Reads a composed experiment tree.
 
-  Options: `:name`, used only for display and logging.
+  Options: `:name`, used only for display and logging, and `:world_simulator`
+  (`:synthetic` or `:habitat`), which world a run is being read for.
   """
   @spec new(map(), keyword()) :: t()
   def new(tree, opts \\ []) do
@@ -134,6 +137,7 @@ defmodule Monty.Studio.Setup do
       experiment_class: describe_target(Map.get(tree["experiment"] || %{}, "_target_")),
       monty_class: describe_target(Map.get(monty_config, "monty_class")),
       environment: environment(config),
+      world: Keyword.get_lazy(opts, :world_simulator, &configured_world/0),
       cameras: cameras(config),
       scene: scene(config),
       motor_system: motor_system(monty_config),
@@ -183,6 +187,11 @@ defmodule Monty.Studio.Setup do
   defp monty_root(opts),
     do: Keyword.get_lazy(opts, :monty_root, fn -> Monty.Config.Source.root() end)
 
+  # Which world a run steps is the machine's, not the experiment's: a config
+  # says nothing about whether this host can run Monty's simulator, so it stays
+  # apart from the config tree and the finding below says what it means.
+  defp configured_world, do: Application.get_env(:ex_tbp_monty, :world_simulator, :synthetic)
+
   defp resolution_findings(false), do: []
 
   defp resolution_findings(true) do
@@ -200,7 +209,7 @@ defmodule Monty.Studio.Setup do
   @spec from_experiment(String.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def from_experiment(name, opts \\ []) do
     with {:ok, tree} <- Monty.Config.Composer.compose(name, Keyword.take(opts, [:conf_dir])) do
-      {:ok, new(tree, [name: name] ++ Keyword.take(opts, [:name]))}
+      {:ok, new(tree, [name: name] ++ Keyword.take(opts, [:name, :world_simulator]))}
     end
   end
 
@@ -372,8 +381,23 @@ defmodule Monty.Studio.Setup do
   from there until the view finder is at `desired_object_distance`, which is
   what brings the patch within a finger's reach.
   """
-  @spec world(t()) :: Monty.Simulators.Synthetic.Environment.t()
-  def world(%__MODULE__{} = setup) do
+  @spec world(t()) :: Monty.Simulators.Environment.t()
+  def world(%__MODULE__{world: world} = setup), do: world(setup, world)
+
+  @doc """
+  The world a run of this experiment steps: Monty's own, or the stand-in.
+
+  `:habitat` is `Monty.Simulators.Habitat.Environment.HabitatEnvironment`, which
+  runs Monty's `HabitatEnvironment` in Monty's own Python environment — the
+  world the experiment was written for, one round trip per step. `:synthetic`
+  is this port's scene, which steps in the BEAM and steps nothing Monty posed.
+  """
+  @spec world(t(), :synthetic | :habitat) :: Monty.Simulators.Environment.t()
+  def world(%__MODULE__{} = setup, :habitat) do
+    HabitatEnvironment.new(experiment: setup.name, sensors: sensor_ids(setup))
+  end
+
+  def world(%__MODULE__{} = setup, :synthetic) do
     Monty.Simulators.Synthetic.Environment.new(
       sensor_ids(setup),
       Monty.Simulators.Synthetic.Scene.new(centre: object_centre(setup)),
@@ -982,7 +1006,9 @@ defmodule Monty.Studio.Setup do
           do: module.class
 
     Enum.map(unknown, &unknown_module_finding/1) ++
-      not_ported_finding(planned, length(modules)) ++ shell_finding(shell, length(modules))
+      not_ported_finding(planned, length(modules)) ++
+      shell_finding(shell, length(modules)) ++
+      world_finding(setup)
   end
 
   defp unknown_module_finding(module) do
@@ -997,28 +1023,34 @@ defmodule Monty.Studio.Setup do
   defp not_ported_finding([], _total), do: []
 
   defp not_ported_finding(classes, _total) do
-    world = Enum.any?(classes, &String.ends_with?(&1, "Environment"))
-
     [
       Finding.new(
-        if(world, do: :warning, else: :info),
+        :info,
         :modules_not_ported,
         "#{length(classes)} class(es) this experiment uses are still stand-ins at run time: " <>
-          Enum.join(Enum.sort(classes), ", ") <> "." <> world_note(world),
+          Enum.join(Enum.sort(classes), ", ") <> ".",
         "monty_config"
       )
     ]
   end
 
   # The world is the one stand-in whose absence changes what a run's numbers
-  # mean: the same learning module over a synthetic scene and over Habitat are
-  # not the same experiment, and a run that says so plainly is worth more than
-  # one that looks finished.
-  defp world_note(true),
-    do:
-      " Without the environment, a run steps this port's synthetic scene, so its results are not Monty's."
+  # mean, so it is the one finding that is a warning: every step of a synthetic
+  # scene is a step Monty did not take.
+  defp world_finding(%__MODULE__{world: :synthetic}) do
+    [
+      Finding.new(
+        :warning,
+        :world_is_a_stand_in,
+        "A run steps this port's synthetic scene, not Monty's world, so its results are not " <>
+          "Monty's. Monty's own HabitatEnvironment runs out of process: set " <>
+          "`config :ex_tbp_monty, world_simulator: :habitat`.",
+        "monty_config"
+      )
+    ]
+  end
 
-  defp world_note(false), do: ""
+  defp world_finding(%__MODULE__{world: :habitat}), do: []
 
   defp shell_finding([], _total), do: []
 

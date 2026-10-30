@@ -6,6 +6,7 @@ defmodule Monty.Studio.SetupTest do
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
   alias Monty.Frameworks.Models.SensorModules.{CameraSM, FeatureChangeFilter}
   alias Monty.SensorModules.SensorModule
+  alias Monty.Simulators.Habitat.Environment.HabitatEnvironment
   alias Monty.Simulators.Synthetic
   alias Monty.Studio.{Finding, Setup}
 
@@ -246,17 +247,35 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "what is ported" do
-    test "one line says which classes a run still stands in for, and warns about the world" do
+    test "one line says which classes a run still stands in for" do
       setup = setup_for("tutorial/first_experiment")
 
       assert [stand_ins] =
                for(%{code: :modules_not_ported} = finding <- setup.findings, do: finding)
 
-      # The world is the stand-in that changes what a run's numbers mean: the
-      # same module over a synthetic scene is not the same experiment.
-      assert stand_ins.level == :warning
-      assert stand_ins.message =~ "HabitatEnvironment"
-      assert stand_ins.message =~ "not Monty's"
+      # The world is not on this list: it has a class of its own now, and the
+      # warning below is about the world a run actually steps.
+      assert stand_ins.level == :info
+      assert stand_ins.message =~ "DisplacementGraphLM"
+      refute stand_ins.message =~ "HabitatEnvironment"
+    end
+
+    test "and warns that a run without Monty's world does not produce Monty's numbers" do
+      setup = setup_for("tutorial/first_experiment")
+
+      assert [world] =
+               for(%{code: :world_is_a_stand_in} = finding <- setup.findings, do: finding)
+
+      assert world.level == :warning
+      assert world.message =~ "HabitatEnvironment"
+      assert world.message =~ "not Monty's"
+      assert world.message =~ "world_simulator: :habitat"
+    end
+
+    test "and says nothing about the world when Monty's own is what a run steps" do
+      {:ok, setup} = Setup.from_experiment("tutorial/first_experiment", world_simulator: :habitat)
+
+      refute :world_is_a_stand_in in Enum.map(setup.findings, & &1.code)
     end
 
     test "and says separately that Monty's model and experiment loop are this port's own" do
@@ -276,8 +295,15 @@ defmodule Monty.Studio.SetupTest do
     end
 
     test "a class Monty ships but this port has not written yet is planned" do
-      # Habitat, the simulator Monty's own runs are embedded in.
       assert %{status: :planned} =
+               Setup.describe_target("tbp.monty.simulators.habitat.agents.HabitatAgent")
+    end
+
+    test "Monty's HabitatEnvironment is this port's class, out of process" do
+      assert %{
+               status: :implemented,
+               elixir: "Monty.Simulators.Habitat.Environment.HabitatEnvironment"
+             } =
                Setup.describe_target(
                  "tbp.monty.simulators.habitat.environment.HabitatEnvironment"
                )
@@ -294,6 +320,19 @@ defmodule Monty.Studio.SetupTest do
       # the one it names, so the warning that a run explores without goals has
       # nothing to say.
       refute :goal_generator_not_ported in Enum.map(setup_from(@base).findings, & &1.code)
+    end
+  end
+
+  describe "the world a run steps" do
+    test "is this port's own scene unless a machine can run Monty's" do
+      assert %Synthetic.Environment{} = Setup.world(setup_for("tutorial/first_experiment"))
+    end
+
+    test "is Monty's HabitatEnvironment, named by the experiment, when it can be" do
+      assert %HabitatEnvironment{experiment: "tutorial/first_experiment", sensors: sensors} =
+               Setup.world(setup_for("tutorial/first_experiment"), :habitat)
+
+      assert "patch" in sensors
     end
   end
 

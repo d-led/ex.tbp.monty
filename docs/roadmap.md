@@ -88,6 +88,10 @@ benchmarks rather than after.
 - **Done, for Habitat.** `Monty.Simulators.Port` is the boundary and
   `scripts/monty_simulator_peer.py` is Monty's own `HabitatEnvironment` and eval
   interface on the far side of it, running in Monty's pinned conda environment.
+  `Monty.Simulators.Habitat.Environment.HabitatEnvironment` is that world under
+  Monty's own name — it owns no scene and starts the peer on its first step — and
+  `world_simulator: :habitat` is what a run of the studio steps it with; without
+  it a run steps this port's synthetic scene, and the setup page says so.
   Units and quirks are preserved on the way across: metres, `wxyz` quaternions
   decoded into `Monty.Geometry.Rotation`, sensor positions relative to the agent.
   A config's own model runs against it (`scripts/probe_world_episodes.exs`), and

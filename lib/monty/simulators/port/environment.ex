@@ -30,6 +30,7 @@ defmodule Monty.Simulators.Port.Environment do
           command: [String.t()],
           sensor_ids: [String.t()],
           timeout: timeout(),
+          env: [{String.t(), String.t()}],
           name: GenServer.name() | nil
         ]
 
@@ -106,17 +107,33 @@ defmodule Monty.Simulators.Port.Environment do
     [executable | arguments] = Keyword.fetch!(options, :command)
 
     port =
-      Port.open({:spawn_executable, executable_path(executable)}, [
-        :binary,
-        :exit_status,
-        {:packet, 4},
-        args: arguments ++ Keyword.get(options, :args, []),
-        cd: Keyword.get(options, :cd, File.cwd!())
-      ])
+      Port.open(
+        {:spawn_executable, executable_path(executable)},
+        port_options(options, arguments)
+      )
 
     {:ok, %{state | port: port}}
   rescue
     error in [ArgumentError, ErlangError] -> {:error, {:cannot_start, error}}
+  end
+
+  # A simulator that imports a library from a source tree needs to be told
+  # where it is, and that is the environment it is started in.
+  defp port_options(options, arguments) do
+    [
+      :binary,
+      :exit_status,
+      {:packet, 4},
+      args: arguments ++ Keyword.get(options, :args, []),
+      cd: Keyword.get(options, :cd, File.cwd!())
+    ] ++ environment(options)
+  end
+
+  defp environment(options) do
+    case Keyword.get(options, :env, []) do
+      [] -> []
+      env -> [{:env, for({name, value} <- env, do: {to_charlist(name), to_charlist(value)})}]
+    end
   end
 
   defp executable_path(executable) do
