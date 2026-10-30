@@ -1081,7 +1081,7 @@ defmodule Monty.ModuleMap.Data do
           python: "MontyHandler"
         },
         %{
-          status: :planned,
+          status: :implemented,
           elixir: "Monty.Frameworks.Loggers.MontyHandlers.DetailedJSONHandler",
           python: "DetailedJSONHandler"
         },
