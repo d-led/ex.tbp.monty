@@ -55,24 +55,51 @@ conclusion = fn model_id, module_id ->
   lm = LearningModuleServer.state(Registry.via({:learning_module, model_id, module_id}))
   mlh = EvidenceGraphLM.current_mlh(lm)
 
-  features =
+  percept =
     lm.buffer
     |> FeatureAtLocationBuffer.get_all_input_percepts()
     |> List.last()
-    |> case do
+
+  # A pose vector is a struct of lists; its fields are what JSON can carry.
+  features =
+    case percept do
       nil ->
         %{}
 
-      # A pose vector is a struct of lists; its fields are what JSON can carry.
-      percept ->
-        Map.new(percept.morphological_features, fn
+      %{morphological_features: features} ->
+        Map.new(features, fn
           {name, %_{} = value} -> {name, Map.from_struct(value)}
           {name, value} -> {name, value}
         end)
     end
 
+  # Per graph, the four numbers the recorder writes for Monty: how many
+  # hypotheses a run still holds, its best evidence, how many are inside 20 % of
+  # it, and its five best — the numbers a conclusion turns on.
+  graphs =
+    lm.hypotheses
+    |> Enum.reject(fn {_graph_id, space} -> space.evidence == [] end)
+    |> Map.new(fn {graph_id, space} ->
+      scores = space.evidence
+      best = Enum.max(scores)
+
+      within =
+        if best > 0,
+          do: Enum.count(scores, &(&1 > best - best / 100 * lm.x_percent_threshold)),
+          else: 0
+
+      {graph_id,
+       %{
+         "hypotheses" => length(scores),
+         "max_evidence" => best,
+         "within_x_percent" => within,
+         "top_evidence" => scores |> Enum.sort(:desc) |> Enum.take(5)
+       }}
+    end)
+
   %{
     "possible_matches" => lm.possible_matches,
+    "graphs" => graphs,
     "mlh" => %{
       "graph_id" => mlh.graph_id,
       "mlh_id" => mlh.mlh_id,
@@ -88,7 +115,12 @@ conclusion = fn model_id, module_id ->
     # What the sensor modules last made of the world: the features the module
     # scored. A difference here explains a difference in evidence, and a
     # difference in evidence explains a different conclusion.
-    "features" => features
+    "percept" => %{
+      "location" => percept && percept.location,
+      "confidence" => percept && percept.confidence,
+      "features" => features,
+      "non_morphological_features" => percept && percept.non_morphological_features
+    }
   }
 end
 

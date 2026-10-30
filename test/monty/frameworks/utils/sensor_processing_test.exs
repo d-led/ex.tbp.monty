@@ -227,11 +227,41 @@ defmodule Monty.Frameworks.Utils.SensorProcessingTest do
     end
 
     test "has no hue and no saturation for a grey pixel" do
-      assert [0.0, 0.0, 0.5] = SensorProcessing.rgb2hsv([0.5, 0.5, 0.5])
+      assert [hue, saturation, value] = SensorProcessing.rgb2hsv([0.5, 0.5, 0.5])
+
+      assert {hue, saturation, value} == {0.0, 0.0, 0.5}
     end
 
     test "and nothing at all for black" do
       assert SensorProcessing.rgb2hsv([0.0, 0.0, 0.0]) == [0.0, 0.0, 0.0]
+    end
+
+    # A camera hands over byte samples, and skimage scales them before it does
+    # anything else (`img_as_float`): a `uint8` pixel means `n / 255`. All four
+    # answers below are `skimage.color.rgb2hsv`'s own, from numpy 1.23.5 in
+    # Monty's environment — a run whose value channel stayed on 0..255 scored
+    # every hypothesis differently from Monty's, which is how this was found.
+    test "reads a byte pixel on the 0..1 scale, as skimage does" do
+      assert SensorProcessing.rgb2hsv([143, 47, 50]) == [
+               0.9947916666666666,
+               0.6713286713286714,
+               0.5607843137254902
+             ]
+
+      assert SensorProcessing.rgb2hsv([255, 0, 0]) == [0.0, 1.0, 1.0]
+
+      assert SensorProcessing.rgb2hsv([0, 128, 64]) == [
+               0.4166666666666667,
+               1.0,
+               0.5019607843137255
+             ]
+    end
+
+    test "keeps a grey byte pixel's value, which is not zero" do
+      assert [hue, saturation, value] = SensorProcessing.rgb2hsv([10, 10, 10])
+
+      assert {hue, saturation} == {0.0, 0.0}
+      assert_in_delta value, 10.0 / 255.0, 1.0e-12
     end
   end
 end

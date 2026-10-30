@@ -311,22 +311,23 @@ minute, `scripts/probe_world_episodes.exs`:
 
 | episode | object | Monty's steps | the port's steps |
 |---|---|---|---|
-| 1 | mug | 21 | **21** |
-| 2 | bowl | 28 | 27 |
+| 1 | mug | 21 | 22 |
+| 2 | bowl | 28 | 33 |
 | 3 | potted_meat_can | 28 | **28** |
-| 4 | spoon | 26 | 36 |
-| 5 | strawberry | 42 | 40 |
-| 6 | mustard_bottle | 21 | 34 |
-| 7 | dice | 35 | 38 |
-| 8 | golf_ball | 50 | 37 |
-| 9 | c_lego_duplo | 47 | 46 |
-| 10 | banana | 29 | 45 |
+| 4 | spoon | 26 | 31 |
+| 5 | strawberry | 42 | 60, timed out |
+| 6 | mustard_bottle | 21 | 22 |
+| 7 | dice | 35 | **35** |
+| 8 | golf_ball | 50 | 42 |
+| 9 | c_lego_duplo | 47 | 37 |
+| 10 | banana | 29 | 36 |
 
 Monty's column is its `monty_steps` in `eval_stats.csv`, reproduced episode for
 episode by `scripts/record_monty_episode.py`; the port's is `Episode.run/3`'s
 `steps`, and both runs use the same `episode_seed` per episode (the peer prints
-it). So: **ten of ten episodes end on the object Monty names, and two of the ten
-take exactly Monty's number of steps.**
+it). So: **nine of ten episodes end on the object Monty names — the tenth, the
+strawberry, ran its 60 steps without concluding — and two of the ten take exactly
+Monty's number of steps.**
 
 ## The stream: Monty's numbers, and where the paths still part
 
@@ -381,14 +382,35 @@ objects a run keeps: at step 3 Monty drops `bowl` because its best evidence,
 step 6 a near-tie inside `mug` has broken the other way and the two runs track
 poses that are mirror images, which is the jump that differs.
 
-The percepts are not the explanation. Diffing the feature map the module scored
-against Monty's, for the same step and the same observation, they agree to the
-last digit in every feature — `hsv`, `principal_curvatures_log`, `object_coverage`,
-`on_object`, `pose_fully_defined` — *except* `pose_vectors`, where the port's two
-principal curvature directions are the **negatives** of Monty's. That sign is
-arbitrary in Monty's own computation (`principal_curvatures` returns whatever
-eigenvector `numpy.linalg.eig` gives and fixes only `dir2`, by the right-hand rule
-about the normal) — and Monty's own evidence says the sign cannot matter:
+**The explanation was in the percept, and it was a bug.** Comparing the *whole*
+percept — not only its morphological features — the two runs agreed on
+`location`, `confidence`, `on_object`, `pose_fully_defined`,
+`principal_curvatures_log` and `object_coverage`, and disagreed on `hsv`:
+
+| | hue | saturation | value |
+|---|---|---|---|
+| Monty | 0.9946236559139785 | 0.6503496503496504 | 0.5607843137254902 |
+| the port | 0.9946236559139785 | 0.6503496503496503 | **143** |
+
+Hue and saturation were already unit-scaled; the value channel was a byte. That
+is `skimage`'s `img_as_float`, which Monty gets for free inside
+`rgb2hsv` and the port's own `rgb2hsv` did not do: a `uint8` pixel means
+`n / 255`, a float pixel is already in `0..1`. With that applied
+(`SensorProcessing.rgb2hsv/1`, and skimage's own numbers as the fixtures), the
+percepts are equal to the last digit and so is the evidence:
+
+| step | Monty's best `mug` evidence | the port's | within 20 % |
+|---|---|---|---|
+| 1 | 0.8592655202 | 0.8592657564 | 160 / 160 |
+| 2 | 2.4529333827 | 2.4529345872 | 299 / 299 |
+| 3 | 4.0456939168 | 4.0457232171 | 246 / 246 |
+| 4 | 5.6255413814 | 5.6255228121 | 166 / 166 |
+
+Two things this closes with. The evidence no longer drifts (it was 0.2 % out and
+growing, and `possible_matches` parted at step 3 because of it), and the
+`pose_vectors` sign difference that looked like a candidate is shown to be
+decorative — Monty's curvature-direction evidence is 180°-invariant by
+construction:
 
 ```python
 # Since curvature directions could be rotated 180 degrees we define
@@ -397,13 +419,21 @@ about the normal) — and Monty's own evidence says the sign cannot matter:
 cd1_error = np.pi / 2 - np.abs(cd1_angle - np.pi / 2)
 ```
 
-so a flipped direction scores the same. The sign is decorative; it is not what
-moves the evidence by a fifth of a percent, and the search for that is in the
-module's own arithmetic, not in the percept: the same hypothesis, on the same
-percepts, carries `4.026` where Monty's carries `4.046`. The recorder already
-writes the per-graph evidence Monty accumulated per step (`hypotheses`,
-`max_evidence`, `within_x_percent`, `top_evidence`), so that is the next thing to
-hold the port's numbers against.
+The lesson is the one this file keeps relearning: the comparison was right and the
+lens was wrong. `features` was being read from `morphological_features` only, so a
+`hsv` that was 255 times too large sat in the percept for the whole investigation
+and every earlier conclusion — "the percepts agree", "the evidence must be
+arithmetic" — was true of the fields being looked at and false of the percept.
+
+**What that did and did not fix.** With the percept equal to Monty's, the evidence
+is equal to `1e-5` and the count of hypotheses inside the 20 % band matches Monty
+step for step in the steps checked — but the epoch's step counts still differ, and
+one episode now runs its 60 steps without concluding. Two readings are available
+and this file will not pretend to know which: the residual `1e-5` is enough to move
+a decision that sits `0.1 %` from a threshold (the `bowl` cut-off above is exactly
+that), or something else still differs. What is now out of the question is the
+first two suspects that were investigated at length — the random stream (same words
+consumed, same first action) and the percept (same to the last digit).
 
 ## Re-recording anything in this file
 

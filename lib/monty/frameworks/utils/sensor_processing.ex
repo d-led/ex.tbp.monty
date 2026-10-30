@@ -75,17 +75,39 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
   channel. A grey pixel has no hue to speak of and skimage answers 0 for it, as
   this does.
 
+  What it also follows is `img_as_float`, which skimage applies before any of
+  that: a pixel whose channels are integers is a `uint8` image and means
+  `n / 255`, while a pixel of floats is already in `0..1`. Monty's `CameraSM`
+  hands `rgb2hsv` a camera image, so this is the branch that is used in a run —
+  and skipping it leaves the value channel on a 0..255 scale while hue and
+  saturation are already unit-scaled, which is a percept no learning module can
+  score against the graph it has.
+
       iex> Monty.Frameworks.Utils.SensorProcessing.rgb2hsv([1.0, 0.0, 0.0])
+      [0.0, 1.0, 1.0]
+
+      iex> Monty.Frameworks.Utils.SensorProcessing.rgb2hsv([255, 0, 0])
       [0.0, 1.0, 1.0]
   """
   @spec rgb2hsv([number()]) :: [float()]
   def rgb2hsv([red, green, blue]) do
+    [red, green, blue] = as_unit([red, green, blue])
+
     brightest = max(red, max(green, blue))
     darkest = min(red, min(green, blue))
     delta = brightest - darkest
 
     [hue(red, green, blue, brightest, delta), saturation(brightest, delta), brightest]
   end
+
+  @uint8_max 255.0
+
+  # skimage's `img_as_float`: integers are byte samples of a camera image.
+  defp as_unit([red, green, blue])
+       when is_integer(red) and is_integer(green) and is_integer(blue),
+       do: [red / @uint8_max, green / @uint8_max, blue / @uint8_max]
+
+  defp as_unit(pixel), do: pixel
 
   defp saturation(brightest, _delta) when brightest == 0.0, do: 0.0
 
