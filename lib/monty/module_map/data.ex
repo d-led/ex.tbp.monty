@@ -1052,7 +1052,7 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/loggers/graph_matching_loggers.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
           elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger",
           python: "BasicGraphMatchingLogger"
         },
