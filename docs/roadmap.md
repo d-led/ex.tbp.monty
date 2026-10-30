@@ -142,6 +142,13 @@ from the page and from `mix monty.run`.
 
 ## Phase 5 — the studio, finished
 
+- **Live, and honest, from the first runnable experiment** (not a polish pass):
+  a run in progress draws its own graphs — evidence per object against the step,
+  the most likely hypothesis with its location and rotation, how many
+  hypotheses are still possible and how many are inside the 20 % band — and the
+  frames its sensors actually received, per sensor, per step. A chart that cannot
+  be explained from the module's state is not shown: the point of the graph is to
+  see Monty think, and of the frames to see what it was thinking about.
 - Config editor: edit a group, see the composed diff and the snapshot check
   before saving; a config Monty would reject cannot be saved.
 - Step inspector: the CMP payload a sensor sent and what a learning module did
