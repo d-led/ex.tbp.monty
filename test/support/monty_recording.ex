@@ -162,23 +162,53 @@ defmodule Monty.Test.MontyRecording do
   end
 
   @doc """
-  The hypothesis Monty's module held as most likely after each step, by id.
+  What Monty's terminal condition saw after each step, and what it decided.
 
-  Two implementations can agree on every graph's best evidence and on how many
-  hypotheses they hold, and still have picked a different *pose*: this is the id
-  of the one Monty chose, so a comparison of pose-uniqueness is comparing the
-  same pose.
+  An episode ends when one object is left *and* its pose is narrow enough to
+  name: all possible poses inside `path_similarity_threshold` of their centre
+  and inside `pose_similarity_threshold` of the most likely one, or enough
+  consecutive steps of the same alternatives to call the object symmetric. These
+  are the numbers behind that decision — the patience it counted, the two maxima
+  it compared, and the verdict — so a reimplementation can be held to them and
+  not only to the step the episode happened to end on.
   """
-  @spec mlh_ids!(Path.t(), keyword()) :: [non_neg_integer() | nil]
-  def mlh_ids!(path, options \\ []) do
+  @spec terminal_conditions!(Path.t(), keyword()) :: [
+          %{
+            optional(:symmetry) => non_neg_integer(),
+            optional(:poses) => non_neg_integer(),
+            optional(:spread) => float(),
+            optional(:turn) => float(),
+            optional(:unique) => boolean()
+          }
+          | nil
+        ]
+  def terminal_conditions!(path, options \\ []) do
     module_id = Keyword.get(options, :learning_module, @default_learning_module)
 
     path
     |> File.stream!()
     |> Enum.map(fn line ->
-      line
-      |> decode!()
-      |> get_in(["learning_modules", module_id, "state", "mlh", "mlh_id"])
+      state =
+        line
+        |> decode!()
+        |> get_in(["learning_modules", module_id, "state"])
+
+      case state do
+        %{"unique_poses" => nil} ->
+          nil
+
+        %{"unique_poses" => unique} ->
+          %{
+            symmetry: state["symmetry_evidence"],
+            poses: unique["poses"],
+            spread: unique["spread"],
+            turn: unique["turn"],
+            unique: unique["unique"]
+          }
+
+        _without_unique_poses ->
+          nil
+      end
     end)
   end
 

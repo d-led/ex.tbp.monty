@@ -297,6 +297,16 @@ defmodule Monty.Studio.SetupTest do
       assert lm.graph_memory.object_model_options[:max_size] == 0.3
     end
 
+    test "is given the experiment's own step counts, so it cannot conclude early" do
+      # Monty requires these of every model: an evaluation that has taken fewer
+      # than `min_eval_steps` matching steps is not asked whether it recognised
+      # anything. Without them a run asked on its first step and recognised the
+      # mug on step 8 of an episode Monty took 43 steps over.
+      spec = "base_config_10distinctobj_dist_agent" |> setup_for() |> Setup.model_spec("model_0")
+
+      assert %{min_eval_steps: 20, min_train_steps: 3, num_exploratory_steps: 1000} = spec
+    end
+
     test "runs the sensor class the config targets, when this port has it" do
       spec = @base |> setup_from() |> Setup.model_spec("model_0")
 

@@ -89,9 +89,17 @@ replay = fn percepts ->
   detected =
     LearningModuleServer.state(Registry.via({:learning_module, id, module_id})).detected_object
 
+  # A step that lost a module to a barrier timeout is a step the module never
+  # saw, which shifts everything after it: worth reporting beside a conclusion.
+  lost =
+    result.infos
+    |> Enum.count(fn info ->
+      info.sensor_timeouts != [] or info.votes.timed_out != []
+    end)
+
   Model.stop(id)
 
-  {result.steps, Map.get(result.terminal_states, module_id), detected}
+  {result.steps, Map.get(result.terminal_states, module_id), detected, lost}
 end
 
 # How many episodes to replay: all ten take a quarter of an hour, so iterating
@@ -104,13 +112,14 @@ results =
   |> Enum.take(wanted)
   |> Enum.with_index(1)
   |> Enum.map(fn {{percepts, conclusion}, index} ->
-    {steps, terminal_state, detected} = replay.(percepts)
+    {steps, terminal_state, detected, lost} = replay.(percepts)
     agrees = detected == conclusion["detected_object"] and terminal_state == :match
 
     IO.puts(
       "episode #{index}: Monty #{conclusion["detected_object"]} (#{length(percepts)} steps) · " <>
         "port #{inspect(detected)} (#{steps} steps, #{inspect(terminal_state)}) · " <>
-        if(agrees, do: "agrees", else: "differs")
+        if(agrees, do: "agrees", else: "differs") <>
+        if(lost > 0, do: " (lost a module on #{lost} steps)", else: "")
     )
 
     agrees

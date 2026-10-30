@@ -109,7 +109,64 @@ def _state(module):
             "evidence": _plain(mlh.get("evidence")),
         },
         "graphs": evidence,
+        # The pose-uniqueness test is why an episode ends when it ends: one
+        # object left is not enough if its pose is still ambiguous. These are
+        # the numbers it turned on, so a reimplementation can be held to them
+        # and not only to the conclusion that followed.
+        "symmetry_evidence": int(getattr(module, "symmetry_evidence", 0)),
+        "unique_poses": getattr(module, "_recorded_unique_poses", None),
     }
+
+
+def _record_unique_poses() -> None:
+    """Wraps Monty's pose-uniqueness test so its two numbers can be recorded.
+
+    `EvidenceGraphLM._check_for_unique_poses` answers one boolean; whether the
+    possible locations are close enough and whether the possible rotations are
+    close enough are two separate questions, and a port that disagrees with
+    Monty needs to know which one. The wrapper computes the same two maxima
+    with Monty's own arrays and thresholds and records them beside the verdict.
+    """
+    from tbp.monty.frameworks.models.evidence_matching.learning_module import (
+        EvidenceGraphLM,
+    )
+
+    original = EvidenceGraphLM._check_for_unique_poses
+    if getattr(original, "_records_unique_poses", False):
+        return
+
+    def wrapped(self, graph_id, possible_object_hypotheses_ids, most_likely_r):
+        unique = original(self, graph_id, possible_object_hypotheses_ids, most_likely_r)
+        ids = np.asarray(possible_object_hypotheses_ids, dtype=np.int64)
+        hypotheses = self._hypotheses[graph_id]
+
+        recorded = {
+            "poses": int(len(ids)),
+            "ids": _plain(ids) if len(ids) <= 32 else None,
+            "unique": bool(unique),
+            "path_similarity_threshold": self.path_similarity_threshold,
+            "pose_similarity_threshold": self.pose_similarity_threshold,
+        }
+
+        if len(ids):
+            locations = np.array(hypotheses.locations)[ids]
+            centre = np.mean(locations, axis=0)
+            rotations = np.array(hypotheses.poses)[ids]
+            trace = np.trace(
+                most_likely_r.as_matrix().T @ rotations, axis1=1, axis2=2
+            )
+            turns = np.arccos(np.clip((trace - 1) / 2, -1, 1))
+
+            recorded["spread"] = float(
+                np.max(np.linalg.norm(locations - centre, axis=1))
+            )
+            recorded["turn"] = float(np.max(np.nan_to_num(turns)))
+
+        self._recorded_unique_poses = recorded
+        return unique
+
+    wrapped._records_unique_poses = True
+    EvidenceGraphLM._check_for_unique_poses = wrapped
 
 
 class Recorder:
@@ -185,6 +242,8 @@ def main() -> None:
         "_target_": "record_monty_episode.Recorder",
         "out": arguments.out,
     }
+
+    _record_unique_poses()
 
     experiment = instantiate_experiment(cfg.experiment)
     with experiment:

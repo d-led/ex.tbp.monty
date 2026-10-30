@@ -201,27 +201,34 @@ Saying this plainly matters more than the table above:
   the number of hypotheses per object matches Monty's at every step (888, 1776,
   2664, … for the mug; `scripts/probe_episode_conclusion.exs`).
 
-  The first episode now replays to a conclusion, and the conclusion is *early*,
-  not wrong: the port recognises the mug on step 8, Monty on step 43
-  (`scripts/probe_dist_agent_episodes.exs 1`). That number is only meaningful
-  with the memory the recording was made with: the recordings used
-  `constants.pretrained_dir=pretrained_ycb_v10`, and replaying the same percepts
-  against the v13 graphs a config resolves to today concludes on step 27 — a
-  mixed experiment, not a comparison. `scripts/probe_support.exs` names the
-  recorded release so a probe cannot drift into that by accident. Monty's
-  terminal condition needs
-  one object left **and** a pose narrow enough to name (all possible poses within
-  `path_similarity_threshold` of their centre and within `pose_similarity_threshold`
-  of the most likely one, or enough consecutive steps of the same alternatives to
-  call the object symmetric — `EvidenceGraphLM.update_terminal_condition/1`). Both
-  sides narrow to one object at step 3, and at step 7 the port has six possible
-  poses spread 0.011 m and 0.133 rad — comfortably inside 0.1 and 0.35, so it
-  concludes — while Monty's module keeps going for another thirty-six steps. What
-  is not yet known is which half of that rule differs: the possible set (which
-  poses are inside `x_percent_threshold` of the best evidence) or the pose it
-  compares them against. Evidence and hypothesis counts agree, so the difference
-  is downstream of evidence, and `scripts/probe_pose_spread.exs` prints the two
-  numbers against both thresholds to place it.
+  **The ten episodes now replay to a conclusion, and six of the ten reach the
+  object Monty reached** (`scripts/probe_dist_agent_episodes.exs`), though only
+  three end on the same step: mug 43 steps (Monty 43), bowl 27 (27) and golf_ball
+  43 (43) agree exactly; potted_meat_can ends at 24 where Monty took 28, dice at
+  38 where Monty took 40, banana at 27 where Monty took 31. Four — spoon,
+  strawberry, mustard_bottle, c_lego_duplo — run to the recording's ceiling
+  without concluding, and the port says `time_out` rather than guessing.
+
+  Getting there found a real bug: a run was never told the experiment's
+  `monty_args`, so `min_eval_steps` was 0 and the terminal condition was asked on
+  the *first* step. Monty will not ask until an evaluation has taken 20 matching
+  steps (`MontyBase.min_steps`), and the mug episode ended on step 8 until that
+  number was passed through (`Setup.model_spec/2`). Every episode is now measured
+  from the same starting line as Monty's.
+
+  What still differs is the pose half of the terminal condition. Monty ends an
+  episode when one object is left **and** either every possible pose is within
+  `path_similarity_threshold` of their centre and `pose_similarity_threshold` of
+  the most likely one, or the same alternatives have survived
+  `required_symmetry_evidence` steps. `scripts/probe_episode_conclusion.exs` prints
+  both sides of that, step by step, from the numbers the recorder now captures
+  (`record_monty_episode.py` wraps `_check_for_unique_poses`). On the spoon's last
+  step Monty has **one** possible pose (spread 0, turn 0.0001 rad) and concludes;
+  the port has seven, 0.011 m apart but 0.62 rad of turn apart, which is past
+  0.35, so it does not. The two sides agree on each graph's best evidence and on
+  how many hypotheses they hold, so the difference is in the *spread* of evidence
+  over those hypotheses — which poses fall inside `x_percent_threshold` of the
+  best — and that is the next thing to measure.
 
   An episode costs tens of seconds, not milliseconds: a step is 0.8–1.9 s at this
   memory size, and that is the learning module's own matching, not the runtime —

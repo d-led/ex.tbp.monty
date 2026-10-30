@@ -1,16 +1,17 @@
-# Which step the port concludes on, and what condition let it.
+# The numbers an episode's ending turns on, Monty's beside the port's.
 #
 #   MIX_ENV=test mix run scripts/probe_episode_conclusion.exs [episode] [steps]
 #
-# `probe_dist_agent_episodes.exs` says the port recognises Monty's object, but
-# on step 8 where Monty took 43 (`docs/validation.md`). The evidence agrees to
-# the printed digit, so the difference is in what turns evidence into a
-# conclusion: one object left, and a pose narrow enough to name — or enough
-# consecutive steps of the same alternatives to call the object symmetric.
-# This prints the module's own path beside Monty's recorded one.
+# An episode ends when one object is left *and* its pose is narrow enough to
+# name, or when the same alternatives have survived `required_symmetry_evidence`
+# steps. `probe_dist_agent_episodes.exs` reports which episodes the port ends the
+# way Monty did; this prints the two quantities that decide it — the symmetry
+# count, and the two maxima of the pose test against their thresholds — so an
+# episode that ends early, late or not at all can be attributed to one of them.
 
-alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
 alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+alias Monty.Geometry
+alias Monty.Geometry.Rotation
 alias Monty.Runtime.{LearningModuleServer, Model, Registry}
 alias Monty.Simulators.Recording
 alias Monty.Simulators.Synthetic.Environment
@@ -23,35 +24,20 @@ experiment = "base_config_10distinctobj_dist_agent"
 [episode, steps] =
   case System.argv() do
     [episode, steps] -> [String.to_integer(episode), String.to_integer(steps)]
-    [episode] -> [String.to_integer(episode), 12]
-    [] -> [1, 12]
+    [episode] -> [String.to_integer(episode), 50]
+    [] -> [1, 50]
   end
 
 Code.require_file("probe_support.exs", __DIR__)
 opened = ProbeSupport.setup(experiment)
+
 percepts_per_step = MontyRecording.episodes!(recording) |> Enum.at(episode - 1)
-monty_evidence = MontyRecording.evidence_over_steps!(recording)
-monty_hypotheses = MontyRecording.hypothesis_counts!(recording)
-monty_poses = MontyRecording.mlh_ids!(recording)
+monty_conditions = MontyRecording.terminal_conditions!(recording)
 
-# Monty's recording runs every episode end to end, so its rows are laid out one
-# episode after another: the first episode's rows are the first ones recorded.
-monty_step = fn step ->
-  {evidence, hypotheses} =
-    {Enum.at(monty_evidence, step, %{}), Enum.at(monty_hypotheses, step, %{})}
-
-  best =
-    evidence
-    |> Enum.reject(fn {_id, value} -> value == 0 end)
-    |> Enum.max_by(fn {_id, value} -> value end, fn -> {"-", 0} end)
-
-  "#{inspect(best)} of #{inspect(Map.get(hypotheses, elem(best, 0)))}"
-end
-
-# Monty's own chosen pose, so the port's most likely hypothesis can be compared
-# with the one Monty actually held: if those differ, a pose-uniqueness test that
-# agrees in form is still measuring a different pose.
-monty_pose = fn step -> Enum.at(monty_poses, step) end
+# Monty's rows run episode after episode, so this episode's start is found by
+# the episode number rather than assumed to be the first.
+episodes = MontyRecording.episodes!(recording)
+monty_offset = episodes |> Enum.take(episode - 1) |> Enum.map(&length/1) |> Enum.sum()
 
 id = "probe-conclusion-#{System.unique_integer([:positive])}"
 spec = Setup.model_spec(opened.setup, id)
@@ -82,33 +68,75 @@ spec =
 
 {:ok, _pid} = DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {Model, spec})
 :ok = Model.set_experiment_mode(id, :eval)
-
 server = Registry.via({:learning_module, id, module_id})
 
-opened_lm = LearningModuleServer.state(server)
+distance = fn a, b ->
+  a
+  |> Enum.zip(b)
+  |> Enum.map(fn {x, y} -> (x - y) * (x - y) end)
+  |> Enum.sum()
+  |> :math.sqrt()
+end
 
-IO.puts(
-  "updater #{inspect(opened_lm.hypotheses_updater_module)}, x% #{opened_lm.x_percent_threshold}"
-)
+trace = fn [[a, _b, _c], [_d, e, _f], [_g, _h, i]] -> a + e + i end
 
-IO.puts("\nstep | port: objects, poses, symmetry, terminal, hypotheses | Monty")
+# The same two numbers the terminal condition compares, computed from what the
+# module holds after the step.
+spread = fn lm, object_id ->
+  hypotheses = Map.fetch!(lm.hypotheses, object_id)
+  ids = EvidenceGraphLM.get_possible_hypothesis_ids(lm, object_id)
+
+  case ids do
+    [] ->
+      "no possible pose"
+
+    ids ->
+      locations = Enum.map(ids, &Enum.at(hypotheses.locations, &1))
+      centre = locations |> Enum.zip_with(&Monty.Math.mean/1)
+      apart = locations |> Enum.map(fn location -> distance.(location, centre) end) |> Enum.max()
+
+      most_likely = Rotation.to_matrix(EvidenceGraphLM.current_mlh(lm).rotation)
+
+      turn =
+        ids
+        |> Enum.map(fn index ->
+          pose = Enum.at(hypotheses.poses, index)
+          cosine = (trace.(Geometry.mul(Geometry.transpose(most_likely), pose)) - 1) / 2
+          :math.acos(Monty.Math.clip(cosine, -1.0, 1.0))
+        end)
+        |> Enum.max()
+
+      "#{length(ids)} poses, spread #{Float.round(apart * 1.0, 4)}, turn #{Float.round(turn * 1.0, 4)}"
+  end
+end
+
+monty = fn step ->
+  case Enum.at(monty_conditions, monty_offset + step) do
+    nil ->
+      "—"
+
+    conditions ->
+      "#{conditions.poses} poses, spread #{Float.round(conditions.spread * 1.0, 4)}, " <>
+        "turn #{Float.round(conditions.turn * 1.0, 4)}, " <>
+        "unique #{conditions.unique}, sym #{conditions.symmetry}"
+  end
+end
+
+IO.puts("step | port: symmetry, terminal, pose test              | Monty")
 
 for step <- 0..(steps - 1) do
   {:ok, _actions, _info} = Model.step(id, %{}, %{}, %{Monty.Context.new(0) | step: step})
   lm = LearningModuleServer.state(server)
 
-  {ids, evidences} = EvidenceGraphLM.evidence_for_each_graph(lm)
-  {best_id, _evidence} = Enum.zip(ids, evidences) |> Enum.max_by(&elem(&1, 1))
-  poses = length(EvidenceGraphLM.get_possible_hypothesis_ids(lm, best_id))
-  counted = Map.get(lm.hypotheses, best_id)
-
-  poser = lm.current_mlh
+  pose =
+    case lm.possible_matches do
+      [object_id] -> spread.(lm, object_id)
+      many -> "#{length(many)} objects possible"
+    end
 
   IO.puts(
-    "#{String.pad_leading("#{step}", 4)} | " <>
-      "#{length(lm.possible_matches)} objects, #{poses} of #{Hypotheses.count(counted)} poses, " <>
-      "sym #{lm.symmetry_evidence}, #{inspect(lm.terminal_state)} | " <>
-      "#{monty_step.(step)} | pose #{inspect(poser && poser.mlh_id)}/#{inspect(monty_pose.(step))}"
+    "#{String.pad_leading("#{step}", 4)} | #{lm.symmetry_evidence}, " <>
+      "#{inspect(lm.terminal_state)}, #{String.pad_trailing(pose, 46)} | #{monty.(step)}"
   )
 end
 

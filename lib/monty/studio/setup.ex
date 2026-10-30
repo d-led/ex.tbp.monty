@@ -244,20 +244,41 @@ defmodule Monty.Studio.Setup do
 
   Every configured sensor and learning module becomes a process, wired exactly
   as the config wires them — so a run is a run of *this* topology, with
-  stand-in modules until the ported ones land.
+  stand-in modules until the ported ones land. The experiment's own
+  `monty_args` come with it: how many steps each step type must last before
+  anything may conclude is a property of the run, and a model given none of
+  them would check the terminal condition on its first step.
   """
   @spec model_spec(t(), atom() | String.t()) :: map()
   def model_spec(%__MODULE__{} = setup, model_id) do
-    %{
-      model_id: model_id,
-      sensor_modules: Enum.map(setup.sensors, &sensor_module_spec/1),
-      learning_modules:
-        Enum.map(setup.learning_modules, &learning_module_spec(&1, memory_for(setup))),
-      sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
-      lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
-      lm_to_lm_vote: inputs_by_learning_module(setup, :vote),
-      motor: motor_spec(setup)
-    }
+    Map.merge(
+      %{
+        model_id: model_id,
+        sensor_modules: Enum.map(setup.sensors, &sensor_module_spec/1),
+        learning_modules:
+          Enum.map(setup.learning_modules, &learning_module_spec(&1, memory_for(setup))),
+        sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
+        lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
+        lm_to_lm_vote: inputs_by_learning_module(setup, :vote),
+        motor: motor_spec(setup)
+      },
+      monty_args(setup)
+    )
+  end
+
+  # Monty keeps these on the model (`MontyBase.min_steps`), not on a module: a
+  # matching episode may not conclude before `min_eval_steps` matching steps,
+  # and an exploratory one runs for `num_exploratory_steps`.
+  @monty_args %{
+    "min_eval_steps" => :min_eval_steps,
+    "min_train_steps" => :min_train_steps,
+    "num_exploratory_steps" => :num_exploratory_steps
+  }
+
+  defp monty_args(%__MODULE__{monty_args: args}) do
+    for {key, field} <- @monty_args, Map.has_key?(args, key), into: %{} do
+      {field, Map.fetch!(args, key)}
+    end
   end
 
   # What runs for one sensor: the class its config targets, when this port has
