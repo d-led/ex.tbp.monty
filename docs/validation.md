@@ -279,6 +279,31 @@ Saying this plainly matters more than the table above:
   `2.67/255` (§1.12), OpenCV's mixed-axis `INTER_AREA` (§1.13), and
   a pixel with no depth becoming the nearest patch (§1.14).
 
+## Monty's own world, behind the port
+
+The world a run needs is Python — `HabitatEnvironment` and the experiment's own
+environment interface — and `Monty.Simulators.Port` is the boundary to it:
+length-prefixed JSON over a pipe, one request in flight. `scripts/monty_simulator_peer.py`
+is the other side, running **Monty's own** environment: it composes the
+experiment's config, builds the environment and the eval interface exactly as
+`MontyExperiment.load_environment_interfaces` does, and starts each episode the
+way Monty's epoch loop does (the first object in the scene, then the next one per
+`post_episode`), including the interface's own positioning procedure.
+
+Measured with `scripts/probe_simulator_peer.exs` on this machine, for
+`base_config_10distinctobj_dist_agent`: the BEAM starts the peer, resets it, and a
+step comes back with `patch` and `view_finder` observations — 64×64 depth and
+rgba, 4096 `semantic_3d` points, `cam_to_world`, `sensor_frame_data` — and
+proprioceptive state for `agent_id_0`. That is the first time the port has looked
+at Monty's world rather than at a recording of it.
+
+Two things are deliberately not done yet. The proprioceptive state arrives as
+Monty's maps (`position`, a `wxyz` quaternion, `sensors`) and the port's motor
+system works in `AgentState`/`SensorState` structs, so a run needs a decoder
+between them. And nothing yet drives a config's model from this world: the probe
+takes one step with no actions. Until both land, a run is still against the
+stand-in world, and the sentence above it — "no simulation" — stays true.
+
 ## Re-recording anything in this file
 
 The fixtures are generated, so they can be regenerated — and should be, when the
