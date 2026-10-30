@@ -89,12 +89,22 @@ def _state(module):
     """What the module concluded after the step, and how sure it is."""
     mlh = dict(module.current_mlh)
     evidence = {}
+    # How many of a graph's hypotheses are inside `x_percent_threshold` of its
+    # best one: exactly the set the pose test is given, so a port whose pose
+    # count differs can be told whether its evidence does.
+    x_percent = getattr(module, "x_percent_threshold", 20)
 
     for graph_id, hypotheses in getattr(module, "_hypotheses", {}).items():
         if len(hypotheses.evidence):
+            scores = np.asarray(hypotheses.evidence, dtype=float)
+            best = float(np.max(scores))
             evidence[graph_id] = {
-                "hypotheses": int(len(hypotheses.evidence)),
-                "max_evidence": _plain(np.max(hypotheses.evidence)),
+                "hypotheses": int(len(scores)),
+                "max_evidence": _plain(best),
+                "within_x_percent": int(np.sum(scores > best - best / 100 * x_percent))
+                if best > 0
+                else 0,
+                "top_evidence": _plain(np.sort(scores)[-5:][::-1]),
             }
 
     return {
@@ -179,6 +189,14 @@ class Recorder:
         self._seen = {}
 
     def __call__(self, ctx, monty, supervised_lm_ids, step, observations, actions):
+        # A new episode resets the buffer every module keeps, so the cursor into
+        # it has to go too. Without this the episode's first percept is read as
+        # "already seen" — it is the one step of a new episode whose count is
+        # smaller than the previous episode's, and it is the step a replay needs
+        # most.
+        if monty.episode_steps == 1:
+            self._seen = {}
+
         record = {
             "episode_step": int(monty.episode_steps),
             "total_step": int(monty.total_steps),

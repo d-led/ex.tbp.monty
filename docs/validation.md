@@ -201,34 +201,38 @@ Saying this plainly matters more than the table above:
   the number of hypotheses per object matches Monty's at every step (888, 1776,
   2664, … for the mug; `scripts/probe_episode_conclusion.exs`).
 
-  **The ten episodes now replay to a conclusion, and six of the ten reach the
-  object Monty reached** (`scripts/probe_dist_agent_episodes.exs`), though only
-  three end on the same step: mug 43 steps (Monty 43), bowl 27 (27) and golf_ball
-  43 (43) agree exactly; potted_meat_can ends at 24 where Monty took 28, dice at
-  38 where Monty took 40, banana at 27 where Monty took 31. Four — spoon,
-  strawberry, mustard_bottle, c_lego_duplo — run to the recording's ceiling
-  without concluding, and the port says `time_out` rather than guessing.
+  **Nine of the ten episodes now replay to Monty's conclusion, on Monty's own
+  step** (`scripts/probe_dist_agent_episodes.exs`): mug 43, bowl 27,
+  potted_meat_can 28, spoon 27, strawberry 36, mustard_bottle 28, golf_ball 43,
+  c_lego_duplo 35 and banana 31 — every one of them the object Monty recognised
+  and the step it recognised it on. The dice is the exception: Monty concluded
+  on step 40, its last, and the port's symmetry count reset there instead of
+  reaching five, so the episode ran out of recorded steps.
 
-  Getting there found a real bug: a run was never told the experiment's
-  `monty_args`, so `min_eval_steps` was 0 and the terminal condition was asked on
-  the *first* step. Monty will not ask until an evaluation has taken 20 matching
-  steps (`MontyBase.min_steps`), and the mug episode ended on step 8 until that
-  number was passed through (`Setup.model_spec/2`). Every episode is now measured
-  from the same starting line as Monty's.
+  Getting there found two bugs, one in the port and one in the recorder:
 
-  What still differs is the pose half of the terminal condition. Monty ends an
-  episode when one object is left **and** either every possible pose is within
-  `path_similarity_threshold` of their centre and `pose_similarity_threshold` of
-  the most likely one, or the same alternatives have survived
-  `required_symmetry_evidence` steps. `scripts/probe_episode_conclusion.exs` prints
-  both sides of that, step by step, from the numbers the recorder now captures
-  (`record_monty_episode.py` wraps `_check_for_unique_poses`). On the spoon's last
-  step Monty has **one** possible pose (spread 0, turn 0.0001 rad) and concludes;
-  the port has seven, 0.011 m apart but 0.62 rad of turn apart, which is past
-  0.35, so it does not. The two sides agree on each graph's best evidence and on
-  how many hypotheses they hold, so the difference is in the *spread* of evidence
-  over those hypotheses — which poses fall inside `x_percent_threshold` of the
-  best — and that is the next thing to measure.
+  * A run was never told the experiment's `monty_args`, so `min_eval_steps` was
+    0 and the terminal condition was asked on the *first* step. Monty does not
+    ask until an evaluation has taken 20 matching steps (`MontyBase.min_steps`),
+    and the mug episode ended on step 8 until that number was passed through
+    (`Setup.model_spec/2`).
+  * `record_monty_episode.py` kept its per-module cursor into the module's
+    buffered percepts across episodes, while the buffer itself is reset at each
+    episode start — so every episode after the first lost its *first* percept in
+    the recording. A replay fed nine of ten episodes one observation short,
+    starting from the wrong view. With the cursor reset, eight of the nine
+    remaining disagreements disappeared.
+
+  The numbers the terminal condition turns on are now recorded too —
+  `record_monty_episode.py` wraps Monty's `_check_for_unique_poses` to keep the
+  symmetry count, the pose-count, the two maxima it compares and, when they are
+  few enough, the pose ids — and `scripts/probe_episode_conclusion.exs` prints
+  both sides of them step by step. That is how the dice was placed: at its last
+  step Monty's symmetry count reaches five and the port's resets to zero, while
+  both hold 26-28 possible poses whose evidence agrees to the second decimal.
+  A difference of one or two poses in that set, from evidence agreeing only to
+  rounding, is what the 90%-overlap rule is sensitive to, and it is the one
+  episode left.
 
   An episode costs tens of seconds, not milliseconds: a step is 0.8–1.9 s at this
   memory size, and that is the learning module's own matching, not the runtime —
@@ -273,7 +277,7 @@ Monty revision moves:
 | `test/fixtures/monty_positioning.json` | `scripts/record_monty_positioning.py` (needs `scipy`) |
 | `test/fixtures/monty_interface.json` | `scripts/record_monty_interface.py` (needs `omegaconf`) |
 | `test/fixtures/monty_interface_objects.json` | `scripts/record_monty_interface_objects.py` (needs `omegaconf`) |
-| `test/fixtures/monty_dist_agent_10episodes.jsonl` | `scripts/record_monty_episode.py` — ten episodes of `base_config_10distinctobj_dist_agent`, recorded in Monty's own environment (the command is in the "An episode, end to end" note below) |
+| `test/fixtures/monty_dist_agent_10episodes.jsonl` | `scripts/record_monty_episode.py` — ten episodes of `base_config_10distinctobj_dist_agent`, recorded in Monty's own environment (the invocation is in that script's docstring): each step's percepts, the module's conclusion, and the numbers its pose test compared |
 | `test/fixtures/monty_recognition_policy.json` | `scripts/record_monty_recognition_policy.py` (imports Monty's policy module, so it needs Monty's own environment) |
 | `test/fixtures/monty_vocus2_images.json` | `scripts/record_monty_vocus2_images.py` |
 | `test/fixtures/monty_pyramids.json` | `scripts/record_monty_pyramids.py` |

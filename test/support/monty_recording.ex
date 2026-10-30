@@ -162,6 +162,38 @@ defmodule Monty.Test.MontyRecording do
   end
 
   @doc """
+  How Monty's evidence was spread over each object's hypotheses after each step.
+
+  `max_evidence` is what the port already reproduces. `hypotheses` and
+  `within_x_percent` are the space behind it: how many explanations the module
+  was carrying, and how many of them are close enough to the best one to be
+  still possible. Two implementations can agree on the maximum and disagree on
+  the set the pose test is given, and this is where that shows.
+  """
+  @spec graph_evidence!(Path.t(), keyword()) :: [
+          %{
+            optional(String.t()) => %{
+              hypotheses: non_neg_integer(),
+              max_evidence: float(),
+              within_x_percent: non_neg_integer(),
+              top_evidence: [float()]
+            }
+          }
+        ]
+  def graph_evidence!(path, options \\ []) do
+    module_id = Keyword.get(options, :learning_module, @default_learning_module)
+
+    path
+    |> File.stream!()
+    |> Enum.map(fn line ->
+      line
+      |> decode!()
+      |> get_in(["learning_modules", module_id, "state", "graphs"])
+      |> Kernel.||(%{})
+    end)
+  end
+
+  @doc """
   What Monty's terminal condition saw after each step, and what it decided.
 
   An episode ends when one object is left *and* its pose is narrow enough to

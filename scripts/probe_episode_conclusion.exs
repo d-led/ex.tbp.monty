@@ -9,6 +9,7 @@
 # count, and the two maxima of the pose test against their thresholds — so an
 # episode that ends early, late or not at all can be attributed to one of them.
 
+alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
 alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
 alias Monty.Geometry
 alias Monty.Geometry.Rotation
@@ -33,6 +34,7 @@ opened = ProbeSupport.setup(experiment)
 
 percepts_per_step = MontyRecording.episodes!(recording) |> Enum.at(episode - 1)
 monty_conditions = MontyRecording.terminal_conditions!(recording)
+monty_evidence = MontyRecording.graph_evidence!(recording)
 
 # Monty's rows run episode after episode, so this episode's start is found by
 # the episode number rather than assumed to be the first.
@@ -122,11 +124,43 @@ monty = fn step ->
   end
 end
 
-IO.puts("step | port: symmetry, terminal, pose test              | Monty")
+monty_space = fn we ->
+  we = we || %{}
+
+  leading =
+    we
+    |> Enum.reject(fn {_id, graph} -> graph["max_evidence"] == 0 end)
+    |> Enum.max_by(fn {_id, graph} -> graph["max_evidence"] end, fn -> {nil, nil} end)
+
+  case leading do
+    {nil, nil} ->
+      "—"
+
+    {_id, graph} ->
+      "#{graph["hypotheses"]} of them, top " <>
+        "#{inspect(Enum.map(graph["top_evidence"], &Float.round(&1 * 1.0, 2)))}"
+  end
+end
+
+IO.puts("step | port: symmetry, terminal, pose test, space         | Monty")
 
 for step <- 0..(steps - 1) do
   {:ok, _actions, _info} = Model.step(id, %{}, %{}, %{Monty.Context.new(0) | step: step})
   lm = LearningModuleServer.state(server)
+
+  {ids, evidences} = EvidenceGraphLM.evidence_for_each_graph(lm)
+
+  counted =
+    Enum.zip(ids, evidences)
+    |> Enum.max_by(&elem(&1, 1), fn -> {nil, 0} end)
+    |> elem(0)
+    |> then(fn id -> id && Map.get(lm.hypotheses, id) end)
+
+  top =
+    case counted do
+      nil -> []
+      hypotheses -> hypotheses.evidence |> Enum.sort(:desc) |> Enum.take(5) |> Enum.map(&Float.round(&1 * 1.0, 2))
+    end
 
   pose =
     case lm.possible_matches do
@@ -136,7 +170,9 @@ for step <- 0..(steps - 1) do
 
   IO.puts(
     "#{String.pad_leading("#{step}", 4)} | #{lm.symmetry_evidence}, " <>
-      "#{inspect(lm.terminal_state)}, #{String.pad_trailing(pose, 46)} | #{monty.(step)}"
+      "#{inspect(lm.terminal_state)}, #{String.pad_trailing(pose, 44)} " <>
+      "#{String.pad_trailing("#{counted && Hypotheses.count(counted)} of them, top #{inspect(top)}", 40)} | " <>
+      "#{monty.(step)} | #{monty_space.(Enum.at(monty_evidence, monty_offset + step))}"
   )
 end
 
