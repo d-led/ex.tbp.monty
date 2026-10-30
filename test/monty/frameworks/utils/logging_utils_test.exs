@@ -10,6 +10,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsTest do
   use ExUnit.Case, async: true
 
   alias Monty.Frameworks.Utils.LoggingUtils
+  alias Monty.Geometry.Rotation
   alias Monty.Test.Tmp
 
   setup do
@@ -102,6 +103,35 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsTest do
                "primary_target_rotation_quat" => nil,
                "primary_target_scale" => nil
              }
+    end
+  end
+
+  describe "the rotation error of a recognition" do
+    test "is nothing when the pose is the one the object was placed with" do
+      {:ok, mug} = Rotation.from_euler_degrees([0.0, 45.0, 0.0])
+
+      assert LoggingUtils.compute_pose_error(mug, mug) == 0.0
+    end
+
+    test "is the angle between the two poses, in radians or degrees" do
+      {:ok, turned} = Rotation.from_euler_degrees([0.0, 90.0, 0.0])
+
+      assert_in_delta LoggingUtils.compute_pose_error(turned, Rotation.identity(), degrees: true),
+                      90.0,
+                      1.0e-6
+
+      assert_in_delta LoggingUtils.compute_pose_error(turned, Rotation.identity()),
+                      :math.pi() / 2,
+                      1.0e-9
+    end
+
+    test "is the closest of the poses a symmetric object could be in" do
+      {:ok, quarter} = Rotation.from_euler_degrees([0.0, 90.0, 0.0])
+      identity = Rotation.identity()
+
+      # A quarter turn is one of a symmetric object's equivalent poses, so a
+      # recognition that chose it is not wrong.
+      assert LoggingUtils.compute_pose_error([quarter, identity], identity) == 0.0
     end
   end
 end
