@@ -533,4 +533,96 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert lm.gsg.wait_factor == 1
     end
   end
+
+  describe "the object an episode is about" do
+    test "is named at the start, with the pose it was placed with" do
+      lm =
+        EvidenceGraphLM.set_target(learning_module(mug()), %{
+          "object" => "mug",
+          "quat_rotation" => [0.0, 0.0, 0.0, 1.0]
+        })
+
+      assert lm.primary_target == "mug"
+      assert lm.primary_target_rotation_quat == [0.0, 0.0, 0.0, 1.0]
+    end
+
+    test "is kept when the caller has no target for this episode" do
+      lm = %{learning_module(mug()) | primary_target: "mug"}
+
+      assert EvidenceGraphLM.set_target(lm, nil).primary_target == "mug"
+    end
+
+    test "is forgotten when the next episode names a different one" do
+      lm =
+        learning_module(mug())
+        |> EvidenceGraphLM.set_target(%{"object" => "mug"})
+        |> Map.replace!(:stepwise_target_object, "bowl")
+        |> EvidenceGraphLM.set_target(%{"object" => "bowl"})
+
+      assert lm.primary_target == "bowl"
+      assert lm.stepwise_target_object == nil
+    end
+  end
+
+  describe "the ground truth a training episode records" do
+    test "says which objects the graph it built came from, both ways round" do
+      lm =
+        mug()
+        |> learning_module()
+        |> EvidenceGraphLM.set_target(%{"object" => "mug"})
+        |> Map.merge(%{mode: :train, detected_object: "mug_graph"})
+        |> put_in([Access.key!(:buffer)], charged_buffer())
+        |> EvidenceGraphLM.fixme_update_ground_truth()
+
+      assert lm.graph_id_to_target == %{"mug_graph" => MapSet.new(["mug"])}
+      assert lm.target_to_graph_id == %{"mug" => MapSet.new(["mug_graph"])}
+    end
+
+    test "adds to both sets when a graph is seen under a second object" do
+      lm =
+        mug()
+        |> learning_module()
+        |> Map.merge(%{
+          mode: :train,
+          detected_object: "mug_graph",
+          graph_id_to_target: %{"mug_graph" => MapSet.new(["mug_cup"])},
+          target_to_graph_id: %{"mug_cup" => MapSet.new(["mug_graph"])}
+        })
+        |> EvidenceGraphLM.set_target(%{"object" => "mug"})
+        |> put_in([Access.key!(:buffer)], charged_buffer())
+        |> EvidenceGraphLM.fixme_update_ground_truth()
+
+      assert lm.graph_id_to_target["mug_graph"] == MapSet.new(["mug_cup", "mug"])
+      assert lm.target_to_graph_id["mug"] == MapSet.new(["mug_graph"])
+    end
+
+    test "records nothing for a training episode that detected nothing" do
+      lm =
+        mug()
+        |> learning_module()
+        |> Map.merge(%{mode: :train, detected_object: nil})
+        |> put_in([Access.key!(:buffer)], charged_buffer())
+        |> EvidenceGraphLM.fixme_update_ground_truth()
+
+      assert lm.graph_id_to_target == %{}
+    end
+
+    test "records nothing while evaluating, where memory is not being built" do
+      lm =
+        mug()
+        |> learning_module()
+        |> Map.merge(%{mode: :eval, detected_object: "mug_graph", primary_target: "mug"})
+        |> put_in([Access.key!(:buffer)], charged_buffer())
+        |> EvidenceGraphLM.fixme_update_ground_truth()
+
+      assert lm.graph_id_to_target == %{}
+    end
+  end
+
+  # The ground-truth record is only made for an episode whose buffer was used:
+  # `size/1` is how many steps were on the object.
+  defp charged_buffer do
+    Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer.new()
+    |> Map.replace!(:on_object, [1])
+  end
 end

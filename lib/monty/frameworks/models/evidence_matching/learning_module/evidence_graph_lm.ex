@@ -119,7 +119,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
             detected_pose: [nil, nil, nil, nil, nil, nil, nil],
             detected_rotation_r: nil,
             current_mlh: nil,
-            previous_mlh: nil
+            previous_mlh: nil,
+            primary_target: nil,
+            primary_target_rotation_quat: nil,
+            stepwise_target_object: nil,
+            graph_id_to_target: %{},
+            target_to_graph_id: %{}
 
   @type graph_id :: String.t()
 
@@ -1727,6 +1732,80 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   end
 
   def update_ltm_from_stm(%__MODULE__{} = lm), do: lm
+
+  @doc """
+  `GraphLM._set_target`: names the object this episode is about.
+
+  The target is what makes a performance measurable at all — "correct" is
+  "recognised the object it was asked about", and the rotation error is measured
+  against the pose the object was placed with. A new episode clears the object it
+  was on last, which Monty does here as well: a stale stepwise target would make
+  the next episode's stepwise performance a statement about the previous one.
+
+  `nil` leaves the target alone, which is Monty's guard and its reason: a caller
+  that has no target for this episode (an unsupervised run) must not erase the
+  one the module learned from.
+  """
+  @spec set_target(t(), map() | nil) :: t()
+  def set_target(%__MODULE__{} = lm, nil), do: %{lm | stepwise_target_object: nil}
+
+  def set_target(%__MODULE__{} = lm, primary_target) do
+    %{
+      lm
+      | primary_target: Map.get(primary_target, "object"),
+        primary_target_rotation_quat: Map.get(primary_target, "quat_rotation"),
+        stepwise_target_object: nil
+    }
+  end
+
+  @doc """
+  `GraphLM.fixme_update_ground_truth`: records which object the graph this
+  episode built came from.
+
+  Monty's name, and its comment: this is the ground truth an evaluation is
+  scored against, not something the model worked out. It is written after a
+  training episode, from the object the module detected and the object it was
+  told to expect, and it is what lets a later run answer "was `mug` recognised as
+  `mug`" without the training run's target being available.
+
+  A graph can come from more than one target and a target can give more than one
+  graph, so both directions are sets, exactly as Monty keeps them.
+  """
+  @spec fixme_update_ground_truth(t()) :: t()
+  def fixme_update_ground_truth(%__MODULE__{mode: :train} = lm) do
+    if FeatureAtLocationBuffer.size(lm.buffer) > 0 do
+      update_target_graph_mapping(lm, lm.detected_object, lm.primary_target)
+    else
+      lm
+    end
+  end
+
+  def fixme_update_ground_truth(%__MODULE__{} = lm), do: lm
+
+  # Monty's guard: a training episode that detected nothing has no graph to
+  # attribute. A target of `nil` is recorded rather than skipped, because that is
+  # what Monty does and an unsupervised training run genuinely has none.
+  defp update_target_graph_mapping(%__MODULE__{} = lm, nil, _target), do: lm
+
+  defp update_target_graph_mapping(%__MODULE__{} = lm, detected_object, target_object) do
+    %{
+      lm
+      | graph_id_to_target:
+          Map.update(
+            lm.graph_id_to_target,
+            detected_object,
+            MapSet.new([target_object]),
+            &MapSet.put(&1, target_object)
+          ),
+        target_to_graph_id:
+          Map.update(
+            lm.target_to_graph_id,
+            target_object,
+            MapSet.new([detected_object]),
+            &MapSet.put(&1, detected_object)
+          )
+    }
+  end
 
   defp update_memory(%__MODULE__{} = lm) do
     %{

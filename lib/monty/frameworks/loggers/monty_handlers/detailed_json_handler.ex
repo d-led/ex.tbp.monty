@@ -21,6 +21,7 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.DetailedJSONHandler do
   alias Monty.Frameworks.Experiments.Mode.ExperimentMode
   alias Monty.Frameworks.Loggers.MontyHandlers.MontyHandler
   alias Monty.Frameworks.Models.Buffer.BufferEncoder
+  alias Monty.Frameworks.Utils.LoggingUtils
 
   @behaviour MontyHandler
 
@@ -131,7 +132,7 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.DetailedJSONHandler do
     path = Path.join(directory, "episode_#{String.pad_leading(to_string(id), 6, "0")}.json")
 
     File.mkdir_p!(directory)
-    maybe_rename_existing_file(path)
+    :ok = LoggingUtils.maybe_rename_existing_file(path)
 
     with :ok <- File.write(path, encode(id, stats)) do
       {:ok, handler}
@@ -148,7 +149,7 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.DetailedJSONHandler do
       if handler.renamed? do
         handler
       else
-        maybe_rename_existing_file(path)
+        :ok = LoggingUtils.maybe_rename_existing_file(path)
         %{handler | renamed?: true}
       end
 
@@ -161,17 +162,5 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.DetailedJSONHandler do
 
   defp encode(global_episode_id, stats) do
     %{global_episode_id => BufferEncoder.encode(stats)} |> Jason.encode!()
-  end
-
-  # `maybe_rename_existing_file`: one `_old`, not a pile of them.
-  # sobelow_skip ["Traversal.FileModule"]
-  defp maybe_rename_existing_file(path) do
-    if File.exists?(path) do
-      old = Path.rootname(path) <> "_old" <> Path.extname(path)
-      if File.exists?(old), do: File.rm!(old)
-      File.rename!(path, old)
-    end
-
-    :ok
   end
 end

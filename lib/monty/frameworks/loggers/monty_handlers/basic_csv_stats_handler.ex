@@ -33,6 +33,7 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.BasicCSVStatsHandler do
 
   alias Monty.Frameworks.Experiments.Mode.ExperimentMode
   alias Monty.Frameworks.Loggers.MontyHandlers.MontyHandler
+  alias Monty.Frameworks.Utils.LoggingUtils
 
   @behaviour MontyHandler
 
@@ -195,7 +196,7 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.BasicCSVStatsHandler do
   defp count_report(handler, path) do
     case Map.fetch(handler.reports_per_file, path) do
       :error ->
-        maybe_rename_existing_file(path)
+        :ok = LoggingUtils.maybe_rename_existing_file(path)
 
         {%{handler | reports_per_file: Map.put(handler.reports_per_file, path, 0)}, true}
 
@@ -203,18 +204,6 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.BasicCSVStatsHandler do
         {%{handler | reports_per_file: Map.put(handler.reports_per_file, path, reports + 1)},
          false}
     end
-  end
-
-  # One `_old`, not a pile of them.
-  # sobelow_skip ["Traversal.FileModule"]
-  defp maybe_rename_existing_file(path) do
-    if File.exists?(path) do
-      old = Path.rootname(path) <> "_old" <> Path.extname(path)
-      if File.exists?(old), do: File.rm!(old)
-      File.rename!(path, old)
-    end
-
-    :ok
   end
 
   defp line(cells), do: Enum.join(cells, ",")
