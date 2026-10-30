@@ -92,6 +92,16 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironmentTest do
     assert_receive {:DOWN, ^ref, :process, ^server, _reason}
   end
 
+  test "the world positions an episode itself, so a run must not move the agent again" do
+    assert Monty.Simulators.Environment.positions_itself?(world())
+
+    # The stand-in has no positioning of its own: a run walks it with the
+    # experiment's procedures, which is what `Setup.world` builds it for.
+    refute Monty.Simulators.Environment.positions_itself?(
+             Monty.Simulators.Synthetic.Environment.new(["patch"])
+           )
+  end
+
   test "the peer is told which Monty to run and which world to build" do
     world = world()
 

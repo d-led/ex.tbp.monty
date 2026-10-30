@@ -40,9 +40,16 @@ defmodule Monty.Runtime.Positioning do
   @typedoc "A world and actions in; the observation, the agent's pose and the next world out."
   @type observe :: (term(), [Monty.Frameworks.Actions.Action.t()] -> {map(), map(), term()})
 
-  @typedoc "How the prologue ended: whether the last procedure reached the object."
+  @typedoc """
+  What positioning did: whether the last procedure ended in a good view, and how
+  many steps it took.
+
+  `steps` is `nil` when the world positioned the episode itself and did not
+  report how much it moved — a world that ran Monty's `pre_episode` did the work,
+  and inventing a number for it here would be worse than saying nothing.
+  """
   @type outcome :: %{
-          steps: non_neg_integer(),
+          steps: non_neg_integer() | nil,
           success: boolean(),
           procedures: [String.t() | atom()]
         }

@@ -138,6 +138,18 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
   end
 
   @doc """
+  True: this world positions an episode itself.
+
+  `reset/1` runs Monty's `pre_episode` in the peer — the experiment's own
+  positioning procedures, drawing from the episode's random stream in Monty's
+  environment — so a run must not position the agent a second time. What the
+  model sees first is then what Monty's model would see first.
+  """
+  @impl true
+  @spec positions_itself?() :: true
+  def positions_itself?, do: true
+
+  @doc """
   Closes the peer. A world that never stepped never started one.
   """
   @impl true

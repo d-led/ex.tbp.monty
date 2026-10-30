@@ -306,13 +306,24 @@ step and closes it when the run stops, so a step is one round trip and the world
 the run sees is Monty's own. Until it is configured, a run steps this port's
 synthetic scene, and the setup page warns that its numbers are not Monty's.
 
-`scripts/probe_world_studio_run.exs` is that path, taken: the experiment's
-positioning procedure ran 21 steps in Habitat, three matching steps followed with
-64×64 depth from both sensors, and the evidence-graph module's MLH sat on `mug`
-— the object the peer loaded — at evidence 2.995 over 18 768 hypotheses. That is
-a smoke, not a comparison: it says the studio's own run path reaches Monty's
-world and gets numbers back. None of those numbers has been checked against
-Monty's run of the same episode yet.
+`scripts/probe_world_studio_run.exs` is that path, taken. The first time it was
+taken it found a bug worth more than the smoke: the agent was positioned **twice**.
+The peer runs Monty's `pre_episode` when an episode starts — the experiment's own
+positioning procedures, on Monty's random stream — and `Monty.Studio.Run` then
+walked the same procedures again over the already-placed agent, 21 steps of it.
+So a run of Monty's world was not the episode Monty ran: it was Monty's episode,
+moved. `Monty.Simulators.Environment.positions_itself?/1` now says who positions,
+`HabitatEnvironment` answers true, and a run over it leaves the agent where Monty
+put it (`procedures: [:world]`, `steps: nil` — the world did not report a count).
+
+With that fixed, `base_config_10distinctobj_dist_agent` in Habitat runs one
+positioning and three matching steps, 64×64 depth from both sensors, and the
+evidence-graph module, after those three steps, has `mug` still possible and
+`mustard_bottle` as its most likely hypothesis at evidence 2.503 over 18 804
+hypotheses. Those are the numbers of Monty's own first three steps, which is what
+makes them worth writing down — and three steps is far too few to conclude
+anything, so this is a smoke, not a comparison. The comparison that matters is
+still open: the same episode, run by Monty, step by step.
 
 What comes back is decoded on this side: `Protocol.proprioceptive_state/1` turns
 Monty's maps into the port's `AgentState`/`SensorState` (`wxyz` quaternion to a

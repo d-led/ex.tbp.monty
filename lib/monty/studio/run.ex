@@ -104,27 +104,40 @@ defmodule Monty.Studio.Run do
   # in front of the object, before the model sees anything. The steps taken here
   # are the environment's, not the episode's, so the run's step counter starts at
   # zero afterwards.
+  #
+  # A world that positions the episode itself — Monty's own, behind the port —
+  # has already done this when the episode started, with Monty's random stream;
+  # stepping it again would move an agent Monty had placed and make the episode a
+  # different one.
   defp position(%Setup{} = setup, factories) do
+    world = Setup.world(setup)
+
     interface =
       Interface.new(
-        env: Setup.world(setup),
-        # A fresh world for the next episode, which is Monty's `env.reset()`.
-        reset: fn -> Setup.world(setup) end,
+        env: world,
+        # The next episode starts where Monty starts one: a new scene for a world
+        # that is a value, and the peer's own reset for a world that is a process
+        # — never a second peer.
+        reset: fn -> world.__struct__.reset(world) end,
         transforms: Setup.built_transforms(setup),
         seed: seed(setup)
       )
 
-    observe = fn interface, actions -> Interface.step(interface, actions) end
+    if Monty.Simulators.Environment.positions_itself?(world) do
+      {:ok, interface, %{steps: nil, success: true, procedures: [:world]}}
+    else
+      observe = fn interface, actions -> Interface.step(interface, actions) end
 
-    case Positioning.prepare(
-           factories,
-           Setup.target_semantic_id(setup),
-           interface,
-           observe,
-           distractors: Setup.distractors(setup)
-         ) do
-      {:ok, positioned, outcome} -> {:ok, positioned, outcome}
-      {:error, reason} -> {:error, reason}
+      case Positioning.prepare(
+             factories,
+             Setup.target_semantic_id(setup),
+             interface,
+             observe,
+             distractors: Setup.distractors(setup)
+           ) do
+        {:ok, positioned, outcome} -> {:ok, positioned, outcome}
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 

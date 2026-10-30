@@ -63,12 +63,34 @@ defmodule Monty.Simulators.Environment do
   """
   @callback stop(t()) :: :ok
 
-  @optional_callbacks stop: 1
+  @doc """
+  Whether the world starts an episode already positioned.
+
+  Monty positions an episode in `Interface.pre_episode`: the experiment's
+  procedures step the world until the target is in view, drawing from the
+  episode's random stream. Which side of the port runs them is not symmetric. A
+  world that is Monty's own runs Monty's `pre_episode` in Monty's environment,
+  with Monty's random stream, and gets the answer Monty would get; a world that is
+  a scene here has to be walked by the ported procedures.
+
+  The world says which it is, so that a run positions exactly once: positioning a
+  placed agent again would make the episode a different one from the episode
+  Monty ran.
+  """
+  @callback positions_itself?() :: boolean()
+
+  @optional_callbacks stop: 1, positions_itself?: 0
 
   @spec stop(t()) :: :ok
   def stop(env) do
     if function_exported?(env.__struct__, :stop, 1),
       do: env.__struct__.stop(env),
       else: :ok
+  end
+
+  @spec positions_itself?(t()) :: boolean()
+  def positions_itself?(env) do
+    function_exported?(env.__struct__, :positions_itself?, 0) and
+      env.__struct__.positions_itself?()
   end
 end
