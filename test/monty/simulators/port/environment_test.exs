@@ -11,6 +11,7 @@ defmodule Monty.Simulators.Port.EnvironmentTest do
   use ExUnit.Case, async: true
 
   alias Monty.Frameworks.Actions.{MoveForward, TurnLeft}
+  alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
   alias Monty.Simulators.Port.Environment
 
   @peer Path.expand("../../../support/probe_world.py", __DIR__)
@@ -39,8 +40,13 @@ defmodule Monty.Simulators.Port.EnvironmentTest do
     location = get_in(observations, ["agent_id_0", "patch", "location"])
     assert_in_delta Enum.at(location, 2), 0.1, 1.0e-12
 
-    position = get_in(proprioceptive_state, ["agent_id_0", "position"])
-    assert Enum.all?(position, &(&1 == 0.0))
+    # The reply's maps are Monty's own (`wxyz` rotations, one agent per key);
+    # what a step answers with is the port's state, ready for the motor system.
+    assert %{"agent_id_0" => %AgentState{} = agent} = proprioceptive_state
+    assert agent.position == [0.0, 0.0, 0.0]
+
+    assert %{"patch" => %SensorState{} = patch} = agent.sensors
+    assert patch.position == [0.0, 0.0, 0.1]
   end
 
   test "the actions arrive as Monty's action maps" do

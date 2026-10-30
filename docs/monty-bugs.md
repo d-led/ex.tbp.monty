@@ -679,6 +679,16 @@ uses.
 `InformedPolicy`, `SurfacePolicy` — walks a different path, so recognition rates
 and step counts differ even when the arithmetic is identical.
 
+**Measured.** Against Monty's own world
+(`scripts/probe_world_episodes.exs`, `base_config_10distinctobj_dist_agent`), the
+episode seed itself is now Monty's — `Monty.Frameworks.Experiments.Seed` gives
+`1170100843` for episode 0, the number in Monty's own `episode_seed` column — and
+the first action of that episode still differs: Monty asks for
+`turn_left 16.78°` + `look_up 20.80°`, the port for `turn_left -33.06°` +
+`look_up 11.29°`. The object agrees on every episode and the step counts do not
+(21/28/28 for Monty against 22/37/31 for the port, episodes 1–3). This is the
+only remaining reason a live run cannot be compared step by step.
+
 **What to compare instead.** The deterministic parts: evidence given the same
 percept sequence (which the replay test asserts to a millionth, where the export's
 rounding puts it), hypothesis counts, and aggregates over many episodes. A

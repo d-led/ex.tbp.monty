@@ -44,6 +44,8 @@ defmodule Monty.Simulators.Port.Protocol do
   """
 
   alias Monty.Frameworks.Actions.ActionJSONEncoder
+  alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
+  alias Monty.Geometry.Rotation
 
   @type request :: {:reset, [String.t()]} | {:step, [Monty.Frameworks.Actions.Action.t()]}
 
@@ -91,5 +93,58 @@ defmodule Monty.Simulators.Port.Protocol do
       {:error, reason} ->
         {:error, {:not_json, reason}}
     end
+  end
+
+  @doc """
+  Proprioceptive state, as the port works with it.
+
+  A reply carries Monty's own shape — per agent its `position`, its `rotation` as
+  a **`wxyz`** quaternion, and its sensors the same way — while the motor system
+  works in `AgentState` and `SensorState`. The order is Monty's, not JSON's:
+  `quaternion.quaternion` writes `wxyz` and the port's own quaternions are
+  `xyzw`, so it is named here rather than guessed at by a caller.
+
+  A reply that leaves a position or a rotation out is a simulator that has
+  drifted from this contract, and says so with the agent it happened for.
+  """
+  @spec proprioceptive_state(map()) :: Monty.Frameworks.Models.MotorSystemState.t()
+  def proprioceptive_state(agents) when is_map(agents) do
+    Map.new(agents, fn {agent_id, agent} -> {agent_id, agent_state(agent)} end)
+  end
+
+  defp agent_state(%{"position" => position, "rotation" => rotation} = agent) do
+    %AgentState{
+      position: position,
+      rotation: rotation_of(rotation),
+      sensors:
+        Map.new(Map.get(agent, "sensors", %{}), fn {sensor_id, sensor} ->
+          {sensor_id, sensor_state(sensor)}
+        end)
+    }
+  end
+
+  defp agent_state(other) do
+    raise ArgumentError,
+          "a simulator's agent state needs a position and a rotation, got: #{inspect(other)}"
+  end
+
+  defp sensor_state(%{"position" => position, "rotation" => rotation}) do
+    %SensorState{position: position, rotation: rotation_of(rotation)}
+  end
+
+  # A zero quaternion is not an orientation, so a simulator that sends one is
+  # reported rather than given the identity by default.
+  defp rotation_of([_, _, _, _] = quaternion) do
+    case Rotation.from_quaternion(List.to_tuple(quaternion)) do
+      {:ok, rotation} ->
+        rotation
+
+      {:error, reason} ->
+        raise ArgumentError, "a simulator's rotation is not one: #{inspect(reason)}"
+    end
+  end
+
+  defp rotation_of(other) do
+    raise ArgumentError, "a simulator's rotation is `wxyz`, got: #{inspect(other)}"
   end
 end

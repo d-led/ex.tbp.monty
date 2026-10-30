@@ -73,8 +73,15 @@ defmodule Monty.Frameworks.Actions.ActionJSONTest do
                "action" => "set_agent_pose",
                "agent_id" => @agent,
                "location" => [0.1, 0.2, 0.3],
-               "rotation_quat" => @quaternion
+               # Monty's `quaternion` crosses a boundary as its four numbers.
+               "rotation_quat" => [0.9238795325112867, 0.0, 0.0, 0.3826834323650898]
              }
+    end
+
+    test "every action's map is JSON, because a map that is not cannot cross a pipe" do
+      for action <- @actions do
+        assert {:ok, _json} = action |> ActionJSONEncoder.encode() |> Jason.encode()
+      end
     end
 
     test "an action names itself in snake case, as Monty derives it from the class" do

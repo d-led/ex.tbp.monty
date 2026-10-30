@@ -67,12 +67,20 @@ def action_from(message):
 
     The port sends Monty's own `dict(action)` — `{"action": "move_forward",
     "agent_id": ..., "distance": ...}` — so the class is the CamelCase of the
-    name and the rest are its fields.
+    name and the rest are its fields. A rotation crosses as four numbers (`wxyz`)
+    and has to be a `quaternion` again before Monty's environment sees it: it
+    does arithmetic on the components, not on a list.
     """
+    import quaternion
+
     from tbp.monty.frameworks.actions import actions as action_classes
 
     fields = dict(message)
     name = fields.pop("action")
+
+    if "rotation_quat" in fields:
+        fields["rotation_quat"] = quaternion.quaternion(*fields["rotation_quat"])
+
     class_name = "".join(part.capitalize() for part in name.split("_"))
 
     return getattr(action_classes, class_name)(**fields)
@@ -90,6 +98,7 @@ class World:
         from hydra.utils import instantiate
 
         from tbp.monty.frameworks.experiments.mode import ExperimentMode
+        from tbp.monty.frameworks.experiments.seed import episode_seed
         from tbp.monty.frameworks.run_env import setup_env
 
         setup_env()
@@ -115,11 +124,13 @@ class World:
 
         self.seed = seed if seed is not None else int(self.config.seed)
         self.rng = np.random.RandomState(self.seed)
+        self.experiment_mode = ExperimentMode.EVAL
+        self._episode_seed = episode_seed
 
         self.interface = interface_class(
             env=self.env,
             transform=environment["transform"],
-            experiment_mode=ExperimentMode.EVAL,
+            experiment_mode=self.experiment_mode,
             rng=self.rng,
             seed=self.seed,
             **interface_args,
@@ -137,15 +148,35 @@ class World:
         procedure: it steps the world until the target is in view, exactly as it
         does inside Monty, so the first observation a model sees is the one Monty
         would have seen.
+
+        The rng is reseeded per episode, from `episode_seed`, because that is what
+        `MontyExperiment.pre_episode` does: an episode's positioning must not
+        depend on how many draws the episode before it took. Keeping one stream
+        for the whole epoch gets the first episode right and every later one
+        wrong.
         """
         if self.episodes == 0:
             self.interface.pre_epoch()
         else:
             self.interface.post_episode()
 
+        seed = self._episode_seed(self.seed, self.experiment_mode, self.episodes)
+        self.rng = np.random.RandomState(seed)
+
         self.episodes += 1
         self.interface.pre_episode(self.rng)
         self.steps = 0
+
+        # The rotation an object is shown at is the world's choice, not the
+        # model's, and it is what makes two runs of "the same episode"
+        # comparable — so it goes to the log, on stderr, out of the pipe's way.
+        target = self._target()
+        if target is not None:
+            print(
+                f"[peer] episode {self.episodes} (seed {seed}): {target['object']}",
+                file=sys.stderr,
+                flush=True,
+            )
 
         return {"ok": True}
 

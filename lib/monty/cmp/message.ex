@@ -81,11 +81,14 @@ defmodule Monty.Cmp.Message do
   Whether the sender believes the sensor is on an object.
 
   Monty's default is `true` when the feature is absent, because a message that
-  says nothing about it came from a sensor that could not tell.
+  says nothing about it came from a sensor that could not tell. The feature
+  itself is a number — a sensor module writes `1.0` or `0.0`, a goal generator
+  `1` — which Monty's `get_on_object` hands on and every caller only ever asks
+  as a question, so the answer here is the question's answer.
   """
   @spec on_object?(t()) :: boolean()
   def on_object?(%__MODULE__{morphological_features: features}) do
-    Map.get(features, "on_object", true)
+    Map.get(features, "on_object", true) not in [false, 0, 0.0]
   end
 
   @doc "The surface normal, for messages carrying `SurfacePoseVectors`."

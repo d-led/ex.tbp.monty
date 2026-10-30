@@ -61,9 +61,20 @@ def _plain(value):
         return [_plain(item) for item in value]
     if isinstance(value, dict):
         return {str(key): _plain(item) for key, item in value.items()}
+    # A rotation is a `quaternion`, which JSON has no word for; the four
+    # components in Monty's `wxyz` order are the word it does have.
+    if hasattr(value, "components") and hasattr(value, "w"):
+        return [_plain(part) for part in value.components]
     if hasattr(value, "value") and not isinstance(value, (str, bytes)):
         return _plain(value.value)
     return value
+
+
+def _action(action):
+    """One action, as the map it crosses a boundary as — Monty's own encoder."""
+    from tbp.monty.frameworks.actions.actions import ActionJSONEncoder
+
+    return _plain(ActionJSONEncoder().default(action))
 
 
 def _message(percept):
@@ -223,6 +234,13 @@ class Recorder:
                 "inputs": [_message(percept) for percept in step_percepts],
                 "state": _state(module),
             }
+
+        # What the model asked the world for after this step's percepts. The
+        # world answers a step's actions with the next step's observations, so
+        # this is the other half of a comparison: two runs that see the same
+        # things and choose different actions disagree in the model, and two
+        # that agree here and diverge later disagree in the world.
+        record["actions"] = [_action(action) for action in actions]
 
         self._handle.write(json.dumps(record) + "\n")
         self._handle.flush()

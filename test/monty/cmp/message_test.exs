@@ -26,6 +26,21 @@ defmodule Monty.Cmp.MessageTest do
     )
   end
 
+  defp with_on_object(value) do
+    {:ok, message} =
+      Message.new(
+        on_object_message(%{
+          morphological_features: %{
+            "pose_vectors" => pose_vectors(),
+            "pose_fully_defined" => true,
+            "on_object" => value
+          }
+        })
+      )
+
+    message
+  end
+
   describe "new/1" do
     test "accepts a sensor percept that carries pose features" do
       assert {:ok, %Message{sender_type: :sm, sender_id: "sensor_module_0"}} =
@@ -101,19 +116,14 @@ defmodule Monty.Cmp.MessageTest do
   end
 
   describe "on_object?/1" do
-    test "reports what the sensor said" do
-      {:ok, off_object} =
-        Message.new(
-          on_object_message(%{
-            morphological_features: %{
-              "pose_vectors" => pose_vectors(),
-              "pose_fully_defined" => true,
-              "on_object" => false
-            }
-          })
-        )
+    test "reports what the sensor said, whether it said it as a number or as a flag" do
+      assert Message.on_object?(with_on_object(1.0))
+      assert Message.on_object?(with_on_object(1))
+      assert Message.on_object?(with_on_object(true))
 
-      refute Message.on_object?(off_object)
+      refute Message.on_object?(with_on_object(0.0))
+      refute Message.on_object?(with_on_object(0))
+      refute Message.on_object?(with_on_object(false))
     end
 
     test "assumes true when the message says nothing, as Monty does" do

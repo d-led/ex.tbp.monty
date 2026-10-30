@@ -11,7 +11,16 @@ defmodule Monty.Frameworks.Actions.ActionJSONEncoder do
 
   @doc """
   The action as a map: its name under `"action"`, then every parameter.
+
+  A tuple is not JSON, and the two pose actions carry their rotation as one
+  `{w, x, y, z}` — Monty's `quaternion` crosses its boundary as those four
+  numbers, so they cross this one as a list.
   """
   @spec encode(Monty.Frameworks.Actions.Action.t()) :: map()
-  def encode(%module{} = action), do: module.to_map(action)
+  def encode(%module{} = action), do: action |> module.to_map() |> plain()
+
+  defp plain({a, b, c, d}), do: [plain(a), plain(b), plain(c), plain(d)]
+  defp plain(list) when is_list(list), do: Enum.map(list, &plain/1)
+  defp plain(map) when is_map(map), do: Map.new(map, fn {key, value} -> {key, plain(value)} end)
+  defp plain(value), do: value
 end

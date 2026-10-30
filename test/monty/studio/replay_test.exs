@@ -6,7 +6,7 @@ defmodule Monty.Studio.ReplayTest do
 
   # A run as the database keeps it: what each step saw, and what the modules
   # made of it. No database here — a replay is a function of the record.
-  defp run(steps \\ 0..11) do
+  defp run(steps) do
     %Run{
       timeline: Enum.map(steps, &moment/1),
       log: Enum.map(steps, &entry/1)

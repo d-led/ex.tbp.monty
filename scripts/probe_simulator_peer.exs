@@ -12,11 +12,9 @@
 # It starts a Python process and Habitat, so it takes about half a minute and is
 # a probe, not a test.
 #
-# What is missing: the proprioceptive state comes back as Monty's own maps
-# (`position`, `rotation` as a `wxyz` quaternion, `sensors`), and the port's
-# motor system works in `AgentState` and `SensorState` structs. Decoding the
-# reply into those is the next step; until it lands this probe stops after the
-# step and says so.
+# What is missing: nothing on the boundary itself, now that proprioception is
+# decoded into `AgentState`/`SensorState`. What is still missing is a run: this
+# probe takes one step with no actions, and no model is attached.
 
 alias Monty.Simulators.Port.Environment
 
@@ -46,6 +44,12 @@ report = fn
     end
 
     IO.puts("proprioception: #{inspect(Map.keys(proprioceptive_state))}")
+
+    for {agent_id, agent} <- Enum.sort(proprioceptive_state) do
+      IO.puts(
+        "  #{agent_id} at #{inspect(agent.position)}, sensors #{inspect(Map.keys(agent.sensors))}"
+      )
+    end
 
   {:error, reason}, _shape ->
     IO.puts("step failed: #{inspect(reason)}")

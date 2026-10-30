@@ -83,7 +83,9 @@ defmodule Monty.Simulators.Port.Environment do
   def handle_call({:step, actions}, _from, state) do
     case request(state, {:step, actions}) do
       {:ok, observations, proprioceptive_state, state} ->
-        {:reply, {:ok, observations, proprioceptive_state}, state}
+        # The reply carries Monty's own maps; the rest of the port works in
+        # `AgentState`/`SensorState`, so the translation happens here, once.
+        {:reply, {:ok, observations, Protocol.proprioceptive_state(proprioceptive_state)}, state}
 
       {:error, reason, state} ->
         {:reply, {:error, reason}, state}

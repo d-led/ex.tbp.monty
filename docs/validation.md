@@ -109,7 +109,7 @@ arithmetic amplifying float32 from the export.
 | What | Command | Result |
 |---|---|---|
 | Monty's Hydra YAML composes to the same tree | `mix monty.config.snapshots` | 103 of Monty's committed snapshots match |
-| Every Monty file has an Elixir module by the one naming rule | `mix monty.module_map.verify` | 131 modules, 43 implemented, 84 planned, 4 excluded |
+| Every Monty file has an Elixir module by the one naming rule | `mix monty.module_map.verify` | 131 modules, 46 implemented, 81 planned, 4 excluded |
 
 ## Run: the prologue a studio run now has
 
@@ -170,14 +170,23 @@ a stand-in is.
 
 Saying this plainly matters more than the table above:
 
-- **The world.** A studio run happens in a synthetic stand-in world. Its numbers
-  are that world's numbers, not Monty's; no run of this port has been compared
-  step by step with a Monty run.
-- **The simulator peer.** Habitat and MuJoCo are not installed here, so the peer
-  that would let the port drive Monty's own environments does not exist yet.
-- **Anything that samples.** The random-stream layout is deliberately different
-  from Monty's (§2.1 of `monty-bugs.md`), so a run that samples walks a different
-  path by design. Only its *rules* are verified, never its sequence of actions.
+- **The world.** A studio run happens in a synthetic stand-in world, and its
+  numbers are that world's numbers. A config's *own* model can also be run
+  against Monty's own world — `scripts/probe_world_episodes.exs`, below — and
+  there every episode so far ends on the object Monty names, in a number of
+  steps that is Monty's only up to the random-stream difference below.
+- **The path of anything that samples.** The random-stream layout is deliberately
+  different from Monty's (§2.1 of `monty-bugs.md`): the same episode seed does
+  not give the same sequence of random actions, so a run walks a different path
+  over the same object. Monty's first random saccade of
+  `base_config_10distinctobj_dist_agent` is `turn_left 16.78°` + `look_up 20.80°`
+  and the port's is `turn_left -33.06°` + `look_up 11.29°`
+  (`scripts/probe_world_episodes.exs` writes the actions, and the recording
+  carries Monty's). Its *rules* are verified; its sequence of actions and
+  therefore its step counts are not.
+- **The simulator peer in CI.** Habitat and MuJoCo need Monty's pinned conda
+  environment, so the peer that drives Monty's own environments runs here as a
+  probe and not as a test: no CI job has that interpreter.
 - **The default policy's arithmetic.** `DistantPolicySelector` is verified for
   *routing* — which goal reaches which policy, and what `LookAtGoal` answers —
   but the fallback it hands the step to is `InformedPolicy`, which needs a
@@ -283,26 +292,49 @@ Saying this plainly matters more than the table above:
 
 The world a run needs is Python — `HabitatEnvironment` and the experiment's own
 environment interface — and `Monty.Simulators.Port` is the boundary to it:
-length-prefixed JSON over a pipe, one request in flight. `scripts/monty_simulator_peer.py`
-is the other side, running **Monty's own** environment: it composes the
-experiment's config, builds the environment and the eval interface exactly as
-`MontyExperiment.load_environment_interfaces` does, and starts each episode the
-way Monty's epoch loop does (the first object in the scene, then the next one per
-`post_episode`), including the interface's own positioning procedure.
+length-prefixed JSON over a pipe, one request at a time.
+`scripts/monty_simulator_peer.py` is the other side, running **Monty's own**
+environment: it composes the experiment's config, builds the environment and the
+eval interface exactly as `MontyExperiment.load_environment_interfaces` does, and
+starts each episode the way Monty's epoch loop does — `pre_epoch` once, then
+`post_episode` and `pre_episode` per episode, including the interface's own
+positioning procedure and its rng, reseeded per episode from `episode_seed` as
+`MontyExperiment.pre_episode` does. It logs each episode's seed and target to
+stderr, out of the pipe's way, so a run can be told which episode it is in.
 
-Measured with `scripts/probe_simulator_peer.exs` on this machine, for
-`base_config_10distinctobj_dist_agent`: the BEAM starts the peer, resets it, and a
-step comes back with `patch` and `view_finder` observations — 64×64 depth and
-rgba, 4096 `semantic_3d` points, `cam_to_world`, `sensor_frame_data` — and
-proprioceptive state for `agent_id_0`. That is the first time the port has looked
-at Monty's world rather than at a recording of it.
+What comes back is decoded on this side: `Protocol.proprioceptive_state/1` turns
+Monty's maps into the port's `AgentState`/`SensorState` (`wxyz` quaternion to a
+`Monty.Geometry.Rotation`), so the motor system can act on them, and an action
+travels the other way because `ActionJSONEncoder` carries a
+`{w, x, y, z}` as the four numbers Monty's `dict(action)` has.
 
-Two things are deliberately not done yet. The proprioceptive state arrives as
-Monty's maps (`position`, a `wxyz` quaternion, `sensors`) and the port's motor
-system works in `AgentState`/`SensorState` structs, so a run needs a decoder
-between them. And nothing yet drives a config's model from this world: the probe
-takes one step with no actions. Until both land, a run is still against the
-stand-in world, and the sentence above it — "no simulation" — stays true.
+Measured on this machine — `base_config_10distinctobj_dist_agent`, its own
+`surf_agent_1lm_10distinctobj` memory, a Habitat scene built in about half a
+minute, `scripts/probe_world_episodes.exs`:
+
+| episode | object | Monty's steps | the port's steps |
+|---|---|---|---|
+| 1 | mug | 21 | 22 |
+| 2 | bowl | 28 | 37 |
+| 3 | potted_meat_can | 28 | 31 |
+
+Monty's column is its `monty_steps` in `eval_stats.csv`, reproduced by
+`scripts/record_monty_episode.py`; the port's is `Episode.run/3`'s `steps`. So:
+**the object agrees on every episode, and the step count does not.** The reason
+is on the first step — Monty asks the world for `turn_left 16.78°` +
+`look_up 20.80°`, the port asks for `turn_left -33.06°` + `look_up 11.29°`,
+which is §2.1: the port gives each module its own stream per step where Python
+threads one `RandomState`, so the same seed draws different numbers and the agent
+walks a different path over the same object. Two things on that path are worth
+knowing: Monty reseeds per episode, so an epoch is ten different streams, and
+until `Monty.Frameworks.Experiments.Seed` existed every episode of a run drew the
+same numbers; and the reseeding is why episode 1 alone used to agree, a shared
+stream happening to be right for the first episode and wrong for the rest.
+
+What is not tried: matching Monty's stream. §2.1 says what it would take — one
+stream per episode threaded in Python's order — and it is the difference that has
+to go before a live run can be compared step by step rather than conclusion by
+conclusion.
 
 ## Re-recording anything in this file
 

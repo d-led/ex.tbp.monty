@@ -16,17 +16,19 @@ defmodule Monty.Studio.Run do
   alias Monty.Experiment.Environment.Interface
   alias Monty.Experiment.RecognitionPolicy
   alias Monty.Experiment.RecognitionPolicy.{RecognitionCounter, RecognitionResult}
+  alias Monty.Frameworks.Experiments.Seed
   alias Monty.Runtime.Model
   alias Monty.Runtime.Positioning
   alias Monty.Studio.Setup
 
   @default_steps 12
 
-  @enforce_keys [:model_id, :setup, :interface]
+  @enforce_keys [:model_id, :setup, :interface, :episode_seed]
   defstruct [
     :model_id,
     :setup,
     :interface,
+    :episode_seed,
     :steps,
     step: 0,
     pending_actions: [],
@@ -39,6 +41,7 @@ defmodule Monty.Studio.Run do
           model_id: String.t(),
           setup: Setup.t(),
           interface: Interface.t(),
+          episode_seed: non_neg_integer(),
           steps: pos_integer(),
           step: non_neg_integer(),
           pending_actions: [Monty.Frameworks.Actions.Action.t()],
@@ -51,12 +54,20 @@ defmodule Monty.Studio.Run do
   Starts a model for an experiment.
 
   Options: `:steps` (how many timesteps this run is for, used for the
-  controller's progress), `:model_id`.
+  controller's progress), `:model_id`, `:episode` (which episode of the epoch it
+  is, counted from zero).
+
+  The episode number is not bookkeeping: a run's random draws come from the
+  seed its episode derives from the experiment's, so the same experiment and a
+  different episode number are different draws — which is exactly what makes the
+  second episode of an epoch a different object seen from a different angle.
   """
   @spec start(Setup.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def start(%Setup{} = setup, opts \\ []) do
     model_id =
       Keyword.get_lazy(opts, :model_id, fn -> "studio-#{System.unique_integer([:positive])}" end)
+
+    episode = Keyword.get(opts, :episode, 0)
 
     spec = Setup.model_spec(setup, model_id)
 
@@ -69,6 +80,7 @@ defmodule Monty.Studio.Run do
            %__MODULE__{
              model_id: model_id,
              setup: setup,
+             episode_seed: Seed.episode_seed(seed(setup), :eval, episode),
              # The world starts where an episode starts, not where the last one
              # left it: a run is an episode — and where that is, the positioning
              # procedures have just decided.
@@ -126,11 +138,11 @@ defmodule Monty.Studio.Run do
   and pretending otherwise here would only move the decision.
   """
   @spec step(t()) :: {:ok, map(), map(), t()}
-  def step(%__MODULE__{model_id: model_id, setup: setup, step: step} = run) do
+  def step(%__MODULE__{model_id: model_id, step: step} = run) do
     {observations, proprioceptive_state, interface} =
       Interface.step(run.interface, run.pending_actions)
 
-    ctx = %{Monty.Context.new(seed(setup)) | step: step}
+    ctx = %{Monty.Context.new(run.episode_seed) | step: step}
 
     {:ok, actions, info} = Model.step(model_id, observations, proprioceptive_state, ctx)
 
