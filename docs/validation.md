@@ -197,24 +197,48 @@ Saying this plainly matters more than the table above:
   bowl=0.822 mustard_bottle=0.806` on both sides; step 4 differs in the third
   decimal, which is float ordering), **both on its own and through the
   coordinator's routing** — `scripts/probe_dist_agent_evidence.exs` and
-  `scripts/probe_dist_agent_routing.exs`. The ten-episode replay itself
-  (`scripts/probe_dist_agent_episodes.exs`) has not finished a run here yet: a
-  full episode through the coordinator takes minutes rather than seconds, which
-  is the first thing to fix before its verdict means anything.
-- **An episode, end to end.**
- `frameworks/models/object_model.py` pulls in
-  `torch` and `torch_geometric`, so a recorded Monty episode needs a second
-  interpreter. This machine has Monty's **own pinned one**: the conda
+  `scripts/probe_dist_agent_routing.exs` — and it holds the same hypothesis space:
+  the number of hypotheses per object matches Monty's at every step (888, 1776,
+  2664, … for the mug; `scripts/probe_episode_conclusion.exs`).
+
+  The first episode now replays to a conclusion, and the conclusion is *early*,
+  not wrong: the port recognises the mug on step 8, Monty on step 43
+  (`scripts/probe_dist_agent_episodes.exs 1`). That number is only meaningful
+  with the memory the recording was made with: the recordings used
+  `constants.pretrained_dir=pretrained_ycb_v10`, and replaying the same percepts
+  against the v13 graphs a config resolves to today concludes on step 27 — a
+  mixed experiment, not a comparison. `scripts/probe_support.exs` names the
+  recorded release so a probe cannot drift into that by accident. Monty's
+  terminal condition needs
+  one object left **and** a pose narrow enough to name (all possible poses within
+  `path_similarity_threshold` of their centre and within `pose_similarity_threshold`
+  of the most likely one, or enough consecutive steps of the same alternatives to
+  call the object symmetric — `EvidenceGraphLM.update_terminal_condition/1`). Both
+  sides narrow to one object at step 3, and at step 7 the port has six possible
+  poses spread 0.011 m and 0.133 rad — comfortably inside 0.1 and 0.35, so it
+  concludes — while Monty's module keeps going for another thirty-six steps. What
+  is not yet known is which half of that rule differs: the possible set (which
+  poses are inside `x_percent_threshold` of the best evidence) or the pose it
+  compares them against. Evidence and hypothesis counts agree, so the difference
+  is downstream of evidence, and `scripts/probe_pose_spread.exs` prints the two
+  numbers against both thresholds to place it.
+
+  An episode costs tens of seconds, not milliseconds: a step is 0.8–1.9 s at this
+  memory size, and that is the learning module's own matching, not the runtime —
+  a step that reads the model's four policy fields used to copy the 43 MB of
+  pretrained graphs out of the coordinator to answer with them (0.24 s a step,
+  and 43 MB of garbage), and that is now a four-field reply costing 4–9 µs
+  (`scripts/probe_state_cost.exs`). So the ten-episode sweep stays a probe until a
+  step gets cheaper.
+- **The environment the recordings came from.** `frameworks/models/object_model.py`
+  pulls in `torch` and `torch_geometric`, so a recorded Monty episode needs a
+  second interpreter. This machine has Monty's **own pinned one**: the conda
   environment `tbp.monty` (Python 3.8.20, `torch` 1.13.1, `torch_geometric`
   2.1.0, `numpy` 1.23.5, `habitat_sim` 0.2.2) matching `environment_arm64.yml`,
   with YCB object meshes under `$MONTY_DATA` and pretrained models under
-  `$MONTY_MODELS`. **Ten episodes of
-  `base_config_10distinctobj_dist_agent` have been recorded** from it —
-  `scripts/record_monty_episode.py`, 338 steps, every episode `correct` in 21–38
-  matching steps — but the port has not yet been replayed against *that*
-  recording; the episode it has been held to is
-  `monty_pretrained_episode.jsonl`, recorded earlier from the same class of
-  experiment. A new recording is not yet a comparison. `scripts/setup_monty_oracle.sh`
+  `$MONTY_MODELS`. Recordings must name their `PYTHONPATH` entries absolutely,
+  or they import a different Monty checkout.
+  `scripts/setup_monty_oracle.sh`
   builds a pip-only stand-in where Monty's environment is absent, with newer
   versions (§2.15 of `monty-bugs.md`).
 - **Distractors.** `OneObjectPerEpisodeInterface` computes which objects a
@@ -247,7 +271,7 @@ Monty revision moves:
 | `test/fixtures/monty_vocus2_images.json` | `scripts/record_monty_vocus2_images.py` |
 | `test/fixtures/monty_pyramids.json` | `scripts/record_monty_pyramids.py` |
 | `test/fixtures/monty_vocus2.json` | `scripts/record_monty_vocus2.py` |
-| `priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz` | `scripts/export_monty_pretrained.py` |
+| `priv/monty/libraries/<release>/surf_agent_1lm_10distinctobj.jsonl.gz`, `…10similarobj…` | `scripts/sync_monty_libraries.sh`, which wraps `scripts/export_monty_pretrained.py` — one library per (release, model), because the same name in two releases is two memories (`priv/monty/libraries/README.md`) |
 | `test/fixtures/monty_*_episode.jsonl` | `scripts/record_monty_episode.py` (needs Monty's own environment and a simulator) |
 
 Two rules, learned the hard way:

@@ -25,7 +25,8 @@ recording = "test/fixtures/monty_dist_agent_10episodes.jsonl"
 experiment = "base_config_10distinctobj_dist_agent"
 channel = "patch"
 
-{:ok, opened} = Monty.Studio.open(experiment)
+Code.require_file("probe_support.exs", __DIR__)
+opened = ProbeSupport.setup(experiment)
 setup = opened.setup
 episodes = MontyRecording.episodes!(recording)
 conclusions = MontyRecording.episode_conclusions!(recording)
@@ -62,6 +63,12 @@ replay = fn percepts ->
       sm_to_lm: %{module_id => [channel]},
       lm_to_lm_vote: %{module_id => []}
     })
+    # No body: the recording holds what the sensors saw, not where the agent
+    # stood, so Monty's own motor system has nothing here to plan a jump from.
+    # Its actions drove the sensor in Monty; in the replay the recording is the
+    # world, and the question under test is what the learning modules make of
+    # the percepts.
+    |> Map.drop([:motor])
 
   {:ok, _pid} = DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {Model, spec})
 
@@ -71,7 +78,13 @@ replay = fn percepts ->
   {:ok, ceiling} = MaxTotalSteps.new(max_total_steps: length(percepts))
   {:ok, bounded} = AnyPolicy.new(policies: [policy, ceiling])
 
-  result = Episode.run(id, fn _actions -> {%{}, %{}} end, mode: :eval, policy: bounded)
+  result =
+    Episode.run(
+      id,
+      fn _actions -> {%{Environment.agent_id() => %{}}, %{}} end,
+      mode: :eval,
+      policy: bounded
+    )
 
   detected =
     LearningModuleServer.state(Registry.via({:learning_module, id, module_id})).detected_object
@@ -81,9 +94,14 @@ replay = fn percepts ->
   {result.steps, Map.get(result.terminal_states, module_id), detected}
 end
 
+# How many episodes to replay: all ten take a quarter of an hour, so iterating
+# starts with one.
+wanted = System.argv() |> Enum.map(&String.to_integer/1) |> List.first(10)
+
 results =
   episodes
   |> Enum.zip(conclusions)
+  |> Enum.take(wanted)
   |> Enum.with_index(1)
   |> Enum.map(fn {{percepts, conclusion}, index} ->
     {steps, terminal_state, detected} = replay.(percepts)

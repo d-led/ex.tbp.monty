@@ -162,6 +162,27 @@ defmodule Monty.Test.MontyRecording do
   end
 
   @doc """
+  The hypothesis Monty's module held as most likely after each step, by id.
+
+  Two implementations can agree on every graph's best evidence and on how many
+  hypotheses they hold, and still have picked a different *pose*: this is the id
+  of the one Monty chose, so a comparison of pose-uniqueness is comparing the
+  same pose.
+  """
+  @spec mlh_ids!(Path.t(), keyword()) :: [non_neg_integer() | nil]
+  def mlh_ids!(path, options \\ []) do
+    module_id = Keyword.get(options, :learning_module, @default_learning_module)
+
+    path
+    |> File.stream!()
+    |> Enum.map(fn line ->
+      line
+      |> decode!()
+      |> get_in(["learning_modules", module_id, "state", "mlh", "mlh_id"])
+    end)
+  end
+
+  @doc """
   Loads a memory exported from Monty's pretrained models.
 
   `scripts/export_monty_pretrained.py` writes one object per line: its node

@@ -23,9 +23,10 @@ defmodule Monty.Studio.GoalGenerationTest do
   @experiment "base_10simobj_surf_agent"
   @learning_module "learning_module_0"
 
-  defp start do
+  defp start(options \\ []) do
     {:ok, opened} = Monty.Studio.open(@experiment)
-    {:ok, run} = Run.start(opened.setup, steps: 20)
+    setup = Map.merge(opened.setup, Map.new(options))
+    {:ok, run} = Run.start(setup, steps: 20)
 
     {run, Registry.via({:learning_module, run.model_id, @learning_module})}
   end
@@ -61,7 +62,9 @@ defmodule Monty.Studio.GoalGenerationTest do
   end
 
   test "and it proposes no goal, because an episode with no memory has nothing to separate" do
-    {run, lm} = start()
+    # No memory, named as such: which libraries are exported here is not what
+    # this test is about.
+    {run, lm} = start(model_name_or_path: nil)
 
     try do
       {_run, infos} = step(run, 20)

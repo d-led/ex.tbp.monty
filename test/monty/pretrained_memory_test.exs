@@ -17,7 +17,7 @@ defmodule Monty.PretrainedMemoryTest do
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Test.MontyRecording
 
-  @pretrained "priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz"
+  @pretrained "priv/monty/libraries/pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz"
 
   # Ten models and sixteen thousand nodes: slow enough on a cold runner that
   # ExUnit's minute is not enough, and there is no reason to build it once per

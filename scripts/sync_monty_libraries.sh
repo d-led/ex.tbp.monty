@@ -14,13 +14,16 @@
 #   scripts/sync_monty_libraries.sh --only <model>  # one model, named
 #   scripts/sync_monty_libraries.sh --release pretrained_ycb_v10 --force
 #
-# With no arguments it touches only the models this repository already ships a
-# library for — "keep them current" — and leaves everything else alone.
+# With no arguments it refreshes the libraries this repository already ships —
+# "keep them current" — and leaves everything else alone.
 #
-# The same model name exists in several Monty releases (`surf_agent_1lm_*` is in
-# v9, v10 and v11), and which release a library came from is provenance, not a
-# detail: the README records it per file. So a name found in more than one
-# release is never guessed at — writing it needs `--release`.
+# A library lives under the release it came from,
+# `priv/monty/libraries/<release>/<model>.jsonl.gz`, because the same model name
+# exists in several Monty releases (`surf_agent_1lm_*` is in v9, v10, v11, v13)
+# and they are different memories: a config that names
+# `${constants.pretrained_dir}/surf_agent_1lm_10similarobj/pretrained/` means
+# whichever release its `pretrained_dir` resolves to, and a run must not quietly
+# recognise with another one's graphs.
 #
 # Nothing is downloaded here. If the models are not unpacked yet, this says so.
 #
@@ -74,58 +77,28 @@ mkdir -p "$libraries_dir"
 
 exported=0
 current=0
-ambiguous=0
 found=0
 
-# One line per model: name, the releases it appears in, and one pickle per
-# release — `surf_agent_1lm_10distinctobj  pretrained_ycb_v9 pretrained_ycb_v10 …`.
-while IFS=$'\t' read -r model releases pickles; do
+# One line per (model, release): a model name in two releases is two memories,
+# and both are exported rather than one being picked.
+while IFS=$'\t' read -r model release_name pickle; do
   found=$((found + 1))
 
   if [ -n "$only" ] && [ "$model" != "$only" ]; then continue; fi
+  if [ -n "$release" ] && [ "$release_name" != "$release" ]; then continue; fi
 
-  library="$libraries_dir/$model.jsonl.gz"
+  library="$libraries_dir/$release_name/$model.jsonl.gz"
   if [ "$all" -eq 0 ] && [ -z "$only" ] && [ ! -f "$library" ]; then continue; fi
 
-  # The pickle of the release asked for, when one was asked for.
-  chosen=""
-  if [ -n "$release" ]; then
-    for pickle in $pickles; do
-      case "$pickle" in *"/$release/"*) chosen="$pickle" ;; esac
-    done
-    if [ -z "$chosen" ]; then
-      echo "  not in $release: $model (it is in $releases)"
-      continue
-    fi
+  if [ "$force" -eq 0 ] && [ -f "$library" ] && [ ! "$pickle" -nt "$library" ]; then
+    echo "  up to date: $release_name/$model"
+    current=$((current + 1))
+    continue
   fi
 
-  # Up to date: the library is newer than every candidate pickle, so nothing
-  # would be written and which release it came from does not matter here.
-  if [ "$force" -eq 0 ] && [ -f "$library" ]; then
-    stale=0
-    for pickle in $pickles; do
-      if [ "$pickle" -nt "$library" ]; then stale=1; fi
-    done
-    if [ "$stale" -eq 0 ]; then
-      echo "  up to date: $model"
-      current=$((current + 1))
-      continue
-    fi
-  fi
-
-  # Writing it means choosing a release, and a name in several releases is not a
-  # choice this script makes on someone's behalf.
-  if [ -z "$chosen" ]; then
-    if [ "$(printf '%s' "$releases" | wc -w | tr -d ' ')" -gt 1 ]; then
-      echo "  ambiguous: $model is in $(printf '%s' "$releases" | tr ' ' ', ') — pass --release" >&2
-      ambiguous=$((ambiguous + 1))
-      continue
-    fi
-    chosen="$pickles"
-  fi
-
-  echo "  exporting: $model (from "$(basename "$(dirname "$(dirname "$(dirname "$chosen")")")")")"
-  "$PYTHON" "$root/scripts/export_monty_pretrained.py" --model "$chosen" --out "$library"
+  echo "  exporting: $model (from $release_name)"
+  mkdir -p "$(dirname "$library")"
+  "$PYTHON" "$root/scripts/export_monty_pretrained.py" --model "$pickle" --out "$library"
   exported=$((exported + 1))
 done < <(
   find "$models_dir" -mindepth 4 -maxdepth 4 -path '*/pretrained/model.pt' -print 2>/dev/null |
@@ -135,25 +108,12 @@ done < <(
       release_name="$(basename "$(dirname "$(dirname "$(dirname "$pickle")")")")"
       printf '%s\t%s\t%s\n' "$model" "$release_name" "$pickle"
     done |
-    sort -t$'\t' -k1,1 -k2,2 |
-    awk -F'\t' '
-      $1 != name {
-        if (name != "") print name "\t" releases "\t" pickles
-        name = $1; releases = ""; pickles = ""
-      }
-      { releases = releases (releases == "" ? "" : " ") $2
-        pickles = pickles (pickles == "" ? "" : " ") $3 }
-      END { if (name != "") print name "\t" releases "\t" pickles }
-    '
+    sort -t$'\t' -k1,1 -k2,2
 )
 
 if [ "$found" -eq 0 ]; then
   echo "sync_monty_libraries: no models under $models_dir" >&2
   exit 1
-fi
-
-if [ "$ambiguous" -gt 0 ]; then
-  echo "sync_monty_libraries: ${ambiguous} ambiguous model(s) left alone" >&2
 fi
 
 echo "sync_monty_libraries: ${exported} exported, ${current} already current, in $libraries_dir"

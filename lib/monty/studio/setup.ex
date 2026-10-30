@@ -393,16 +393,18 @@ defmodule Monty.Studio.Setup do
   @doc """
   Monty's pretrained memory for the model this experiment names, if exported.
 
-  `:none` means an empty memory: either the config names no model, or this
-  machine has no exported library for it — and `memory_findings/1` says which,
-  because a run with no memory cannot recognise anything however long it runs.
+  `:none` means an empty memory: the config names no model, it names no release
+  to look in, or this machine has no exported library for that model from that
+  release — and `memory_findings/1` says which, because a run with no memory
+  cannot recognise anything however long it runs.
   """
   @spec memory_for(t()) :: Monty.Frameworks.Models.GraphMatching.GraphMemory.t() | :none
   def memory_for(%__MODULE__{model_name_or_path: nil}), do: :none
 
   def memory_for(%__MODULE__{model_name_or_path: path}) do
     with name when is_binary(name) <- Memory.name_of(path),
-         {:ok, memory} <- Memory.load(name) do
+         release when is_binary(release) <- Memory.release_of(path),
+         {:ok, memory} <- Memory.load(name, release) do
       memory
     else
       _absent -> :none
@@ -861,26 +863,58 @@ defmodule Monty.Studio.Setup do
   end
 
   # A run with no memory cannot recognise anything, so it says so before it
-  # starts rather than reporting "no conclusion" after sixty steps.
-  defp memory_findings(%__MODULE__{model_name_or_path: nil}), do: []
+  # starts rather than reporting "no conclusion" after sixty steps. A memory
+  # from another release is not that: it is a run that will recognise with
+  # graphs Monty did not train for this config, which is worth knowing and not
+  # worth refusing.
+  @doc """
+  What this setup says about the memory its run will load.
 
-  defp memory_findings(%__MODULE__{model_name_or_path: path}) do
+  Nothing when the config names no model, or when the model is exported from the
+  release the config names. A warning when the model is exported from some other
+  release — the run still starts, with graphs Monty would not have loaded for
+  this config — and a louder one when nothing is exported at all, because then
+  the run cannot recognise anything however long it runs.
+  """
+  @spec memory_findings(t()) :: [Finding.t()]
+  def memory_findings(%__MODULE__{model_name_or_path: nil}), do: []
+
+  def memory_findings(%__MODULE__{model_name_or_path: path}) do
     name = Memory.name_of(path)
+    release = Memory.release_of(path)
 
-    if Memory.available?(name) do
-      []
-    else
-      [
-        Finding.new(
-          :warning,
-          :no_pretrained_memory,
-          "No exported memory for #{name || path}: this run starts with an empty " <>
-            "memory and cannot recognise anything. Export one with " <>
-            "scripts/export_monty_pretrained.py; exported here: " <>
-            Enum.join(Memory.available_libraries(), ", ") <> ".",
-          "model_name_or_path"
-        )
-      ]
+    cond do
+      Memory.available?(name, release) ->
+        []
+
+      Memory.releases_for(name) != [] ->
+        [
+          Finding.new(
+            :warning,
+            :memory_from_another_release,
+            "#{name} is exported from " <>
+              Enum.join(Memory.releases_for(name), ", ") <>
+              ", but this config's pretrained_dir names #{inspect(release)}. The run " <>
+              "uses the graphs that are here, which are not the ones Monty would " <>
+              "load for this config. Export the release it names with " <>
+              "scripts/sync_monty_libraries.sh --only #{name} --release #{release}.",
+            "model_name_or_path"
+          )
+        ]
+
+      true ->
+        [
+          Finding.new(
+            :warning,
+            :no_pretrained_memory,
+            "No exported memory for #{name || path} from #{inspect(release)}: this run " <>
+              "starts with an empty memory and cannot recognise anything. Export one " <>
+              "with scripts/sync_monty_libraries.sh --only <model> --release <release>; " <>
+              "exported here: " <>
+              Enum.join(Memory.available_libraries(), ", ") <> ".",
+            "model_name_or_path"
+          )
+        ]
     end
   end
 

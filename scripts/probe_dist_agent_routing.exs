@@ -22,7 +22,8 @@ recording = "test/fixtures/monty_dist_agent_10episodes.jsonl"
 experiment = "base_config_10distinctobj_dist_agent"
 steps = 5
 
-{:ok, opened} = Monty.Studio.open(experiment)
+Code.require_file("probe_support.exs", __DIR__)
+opened = ProbeSupport.setup(experiment)
 [percepts_per_step | _more] = MontyRecording.episodes!(recording)
 monty = MontyRecording.evidence_over_steps!(recording)
 

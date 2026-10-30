@@ -38,7 +38,7 @@ defmodule Monty.PretrainedReplayTest do
   alias Monty.Test.MontyRecording
 
   @recording "test/fixtures/monty_pretrained_episode.jsonl"
-  @pretrained "priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz"
+  @pretrained "priv/monty/libraries/pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz"
 
   # The tolerances and weights of the experiment the recording came from
   # (`learning_module/evidence_1lm_nn5_dod0025.yaml`), and its burst sampler.
