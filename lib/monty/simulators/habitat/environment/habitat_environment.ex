@@ -31,8 +31,9 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
         ]
 
   Monty's own defaults are what a run uses when nothing is configured: `python3`
-  from the PATH, this project's peer script, no overrides, and the Monty source
-  the configs were read from on `PYTHONPATH`.
+  from the PATH, this project's peer script, no overrides, and the Monty checkout
+  the configs were read from, named to the peer with `--monty-root` — the peer
+  has to be told which Monty to import, or a relative path quietly picks another.
   """
 
   @behaviour Monty.Simulators.Environment
@@ -47,7 +48,6 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
   defstruct experiment: nil,
             sensors: [],
             command: nil,
-            env: [],
             timeout: @default_timeout,
             server: nil
 
@@ -58,7 +58,6 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
           experiment: String.t() | nil,
           sensors: [Monty.Simulators.Environment.sensor_id()],
           command: [String.t()] | nil,
-          env: [{String.t(), String.t()}],
           timeout: timeout(),
           server: GenServer.server() | nil
         }
@@ -73,8 +72,8 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
     * `:python` — the interpreter Monty lives in;
     * `:peer` — the script that runs Monty's world;
     * `:overrides` — Hydra overrides, as Monty's own command line takes them;
-    * `:env` — the environment the peer starts in (default: Monty's source on
-      `PYTHONPATH`);
+    * `:monty_root` — the checkout the peer runs, given to it by name (default:
+      the source the configs were read from);
     * `:timeout` — how long one step may take.
   """
   @impl true
@@ -87,7 +86,6 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
       experiment: experiment,
       sensors: Keyword.get(options, :sensors, []),
       command: command(options, experiment),
-      env: Keyword.get_lazy(options, :env, &monty_source/0),
       timeout: Keyword.get(options, :timeout, @default_timeout)
     }
   end
@@ -159,8 +157,7 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
     options = [
       command: world.command,
       sensor_ids: world.sensors,
-      timeout: world.timeout,
-      env: world.env
+      timeout: world.timeout
     ]
 
     case Environment.start_link(options) do
@@ -177,7 +174,8 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
   defp command(options, experiment) do
     overrides = Keyword.get(options, :overrides, [])
 
-    [python(options), peer_script(options), "--experiment", experiment] ++ overrides
+    [python(options), peer_script(options), "--experiment", experiment] ++
+      monty_root(options) ++ overrides
   end
 
   defp python(options) do
@@ -192,7 +190,12 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
     end)
   end
 
-  # The peer imports Monty from its source tree, which is the tree the configs
-  # and the pretrained memory were read from.
-  defp monty_source, do: [{"PYTHONPATH", Path.join(Monty.Config.Source.root(), "src")}]
+  # The peer imports Monty, so it has to be told *which* Monty: a relative or
+  # inherited import path quietly picks a different checkout.
+  defp monty_root(options) do
+    case Keyword.get_lazy(options, :monty_root, &Monty.Config.Source.root/0) do
+      nil -> []
+      root -> ["--monty-root", root]
+    end
+  end
 end

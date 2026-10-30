@@ -92,13 +92,15 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironmentTest do
     assert_receive {:DOWN, ^ref, :process, ^server, _reason}
   end
 
-  test "the peer is told where Monty's source is, and the scene by name" do
+  test "the peer is told which Monty to run and which world to build" do
     world = world()
 
-    assert world.command |> Enum.take(2) |> List.last() == @peer
-    assert "--experiment" in world.command
-    assert world.experiment in world.command
+    assert [python, @peer, "--experiment", experiment | rest] = world.command
+    assert python == System.find_executable("python3")
+    assert experiment == "base_config_10distinctobj_dist_agent"
 
-    assert match?([{"PYTHONPATH", _path}], world.env)
+    # The peer imports Monty, so the checkout is named rather than inherited.
+    assert ["--monty-root", root] = rest
+    assert File.dir?(Path.join(root, "src"))
   end
 end

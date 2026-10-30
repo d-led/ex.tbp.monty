@@ -306,6 +306,14 @@ step and closes it when the run stops, so a step is one round trip and the world
 the run sees is Monty's own. Until it is configured, a run steps this port's
 synthetic scene, and the setup page warns that its numbers are not Monty's.
 
+`scripts/probe_world_studio_run.exs` is that path, taken: the experiment's
+positioning procedure ran 21 steps in Habitat, three matching steps followed with
+64×64 depth from both sensors, and the evidence-graph module's MLH sat on `mug`
+— the object the peer loaded — at evidence 2.995 over 18 768 hypotheses. That is
+a smoke, not a comparison: it says the studio's own run path reaches Monty's
+world and gets numbers back. None of those numbers has been checked against
+Monty's run of the same episode yet.
+
 What comes back is decoded on this side: `Protocol.proprioceptive_state/1` turns
 Monty's maps into the port's `AgentState`/`SensorState` (`wxyz` quaternion to a
 `Monty.Geometry.Rotation`), so the motor system can act on them, and an action
