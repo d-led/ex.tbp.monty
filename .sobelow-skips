@@ -35,5 +35,4 @@ Traversal.FileModule: Directory Traversal in `File.write!`,lib/ex_tbp_monty/buil
 Traversal.FileModule: Directory Traversal in `File.write`,lib/monty/studio/artifacts.ex:56,66D8872
 Traversal.FileModule: Directory Traversal in `File.write`,lib/monty/studio/drafts.ex:47,173E5A3
 XSS.Raw: XSS,lib/ex_tbp_monty_web/components/studio_components.ex:294,5EE9AFC
-XSS.Raw: XSS,lib/ex_tbp_monty_web/live/experiment_live.ex:195,3500438
-XSS.Raw: XSS,lib/ex_tbp_monty_web/live/experiment_live.ex:196,117A231
+XSS.Raw: XSS,lib/ex_tbp_monty_web/live/experiment_live.ex:275,597FE84

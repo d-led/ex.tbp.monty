@@ -100,6 +100,23 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert patch =~ "step 1"
     end
 
+    test "what the learning module believes is drawn while the run steps", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # A chart per learning module, with a line per object it was weighing and
+      # the answer marked on it — the module's numbers, not a summary of the log.
+      assert has_element?(view, "#evidence-chart")
+      assert has_element?(view, "#chart-learning_module_0 svg")
+      assert has_element?(view, "#chart-learning_module_0 polyline")
+
+      chart = view |> element("#chart-learning_module_0") |> render()
+      assert chart =~ "is the answer so far"
+    end
+
     test "the log filter keeps a line only if every word matches", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")

@@ -307,6 +307,16 @@ defmodule Monty.Studio.SetupTest do
       assert %{min_eval_steps: 20, min_train_steps: 3, num_exploratory_steps: 1000} = spec
     end
 
+    test "waits for its modules for as long as a step takes, as Monty's round does" do
+      # A deadline on a module's work decides which module is dropped when the
+      # machine is busy, and a dropped module is a step the episode never saw.
+      # The vote round keeps its own deadline: that one is an experiment.
+      spec = "base_config_10distinctobj_dist_agent" |> setup_for() |> Setup.model_spec("model_0")
+
+      assert spec.call_timeout == :infinity
+      refute Map.has_key?(spec, :vote_timeout)
+    end
+
     test "runs the sensor class the config targets, when this port has it" do
       spec = @base |> setup_from() |> Setup.model_spec("model_0")
 

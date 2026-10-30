@@ -120,8 +120,9 @@ defmodule Monty.Studio.Jobs.Run do
 
   defp step(run_id, record, run, sensor_ids, infos) do
     {:ok, info, observations, run} = Run.step(run)
-    record = RunLog.record_step(record, info, observations)
-    emit(run_id, info, observations, sensor_ids)
+    beliefs = Run.beliefs(run)
+    record = RunLog.record_step(record, info, observations, beliefs)
+    emit(run_id, info, observations, sensor_ids, beliefs)
     step_until_done(run_id, record, run, sensor_ids, [info | infos])
   catch
     :exit, reason ->
@@ -129,12 +130,12 @@ defmodule Monty.Studio.Jobs.Run do
       {{:crashed, run.step, reason}, infos, record}
   end
 
-  defp emit(run_id, info, observations, sensor_ids) do
-    entry = RunLog.entry(info)
+  defp emit(run_id, info, observations, sensor_ids, beliefs) do
+    entry = RunLog.entry(info, beliefs)
     line = RunLog.line(entry)
     say(run_id, line)
     frames = frames_for(sensor_ids, observations, info.step)
-    broadcast(run_id, {:step, %{line: line, step: info.step, frames: frames}})
+    broadcast(run_id, {:step, %{line: line, step: info.step, frames: frames, beliefs: beliefs}})
   end
 
   # Every sensor, every step: a queued run has no socket waiting on it, so the

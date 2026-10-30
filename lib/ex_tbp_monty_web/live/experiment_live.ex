@@ -20,7 +20,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   use ExTbpMontyWeb, :live_view
 
   alias Monty.Studio
-  alias Monty.Studio.{Jobs, LogFilter, Replay, RunHistory, RunLog, Setup}
+  alias Monty.Studio.{Chart, Jobs, LogFilter, Replay, RunHistory, RunLog, Setup}
 
   # A log is a thing a person reads back, not a database: the last few thousand
   # lines are enough to scroll through a run and bounded enough that a runaway
@@ -50,7 +50,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       lines: [],
       filter: "",
       summary: nil,
-      log_path: nil
+      log_path: nil,
+      # Per learning module: the beliefs it held, step by step, and the chart a
+      # template draws from them. Kept per module because a run with two modules
+      # has two answers, and averaging them would be a third.
+      beliefs: %{},
+      charts: %{}
     )
     |> stream_configure(:frames, dom_id: &"frame-#{&1.sensor_id}")
     |> stream(:frames, [])
@@ -178,6 +183,80 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           written as it goes. It uses stand-in modules until the ported ones land.
         </p>
 
+        <section :if={@charts != %{}} id="evidence-chart" class="space-y-2">
+          <h3 class="text-sm font-medium">What the learning modules believe</h3>
+          <div class="grid gap-2 lg:grid-cols-2">
+            <figure
+              :for={{module_id, chart} <- @charts}
+              id={"chart-#{module_id}"}
+              class="rounded-field border border-base-300 bg-base-100 p-2"
+            >
+              <figcaption class="flex items-baseline justify-between px-0.5 pb-1 font-mono text-[11px] text-base-content/60">
+                <span>{module_id}</span>
+                <span :if={chart.mlh}>
+                  {chart.mlh.graph_id} is the answer so far
+                </span>
+              </figcaption>
+              <svg
+                viewBox={"0 0 #{chart.width} #{chart.height}"}
+                class="w-full"
+                role="img"
+                aria-label={"evidence per object, step by step, for #{module_id}"}
+              >
+                <g :for={tick <- chart.ticks}>
+                  <line
+                    x1="44"
+                    x2={chart.width - 12}
+                    y1={tick.y}
+                    y2={tick.y}
+                    stroke="currentColor"
+                    stroke-width="0.5"
+                    class="text-base-content/20"
+                  />
+                  <text
+                    x="38"
+                    y={tick.y + 3}
+                    text-anchor="end"
+                    fill="currentColor"
+                    font-size="8"
+                    class="text-base-content/50"
+                  >
+                    {tick.label}
+                  </text>
+                </g>
+                <g :for={series <- chart.series}>
+                  <polyline
+                    :for={points <- series.points}
+                    points={points}
+                    fill="none"
+                    stroke={series.colour}
+                    stroke-width="1.5"
+                  />
+                </g>
+                <circle
+                  :if={chart.mlh}
+                  cx={chart.mlh.x}
+                  cy={chart.mlh.y}
+                  r="3"
+                  fill={chart.mlh_colour}
+                />
+              </svg>
+              <ul class="flex flex-wrap gap-x-3 gap-y-1 px-0.5 pb-0.5 text-[11px]">
+                <li :for={series <- chart.series} class="flex items-center gap-1">
+                  <span
+                    class="inline-block size-2 rounded-full"
+                    style={"background-color: #{series.colour}"}
+                  ></span>
+                  <span class="font-mono text-base-content/70">{series.graph_id}</span>
+                  <span class="text-base-content/50">
+                    {series.evidence |> List.last() |> elem(1) |> Float.round(2)}
+                  </span>
+                </li>
+              </ul>
+            </figure>
+          </div>
+        </section>
+
         <div id="frames" phx-update="stream" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <p id="frames-empty" class="hidden only:block text-xs text-base-content/50">
             Sensor views appear here as the run steps.
@@ -304,11 +383,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     assign(socket, status: "running", progress: {0, steps})
   end
 
-  defp handle_studio({:step, %{line: text, step: step, frames: frames}}, socket) do
+  defp handle_studio({:step, %{line: text, step: step, frames: frames} = event}, socket) do
     socket
     |> push(step, text, :info)
     |> assign(progress: {step + 1, elem(socket.assigns.progress, 1)})
     |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
+    |> remember(step, Map.get(event, :beliefs, %{}))
   end
 
   defp handle_studio({:finished, _summary}, socket) do
@@ -321,6 +401,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     socket
     |> push(nil, "the run failed: #{inspect(reason)}", :error)
     |> reconcile()
+  end
+
+  # What each learning module believed after this step, appended to what it held
+  # before it: the chart is the run's history, not the latest frame of it.
+  defp remember(socket, _step, beliefs) when beliefs == %{}, do: socket
+
+  defp remember(socket, step, beliefs) do
+    histories =
+      Enum.reduce(beliefs, socket.assigns.beliefs, fn {module_id, belief}, histories ->
+        Map.update(histories, module_id, [{step, belief}], &(&1 ++ [{step, belief}]))
+      end)
+
+    charts = Map.new(histories, fn {module_id, steps} -> {module_id, Chart.new(steps)} end)
+
+    assign(socket, beliefs: histories, charts: charts)
   end
 
   # What the record says, applied to the page.

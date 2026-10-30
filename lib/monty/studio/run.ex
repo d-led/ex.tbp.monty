@@ -19,7 +19,7 @@ defmodule Monty.Studio.Run do
   alias Monty.Frameworks.Experiments.Seed
   alias Monty.Runtime.Model
   alias Monty.Runtime.Positioning
-  alias Monty.Studio.Setup
+  alias Monty.Studio.{Belief, Setup}
 
   @default_steps 12
 
@@ -123,6 +123,17 @@ defmodule Monty.Studio.Run do
       {:ok, positioned, outcome} -> {:ok, positioned, outcome}
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  @doc """
+  What each learning module believes after the run's last step, keyed by module id.
+
+  The coordinator's report says what the modules *were given*; this says what they
+  made of it, which is the other half of a step and the half a chart draws.
+  """
+  @spec beliefs(t()) :: %{optional(atom() | String.t()) => Belief.t()}
+  def beliefs(%__MODULE__{model_id: model_id, setup: setup}) do
+    Belief.all(model_id, Enum.map(setup.learning_modules, & &1.id))
   end
 
   @doc """

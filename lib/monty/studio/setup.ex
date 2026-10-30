@@ -260,7 +260,13 @@ defmodule Monty.Studio.Setup do
         sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
         lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
         lm_to_lm_vote: inputs_by_learning_module(setup, :vote),
-        motor: motor_spec(setup)
+        motor: motor_spec(setup),
+        # A step waits for its modules for as long as they take. Monty's round
+        # is synchronous, and the vote round — which does have a deadline, on
+        # purpose — is a separate number (`vote_timeout`). A deadline on the
+        # work itself only decides which module gets dropped when a machine is
+        # busy, which is the one thing a comparison must not let it decide.
+        call_timeout: :infinity
       },
       monty_args(setup)
     )

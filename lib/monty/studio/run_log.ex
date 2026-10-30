@@ -10,9 +10,17 @@ defmodule Monty.Studio.RunLog do
   """
 
   alias Monty.Studio.{RunHistory, Setup, Summary}
-  @doc "One timestep, as the database stores it."
-  @spec entry(map()) :: map()
-  def entry(info) do
+
+  @doc """
+  One timestep, as the database stores it.
+
+  With `beliefs` — what each learning module held after the step — the entry also
+  records the module's own numbers, which is what a run's page draws: the objects
+  it had not ruled out, the hypothesis it believed most, and per object how many
+  hypotheses were alive and how strong the best one was.
+  """
+  @spec entry(map(), map()) :: map()
+  def entry(info, beliefs \\ %{}) do
     %{
       "step" => info.step,
       "percepts" => Enum.map(info.percept_ids, &to_string/1),
@@ -22,7 +30,15 @@ defmodule Monty.Studio.RunLog do
       "actions" => length(info.actions),
       "duration_us" => info.duration_us
     }
+    |> put_beliefs(beliefs)
   end
+
+  defp put_beliefs(entry, beliefs) when map_size(beliefs) == 0, do: entry
+
+  # A belief is stored as the module reported it, keys and all: it is Monty's
+  # record, not this module's, and rewriting it would make the live page and a
+  # recorded episode read the same belief two different ways.
+  defp put_beliefs(entry, beliefs), do: Map.put(entry, "beliefs", beliefs)
 
   @doc """
   One timestep's scene, as the database stores it.
@@ -65,8 +81,36 @@ defmodule Monty.Studio.RunLog do
 
     "step #{entry["step"]} · percepts #{Enum.join(Map.get(entry, "percepts", []), ",")} · " <>
       "inputs #{inputs} · votes #{votes["used"]}/#{votes["sent"]} · " <>
-      "goals #{entry["goals"]} · #{Map.get(entry, "duration_us", 0)} µs"
+      "goals #{entry["goals"]} · #{Map.get(entry, "duration_us", 0)} µs" <>
+      believed(entry)
   end
+
+  # What each module believes, on the same line: a run that is watched through a
+  # log is watched for this, and a line that only counts percepts says a run is
+  # alive without saying whether it is getting anywhere.
+  defp believed(entry) do
+    case Map.get(entry, "beliefs") do
+      nil ->
+        ""
+
+      beliefs ->
+        " · " <>
+          Enum.map_join(beliefs, " ", fn {id, belief} -> "#{id}: #{belief_line(belief)}" end)
+    end
+  end
+
+  defp belief_line(%{mlh: nil}), do: "nothing yet"
+
+  defp belief_line(%{mlh: mlh, graphs: graphs, possible_matches: possible}) do
+    "#{mlh.graph_id} ev #{round_evidence(mlh.evidence)}" <>
+      " (#{hypotheses(graphs[mlh.graph_id])} hyps, #{length(possible)} possible)"
+  end
+
+  defp hypotheses(nil), do: 0
+  defp hypotheses(graph), do: graph.hypotheses
+
+  defp round_evidence(evidence) when is_number(evidence), do: Float.round(evidence * 1.0, 3)
+  defp round_evidence(_not_a_number), do: nil
 
   @doc "A finished run's summary, as the database stores it."
   @spec summary(Summary.t()) :: map()
@@ -117,10 +161,10 @@ defmodule Monty.Studio.RunLog do
     }
   end
 
-  @doc "Records a step — what was reported and what was seen — and returns the row."
-  @spec record_step(RunHistory.Run.t(), map(), map()) :: RunHistory.Run.t()
-  def record_step(history, info, observations) do
-    case RunHistory.record_step(history, entry(info), moment(info, observations)) do
+  @doc "Records a step — what was reported, what was seen and what was believed — and returns the row."
+  @spec record_step(RunHistory.Run.t(), map(), map(), map()) :: RunHistory.Run.t()
+  def record_step(history, info, observations, beliefs \\ %{}) do
+    case RunHistory.record_step(history, entry(info, beliefs), moment(info, observations)) do
       {:ok, history} -> history
       {:error, _changeset} -> history
     end

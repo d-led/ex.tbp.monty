@@ -44,4 +44,71 @@ defmodule Monty.Studio.RunLogTest do
       }
     }
   end
+
+  describe "what the modules believed" do
+    test "is recorded with the step, under the module the belief belongs to" do
+      entry = RunLog.entry(info(), %{lm_0: belief()})
+
+      assert %{
+               possible_matches: ["mug"],
+               mlh: %{graph_id: "mug", evidence: 3.0},
+               graphs: %{"mug" => %{max_evidence: 3.0}}
+             } = entry["beliefs"].lm_0
+    end
+
+    test "and left out entirely when there is nothing to record" do
+      refute Map.has_key?(RunLog.entry(info()), "beliefs")
+    end
+
+    test "a line says which object a module believes, how strongly, and how crowded" do
+      line = info() |> RunLog.entry(%{lm_0: belief()}) |> RunLog.line()
+
+      assert line =~ "lm_0: mug ev 3.0 (3 hyps, 1 possible)"
+    end
+
+    test "and says so plainly before it has seen anything" do
+      line =
+        info()
+        |> RunLog.entry(%{lm_0: %{belief() | mlh: nil}})
+        |> RunLog.line()
+
+      assert line =~ "lm_0: nothing yet"
+    end
+  end
+
+  defp info do
+    %{
+      step: 3,
+      percept_ids: [:patch],
+      inputs: %{lm_0: 1},
+      votes: %{sent: 1, used: 1},
+      goals: 1,
+      actions: [],
+      duration_us: 1234
+    }
+  end
+
+  defp belief do
+    %{
+      possible_matches: ["mug"],
+      mlh: %{
+        graph_id: "mug",
+        id: 0,
+        location: [0.1, 0.0, 0.0],
+        rotation_wxyz: [1.0, 0.0, 0.0, 0.0],
+        evidence: 3.0
+      },
+      graphs: %{
+        "mug" => %{
+          hypotheses: 3,
+          max_evidence: 3.0,
+          within_x_percent: 2,
+          top_evidence: [3.0, 2.9, 2.0]
+        }
+      },
+      x_percent_threshold: 20,
+      terminal_state: nil,
+      detected_object: nil
+    }
+  end
 end

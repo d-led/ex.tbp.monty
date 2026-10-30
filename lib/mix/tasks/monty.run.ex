@@ -101,8 +101,13 @@ defmodule Mix.Tasks.Monty.Run do
 
   defp step_through(run, history, opts, infos) do
     {:ok, info, observations, next_run} = Monty.Studio.Run.step(run)
-    print_step(info, opts)
-    history = if history, do: Monty.Studio.RunLog.record_step(history, info, observations)
+    beliefs = Monty.Studio.Run.beliefs(run)
+    print_step(info, beliefs, opts)
+
+    history =
+      if history,
+        do: Monty.Studio.RunLog.record_step(history, info, observations, beliefs)
+
     infos = [info | infos]
 
     if Monty.Studio.Run.finished?(next_run) do
@@ -112,9 +117,9 @@ defmodule Mix.Tasks.Monty.Run do
     end
   end
 
-  defp print_step(info, opts) do
+  defp print_step(info, beliefs, opts) do
     unless opts[:quiet] do
-      Mix.shell().info(Monty.Studio.RunLog.line(Monty.Studio.RunLog.entry(info)))
+      Mix.shell().info(Monty.Studio.RunLog.line(Monty.Studio.RunLog.entry(info, beliefs)))
     end
   end
 
