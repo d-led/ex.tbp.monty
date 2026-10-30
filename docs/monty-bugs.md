@@ -685,9 +685,10 @@ episode seed itself is now Monty's — `Monty.Frameworks.Experiments.Seed` gives
 `1170100843` for episode 0, the number in Monty's own `episode_seed` column — and
 the first action of that episode still differs: Monty asks for
 `turn_left 16.78°` + `look_up 20.80°`, the port for `turn_left -33.06°` +
-`look_up 11.29°`. The object agrees on every episode and the step counts do not
-(21/28/28 for Monty against 22/37/31 for the port, episodes 1–3). This is the
-only remaining reason a live run cannot be compared step by step.
+`look_up 11.29°`. Across Monty's ten-object eval epoch the object agrees ten times
+out of ten and the step counts agree once — the dice, at 35 steps — with Monty at
+21/28/28/26/42/21/35/50/47/29 against the port's 22/37/31/30/46/27/35/44/38/21.
+This is the only remaining reason a live run cannot be compared step by step.
 
 **What to compare instead.** The deterministic parts: evidence given the same
 percept sequence (which the replay test asserts to a millionth, where the export's

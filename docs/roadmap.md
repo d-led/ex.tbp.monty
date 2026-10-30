@@ -85,9 +85,15 @@ and a run of it is the ported pipeline, not stand-ins.
 Accuracy cannot be compared before the world is real, so this comes before
 benchmarks rather than after.
 
-- A sidecar (`priv/py/monty_sim_bridge.py`, uv/venv, MuJoCo) behind a behaviour,
-  reached by an Erlang `Port` speaking newline-delimited JSON; units and quirks
-  preserved (metres, `wxyz`, sensor positions relative to the agent).
+- **Done, for Habitat.** `Monty.Simulators.Port` is the boundary and
+  `scripts/monty_simulator_peer.py` is Monty's own `HabitatEnvironment` and eval
+  interface on the far side of it, running in Monty's pinned conda environment.
+  Units and quirks are preserved on the way across: metres, `wxyz` quaternions
+  decoded into `Monty.Geometry.Rotation`, sensor positions relative to the agent.
+  A config's own model runs against it (`scripts/probe_world_episodes.exs`), and
+  what that comparison shows — objects agree, step counts do not, because of the
+  random-stream deviation of §2.1 in `monty-bugs.md` — is in
+  `docs/validation.md`. MuJoCo is the same shape of job and has not been done.
 - Observation transforms (`DepthTo3DLocations`, `MissingToMaxDepth`, noise,
   blur) in Elixir: pure math, testable, and the reason frames can still be drawn.
 - Recorded transcripts replayed in tests; a live MuJoCo test tagged
@@ -95,8 +101,11 @@ benchmarks rather than after.
 - `Monty.Simulators.Synthetic.Camera` is the boundary that changes last: it
   returns PNG bytes instead of SVG, and no page changes.
 
-**Done when**: `docker compose up simulator` plus
-`mix monty.run base_config_10distinctobj_dist_agent_mujoco` runs a real episode.
+**Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
+episode **against Monty's own world through the studio**, with no probe in the
+loop, and its step count is Monty's — which needs the single-stream mode that
+`monty-bugs.md` §2.1 describes. The world half is done; the stream half is the
+remaining obstacle, and it is the one to do next.
 
 ## Phase 3 — benchmarks and profiles
 

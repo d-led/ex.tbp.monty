@@ -317,19 +317,28 @@ minute, `scripts/probe_world_episodes.exs`:
 | 1 | mug | 21 | 22 |
 | 2 | bowl | 28 | 37 |
 | 3 | potted_meat_can | 28 | 31 |
+| 4 | spoon | 26 | 30 |
+| 5 | strawberry | 42 | 46 |
+| 6 | mustard_bottle | 21 | 27 |
+| 7 | dice | 35 | **35** |
+| 8 | golf_ball | 50 | 44 |
+| 9 | c_lego_duplo | 47 | 38 |
+| 10 | banana | 29 | 21 |
 
-Monty's column is its `monty_steps` in `eval_stats.csv`, reproduced by
-`scripts/record_monty_episode.py`; the port's is `Episode.run/3`'s `steps`. So:
-**the object agrees on every episode, and the step count does not.** The reason
-is on the first step — Monty asks the world for `turn_left 16.78°` +
-`look_up 20.80°`, the port asks for `turn_left -33.06°` + `look_up 11.29°`,
-which is §2.1: the port gives each module its own stream per step where Python
-threads one `RandomState`, so the same seed draws different numbers and the agent
-walks a different path over the same object. Two things on that path are worth
-knowing: Monty reseeds per episode, so an epoch is ten different streams, and
-until `Monty.Frameworks.Experiments.Seed` existed every episode of a run drew the
-same numbers; and the reseeding is why episode 1 alone used to agree, a shared
-stream happening to be right for the first episode and wrong for the rest.
+Monty's column is its `monty_steps` in `eval_stats.csv`, reproduced episode for
+episode by `scripts/record_monty_episode.py`; the port's is `Episode.run/3`'s
+`steps`, and both runs use the same `episode_seed` per episode (the peer prints
+it). So: **ten of ten episodes end on the object Monty names, and one of the ten
+takes exactly Monty's number of steps.** The reason for the rest is on the first
+step — Monty asks the world for `turn_left 16.78°` + `look_up 20.80°`, the port
+asks for `turn_left -33.06°` + `look_up 11.29°`, which is §2.1: the port gives
+each module its own stream per step where Python threads one `RandomState`, so
+the same seed draws different numbers and the agent walks a different path over
+the same object. Two things on that path are worth knowing: Monty reseeds per
+episode, so an epoch is ten different streams, and until
+`Monty.Frameworks.Experiments.Seed` existed every episode of a run drew the same
+numbers; and the reseeding is why episode 1 alone used to agree, a shared stream
+happening to be right for the first episode and wrong for the rest.
 
 What is not tried: matching Monty's stream. §2.1 says what it would take — one
 stream per episode threaded in Python's order — and it is the difference that has
