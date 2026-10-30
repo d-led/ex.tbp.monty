@@ -2,21 +2,12 @@ defmodule Monty.Studio.Jobs.RunTest do
   use ExTbpMontyWeb.ConnCase, async: false
 
   alias Monty.Studio.{Artifacts, Jobs, RunHistory, RunLog}
+  alias Monty.Test.Tmp
 
   # The queue runs jobs by hand here: what is under test is the run, not Oban's
   # scheduler.
   setup do
-    root = Path.join(System.tmp_dir!(), "studio-runs-#{System.unique_integer([:positive])}")
-    previous = Application.get_env(:ex_tbp_monty, :studio_artifacts_dir)
-    Application.put_env(:ex_tbp_monty, :studio_artifacts_dir, root)
-
-    on_exit(fn ->
-      if previous,
-        do: Application.put_env(:ex_tbp_monty, :studio_artifacts_dir, previous),
-        else: Application.delete_env(:ex_tbp_monty, :studio_artifacts_dir)
-
-      File.rm_rf!(root)
-    end)
+    root = Tmp.env_dir("studio-runs", :studio_artifacts_dir)
 
     {:ok, root: root}
   end

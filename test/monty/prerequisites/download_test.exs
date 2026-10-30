@@ -3,10 +3,10 @@ defmodule Monty.Prerequisites.DownloadTest do
 
   alias Monty.Prerequisites
   alias Monty.Prerequisites.Download
+  alias Monty.Test.Tmp
 
   setup do
-    tmp = Path.join(System.tmp_dir!(), "prereq-#{System.unique_integer([:positive])}")
-    File.mkdir_p!(tmp)
+    tmp = Tmp.dir("prereq")
 
     manifest = Path.join(tmp, "prerequisites.yaml")
 
@@ -51,7 +51,6 @@ defmodule Monty.Prerequisites.DownloadTest do
       Application.delete_env(:ex_tbp_monty, :prerequisite_fetcher)
       Application.delete_env(:ex_tbp_monty, :fake_download_result)
       Application.delete_env(:ex_tbp_monty, :fake_download_chunks)
-      File.rm_rf!(tmp)
     end)
 
     {:ok, prerequisite: Prerequisites.get("tiny"), tmp: tmp}
@@ -178,22 +177,12 @@ defmodule Monty.Prerequisites.DownloadTest do
     test "a folder that cannot be created is reported, not crashed into" do
       # A file where the folder should be: `mkdir` cannot make it, and no
       # download process may be left behind.
-      blocker = Path.join(System.tmp_dir!(), "blocked-#{System.unique_integer([:positive])}")
+      blocker = Tmp.file("blocked")
       File.write!(blocker, "not a directory")
 
-      previous = System.get_env("MONTY_DATA")
-      System.put_env("MONTY_DATA", Path.join(blocker, "data"))
+      Tmp.system_env("MONTY_DATA", Path.join(blocker, "data"))
 
-      on_exit(fn ->
-        if previous,
-          do: System.put_env("MONTY_DATA", previous),
-          else: System.delete_env("MONTY_DATA")
-
-        File.rm(blocker)
-      end)
-
-      manifest =
-        Path.join(System.tmp_dir!(), "blocked-#{System.unique_integer([:positive])}.yaml")
+      manifest = Tmp.file("blocked.yaml")
 
       File.write!(manifest, """
       prerequisites:
@@ -204,8 +193,7 @@ defmodule Monty.Prerequisites.DownloadTest do
           target: tiny.tgz
       """)
 
-      Application.put_env(:ex_tbp_monty, :prerequisites_manifest, manifest)
-      on_exit(fn -> File.rm(manifest) end)
+      Tmp.app_env(:prerequisites_manifest, manifest)
 
       assert {:error, {:cannot_create, _directory, _reason}} =
                Download.start(Prerequisites.get("blocked"))

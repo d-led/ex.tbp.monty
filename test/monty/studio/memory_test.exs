@@ -13,6 +13,7 @@ defmodule Monty.Studio.MemoryTest do
   use ExTbpMontyWeb.ConnCase, async: true
 
   alias Monty.Studio.{Memory, Setup}
+  alias Monty.Test.Tmp
 
   @experiment "base_config_10distinctobj_dist_agent"
 
@@ -114,9 +115,7 @@ defmodule Monty.Studio.MemoryTest do
 
   describe "a directory that holds no libraries" do
     test "answers that the model was never exported, rather than an empty memory" do
-      empty = Path.join(System.tmp_dir!(), "no-libraries-#{System.unique_integer([:positive])}")
-      File.mkdir_p!(empty)
-      on_exit(fn -> File.rm_rf!(empty) end)
+      empty = Tmp.dir("no-libraries")
 
       # The question a run asks, asked of a directory instead: no global setting
       # is touched, so this cannot leak into a test running beside it.

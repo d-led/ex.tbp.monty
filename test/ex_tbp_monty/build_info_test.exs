@@ -2,6 +2,7 @@ defmodule ExTbpMonty.BuildInfoTest do
   use ExUnit.Case, async: true
 
   alias ExTbpMonty.BuildInfo
+  alias Monty.Test.Tmp
 
   @info %{
     version: "1.2.3",
@@ -15,11 +16,7 @@ defmodule ExTbpMonty.BuildInfoTest do
     }
   }
 
-  defp temp_dir do
-    dir = Path.join(System.tmp_dir!(), "build_info_#{System.unique_integer([:positive])}")
-    on_exit(fn -> File.rm_rf!(dir) end)
-    dir
-  end
+  defp temp_dir, do: Tmp.dir("build_info")
 
   describe "write/2 and read/1" do
     test "a release reads back what its build was told" do

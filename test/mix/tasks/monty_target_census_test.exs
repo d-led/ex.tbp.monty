@@ -10,6 +10,8 @@ defmodule Mix.Tasks.Monty.TargetCensusTest do
 
   use ExUnit.Case, async: false
 
+  alias Monty.Test.Tmp
+
   setup do
     previous = Mix.shell()
     Mix.shell(Mix.Shell.Process)
@@ -18,10 +20,7 @@ defmodule Mix.Tasks.Monty.TargetCensusTest do
   end
 
   test "a class Monty's experiments name is reported with how many name it" do
-    path =
-      Path.join(System.tmp_dir!(), "target_census_#{System.unique_integer([:positive])}.json")
-
-    on_exit(fn -> File.rm(path) end)
+    path = Tmp.file("target_census.json")
 
     Mix.Tasks.Monty.TargetCensus.run(["--json", path])
     census = path |> File.read!() |> Jason.decode!()

@@ -5,10 +5,10 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
 
   alias Monty.Prerequisites
   alias Monty.Prerequisites.Download
+  alias Monty.Test.Tmp
 
   setup do
-    tmp = Path.join(System.tmp_dir!(), "prereq-live-#{System.unique_integer([:positive])}")
-    File.mkdir_p!(tmp)
+    tmp = Tmp.dir("prereq-live")
     manifest = Path.join(tmp, "prerequisites.yaml")
 
     File.write!(manifest, """
@@ -20,24 +20,13 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
         target: tiny.tgz
     """)
 
-    previous = System.get_env("MONTY_DATA")
-    System.put_env("MONTY_DATA", Path.join(tmp, "data"))
-    Application.put_env(:ex_tbp_monty, :prerequisites_manifest, manifest)
-    Application.put_env(:ex_tbp_monty, :prerequisite_fetcher, Monty.Test.FakeFetcher)
+    Tmp.system_env("MONTY_DATA", Path.join(tmp, "data"))
+    Tmp.app_env(:prerequisites_manifest, manifest)
+    Tmp.app_env(:prerequisite_fetcher, Monty.Test.FakeFetcher)
 
     Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Download.topic())
 
-    on_exit(fn ->
-      Monty.Test.PrerequisiteDownloads.stop_all()
-
-      if previous,
-        do: System.put_env("MONTY_DATA", previous),
-        else: System.delete_env("MONTY_DATA")
-
-      Application.delete_env(:ex_tbp_monty, :prerequisites_manifest)
-      Application.delete_env(:ex_tbp_monty, :prerequisite_fetcher)
-      File.rm_rf!(tmp)
-    end)
+    on_exit(fn -> Monty.Test.PrerequisiteDownloads.stop_all() end)
 
     {:ok, tmp: tmp}
   end

@@ -10,6 +10,8 @@ defmodule Mix.Tasks.Monty.PortCensusTest do
 
   use ExUnit.Case, async: false
 
+  alias Monty.Test.Tmp
+
   setup do
     previous = Mix.shell()
     Mix.shell(Mix.Shell.Process)
@@ -18,8 +20,7 @@ defmodule Mix.Tasks.Monty.PortCensusTest do
   end
 
   test "a class with a body is work, and a Protocol is not" do
-    path = Path.join(System.tmp_dir!(), "port_census_#{System.unique_integer([:positive])}.json")
-    on_exit(fn -> File.rm(path) end)
+    path = Tmp.file("port_census.json")
 
     Mix.Tasks.Monty.PortCensus.run(["--json", path])
     census = path |> File.read!() |> Jason.decode!()

@@ -2,6 +2,7 @@ defmodule Monty.Prerequisites.HttpFetcherTest do
   use ExUnit.Case, async: false
 
   alias Monty.Prerequisites.HttpFetcher
+  alias Monty.Test.Tmp
 
   setup do
     server = start_supervised!({Bandit, plug: Monty.Test.FixtureServer, port: 0})
@@ -34,9 +35,5 @@ defmodule Monty.Prerequisites.HttpFetcherTest do
              HttpFetcher.download(url <> "/missing.tgz", path, fn _ -> :ok end, [])
   end
 
-  defp temp_path do
-    path = Path.join(System.tmp_dir!(), "http-fetch-#{System.unique_integer([:positive])}.bin")
-    on_exit(fn -> File.rm(path) end)
-    path
-  end
+  defp temp_path, do: Tmp.file("http-fetch.bin")
 end

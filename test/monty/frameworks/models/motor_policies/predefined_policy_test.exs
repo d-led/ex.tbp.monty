@@ -4,14 +4,12 @@ defmodule Monty.Frameworks.Models.MotorPolicies.PredefinedPolicyTest do
   alias Monty.Context
   alias Monty.Frameworks.Actions.{LookUp, MoveForward, TurnLeft}
   alias Monty.Frameworks.Models.MotorPolicies.{MotorPolicyResult, PredefinedPolicy}
+  alias Monty.Test.Tmp
 
   @agent "agent_id_0"
 
   setup do
-    path = Path.join(System.tmp_dir!(), "predefined_#{System.unique_integer([:positive])}.jsonl")
-    on_exit(fn -> File.rm(path) end)
-
-    %{path: path}
+    %{path: Tmp.file("predefined.jsonl")}
   end
 
   defp write(path, lines) do

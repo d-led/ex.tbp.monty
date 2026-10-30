@@ -4,18 +4,10 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
   import Phoenix.LiveViewTest
 
   alias Monty.Studio.Drafts
+  alias Monty.Test.Tmp
 
   setup do
-    tmp = Path.join(System.tmp_dir!(), "studio-index-#{System.unique_integer([:positive])}")
-    File.mkdir_p!(tmp)
-
-    previous = Application.get_env(:ex_tbp_monty, :experiments_dir)
-    Application.put_env(:ex_tbp_monty, :experiments_dir, tmp)
-
-    on_exit(fn ->
-      Application.put_env(:ex_tbp_monty, :experiments_dir, previous || "priv/experiments")
-      File.rm_rf!(tmp)
-    end)
+    tmp = Tmp.env_dir("studio-index", :experiments_dir)
 
     {:ok, tmp: tmp}
   end

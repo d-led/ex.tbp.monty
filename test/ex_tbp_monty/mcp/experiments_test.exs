@@ -3,6 +3,7 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
 
   alias ExTbpMonty.Mcp.Experiments
   alias Monty.Studio
+  alias Monty.Test.Tmp
 
   @experiment "tutorial/first_experiment"
 
@@ -78,18 +79,8 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
 
   describe "creating an experiment" do
     setup do
-      previous = Application.get_env(:ex_tbp_monty, :experiments_dir)
-      dir = Path.join(System.tmp_dir!(), "mcp-drafts-#{System.unique_integer([:positive])}")
-      File.mkdir_p!(dir)
-      Application.put_env(:ex_tbp_monty, :experiments_dir, dir)
-
-      on_exit(fn ->
-        File.rm_rf!(dir)
-
-        if previous,
-          do: Application.put_env(:ex_tbp_monty, :experiments_dir, previous),
-          else: Application.delete_env(:ex_tbp_monty, :experiments_dir)
-      end)
+      Tmp.env_dir("mcp-drafts", :experiments_dir)
+      :ok
     end
 
     test "writes a draft the studio can open" do

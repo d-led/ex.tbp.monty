@@ -4,33 +4,17 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   import Phoenix.LiveViewTest
 
   alias Monty.Studio.RunHistory
+  alias Monty.Test.Tmp
 
   setup do
-    tmp = Path.join(System.tmp_dir!(), "studio-experiment-#{System.unique_integer([:positive])}")
-    File.mkdir_p!(tmp)
+    tmp = Tmp.env_dir("studio-experiment", :experiments_dir)
+    Tmp.env_dir("studio-experiment-runs", :studio_artifacts_dir)
 
-    previous_dir = Application.get_env(:ex_tbp_monty, :experiments_dir)
-    previous_tick = Application.get_env(:ex_tbp_monty, :studio_tick_ms)
-    previous_throttle = Application.get_env(:ex_tbp_monty, :studio_frame_throttle_ms)
-    Application.put_env(:ex_tbp_monty, :experiments_dir, tmp)
-    Application.put_env(:ex_tbp_monty, :studio_tick_ms, 1)
-    Application.put_env(:ex_tbp_monty, :studio_frame_throttle_ms, 0)
-    Application.put_env(:ex_tbp_monty, :studio_artifacts_dir, Path.join(tmp, "runs"))
-    Application.put_env(:ex_tbp_monty, :studio_poll_ms, 60_000)
+    Tmp.app_env(:studio_tick_ms, 1)
+    Tmp.app_env(:studio_frame_throttle_ms, 0)
+    Tmp.app_env(:studio_poll_ms, 60_000)
 
-    on_exit(fn ->
-      Application.put_env(:ex_tbp_monty, :experiments_dir, previous_dir || "priv/experiments")
-      if previous_tick, do: Application.put_env(:ex_tbp_monty, :studio_tick_ms, previous_tick)
-
-      if previous_throttle,
-        do: Application.put_env(:ex_tbp_monty, :studio_frame_throttle_ms, previous_throttle),
-        else: Application.delete_env(:ex_tbp_monty, :studio_frame_throttle_ms)
-
-      Monty.Test.PrerequisiteDownloads.stop_all()
-      Application.delete_env(:ex_tbp_monty, :studio_artifacts_dir)
-      Application.delete_env(:ex_tbp_monty, :studio_poll_ms)
-      File.rm_rf!(tmp)
-    end)
+    on_exit(fn -> Monty.Test.PrerequisiteDownloads.stop_all() end)
 
     {:ok, tmp: tmp}
   end
