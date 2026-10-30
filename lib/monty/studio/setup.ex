@@ -945,15 +945,44 @@ defmodule Monty.Studio.Setup do
     end
   end
 
-  # One line per experiment about what is not ported, not one per class: a
+  # One line per kind of gap about what is not ported, not one per class: a
   # fifteen-module config would otherwise bury its real findings under fifteen
-  # identical notices. The names are listed, so the line is still actionable.
+  # identical notices. The names are listed, so a line is still actionable.
+  #
+  # Two kinds are worth telling apart, because they mean different things for a
+  # run. Monty's *shell* — `Monty`, the `MontyFor*` model that owns the modules,
+  # and the object-recognition experiment that owns the epoch — is deliberately
+  # not a port: this project's runtime does that job (`Monty.Runtime.Step`,
+  # `Monty.Studio.Run`), so those classes are named by the topology and replaced
+  # on purpose. Everything else planned is a real stand-in at run time, and the
+  # world is the one that changes what a run's numbers mean. A training
+  # experiment is not a shell: there is no training loop here yet, and saying so
+  # is the point.
+  @shell_classes [
+    "Monty",
+    "MontyForEvidenceGraphMatching",
+    "MontyForGraphMatching",
+    "MontyObjectRecognitionExperiment"
+  ]
+
   defp module_findings(setup) do
     modules = all_modules(setup)
     unknown = Enum.filter(modules, &(&1.status == :unknown))
-    planned = for module <- modules, module.status == :planned, do: module.class
 
-    Enum.map(unknown, &unknown_module_finding/1) ++ not_ported_finding(planned, length(modules))
+    planned =
+      for module <- modules,
+          module.status == :planned,
+          module.class not in @shell_classes,
+          do: module.class
+
+    shell =
+      for module <- modules,
+          module.status == :planned,
+          module.class in @shell_classes,
+          do: module.class
+
+    Enum.map(unknown, &unknown_module_finding/1) ++
+      not_ported_finding(planned, length(modules)) ++ shell_finding(shell, length(modules))
   end
 
   defp unknown_module_finding(module) do
@@ -967,13 +996,40 @@ defmodule Monty.Studio.Setup do
 
   defp not_ported_finding([], _total), do: []
 
-  defp not_ported_finding(classes, total) do
+  defp not_ported_finding(classes, _total) do
+    world = Enum.any?(classes, &String.ends_with?(&1, "Environment"))
+
+    [
+      Finding.new(
+        if(world, do: :warning, else: :info),
+        :modules_not_ported,
+        "#{length(classes)} class(es) this experiment uses are still stand-ins at run time: " <>
+          Enum.join(Enum.sort(classes), ", ") <> "." <> world_note(world),
+        "monty_config"
+      )
+    ]
+  end
+
+  # The world is the one stand-in whose absence changes what a run's numbers
+  # mean: the same learning module over a synthetic scene and over Habitat are
+  # not the same experiment, and a run that says so plainly is worth more than
+  # one that looks finished.
+  defp world_note(true),
+    do:
+      " Without the environment, a run steps this port's synthetic scene, so its results are not Monty's."
+
+  defp world_note(false), do: ""
+
+  defp shell_finding([], _total), do: []
+
+  defp shell_finding(classes, _total) do
     [
       Finding.new(
         :info,
-        :modules_not_ported,
-        "#{length(classes)} of #{total} classes this experiment uses are not ported yet: " <>
-          Enum.join(Enum.sort(classes), ", ") <> ". A run uses synthetic stand-ins.",
+        :modules_not_ported_shell,
+        "Monty's model and experiment loop are this port's own runtime, not a port: " <>
+          Enum.join(Enum.sort(classes), ", ") <>
+          ". The topology they build is the config's; the classes that do the stepping are ours.",
         "monty_config"
       )
     ]

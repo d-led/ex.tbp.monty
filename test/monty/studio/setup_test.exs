@@ -246,14 +246,28 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "what is ported" do
-    test "one line says what is missing, not one line per module" do
+    test "one line says which classes a run still stands in for, and warns about the world" do
       setup = setup_for("tutorial/first_experiment")
 
-      notices = for %{code: :modules_not_ported} = finding <- setup.findings, do: finding
+      assert [stand_ins] =
+               for(%{code: :modules_not_ported} = finding <- setup.findings, do: finding)
 
-      assert [notice] = notices
-      assert notice.message =~ "not ported yet"
-      assert notice.message =~ "HabitatEnvironment"
+      # The world is the stand-in that changes what a run's numbers mean: the
+      # same module over a synthetic scene is not the same experiment.
+      assert stand_ins.level == :warning
+      assert stand_ins.message =~ "HabitatEnvironment"
+      assert stand_ins.message =~ "not Monty's"
+    end
+
+    test "and says separately that Monty's model and experiment loop are this port's own" do
+      setup = setup_for("tutorial/first_experiment")
+
+      assert [shell] =
+               for(%{code: :modules_not_ported_shell} = finding <- setup.findings, do: finding)
+
+      assert shell.level == :info
+      assert shell.message =~ "MontyForGraphMatching"
+      assert shell.message =~ "runtime"
     end
 
     test "a class this port has written is reported as ported" do
