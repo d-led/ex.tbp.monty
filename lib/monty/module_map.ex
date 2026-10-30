@@ -18,8 +18,6 @@ defmodule Monty.ModuleMap do
 
   alias Monty.Config.Source
 
-  @map_path "priv/monty/module_map.exs"
-
   @packages [
     %{
       name: "monty",
@@ -59,14 +57,15 @@ defmodule Monty.ModuleMap do
   @spec package(String.t()) :: map() | nil
   def package(name), do: Enum.find(@packages, &(&1.name == name))
 
-  @doc "The generated map."
-  @spec load(Path.t()) :: [entry()]
-  def load(path \\ @map_path) do
-    # Generated in-repo by `mix monty.module_map.gen`: data, not something
-    # fetched at runtime. Reviewed in .sobelow-skips.
-    {entries, _binding} = Code.eval_file(path)
-    entries
-  end
+  @doc """
+  The generated map.
+
+  It is compiled in by `mix monty.module_map.gen`, not read from a file: the map
+  is data, and a file read at run time is a path whose contents decide what this
+  application does next.
+  """
+  @spec load() :: [entry()]
+  def load, do: Monty.ModuleMap.Data.entries()
 
   @doc "The Elixir module a Python file maps to, within a package namespace."
   @spec module_for(String.t(), String.t()) :: String.t()
@@ -114,7 +113,7 @@ defmodule Monty.ModuleMap do
   """
   @spec verify(keyword()) :: {:ok, map()} | {:error, [String.t()]}
   def verify(opts \\ []) do
-    entries = load(Keyword.get(opts, :map, @map_path))
+    entries = Keyword.get_lazy(opts, :entries, &load/0)
     packages = Keyword.get(opts, :packages, @packages)
     mapped = Map.new(entries, &{{&1.package, &1.python}, &1})
 
@@ -157,7 +156,7 @@ defmodule Monty.ModuleMap do
   """
   @spec resolve(String.t(), keyword()) :: {:ok, map()} | :error
   def resolve(dotted, opts \\ []) do
-    entries = Keyword.get_lazy(opts, :map, fn -> load() end)
+    entries = Keyword.get_lazy(opts, :entries, &load/0)
 
     with {:ok, package, file, class} <- split_target(dotted),
          {:ok, entry} <- find_entry(entries, package, file) do

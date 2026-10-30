@@ -161,17 +161,9 @@ defmodule Monty.ModuleMapTest do
     end
   end
 
-  # `verify/1` reads a map file and checks it against the checkouts; an empty
-  # package list keeps these tests about the reasons, not the coverage.
-  defp verify_with(entries) do
-    path =
-      Path.join(System.tmp_dir!(), "module_map_test_#{System.unique_integer([:positive])}.exs")
-
-    File.write!(path, inspect(entries))
-    on_exit(fn -> File.rm(path) end)
-
-    ModuleMap.verify(map: path, packages: [])
-  end
+  # `verify/1` checks entries against the checkouts; an empty package list
+  # keeps these tests about the reasons, not the coverage.
+  defp verify_with(entries), do: ModuleMap.verify(entries: entries, packages: [])
 
   defp entry(status, classes) do
     %{

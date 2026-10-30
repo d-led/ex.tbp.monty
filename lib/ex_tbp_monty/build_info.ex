@@ -109,10 +109,11 @@ defmodule ExTbpMonty.BuildInfo do
   and the file `read/1` expects are one function pair, and a test can round-trip
   them.
   """
+  # `priv_dir` is the release's own priv directory, supplied by `mix build.info`,
+  # never by a request.
+  # sobelow_skip ["Traversal.FileModule"]
   @spec write(Path.t(), t()) :: :ok
   def write(priv_dir, %{} = info) do
-    # priv_dir is the release's own priv directory, supplied by `mix build.info`,
-    # never by a request. Reviewed in .sobelow-skips.
     File.mkdir_p!(priv_dir)
 
     File.write!(
@@ -149,10 +150,11 @@ defmodule ExTbpMonty.BuildInfo do
   No file is not an error: it is a checkout that was never released, and `dev`
   is the truth about it.
   """
+  # The release's own priv path, or none at all in a checkout.
+  # sobelow_skip ["Traversal.FileModule"]
   @spec read(Path.t() | nil) :: t()
   def read(priv_dir \\ priv_dir()) do
     with dir when is_binary(dir) <- priv_dir,
-         # The release's own priv path. Reviewed in .sobelow-skips.
          {:ok, contents} <- File.read(Path.join(dir, @filename)),
          {:ok, decoded} <- decode(contents) do
       from_json(decoded)

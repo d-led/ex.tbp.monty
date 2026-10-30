@@ -20,7 +20,7 @@ contract needs both checkouts (`MONTY_SOURCE` and `TELEOP_SOURCE`, default
 
 * **Module for module.** Python `path/file.py::Class` becomes
   `Monty.Path.File.Class`, with a repeated segment collapsed and the class
-  dropped when it repeats the file. `priv/monty/module_map.exs` records the
+  dropped when it repeats the file. `lib/monty/module_map/data.ex` records the
   mapping and `mix monty.module_map.verify` fails when a Monty file has no
   entry or an `implemented` entry has no module. Do not "improve" a name to
   fit Elixir style; recognisability is the point.
@@ -82,14 +82,23 @@ mix complexity                # CRAP <= 20 (lib/monty, lib/ex_tbp_monty), <= 30 
 mix dialyzer                  # separate CI job; PLT cached
 ```
 
-Sobelow's reviewed findings live in `.sobelow-skips`; regenerate only after a
-review (`mix sobelow --config --mark-skip-all`). Inline `# sobelow_skip`
-comments are avoided because Sobelow's comment parser chokes on prose after
-them.
+Sobelow's findings are reviewed where they are raised, not in a list. A call that
+is not a traversal — a path this application built from a name it checked, a file
+of its own — carries `# sobelow_skip ["Traversal.FileModule"]` immediately above
+the function, with the reason on the line above *that*. There is no
+`.sobelow-skips`: a file that says "we ignore directory traversal, XSS and code
+execution" is a file nobody reviews, and it hides which of the findings were
+looked at.
+
+Two things about the annotation: it applies to the whole function it precedes, so
+put it above a `def` and not inside one; and the reason must not continue on the
+annotation's line — Sobelow rewrites that comment into an attribute, and trailing
+prose turns the rewrite into a syntax error, which silently stops the file from
+being scanned.
 
 ## Adding a module
 
-1. Find the Python file and class in `priv/monty/module_map.exs`.
+1. Find the Python file and class in `lib/monty/module_map/data.ex`.
 2. Create the Elixir module at the mapped name.
 3. Port the algorithm as pure functions; keep Python's names for structs and
    keys where they carry meaning (`pose_vectors`, `pose_fully_defined`).

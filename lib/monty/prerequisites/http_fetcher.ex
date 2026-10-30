@@ -11,6 +11,9 @@ defmodule Monty.Prerequisites.HttpFetcher do
   @behaviour Monty.Prerequisites.Fetcher
 
   @impl true
+  # `path` is the destination the prerequisite list names under the data
+  # directory; nothing a request says reaches here.
+  # sobelow_skip ["Traversal.FileModule"]
   def download(url, path, on_chunk, opts) do
     on_total = Keyword.get(opts, :on_total, fn _total -> :ok end)
 

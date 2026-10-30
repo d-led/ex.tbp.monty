@@ -270,9 +270,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               <span class="font-mono">{frame.sensor_id}</span>
               <span>{frame.note}</span>
             </figcaption>
-            <%!-- The frame is an SVG string this application generated, not
-            content from a request. --%>
-            <div class="text-base-content/80">{Phoenix.HTML.raw(frame.data)}</div>
+            <%!-- The frame is markup this application built, with every value in
+            it escaped where it was built. --%>
+            <div class="text-base-content/80">{frame.data}</div>
           </figure>
         </div>
 

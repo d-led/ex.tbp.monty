@@ -5,15 +5,14 @@ defmodule ExTbpMontyWeb.Router do
   # here, plus the LiveView socket on the same host. `'unsafe-inline'` for
   # scripts is what Phoenix's own layout and LiveView bootstrap need; the
   # policy still blocks third-party script and frame origins.
-  @content_security_policy [
-                             "default-src 'self'",
-                             "img-src 'self' data:",
-                             "style-src 'self' 'unsafe-inline'",
-                             "script-src 'self' 'unsafe-inline'",
-                             "connect-src 'self' ws: wss:",
-                             "frame-ancestors 'self'"
-                           ]
-                           |> Enum.join("; ")
+  #
+  # The policy is one literal, not a list joined at compile time: what a reader
+  # (or a scanner) needs to be able to check is the exact header that is sent,
+  # and a value assembled at run time is one they have to assemble themselves.
+  @secure_headers %{
+    "content-security-policy" =>
+      "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; frame-ancestors 'self'"
+  }
 
   pipeline :browser do
     plug :accepts, ["html"]
@@ -21,7 +20,7 @@ defmodule ExTbpMontyWeb.Router do
     plug :fetch_live_flash
     plug :put_root_layout, html: {ExTbpMontyWeb.Layouts, :root}
     plug :protect_from_forgery
-    plug :put_secure_browser_headers, %{"content-security-policy" => @content_security_policy}
+    plug :put_secure_browser_headers, @secure_headers
   end
 
   pipeline :api do

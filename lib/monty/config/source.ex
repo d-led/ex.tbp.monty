@@ -125,9 +125,10 @@ defmodule Monty.Config.Source do
     |> Enum.reject(&(&1 == "_global_"))
   end
 
+  # The path is the Monty checkout's own config tree (root + group + option),
+  # never request or user input.
+  # sobelow_skip ["Traversal.FileModule"]
   defp read(path) do
-    # The path is the Monty checkout's own config tree (root + group + option),
-    # never request or user input; the finding is reviewed in .sobelow-skips.
     case File.read(path) do
       {:ok, text} -> {:ok, text}
       {:error, reason} -> {:error, {:cannot_read, path, reason}}

@@ -6,7 +6,7 @@ A module-for-module reimplementation of the Thousand Brains Project's Monty.
 The rules that are specific to it, in priority order:
 
 - **Module for module.** Python `a/b.py::C` is `Monty.A.B.C` (repeated segment
-  collapsed, class dropped when it repeats the file). `priv/monty/module_map.exs`
+  collapsed, class dropped when it repeats the file). `lib/monty/module_map/data.ex`
   is the contract; `mix monty.module_map.verify` enforces it. Never rename a
   mapped module to a prettier Elixir name.
 - **Functional core, actor shell.** Modules under `lib/monty/` are pure, one to

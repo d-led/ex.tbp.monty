@@ -291,7 +291,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
               <span class="font-mono">{frame.sensor_id}</span>
               <span>{frame.note}</span>
             </figcaption>
-            <div class="text-base-content/80">{Phoenix.HTML.raw(frame.data)}</div>
+            <div class="text-base-content/80">{frame.data}</div>
           </figure>
         </div>
 

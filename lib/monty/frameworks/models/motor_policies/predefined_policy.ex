@@ -51,8 +51,9 @@ defmodule Monty.Frameworks.Models.MotorPolicies.PredefinedPolicy do
   the line, because a replay that silently skipped one would be a different
   experiment.
   """
-  # sobelow_skip ["Traversal.FileModule"] — the path is the experiment's own
-  # `file_name`, from its config, exactly as Monty's `Path(file_name)` is.
+  # The path is the experiment's own `file_name`, from its config, exactly as
+  # Monty's `Path(file_name)` is.
+  # sobelow_skip ["Traversal.FileModule"]
   @spec read_action_file(Path.t()) :: [Monty.Frameworks.Actions.Action.t()]
   def read_action_file(file) do
     actions =

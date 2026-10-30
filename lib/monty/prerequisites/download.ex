@@ -150,6 +150,9 @@ defmodule Monty.Prerequisites.Download do
     end
   end
 
+  # `path` is `Prerequisites.target_path/1`: a file name this application picks
+  # under the data directory, not one a request hands in.
+  # sobelow_skip ["Traversal.FileModule"]
   defp make_directory(path) do
     directory = Path.dirname(path)
 
@@ -203,6 +206,9 @@ defmodule Monty.Prerequisites.Download do
   @impl true
   def handle_call(:status, _from, state), do: {:reply, public(state), state}
 
+  # The partial file of a download this application started, named from the
+  # prerequisite it belongs to.
+  # sobelow_skip ["Traversal.FileModule"]
   def handle_call(:cancel, _from, state) do
     if state.status in [:done, :failed, :cancelled] do
       {:reply, :ok, state}
@@ -302,6 +308,8 @@ defmodule Monty.Prerequisites.Download do
 
   defp verify_checksum(_part, nil), do: :ok
 
+  # The partial file the downloader itself is writing; nothing else names it.
+  # sobelow_skip ["Traversal.FileModule"]
   defp verify_checksum(part, expected) do
     actual =
       part
@@ -313,6 +321,8 @@ defmodule Monty.Prerequisites.Download do
     if actual == String.downcase(expected), do: :ok, else: {:error, {:checksum_mismatch, actual}}
   end
 
+  # The partial file of a download that failed, named from its prerequisite.
+  # sobelow_skip ["Traversal.FileModule"]
   defp fail(state, reason) do
     File.rm(state.part)
     state = %{state | status: :failed, error: reason, finished_at: now()}

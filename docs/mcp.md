@@ -28,7 +28,7 @@ The server does not keep a copy of anything it talks about.
 | --- | --- |
 | What does the project say? | `docs/**` in the Monty checkout `MONTY_SOURCE` names (`../monty-orig` here) |
 | What does it plan? | `docs/future-work/<section>/<task>.md`, whose front matter is the project's own future-work table |
-| Where is that in code? | `priv/monty/module_map.exs`, the same map `mix monty.module_map.verify` checks |
+| Where is that in code? | `lib/monty/module_map/data.ex`, the same map `mix monty.module_map.verify` checks |
 | What is this experiment? | `Monty.Studio.open/2` — Monty's `conf/` tree, composed and read back |
 | Did the run work? | `studio_runs`, written by `Monty.Studio.Jobs.Run` as the run goes |
 

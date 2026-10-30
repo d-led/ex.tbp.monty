@@ -39,8 +39,17 @@ defmodule Monty.Simulators.Synthetic.CameraTest do
     test "a sensor that reports no location still gets a frame" do
       frame = Camera.frame("view_finder", %{}, 0)
 
-      assert frame.data =~ "<svg"
+      assert markup(frame) =~ "<svg"
       assert frame.location == [0.0, 0.0, 0.0]
     end
+
+    test "a sensor id is escaped, so a frame is markup a page may render" do
+      frame = Camera.frame("<script>alert(1)</script>", %{}, 0)
+
+      assert markup(frame) =~ "&lt;script&gt;"
+      refute markup(frame) =~ "<script>"
+    end
   end
+
+  defp markup(frame), do: Phoenix.HTML.safe_to_string(frame.data)
 end

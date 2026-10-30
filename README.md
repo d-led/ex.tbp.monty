@@ -145,12 +145,12 @@ Two gates are specific to this project:
 
 ```bash
 mix monty.config.snapshots   # compose all 103 experiments, compare with Monty's snapshots
-mix monty.module_map.gen     # rewrite priv/monty/module_map.exs from the checkouts
+mix monty.module_map.gen     # rewrite lib/monty/module_map/data.ex from the checkouts
 mix monty.module_map.verify  # every Monty file is mapped, every "implemented" module exists
 ```
 
 **The module map is generated, not hand-written.**
-`priv/monty/module_map.exs` holds one entry per Python file: the Elixir module
+`lib/monty/module_map/data.ex` holds one entry per Python file: the Elixir module
 it maps to, a status, and its classes. `gen` re-derives all of it and flips an
 entry to `implemented` by loading the Elixir module; only human decisions
 (`excluded` plus a reason, `excluded_classes`) survive a regeneration, and

@@ -87,6 +87,9 @@ defmodule Monty.Config.Composer do
 
   @doc "Composes a config from a file outside Monty's config tree."
   @spec compose_file(Path.t(), keyword()) :: {:ok, tree()} | {:error, term()}
+  # The caller names a config file to compose: `mix monty.config.snapshots` and
+  # the tests, both with paths of their own. Nothing from a request arrives here.
+  # sobelow_skip ["Traversal.FileModule"]
   def compose_file(path, opts \\ []) do
     with {:ok, text} <- File.read(path) do
       compose_yaml(text, opts)

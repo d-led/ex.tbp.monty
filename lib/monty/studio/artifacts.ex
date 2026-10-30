@@ -42,6 +42,9 @@ defmodule Monty.Studio.Artifacts do
   A run whose log cannot be written still runs — the database is the record —
   but it says so here instead of pretending.
   """
+  # `dir/1` has already refused a run id that is not a UUID, so the path is this
+  # application's own directory for that run.
+  # sobelow_skip ["Traversal.FileModule"]
   @spec start(binary()) :: :ok | {:error, term()}
   def start(run_id) do
     case File.mkdir_p(dir(run_id)) do
@@ -51,12 +54,17 @@ defmodule Monty.Studio.Artifacts do
   end
 
   @doc "Appends one line to a run's log file."
+  # A run's own log file, under the UUID-checked directory `dir/1` builds.
+  # sobelow_skip ["Traversal.FileModule"]
   @spec append(binary(), String.t()) :: :ok | {:error, term()}
   def append(run_id, line) do
     File.write(log_path(run_id), line <> "\n", [:append])
   end
 
   @doc "Forgets a run's directory, if it has one."
+  # A run's own directory, named by a UUID `dir/1` has checked; a recursive
+  # delete of anything else never gets this far.
+  # sobelow_skip ["Traversal.FileModule"]
   @spec forget(binary()) :: :ok
   def forget(run_id) do
     _ignored = File.rm_rf(dir(run_id))

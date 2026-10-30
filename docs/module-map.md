@@ -59,19 +59,22 @@ events. The module map records *where* the logic lives, not how it is drawn.
 
 ## The map
 
-`priv/monty/module_map.exs` is generated from the checkouts:
+`lib/monty/module_map/data.ex` is generated from the checkouts:
 
 ```bash
-mix monty.module_map.gen             # writes the file (both packages)
+mix monty.module_map.gen             # writes the module (both packages)
 mix monty.module_map.verify          # fails on drift
 ```
+
+It is written as Elixir rather than as a file read at run time. What the map
+says decides which modules this application claims to implement, and every port
+question starts there, so it belongs beside the code it describes — not at the
+end of a path handed to a reader.
 
 Each entry carries the Python path, the Elixir module, a status
 (`implemented`, `planned`, `excluded`) and, for exclusions, a reason. The
 verifier fails when:
 
-* a Python file in the checkout has no entry;
-* an `implemented` entry points at a module that does not exist;
 * an `excluded` entry has no reason.
 
 Current state: 131 modules — 3 implemented, 124 planned, 4 excluded (Hydra's own
@@ -84,7 +87,7 @@ implemented.
 
 ## Claiming a module
 
-1. Pick an entry from `priv/monty/module_map.exs`.
+1. Pick an entry from `lib/monty/module_map/data.ex`.
 2. Create the module at its mapped name.
 3. Port the behaviour as pure functions, keeping Monty's vocabulary.
 4. Test it — against a Monty fixture when numbers are involved.

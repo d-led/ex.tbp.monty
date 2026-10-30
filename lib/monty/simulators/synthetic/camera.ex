@@ -12,6 +12,11 @@ defmodule Monty.Simulators.Synthetic.Camera do
   size. When real frames arrive, this module is the only thing that changes: it
   returns `%{media_type: "image/png", data: base64}` instead, and the page keeps
   rendering whatever it is given.
+
+  A frame's `data` is markup the page may interpolate as it stands. Everything
+  in it that is not one of our own numbers is escaped here, at the point the
+  string is built — a template that had to remember to escape it would be a
+  template that could forget.
   """
 
   @width 160
@@ -21,7 +26,7 @@ defmodule Monty.Simulators.Synthetic.Camera do
           sensor_id: String.t(),
           step: non_neg_integer(),
           media_type: String.t(),
-          data: String.t(),
+          data: Phoenix.HTML.Safe.t(),
           location: [float()],
           note: String.t()
         }
@@ -64,7 +69,9 @@ defmodule Monty.Simulators.Synthetic.Camera do
   def size, do: {@width, @height}
 
   defp svg(x, y, step, sensor_id) do
-    """
+    sensor_id = escaped(sensor_id)
+
+    safe("""
     <svg viewBox="0 0 #{@width} #{@height}" role="img" \
     aria-label="sensor #{sensor_id} at step #{step}" class="w-full">\
     <rect x="0" y="0" width="#{@width}" height="#{@height}" fill="currentColor" opacity="0.04"/>\
@@ -72,8 +79,17 @@ defmodule Monty.Simulators.Synthetic.Camera do
     <line x1="#{@width / 2}" y1="0" x2="#{@width / 2}" y2="#{@height}" stroke="currentColor" stroke-opacity="0.15" stroke-dasharray="3 3"/>\
     <circle cx="#{x}" cy="#{y}" r="5" fill="currentColor" opacity="0.75"/>\
     </svg>
-    """
+    """)
   end
+
+  # The only thing in a frame that is not a number of ours, escaped before it
+  # becomes part of the markup.
+  defp escaped(value),
+    do: value |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+
+  # Markup this module built from escaped parts: the page can interpolate it,
+  # and does not have to take this module's word for it by calling `raw`.
+  defp safe(markup), do: {:safe, markup}
 
   defp clamp(value, bound) do
     value |> max(0) |> min(bound) |> Kernel.*(1.0) |> Float.round(2)
