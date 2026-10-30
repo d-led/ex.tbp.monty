@@ -45,7 +45,8 @@ defmodule Monty.ModuleMap do
             %{
               required(:python) => String.t(),
               required(:elixir) => String.t(),
-              required(:status) => atom()
+              required(:status) => atom(),
+              optional(:reason) => String.t() | nil
             }
           ]
         }
@@ -235,10 +236,26 @@ defmodule Monty.ModuleMap do
   end
 
   defp missing_reasons(entries) do
-    for entry <- entries, entry.status == :excluded, entry[:reason] in [nil, ""] do
-      "excluded entry has no reason: #{entry.package}:#{entry.python}"
-    end
+    entry_problems =
+      for entry <- entries, entry.status == :excluded, unexplained?(entry) do
+        "excluded entry has no reason: #{entry.package}:#{entry.python}"
+      end
+
+    # A file-level exclusion covers its classes. Only a class excluded inside a
+    # file this port does write has to say why on its own.
+    class_problems =
+      for entry <- entries,
+          entry.status != :excluded,
+          class <- entry.classes,
+          class.status == :excluded,
+          unexplained?(class) do
+        "excluded class has no reason: #{entry.package}:#{entry.python}::#{class.python}"
+      end
+
+    entry_problems ++ class_problems
   end
+
+  defp unexplained?(map), do: Map.get(map, :reason) in [nil, ""]
 
   defp exists?(module) do
     module |> String.split(".") |> Module.concat() |> Code.ensure_loaded?()

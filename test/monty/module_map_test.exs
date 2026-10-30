@@ -97,6 +97,31 @@ defmodule Monty.ModuleMapTest do
     end
   end
 
+  describe "an excluded class" do
+    test "must say why, the way an excluded module must" do
+      assert {:error, problems} =
+               verify_with([entry(:planned, [excluded_class("PerceptFilter", nil)])])
+
+      assert problems == [
+               "excluded class has no reason: " <>
+                 "monty:frameworks/models/sensor_modules.py::PerceptFilter"
+             ]
+    end
+
+    test "is satisfied by a reason" do
+      assert {:ok, _summary} =
+               verify_with([
+                 entry(:planned, [
+                   excluded_class("PerceptFilter", "a Protocol; no runtime behaviour")
+                 ])
+               ])
+    end
+
+    test "needs none of its own when its whole file is excluded" do
+      assert {:ok, _summary} = verify_with([entry(:excluded, [excluded_class("Thing", nil)])])
+    end
+  end
+
   describe "regenerating the map" do
     # The map is generated, and a generator that treats what it read as a
     # decision makes its own output permanent. Only classes the old map
@@ -117,7 +142,8 @@ defmodule Monty.ModuleMapTest do
             %{
               python: "PerceptFilter",
               status: :excluded,
-              elixir: "Monty.Frameworks.Models.SensorModules.PerceptFilter"
+              elixir: "Monty.Frameworks.Models.SensorModules.PerceptFilter",
+              reason: "a Protocol; no runtime behaviour"
             }
           ]
         }
@@ -127,11 +153,44 @@ defmodule Monty.ModuleMapTest do
 
       assert %{
                {"monty", "frameworks/models/sensor_modules.py"} => %{
-                 excluded_classes: ["PerceptFilter"],
+                 excluded_classes: %{"PerceptFilter" => "a Protocol; no runtime behaviour"},
                  status: :planned
                }
              } =
                decisions
     end
+  end
+
+  # `verify/1` reads a map file and checks it against the checkouts; an empty
+  # package list keeps these tests about the reasons, not the coverage.
+  defp verify_with(entries) do
+    path =
+      Path.join(System.tmp_dir!(), "module_map_test_#{System.unique_integer([:positive])}.exs")
+
+    File.write!(path, inspect(entries))
+    on_exit(fn -> File.rm(path) end)
+
+    ModuleMap.verify(map: path, packages: [])
+  end
+
+  defp entry(status, classes) do
+    %{
+      package: "monty",
+      python: "frameworks/models/sensor_modules.py",
+      elixir: "Monty.Frameworks.Models.SensorModules",
+      status: status,
+      reason: if(status == :excluded, do: "superseded by Monty.Config"),
+      classes: classes
+    }
+  end
+
+  defp excluded_class(name, reason) do
+    class = %{
+      python: name,
+      elixir: "Monty.Frameworks.Models.SensorModules.#{name}",
+      status: :excluded
+    }
+
+    if reason, do: Map.put(class, :reason, reason), else: class
   end
 end
