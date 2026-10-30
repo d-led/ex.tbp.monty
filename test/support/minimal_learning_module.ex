@@ -47,4 +47,10 @@ defmodule Monty.Test.MinimalLearningModule do
 
   @impl true
   def update_ltm_from_stm(state), do: state
+
+  @impl true
+  def set_target(state, _primary_target), do: state
+
+  @impl true
+  def fixme_update_ground_truth(state), do: state
 end

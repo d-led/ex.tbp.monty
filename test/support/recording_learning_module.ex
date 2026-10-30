@@ -96,4 +96,16 @@ defmodule Monty.Test.RecordingLearningModule do
     send(state.notify, {:update_ltm, state.id})
     state
   end
+
+  @impl true
+  def set_target(state, primary_target) do
+    send(state.notify, {:set_target, state.id, primary_target})
+    Map.put(state, :primary_target, primary_target)
+  end
+
+  @impl true
+  def fixme_update_ground_truth(state) do
+    send(state.notify, {:ground_truth, state.id})
+    state
+  end
 end

@@ -370,6 +370,25 @@ defmodule Monty.Runtime.StepTest do
       assert_receive {:update_ltm, :lm_0}
     end
 
+    test "and records what that memory came from, after it was written" do
+      model_id = start_model()
+
+      {:ok, _, _} = step(model_id)
+      :ok = Model.update_ltm(model_id)
+
+      assert_receive {:update_ltm, :lm_0}
+      assert_receive {:ground_truth, :lm_0}
+    end
+
+    test "the model can be told which object the episode is about" do
+      model_id = start_model()
+      target = %{"object" => "mug", "quat_rotation" => [0.0, 0.0, 0.0, 1.0]}
+
+      :ok = Model.fixme_set_ground_truth(model_id, target)
+
+      assert_receive {:set_target, :lm_0, ^target}
+    end
+
     test "the model can be told whether this episode trains or evaluates" do
       model_id = start_model()
 

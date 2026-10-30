@@ -1747,6 +1747,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   one the module learned from.
   """
   @spec set_target(t(), map() | nil) :: t()
+  @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
   def set_target(%__MODULE__{} = lm, nil), do: %{lm | stepwise_target_object: nil}
 
   def set_target(%__MODULE__{} = lm, primary_target) do
@@ -1772,6 +1773,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   graph, so both directions are sets, exactly as Monty keeps them.
   """
   @spec fixme_update_ground_truth(t()) :: t()
+  @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
   def fixme_update_ground_truth(%__MODULE__{mode: :train} = lm) do
     if FeatureAtLocationBuffer.size(lm.buffer) > 0 do
       update_target_graph_mapping(lm, lm.detected_object, lm.primary_target)

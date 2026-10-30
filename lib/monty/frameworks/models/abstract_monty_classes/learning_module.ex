@@ -118,6 +118,25 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
   """
   @callback update_ltm_from_stm(state) :: state
 
+  @doc """
+  Names the object this episode is about, and the pose it was placed with.
+
+  Monty's `fixme_reset_ground_truth`: the target is what makes a performance
+  measurable — "correct" means "recognised the object it was asked about" — so a
+  module that is never told one cannot report a performance at all. `nil` leaves
+  whatever it knew alone.
+  """
+  @callback set_target(state, map() | nil) :: state
+
+  @doc """
+  Records which objects the graph a training episode built came from.
+
+  Monty's `fixme_update_ground_truth`, called after the episode's long-term
+  memory is written. It is a record of the run's supervision, not something the
+  model worked out, and a later evaluation is scored against it.
+  """
+  @callback fixme_update_ground_truth(state) :: state
+
   @optional_callbacks propose_goals: 1, propose_region: 1, get_output: 1
 
   @doc """

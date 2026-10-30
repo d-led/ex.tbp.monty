@@ -108,5 +108,11 @@ defmodule Monty.Simulators.Synthetic.LearningModule do
   @impl true
   def update_ltm_from_stm(state), do: state
 
+  @impl true
+  def set_target(state, primary_target), do: Map.put(state, :primary_target, primary_target)
+
+  @impl true
+  def fixme_update_ground_truth(state), do: state
+
   defp remember(state, percepts), do: %{state | percepts: state.percepts ++ percepts}
 end

@@ -124,6 +124,17 @@ defmodule Monty.Runtime.Step do
     do: GenServer.call(server, {:set_experiment_mode, mode}, :infinity)
 
   @doc """
+  Tells every module which object this episode is about.
+
+  Monty's `MontyForGraphMatching.fixme_set_ground_truth`: the experiment knows
+  it, the modules cannot work it out, and without it nothing the episode does can
+  be scored.
+  """
+  @spec fixme_set_ground_truth(server(), map() | nil) :: :ok
+  def fixme_set_ground_truth(server, primary_target),
+    do: GenServer.call(server, {:fixme_set_ground_truth, primary_target}, :infinity)
+
+  @doc """
   Hands what the episode saw to long-term memory.
 
   Called at the end of an episode: it is the only moment a training episode
@@ -227,6 +238,10 @@ defmodule Monty.Runtime.Step do
 
   def handle_call({:set_experiment_mode, mode}, _from, state) do
     {:reply, :ok, set_experiment_mode_state(state, mode)}
+  end
+
+  def handle_call({:fixme_set_ground_truth, primary_target}, _from, state) do
+    {:reply, :ok, set_ground_truth_state(state, primary_target)}
   end
 
   def handle_call(:state, _from, state), do: {:reply, state, state}
@@ -618,7 +633,24 @@ defmodule Monty.Runtime.Step do
 
   defp update_ltm_state(%State{model_id: model_id} = state) do
     Enum.each(state.learning_modules, fn lm ->
-      LearningModuleServer.update_ltm_from_stm(Registry.via({:learning_module, model_id, lm.id}))
+      server = Registry.via({:learning_module, model_id, lm.id})
+
+      # Monty's `MontyBase.update_ltm`: write the episode into long-term memory,
+      # then record what that memory came from. The record is only made by a
+      # training episode, which the module decides from its own mode.
+      LearningModuleServer.update_ltm_from_stm(server)
+      LearningModuleServer.fixme_update_ground_truth(server)
+    end)
+
+    state
+  end
+
+  defp set_ground_truth_state(%State{model_id: model_id} = state, primary_target) do
+    Enum.each(state.learning_modules, fn lm ->
+      LearningModuleServer.set_target(
+        Registry.via({:learning_module, model_id, lm.id}),
+        primary_target
+      )
     end)
 
     state

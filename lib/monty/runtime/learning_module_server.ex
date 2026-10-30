@@ -114,6 +114,16 @@ defmodule Monty.Runtime.LearningModuleServer do
   @spec update_ltm_from_stm(server()) :: :ok
   def update_ltm_from_stm(server), do: GenServer.call(server, :update_ltm_from_stm, :infinity)
 
+  @doc "Names the object this episode is about, as the experiment knows it."
+  @spec set_target(server(), map() | nil) :: :ok
+  def set_target(server, primary_target),
+    do: GenServer.call(server, {:set_target, primary_target}, :infinity)
+
+  @doc "Records which objects the graph a training episode built came from."
+  @spec fixme_update_ground_truth(server()) :: :ok
+  def fixme_update_ground_truth(server),
+    do: GenServer.call(server, :fixme_update_ground_truth, :infinity)
+
   @doc "The module's own state, for tests and the run inspector."
   @spec state(server()) :: term()
   def state(server), do: GenServer.call(server, :state, :infinity)
@@ -191,6 +201,16 @@ defmodule Monty.Runtime.LearningModuleServer do
 
   def handle_call(:update_ltm_from_stm, _from, server) do
     state = server.module.update_ltm_from_stm(server.state)
+    {:reply, :ok, %{server | state: state}}
+  end
+
+  def handle_call({:set_target, primary_target}, _from, server) do
+    state = server.module.set_target(server.state, primary_target)
+    {:reply, :ok, %{server | state: state}}
+  end
+
+  def handle_call(:fixme_update_ground_truth, _from, server) do
+    state = server.module.fixme_update_ground_truth(server.state)
     {:reply, :ok, %{server | state: state}}
   end
 

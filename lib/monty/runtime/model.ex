@@ -66,6 +66,12 @@ defmodule Monty.Runtime.Model do
     Step.set_experiment_mode(Registry.via({:step, model_id}), mode)
   end
 
+  @doc "Tells every module which object this episode is about."
+  @spec fixme_set_ground_truth(atom() | String.t(), map() | nil) :: :ok
+  def fixme_set_ground_truth(model_id, primary_target) do
+    Step.fixme_set_ground_truth(Registry.via({:step, model_id}), primary_target)
+  end
+
   @doc "Hands what the episode saw to long-term memory."
   @spec update_ltm(atom() | String.t()) :: :ok
   def update_ltm(model_id), do: Step.update_ltm(Registry.via({:step, model_id}))
