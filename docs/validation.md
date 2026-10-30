@@ -235,8 +235,14 @@ Saying this plainly matters more than the table above:
   port's starts again. The two extra poses are ones whose evidence sits inside
   20% of the best here and outside it there, and the two implementations'
   evidence agrees only to about `2e-4` relative (`29.44` against `29.46`): a
-  boundary case, not a different rule. Chasing it means matching Monty's
-  arithmetic to the last bit, which is the one thing this episode asks for.
+  boundary case, not a different rule — and the boundary is the *memory's*,
+  not the arithmetic's: on every step of that episode both sides pick the same
+  hypothesis id, and its rotation is `2.7e-7` rad apart
+  (`scripts/probe_pose_drift.exs`), which is the six-decimal rounding the export
+  writes node positions and features with. A hypothesis whose feature sits within
+  that of its tolerance is scored differently in the two, and its evidence then
+  runs a fraction apart for the rest of the episode. Matching Monty's arithmetic
+  to the last bit would mean importing its pickles without rounding them.
 
   The claim itself is a test now: "an episode of Monty's ten-episode evaluation
   ends on the object Monty named, after the steps Monty took"

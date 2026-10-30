@@ -162,6 +162,38 @@ defmodule Monty.Test.MontyRecording do
   end
 
   @doc """
+  The hypothesis Monty held as most likely after each step, and where it put it.
+
+  Two implementations can agree on evidence and on the number of hypotheses and
+  still be aiming at a different pose: this is the answer Monty chose — its id,
+  and its rotation as a quaternion **in Monty's own `wxyz` order** — so a
+  comparison of the two can tell whether anything before the arithmetic differs.
+  """
+  @spec mlh!(Path.t(), keyword()) :: [
+          %{id: non_neg_integer() | nil, rotation: [float()], graph_id: String.t() | nil}
+          | nil
+        ]
+  def mlh!(path, options \\ []) do
+    module_id = Keyword.get(options, :learning_module, @default_learning_module)
+
+    path
+    |> File.stream!()
+    |> Enum.map(fn line ->
+      case line |> decode!() |> get_in(["learning_modules", module_id, "state", "mlh"]) do
+        nil ->
+          nil
+
+        mlh ->
+          %{
+            id: mlh["mlh_id"],
+            rotation: mlh["rotation_quaternion"],
+            graph_id: mlh["graph_id"]
+          }
+      end
+    end)
+  end
+
+  @doc """
   How Monty's evidence was spread over each object's hypotheses after each step.
 
   `max_evidence` is what the port already reproduces. `hypotheses` and
