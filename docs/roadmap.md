@@ -74,6 +74,12 @@ should move with every commit; when a mapped class is implemented,
 8. **`monty_base.py`, `graph_matching.py`, `evidence_matching/model.py`** — the
    classes that wire modules together; here the runtime's routing is replaced by
    the ported one where it is behaviour, and stays where it is supervision.
+   **`evidence_matching/model.py` done:**
+   `Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching`
+   is the model a config naming it starts — the class is the name a run uses and
+   `Monty.Runtime.Model` is the processes behind it — while a config naming a
+   model this port has not written keeps running on the runtime, and the setup
+   page says which of the two it got.
 9. **`experiments/`** — `MontyExperiment`, `MontySupervisedObjectPretraining…`,
    `MontyObjectRecognition…`: epochs, episodes, recognition policy, hooks.
 

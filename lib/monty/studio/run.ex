@@ -17,14 +17,14 @@ defmodule Monty.Studio.Run do
   alias Monty.Experiment.RecognitionPolicy
   alias Monty.Experiment.RecognitionPolicy.{RecognitionCounter, RecognitionResult}
   alias Monty.Frameworks.Experiments.Seed
-  alias Monty.Runtime.Model
   alias Monty.Runtime.Positioning
   alias Monty.Studio.{Belief, Setup}
 
   @default_steps 12
 
-  @enforce_keys [:model_id, :setup, :interface, :episode_seed]
+  @enforce_keys [:model, :model_id, :setup, :interface, :episode_seed]
   defstruct [
+    :model,
     :model_id,
     :setup,
     :interface,
@@ -38,6 +38,7 @@ defmodule Monty.Studio.Run do
   ]
 
   @type t :: %__MODULE__{
+          model: module(),
           model_id: String.t(),
           setup: Setup.t(),
           interface: Interface.t(),
@@ -70,14 +71,16 @@ defmodule Monty.Studio.Run do
     episode = Keyword.get(opts, :episode, 0)
 
     spec = Setup.model_spec(setup, model_id)
+    model = Setup.model_class(setup)
 
     with {:ok, factories} <- Setup.positioning_procedures(setup),
          {:ok, policy} <- Setup.recognition_policy(setup),
          {:ok, interface, positioning} <- position(setup, factories) do
-      case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {Model, spec}) do
+      case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {model, spec}) do
         {:ok, _pid} ->
           {:ok,
            %__MODULE__{
+             model: model,
              model_id: model_id,
              setup: setup,
              episode_seed: Seed.episode_seed(seed(setup), :eval, episode),
@@ -149,13 +152,13 @@ defmodule Monty.Studio.Run do
   and pretending otherwise here would only move the decision.
   """
   @spec step(t()) :: {:ok, map(), map(), t()}
-  def step(%__MODULE__{model_id: model_id, step: step} = run) do
+  def step(%__MODULE__{model: model, model_id: model_id, step: step} = run) do
     {observations, proprioceptive_state, interface} =
       Interface.step(run.interface, run.pending_actions)
 
     ctx = %{Monty.Context.new(run.episode_seed) | step: step}
 
-    {:ok, actions, info} = Model.step(model_id, observations, proprioceptive_state, ctx)
+    {:ok, actions, info} = model.step(model_id, observations, proprioceptive_state, ctx)
 
     # The observations come back with the report so a page can show what the
     # modules saw, not just what they did with it.
@@ -191,8 +194,8 @@ defmodule Monty.Studio.Run do
   @spec decision(t()) :: RecognitionResult.t()
   def decision(%__MODULE__{policy: nil}), do: %RecognitionResult{}
 
-  def decision(%__MODULE__{policy: policy, counter: counter, model_id: model_id}) do
-    RecognitionPolicy.call(policy, model_view(model_id), counter)
+  def decision(%__MODULE__{policy: policy, counter: counter} = run) do
+    RecognitionPolicy.call(policy, model_view(run), counter)
   end
 
   @doc """
@@ -202,7 +205,8 @@ defmodule Monty.Studio.Run do
   ending an episode gets from a time-out happens after that report.
   """
   @spec conclusion(t()) :: %{optional(atom()) => term()}
-  def conclusion(%__MODULE__{model_id: model_id}), do: Model.state(model_id).terminal_states
+  def conclusion(%__MODULE__{model: model, model_id: model_id}),
+    do: model.state(model_id).terminal_states
 
   @doc """
   Whether the run is over: the experiment's policy, or this page's step budget.
@@ -216,8 +220,8 @@ defmodule Monty.Studio.Run do
 
   @doc "Stops the run's processes — the model and the world it steps; safe to call twice."
   @spec stop(t()) :: :ok
-  def stop(%__MODULE__{model_id: model_id, interface: interface}) do
-    Monty.Runtime.Model.stop(model_id)
+  def stop(%__MODULE__{model: model, model_id: model_id, interface: interface}) do
+    model.stop(model_id)
     Monty.Simulators.Environment.stop(interface.env)
   end
 
@@ -230,11 +234,11 @@ defmodule Monty.Studio.Run do
 
   # Monty's `_recognition_complete`: the two things a policy can ask for besides
   # stopping.
-  defp apply_reactions(%__MODULE__{model_id: model_id}, decision) do
-    if decision.start_exploring, do: :ok = Model.switch_to_exploratory_step(model_id)
-    if decision.time_out_lms, do: :ok = Model.time_out(model_id)
+  defp apply_reactions(%__MODULE__{model: model, model_id: model_id}, decision) do
+    if decision.start_exploring, do: :ok = model.switch_to_exploratory_step(model_id)
+    if decision.time_out_lms, do: :ok = model.time_out(model_id)
   end
 
   # The four things a policy may read off the model (`docs/monty-bugs.md` §2.17).
-  defp model_view(model_id), do: Model.status(model_id)
+  defp model_view(%__MODULE__{model: model, model_id: model_id}), do: model.status(model_id)
 end

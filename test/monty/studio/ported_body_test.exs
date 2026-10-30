@@ -12,6 +12,7 @@ defmodule Monty.Studio.PortedBodyTest do
   use ExUnit.Case, async: false
 
   alias Monty.Frameworks.Actions.ActionJSONEncoder
+  alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed
   alias Monty.Frameworks.Models.MotorPolicySelectors.SinglePolicySelector
   alias Monty.Frameworks.Models.MotorSystem
@@ -34,6 +35,17 @@ defmodule Monty.Studio.PortedBodyTest do
              motor
 
     assert %SurfacePolicyCurvatureInformed{agent_id: "agent_id_0"} = policy
+  end
+
+  test "the run steps the model its config names, not this port's runtime" do
+    {:ok, run} = Run.start(setup(), steps: 1)
+
+    try do
+      assert run.model == MontyForEvidenceGraphMatching
+      assert {:ok, _info, _observations, _run} = Run.step(run)
+    after
+      Run.stop(run)
+    end
   end
 
   test "and it steers a run: the actions are Monty's, and the world moves by them" do

@@ -1434,7 +1434,7 @@
     python: "frameworks/models/evidence_matching/model.py",
     classes: [
       %{
-        status: :planned,
+        status: :implemented,
         elixir: "Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching",
         python: "MontyForEvidenceGraphMatching"
       }

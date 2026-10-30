@@ -21,6 +21,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Experiment.RecognitionPolicy
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
   alias Monty.Frameworks.Models.SensorModules.CameraSM
   alias Monty.Geometry.Rotation
@@ -248,8 +249,26 @@ defmodule Monty.Studio.Setup do
     }
   end
 
+  # The models this port has written, by the name a config gives. A config that
+  # names any other runs on this port's runtime, which is what the findings say
+  # out loud rather than leaving to be discovered.
+  @model_classes %{"MontyForEvidenceGraphMatching" => MontyForEvidenceGraphMatching}
+
   @doc """
-  The model spec `Monty.Runtime.Model` runs.
+  The model a run of this setup starts.
+
+  Monty's own class when this port has written it, this port's runtime when it
+  has not — the same answer the findings give, from the same map.
+  """
+  @spec model_class(t()) :: module()
+  def model_class(%__MODULE__{monty_class: %{class: class}}),
+    do: Map.get(@model_classes, class, Monty.Runtime.Model)
+
+  def model_class(%__MODULE__{}), do: Monty.Runtime.Model
+
+  @doc """
+  The model spec a run starts: what the config resolved to, as processes can be
+  given it.
 
   Every configured sensor and learning module becomes a process, wired exactly
   as the config wires them — so a run is a run of *this* topology, with
@@ -984,7 +1003,6 @@ defmodule Monty.Studio.Setup do
   # is the point.
   @shell_classes [
     "Monty",
-    "MontyForEvidenceGraphMatching",
     "MontyForGraphMatching",
     "MontyObjectRecognitionExperiment"
   ]

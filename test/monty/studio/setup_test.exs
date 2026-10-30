@@ -3,6 +3,7 @@ defmodule Monty.Studio.SetupTest do
 
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
   alias Monty.Frameworks.Models.SensorModules.{CameraSM, FeatureChangeFilter}
   alias Monty.SensorModules.SensorModule
@@ -337,6 +338,32 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "the model a run starts" do
+    test "is the class its config names, when this port has written it" do
+      assert Setup.model_class(setup_for("base_config_10distinctobj_dist_agent")) ==
+               MontyForEvidenceGraphMatching
+    end
+
+    test "and the map reports that class ported, so the page and the run agree" do
+      # The setup page's findings are read from the module map and a run starts
+      # what `model_class/1` answers; a class in one and not the other is a
+      # page that describes a run nobody is running.
+      assert %{
+               status: :implemented,
+               elixir:
+                 "Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching"
+             } =
+               Setup.describe_target(
+                 "tbp.monty.frameworks.models.evidence_matching.model.MontyForEvidenceGraphMatching"
+               )
+    end
+
+    test "is this port's runtime for a config naming a model it has not written" do
+      # Not a coercion: the setup page lists that class as this port's own
+      # runtime, and a run starting something else would make the page a lie.
+      assert Setup.model_class(setup_for("tutorial/first_experiment")) ==
+               Monty.Runtime.Model
+    end
+
     test "uses the ported module when the config targets one" do
       setup = setup_from(@base)
 
