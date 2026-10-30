@@ -83,6 +83,18 @@ defmodule Monty.Runtime.Step do
   def state(server), do: GenServer.call(server, :state, :infinity)
 
   @doc """
+  The four things a recognition policy may read off the model.
+
+  Monty's `MontyIsDone` and its siblings read `model.is_done`, the model's step
+  type, its matching-step count and each module's conclusion — four fields, not
+  the model. The coordinator holds the pretrained memory in its own state, so
+  answering with the whole thing would copy tens of megabytes per step to
+  deliver four values (`docs/monty-bugs.md` §2.17).
+  """
+  @spec status(server()) :: Monty.Experiment.RecognitionPolicy.model()
+  def status(server), do: GenServer.call(server, :status, :infinity)
+
+  @doc """
   Whether the model has concluded this episode.
 
   Monty's `model.is_done`: set by the model when its match criterion is
@@ -191,6 +203,7 @@ defmodule Monty.Runtime.Step do
   end
 
   def handle_call(:done?, _from, state), do: {:reply, state.done?, state}
+  def handle_call(:status, _from, %State{} = state), do: {:reply, describe_status(state), state}
   def handle_call(:reset_episode, _from, state), do: {:reply, :ok, reset_episode_state(state)}
   def handle_call(:update_ltm, _from, state), do: {:reply, :ok, update_ltm_state(state)}
 
@@ -388,6 +401,20 @@ defmodule Monty.Runtime.Step do
     state = %{state | motor_state: motor_state, motor_only?: module.motor_only_step(motor_state)}
 
     {actions, state}
+  end
+
+  # -- what a policy reads --------------------------------------------------
+
+  # Monty's `model.is_done` and the three other fields `MontyIsDone` and its
+  # siblings read. Built here, from the state that holds the memory, so that the
+  # four values travel and not the graphs behind them.
+  defp describe_status(%State{} = state) do
+    %{
+      is_done: state.done?,
+      is_exploring: state.step_type == :exploratory,
+      matching_steps: state.matching_steps,
+      conclusions: Enum.map(state.learning_modules, &Map.get(state.terminal_states, &1.id))
+    }
   end
 
   # -- the model's own decisions --------------------------------------------

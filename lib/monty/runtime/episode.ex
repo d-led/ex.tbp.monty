@@ -168,16 +168,7 @@ defmodule Monty.Runtime.Episode do
   end
 
   # The four things a policy may read off the model (`docs/monty-bugs.md` §2.17).
-  defp view(model_id) do
-    state = Model.state(model_id)
-
-    %{
-      is_done: state.done?,
-      is_exploring: state.step_type == :exploratory,
-      matching_steps: state.matching_steps,
-      conclusions: Enum.map(state.learning_modules, &Map.get(state.terminal_states, &1.id))
-    }
-  end
+  defp view(model_id), do: Model.status(model_id)
 
   # Monty's first step is taken with no action: the environment is asked for
   # what the sensors see where they already are.

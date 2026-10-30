@@ -212,14 +212,5 @@ defmodule Monty.Studio.Run do
   end
 
   # The four things a policy may read off the model (`docs/monty-bugs.md` §2.17).
-  defp model_view(model_id) do
-    state = Model.state(model_id)
-
-    %{
-      is_done: state.done?,
-      is_exploring: state.step_type == :exploratory,
-      matching_steps: state.matching_steps,
-      conclusions: Enum.map(state.learning_modules, &Map.get(state.terminal_states, &1.id))
-    }
-  end
+  defp model_view(model_id), do: Model.status(model_id)
 end

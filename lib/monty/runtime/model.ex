@@ -48,6 +48,10 @@ defmodule Monty.Runtime.Model do
   @spec state(atom() | String.t()) :: Monty.Runtime.Step.State.t()
   def state(model_id), do: Step.state(Registry.via({:step, model_id}))
 
+  @doc "The four things a recognition policy may read off the model."
+  @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionPolicy.model()
+  def status(model_id), do: Step.status(Registry.via({:step, model_id}))
+
   @doc "Clears short-term memory for a new episode, keeping long-term memory."
   @spec reset_episode(atom() | String.t()) :: :ok
   def reset_episode(model_id), do: Step.reset_episode(Registry.via({:step, model_id}))
