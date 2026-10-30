@@ -381,17 +381,29 @@ objects a run keeps: at step 3 Monty drops `bowl` because its best evidence,
 step 6 a near-tie inside `mug` has broken the other way and the two runs track
 poses that are mirror images, which is the jump that differs.
 
-The percepts explain it. Diffing the feature map the module scored against Monty's,
-for the same step and the same observation, they agree to the last digit in every
-feature *except* `pose_vectors`: the port's `principal_curvature_1` and `_2` rows
-are the **negatives** of Monty's. That sign is arbitrary in Monty's own
-computation — `principal_curvatures` returns whatever eigenvector
-`numpy.linalg.eig` gives and only fixes `dir2` by the right-hand rule about the
-normal — so Monty is self-consistent (its pretrained graphs and its live percepts
-come from the same solver) while the port, whose solver picks the other sign, is
-not. Whether that sign is what moves the evidence by a fifth of a percent is the
-next thing to measure; it is the first candidate, and it is a sensor-side number
-rather than the model or the stream.
+The percepts are not the explanation. Diffing the feature map the module scored
+against Monty's, for the same step and the same observation, they agree to the
+last digit in every feature — `hsv`, `principal_curvatures_log`, `object_coverage`,
+`on_object`, `pose_fully_defined` — *except* `pose_vectors`, where the port's two
+principal curvature directions are the **negatives** of Monty's. That sign is
+arbitrary in Monty's own computation (`principal_curvatures` returns whatever
+eigenvector `numpy.linalg.eig` gives and fixes only `dir2`, by the right-hand rule
+about the normal) — and Monty's own evidence says the sign cannot matter:
+
+```python
+# Since curvature directions could be rotated 180 degrees we define
+# the error to be largest when the angle is pi/2 (90 deg) and angles 0 and
+# pi are equal.
+cd1_error = np.pi / 2 - np.abs(cd1_angle - np.pi / 2)
+```
+
+so a flipped direction scores the same. The sign is decorative; it is not what
+moves the evidence by a fifth of a percent, and the search for that is in the
+module's own arithmetic, not in the percept: the same hypothesis, on the same
+percepts, carries `4.026` where Monty's carries `4.046`. The recorder already
+writes the per-graph evidence Monty accumulated per step (`hypotheses`,
+`max_evidence`, `within_x_percent`, `top_evidence`), so that is the next thing to
+hold the port's numbers against.
 
 ## Re-recording anything in this file
 
