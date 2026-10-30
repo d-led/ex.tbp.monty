@@ -100,15 +100,21 @@ defmodule Monty.Studio.Run do
     end
   end
 
-  # Monty's `pre_episode`: the world is looked at and stepped until the agent is
-  # in front of the object, before the model sees anything. The steps taken here
-  # are the environment's, not the episode's, so the run's step counter starts at
-  # zero afterwards.
+  # Monty's `pre_episode`: the world is reset, then looked at and stepped until
+  # the agent is in front of the object, before the model sees anything. The
+  # steps taken here are the environment's, not the episode's, so the run's step
+  # counter starts at zero afterwards.
   #
-  # A world that positions the episode itself — Monty's own, behind the port —
-  # has already done this when the episode started, with Monty's random stream;
-  # stepping it again would move an agent Monty had placed and make the episode a
-  # different one.
+  # The reset comes first because that is the order Monty's `Interface.pre_episode`
+  # has, and because it is the only thing that starts an episode in a world that
+  # lives in another process: `HabitatEnvironment.reset/1` is what runs Monty's own
+  # `pre_episode` in the peer. Without it a run stepped a world that had never been
+  # told an episode had begun.
+  #
+  # A world that positions the episode itself — Monty's own, behind the port — has
+  # done the positioning inside that reset, with Monty's random stream; stepping
+  # the procedures again would move an agent Monty had placed and make the episode
+  # a different one.
   defp position(%Setup{} = setup, factories) do
     world = Setup.world(setup)
 
@@ -122,6 +128,8 @@ defmodule Monty.Studio.Run do
         transforms: Setup.built_transforms(setup),
         seed: seed(setup)
       )
+
+    {_observations, _proprioceptive_state, interface} = Interface.pre_episode(interface)
 
     if Monty.Simulators.Environment.positions_itself?(world) do
       {:ok, interface, %{steps: nil, success: true, procedures: [:world]}}

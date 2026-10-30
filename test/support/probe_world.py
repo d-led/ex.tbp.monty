@@ -11,11 +11,23 @@ Framing: 4-byte big-endian length, then that many bytes of UTF-8 JSON.
 """
 
 import json
+import os
 import struct
 import sys
 
 SENSOR_ID = "patch"
 AGENT_ID = "agent_id_0"
+
+# Where a test asks this probe to write down the commands it was sent. Unset in
+# normal use: a world that logged to a file nobody asked for would surprise its
+# caller.
+LOG = os.environ.get("PROBE_WORLD_LOG")
+
+
+def record(command):
+    if LOG:
+        with open(LOG, "a", encoding="utf-8") as log:
+            log.write(command + "\n")
 
 
 def read_frame(stream):
@@ -35,13 +47,18 @@ def write_frame(stream, body):
 
 def observation(actions):
     # The "scene" is whatever was asked for: this proves the round trip, and
-    # makes no claim to be geometry.
+    # makes no claim to be geometry. It does carry a one-pixel view, because a
+    # world that answers no image cannot stand behind an experiment's transforms
+    # — `DepthTo3DLocations` unprojects the depth image a sensor was given.
     return {
         AGENT_ID: {
             SENSOR_ID: {
                 "location": [0.0, 0.0, 0.1],
                 "value": len(actions),
                 "actions_seen": actions,
+                "depth": [[0.1]],
+                "rgba": [[[0.2, 0.7, 0.2, 1.0]]],
+                "semantic": [[1.0]],
             }
         }
     }
@@ -65,6 +82,8 @@ def main(argv):
         request = json.loads(body.decode("utf-8"))
         command = request.get("command")
         request_id = request.get("id")
+
+        record(command)
 
         if command == "reset":
             write_frame(stream_out, {"id": request_id, "ok": True})
