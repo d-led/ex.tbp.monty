@@ -132,7 +132,10 @@ defmodule Monty.Geometry.Rotation do
   @spec to_euler_radians(t()) :: vector()
   def to_euler_radians(%__MODULE__{} = rotation) do
     [[m00, m01, m02], [m10, m11, m12], [m20, m21, m22]] = to_matrix(rotation)
-    sin_ry = -m20
+    # A rotation of exactly a quarter turn computes this as 1.0000000000000002,
+    # and `:math.asin/1` refuses anything past one. scipy clamps, so a pose at
+    # ninety degrees is a pose and not an arithmetic error.
+    sin_ry = m20 |> Kernel.*(-1.0) |> max(-1.0) |> min(1.0)
     _ = {m01, m02, m12}
 
     if abs(sin_ry) < 1.0 - 1.0e-9 do

@@ -120,6 +120,19 @@ defmodule Monty.Geometry.RotationTest do
       end
     end
 
+    test "a quarter turn answers its angles instead of an arithmetic error" do
+      # The matrix of a 90° turn gives sin(ry) as 1.0000000000000002, and asin
+      # refuses anything past one. scipy clamps, and a pose at ninety degrees is
+      # a pose: this is what a policy asks for when it sets a sensor straight
+      # up, so it must answer rather than raise.
+      {:ok, rotation} = Rotation.from_euler_degrees([0.0, 90.0, 0.0])
+
+      assert [x, y, z] = Rotation.to_euler_degrees(rotation)
+      assert_in_delta y, 90.0, 0.001
+      assert_in_delta x, 0.0, 0.001
+      assert_in_delta z, 0.0, 0.001
+    end
+
     test "x turns first, in the frame the axes were given in" do
       # Extrinsic xyz: 90° about x then 90° about y takes +y to +z to +x.
       {:ok, rotation} = Rotation.from_euler_degrees([90.0, 90.0, 0.0])

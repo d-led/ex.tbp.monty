@@ -17,7 +17,12 @@ defmodule Monty.Simulators.Synthetic.KinematicsTest do
     MoveTangentially,
     OrientHorizontal,
     OrientVertical,
+    SetAgentPitch,
     SetAgentPose,
+    SetSensorPitch,
+    SetSensorPose,
+    SetSensorRotation,
+    SetYaw,
     TurnLeft,
     TurnRight
   }
@@ -33,6 +38,14 @@ defmodule Monty.Simulators.Synthetic.KinematicsTest do
 
   defp sensor_position(world, sensor_id \\ "patch") do
     Map.fetch!(Kinematics.sensor_positions(world), sensor_id)
+  end
+
+  defp sensor_euler(world, sensor_id \\ "patch") do
+    world
+    |> Map.fetch!(:sensors)
+    |> Map.fetch!(sensor_id)
+    |> Map.fetch!(:rotation)
+    |> Rotation.to_euler_degrees()
   end
 
   defp gaze(world, sensor_id \\ "patch") do
@@ -216,17 +229,59 @@ defmodule Monty.Simulators.Synthetic.KinematicsTest do
     end
   end
 
-  describe "an action the stand-in world cannot honour" do
-    test "is refused rather than quietly ignored" do
-      assert_raise ArgumentError, ~r/sets a pose outright/, fn ->
+  describe "an action that sets a pose outright" do
+    test "places the agent where it says, and its sensors go with it" do
+      world =
         move(world(), [
           %SetAgentPose{
             agent_id: @agent,
-            location: [0.0, 0.0, 0.0],
+            location: [1.0, 2.0, 3.0],
             rotation_quat: {1.0, 0.0, 0.0, 0.0}
           }
         ])
-      end
+
+      assert_at(world.agent.position, [1.0, 2.0, 3.0])
+
+      # The sensor still sits a decimetre in front of the agent on its own axis;
+      # where that is in the world moved with the agent.
+      assert_at(sensor_position(world), [1.0, 2.0, 3.1])
+    end
+
+    test "sets a sensor's pose on the agent, which is what proprioception reports" do
+      world =
+        move(world(), [
+          %SetSensorPose{
+            agent_id: @agent,
+            location: [0.0, 0.0, 0.05],
+            rotation_quat: {1.0, 0.0, 0.0, 0.0}
+          }
+        ])
+
+      assert_at(sensor_position(world), [0.0, 0.0, 0.05])
+
+      quarter_turn_about_y = {0.7071067811865476, 0.0, 0.7071067811865476, 0.0}
+
+      world =
+        move(world, [%SetSensorRotation{agent_id: @agent, rotation_quat: quarter_turn_about_y}])
+
+      assert [_, 90.0, _] = sensor_euler(world)
+
+      # A pitch is set and the yaw it was given is kept.
+      world = move(world, [%SetSensorPitch{agent_id: @agent, pitch_degrees: 10.0}])
+      assert [10.0, 90.0, _] = sensor_euler(world)
+    end
+
+    test "sets the yaw and the pitch rather than nudging them" do
+      world = move(world(), [%SetYaw{agent_id: @agent, rotation_degrees: 90.0}])
+      assert [_, 90.0, _] = Rotation.to_euler_degrees(world.agent.rotation)
+
+      # A second yaw replaces the first: 30 is not 120.
+      world = move(world, [%SetYaw{agent_id: @agent, rotation_degrees: 30.0}])
+      assert [_, 30.0, _] = Rotation.to_euler_degrees(world.agent.rotation)
+
+      # Pitching keeps the yaw it had, because the stand-in's agent has both.
+      world = move(world, [%SetAgentPitch{agent_id: @agent, pitch_degrees: 10.0}])
+      assert [10.0, 30.0, _] = Rotation.to_euler_degrees(world.agent.rotation)
     end
   end
 end

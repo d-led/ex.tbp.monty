@@ -32,6 +32,12 @@ defmodule Monty.Simulators.Synthetic.Kinematics do
     MoveTangentially,
     OrientHorizontal,
     OrientVertical,
+    SetAgentPitch,
+    SetAgentPose,
+    SetSensorPitch,
+    SetSensorPose,
+    SetSensorRotation,
+    SetYaw,
     TurnLeft,
     TurnRight
   }
@@ -97,7 +103,6 @@ defmodule Monty.Simulators.Synthetic.Kinematics do
     do: turn_agent(world, -degrees)
 
   defp act(%LookUp{rotation_degrees: degrees}, world), do: pitch_sensors(world, degrees)
-
   defp act(%LookDown{rotation_degrees: degrees}, world), do: pitch_sensors(world, -degrees)
 
   defp act(%OrientVertical{} = action, world) do
@@ -114,11 +119,69 @@ defmodule Monty.Simulators.Synthetic.Kinematics do
     |> translate_agent([0.0, 0.0, -action.forward_distance])
   end
 
+  # -- the actions that set a pose outright ---------------------------------
+
+  # A goal-reaching policy ends with "be exactly here" rather than "move by this
+  # much", and a stand-in with no physics to fight can simply be told. Sensor
+  # poses are stored relative to the agent here, so placing the agent carries its
+  # cameras with it.
+  defp act(%SetAgentPose{} = action, world) do
+    %{world | agent: %{position: action.location, rotation: quaternion(action.rotation_quat)}}
+  end
+
+  # Yaw and pitch are set, not added: the stand-in's agent has these two, so
+  # setting one keeps the other instead of losing it.
+  defp act(%SetYaw{rotation_degrees: degrees}, world) do
+    [pitch, _yaw, roll] = Rotation.to_euler_degrees(world.agent.rotation)
+    %{world | agent: %{world.agent | rotation: euler([pitch, degrees, roll])}}
+  end
+
+  defp act(%SetAgentPitch{pitch_degrees: degrees}, world) do
+    [_pitch, yaw, roll] = Rotation.to_euler_degrees(world.agent.rotation)
+    %{world | agent: %{world.agent | rotation: euler([degrees, yaw, roll])}}
+  end
+
+  # A sensor's pose is where it sits on the agent, which is what proprioception
+  # reports and what `sensor_world_poses/1` turns into where it is in the world.
+  # Monty's agent applies these to the sensors it owns, and so does this one.
+  defp act(%SetSensorPose{} = action, world) do
+    placed = %{position: action.location, rotation: quaternion(action.rotation_quat)}
+    %{world | sensors: Map.new(world.sensors, fn {sensor_id, _sensor} -> {sensor_id, placed} end)}
+  end
+
+  defp act(%SetSensorRotation{} = action, world) do
+    every_sensor(world, fn sensor -> %{sensor | rotation: quaternion(action.rotation_quat)} end)
+  end
+
+  defp act(%SetSensorPitch{pitch_degrees: degrees}, world) do
+    every_sensor(world, fn sensor ->
+      [_pitch, yaw, roll] = Rotation.to_euler_degrees(sensor.rotation)
+      %{sensor | rotation: euler([degrees, yaw, roll])}
+    end)
+  end
+
   defp act(action, _world) do
     raise ArgumentError,
-          "#{inspect(action.__struct__)} sets a pose outright, which the stand-in " <>
-            "world does not do; use a simulator behind " <>
-            "Monty.Simulators.Port.Environment instead"
+          "#{inspect(action.__struct__)} is not an action the stand-in world knows; " <>
+            "a simulator behind Monty.Simulators.Port.Environment is the world for sequences it does not."
+  end
+
+  defp every_sensor(world, change) do
+    %{
+      world
+      | sensors:
+          Map.new(world.sensors, fn {sensor_id, sensor} -> {sensor_id, change.(sensor)} end)
+    }
+  end
+
+  defp quaternion({_w, _x, _y, _z} = wxyz) do
+    {:ok, rotation} = Rotation.from_quaternion(wxyz)
+    rotation
+  end
+
+  defp euler(angles) do
+    {:ok, rotation} = Rotation.from_euler_degrees(angles)
+    rotation
   end
 
   # -- the agent ------------------------------------------------------------
