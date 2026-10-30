@@ -692,17 +692,19 @@ the stream it was `turn_left -33.06°` + `look_up 11.29°` — the salience modu
 dither, drawn from a stream that was not Monty's, pushing `LookAtGoal` towards a
 different point of the same view.
 
-**What is still not Monty's.** Two episodes of ten then agree with Monty step for
-step (21 and 28 steps), and eight do not: 21/27/28/36/40/34/38/37/46/45 here
-against 21/28/28/26/42/21/35/50/47/29. The first action being equal and the third
-episode being equal means the difference is not the generator; it appears later,
-and the candidates are a draw that happens at a different step, a different number
-of draws in a step, or a percept that already differs. Two draw sites also still
-derive their own stream and are not in this comparison — `DepthTo3DLocations`
-noise and a camera's message noise — as is every `ActionSampler` stream
-(`ActionSampler.stream/3`), which the config's `ConstantSampler` never reaches.
-Both runs now log their actions step by step, so the next step is a diff of the
-two sequences rather than a hypothesis.
+**What is still not Monty's, and why it is no longer this.** Two episodes of ten
+agree with Monty step for step (21 and 28 steps), and eight do not:
+21/27/28/36/40/34/38/37/46/45 here against 21/28/28/26/42/21/35/50/47/29. The
+stream is in step for the first seven of them, though — the same number of
+32-bit words consumed at every step (228, 40, 400, 420, 512, 456, 6) — and the
+first action that differs is chosen while both streams stand at word 184. So the
+two runs draw the same numbers and decide differently: the difference is in
+goal selection at the step the learning module's evidence first drives the motor
+system, and only from step 8 do the draws differ as a consequence of the
+different view. That is a decision to compare, not a generator to port.
+(Draw sites still on a per-module stream: `DepthTo3DLocations` noise, a camera's
+message noise, and `ActionSampler.stream/3`, whose `ConstantSampler` this config
+never reaches.)
 
 ## 2.2 `motor_only_step` travels in the result
 

@@ -64,7 +64,11 @@ run_episode = fn episode ->
       record =
         Jason.encode!(%{
           "episode" => episode,
-          "actions" => Enum.map(actions, &ActionJSONEncoder.encode/1)
+          "actions" => Enum.map(actions, &ActionJSONEncoder.encode/1),
+          # Where the episode's stream stands when this step's actions go out,
+          # which is where the previous step's draws left it — the number to hold
+          # against Monty's own `get_state()` for the same step.
+          "rng" => Monty.Random.Stream.state(Monty.Random.Stream.via(model_id)).pos
         })
 
       File.write!(out, record <> "\n", [:append])
@@ -83,6 +87,7 @@ run_episode = fn episode ->
       # every episode and drift from Monty on the second one.
       seed: Seed.episode_seed(setup.seed, :eval, episode - 1)
     )
+
   lm = LearningModuleServer.state(Registry.via({:learning_module, model_id, module_id}))
 
   Model.stop(model_id)

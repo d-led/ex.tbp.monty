@@ -242,6 +242,12 @@ class Recorder:
         # that agree here and diverge later disagree in the world.
         record["actions"] = [_action(action) for action in actions]
 
+        # Where the episode's one random stream stands after this step, so a port
+        # that draws its own numbers can be told the step it stopped drawing the
+        # same *number* of them: the position is the word the next draw reads.
+        stream_state = ctx.rng.get_state()
+        record["rng"] = {"pos": int(stream_state[2]), "gauss": int(stream_state[3])}
+
         self._handle.write(json.dumps(record) + "\n")
         self._handle.flush()
         return actions

@@ -348,12 +348,26 @@ to the last digit (`scripts/probe_world_episodes.exs` writes the port's actions,
 `turn_left -33.06°` + `look_up 11.29°`, and the episode it walked was a different
 one.
 
-Episodes 1 and 3 then agree with Monty step for step, and the rest do not — so the
-stream was necessary and is not sufficient. What is left is a per-step question,
-not a per-episode one: from some step onward the port draws a different *number of
-times* or in a different order than Monty, or sees a different percept at the same
-step, and the two trajectories part. Both sides now log their actions step by
-step, so that is a diff to read rather than a hypothesis to hold.
+Episodes 1 and 3 then agree with Monty step for step, and the rest do not, so the
+stream was necessary and is not sufficient. Both sides now log where the stream
+stands after each step (`get_state()[2]` on Monty's side,
+`Monty.Random.Stream.state/1` on ours), and for the first episode the two rows
+are:
+
+| step | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| Monty, words drawn | 228 | 40 | 400 | 420 | 512 | 456 | 6 | 264 |
+| the port | 228 | 40 | 400 | 420 | 512 | 456 | 6 | 92 |
+
+The same words are consumed, step for step, for seven steps. And the first action
+that differs between the two runs is chosen while that is still true — at the end
+of step 6 both streams stand at word 184 — so **the remaining difference is not
+the random stream**. The two runs hold the same numbers and make different
+decisions out of them: they part at the first step where the model has a goal to
+pursue, which is where the learning module's evidence starts driving the motor
+system rather than the salience module's dither. From step 8 the draws differ too,
+but that is downstream: a different decision is a different view, and a different
+view is a different number of pixels to score.
 
 ## Re-recording anything in this file
 
