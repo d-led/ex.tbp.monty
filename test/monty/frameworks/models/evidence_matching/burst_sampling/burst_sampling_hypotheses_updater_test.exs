@@ -9,6 +9,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
+  alias Monty.Geometry
   alias Monty.Geometry.Rotation
 
   @pose [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -32,9 +33,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     |> GraphMemory.initialize_feature_arrays()
   end
 
-  defp updater(options \\ []) do
-    graph_memory = memory()
+  defp updater(options \\ []), do: updater_for(memory(), options)
 
+  defp updater_for(graph_memory, options) do
     scorer =
       DefaultFeatureEvidenceScorer.new(graph_memory,
         feature_weights: %{"patch" => %{"rgba" => 1.0}},
@@ -57,6 +58,37 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
   defp features do
     %{"patch" => %{"pose_vectors" => @pose, "pose_fully_defined" => true, "rgba" => [0.2]}}
+  end
+
+  # The same graph, with its frames measured the way a real model measures them:
+  # unit and perpendicular to a few parts in a thousand, and not a rotation.
+  defp measured_memory do
+    locations = [[0.0, 0.0, 0.0]]
+
+    features = %{
+      "rgba" => [[0.2]],
+      "pose_vectors" => [
+        [
+          0.195_484,
+          0.098_572,
+          0.975_740,
+          -0.334_766,
+          -0.928_469,
+          0.160_865,
+          0.921_854,
+          -0.357_946,
+          -0.148_527
+        ]
+      ]
+    }
+
+    model =
+      GraphObjectModel.new("mug")
+      |> GraphObjectModel.build_model(locations, features, nil, nil)
+
+    GraphMemory.new(features_to_use: %{"patch" => ["rgba", "pose_vectors"]})
+    |> GraphMemory.add_graph_to_memory(%{"patch" => model}, "mug")
+    |> GraphMemory.initialize_feature_arrays()
   end
 
   defp hypotheses do
@@ -190,6 +222,42 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
         end)
 
       assert map_size(updater.evidence_slope_trackers) == 1
+    end
+
+    # A sampled hypothesis is placed where a node of the model could be, and
+    # turned onto it: the pose is the product that maps the sensed frame onto the
+    # stored one. A stored frame is measured, not constructed — unit and
+    # perpendicular only to a few parts in a thousand — so the product is only
+    # nearly a rotation, and Monty keeps it that way. Rounding it into a rotation
+    # instead turns the sensed surface normal onto a normal the model does not
+    # hold, an error of hundredths of a radian in every later step's pose
+    # evidence.
+    test "a sampled pose turns the sensed surface normal onto the stored one exactly" do
+      updater = updater_for(measured_memory(), sampling_multiplier: 3.0, umbilical_num_poses: 2)
+
+      {_updater, sampled, _telemetry} =
+        updater
+        |> BurstSamplingHypothesesUpdater.begin_step()
+        |> then(fn updater ->
+          BurstSamplingHypothesesUpdater.update_evidence(
+            updater,
+            Hypotheses.empty(),
+            features(),
+            "mug",
+            0.0
+          )
+        end)
+
+      # The normal of the one stored node, as the model measured it, and the
+      # sensed normal the observation reports.
+      stored_normal = [0.195_484, 0.098_572, 0.975_740]
+      sensed_normal = Enum.take(@pose, 3)
+
+      assert sampled.poses != []
+
+      assert Enum.all?(sampled.poses, fn pose ->
+               Geometry.apply(pose, sensed_normal) == stored_normal
+             end)
     end
   end
 end

@@ -219,16 +219,20 @@ defmodule Monty.Frameworks.Utils.SpatialArithmetics do
   end
 
   @doc """
-  The rotation that turns each of `frames` into `target`, one per frame.
-  """
-  @spec align_multiple_orthonormal_vectors([matrix()], matrix()) :: [Rotation.t()]
-  def align_multiple_orthonormal_vectors(frames, target) do
-    Enum.map(frames, fn frame ->
-      {:ok, rotation} =
-        frame |> align_orthonormal_vectors_as_matrix(target) |> Rotation.from_matrix()
+  The matrix that turns each of `frames` into `target`, one per frame.
 
-      rotation
-    end)
+  Monty asks for these rather than for rotations (`as_scipy=False` in
+  `align_multiple_orthonormal_vectors`), and that is the form a learning module
+  keeps: a stored node frame is only *approximately* orthonormal — YCB's surface
+  normals and curvature directions are unit to a few parts in a thousand and
+  perpendicular to a few hundredths — so the product is only approximately a
+  rotation. Rounding it to the nearest rotation instead, as a rotation object
+  does, moves the pose by hundredths of a radian: the displacement it rotates
+  drifts by millimetres a step, and the pose evidence drifts with it.
+  """
+  @spec align_multiple_orthonormal_vectors_as_matrices([matrix()], matrix()) :: [matrix()]
+  def align_multiple_orthonormal_vectors_as_matrices(frames, target) do
+    Enum.map(frames, &align_orthonormal_vectors_as_matrix(&1, target))
   end
 
   @doc """

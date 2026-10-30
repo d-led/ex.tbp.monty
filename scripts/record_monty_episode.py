@@ -35,12 +35,22 @@ Each line of the output is one step:
 shape the cortical messaging protocol defines. `state` is what it concluded
 afterwards: the terminal state, the possible matches, and the most likely
 hypothesis. A new episode starts wherever `episode_step` goes backwards.
+
+Two environment variables widen it, and both are off by default because the
+usual recording is already the whole of what a replay needs:
+
+* `MONTY_RECORD_EVIDENCE=1` adds, per graph, the evidence of every hypothesis
+  and where each one sits — for the comparison that has to go inside a graph
+  rather than stop at its best number.
+* `MONTY_RECORD_STEPS=N` keeps only the first `N` steps of each episode. The
+  run still finishes; what changes is how much of it is written.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -117,6 +127,23 @@ def _state(module):
                 else 0,
                 "top_evidence": _plain(np.sort(scores)[-5:][::-1]),
             }
+
+            # Where the difference is *inside* a graph: the evidence of every
+            # hypothesis, and where each of them sits. Off unless asked for, as
+            # a graph can carry thousands of hypotheses a step and the four
+            # numbers above are enough to see that two implementations differ
+            # before one of them has to be taken apart.
+            if os.environ.get("MONTY_RECORD_EVIDENCE"):
+                evidence[graph_id]["evidence_all"] = _plain(scores)
+                evidence[graph_id]["locations_all"] = _plain(
+                    np.asarray(hypotheses.locations, dtype=float)
+                )
+                # Monty keeps each hypothesis' pose as a rotation matrix, so the
+                # array itself is what is written — its layout is the port's
+                # business, not the recording's.
+                evidence[graph_id]["poses_all"] = _plain(
+                    np.asarray(hypotheses.poses, dtype=float)
+                )
 
     return {
         "terminal_state": module.terminal_state,
@@ -207,6 +234,13 @@ class Recorder:
         # most.
         if monty.episode_steps == 1:
             self._seen = {}
+
+        # An episode is stopped being written, not stopped: `MONTY_RECORD_STEPS`
+        # keeps the first N steps of each episode, which is what a comparison of
+        # one increment needs, and leaves the run to finish on its own.
+        limit = int(os.environ.get("MONTY_RECORD_STEPS") or 0)
+        if limit and monty.episode_steps > limit:
+            return actions
 
         record = {
             "episode_step": int(monty.episode_steps),

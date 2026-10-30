@@ -44,7 +44,6 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
-  alias Monty.Geometry.Rotation
   alias Monty.Geometry.SurfacePoseVectors
 
   defstruct graph_memory: nil,
@@ -221,9 +220,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
       |> sensed_pose_vectors()
       |> GraphMatchingUtils.possible_sensed_directions(per_node(updater, features))
       |> Enum.flat_map(fn sensed ->
-        node_directions
-        |> SpatialArithmetics.align_multiple_orthonormal_vectors(sensed)
-        |> Enum.map(&Rotation.to_matrix/1)
+        # Matrices, not rotations: a stored frame is only nearly orthonormal and
+        # Monty keeps that — see `align_multiple_orthonormal_vectors_as_matrices/2`.
+        SpatialArithmetics.align_multiple_orthonormal_vectors_as_matrices(node_directions, sensed)
       end)
 
     all_hypotheses(

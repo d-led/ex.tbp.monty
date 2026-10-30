@@ -315,12 +315,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
     end)
   end
 
-  defp angle(a, b),
-    do:
-      SpatialArithmetics.get_angle(
-        SpatialArithmetics.normalize(a),
-        SpatialArithmetics.normalize(b)
-      )
+  # The angle Monty reads off two pose directions, straight from the dot product
+  # and clipped at ±1, with no normalisation. That is not an oversight on its
+  # side: the stored direction is a measurement whose length is not exactly one,
+  # and the rotation that turns the sensed frame onto it is only nearly a
+  # rotation, so both lengths are already part of the comparison. Normalising
+  # them first "fixes" a cosine that is not wrong and moves the evidence.
+  defp angle(a, b), do: SpatialArithmetics.get_angle(a, b)
 
   defp rotate(pose_vectors, pose) do
     pose_vectors

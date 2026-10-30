@@ -3,6 +3,7 @@ defmodule Monty.Frameworks.Utils.SpatialArithmeticsTest do
   use ExUnitProperties
 
   alias Monty.Frameworks.Utils.SpatialArithmetics
+  alias Monty.Geometry
   alias Monty.Geometry.Rotation
   alias Monty.Geometry.SurfacePoseVectors
   alias Monty.Math
@@ -235,17 +236,39 @@ defmodule Monty.Frameworks.Utils.SpatialArithmeticsTest do
     end
   end
 
-  describe "align_multiple_orthonormal_vectors/2" do
-    test "gives one rotation per frame" do
+  describe "align_multiple_orthonormal_vectors_as_matrices/2" do
+    test "gives one matrix per frame, each turning its frame onto the target" do
       frame = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
       {:ok, turn} = Rotation.from_axis_angle([1.0, 0.0, 0.0], 0.3)
       turned = Rotation.apply(turn, frame)
 
-      rotations = align_multiple_orthonormal_vectors([frame, turned], frame)
+      assert [first, second] =
+               align_multiple_orthonormal_vectors_as_matrices([frame, turned], frame)
 
-      assert [first, second] = rotations
-      assert_in_delta Rotation.magnitude(first), 0.0, 1.0e-5
-      assert_in_delta Rotation.magnitude(second), 0.3, 1.0e-5
+      # The pose turns the target onto each frame: the identity for a frame
+      # already in place, and the turn for the turned one.
+      assert first == frame
+      assert Enum.map(frame, &Geometry.apply(second, &1)) == turned
+    end
+
+    # A stored node frame is a surface normal and two curvature directions as
+    # measured: unit to a few parts in a thousand, perpendicular to a few
+    # hundredths. Monty keeps the product it aligns with, so the pose turns each
+    # sensed direction onto the stored one exactly. Rounding the pose into a
+    # rotation loses that, and the stored directions it then matches are off by
+    # hundredths of a radian — the difference that shows up as evidence.
+    test "a stored frame that is only nearly orthonormal still comes back exactly" do
+      sensed = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+
+      stored = [
+        [0.195_484, 0.098_572, 0.975_740],
+        [-0.334_766, -0.928_469, 0.160_865],
+        [0.921_854, -0.357_946, -0.148_527]
+      ]
+
+      [pose] = align_multiple_orthonormal_vectors_as_matrices([stored], sensed)
+
+      assert Enum.map(sensed, &Geometry.apply(pose, &1)) == stored
     end
   end
 

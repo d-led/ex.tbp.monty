@@ -329,6 +329,47 @@ it). So: **nine of ten episodes end on the object Monty names — the tenth, the
 strawberry, ran its 60 steps without concluding — and two of the ten take exactly
 Monty's number of steps.**
 
+## The pose: a stored frame is a measurement, not a rotation
+
+A live run compares two pipelines, so a difference in evidence can always be
+blamed on the sensor side. `scripts/probe_replay_hypotheses.exs` removes that
+excuse: it steps the port through Monty's own percepts — the recording is the
+world — and compares every hypothesis of one graph, its location, its pose and
+its evidence, against what Monty held after the same observation. With
+`MONTY_RECORD_EVIDENCE=1` the recorder writes Monty's own arrays.
+
+The first observation agreed to `2e-6`. The second did not: on `c_lego_duplo` the
+best evidence was `1.4465` against Monty's `1.5721`, and 747 of 1524 hypotheses
+were off by more than a thousandth. Two differences did it, both in how the port
+turned "where this hypothesis sits" into numbers:
+
+1. **The pose was rounded into a rotation.** Monty's hypothesis pose is
+   `np.matmul(ms1.T, ms2)` — `align_multiple_orthonormal_vectors(..., as_scipy=False)`
+   — and the port passed the same product through `Rotation.from_matrix/1`. A
+   stored node frame is *measured*: its rows are unit to a few parts in a
+   thousand and perpendicular to a few hundredths, so the product is only nearly
+   a rotation, and Monty keeps it that way. Rounding it moved the pose by
+   `3.7e-3` on average and by `0.54` at worst; the pose is what rotates the
+   displacement each step, so the hypotheses then sat up to millimetres away from
+   Monty's and the evidence followed.
+2. **The pose angle was normalised.** Monty's `get_angles_for_all_hypotheses`
+   reads `np.arccos(np.clip(dot, -1, 1))` off the raw dot product of a stored
+   frame row and the rotated sensed row. The port normalised both first. With
+   rows of length `0.995`–`1.004` that is not the same angle, and `arccos` near
+   zero is where a thousandth of a cosine is a hundredth of a radian.
+
+After both: every one of the 1524 hypotheses agrees to `1.1e-5`, none by more
+than a thousandth, and the best evidence is `1.572131035` against Monty's
+`1.572131863`. Over the episode, nine of ten objects agree to `1e-5` relative;
+`golf_ball` — the one object whose pose is *not* fully defined, so whose poses
+are the eight umbilical directions — still parts at `8 %`, which is the next
+difference to find.
+
+The lesson is the one the `hsv` value channel taught: a measured quantity is not
+a mathematical one. A frame is three measured directions, a pose needs no more
+than a matrix, and `arccos` of a cosine that was never normalised is still an
+angle Monty believes.
+
 ## The stream: Monty's numbers, and where the paths still part
 
 The random stream is Monty's now. `Monty.Random.Numpy` is MT19937 seeded as NumPy
