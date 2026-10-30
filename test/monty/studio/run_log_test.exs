@@ -46,14 +46,19 @@ defmodule Monty.Studio.RunLogTest do
   end
 
   describe "what the modules believed" do
-    test "is recorded with the step, under the module the belief belongs to" do
+    test "is recorded with the step, in the shape the database will hand back" do
       entry = RunLog.entry(info(), %{lm_0: belief()})
 
+      # String keys all the way down, because that is what the JSON column
+      # returns. A page replaying a recorded run and a page watching a live one
+      # then read one shape, and `line/1` prints one line.
       assert %{
-               possible_matches: ["mug"],
-               mlh: %{graph_id: "mug", evidence: 3.0},
-               graphs: %{"mug" => %{max_evidence: 3.0}}
-             } = entry["beliefs"].lm_0
+               "possible_matches" => ["mug"],
+               "mlh" => %{"graph_id" => "mug", "evidence" => 3.0},
+               "graphs" => %{"mug" => %{"max_evidence" => 3.0}}
+             } = entry["beliefs"]["lm_0"]
+
+      assert Jason.encode!(entry) |> Jason.decode!() == entry
     end
 
     test "and left out entirely when there is nothing to record" do
@@ -64,6 +69,13 @@ defmodule Monty.Studio.RunLogTest do
       line = info() |> RunLog.entry(%{lm_0: belief()}) |> RunLog.line()
 
       assert line =~ "lm_0: mug ev 3.0 (3 hyps, 1 possible)"
+    end
+
+    test "and prints the same line after the trip through the database" do
+      entry = info() |> RunLog.entry(%{lm_0: belief()})
+      stored = entry |> Jason.encode!() |> Jason.decode!()
+
+      assert RunLog.line(stored) == RunLog.line(entry)
     end
 
     test "and says so plainly before it has seen anything" do

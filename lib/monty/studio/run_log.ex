@@ -35,10 +35,26 @@ defmodule Monty.Studio.RunLog do
 
   defp put_beliefs(entry, beliefs) when map_size(beliefs) == 0, do: entry
 
-  # A belief is stored as the module reported it, keys and all: it is Monty's
-  # record, not this module's, and rewriting it would make the live page and a
-  # recorded episode read the same belief two different ways.
-  defp put_beliefs(entry, beliefs), do: Map.put(entry, "beliefs", beliefs)
+  # A belief goes in as the database will hand it back: string keys, all the way
+  # down. It is Monty's record either way, but the JSON column rewrites keys
+  # whether we do or not, and a run read from the history then has a different
+  # shape from a run being watched. One shape, the stored one, so there is one
+  # line — which is what `line/1` prints and a page replays.
+  defp put_beliefs(entry, beliefs) do
+    Map.put(
+      entry,
+      "beliefs",
+      Map.new(beliefs, fn {id, belief} -> {to_string(id), stored(belief)} end)
+    )
+  end
+
+  defp stored(%_{} = struct), do: struct |> Map.from_struct() |> stored()
+
+  defp stored(map) when is_map(map),
+    do: Map.new(map, fn {key, value} -> {to_string(key), stored(value)} end)
+
+  defp stored(list) when is_list(list), do: Enum.map(list, &stored/1)
+  defp stored(value), do: value
 
   @doc """
   One timestep's scene, as the database stores it.
@@ -99,15 +115,22 @@ defmodule Monty.Studio.RunLog do
     end
   end
 
-  defp belief_line(%{mlh: nil}), do: "nothing yet"
+  defp belief_line(belief) do
+    case Map.get(belief, "mlh") do
+      nil ->
+        "nothing yet"
 
-  defp belief_line(%{mlh: mlh, graphs: graphs, possible_matches: possible}) do
-    "#{mlh.graph_id} ev #{round_evidence(mlh.evidence)}" <>
-      " (#{hypotheses(graphs[mlh.graph_id])} hyps, #{length(possible)} possible)"
+      mlh ->
+        graphs = Map.get(belief, "graphs", %{})
+
+        "#{mlh["graph_id"]} ev #{round_evidence(mlh["evidence"])}" <>
+          " (#{hypotheses(graphs[mlh["graph_id"]])} hyps, " <>
+          "#{length(Map.get(belief, "possible_matches", []))} possible)"
+    end
   end
 
   defp hypotheses(nil), do: 0
-  defp hypotheses(graph), do: graph.hypotheses
+  defp hypotheses(graph), do: graph["hypotheses"]
 
   defp round_evidence(evidence) when is_number(evidence), do: Float.round(evidence * 1.0, 3)
   defp round_evidence(_not_a_number), do: nil
