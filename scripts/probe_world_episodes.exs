@@ -19,6 +19,8 @@
 
 alias Monty.Frameworks.Actions.ActionJSONEncoder
 alias Monty.Frameworks.Experiments.Seed
+alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
+alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
 alias Monty.Runtime.{Episode, LearningModuleServer, Model, Registry}
 alias Monty.Simulators.Port.Environment
 alias Monty.Studio.Setup
@@ -46,6 +48,50 @@ IO.puts(String.duplicate("-", 60))
     timeout: 300_000
   )
 
+# The conclusion a module is standing on: the objects it has not ruled out, and
+# the hypothesis it thinks most likely — the fields Monty's recorder writes, so
+# the two runs can be compared at the step they part rather than at the end.
+conclusion = fn model_id, module_id ->
+  lm = LearningModuleServer.state(Registry.via({:learning_module, model_id, module_id}))
+  mlh = EvidenceGraphLM.current_mlh(lm)
+
+  features =
+    lm.buffer
+    |> FeatureAtLocationBuffer.get_all_input_percepts()
+    |> List.last()
+    |> case do
+      nil ->
+        %{}
+
+      # A pose vector is a struct of lists; its fields are what JSON can carry.
+      percept ->
+        Map.new(percept.morphological_features, fn
+          {name, %_{} = value} -> {name, Map.from_struct(value)}
+          {name, value} -> {name, value}
+        end)
+    end
+
+  %{
+    "possible_matches" => lm.possible_matches,
+    "mlh" => %{
+      "graph_id" => mlh.graph_id,
+      "mlh_id" => mlh.mlh_id,
+      "location" => mlh.location,
+      # `wxyz`, which is the order the recorder writes: Monty's `mlh["rotation"]`
+      # is a scipy `Rotation` and its `as_quat()` is `xyzw`, but the recorder
+      # goes through Monty's own `Rotation`, whose `as_quat()` is the underlying
+      # `quaternion`'s `wxyz`. Comparing one order against the other "proved" a
+      # 41-degree pose difference that was not there.
+      "rotation_wxyz" => Tuple.to_list(mlh.rotation.wxyz),
+      "evidence" => mlh.evidence
+    },
+    # What the sensor modules last made of the world: the features the module
+    # scored. A difference here explains a difference in evidence, and a
+    # difference in evidence explains a different conclusion.
+    "features" => features
+  }
+end
+
 run_episode = fn episode ->
   :ok = Environment.reset(world)
 
@@ -68,7 +114,10 @@ run_episode = fn episode ->
           # Where the episode's stream stands when this step's actions go out,
           # which is where the previous step's draws left it — the number to hold
           # against Monty's own `get_state()` for the same step.
-          "rng" => Monty.Random.Stream.state(Monty.Random.Stream.via(model_id)).pos
+          "rng" => Monty.Random.Stream.state(Monty.Random.Stream.via(model_id)).pos,
+          # What the module believed when it chose them, so a run that decides
+          # differently can be told whether it also believed differently.
+          "module" => conclusion.(model_id, module_id)
         })
 
       File.write!(out, record <> "\n", [:append])

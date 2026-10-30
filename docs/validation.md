@@ -369,6 +369,30 @@ system rather than the salience module's dither. From step 8 the draws differ to
 but that is downstream: a different decision is a different view, and a different
 view is a different number of pixels to score.
 
+Both runs also log what the module believed after each step, and that says where
+the two part. Through steps 3, 4 and 5 the most likely hypothesis is the *same
+hypothesis*: the same location and the same rotation, in Monty's `wxyz` order and
+to the last digit (`[0.685139, −0.016442, 0.728086, −0.014276]` as `xyzw` on both
+sides once the orders are compared like for like). What differs is the evidence:
+`4.026` against Monty's `4.046`, `5.577` against `5.626`, `7.035` against
+`7.176` — a fifth of a percent, then one, then two. And what that moves is the
+objects a run keeps: at step 3 Monty drops `bowl` because its best evidence,
+`3.2336`, sits `0.1 %` under the 20 %-of-best cutoff, and the port keeps it. By
+step 6 a near-tie inside `mug` has broken the other way and the two runs track
+poses that are mirror images, which is the jump that differs.
+
+The percepts explain it. Diffing the feature map the module scored against Monty's,
+for the same step and the same observation, they agree to the last digit in every
+feature *except* `pose_vectors`: the port's `principal_curvature_1` and `_2` rows
+are the **negatives** of Monty's. That sign is arbitrary in Monty's own
+computation — `principal_curvatures` returns whatever eigenvector
+`numpy.linalg.eig` gives and only fixes `dir2` by the right-hand rule about the
+normal — so Monty is self-consistent (its pretrained graphs and its live percepts
+come from the same solver) while the port, whose solver picks the other sign, is
+not. Whether that sign is what moves the evidence by a fifth of a percent is the
+next thing to measure; it is the first candidate, and it is a sensor-side number
+rather than the model or the stream.
+
 ## Re-recording anything in this file
 
 The fixtures are generated, so they can be regenerated — and should be, when the
