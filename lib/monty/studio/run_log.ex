@@ -153,6 +153,7 @@ defmodule Monty.Studio.RunLog do
       inputs: %{
         "groups" => opened.groups,
         "seed" => opened.setup.seed,
+        "world" => to_string(opened.setup.world),
         "train_epochs" => opened.setup.epochs.train,
         "eval_epochs" => opened.setup.epochs.eval,
         "sensors" => Setup.sensor_ids(opened.setup),

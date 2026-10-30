@@ -26,17 +26,22 @@ defmodule Monty.Studio do
   A draft in `Monty.Studio.Drafts` wins, because that is the one a person just
   built; otherwise the name is a Monty experiment and is composed from Monty's
   own conf tree.
+
+  Options: `:conf_dir`, and `:world_simulator` — which world a run of this setup
+  would step, when the caller knows better than this host's configuration. A run
+  record says so, and the queue executes what the record says rather than what
+  the worker's own environment happens to be.
   """
   @spec open(String.t(), keyword()) :: {:ok, opened()} | {:error, term()}
   def open(name, opts \\ []) do
     if Drafts.exists?(name) do
       with {:ok, text} <- Drafts.read(name),
            {:ok, tree} <- Monty.Config.Composer.compose_yaml(text) do
-        {:ok, describe(name, :draft, tree, text, groups_of(text))}
+        {:ok, describe(name, :draft, tree, text, groups_of(text), opts)}
       end
     else
       with {:ok, tree} <- Monty.Config.Composer.compose(name, Keyword.take(opts, [:conf_dir])) do
-        {:ok, describe(name, :monty, tree, nil, groups_of_name(name))}
+        {:ok, describe(name, :monty, tree, nil, groups_of_name(name), opts)}
       end
     end
   end
@@ -82,8 +87,8 @@ defmodule Monty.Studio do
     end
   end
 
-  defp describe(name, source, tree, yaml, groups) do
-    setup = Setup.new(tree, name: name)
+  defp describe(name, source, tree, yaml, groups, opts) do
+    setup = Setup.new(tree, [name: name] ++ Keyword.take(opts, [:world_simulator]))
 
     %{
       name: name,

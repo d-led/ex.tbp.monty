@@ -123,9 +123,17 @@ defmodule Monty.Studio.Jobs.Run do
     emit(run_id, info, observations, sensor_ids, beliefs)
     {:ok, info, {run, record}}
   catch
-    :exit, reason ->
-      say(run_id, "step #{run.step} died: #{inspect(reason)}")
-      {:error, reason}
+    # An exit and a raise are the same thing here: the step did not produce a
+    # report. Both end the episode as a failure, because the alternative — the
+    # exception escaping the job — leaves a record saying "running" for ever,
+    # and a page nobody trusts.
+    :exit, reason -> broken(run_id, run, reason)
+    :error, reason -> broken(run_id, run, reason)
+  end
+
+  defp broken(run_id, run, reason) do
+    say(run_id, "step #{run.step} died: #{inspect(reason)}")
+    {:error, reason}
   end
 
   # The stop lands in this process's mailbox because this process owns the clock.
@@ -216,9 +224,16 @@ defmodule Monty.Studio.Jobs.Run do
 
   # A run whose experiment no longer composes is not a run: say which one and
   # why, rather than starting something else and calling it the same thing.
-  defp open(%RunHistory.Run{experiment: name}) do
-    Studio.open(name)
+  # The record is the contract: a run says which world it steps, and the queue
+  # executes that, not whatever the worker's own environment happens to be. Two
+  # processes can share the queue and this database, and one of them may have
+  # Monty's world configured while the other does not.
+  defp open(%RunHistory.Run{experiment: name, inputs: inputs}) do
+    Studio.open(name, world_simulator: world_of(inputs))
   end
+
+  defp world_of(%{"world" => "habitat"}), do: :habitat
+  defp world_of(_inputs), do: :synthetic
 
   defp attach_log(record, run_id, :ok) do
     path = Artifacts.log_path(run_id)

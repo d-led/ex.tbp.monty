@@ -92,10 +92,15 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
 
   @doc """
   What this machine tells Monty's process: `:monty_peer` in the application
-  configuration, empty when nothing is configured.
+  configuration, with `$MONTY_PYTHON` for the interpreter when the configuration
+  does not name one.
   """
   @spec peer_options() :: keyword()
-  def peer_options, do: Application.get_env(:ex_tbp_monty, :monty_peer, [])
+  def peer_options do
+    :ex_tbp_monty
+    |> Application.get_env(:monty_peer, [])
+    |> Keyword.put_new_lazy(:python, fn -> System.get_env("MONTY_PYTHON") end)
+  end
 
   @doc """
   The world after `actions`, and the process that is now serving it.
