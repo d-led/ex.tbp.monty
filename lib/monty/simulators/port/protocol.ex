@@ -70,19 +70,25 @@ defmodule Monty.Simulators.Port.Protocol do
   A reply that is not JSON, or that answers a different request, is reported
   rather than guessed at: a simulator that has drifted from this contract is a
   bug to fix, not a case to handle.
+
+  The fourth element is what the world said about the episode, which only a reset
+  answer has: `%{"primary_target" => target}`. It is a map rather than an option
+  so a world that says nothing costs nobody a clause, and one that has more to say
+  one day does not need a new arity.
   """
   @spec reply(binary(), non_neg_integer()) ::
-          {:ok, map(), map()} | {:error, term()}
+          {:ok, map(), map(), map()} | {:error, term()}
   def reply(body, id) do
     case Jason.decode(body) do
       {:ok, %{"id" => ^id, "error" => error}} ->
         {:error, {:simulator_error, error}}
 
-      {:ok, %{"id" => ^id, "observations" => observations, "proprioceptive_state" => state}} ->
-        {:ok, observations, state}
+      {:ok,
+       %{"id" => ^id, "observations" => observations, "proprioceptive_state" => state} = reply} ->
+        {:ok, observations, state, episode(reply)}
 
-      {:ok, %{"id" => ^id, "ok" => true}} ->
-        {:ok, %{}, %{}}
+      {:ok, %{"id" => ^id, "ok" => true} = reply} ->
+        {:ok, %{}, %{}, episode(reply)}
 
       {:ok, %{"id" => other}} when other != id ->
         {:error, {:wrong_reply, %{expected: id, got: other}}}
@@ -92,6 +98,13 @@ defmodule Monty.Simulators.Port.Protocol do
 
       {:error, reason} ->
         {:error, {:not_json, reason}}
+    end
+  end
+
+  defp episode(reply) do
+    case Map.get(reply, "primary_target") do
+      nil -> %{}
+      target -> %{"primary_target" => target}
     end
   end
 

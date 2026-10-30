@@ -178,7 +178,10 @@ class World:
                 flush=True,
             )
 
-        return {"ok": True}
+        # The model is told what the episode is about, and only this process
+        # knows: it is Monty's interface that samples the object. A reply without
+        # it would leave the model scoring itself against nothing.
+        return {"ok": True, "primary_target": to_json(target) if target is not None else None}
 
     def step(self, actions: list[dict]) -> dict:
         self.steps += 1

@@ -51,11 +51,18 @@ defmodule Monty.Simulators.Port.ProtocolTest do
         })
 
       assert Protocol.reply(body, 2) ==
-               {:ok, %{"agent_id_0" => %{}}, %{"agent_id_0" => %{}}}
+               {:ok, %{"agent_id_0" => %{}}, %{"agent_id_0" => %{}}, %{}}
     end
 
     test "a reset is acknowledged rather than answered" do
-      assert Protocol.reply(~s({"id": 2, "ok": true}), 2) == {:ok, %{}, %{}}
+      assert Protocol.reply(~s({"id": 2, "ok": true}), 2) == {:ok, %{}, %{}, %{}}
+    end
+
+    test "and a reset that says what the episode is about carries that too" do
+      target = %{"object" => "mug", "quat_rotation" => [0.0, 0.0, 0.0, 1.0]}
+      body = Jason.encode!(%{"id" => 2, "ok" => true, "primary_target" => target})
+
+      assert Protocol.reply(body, 2) == {:ok, %{}, %{}, %{"primary_target" => target}}
     end
 
     test "the simulator's own error is carried, not dressed up as a step" do

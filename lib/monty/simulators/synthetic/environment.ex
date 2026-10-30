@@ -105,6 +105,17 @@ defmodule Monty.Simulators.Synthetic.Environment do
   @spec agent_id() :: String.t()
   def agent_id, do: @agent_id
 
+  @doc """
+  Nothing: this world places no object it could name.
+
+  Monty's worlds sample an object and say which; the stand-in has one sphere at
+  the centre an experiment's scene put it, and calling that an object would tell a
+  model to score itself against something nobody chose.
+  """
+  @impl true
+  @spec primary_target(t()) :: nil
+  def primary_target(%__MODULE__{}), do: nil
+
   defp observations(environment, world) do
     [x, _y, _z] = world.agent.position
 

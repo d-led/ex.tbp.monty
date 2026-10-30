@@ -86,7 +86,19 @@ def main(argv):
         record(command)
 
         if command == "reset":
-            write_frame(stream_out, {"id": request_id, "ok": True})
+            write_frame(
+                stream_out,
+                {
+                    "id": request_id,
+                    "ok": True,
+                    # What the episode is about, as a world that samples an object
+                    # would answer it.
+                    "primary_target": {
+                        "object": "probe",
+                        "quat_rotation": [0.0, 0.0, 0.0, 1.0],
+                    },
+                },
+            )
         elif command == "step":
             write_frame(
                 stream_out,

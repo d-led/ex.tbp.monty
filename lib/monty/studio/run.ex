@@ -78,6 +78,12 @@ defmodule Monty.Studio.Run do
          {:ok, interface, positioning} <- position(setup, factories) do
       case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {model, spec}) do
         {:ok, _pid} ->
+          # Monty's `pre_episode`: the experiment tells the model what the episode
+          # is about, because only the world knows — a world that samples an object
+          # says which one, and one that does not says nothing and the model keeps
+          # what it knew.
+          tell_target(model, model_id, interface)
+
           {:ok,
            %__MODULE__{
              model: model,
@@ -98,6 +104,18 @@ defmodule Monty.Studio.Run do
           {:error, reason}
       end
     end
+  end
+
+  defp tell_target(model, model_id, interface) do
+    world = interface.env
+
+    target =
+      if function_exported?(world.__struct__, :primary_target, 1),
+        do: world.__struct__.primary_target(world)
+
+    if is_map(target), do: model.fixme_set_ground_truth(model_id, target)
+
+    :ok
   end
 
   # Monty's `pre_episode`: the world is reset, then looked at and stepped until

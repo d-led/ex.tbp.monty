@@ -51,6 +51,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
   @spec state(atom() | String.t()) :: Monty.Runtime.Step.State.t()
   def state(model_id), do: Model.state(model_id)
 
+  @doc """
+  `MontyForGraphMatching.fixme_set_ground_truth`: what this episode is about.
+
+  The experiment is the only one that knows, and a module that is never told cannot
+  say whether it recognised anything — so this is part of the model's public
+  surface, not the experiment's private business.
+  """
+  @spec fixme_set_ground_truth(atom() | String.t(), map() | nil) :: :ok
+  def fixme_set_ground_truth(model_id, primary_target),
+    do: Model.fixme_set_ground_truth(model_id, primary_target)
+
   @doc "The four things a recognition policy may read off the model."
   @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionPolicy.model()
   def status(model_id), do: Model.status(model_id)

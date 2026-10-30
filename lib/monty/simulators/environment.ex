@@ -79,7 +79,17 @@ defmodule Monty.Simulators.Environment do
   """
   @callback positions_itself?() :: boolean()
 
-  @optional_callbacks stop: 1, positions_itself?: 0
+  @doc """
+  The object this episode is about, when the world is the one that chose it.
+
+  Monty's evaluation experiments sample an object, place it, and tell the model
+  what it is; a world that does that in its own process is the only thing that
+  knows the answer, and `nil` is the honest answer for a world that does not — a
+  model told nothing keeps whatever it knew rather than being told a guess.
+  """
+  @callback primary_target(t()) :: map() | nil
+
+  @optional_callbacks stop: 1, positions_itself?: 0, primary_target: 1
 
   @spec stop(t()) :: :ok
   def stop(env) do

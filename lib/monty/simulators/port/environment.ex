@@ -40,8 +40,12 @@ defmodule Monty.Simulators.Port.Environment do
 
   @doc """
   Starts the simulator afresh, for the first step of an episode.
+
+  Answers what the world said about that episode — the target it chose, when it
+  chooses one — because a world that samples an object is the only one that knows
+  which.
   """
-  @spec reset(GenServer.server()) :: :ok | {:error, term()}
+  @spec reset(GenServer.server()) :: {:ok, map()} | {:error, term()}
   def reset(server), do: GenServer.call(server, :reset, :infinity)
 
   @doc """
@@ -75,14 +79,17 @@ defmodule Monty.Simulators.Port.Environment do
   @impl true
   def handle_call(:reset, _from, state) do
     case request(state, {:reset, Keyword.get(state.options, :sensor_ids, [])}) do
-      {:ok, _observations, _proprioceptive_state, state} -> {:reply, :ok, state}
-      {:error, reason, state} -> {:reply, {:error, reason}, state}
+      {:ok, _observations, _proprioceptive_state, episode, state} ->
+        {:reply, {:ok, episode}, state}
+
+      {:error, reason, state} ->
+        {:reply, {:error, reason}, state}
     end
   end
 
   def handle_call({:step, actions}, _from, state) do
     case request(state, {:step, actions}) do
-      {:ok, observations, proprioceptive_state, state} ->
+      {:ok, observations, proprioceptive_state, _episode, state} ->
         # The reply carries Monty's own maps; the rest of the port works in
         # `AgentState`/`SensorState`, so the translation happens here, once.
         {:reply, {:ok, observations, Protocol.proprioceptive_state(proprioceptive_state)}, state}
@@ -140,8 +147,8 @@ defmodule Monty.Simulators.Port.Environment do
     receive do
       {port, {:data, body}} when port == state.port ->
         case Protocol.reply(body, id) do
-          {:ok, observations, proprioceptive_state} ->
-            {:ok, observations, proprioceptive_state, state}
+          {:ok, observations, proprioceptive_state, episode} ->
+            {:ok, observations, proprioceptive_state, episode, state}
 
           {:error, reason} ->
             {:error, reason, state}

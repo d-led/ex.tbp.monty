@@ -49,17 +49,20 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
             sensors: [],
             command: nil,
             timeout: @default_timeout,
-            server: nil
+            server: nil,
+            primary_target: nil
 
   @typedoc """
-  A world named by an experiment, not yet started.
+  A world named by an experiment, not yet started, and what its last episode was
+  about once one has been started.
   """
   @type t :: %__MODULE__{
           experiment: String.t() | nil,
           sensors: [Monty.Simulators.Environment.sensor_id()],
           command: [String.t()] | nil,
           timeout: timeout(),
-          server: GenServer.server() | nil
+          server: GenServer.server() | nil,
+          primary_target: map() | nil
         }
 
   @doc """
@@ -134,13 +137,25 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
     server = server(world)
 
     case Environment.reset(server) do
-      :ok ->
-        %{world | server: server}
+      {:ok, episode} ->
+        %{world | server: server, primary_target: Map.get(episode, "primary_target")}
 
       {:error, reason} ->
         raise "the world behind #{world.experiment} could not reset: #{inspect(reason)}"
     end
   end
+
+  @doc """
+  The object this episode is about, as the peer's `pre_episode` chose it.
+
+  `nil` until an episode has been started: the peer chooses the object while it
+  positions the agent, and before that there is nothing to report. Monty's
+  interface is the one that knows; this is the answer to the question it would
+  give.
+  """
+  @impl true
+  @spec primary_target(t()) :: map() | nil
+  def primary_target(%__MODULE__{primary_target: primary_target}), do: primary_target
 
   @doc """
   True: this world positions an episode itself.

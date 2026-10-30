@@ -12,6 +12,7 @@ defmodule Monty.Studio.RunPrologueTest do
 
   use ExUnit.Case, async: false
 
+  alias Monty.Runtime.{LearningModuleServer, Registry}
   alias Monty.Studio.Run
   alias Monty.Test.Tmp
 
@@ -38,6 +39,23 @@ defmodule Monty.Studio.RunPrologueTest do
       # does not walk the procedures over an agent Monty already placed.
       assert run.positioning == %{steps: nil, success: true, procedures: [:world]}
       assert requested?(log, "reset"), "the world was never asked for an episode"
+    after
+      Run.stop(run)
+    end
+  end
+
+  test "and what it answers is what the learning modules are told", %{setup: setup} do
+    {:ok, run} = Run.start(setup, steps: 1)
+
+    try do
+      [lm | _rest] = setup.learning_modules
+
+      state =
+        LearningModuleServer.state(Registry.via({:learning_module, run.model_id, lm.id}))
+
+      # Only the world knows which object it chose; a model told nothing could not
+      # say whether it recognised anything.
+      assert state.primary_target == "probe"
     after
       Run.stop(run)
     end

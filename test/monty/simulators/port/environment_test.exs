@@ -66,8 +66,9 @@ defmodule Monty.Simulators.Port.EnvironmentTest do
            ] = seen
   end
 
-  test "a fresh episode is acknowledged" do
-    assert Environment.reset(start_environment()) == :ok
+  test "a fresh episode answers what that episode is about" do
+    assert {:ok, %{"primary_target" => %{"object" => "probe"}}} =
+             Environment.reset(start_environment())
   end
 
   test "each step is answered by its own reply" do
