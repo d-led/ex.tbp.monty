@@ -94,6 +94,39 @@ defmodule Monty.Studio.RunLogTest do
 
       assert line =~ "lm_0: nothing yet"
     end
+
+    test "the line starts with the time the step happened" do
+      line = info() |> RunLog.entry() |> RunLog.line()
+
+      assert line =~ ~r/^\d\d:\d\d:\d\d step 3 /
+    end
+
+    test "and says how long the step took in words" do
+      # 1.4 s is a line a person can read; 1400000 µs is a number to divide.
+      line =
+        info()
+        |> Map.put(:duration_us, 1_400_000)
+        |> RunLog.entry()
+        |> RunLog.line()
+
+      assert line =~ "1.4 s"
+    end
+
+    test "a line recorded before times were kept still prints" do
+      line =
+        %{
+          "step" => 0,
+          "percepts" => [],
+          "inputs" => %{},
+          "votes" => %{"sent" => 0, "used" => 0},
+          "goals" => 0,
+          "duration_us" => 0
+        }
+        |> RunLog.line()
+
+      assert line =~ "step 0"
+      refute line =~ ~r/^\d\d:\d\d:\d\d/
+    end
   end
 
   defp info do

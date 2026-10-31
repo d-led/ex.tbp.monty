@@ -35,6 +35,30 @@ defmodule Monty.Studio.ReplayTest do
     }
   end
 
+  # A run whose steps kept a picture per sensor, in the shape the database keeps:
+  # the PNGs as they were drawn, and the depth range they were drawn over.
+  defp with_pictures(steps) do
+    %Run{
+      timeline:
+        Enum.map(steps, fn step ->
+          %{
+            "step" => step,
+            "sensors" => %{
+              "patch" => %{
+                "location" => [step * 0.01, 0.0, 0.1],
+                "images" => %{"depth" => "png", "range" => [0.02, 0.04]}
+              },
+              "view_finder" => %{
+                "location" => [step * 0.01, 0.0, 0.11],
+                "images" => %{"depth" => "png", "range" => [0.03, 0.05]}
+              }
+            }
+          }
+        end),
+      log: Enum.map(steps, &entry/1)
+    }
+  end
+
   # A step's report with what the learning modules believed, in the shape the
   # database keeps: `max_evidence` under the object it is about.
   defp believe(entry, evidence) when is_number(evidence),
@@ -68,18 +92,22 @@ defmodule Monty.Studio.ReplayTest do
 
   describe "one step of a replay" do
     test "is the frame that run saw, not a new one" do
-      moment = Replay.at(run(0..3), 2)
+      moment = Replay.at(with_pictures(0..3), 2)
 
       assert moment.step == 2
       assert moment.frames |> Enum.map(& &1.sensor_id) |> Enum.sort() == ["patch", "view_finder"]
 
-      # The camera draws the recorded location, so the frame is history. A
-      # recorded step keeps the percept, not the pixels — the camera arrays are
-      # dropped on the way into the database, because they are four thousand
-      # numbers a step — so the frame says there is no picture rather than
-      # drawing one that the run never had.
+      # The note is the range the step was drawn over, read back from the record:
+      # the frame is history, not a re-simulation of it.
       assert moment.frames |> Enum.find(&(&1.sensor_id == "patch")) |> Map.get(:note) =~
-               "no image"
+               "depth 0.020–0.040 m"
+    end
+
+    test "a step whose sensors kept no picture has no frames to draw" do
+      # A run recorded before runs kept their pictures, or one whose sensors are
+      # not cameras: the page says so once instead of drawing blank boxes.
+      assert Replay.at(run(0..3), 2).frames == []
+      refute Replay.pictures?(run(0..3))
     end
 
     test "carries the report the modules gave at the same step" do
@@ -228,6 +256,87 @@ defmodule Monty.Studio.ReplayTest do
     test "a run of one step cannot be zoomed into a hole" do
       assert Replay.zoom(run([7]), {7, 7}, 7, :in) == {7, 7}
       assert Replay.zoom(run([7]), {7, 7}, 7, :out) == {7, 7}
+    end
+  end
+
+  describe "the objects a run believed in" do
+    # Two objects, one module each, evidence climbing for the object it guesses.
+    defp with_graphs(steps) do
+      %Run{
+        timeline: Enum.map(steps, &moment/1),
+        log:
+          Enum.map(steps, fn step ->
+            %{"step" => step}
+            |> Map.put("beliefs", %{
+              "learning_module_0" => %{
+                "graphs" => %{
+                  "mug" => %{"max_evidence" => step * 1.0},
+                  "bowl" => %{"max_evidence" => 10 - step * 1.0}
+                }
+              }
+            })
+          end)
+      }
+    end
+
+    test "one series per object, over every step" do
+      series = Replay.objects(with_graphs(0..2))
+
+      assert Enum.map(series, & &1.label) == ["bowl", "mug"]
+
+      assert Enum.map(Enum.find(series, &(&1.label == "mug")).points, & &1.value) == [
+               0.0,
+               1.0,
+               2.0
+             ]
+    end
+
+    test "an object is as strong as the strongest module that held it" do
+      record = %Run{
+        timeline: Enum.map([0], &moment/1),
+        log: [
+          %{
+            "step" => 0,
+            "beliefs" => %{
+              "learning_module_0" => %{"graphs" => %{"mug" => %{"max_evidence" => 1.5}}},
+              "learning_module_1" => %{"graphs" => %{"mug" => %{"max_evidence" => 4.5}}}
+            }
+          }
+        ]
+      }
+
+      assert [%{points: [%{value: 4.5}]}] = Replay.objects(record)
+    end
+
+    test "a run whose modules built no graphs has nothing to draw" do
+      assert Replay.objects(run(0..2)) == []
+    end
+
+    test "the strongest object of the run is the headline" do
+      assert Replay.best_evidence(with_graphs(0..2)) == %{object: "bowl", value: 10.0}
+      assert Replay.best_evidence(run(0..2)) == nil
+    end
+
+    test "the two theories at a step are the two strongest, the strongest first" do
+      # Step 3: the run's guess is still bowl, with mug climbing behind it.
+      assert Replay.theories(Replay.at(with_graphs([0, 3]), 3)) == [
+               %{object: "bowl", evidence: 7.0},
+               %{object: "mug", evidence: 3.0}
+             ]
+    end
+
+    test "a theory with no evidence behind it is not worth naming" do
+      assert Replay.theories(Replay.at(with_graphs([0]), 0)) == [
+               %{object: "bowl", evidence: 10.0}
+             ]
+    end
+
+    test "a step whose modules built no graphs has no theories" do
+      assert Replay.theories(Replay.at(run(0..2), 1)) == []
+    end
+
+    test "how many theories to name is the caller's choice" do
+      assert [%{object: "bowl"}] = Replay.theories(Replay.at(with_graphs([3]), 3), 1)
     end
   end
 end

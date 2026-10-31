@@ -162,9 +162,49 @@ defmodule Monty.Studio.RunHistory do
     |> Repo.all()
   end
 
-  @doc "One run, or `nil`."
+  @doc """
+  One run, or `nil`.
+
+  An id that is not an id at all — a URL that has been typed wrong, an id from
+  somebody else's database — is `nil`, the same as one that has been forgotten.
+  Both mean "there is no such run", and neither is worth an error page.
+  """
   @spec get(binary()) :: Run.t() | nil
-  def get(id), do: Repo.get(Run, id)
+  def get(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} -> Repo.get(Run, uuid)
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Forgets every run the filter matches, and answers how many it forgot.
+
+  The filter is the same one the list uses, so "delete all failed runs" is a
+  statement about the list a person is looking at, not about the page of it they
+  can see.
+  """
+  @spec delete_matching(keyword()) :: non_neg_integer()
+  def delete_matching(options) do
+    state = Keyword.get(options, :state, "all")
+    text = Keyword.get(options, :text, "")
+
+    Run
+    |> by_state(state)
+    |> by_text(text)
+    |> select([run], run.id)
+    |> Repo.all()
+    |> delete_ids()
+  end
+
+  @doc "Forgets the runs with these ids, and answers how many it forgot."
+  @spec delete_ids([binary()]) :: non_neg_integer()
+  def delete_ids(ids) do
+    ids
+    |> Enum.map(&get/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.count(fn run -> match?({:ok, _deleted}, delete(run)) end)
+  end
 
   @doc "Forgets a run, and the files it wrote. Monty's artifacts are not ours to delete."
   @spec delete(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}

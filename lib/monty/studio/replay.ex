@@ -93,6 +93,99 @@ defmodule Monty.Studio.Replay do
     sensor_series(run) ++ Enum.map(@logged_series, &chart_series(run, &1))
   end
 
+  @doc """
+  Every object a learning module held a graph for, one series each.
+
+  This is the chart a Monty experiment is judged by: one line per object the
+  module had not ruled out, all on the same axis, so the moment one of them
+  climbs away from the others is visible as a shape rather than inferred from a
+  table. A module that never built a graph contributes nothing, so a run with no
+  graphs answers `[]` — and the page says so instead of drawing a flat line at
+  zero and calling it evidence.
+  """
+  @spec objects(Run.t()) :: [series()]
+  def objects(%Run{} = run) do
+    moments = recorded(run)
+    names = moments |> Enum.flat_map(&object_names/1) |> Enum.uniq() |> Enum.sort()
+
+    Enum.map(names, fn name ->
+      %{
+        id: "object:" <> name,
+        label: name,
+        unit: "",
+        points:
+          Enum.map(moments, fn moment ->
+            %{step: moment.step, value: evidence_of(moment, name)}
+          end)
+      }
+    end)
+  end
+
+  @doc """
+  The object the run believed in most, and how much, over the whole run.
+
+  The one number a person wants above the pictures: what it settled on, and how
+  sure it was.
+  """
+  @spec best_evidence(Run.t()) :: %{object: String.t(), value: number()} | nil
+  def best_evidence(%Run{} = run) do
+    run
+    |> recorded()
+    |> Enum.flat_map(fn moment ->
+      for name <- object_names(moment), do: %{object: name, value: evidence_of(moment, name)}
+    end)
+    |> Enum.max_by(& &1.value, fn -> nil end)
+    |> case do
+      nil -> nil
+      best -> best
+    end
+  end
+
+  @doc """
+  The theories the run was still weighing at one step, strongest first.
+
+  A replay is a slider, and what a person wants while dragging it is the short
+  version: not the ten lines, two names and two numbers. Objects the modules have
+  ruled out to nothing are left out rather than listed at zero — a theory with no
+  evidence behind it is not a theory.
+
+  `count` is how many to name. The default is two because that is what fits on
+  one line beside the step, and because a decision between two is the shape of
+  the moment being looked at.
+  """
+  @spec theories(moment(), pos_integer()) :: [%{object: String.t(), evidence: number()}]
+  def theories(moment, count \\ 2) do
+    moment
+    |> object_names()
+    |> Enum.map(&%{object: &1, evidence: evidence_of(moment, &1)})
+    |> Enum.reject(&(&1.evidence <= 0))
+    |> Enum.sort_by(& &1.evidence, :desc)
+    |> Enum.take(count)
+  end
+
+  defp object_names(moment) do
+    moment
+    |> modules()
+    |> Enum.flat_map(fn belief -> belief |> Map.get("graphs", %{}) |> Map.keys() end)
+    |> Enum.uniq()
+  end
+
+  # An object's evidence on a step: the strongest any module held for it. One
+  # number per object per step is what a line needs, and the best module is the
+  # one whose belief the ensemble acted on.
+  defp evidence_of(moment, name) do
+    moment
+    |> modules()
+    |> Enum.map(&(&1 |> Map.get("graphs", %{}) |> Map.get(name, %{}) |> Map.get("max_evidence")))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.max(fn -> 0.0 end)
+  end
+
+  defp modules(%{entry: entry}) when is_map(entry),
+    do: entry |> Map.get("beliefs", %{}) |> Map.values()
+
+  defp modules(_moment), do: []
+
   @doc "One series by id, with whatever points the run has for it."
   @spec chart_series(Run.t(), String.t()) :: series()
   def chart_series(%Run{} = run, id) do
@@ -209,11 +302,11 @@ defmodule Monty.Studio.Replay do
   # for any object. That is the curve an episode is judged by — it climbs to the
   # recognition or it does not — and it is what the live page draws while a run is
   # going, so a replay can draw the same one.
-  defp value_of(%{entry: entry}, "evidence"), do: best_evidence(entry)
+  defp value_of(%{entry: entry}, "evidence"), do: strongest_evidence(entry)
 
-  defp best_evidence(nil), do: 0.0
+  defp strongest_evidence(nil), do: 0.0
 
-  defp best_evidence(entry) do
+  defp strongest_evidence(entry) do
     entry
     |> Map.get("beliefs", %{})
     |> Map.values()

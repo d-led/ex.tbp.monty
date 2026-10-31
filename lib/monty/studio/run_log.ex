@@ -10,7 +10,7 @@ defmodule Monty.Studio.RunLog do
   """
 
   alias Monty.Simulators.Synthetic.Camera
-  alias Monty.Studio.{RunHistory, Setup, Summary}
+  alias Monty.Studio.{Duration, RunHistory, Setup, Summary}
 
   @doc """
   One timestep, as the database stores it.
@@ -24,6 +24,7 @@ defmodule Monty.Studio.RunLog do
   def entry(info, beliefs \\ %{}) do
     %{
       "step" => info.step,
+      "at" => now(),
       "percepts" => Enum.map(info.percept_ids, &to_string/1),
       "inputs" => Map.new(info.inputs, fn {module, count} -> {to_string(module), count} end),
       "votes" => %{"sent" => info.votes.sent, "used" => info.votes.used},
@@ -106,7 +107,14 @@ defmodule Monty.Studio.RunLog do
       else: {sensor_id, Map.put(kept, "images", recorded)}
   end
 
-  @doc "One timestep, as a line of text."
+  @doc """
+  One timestep, as a line of text.
+
+  The line starts with the wall clock and ends with how long the step took: a
+  log that only counts percepts says a run is alive without saying whether the
+  last step took a millisecond or a minute, and "why is this slow" is the first
+  question anyone asks a log.
+  """
   @spec line(map()) :: String.t()
   def line(entry) do
     inputs =
@@ -116,11 +124,24 @@ defmodule Monty.Studio.RunLog do
 
     votes = Map.get(entry, "votes", %{})
 
-    "step #{entry["step"]} · percepts #{Enum.join(Map.get(entry, "percepts", []), ",")} · " <>
+    "#{at(entry)}step #{entry["step"]} · percepts #{Enum.join(Map.get(entry, "percepts", []), ",")} · " <>
       "inputs #{inputs} · votes #{votes["used"]}/#{votes["sent"]} · " <>
-      "goals #{entry["goals"]} · #{Map.get(entry, "duration_us", 0)} µs" <>
+      "goals #{entry["goals"]} · #{Duration.humanize(Map.get(entry, "duration_us", 0))}" <>
       believed(entry)
   end
+
+  # When the step happened, to the second. A line recorded before runs kept the
+  # time is history, not an error: it prints without the prefix.
+  defp at(entry) do
+    with iso when is_binary(iso) <- Map.get(entry, "at"),
+         {:ok, at, _offset} <- DateTime.from_iso8601(iso) do
+      Calendar.strftime(at, "%H:%M:%S ")
+    else
+      _missing -> ""
+    end
+  end
+
+  defp now, do: DateTime.utc_now() |> DateTime.to_iso8601()
 
   # What each module believes, on the same line: a run that is watched through a
   # log is watched for this, and a line that only counts percepts says a run is

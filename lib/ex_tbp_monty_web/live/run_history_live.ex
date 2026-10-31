@@ -13,18 +13,28 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   use ExTbpMontyWeb, :live_view
 
-  alias Monty.Studio.{Artifacts, Duration, Jobs, Json, Replay, RunHistory}
+  alias ExTbpMontyWeb.RunHistoryLive.Selection
+  alias Monty.Studio.{Artifacts, Duration, Failure, Jobs, Json, Replay, RunHistory}
   alias Monty.Studio.Jobs.Reaper
   alias Monty.Studio.Replay.Chart
 
   # The states a run can be in, in the order the filter pills read them.
   @states ~w(running finished stopped failed)
 
+  # Not a column of the record: the chart of every object's evidence at once,
+  # which the picker offers when the run built graphs.
+  @objects "objects"
+
+  @selection_events Selection.events()
+
+  # The replay panel's controls, grouped the same way and for the same reason.
+  @replay_events ~w(replay_seek replay_step replay_play replay_pause replay_zoom replay_series)
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(confirming: nil)
+     |> assign(confirming: nil, confirming_bulk: nil, selected: MapSet.new())
      |> stream_configure(:log, dom_id: &"log-#{&1["step"]}")
      |> stream_configure(:runs, dom_id: &"run-#{&1.id}")
      |> stream(:runs, [])
@@ -69,6 +79,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       per_page: found.per_page,
       total: found.total,
       counts: RunHistory.counts(),
+      page_ids: Enum.map(found.runs, & &1.id),
       queue: where_each_run_is(found.runs)
     )
     |> stream(:runs, found.runs, reset: true)
@@ -76,6 +87,32 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   defp state_of(%{"state" => state}) when state in @states, do: state
   defp state_of(_params), do: "all"
+
+  defp selection(event, params, socket) do
+    case Selection.handle(event, params, socket.assigns) do
+      {:assign, assigns} -> assign(socket, assigns)
+      {:forget, scope} -> forget_every(socket, scope)
+    end
+  end
+
+  # Deleting happens inside the filter the person is looking at, so the list stays
+  # the list they were reading — all of a narrowed list, not all of everything.
+  defp forget_every(socket, scope) do
+    forgotten =
+      case scope do
+        {:ids, ids} -> RunHistory.delete_ids(ids)
+        {:matching, filter} -> RunHistory.delete_matching(filter)
+      end
+
+    socket
+    |> assign(confirming_bulk: nil, selected: MapSet.new())
+    |> put_flash(:info, forgot(forgotten))
+    |> load_runs(here_is_where_we_are(socket))
+  end
+
+  defp here_is_where_we_are(socket) do
+    %{"state" => socket.assigns.state, "q" => socket.assigns.text, "page" => socket.assigns.page}
+  end
 
   defp page_of(%{"page" => page}) do
     case Integer.parse(to_string(page)) do
@@ -111,19 +148,23 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # to see what it came to, and rewinding is one drag away.
   defp assign_replay(socket, run, step) do
     step = step || Replay.first_step(run)
-    series = Replay.series(run)
+    series = charts_of(run)
     series_id = socket.assigns[:series_id] || default_series(series)
     window = Replay.window(run, socket.assigns[:window] || whole_run(run))
+    moment = Replay.at(run, step)
 
     socket
     |> assign(
-      moment: Replay.at(run, step),
+      moment: moment,
       step: step,
       series: series,
       series_id: series_id,
       window: window,
       pictures: Replay.pictures?(run),
-      chart: Chart.new(series_points(series, series_id), window: window, playhead: step),
+      best: Replay.best_evidence(run),
+      theories: Replay.theories(moment),
+      graphs: Replay.objects(run) != [],
+      chart: chart_for(run, series_id, window, step),
       playing: false
     )
   end
@@ -132,11 +173,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     {Replay.first_step(run) || 0, Replay.last_step(run) || 0}
   end
 
-  # The chart opens on the curve an episode is judged by — the evidence, which
-  # climbs to a recognition or does not — rather than on a sensor's x, which for a
-  # world behind the port barely moves.
+  # The chart opens on the lines an episode is judged by — every object the
+  # modules still held, whose climbing away from the rest *is* the recognition —
+  # and falls back to the single evidence curve, then to whatever there is.
   defp default_series(series) do
     Enum.find_value(series, first_id(series), fn
+      %{id: @objects} -> @objects
       %{id: "evidence"} -> "evidence"
       _other -> nil
     end)
@@ -145,12 +187,28 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp first_id([first | _rest]), do: first.id
   defp first_id([]), do: nil
 
-  defp series_points(series, id) do
-    case Enum.find(series, &(&1.id == id)) do
-      nil -> []
-      found -> found.points
+  # The per-object chart is offered first when a run built graphs: a single
+  # maximum hides what the episode was actually about, which objects were still
+  # in the running and when one of them won.
+  defp charts_of(run) do
+    case Replay.objects(run) do
+      [] ->
+        Replay.series(run)
+
+      objects ->
+        [
+          %{id: @objects, label: "every object (#{length(objects)})", unit: "", points: []}
+          | Replay.series(run)
+        ]
     end
   end
+
+  defp chart_for(run, series_id, window, step) do
+    Chart.many(chart_lines(run, series_id), window: window, playhead: step)
+  end
+
+  defp chart_lines(run, @objects), do: Replay.objects(run)
+  defp chart_lines(run, series_id), do: [Replay.chart_series(run, series_id)]
 
   @impl true
   def render(%{live_action: :index} = assigns) do
@@ -198,10 +256,52 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         </span>
       </div>
 
+      <%!-- Two ways to delete more than one run: the ones picked, or everything the
+      filter shows. Both ask once, because both are the same keystroke away from
+      losing a run's only record. --%>
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <span :if={MapSet.size(@selected) > 0} id="selected-count" class="text-base-content/60">
+          {MapSet.size(@selected)} selected
+        </span>
+        <button
+          :if={MapSet.size(@selected) > 0}
+          id="delete-selected"
+          phx-click="ask_delete_selected"
+          class="btn btn-ghost btn-xs text-error"
+        >
+          Delete selected
+        </button>
+        <button
+          :if={MapSet.size(@selected) > 0}
+          id="clear-selection"
+          phx-click="clear_selection"
+          class="btn btn-ghost btn-xs"
+        >
+          Clear selection
+        </button>
+        <button
+          :if={@total > 0}
+          id="delete-matching"
+          phx-click="ask_delete_matching"
+          class="btn btn-ghost btn-xs text-error ms-auto"
+        >
+          Delete all {showing(@page, @per_page, @total)} shown
+        </button>
+      </div>
+
       <div class="overflow-hidden rounded-box border border-base-300 bg-base-100">
         <table class="table table-sm">
           <thead>
             <tr class="text-xs text-base-content/60">
+              <th class="w-6">
+                <input
+                  type="checkbox"
+                  id="pick-all"
+                  phx-click="toggle_all"
+                  class="checkbox checkbox-xs"
+                  aria-label="Pick every run on this page"
+                />
+              </th>
               <th class="w-full">experiment</th>
               <th>state</th>
               <th class="text-right">steps</th>
@@ -212,12 +312,23 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           </thead>
           <tbody id="runs" phx-update="stream">
             <tr id="runs-empty" class="hidden only:table-row">
-              <td colspan="6" class="text-sm text-base-content/60">
+              <td colspan="7" class="text-sm text-base-content/60">
                 No run matches.
                 <.link patch={filter_href(@state, "")} class="link link-primary">Clear the filter</.link>
               </td>
             </tr>
             <tr :for={{dom_id, run} <- @streams.runs} id={dom_id}>
+              <td class="w-6">
+                <input
+                  type="checkbox"
+                  id={"pick-#{run.id}"}
+                  phx-click="toggle"
+                  phx-value-id={run.id}
+                  checked={MapSet.member?(@selected, run.id)}
+                  class="checkbox checkbox-xs"
+                  aria-label={"Pick the run of " <> run.experiment}
+                />
+              </td>
               <td class="w-full">
                 <.link navigate={~p"/runs/#{run.id}"} class="link link-hover font-mono text-sm">
                   {run.experiment}
@@ -288,6 +399,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         </.link>
       </div>
 
+      <.confirm_bulk :if={@confirming_bulk} confirming={@confirming_bulk} />
+
       <.confirm_delete :if={@confirming} run={@confirming} />
     </Layouts.app>
     """
@@ -315,17 +428,25 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         </p>
       </header>
 
-      <%!-- A run that did not finish says why, in the words of whatever stopped
-      it: the worker's own message when it could record one, the reaper's when
-      the process died with no chance to. A person reading this page should never
-      have to ask "was it interrupted?". --%>
+      <%!-- A run that did not finish says why — in a sentence, not in a
+      stacktrace. The words whatever stopped it used are one fold away, for
+      whoever is debugging, and out of the way for everybody else. --%>
       <section
         :if={failure(@run)}
         id="run-failure"
-        class="rounded-field border border-error/40 bg-error/10 px-3 py-2"
+        class="space-y-1 rounded-field border border-error/40 bg-error/10 px-3 py-2"
       >
         <p class="text-sm font-medium">This run did not finish.</p>
-        <p class="mt-0.5 font-mono text-xs break-words text-base-content/80">{failure(@run)}</p>
+        <p id="run-failure-what" class="text-sm">{failure(@run).what}</p>
+        <p :if={failure(@run).hint} id="run-failure-hint" class="text-xs text-base-content/70">
+          {failure(@run).hint}
+        </p>
+        <details :if={failure(@run).technical} id="run-failure-technical">
+          <summary class="cursor-pointer text-[11px] text-base-content/50 hover:text-base-content">
+            Technical details
+          </summary>
+          <pre class="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-base-content/70">{failure(@run).technical}</pre>
+        </details>
       </section>
 
       <section :if={@run == nil} class="text-base-content/70">
@@ -364,6 +485,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           chart={@chart}
           series={@series}
           series_id={@series_id}
+          best={@best}
+          theories={@theories}
+          graphs={@graphs}
           pictures={@pictures}
           recorded={length(Replay.steps(@run))}
           playing={@playing}
@@ -400,11 +524,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           >
             <.link
               href={~p"/runs/#{@run.id}/files/#{file.name}"}
-              class="link link-hover font-mono text-primary"
+              class="link link-hover font-mono text-sm text-base-content"
             >
               {file.name}
             </.link>
-            <span class="ms-auto font-mono text-base-content/50">{bytes(file.bytes)}</span>
+            <span class="ms-auto font-mono text-[11px] text-base-content/60">{bytes(file.bytes)}</span>
           </li>
         </ul>
       </section>
@@ -426,6 +550,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # list is shareable and the back button undoes it.
   def handle_event("filter", %{"q" => text}, socket) do
     {:noreply, push_patch(socket, to: filter_href(socket.assigns.state, text))}
+  end
+
+  # Picking rows and deleting them is one small piece of state with rules of its
+  # own (see Selection), so every one of its events arrives here and leaves as an
+  # assignment. The page keeps no branches of its own about it.
+  def handle_event(event, params, socket) when event in @selection_events do
+    {:noreply, selection(event, params, socket)}
   end
 
   def handle_event("ask_delete", %{"id" => id}, socket) do
@@ -478,40 +609,42 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # -- the replay ------------------------------------------------------------
 
   @impl true
-  def handle_event("replay_seek", %{"step" => step}, %{assigns: %{run: run}} = socket) do
-    {:noreply, replay_to(socket, run, parse_step(step))}
+  # The replay panel's controls are one concern — move through the run, look at a
+  # window of it, pick a line — so they arrive here and leave as one answer.
+  def handle_event(event, params, socket) when event in @replay_events do
+    {:noreply, replay(event, params, socket)}
   end
 
-  def handle_event("replay_step", %{"delta" => delta}, %{assigns: %{run: run}} = socket) do
-    {:noreply, replay_to(socket, run, socket.assigns.step + parse_step(delta))}
-  end
+  defp replay("replay_seek", %{"step" => step}, %{assigns: %{run: run}} = socket),
+    do: replay_to(socket, run, parse_step(step))
 
-  def handle_event("replay_play", _params, %{assigns: %{run: run}} = socket) do
+  defp replay("replay_step", %{"delta" => delta}, %{assigns: %{run: run}} = socket),
+    do: replay_to(socket, run, socket.assigns.step + parse_step(delta))
+
+  defp replay("replay_play", _params, %{assigns: %{run: run}} = socket) do
     socket =
       if Replay.last_step(run) == socket.assigns.step do
         # Playing a run that is already at its end starts again from the top,
         # which is what a person who pressed play wanted.
-        socket |> replay_to(run, Replay.first_step(run))
+        replay_to(socket, run, Replay.first_step(run))
       else
         socket
       end
 
-    {:noreply, assign(socket, playing: true) |> schedule_replay()}
+    socket |> assign(playing: true) |> schedule_replay()
   end
 
-  def handle_event("replay_pause", _params, socket) do
-    {:noreply, assign(socket, playing: false)}
+  defp replay("replay_pause", _params, socket), do: assign(socket, playing: false)
+
+  defp replay("replay_zoom", %{"zoom" => zoom}, %{assigns: %{run: run}} = socket) do
+    replay_window(
+      socket,
+      Replay.zoom(run, socket.assigns.window, socket.assigns.step, zoom_of(zoom))
+    )
   end
 
-  def handle_event("replay_zoom", %{"zoom" => zoom}, %{assigns: %{run: run}} = socket) do
-    window = Replay.zoom(run, socket.assigns.window, socket.assigns.step, zoom_of(zoom))
-    {:noreply, replay_window(socket, window)}
-  end
-
-  def handle_event("replay_series", %{"series" => id}, socket) do
-    {:noreply,
-     assign(socket, series_id: id)
-     |> replay_window(socket.assigns.window)}
+  defp replay("replay_series", %{"series" => id}, socket) do
+    socket |> assign(series_id: id) |> replay_window(socket.assigns.window)
   end
 
   @impl true
@@ -534,11 +667,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp replay_window(socket, window) do
-    points = series_points(socket.assigns.series, socket.assigns.series_id)
+    run = socket.assigns.run
 
     assign(socket,
       window: window,
-      chart: Chart.new(points, window: window, playhead: socket.assigns.step)
+      chart: chart_for(run, socket.assigns.series_id, window, socket.assigns.step)
     )
   end
 
@@ -573,6 +706,41 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp forget(socket, _run) do
     {:noreply, push_navigate(socket, to: ~p"/runs")}
   end
+
+  # The same question as the one above, asked once for many. It says how many and
+  # what they are — the ones picked, or everything the filter shows — because
+  # "delete all" is the one place a list of hundreds can vanish.
+  attr :confirming, :map, required: true
+
+  defp confirm_bulk(assigns) do
+    ~H"""
+    <div
+      id="confirm-bulk-delete"
+      class="fixed inset-0 z-50 grid place-items-center bg-base-content/20 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="w-full max-w-md space-y-3 rounded-box border border-base-300 bg-base-100 p-4">
+        <h2 class="font-semibold">Delete {confirming_what(@confirming)}?</h2>
+        <p class="text-sm text-base-content/70">
+          {@confirming.count} run(s), with their config snapshots, inputs and
+          logs. Files the runs produced stay where they are.
+        </p>
+        <div class="flex justify-end gap-2">
+          <button id="cancel-bulk-delete" phx-click="cancel_bulk_delete" class="btn btn-ghost btn-sm">
+            Keep them
+          </button>
+          <button id="confirm-bulk-delete-button" phx-click="bulk_delete" class="btn btn-error btn-sm">
+            Delete {@confirming.count}
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp confirming_what(%{scope: {:ids, _ids}}), do: "the selected runs"
+  defp confirming_what(%{scope: {:matching, _filter}}), do: "every run shown"
 
   attr :run, :map, required: true
 
@@ -626,8 +794,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   # What ended a run that did not finish. Absent is a real answer: a run that
   # finished, or one still going, has nothing that ended it.
+  # Why it stopped, said the way a person reads it. The record keeps whatever the
+  # worker could say — often a stacktrace — and `Failure` turns that into a
+  # sentence without throwing the original away.
   defp failure(%{status: "failed", summary: summary}) when is_map(summary),
-    do: summary["reason"]
+    do: Failure.explain(summary["reason"])
 
   defp failure(_run), do: nil
 
@@ -711,5 +882,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     "#{first}–#{min(page * per_page, total)} of #{total}"
   end
 
-  defp showing(_page, _per_page, total), do: "#{total} run(s)"
+  defp showing(_page, _per_page, 1), do: "1 run"
+  defp showing(_page, _per_page, total), do: "#{total} runs"
+
+  defp forgot(1), do: "Forgot one run."
+  defp forgot(count), do: "Forgot #{count} runs."
 end

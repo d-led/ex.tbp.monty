@@ -220,6 +220,9 @@ defmodule ExTbpMontyWeb.StudioComponents do
   attr :chart, :map, default: nil
   attr :series, :list, default: []
   attr :series_id, :string, default: nil
+  attr :best, :map, default: nil
+  attr :theories, :list, default: []
+  attr :graphs, :boolean, default: true
   attr :recorded, :integer, default: 0
   attr :playing, :boolean, default: false
   # Whether the run kept any picture at all: a run recorded before a step kept
@@ -291,6 +294,24 @@ defmodule ExTbpMontyWeb.StudioComponents do
           aria-label="Step"
         />
       </form>
+
+      <%!-- What the step under the slider was deciding between. Two names and two
+      numbers, so dragging the slider answers "and then what?" without reading a
+      chart or a log. --%>
+      <p
+        :if={@moment && @theories != []}
+        id="replay-theories"
+        class="flex flex-wrap items-baseline gap-x-2 px-0.5 text-xs"
+      >
+        <span class="text-base-content/60">strongest theories</span>
+        <span
+          :for={{theory, rank} <- Enum.with_index(@theories)}
+          class={["font-mono", rank == 0 && "font-semibold"]}
+        >
+          {theory.object}
+          <span class="text-base-content/60">{format_value(theory.evidence)}</span>
+        </span>
+      </p>
 
       <div :if={@moment} class="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div :if={@moment.frames != []} id="replay-frames" class="grid gap-1.5 sm:grid-cols-2">
@@ -381,39 +402,206 @@ defmodule ExTbpMontyWeb.StudioComponents do
               @series_id
             )}
           </span>
+          <span :if={@best} id="replay-best" class="ms-auto text-[11px] text-base-content/60">
+            strongest evidence
+            <span class="font-mono text-base-content">{@best.object} {format_value(@best.value)}</span>
+          </span>
         </div>
 
-        <svg
-          id="replay-chart"
-          viewBox={"0 0 #{@chart.width} #{@chart.height}"}
-          preserveAspectRatio="none"
-          class="h-16 w-full rounded-field border border-base-300 bg-base-100 text-primary"
-          role="img"
-          aria-label="The selected series over the steps in the window"
+        <%!-- Hovering a line says which object is under the pointer, which step
+        it is, and what it was worth. The samples come from the server, so the
+        words and the unit are the ones the rest of the page uses; the hook only
+        decides which drawn point is nearest and where to put the line. --%>
+        <div
+          id="replay-chart-hover"
+          phx-hook=".ChartHover"
+          data-width={@chart.width}
+          data-height={@chart.height}
+          data-samples={chart_samples(@chart, @series, @series_id)}
+          class="relative cursor-crosshair"
         >
-          <polyline
-            points={@chart.polyline}
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            vector-effect="non-scaling-stroke"
-          />
-          <line
-            :if={@chart.playhead}
-            x1={@chart.playhead}
-            y1="0"
-            x2={@chart.playhead}
-            y2={@chart.height}
-            stroke="currentColor"
-            stroke-opacity="0.35"
-            stroke-dasharray="2 2"
-            vector-effect="non-scaling-stroke"
-          />
-        </svg>
+          <svg
+            id="replay-chart"
+            viewBox={"0 0 #{@chart.width} #{@chart.height}"}
+            preserveAspectRatio="none"
+            class="h-20 w-full rounded-field border border-base-300 bg-base-100"
+            role="img"
+            aria-label="The chosen series over the steps in the window"
+          >
+            <polyline
+              :for={line <- @chart.lines}
+              id={"replay-line-#{line.colour}"}
+              points={line.polyline}
+              fill="none"
+              stroke={line_colour(line.colour)}
+              stroke-width="1.5"
+              stroke-linejoin="round"
+              vector-effect="non-scaling-stroke"
+            />
+            <line
+              :if={@chart.playhead}
+              x1={@chart.playhead}
+              y1="0"
+              x2={@chart.playhead}
+              y2={@chart.height}
+              stroke="currentColor"
+              stroke-opacity="0.35"
+              stroke-dasharray="2 2"
+              vector-effect="non-scaling-stroke"
+            />
+          </svg>
+        </div>
+
+        <%!-- A legend is only worth its line when there is a choice to make: a
+        chart of one object needs no key. --%>
+        <ul
+          :if={length(@chart.lines) > 1}
+          id="replay-chart-legend"
+          class="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-base-content/70"
+        >
+          <li :for={line <- @chart.lines} class="flex items-center gap-1">
+            <span class="h-0.5 w-3 rounded" style={"background: #{line_colour(line.colour)}"}></span>
+            <span class="font-mono">{line.label}</span>
+          </li>
+        </ul>
+
+        <%!-- A line at zero is honest, but it is not an answer: a run whose
+        modules reported no graphs has nothing to compare per object, and saying
+        so is the difference between "nothing happened" and "nothing was kept". --%>
+        <p
+          :if={not @graphs and @chart.lines != []}
+          id="replay-chart-no-graphs"
+          class="text-[11px] text-base-content/50"
+        >
+          No graphs were kept for this run, so there is nothing to compare per object —
+          the line above is the strongest evidence there was, which is none.
+        </p>
+        <script :type={Phoenix.LiveView.ColocatedHook} name=".ChartHover">
+          // Points are drawn in the SVG's own 0..width units but shown stretched to
+          // the width of the box, so a pointer position is turned back into those
+          // units before the nearest drawn step is looked up.
+          export default {
+            mounted() {
+              this.marker = document.createElement("div")
+              this.marker.className =
+                "pointer-events-none absolute inset-y-0 w-px border-l border-dashed border-base-content/50"
+              this.marker.hidden = true
+
+              this.label = document.createElement("div")
+              this.label.className =
+                "pointer-events-none absolute top-0.5 z-10 whitespace-nowrap rounded bg-base-content px-1 py-0.5 font-mono text-[10px] leading-none text-base-100"
+              this.label.hidden = true
+
+              this.el.append(this.marker, this.label)
+
+              this.el.addEventListener("pointermove", event => this.hover(event))
+              this.el.addEventListener("pointerleave", () => this.hide())
+
+              // Clicking a point is the shortest way to say "show me that step":
+              // the slider below the chart does the same thing, one drag at a time.
+              this.el.addEventListener("click", event => this.seek(event))
+
+              this.read()
+            },
+
+            updated() {
+              this.read()
+            },
+
+            read() {
+              this.samples = JSON.parse(this.el.dataset.samples || "[]")
+              this.width = Number(this.el.dataset.width || 320)
+              this.height = Number(this.el.dataset.height || 64)
+            },
+
+            // The pointer is in box pixels, the points are in the SVG's own
+            // units. Both axes are scaled to the box, so both are converted —
+            // and compared in fractions of the box, which is what makes a point
+            // on a steep line nearer than a point on a flat one beside it.
+            nearest(event) {
+              if (this.samples.length === 0) return null
+
+              const box = this.el.getBoundingClientRect()
+              if (box.width === 0 || box.height === 0) return null
+
+              const atX = ((event.clientX - box.left) / box.width) * this.width
+              const atY = ((event.clientY - box.top) / box.height) * this.height
+              const away = sample =>
+                ((sample.x - atX) / this.width) ** 2 + ((sample.y - atY) / this.height) ** 2
+
+              return this.samples.reduce((best, sample) =>
+                away(sample) < away(best) ? sample : best
+              )
+            },
+
+            hover(event) {
+              const nearest = this.nearest(event)
+              if (!nearest) return
+
+              const percent = (nearest.x / this.width) * 100
+
+              this.marker.style.left = `${percent}%`
+              this.marker.hidden = false
+
+              this.label.textContent = nearest.label
+              this.label.style.left = `${percent}%`
+              this.label.style.transform =
+                percent < 20 ? "translateX(0)" : percent > 80 ? "translateX(-100%)" : "translateX(-50%)"
+              this.label.hidden = false
+            },
+
+            seek(event) {
+              const nearest = this.nearest(event)
+              if (!nearest) return
+
+              this.pushEvent("replay_seek", {step: String(nearest.step)})
+            },
+
+            hide() {
+              this.marker.hidden = true
+              this.label.hidden = true
+            },
+          }
+        </script>
       </div>
     </section>
     """
   end
+
+  # One entry per drawn point: where it sits, and the words a hover shows. The
+  # label is made here, not in the browser, so it says "mug · step 3 · 0.41" like
+  # every other number on the page — and it names the line, because with ten of
+  # them a value alone does not say whose it is.
+  defp chart_samples(chart, series, series_id) do
+    unit = chart_unit(series, series_id)
+    named? = length(chart.lines) > 1
+
+    chart.hover
+    |> Enum.map(fn %{line: line, x: x, y: y, step: step, value: value} ->
+      %{
+        x: Float.round(x * 1.0, 2),
+        y: Float.round(y * 1.0, 2),
+        step: step,
+        label: label(line, named?, step, value, unit)
+      }
+    end)
+    |> Jason.encode!()
+  end
+
+  defp label(line, true, step, value, unit),
+    do: "#{line} · step #{step} · #{format_value(value)}#{unit_note(unit)}"
+
+  defp label(_line, false, step, value, unit),
+    do: "step #{step} · #{format_value(value)}#{unit_note(unit)}"
+
+  defp unit_note(""), do: ""
+  defp unit_note(unit), do: " " <> unit
+
+  # The palette Monty's own plots use, so an object is the same colour here as it
+  # is in the figure a paper shows: tab10, in the order the objects were sorted.
+  @chart_colours ~w(#1f77b4 #ff7f0e #2ca02c #d62728 #9467bd #8c564b #e377c2 #7f7f7f #bcbd22 #17becf)
+
+  defp line_colour(index), do: Enum.at(@chart_colours, rem(index, length(@chart_colours)))
 
   defp inputs(entry) do
     entry

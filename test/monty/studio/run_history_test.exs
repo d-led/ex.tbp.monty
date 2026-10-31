@@ -106,5 +106,30 @@ defmodule Monty.Studio.RunHistoryTest do
       assert {:ok, _deleted} = RunHistory.delete(run)
       assert RunHistory.get(run.id) == nil
     end
+
+    test "the runs with these ids, and no others" do
+      {:ok, first} = RunHistory.start(%{@attributes | experiment: "one"})
+      {:ok, second} = RunHistory.start(%{@attributes | experiment: "two"})
+      {:ok, kept} = RunHistory.start(%{@attributes | experiment: "three"})
+
+      assert RunHistory.delete_ids([first.id, second.id, "no-such-run"]) == 2
+
+      assert RunHistory.get(first.id) == nil
+      assert RunHistory.get(second.id) == nil
+      assert RunHistory.get(kept.id) != nil
+    end
+
+    test "every run a filter shows, and no others" do
+      {:ok, tutorial} = RunHistory.start(@attributes)
+      {:ok, dist} = RunHistory.start(%{@attributes | experiment: "base_dist"})
+      {:ok, surf} = RunHistory.start(%{@attributes | experiment: "base_surf"})
+      {:ok, surf} = RunHistory.finish(surf, %{}, "finished")
+
+      assert RunHistory.delete_matching(state: "running", text: "base") == 1
+
+      assert RunHistory.get(dist.id) == nil
+      assert RunHistory.get(surf.id) != nil
+      assert RunHistory.get(tutorial.id) != nil
+    end
   end
 end

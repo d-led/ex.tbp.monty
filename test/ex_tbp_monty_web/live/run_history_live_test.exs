@@ -94,6 +94,51 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     })
   end
 
+  # A finished run that kept what its modules believed: one graph per object,
+  # with the strongest evidence the module held for it. This is the shape the
+  # chart of every object is drawn from. One map is one step; a list of maps is
+  # one step each, which is what a run that changed its mind looks like.
+  defp run_believing(steps) when is_map(steps), do: run_believing([steps])
+
+  defp run_believing(steps) do
+    {:ok, run} =
+      RunHistory.start(%{
+        experiment: "tutorial/first_experiment",
+        source: "monty",
+        steps: length(steps),
+        config: %{}
+      })
+
+    run =
+      steps
+      |> Enum.with_index()
+      |> Enum.reduce(run, fn {evidence, step}, run ->
+        beliefs = %{
+          "learning_module_0" => %{
+            "graphs" =>
+              Map.new(evidence, fn {object, value} -> {object, %{"max_evidence" => value}} end)
+          }
+        }
+
+        entry = %{
+          "step" => step,
+          "percepts" => ["patch"],
+          "inputs" => %{"learning_module_0" => 1},
+          "votes" => %{"sent" => 1, "used" => 1},
+          "goals" => 1,
+          "actions" => 1,
+          "duration_us" => 120,
+          "beliefs" => beliefs
+        }
+
+        {:ok, run} = RunHistory.record_step(run, entry, moment(step))
+        run
+      end)
+
+    {:ok, run} = RunHistory.finish(run, %{"steps" => length(steps)})
+    run
+  end
+
   describe "the list of runs" do
     test "shows every run with how it ended", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs")
@@ -241,6 +286,12 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert html =~ "gone"
     end
 
+    test "an address that is not a run id at all is that same page", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/runs/not-a-run")
+
+      assert html =~ "gone"
+    end
+
     test "offers the files the run wrote, with their sizes", %{conn: conn, run: run} do
       Monty.Test.Tmp.env_dir("studio-runs", :studio_artifacts_dir)
       :ok = Monty.Studio.Artifacts.start(run.id)
@@ -287,6 +338,27 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert RunHistory.get(abandoned.id).status == "failed"
       assert view |> element("#run-failure") |> render() =~ "stopped before it finished"
+    end
+
+    test "a crash is said in a sentence, with the trace folded away", %{conn: conn, run: run} do
+      crash = """
+      ** (ArgumentError) Monty.Frameworks.Actions.SetAgentPose sets a pose outright, which the stand-in world does not do; use a simulator behind Monty.Simulators.Port.Environment instead
+          (ex_tbp_monty 0.1.0) lib/monty/simulators/synthetic/kinematics.ex:118: Monty.Simulators.Synthetic.Kinematics.act/2
+          (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+      """
+
+      {:ok, failed} = RunHistory.finish(run, %{"reason" => crash}, "failed")
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{failed.id}")
+
+      assert view |> element("#run-failure-what") |> render() =~
+               "cannot be posed directly"
+
+      assert has_element?(view, "#run-failure-hint")
+
+      # The trace is there for whoever wants it, and costs nobody else a glance.
+      assert has_element?(view, "#run-failure-technical pre")
+      refute has_element?(view, "details#run-failure-technical[open]")
     end
 
     test "a run that finished says nothing about how it ended", %{conn: conn, run: run} do
@@ -347,6 +419,96 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       refute view |> element("#replay-chart") |> render() =~ " m"
     end
 
+    test "hovering the line names the step and the value it was", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      # The readout is made on the server, so it is worded like the rest of the
+      # page; the hover itself only picks the nearest one and draws the line.
+      assert view |> element("#replay-chart-hover") |> render() =~ "step 1 · "
+    end
+
+    test "a series measured in metres says so", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      view |> element("#replay-series") |> render_change(%{"series" => "sensor:patch"})
+
+      assert view |> element("#replay-chart-hover") |> render() =~ " m"
+    end
+
+    test "a run that built graphs opens on every object at once", %{conn: conn} do
+      run = run_believing(%{"mug" => 1.0, "bowl" => 4.0})
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      # The picker offers it, and it is where the page opened.
+      assert has_element?(view, "#replay-series option[value='objects'][selected]")
+
+      # One line per object, each with its own colour.
+      assert has_element?(view, "#replay-line-0")
+      assert has_element?(view, "#replay-line-1")
+
+      # Named, because a colour nobody can name is a puzzle.
+      legend = view |> element("#replay-chart-legend") |> render()
+      assert legend =~ "bowl"
+      assert legend =~ "mug"
+
+      # And one number says what the episode came to.
+      assert view |> element("#replay-best") |> render() =~ "bowl"
+    end
+
+    test "a hover over those lines names the object it is on", %{conn: conn} do
+      run = run_believing(%{"mug" => 1.0, "bowl" => 4.0})
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#replay-chart-hover") |> render() =~ "bowl · step 0 · "
+    end
+
+    test "the two strongest theories change as the slider moves", %{conn: conn} do
+      run = run_believing([%{"mug" => 1.0, "bowl" => 4.0}, %{"mug" => 9.0, "bowl" => 2.0}])
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      # The page opens where the run ended: mug is the guess by then.
+      assert view |> element("#replay-theories") |> render() =~ "mug"
+      assert view |> element("#replay-theories") |> render() =~ "9.00"
+
+      view |> element("#replay-seek") |> render_change(%{"step" => "0"})
+
+      theories = view |> element("#replay-theories") |> render()
+      assert theories =~ "bowl"
+      assert theories =~ "4.00"
+    end
+
+    test "a step that weighed nothing says nothing", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      refute has_element?(view, "#replay-theories")
+    end
+
+    test "a run with nothing to compare gets one line and no legend", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert has_element?(view, "#replay-line-0")
+      refute has_element?(view, "#replay-line-1")
+      refute has_element?(view, "#replay-chart-legend")
+      refute has_element?(view, "#replay-best")
+    end
+
+    test "a run that kept no graphs says why its evidence line is flat", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#replay-chart-no-graphs") |> render() =~ "No graphs were kept"
+    end
+
+    test "a run with graphs does not need the explanation", %{conn: conn} do
+      run = run_believing(%{"mug" => 1.0})
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      refute has_element?(view, "#replay-chart-no-graphs")
+    end
+
     test "playing walks the steps forward on its own", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
@@ -397,6 +559,87 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert RunHistory.get(run.id) == nil
       refute has_element?(view, "#run-#{run.id}")
+    end
+  end
+
+  describe "deleting many runs" do
+    test "one filter and one confirmation forget every run it shows", %{conn: conn, run: run} do
+      first = insert_run(%{experiment: "base_a", status: "failed"})
+      second = insert_run(%{experiment: "base_b", status: "failed"})
+
+      {:ok, view, _html} = live(conn, ~p"/runs?#{[state: "failed", q: ""]}")
+
+      view |> element("#delete-matching") |> render_click()
+
+      dialog = view |> element("#confirm-bulk-delete") |> render()
+      assert dialog =~ "Delete every run shown?"
+      assert dialog =~ "2 run(s)"
+
+      view |> element("#confirm-bulk-delete-button") |> render_click()
+
+      assert RunHistory.get(first.id) == nil
+      assert RunHistory.get(second.id) == nil
+      assert render(view) =~ "Forgot 2 runs."
+
+      # The runs that were not shown are still there, and so is the filter.
+      assert RunHistory.get(run.id) != nil
+      assert render(view) =~ "No run matches"
+    end
+
+    test "keeping them leaves every one of them alone", %{conn: conn} do
+      failed = insert_run(%{experiment: "base_a", status: "failed"})
+
+      {:ok, view, _html} = live(conn, ~p"/runs?#{[state: "failed", q: ""]}")
+
+      view |> element("#delete-matching") |> render_click()
+      view |> element("#cancel-bulk-delete") |> render_click()
+
+      refute has_element?(view, "#confirm-bulk-delete")
+      assert RunHistory.get(failed.id) != nil
+    end
+
+    test "picking rows forgets just the rows picked", %{conn: conn, run: run} do
+      first = insert_run(%{experiment: "base_a", status: "failed"})
+      second = insert_run(%{experiment: "base_b", status: "finished"})
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      refute has_element?(view, "#delete-selected")
+
+      view |> element("#pick-#{first.id}") |> render_click()
+      view |> element("#pick-#{second.id}") |> render_click()
+
+      assert view |> element("#selected-count") |> render() =~ "2 selected"
+
+      view |> element("#delete-selected") |> render_click()
+
+      assert view |> element("#confirm-bulk-delete") |> render() =~ "Delete the selected runs?"
+
+      view |> element("#confirm-bulk-delete-button") |> render_click()
+
+      assert RunHistory.get(first.id) == nil
+      assert RunHistory.get(second.id) == nil
+      assert RunHistory.get(run.id) != nil
+
+      # Nothing is left picked, so the question cannot be asked twice.
+      refute has_element?(view, "#selected-count")
+      refute has_element?(view, "#confirm-bulk-delete")
+    end
+
+    test "picking all takes the page, and clearing lets it go again", %{conn: conn, run: run} do
+      other = insert_run(%{experiment: "base_a", status: "finished"})
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      view |> element("#pick-all") |> render_click()
+
+      assert view |> element("#selected-count") |> render() =~ "2 selected"
+
+      view |> element("#clear-selection") |> render_click()
+
+      refute has_element?(view, "#selected-count")
+      assert RunHistory.get(run.id) != nil
+      assert RunHistory.get(other.id) != nil
     end
   end
 end
