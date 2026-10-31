@@ -4,8 +4,9 @@ defmodule Monty.Studio.Storage do
 
   Two places matter, and they are not always one disk: what a run leaves behind
   (`Monty.Studio.Artifacts`) and what a prerequisite download adds
-  (`Monty.Prerequisites`). In the container they are the same volume, mounted at
-  `/app/priv`; in a checkout they are `priv/` and `~/tbp`.
+  (`Monty.Prerequisites`). In a container both are the one volume mounted under
+  the application's home; in a checkout they are `priv/` and whatever `MONTY_DATA`
+  and `MONTY_MODELS` name, which need not be the same disk.
 
   The number is the *device's*, as the operating system reports it — `df -kP` for
   the filesystem the path sits on — not this application's share of it. That is

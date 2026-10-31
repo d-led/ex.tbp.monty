@@ -27,17 +27,22 @@ The server does not keep a copy of anything it talks about.
 
 | Question | Read from |
 | --- | --- |
-| What does the project say? | `docs/**` in the Monty checkout `MONTY_SOURCE` names (`../monty-orig` here) |
-| What does it plan? | `docs/future-work/<section>/<task>.md`, whose front matter is the project's own future-work table |
+| What does the project say? | `docs.thousandbrains.org` — its own search API, `/docs/<slug>.md`, and `llms.txt` |
+| What does it plan? | `futureworkwidget.thousandbrains.ai/data.json`, the data the project's own roadmap page renders |
 | Where is that in code? | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex), the same map `mix monty.module_map.verify` checks |
 | What is this experiment? | `Monty.Studio.open/2` — Monty's `conf/` tree, composed and read back |
 | Did the run work? | `studio_runs`, written by `Monty.Studio.Jobs.Run` as the run goes |
 
-Documentation answers carry the page's `path` and a link to its published
-address (`https://docs.thousandbrains.org/docs/<page>`), so a claim can be
-checked instead of believed. The published address is derived from the file
-name, which is how Monty's site addresses a page; a page the site has not
-published yet reads as a link that does not exist.
+Documentation answers carry the page's `slug` and a link to its published
+address (`https://docs.thousandbrains.org/docs/<slug>`), so a claim can be
+checked instead of believed. A page is named by its slug because that is how the
+site addresses it — `learning-modules`, not a path in a repository — and the
+same slug is what `monty_read_doc` and `monty_code_in_doc` take.
+
+Nothing here reads a Monty checkout: a neighbouring checkout is a *development*
+input (`mix monty.inputs` copies its configs in), and the image has none. A site
+that cannot be reached is reported in words with what to try next, because a
+tool that cannot answer still answers.
 
 Port status answers are the module map's verdict, not an opinion: `implemented`
 means the Elixir module exists, `planned` means it does not, `excluded` says
@@ -107,9 +112,9 @@ configured limit, rather than claiming a number it cannot see.
 
 Storage is the *device's* own answer — `df -kP` for the filesystem behind each
 place a run writes to, not this application's share of it — reported per place
-because a checkout keeps `priv/` and `~/tbp` on disks that need not be one. A
-machine the operating system will not answer for says so (`device: null`) rather
-than reporting zeros that read as a full disk.
+because a checkout keeps `priv/` and Monty's data roots on disks that need not be
+one. A machine the operating system will not answer for says so (`device: null`)
+rather than reporting zeros that read as a full disk.
 
 ### Asking "how many experiments?"
 
@@ -226,17 +231,20 @@ fails immediately looks like a run that worked.
 
 | Setting | Default | What it is |
 | --- | --- | --- |
-| `:monty_source` / `MONTY_SOURCE` | `../monty-orig` | the checkout the docs and configs are read from |
-| `:monty_docs_dir` | `<monty_source>/docs` | the documentation corpus |
-| `:monty_docs_url` | `https://docs.thousandbrains.org/docs/` | where pages are published |
+| `:docs_site` | `https://docs.thousandbrains.org` | the documentation site every docs tool reads |
+| `:docs_version` | unset — the current release | pins the site's search and page list to one release, e.g. `"0.56"` |
+| `:docs_http` | `ExTbpMonty.Mcp.Docs.Http.Req` | the one place a request is made, so a test serves bodies from a map |
+| `:monty_roadmap_url` | `https://futureworkwidget.thousandbrains.ai/data.json` | the project's roadmap data |
 | `:experiments_dir` | [`priv/experiments`](../priv/experiments) | where drafts are written |
+
+None of these is a path to a Monty checkout, and none needs one: the configs
+and snapshots the studio composes are already inside the image.
 
 ## What it is not
 
-There is no authentication. The tools read the checkout this application was
-built from and write only where the studio itself writes; that is a statement
-about a development server on a developer's machine, and the endpoint is meant
-to be used as one.
+There is no authentication. The tools read what the project publishes and write
+only where the studio itself writes; that is a statement about a development
+server on a developer's machine, and the endpoint is meant to be used as one.
 
 `Origin`, when a client sends one, must name this host — the DNS-rebinding
 defence the specification asks for — and `MCP-Protocol-Version`, when a client

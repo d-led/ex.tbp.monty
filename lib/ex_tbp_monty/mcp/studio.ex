@@ -117,9 +117,10 @@ defmodule ExTbpMonty.Mcp.Studio do
   end
 
   # The two places a run adds to the disk: what it leaves behind, and what it had
-  # to download first. In the container both are the one volume at `/app/priv`;
-  # in a checkout they are `priv/` and `~/tbp`, which may be the same disk or
-  # not — so the answer is per place rather than one figure for "the disk".
+  # to download first. In a container both are the one volume mounted under the
+  # application's home; in a checkout they are `priv/` and the roots the
+  # environment variables name, which need not be the same disk — so the answer
+  # is per place rather than one figure for "the disk".
   defp storage do
     [
       {"run artifacts and logs", Artifacts.root()},
