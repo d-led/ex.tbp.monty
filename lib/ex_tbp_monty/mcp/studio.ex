@@ -109,7 +109,8 @@ defmodule ExTbpMonty.Mcp.Studio do
             "a run steps this port's own scene; Monty's simulator in an external process is " <>
               "the default, and `monty_run_experiment` with `world: \"monty\"` (or the run " <>
               "page's selector) chooses it. `MONTY_PYTHON` is the interpreter it runs in",
-          else: "the simulator runs in an external process — the experiment's own engine — " <>
+          else:
+            "the simulator runs in an external process — the experiment's own engine — " <>
               "unless the run chooses the stand-in"
         )
     }

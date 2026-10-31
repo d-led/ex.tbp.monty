@@ -94,12 +94,22 @@ port's stand-in, and the record keeps which one it was. `MONTY_PYTHON` is the
 interpreter it runs in.
 
 Prerequisites: 2/2 present (pretrained_ycb_v13 present · pretrained_ycb_v13_zip present)
+
+Storage:
+  - run artifacts and logs at /app/priv/studio_runs: 412.0 GiB free of 900.0 GiB on / (54% used)
+  - prerequisite downloads at /app/priv/tbp/data: 412.0 GiB free of 900.0 GiB on / (54% used)
 ```
 
 The limit is read from the running queue, not from the config: the run page
 changes it while the queue drains, so the config value is where it started.
 A process with no queue up (a Mix task, a test run) says so and reports the
 configured limit, rather than claiming a number it cannot see.
+
+Storage is the *device's* own answer — `df -kP` for the filesystem behind each
+place a run writes to, not this application's share of it — reported per place
+because a checkout keeps `priv/` and `~/tbp` on disks that need not be one. A
+machine the operating system will not answer for says so (`device: null`) rather
+than reporting zeros that read as a full disk.
 
 ### Asking "how many experiments?"
 
@@ -125,6 +135,11 @@ Learning modules: 1 18
 learning modules, the objects the config names (or the sampler that places
 them), the connections, the epochs, the seed, `num_parallel`, and which classes
 are ported — in one response, so an assistant needs no filesystem of its own.
+It also says which world a run of it would step and what that run reads off the
+disk before it starts: the interpreter, the engine's package, the objects and
+the pretrained memory, each with its path and whether it is there. That is the
+same list `monty_run_experiment` refuses a run over, given before the attempt
+rather than after it.
 
 ### Taking one of Monty's experiments and changing it
 

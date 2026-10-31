@@ -117,6 +117,9 @@ defmodule ExTbpMonty.MixProject do
       {:pythonx, "~> 0.4.11"},
       {:oban, "~> 2.20"},
       {:req, "~> 0.5"},
+      # "24.8 GiB free" is what an operator reads, not 26_636_431_360: one
+      # tested formatter rather than one per page that shows a byte count.
+      {:humanizer, "~> 0.3.0"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.2"},

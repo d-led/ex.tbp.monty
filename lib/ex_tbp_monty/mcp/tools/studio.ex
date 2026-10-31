@@ -31,6 +31,8 @@ defmodule ExTbpMonty.Mcp.Tools.Studio do
 
     World: #{studio.world.mode} — #{studio.world.note}.
 
+    #{storage(studio.storage)}
+
     Prerequisites: #{prerequisites_line(studio.prerequisites)}
 
     Runs: #{base_url}/runs · integrations: #{base_url}/mcp/config
@@ -68,5 +70,24 @@ defmodule ExTbpMonty.Mcp.Tools.Studio do
       end)
 
     "#{present}/#{length(prerequisites)} present (#{details})"
+  end
+
+  # Where a run adds to the disk, and what is left on the volume behind each —
+  # the question an operator asks before queueing the next one.
+  defp storage([]), do: "Storage: nothing configured."
+
+  defp storage(places) do
+    "Storage:\n" <>
+      Enum.map_join(places, "\n", fn place ->
+        "  - #{place.what} at #{place.path}: #{room(place.device)}"
+      end)
+  end
+
+  defp room(nil), do: "the operating system did not say how much is left"
+
+  defp room(device) do
+    "#{Humanizer.bytes(device.free_bytes, system: :binary)} free of " <>
+      "#{Humanizer.bytes(device.total_bytes, system: :binary)} " <>
+      "on #{device.mount} (#{device.percent}% used)"
   end
 end

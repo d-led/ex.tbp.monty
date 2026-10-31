@@ -48,6 +48,25 @@ defmodule ExTbpMonty.Mcp.StudioTest do
         assert is_binary(path)
       end
     end
+
+    test "says how much room is left where a run and a download write" do
+      assert [run_place, download_place] = Studio.describe().storage
+
+      assert run_place.what == "run artifacts and logs"
+      assert download_place.what == "prerequisite downloads"
+
+      for place <- Studio.describe().storage do
+        assert Path.type(place.path) == :absolute
+
+        assert %{total_bytes: total, free_bytes: free, percent: percent, mount: mount} =
+                 place.device
+
+        assert total > 0
+        assert free >= 0 and free <= total
+        assert percent in 0..100
+        assert is_binary(mount)
+      end
+    end
   end
 
   describe "the tool an assistant calls" do
@@ -74,6 +93,14 @@ defmodule ExTbpMonty.Mcp.StudioTest do
       assert [{"The studio", [tool]} | _rest] = Mcp.Tools.families()
       assert tool["name"] == "monty_studio"
       assert tool["annotations"]["readOnlyHint"] == true
+    end
+
+    test "answers how much space is left in words a person reads" do
+      assert {:ok, %{text: text}} = Mcp.Tools.call("monty_studio", %{}, %{base_url: "http://x"})
+
+      assert text =~ "Storage:"
+      assert text =~ ~r/run artifacts and logs at .*: \d+(\.\d+)? (B|KiB|MiB|GiB|TiB) free of/
+      assert text =~ "% used"
     end
   end
 end

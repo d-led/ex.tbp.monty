@@ -66,8 +66,9 @@ defmodule ExTbpMonty.Mcp.Tools do
         "What this deployment is, as numbers: how many experiments are preconfigured, how " <>
           "many runs there are of each kind, how many episodes run at once (the queue's " <>
           "limit — the answer to \"can we run experiments in parallel here?\"), whether the " <>
-          "world is Monty's or this port's stand-in, and which data and model bundles are " <>
-          "present. Ask this instead of reading a filesystem: the files an assistant would " <>
+          "world is Monty's or this port's stand-in, which data and model bundles are " <>
+          "present, and how much room is left on the volumes runs and downloads write to. " <>
+          "Ask this instead of reading a filesystem: the files an assistant would " <>
           "look for are not on its side of the connection.",
       "inputSchema" => %{"type" => "object", "properties" => %{}},
       "annotations" => @read_only

@@ -251,10 +251,30 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
     connections: #{summary.counts.connections} · epochs: train #{summary.epochs.train}, eval #{summary.epochs.eval} · seed: #{inspect(summary.seed)}
     parallel: #{parallel_text(summary.parallel)}
     ported here: #{summary.ported.implemented}/#{summary.ported.total} classes
+    #{needs_text(summary)}
 
     #{findings_text(summary.findings)}
     """
   end
+
+  # The question before the button: a run refuses while any of these is missing,
+  # so the answer belongs here rather than only in a refusal at the end.
+  defp needs_text(%{world: "synthetic"}),
+    do: "on disk: nothing — this world reads no files."
+
+  defp needs_text(%{needs: []}), do: "on disk: nothing — this setup reads no files."
+
+  defp needs_text(%{needs: needs}) do
+    here = Enum.count(needs, & &1.present?)
+
+    "on disk (#{here}/#{length(needs)} here):\n" <>
+      Enum.map_join(needs, "\n", fn need ->
+        "  - #{presence(need.present?)}: #{need.what} at #{need.path}"
+      end)
+  end
+
+  defp presence(true), do: "here"
+  defp presence(false), do: "missing"
 
   defp objects_text(%{count: count, names: names}) when is_integer(count) do
     "#{count} named by the config (#{Enum.join(Enum.take(names, 6), ", ")}#{if count > 6, do: ", …"})"
