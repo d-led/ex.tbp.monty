@@ -72,8 +72,18 @@ defmodule Mix.Tasks.Monty.Inputs do
           options
         )
 
-      {:error, reason} ->
-        refuse("cannot check the copy", inspect(reason), options)
+      {:error, {:missing, name, dir}} ->
+        refuse(
+          "nothing to check the copy against",
+          """
+          No #{name} at #{dir}.
+
+          Checking compares priv/monty with a checkout, so it needs one. The copy
+          itself needs nothing: `mix monty.inputs` checks a checkout out if there
+          is none.
+          """,
+          options
+        )
     end
   end
 
