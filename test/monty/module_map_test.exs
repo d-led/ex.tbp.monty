@@ -47,7 +47,8 @@ defmodule Monty.ModuleMapTest do
     test "covers every Python file in both packages" do
       if File.dir?(Path.join(Monty.Config.Source.root(), "src/tbp/monty")) do
         assert {:ok, summary} = ModuleMap.verify()
-        assert summary.modules > 100
+        assert summary.files > 100
+        assert summary.classes > summary.files
         assert summary.by_package["monty"] > 100
         assert summary.by_package["teleop"] >= 7
       end

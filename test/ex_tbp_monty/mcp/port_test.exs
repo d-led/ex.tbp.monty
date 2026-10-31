@@ -54,7 +54,7 @@ defmodule ExTbpMonty.Mcp.PortTest do
     test "counts what exists here and lists what does not" do
       status = Port.status()
 
-      assert status.summary.modules > 100
+      assert status.summary.classes > 100
       assert status.summary.implemented > 0
       assert Enum.any?(status.planned, &(&1.elixir == "Monty.Attention.AttentionSystem"))
     end

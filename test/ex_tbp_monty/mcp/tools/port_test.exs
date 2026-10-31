@@ -39,8 +39,8 @@ defmodule ExTbpMonty.Mcp.Tools.PortTest do
     test "counts what exists, what is planned and what is left out" do
       assert {:ok, %{text: text, structured: %{summary: summary}}} = Port.status(%{}, %{})
 
-      assert summary.modules > 0
-      assert text =~ "#{summary.implemented} of #{summary.modules} modules implemented"
+      assert summary.classes > 0
+      assert text =~ "#{summary.implemented} of #{summary.classes} classes implemented"
     end
   end
 end

@@ -68,8 +68,8 @@ defmodule ExTbpMonty.Mcp.Tools.Port do
 
   defp status_text(summary, planned) do
     header =
-      "#{summary.implemented} of #{summary.modules} modules implemented, " <>
-        "#{summary.planned} planned, #{summary.excluded} excluded " <>
+      "#{summary.implemented} of #{summary.classes} classes implemented, " <>
+        "#{summary.planned} planned, #{summary.excluded} excluded, in #{summary.files} files " <>
         "(#{Enum.map_join(summary.by_package, ", ", fn {package, count} -> "#{package}: #{count}" end)})."
 
     case planned do

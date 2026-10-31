@@ -128,18 +128,33 @@ defmodule Monty.ModuleMap do
     end
   end
 
-  @doc "Counts by status."
+  @doc """
+  Counts by status, of the classes and of the files that hold them.
+
+  The count that answers "how much of Monty is ported" is the classes': a file is
+  ported when the classes a config can name in it are, and most of Monty's files
+  hold several. `files` is there too, because a file is what a reader opens, and
+  the two numbers are different questions rather than two spellings of one.
+  """
   @spec summary([entry()]) :: map()
   def summary(entries) do
-    counts = Enum.frequencies_by(entries, & &1.status)
+    classes = Enum.flat_map(entries, & &1.classes)
+    counts = Enum.frequencies_by(classes, & &1.status)
 
     %{
-      modules: length(entries),
+      files: length(entries),
+      classes: length(classes),
       implemented: Map.get(counts, :implemented, 0),
       planned: Map.get(counts, :planned, 0),
       excluded: Map.get(counts, :excluded, 0),
-      by_package: Enum.frequencies_by(entries, & &1.package)
+      by_package: classes_by_package(entries)
     }
+  end
+
+  defp classes_by_package(entries) do
+    Enum.reduce(entries, %{}, fn entry, counts ->
+      Map.update(counts, entry.package, length(entry.classes), &(&1 + length(entry.classes)))
+    end)
   end
 
   @doc """
