@@ -6,8 +6,8 @@ model it and say where the sensor is on it. This is that system rewritten in
 Elixir — one process per module, every experiment Monty ships on a page in a
 browser, and an MCP endpoint for an assistant.
 
-The port is module for module, and checked against Monty's own numbers rather
-than against a description of it. Where it deliberately differs, it says so.
+The port is module for module and checked against Monty's own numbers;
+differences are listed in [docs/monty-bugs.md](docs/monty-bugs.md).
 
 ## Run it
 
@@ -18,11 +18,10 @@ docker compose up
 
 → <http://localhost:4001>
 
-No checkout, no build, nothing to configure. The image is
-`ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64); compose adds the Postgres
-it needs and runs the migration itself. The database and everything
-`/prerequisites` downloads live in volumes, so a restart is a restart —
-`docker compose down -v` deletes them.
+The image is `ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64); the compose
+file adds the Postgres it needs and runs the migration. The database and
+`/prerequisites` downloads are named volumes, so `docker compose down` keeps
+them and `docker compose down -v` deletes them.
 
 The image alone, against a Postgres you already have:
 
@@ -75,13 +74,12 @@ a module is added.
 * **Processes, not a loop.** A step is a barrier over processes: sensor modules,
   learning modules and the motor system exchange CMP messages, and a vote is a
   round with a deadline — [docs/architecture.md](docs/architecture.md).
-* **The experiment's own engine, unless you choose otherwise.** A run steps
+* **The experiment's own engine, unless the run chooses otherwise.** A run steps
   MuJoCo or Habitat-Sim through Monty's Python, in an external process that
-  *imports* Monty rather than copying it; the Elixir stand-in scene is what a run
-  chooses instead — [docs/simulator-port.md](docs/simulator-port.md).
-* **Checked against Monty, not asserted.** What was compared, with which numbers,
-  is [docs/validation.md](docs/validation.md); every difference is
-  [docs/monty-bugs.md](docs/monty-bugs.md); what is ported is measured in
+  imports Monty; the Elixir stand-in scene is the alternative —
+  [docs/simulator-port.md](docs/simulator-port.md).
+* **Checked against Monty.** What was compared, with which numbers, is
+  [docs/validation.md](docs/validation.md); what is ported is measured in
   [docs/features.md](docs/features.md).
 
 ## Where it differs
@@ -99,7 +97,7 @@ follows from that is argued in [docs/monty-bugs.md](docs/monty-bugs.md) §2.
 * **Values returned, not mutated.** Python's subclasses and self-mutating objects
   become functions and returned state.
 * **A UI and an MCP server.** A page per experiment, runs kept in Postgres, and
-  `/mcp` — nothing Python has.
+  `/mcp`.
 
 ## Docs
 
