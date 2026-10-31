@@ -251,6 +251,9 @@ defmodule ExTbpMontyWeb.BuildLive do
 
   defp coerce(_key, value), do: value
 
+  # `path` is the temporary file Phoenix wrote for this upload, not anything the
+  # browser named; the client's file name is only classified, never opened.
+  # sobelow_skip ["Traversal.FileModule"]
   defp read_upload(socket) do
     case consume_uploaded_entries(socket, :yaml, fn %{path: path}, entry ->
            {:ok, {entry.client_name, File.read!(path)}}

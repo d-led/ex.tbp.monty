@@ -12,9 +12,9 @@ defmodule Monty.Studio.Drafts do
   directory.
   """
 
+  alias Monty.Config.Source
   alias Monty.Studio.Blueprint
   alias Monty.Studio.Setup
-  alias Monty.Config.Source
 
   @default_dir "priv/experiments"
 
@@ -121,6 +121,9 @@ defmodule Monty.Studio.Drafts do
     end
   end
 
+  # Only a name Monty ships gets here (`export/1` checks `Source.experiments/0`
+  # first), and the file is read under the checked-in `conf` directory.
+  # sobelow_skip ["Traversal.FileModule"]
   defp export_monty(name) do
     path = Path.join([Source.conf_dir(), "experiment", name <> ".yaml"])
 
@@ -149,6 +152,9 @@ defmodule Monty.Studio.Drafts do
   The name is a new name, not the file's: a draft is one file name, and
   overwriting an existing draft takes `overwrite: true`.
   """
+  # `importable_name/1` and `path/1` refuse anything that is not one file name,
+  # so neither the directory nor the file it writes can leave the drafts dir.
+  # sobelow_skip ["Traversal.FileModule"]
   @spec import(String.t(), String.t(), keyword()) :: {:ok, map()} | {:error, String.t()}
   def import(name, yaml, opts \\ []) do
     with :ok <- importable_name(name),

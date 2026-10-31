@@ -11,6 +11,11 @@ defmodule Monty.Config.Inputs do
   Hydra (`update_snapshots.py`, `__pycache__`), which nothing here reads. A file
   upstream deleted is deleted here too — a config that no longer exists must not
   linger in the studio and be run against nothing.
+
+  Every path below is one of two, and both are fixed by configuration: the
+  checkout root a caller passed in, and `priv/monty`. Neither is a request —
+  this runs in a Mix task — so the file operations carry `sobelow_skip` instead
+  of a guard that would only be defending against a value nobody supplies.
   """
 
   alias Monty.Config.Source
@@ -99,6 +104,7 @@ defmodule Monty.Config.Inputs do
   end
 
   # Every file the copy should hold, keyed by its path relative to the copy.
+  # sobelow_skip ["Traversal.FileModule"]
   defp wanted_files(monty_root) do
     conf = yaml_files(Path.join([monty_root | @conf]), "conf")
     snapshots = yaml_files(Path.join([monty_root | @snapshots]), "snapshots")
@@ -107,6 +113,7 @@ defmodule Monty.Config.Inputs do
     Map.merge(Map.merge(conf, snapshots), licence)
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp yaml_files(dir, prefix) do
     dir
     |> Path.join("**/*.yaml")
@@ -116,6 +123,7 @@ defmodule Monty.Config.Inputs do
     end)
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp destination_files(destination) do
     for prefix <- ["conf", "snapshots"] do
       destination
@@ -128,6 +136,7 @@ defmodule Monty.Config.Inputs do
     end)
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp licence_file(destination) do
     path = Path.join(destination, "LICENSE")
 
@@ -145,6 +154,7 @@ defmodule Monty.Config.Inputs do
     written ++ prune(destination, prefix, Map.keys(yaml_files(source_dir, prefix)))
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp copy_licence(monty_root, destination) do
     case write(destination, "LICENSE", File.read!(Path.join(monty_root, "LICENSE"))) do
       :unchanged -> []
@@ -152,6 +162,7 @@ defmodule Monty.Config.Inputs do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp write(destination, relative, content) do
     path = Path.join(destination, relative)
 
@@ -170,6 +181,7 @@ defmodule Monty.Config.Inputs do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp prune(destination, prefix, keep) do
     wanted = MapSet.new(keep)
 
@@ -216,6 +228,7 @@ defmodule Monty.Config.Inputs do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp write_manifest(destination, summary) do
     manifest = %{
       "monty" => summary.monty,

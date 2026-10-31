@@ -225,13 +225,13 @@ defmodule ExTbpMonty.Mcp.Tools do
       "name" => "monty_list_experiments",
       "title" => "List experiments (counts and facets)",
       "description" =>
-        "How many experiments there are, the choices they make counted, and a page of the " <>
-          "matching ones. `agent` (dist/surf), `modules` (learning modules, a number), " <>
-          "`learning_module`, `model` (pretrained/scratch) and a word `query` are all " <>
-          "optional and combine; the counts respect them. This is the tool for \"how many " <>
-          "experiments\", \"which use surface agents\", \"how many with five learning " <>
-          "modules\" — not a list to count yourself. Whether *this deployment* runs several at once is " <>
-          "`monty_studio`, and not a property of a config.",
+        ~s|How many experiments there are, the choices they make counted, and a page of | <>
+          ~s|the matching ones. `agent` (dist/surf), `modules` (learning modules, a | <>
+          ~s|number), `learning_module`, `model` (pretrained/scratch) and a word `query` | <>
+          ~s|are all optional and combine; the counts respect them. This is the tool for | <>
+          ~s|"how many experiments", "which use surface agents", "how many with five | <>
+          ~s|learning modules" — not a list to count yourself. Whether *this deployment* | <>
+          ~s|runs several at once is `monty_studio`, and not a property of a config.|,
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
