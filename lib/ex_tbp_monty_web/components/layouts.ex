@@ -71,6 +71,24 @@ defmodule ExTbpMontyWeb.Layouts do
             The queue's own page is one click from there, for the operator who
             needs to stop something. --%>
             <.nav_link id="nav-runs" navigate={~p"/runs"} label="Runs" icon="hero-play-mini" />
+
+            <%!-- The walkthrough, on every page rather than on the one it
+            describes: a help button nobody can find is not help. driver.js
+            skips the steps whose target this page does not have, so the tour
+            is the full one on the index and the shell elsewhere. --%>
+            <button
+              id="tour-start"
+              type="button"
+              phx-hook="StudioTour"
+              phx-update="ignore"
+              data-steps={ExTbpMontyWeb.Tour.payload()}
+              data-seen-key={ExTbpMontyWeb.Tour.seen_key()}
+              class="btn btn-ghost btn-sm gap-1.5 font-normal"
+              title="Show the walkthrough"
+              aria-label="Show the walkthrough"
+            >
+              <.icon name="hero-question-mark-circle-mini" class="size-4 opacity-70" /> help
+            </button>
           </nav>
         </div>
       </header>

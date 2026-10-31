@@ -61,6 +61,12 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
       assert [%{"element" => _} | _] = Jason.decode!(payload)
     end
 
+    test "the button is in the nav, so a page without the list still has it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+      assert has_element?(view, "nav button#tour-start")
+    end
+
     test "the button is outside LiveView's patching, so the hook keeps its element", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 

@@ -21,7 +21,14 @@ export const StudioTour = {
   },
 
   start() {
-    const steps = JSON.parse(this.el.dataset.steps || "[]")
+    // Steps name a selector, and a page that does not have that element would
+    // otherwise show a popover pointing at nothing. Which page a visitor is on
+    // is the browser's to know, so the filter lives here: the full tour on the
+    // index, the shell (nav and footer) everywhere else.
+    const steps = JSON.parse(this.el.dataset.steps || "[]").filter(
+      step => step.element && document.querySelector(step.element),
+    )
+
     if (steps.length === 0) return
 
     driver({
