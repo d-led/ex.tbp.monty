@@ -59,9 +59,8 @@ Docker is not on PATH, so there is nothing to pull or run.
 Either install Docker Desktop (https://docs.docker.com/get-docker/) and run this
 again, or run it from a checkout with Elixir on the machine:
 
-    docker compose up -d      # Postgres 17 on :6432
-    mix setup                 # deps, database, assets
-    mix phx.server            # http://localhost:4000
+    scripts/init-dev.sh       # Postgres, dependencies, database, assets
+    scripts/run-dev.sh        # http://localhost:4000
 MESSAGE
 )"
 
