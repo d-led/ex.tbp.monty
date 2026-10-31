@@ -1105,7 +1105,7 @@ defmodule Monty.ModuleMap.Data do
           python: "WandbWrapper"
         },
         %{
-          status: :planned,
+          status: :implemented,
           elixir: "Monty.Frameworks.Loggers.WandbHandlers.WandbHandler",
           python: "WandbHandler"
         },
