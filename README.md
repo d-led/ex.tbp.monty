@@ -187,6 +187,7 @@ docs/                    architecture, config compatibility, module map, MCP, va
 | [docs/simulator-port.md](docs/simulator-port.md) | where the world lives, and what is still Python |
 | [docs/parallel-and-live.md](docs/parallel-and-live.md) | parallel episodes and a live world — designed, not built |
 | [docs/roadmap.md](docs/roadmap.md) | the order the rest of Monty arrives in |
+| [docs/open-ends.md](docs/open-ends.md) | everything TBP and its community say is still open, as a menu to pick from |
 | [docs/mcp.md](docs/mcp.md) | `POST /mcp` — ask this app about Monty's docs, roadmap and code, and define and run an experiment from a conversation |
 
 ## Licence
