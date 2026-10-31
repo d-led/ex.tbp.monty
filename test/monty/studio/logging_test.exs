@@ -95,8 +95,11 @@ defmodule Monty.Studio.LoggingTest do
 
     assert logger.handlers |> length() == 1
 
+    # The wrapper is this port's now; the handlers it would wrap are not, so it is
+    # the wrapper that is skipped, and its children are named first.
     assert notes == [
-             "logging: tbp.monty.frameworks.loggers.wandb_handlers.py::WandbWrapper is not ported yet; skipped"
+             "logging: tbp.monty.frameworks.loggers.wandb_handlers.py::BasicWandbTableStatsHandler is not ported yet; skipped",
+             "logging: tbp.monty.frameworks.loggers.wandb_handlers.py::WandbWrapper wraps no handler this port has; skipped"
            ]
   end
 

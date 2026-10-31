@@ -129,6 +129,40 @@ defmodule Monty.ModuleMap do
   end
 
   @doc """
+  The commit each package was at when the map was generated.
+
+  The map describes a checkout at a moment, and checkouts move: the map carries
+  that moment so a regenerated map shows it in the diff, and so a stale map can
+  be recognised rather than trusted.
+  """
+  @spec sources() :: %{optional(String.t()) => map()}
+  def sources, do: Monty.ModuleMap.Data.sources()
+
+  @doc """
+  Packages whose checkout has moved away from the commit the map names.
+
+  Answers `{package, recorded_commit, current_commit}`, empty when the map is
+  current or when a checkout cannot be asked — a package unpacked from an archive
+  has no commit, and that is not a drift.
+  """
+  @spec moved() :: [{String.t(), String.t() | nil, String.t()}]
+  def moved do
+    for {name, %{"commit" => recorded}} <- sources(),
+        package = package(name),
+        current = commit(package.root.()),
+        current != nil,
+        current != recorded,
+        do: {name, recorded, current}
+  end
+
+  defp commit(root) do
+    case System.cmd("git", ["-C", root, "rev-parse", "HEAD"], stderr_to_stdout: true) do
+      {output, 0} -> String.trim(output)
+      _no_git_or_not_a_checkout -> nil
+    end
+  end
+
+  @doc """
   Counts by status, of the classes and of the files that hold them.
 
   The count that answers "how much of Monty is ported" is the classes': a file is

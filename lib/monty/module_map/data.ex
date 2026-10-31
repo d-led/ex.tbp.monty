@@ -7,7 +7,22 @@ defmodule Monty.ModuleMap.Data do
 
   It is a literal here rather than a file read at run time: the map is data, and
   the code that mirrors Monty should not be a reader of files it is told about.
+
+  `sources/0` says which commit of each package these entries were read from.
+  A map generated before a checkout moved is a map of the commits it names, not
+  of the code beside it, and `mix monty.module_map.verify` says so.
   """
+
+  @sources %{
+    "monty" => %{
+      "commit" => "760ad1746feda1368cdbdc5aefe4be5a707de39d",
+      "date" => "2026-10-30T12:59:57-05:00"
+    },
+    "teleop" => %{
+      "commit" => "2476e5c06a23fb8916ccfcd015a93990316bcbdc",
+      "date" => "2026-10-20T14:08:08+02:00"
+    }
+  }
 
   @entries [
     %{
@@ -372,6 +387,11 @@ defmodule Monty.ModuleMap.Data do
           status: :implemented,
           elixir: "Monty.Experiment.RecognitionPolicy.StepLimit",
           python: "StepLimit"
+        },
+        %{
+          status: :planned,
+          elixir: "Monty.Experiment.RecognitionPolicy.MatchCriteria",
+          python: "MatchCriteria"
         },
         %{
           status: :implemented,
@@ -1100,7 +1120,7 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/loggers/wandb_handlers.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
           elixir: "Monty.Frameworks.Loggers.WandbHandlers.WandbWrapper",
           python: "WandbWrapper"
         },
@@ -2964,6 +2984,10 @@ defmodule Monty.ModuleMap.Data do
       ]
     }
   ]
+
+  @doc "The commit each package was at when this map was generated."
+  @spec sources() :: %{optional(String.t()) => %{optional(String.t()) => String.t() | nil}}
+  def sources, do: @sources
 
   @doc "Every entry, in the order the generator wrote them."
   @spec entries() :: [map()]

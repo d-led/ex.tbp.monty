@@ -63,7 +63,17 @@ defmodule Monty.Studio.Logging do
   @spec detailed?(plan()) :: boolean()
   def detailed?(%{detailed?: detailed?}), do: detailed?
 
-  defp wants_detail?(handlers), do: Enum.any?(handlers, &(&1.__struct__.log_level() == :detailed))
+  defp wants_detail?(handlers) when is_list(handlers), do: Enum.any?(handlers, &wants_detail?/1)
+
+  # A wrapper keeps nothing back itself, so the question goes on to the handlers
+  # it holds: a `DetailedWandbTableStatsHandler` inside a `WandbWrapper` decides
+  # the run's level exactly as it would on its own.
+  defp wants_detail?(%{handlers: children} = handler)
+       when is_struct(handler) and is_list(children) do
+    handler.__struct__.log_level() == :detailed or wants_detail?(children)
+  end
+
+  defp wants_detail?(handler), do: handler.__struct__.log_level() == :detailed
 
   @doc """
   What this plan writes, in one line for a run's log.
@@ -129,25 +139,82 @@ defmodule Monty.Studio.Logging do
   defp handlers(handlers) do
     {built, notes} =
       Enum.reduce(handlers, {[], []}, fn handler, {built, notes} ->
-        case handler_module(handler) do
-          {:ok, module, config} -> {[module.from_config(config) | built], notes}
-          {:error, note} -> {built, [note | notes]}
+        case build(handler) do
+          {:ok, struct, nested} -> {[struct | built], notes ++ nested}
+          {:error, refused} -> {built, notes ++ refused}
         end
       end)
 
-    {Enum.reverse(built), Enum.reverse(notes)}
+    {Enum.reverse(built), notes}
   end
 
-  defp handler_module(%{module: nil}) do
-    {:error, "logging: a handler in this config names no class; skipped"}
+  # A handler is built from the keywords its config gives it, and those keywords
+  # can name classes themselves — a `WandbWrapper` is given its `wandb_handlers`
+  # — so building one is the same job one level down, with the same rule: a class
+  # this port does not have is skipped and named rather than handed to a handler
+  # as `nil`.
+  defp build(%{module: nil}) do
+    {:error, ["logging: a handler in this config names no class; skipped"]}
   end
 
-  defp handler_module(%{module: description, config: config}) do
+  defp build(%{module: description, config: config}) do
     case described_module(description) do
-      {:ok, module} -> {:ok, module, config}
-      {:error, why} -> {:error, "logging: #{why}; skipped"}
+      {:ok, module} ->
+        {arguments, notes} = arguments(config)
+
+        # A handler that asks for nested handlers and gets none has nothing to
+        # report: a `WandbWrapper` with no handlers would open a run and commit
+        # empty steps. Saying so is the same rule as for the classes themselves.
+        if emptied?(config, arguments) do
+          {:error,
+           notes ++ ["logging: #{cite(description)} wraps no handler this port has; skipped"]}
+        else
+          {:ok, module.from_config(arguments), notes}
+        end
+
+      {:error, why} ->
+        {:error, ["logging: #{why}; skipped"]}
     end
   end
+
+  defp emptied?(config, arguments) do
+    Enum.any?(config, fn {key, value} -> asked?(value) and Map.get(arguments, key) == [] end)
+  end
+
+  defp asked?(list) when is_list(list), do: Enum.any?(list, &match?(%{module: _}, &1))
+  defp asked?(_not_a_list), do: false
+
+  defp arguments(config) do
+    {pairs, notes} =
+      Enum.map_reduce(config, [], fn {key, value}, notes ->
+        {value, nested} = argument(value)
+        {{key, value}, notes ++ nested}
+      end)
+
+    {Map.new(pairs), notes}
+  end
+
+  # Only a described handler, and a list of them, nest. A plain keyword passes
+  # through untouched: a string that happens to name a class is a parameter, not
+  # a target.
+  defp argument(%{module: _} = entry) do
+    case build(entry) do
+      {:ok, struct, notes} -> {struct, notes}
+      {:error, refused} -> {nil, refused}
+    end
+  end
+
+  defp argument(list) when is_list(list) do
+    {values, notes} =
+      Enum.map_reduce(list, [], fn value, notes ->
+        {value, nested} = argument(value)
+        {value, notes ++ nested}
+      end)
+
+    {Enum.reject(values, &is_nil/1), notes}
+  end
+
+  defp argument(value), do: {value, []}
 
   # The map says whether a class is ported; the code loader says whether the
   # module it points at is there. Asking both keeps a stale map from becoming a

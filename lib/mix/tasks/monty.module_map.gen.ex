@@ -48,7 +48,7 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
       |> Enum.sort_by(&{&1.package, &1.python})
 
     File.mkdir_p!(Path.dirname(@map_path))
-    File.write!(@map_path, render(entries) |> Code.format_string!())
+    File.write!(@map_path, render(entries, sources()) |> Code.format_string!())
 
     summary = ModuleMap.summary(entries)
 
@@ -199,7 +199,30 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
         do: {class, Map.get(excluded, :reason)}
   end
 
-  defp render(entries) do
+  # What the map was generated from, per package. The checkouts move under us —
+  # `git pull` in the Monty checkout once changed 297 files — so the map carries
+  # the commit it describes: a regenerated map then *says* upstream moved, in the
+  # diff, instead of leaving a stale map to be discovered by a failing test.
+  defp sources do
+    Map.new(ModuleMap.packages(), fn package ->
+      root = package.root.()
+
+      {package.name,
+       %{
+         "commit" => git(root, ~w(rev-parse HEAD)),
+         "date" => git(root, ~w(show -s --format=%cI HEAD))
+       }}
+    end)
+  end
+
+  defp git(root, arguments) do
+    case System.cmd("git", ["-C", root | arguments], stderr_to_stdout: true) do
+      {output, 0} -> String.trim(output)
+      _no_git_or_not_a_checkout -> nil
+    end
+  end
+
+  defp render(entries, sources) do
     """
     defmodule Monty.ModuleMap.Data do
       @moduledoc \"\"\"
@@ -210,9 +233,19 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
 
       It is a literal here rather than a file read at run time: the map is data, and
       the code that mirrors Monty should not be a reader of files it is told about.
+
+      `sources/0` says which commit of each package these entries were read from.
+      A map generated before a checkout moved is a map of the commits it names, not
+      of the code beside it, and `mix monty.module_map.verify` says so.
       \"\"\"
 
+      @sources #{inspect(sources, pretty: true, limit: :infinity)}
+
       @entries #{inspect(entries, pretty: true, limit: :infinity, printable_limit: :infinity)}
+
+      @doc "The commit each package was at when this map was generated."
+      @spec sources() :: %{optional(String.t()) => %{optional(String.t()) => String.t() | nil}}
+      def sources, do: @sources
 
       @doc "Every entry, in the order the generator wrote them."
       @spec entries() :: [map()]

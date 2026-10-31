@@ -111,7 +111,25 @@ benchmarks rather than after.
   A config's own model runs against it (`scripts/probe_world_episodes.exs`), and
   what that comparison shows — objects agree, step counts do not, because of the
   random-stream deviation of §2.1 in `monty-bugs.md` — is in
-  `docs/validation.md`. MuJoCo is the same shape of job and has not been done.
+  `docs/validation.md`.
+- **Next: MuJoCo — the same bridge, with a heavier far side.** All 17 classes of
+  `simulators/mujoco/` are `:planned`: `agents.py` (`Axis`, `Embodiment`, `Agent`,
+  `NoopAgent`, `DistantAgent`, `SurfaceAgent`), `objects.py` (`ObjectMetadata`,
+  `ObjectMetadataDecoder` and the two errors a bad YCB entry raises) and
+  `simulator.py` (`MuJoCoSimulator`, `MuJoCoAgentFactory`, `ModelMetadata`,
+  `UnknownObjectType` and the three configuration errors). The Elixir half is
+  nearly free — `Monty.Simulators.Port.Protocol` already carries actions and
+  observations, `Synthetic.Kinematics` already follows MuJoCo's action
+  conventions, and `pythonx` runs Python in-process, so the peer is a module here
+  rather than a conda environment somewhere else. The far half is not free: the
+  `mujoco` wheel and its EGL/OSMesa off-screen rendering, the MJCF scenes, the YCB
+  object models under `MONTY_DATA`, `MuJoCoAgentFactory`'s choice of body per
+  `embodiment`, and depth and colour a sensor can be checked against. Habitat has
+  already shown where the difficulty is not: the wiring, which is shared, but the
+  random stream in the middle of an episode (`monty-bugs.md` §2.1). MuJoCo puts
+  physics on top of that, so the comparison is the work, not the bridge.
+  **Done when**: `world_simulator: :mujoco` steps Monty's own physics world through
+  the studio, and the setup page stops calling the scene synthetic.
 - Observation transforms (`DepthTo3DLocations`, `MissingToMaxDepth`, noise,
   blur) in Elixir: pure math, testable, and the reason frames can still be drawn.
 - Recorded transcripts replayed in tests; a live MuJoCo test tagged
@@ -184,8 +202,11 @@ from the page and from `mix monty.run`.
 ## Not in scope
 
 No pretrained `.pt`/torch checkpoint import (graphs only, rebuild by running a
-training experiment); no Habitat; no GPU or EXLA requirement; no distributed
-clustering (the design keeps it possible); no WandB.
+training experiment); no GPU or EXLA requirement; no distributed clustering (the
+design keeps it possible). Habitat and MuJoCo are not exclusions but bridges, and
+Phase 2 holds their order: Habitat's is done, MuJoCo's is next. wandb is in the
+same position — `WandbWrapper` and the Python client behind it exist and are
+tested offline; what a deployment adds is credentials, not code.
 
 Two things that are not scope decisions but *later milestones* — Monty's
 parallel episodes and an episode against a live world — are worked out in

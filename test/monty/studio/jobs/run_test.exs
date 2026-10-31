@@ -115,7 +115,7 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert log =~
                "the episode is reported to Monty.Frameworks.Loggers.MontyHandlers.BasicCSVStatsHandler"
 
-      assert log =~ "wandb_handlers.py::WandbWrapper is not ported yet"
+      assert log =~ "wandb_handlers.py::WandbWrapper wraps no handler this port has"
       assert log =~ Artifacts.dir(closed.id)
     end
 

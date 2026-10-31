@@ -270,11 +270,24 @@ defmodule Monty.Studio.Setup do
   defp handler(entry) when is_map(entry) do
     %{
       module: describe_target(Map.get(entry, "_target_")),
-      config: Map.drop(entry, ["_target_"])
+      config: entry |> Map.drop(["_target_"]) |> described()
     }
   end
 
-  defp handler(_not_a_map), do: %{module: nil, config: %{}}
+  # A handler's keyword can itself name a class: a `WandbWrapper` is given its
+  # `wandb_handlers` that way. Only a list is looked through — a keyword holding
+  # one target is a *value* the config resolved, such as `wandb_id:
+  # ${wandb.util.generate_id:}`, and describing it as a handler would be reading
+  # a call as a class.
+  defp described(config) do
+    Map.new(config, fn {key, value} -> {key, named(value)} end)
+  end
+
+  defp named(list) when is_list(list), do: Enum.map(list, &handler_or_value/1)
+  defp named(value), do: value
+
+  defp handler_or_value(%{"_target_" => _} = entry), do: handler(entry)
+  defp handler_or_value(value), do: value
 
   @doc "The findings at one level."
   @spec findings(t(), Finding.level()) :: [Finding.t()]
@@ -680,15 +693,30 @@ defmodule Monty.Studio.Setup do
     Map.get(config, "train_env_interface_class") || Map.get(config, "eval_env_interface_class")
   end
 
-  # Where a config's simulator puts everything. Habitat's `agent_args` give the
-  # agent a position and no rotation — the rotations it lists are the sensors',
-  # relative to the agent — and `env_init_args.objects` give the object a place
-  # 0.2 m in front of it.
+  # Where a config's simulator puts everything. Habitat gives the agent a
+  # position through `agents.agent_args`, plus the sensors' offsets relative to
+  # the agent; MuJoCo gives `agents` as a list of agent objects, and mounts the
+  # sensors in the scene rather than placing them from the config. Either way the
+  # agent's own pose is what the scene needs, and `env_init_args.objects` give the
+  # object a place 0.2 m in front of it.
   defp scene(config) do
     args = get_in(config, ["environment", "env_init_args"]) || %{}
-    agent_args = get_in(args, ["agents", "agent_args"]) || %{}
+    agent = agent(args)
 
-    %{agent: agent_pose(agent_args), sensors: sensor_poses(agent_args), objects: objects(args)}
+    %{agent: agent_pose(agent), sensors: sensor_poses(agent), objects: objects(args)}
+  end
+
+  defp agent(args) do
+    case Map.get(args, "agents") do
+      [%{} = agent | _more] ->
+        %{"position" => Map.get(agent, "position"), "rotation" => Map.get(agent, "rotation")}
+
+      %{} = agents ->
+        Map.get(agents, "agent_args") || %{}
+
+      _no_agent ->
+        %{}
+    end
   end
 
   defp agent_pose(agent_args) do
@@ -749,11 +777,32 @@ defmodule Monty.Studio.Setup do
   # field of view is the simulator's — 90 degrees for Habitat — unless a config
   # says otherwise, which none of Monty's do.
   defp cameras(config) do
-    case get_in(config, ["environment", "env_init_args", "agents", "agent_args"]) do
-      %{} = args -> cameras_of(args)
-      _absent -> %{}
+    args = get_in(config, ["environment", "env_init_args"]) || %{}
+
+    case Map.get(args, "agents") do
+      [%{} = agent | _more] -> Map.get(agent, "sensor_configs") |> cameras_in_objects()
+      %{} = agents -> cameras_of(Map.get(agents, "agent_args") || %{})
+      _no_agent -> %{}
     end
   end
+
+  # MuJoCo's agent object names each sensor's config, and the config carries its
+  # own resolution and zoom — the same numbers, said one sensor at a time instead
+  # of three parallel lists. Habitat's field of view stays the simulator's.
+  defp cameras_in_objects(%{} = sensor_configs) do
+    for {sensor_id, %{} = sensor_config} <- sensor_configs,
+        %{"width" => width, "height" => height} = Map.get(sensor_config, "resolution"),
+        into: %{} do
+      {sensor_id,
+       [
+         resolution: {width, height},
+         zoom: Map.get(sensor_config, "zoom", 1.0),
+         hfov: @habitat_hfov
+       ]}
+    end
+  end
+
+  defp cameras_in_objects(_no_sensor_configs), do: %{}
 
   defp cameras_of(args) do
     sensor_ids = List.wrap(Map.get(args, "sensor_ids"))

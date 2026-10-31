@@ -40,12 +40,13 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     test "says what the run will log with before it runs", %{conn: conn} do
       # This experiment's logging group names the CSV handler and wandb. The
-      # handler this port does not have is said here, beside the findings, rather
-      # than only in the log of a run that has already happened.
+      # wrapper is this port's, but nothing it would wrap is; that is said here,
+      # beside the findings, rather than only in the log of a run that has already
+      # happened.
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
 
       assert has_element?(view, "#logging-notes")
-      assert render(view) =~ "WandbWrapper is not ported yet"
+      assert render(view) =~ "WandbWrapper wraps no handler this port has"
     end
 
     test "says nothing about logging for a config that asks for none", %{conn: conn} do

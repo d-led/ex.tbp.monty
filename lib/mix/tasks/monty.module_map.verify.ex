@@ -11,6 +11,11 @@ defmodule Mix.Tasks.Monty.ModuleMap.Verify do
     * every entry marked `implemented` points at a module that exists;
     * every entry marked `excluded` says why.
 
+  It also reports a checkout that has moved since the map was generated: the map
+  records the commits it was read from, so a `git pull` is a fact about the map
+  rather than something to remember. A moved checkout is an error to read, not a
+  failure: the map still describes the commits it names.
+
   This is what makes "module for module" a property of the repository rather
   than a claim in a README.
   """
@@ -38,9 +43,21 @@ defmodule Mix.Tasks.Monty.ModuleMap.Verify do
             "#{summary.excluded} excluded, per package: #{inspect(summary.by_package)}"
         )
 
+        ModuleMap.moved()
+        |> Enum.each(fn {package, recorded, current} ->
+          Mix.shell().error(
+            "module map: #{package} has moved since this map was generated — " <>
+              "the map describes #{short(recorded)}, the checkout is at #{short(current)}; " <>
+              "run `mix monty.module_map.gen` and read the diff"
+          )
+        end)
+
       {:error, problems} ->
         Enum.each(problems, fn problem -> Mix.shell().error(problem) end)
         Mix.raise("#{length(problems)} module map problem(s)")
     end
   end
+
+  defp short(nil), do: "?"
+  defp short(commit), do: String.slice(commit, 0, 7)
 end
