@@ -79,6 +79,19 @@ not recalled — run it after anything lands that can move one.
 - `/health` answers 200 and nothing else; a CSP header is set for the browser scope;
   there is no authentication. ([`router.ex`](../lib/ex_tbp_monty_web/router.ex))
 
+## MCP server
+
+- `POST /mcp`: JSON-RPC 2.0 over Streamable HTTP, stateless — no session header, no
+  SSE (`GET`/`DELETE` → 405), no batches. ([mcp.md](mcp.md))
+- **17 tools**, all `monty_*`: docs search/read/index, roadmap list/task, module
+  lookup/port status/code-in-doc, experiment options/describe/list/preview/create/run/
+  report/list-runs.
+- Answers come from the sources, not a copy: the checkout's `docs/`, its `future-work`
+  front matter, the generated module map, `Monty.Studio` and `studio_runs`. Doc answers
+  carry the page's published URL; port status is the map's verdict.
+- Creating is preview-first, and a run is queued as the studio's own Oban job. `Origin`
+  and `MCP-Protocol-Version` are checked; no auth.
+
 ## CLI
 
 ```bash
@@ -96,18 +109,6 @@ mix build.info                 # commit + build metadata into the release
 config would not start, so CI can use it. `mix lint`, `mix cover`, `mix complexity`,
 `mix dialyzer`; `mix precommit` is `scripts/quality.sh`, what CI runs.
 
-## MCP server
-
-- `POST /mcp`: JSON-RPC 2.0 over Streamable HTTP, stateless — no session header, no
-  SSE (`GET`/`DELETE` → 405), no batches. ([mcp.md](mcp.md))
-- **17 tools**, all `monty_*`: docs search/read/index, roadmap list/task, module
-  lookup/port status/code-in-doc, experiment options/describe/list/preview/create/run/
-  report/list-runs.
-- Answers come from the sources, not a copy: the checkout's `docs/`, its `future-work`
-  front matter, the generated module map, `Monty.Studio` and `studio_runs`. Doc answers
-  carry the page's published URL; port status is the map's verdict.
-- Creating is preview-first, and a run is queued as the studio's own Oban job. `Origin`
-  and `MCP-Protocol-Version` are checked; no auth.
 
 ## Logging, including wandb
 
