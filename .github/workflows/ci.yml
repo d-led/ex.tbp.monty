@@ -396,10 +396,32 @@ jobs:
       - name: Run as an unprivileged user
         run: |
           set -euo pipefail
-          uid=$(docker run --rm --entrypoint /usr/bin/id "${{ steps.image.outputs.ref }}" -u)
+          image="${{ steps.image.outputs.ref }}"
+          uid=$(docker run --rm --entrypoint /usr/bin/id "$image" -u)
           echo "image runs as uid ${uid}"
           test "${uid}" -ne 0
           test "${uid}" = "10001"
+
+          # …and it can work like that: a read-only root filesystem, one
+          # writable volume, and no root to ask for more. The studio writes
+          # through `/app/bin/priv` (a symlink into that volume, which inherits
+          # the image's ownership), and `HOME` and `WANDB_DIR` both point into
+          # it. A volume rather than a tmpfs on purpose: a tmpfs arrives owned by
+          # root, which is the deployment mistake this shape has to survive.
+          docker volume create monty-contract >/dev/null
+          docker run --rm --read-only --tmpfs /tmp -v monty-contract:/app/priv \
+            --entrypoint /bin/sh "$image" -c '
+              set -eu
+              mkdir -p "$WANDB_DIR"
+              touch "$HOME/home-probe"
+              touch /app/bin/priv/studio-probe
+              test -f /app/priv/studio-probe
+              if touch /app/elsewhere 2>/dev/null; then
+                echo "the root filesystem is writable; the image should need only /app/priv" >&2
+                exit 1
+              fi
+            '
+          docker volume rm monty-contract >/dev/null
 
       # One image per published tag. For a release (or a dispatch) it carries
       # both architectures: an Apple Silicon laptop or an arm64 VM pulls a

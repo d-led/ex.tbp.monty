@@ -45,7 +45,7 @@ evidence and the vote telemetry as they happen.
 | `Monty.Config` — Hydra composition, resolvers, snapshot parity | done (103/103) |
 | `Monty.ModuleMap` — the module contract and its verification | done — 131 modules, 47 implemented |
 | `Monty.Runtime` — one process per sensor and learning module, step barriers, vote rounds with deadlines | done |
-| Synthetic world (`Monty.Simulators.Synthetic.*`) and the `/runs/demo` live view | done |
+| Synthetic world (`Monty.Simulators.Synthetic.*`) and its camera frames | done |
 | `Monty.Prerequisites` — streaming downloads into Monty's own data and model paths, `/prerequisites` view | done |
 | `Monty.Studio` — faceted index, setup preview and validation, builder, run history, job queue | done |
 | Ported sensor/learning modules, evidence matching, motor policies | in progress — see [docs/validation.md](docs/validation.md) |
@@ -76,8 +76,8 @@ script:
 | `/experiments/*name` | one experiment: wiring diagram, what the checks say, the config, and a run that streams steps and log |
 | `/build` | an experiment from the least input — a name is enough — previewed by composing the config it would write |
 | `/runs` | every run with its config snapshot, inputs, summary and log; delete asks first |
-| `/runs/demo` | a live run against the synthetic world |
-| `/jobs` | the Oban queue — where a run is before it has a decision to show |
+| `/runs/:id` | one run, replayed: what each step saw, the evidence it climbed to, and why it stopped |
+| `/jobs` | the Oban queue — what is waiting, what failed and why, and where a job that will not finish is cancelled or killed |
 | `/prerequisites` | the data and models an experiment needs, downloaded into Monty's own paths |
 
 Runs are recorded in Postgres the moment they start — composed config, inputs,
@@ -183,11 +183,39 @@ docker pull ghcr.io/d-led/ex.tbp.monty:latest
 docker run --rm -e DATABASE_URL=... -e SECRET_KEY_BASE=... \
   ghcr.io/d-led/ex.tbp.monty:latest /app/bin/migrate
 
-docker run --rm -p 4000:4000 -e DATABASE_URL=... -e SECRET_KEY_BASE=... \
+# The app itself, unprivileged, with the one writable directory on a volume and
+# nothing else writable at all — which is how it is meant to run.
+docker run --rm -p 4000:4000 \
+  --read-only --tmpfs /tmp \
+  -v monty-priv:/app/priv \
+  -e DATABASE_URL=... -e SECRET_KEY_BASE=... \
   ghcr.io/d-led/ex.tbp.monty:latest   # /app/bin/server
 ```
 
-The image runs as uid 10001, and CI scans it with Trivy before it pushes.
+The image runs as **uid 10001** and needs no privilege of any kind — no root, no
+writable filesystem outside the volume. `CI` scans it with Trivy before pushing,
+and the publishing job starts it as that uid.
+
+One directory is writable, `/app/priv`, and everything that writes is pointed
+at it, because a release resolves those paths somewhere else: the studio's
+drafts and a run's files as `priv/…` relative to the working directory (the
+release's `bin/`, which is why `/app/bin/priv` is a symlink), Monty's downloads
+at `~/tbp`, wandb's runs at `$WANDB_DIR`. `HOME=/app/priv` and
+`WANDB_DIR=/app/priv/wandb` are the defaults the image sets, and both can be
+overridden with `-e`.
+
+That directory has to belong to uid 10001, and the image cannot arrange it —
+giving ownership away needs root, which is the thing it does not have. A named
+Docker volume inherits it from the image and works as is; a Kubernetes PVC needs
+`fsGroup: 10001`; a bind mount or a tmpfs needs a `chown 10001:10001` once. When
+it is wrong the release says so at boot (`the release cannot write
+/app/priv/wandb …`) instead of failing quietly, and wandb falls back to the
+system temp directory. Mount a volume at `/app/priv` either way, or a restart
+takes drafts, run logs and downloads with it.
+
+The embedded Python (pythonx) needs nothing installed on the host: the
+interpreter, its packages and the uv that built them travel inside the image,
+in the release's `lib/pythonx-*/priv`.
 
 ## Layout
 

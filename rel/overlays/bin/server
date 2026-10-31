@@ -6,4 +6,19 @@
 set -eu
 
 cd -P -- "$(dirname -- "$0")"
+
+# `WANDB_DIR` is where a run's wandb files are written, and wandb only uses it
+# if the directory is already there: given one that is not, it warns once and
+# writes to the system temp directory instead, which is not on the volume. The
+# image points it into that volume, and a volume is empty on its first boot —
+# so create it here, where every deployment (Fly, Kubernetes, Compose) runs.
+#
+# Not fatal, and not silent: a volume that is not writable by this uid (a PVC
+# without `fsGroup`, a host directory, a tmpfs) cannot be fixed from here
+# without root, and the run should still start. Whoever reads the log is told
+# which path was refused, rather than finding the runs in /tmp later.
+if [ -n "${WANDB_DIR:-}" ] && ! mkdir -p "$WANDB_DIR"; then
+  echo "the release cannot write ${WANDB_DIR} (uid $(id -u)); wandb will use the system temp directory" >&2
+fi
+
 PHX_SERVER=true exec ./ex_tbp_monty start

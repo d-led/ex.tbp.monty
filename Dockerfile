@@ -159,13 +159,28 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 COPY --from=builder --chown=10001:10001 /app/_build/prod/rel/ex_tbp_monty ./
 
-# The studio writes drafts and the files a run leaves behind under `priv/`,
-# relative to the working directory — a path a release does not otherwise have.
-# This is the one directory the application writes to; mount a volume there (a
-# Fly volume, a Kubernetes PVC) to keep drafts and run artifacts across
-# restarts.
-RUN mkdir -p /app/priv \
+# Everything a non-root container has to be able to write, in one directory:
+#
+#   * the studio's drafts and a run's files, which it resolves as `priv/...`
+#     relative to the working directory — and the release's working directory
+#     is `bin/`, inside a root-owned release tree. Hence the symlink: the same
+#     relative path, landing on the volume.
+#   * wandb's `root_dir` (`WANDB_DIR`) and, by default, everything that means
+#     "the user's own directory" — Monty's downloads go to `~/tbp`, wandb reads
+#     `~/.config`, Erlang writes `~/.erlang.cookie`. `HOME` was `/app`, owned by
+#     root, so all of that failed for uid 10001.
+#   * `WANDB_DIR` has to exist: handed a path it cannot write to — including one
+#     that is not there yet — wandb warns once and uses the system temp
+#     directory, which is outside the volume.
+#
+# Mount a volume here (a Fly volume, a Kubernetes PVC) to keep all of it across
+# restarts. `-e HOME=...` and `-e WANDB_DIR=...` at run time still win.
+RUN mkdir -p /app/priv/wandb \
+  && ln -s /app/priv /app/bin/priv \
   && chown -R 10001:10001 /app/priv
+
+ENV WANDB_DIR=/app/priv/wandb \
+    HOME=/app/priv
 
 USER 10001:10001
 
