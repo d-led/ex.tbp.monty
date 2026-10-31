@@ -170,6 +170,14 @@ import tbp.monty.frameworks.environments.environment as env; \
 import tbp.monty.frameworks.actions.actions as actions; \
 print('world ok:', mujoco_world.__name__, env.__name__, actions.__name__)"
 
+# pip leaves. Nothing in this image installs a package at run time, and pip
+# carries its own vendored copies of urllib3, msgpack and setuptools — versions
+# written in `pip/_vendor/vendor.txt`, which is what the image scan reads and
+# rightly refuses. The copies a run actually imports are the wheels installed
+# above, all of them newer than the fixes; the vendored ones never execute.
+RUN python -m pip uninstall -y pip \
+  && rm -rf "$VIRTUAL_ENV"/lib/python3.*/site-packages/pip-*
+
 # --- what ships --------------------------------------------------------------
 FROM ${RUNNER_IMAGE} AS runtime
 
@@ -208,6 +216,14 @@ RUN groupadd --system --gid 10001 app \
 
 WORKDIR /app
 COPY --from=builder --chown=10001:10001 /app/_build/prod/rel/ex_tbp_monty ./
+
+# The interpreter pythonx downloads carries a pip of its own, with the same
+# stale vendored libraries as the one the `world` stage drops (that pip's
+# `vendor.txt` says msgpack 1.0.8, urllib3 1.26.20, setuptools 70.3.0). uv never
+# calls pip and neither does the release, so the copies go rather than being
+# argued about in `.trivyignore.yaml`.
+RUN rm -rf /app/lib/pythonx-*/priv/uv/python/*/lib/python3.*/site-packages/pip \
+           /app/lib/pythonx-*/priv/uv/python/*/lib/python3.*/site-packages/pip-*.dist-info
 
 # The prerequisites travel with the image, at the place the running release
 # looks for them. `HOME=/app/priv` (below) is what makes the two meet: Monty's

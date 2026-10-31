@@ -16,6 +16,15 @@ config :pythonx, :uv_init,
   version = "0.0.0"
   requires-python = "==3.13.*"
   dependencies = [
-    "wandb==0.31.0"
+    "wandb==0.31.0",
+    # Floors, not pins: these arrive as wandb's own dependencies, and the version
+    # that lands is the one a scanner reads. `wandb==0.31.0` pulls urllib3 2.7.0
+    # and msgpack 1.1.2, each with a fix above it — a TLS-interception and a
+    # denial-of-service in a client this application does start, so raising them
+    # is a real fix and not a quieter report. The pins we mean stay pinned; these
+    # are the ones we do not.
+    "setuptools>=84.2.1",
+    "urllib3>=2.8.0",
+    "msgpack>=1.2.4"
   ]
   """
