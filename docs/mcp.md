@@ -45,6 +45,12 @@ guessed at.
 
 ## The tools
 
+**The deployment** — `monty_studio`: how many experiments are preconfigured, how
+many runs there are of each state, how many episodes run at once, which world a
+run steps, and which data and model bundles are present. The answer to "can we
+run experiments in parallel", and to every other question about *this* instance
+rather than about a config — an assistant does not need a shell to ask it.
+
 **Documentation** — `monty_search_docs`, `monty_read_doc`, `monty_docs_index`.
 
 **Roadmap** — `monty_roadmap` (filter by section, status, skill, words),
@@ -65,6 +71,32 @@ of theory to source).
 Every tool has an `inputSchema` and honest annotations: the ones that only read
 say `readOnlyHint`; the two that write — a draft, a queued run — say that too;
 and `monty_delete_runs` says `destructiveHint`, because it is.
+
+### Asking about this deployment
+
+`monty_studio` takes no arguments and answers with numbers:
+
+```
+210 experiments preconfigured; 33 finished · 5 failed run(s)
+
+Parallel: 2 episode(s) at a time (0 running now).
+a run is a job on the :studio queue, and the queue's limit is how many run at
+once. The run page's "in parallel" selector queues one run per episode and sets
+the limit to the same number — one object per episode.
+Monty does the same thing its own way: Monty's run_parallel.py, one process per
+episode.
+
+World: synthetic — runs step this port's synthetic scene, so their numbers are
+not Monty's; MONTY_WORLD=monty with MONTY_PYTHON set runs Monty's own simulator
+out of process.
+
+Prerequisites: 2/2 present (pretrained_ycb_v13 present · pretrained_ycb_v13_zip present)
+```
+
+The limit is read from the running queue, not from the config: the run page
+changes it while the queue drains, so the config value is where it started.
+A process with no queue up (a Mix task, a test run) says so and reports the
+configured limit, rather than claiming a number it cannot see.
 
 ### Asking "how many experiments?"
 

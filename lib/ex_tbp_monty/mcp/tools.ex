@@ -20,7 +20,7 @@ defmodule ExTbpMonty.Mcp.Tools do
   say so, and the two that write — a draft, a queued run — say that too.
   """
 
-  alias ExTbpMonty.Mcp.Tools.{Docs, Experiments, Port, Roadmap}
+  alias ExTbpMonty.Mcp.Tools.{Docs, Experiments, Port, Roadmap, Studio}
 
   @type ctx :: %{base_url: String.t()}
   @type result :: {:ok, %{text: String.t(), structured: map()}} | {:error, String.t()}
@@ -59,6 +59,19 @@ defmodule ExTbpMonty.Mcp.Tools do
   }
 
   @tools [
+    %{
+      "name" => "monty_studio",
+      "title" => "About this studio",
+      "description" =>
+        "What this deployment is, as numbers: how many experiments are preconfigured, how " <>
+          "many runs there are of each kind, how many episodes run at once (the queue's " <>
+          "limit — the answer to \"can we run experiments in parallel here?\"), whether the " <>
+          "world is Monty's or this port's stand-in, and which data and model bundles are " <>
+          "present. Ask this instead of reading a filesystem: the files an assistant would " <>
+          "look for are not on its side of the connection.",
+      "inputSchema" => %{"type" => "object", "properties" => %{}},
+      "annotations" => @read_only
+    },
     %{
       "name" => "monty_search_docs",
       "title" => "Search Monty's documentation",
@@ -217,7 +230,8 @@ defmodule ExTbpMonty.Mcp.Tools do
           "`learning_module`, `model` (pretrained/scratch) and a word `query` are all " <>
           "optional and combine; the counts respect them. This is the tool for \"how many " <>
           "experiments\", \"which use surface agents\", \"how many with five learning " <>
-          "modules\" — not a list to count yourself.",
+          "modules\" — not a list to count yourself. Whether *this deployment* runs several at once is " <>
+          "`monty_studio`, and not a property of a config.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -476,6 +490,7 @@ defmodule ExTbpMonty.Mcp.Tools do
   # other way round) is a compile-time miss rather than a tool a client can see
   # and cannot call.
   @dispatch %{
+    "monty_studio" => {Studio, :about},
     "monty_search_docs" => {Docs, :search},
     "monty_read_doc" => {Docs, :read},
     "monty_docs_index" => {Docs, :index},
@@ -503,6 +518,7 @@ defmodule ExTbpMonty.Mcp.Tools do
   # not put in a family (or a family that names a tool that no longer exists) is
   # a failing test rather than a page that quietly lists the wrong thing.
   @families [
+    {"The studio", ~w(monty_studio)},
     {"Documentation", ~w(monty_search_docs monty_read_doc monty_docs_index)},
     {"Roadmap", ~w(monty_roadmap monty_roadmap_task)},
     {"The port", ~w(monty_lookup_module monty_port_status monty_code_in_doc)},

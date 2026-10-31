@@ -150,8 +150,10 @@ config would not start, so CI can use it. `mix lint`, `mix cover`, `mix complexi
 - MuJoCo: no Elixir-side world; its map entries are `planned`. Upstream also deleted
   its MuJoCo experiment presets.
 - wandb: the five stats handlers and `mark_obs` frame marking.
-- Parallel episodes and stepping a live world: designed, not built.
-  ([parallel-and-live.md](parallel-and-live.md))
+- Parallel episodes: the run page queues one run per episode and sets the
+  `:studio` queue's limit to the same number, which is Monty's `run_parallel.py`
+  arrangement — one process per episode, one object each. Stepping a live world
+  is designed, not built. ([parallel-and-live.md](parallel-and-live.md))
 - `tbp.teleop`: 0 of its 7 mapped modules exist (no `lib/teleop/`).
 - `MontyObjectRecognitionExperiment`: upstream's body calls a hook that is `pass`, so
   it is left planned on purpose.
