@@ -134,4 +134,31 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsTest do
       assert LoggingUtils.compute_pose_error([quarter, identity], identity) == 0.0
     end
   end
+
+  describe "a column a wandb table cannot take" do
+    test "joins a list of matches into one cell, and leaves everything else alone" do
+      # A list in a cell makes a column whose type depends on the row; `^` is
+      # Monty's join, so the column stays a string in every row.
+      stats = %{"result" => ["mug", "bowl"], "stepwise_performance" => "correct"}
+
+      assert LoggingUtils.format_columns_for_wandb(stats) == %{
+               "result" => "mug^bowl",
+               "stepwise_performance" => "correct"
+             }
+    end
+
+    test "is a value, so the stats it was given are the stats they still are" do
+      stats = %{"result" => ["mug"]}
+
+      LoggingUtils.format_columns_for_wandb(stats)
+
+      assert stats == %{"result" => ["mug"]}
+    end
+
+    test "passes a result that is already one name straight through" do
+      stats = %{"result" => "mug_graph"}
+
+      assert LoggingUtils.format_columns_for_wandb(stats) == stats
+    end
+  end
 end

@@ -125,6 +125,26 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
   end
 
   @doc """
+  `format_columns_for_wandb`: the one column a table cannot take as it is.
+
+  Monty's words: "various columns break wandb because we are playing fast and loose
+  with types". A result is a list of object names, and a list in a cell makes a
+  table column whose type depends on the row; joined with `^` it stays a string in
+  every row. Everything else is passed through.
+
+  Monty deep-copies first, because Python mutates a dict in place. A map here is
+  already a value, so there is nothing to copy and nothing to be careful about —
+  which is the only difference between the two.
+  """
+  @spec format_columns_for_wandb(map()) :: map()
+  def format_columns_for_wandb(lm_stats) do
+    case Map.get(lm_stats, "result") do
+      result when is_list(result) -> Map.put(lm_stats, "result", Enum.join(result, "^"))
+      _not_a_list -> lm_stats
+    end
+  end
+
+  @doc """
   `get_stats_per_lm`: every learning module's stats for one episode.
 
   Keyed `LM_0`, `LM_1` … by the module's position, which is the key Monty's CSV
