@@ -16,6 +16,12 @@ defmodule Mix.Tasks.Monty.PortCensus do
       mix monty.port_census
       mix monty.port_census --json priv/monty/port_census.json
       mix monty.port_census --python /path/to/conda/envs/tbp.monty/bin/python
+      mix monty.port_census --all --monty-root ../monty-orig
+
+  `--monty-root` reads a checkout other than the one `MONTY_SOURCE` names, and
+  `--all` classifies every class in it instead of only the planned ones — which
+  is what the census is a census of, and what a test can ask without a Monty
+  checkout in sight.
 
   The classifier needs a Python interpreter but not Monty's environment: it only
   parses source. `$PYTHON`, then `python3` from the PATH.
@@ -30,19 +36,28 @@ defmodule Mix.Tasks.Monty.PortCensus do
 
   @impl Mix.Task
   def run(arguments) do
-    {options, _rest} = OptionParser.parse!(arguments, strict: [json: :string, python: :string])
+    {options, _rest} =
+      OptionParser.parse!(arguments,
+        strict: [json: :string, python: :string, monty_root: :string, all: :boolean]
+      )
+
     python = options[:python] || System.get_env("PYTHON") || System.find_executable("python3")
 
     python ||
       Mix.raise("no python3 on the PATH: pass --python or set $PYTHON")
 
-    planned = planned_classes()
-    path = planned_path(planned)
+    root = options[:monty_root] || Source.root()
 
-    try do
-      run_classifier(python, path, options[:json])
-    after
-      File.rm(path)
+    if options[:all] do
+      classify(python, root, nil, options[:json])
+    else
+      planned = planned_path(planned_classes())
+
+      try do
+        classify(python, root, planned, options[:json])
+      after
+        File.rm(planned)
+      end
     end
   end
 
@@ -62,29 +77,31 @@ defmodule Mix.Tasks.Monty.PortCensus do
     path
   end
 
-  defp run_classifier(python, planned, json_out) do
+  # One call either way: a report on stdout, or the same report written to a
+  # file the caller names.
+  defp classify(python, root, planned, json_out) do
+    extra =
+      case json_out do
+        nil ->
+          ["--summary"]
+
+        path ->
+          File.mkdir_p!(Path.dirname(path))
+          ["--out", path]
+      end
+
     arguments =
-      [Path.expand(@script), "--monty-root", Source.root(), "--planned", planned, "--summary"]
+      [Path.expand(@script), "--monty-root", root] ++
+        if(planned, do: ["--planned", planned], else: []) ++ extra
 
-    case System.cmd(python, arguments, into: IO.stream(), stderr_to_stdout: true) do
-      {_, 0} when is_nil(json_out) ->
-        :ok
+    # The script says why it stopped, so its own words reach a person: a bare
+    # "status 1" is what a missing checkout used to look like.
+    {output, status} = System.cmd(python, arguments, stderr_to_stdout: true)
 
-      {_, 0} ->
-        write_json(python, planned, json_out)
-
-      {_, status} ->
-        Mix.raise("#{@script} failed with status #{status}")
-    end
-  end
-
-  defp write_json(python, planned, json_out) do
-    arguments = [Path.expand(@script), "--monty-root", Source.root(), "--planned", planned]
-    File.mkdir_p!(Path.dirname(json_out))
-
-    case System.cmd(python, arguments ++ ["--out", json_out]) do
-      {_, 0} -> Mix.shell().info("wrote #{json_out}")
-      {output, status} -> Mix.raise("could not write #{json_out} (#{status}): #{output}")
+    case status do
+      0 when is_nil(json_out) -> IO.write(output)
+      0 -> Mix.shell().info("wrote #{json_out}")
+      _failure -> Mix.raise("#{@script} failed with status #{status}: #{String.trim(output)}")
     end
   end
 end

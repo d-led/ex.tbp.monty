@@ -1,16 +1,20 @@
 defmodule Mix.Tasks.Monty.PortCensusTest do
   @moduledoc """
-  The census, run for real: it parses Monty's source, so what it says about a
-  class is what Monty's source says.
+  The census, run for real against source it can read: two classes in a fixture
+  checkout, one with a body and one `Protocol`.
 
-  Two classes are enough to hold the seam: one that is behaviour and one that is
-  an interface. If the classifier stops reading Monty's AST and starts guessing,
-  these two answers change.
+  No Monty checkout, because nothing in the build may need one. What is held is
+  the distinction the census exists to draw — a class with a body is work, a
+  `Protocol` is an interface — and it is held by reading an AST, so a classifier
+  that started guessing from names would answer differently here.
   """
 
   use ExUnit.Case, async: false
 
   alias Monty.Test.Tmp
+
+  @checkout Path.expand("../../fixtures/classifier", __DIR__)
+  @source "tbp/monty/shapes.py"
 
   setup do
     previous = Mix.shell()
@@ -20,17 +24,28 @@ defmodule Mix.Tasks.Monty.PortCensusTest do
   end
 
   test "a class with a body is work, and a Protocol is not" do
-    path = Tmp.file("port_census.json")
-
-    Mix.Tasks.Monty.PortCensus.run(["--json", path])
-    census = path |> File.read!() |> Jason.decode!()
+    census = census(@checkout)
 
     assert %{"kind" => "class", "behaviour" => "some", "methods" => methods} =
-             census["tbp/monty/simulators/habitat/agents.py::SingleSensorAgent"]
+             census["#{@source}::Recorder"]
 
-    assert "get_spec" in methods
+    assert "record" in methods
+    assert %{"kind" => "protocol", "behaviour" => "none"} = census["#{@source}::Sensor"]
+  end
 
-    assert %{"kind" => "protocol", "behaviour" => "none"} =
-             census["tbp/monty/frameworks/actions/actions.py::LookDownActuator"]
+  test "a root with no source in it is an error, not an empty census" do
+    path = Tmp.file("not_a_checkout")
+
+    assert_raise Mix.Error, ~r/no Monty source/, fn ->
+      Mix.Tasks.Monty.PortCensus.run(["--monty-root", path, "--all", "--json", path])
+    end
+  end
+
+  defp census(root) do
+    path = Tmp.file("port_census.json")
+
+    Mix.Tasks.Monty.PortCensus.run(["--monty-root", root, "--all", "--json", path])
+
+    path |> File.read!() |> Jason.decode!()
   end
 end

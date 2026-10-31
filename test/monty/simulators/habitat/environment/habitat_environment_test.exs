@@ -11,6 +11,7 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironmentTest do
 
   use ExUnit.Case, async: true
 
+  alias Monty.Config.Source
   alias Monty.Frameworks.Actions.MoveForward
   alias Monty.Frameworks.Models.MotorSystemState.AgentState
   alias Monty.Simulators.Habitat.Environment.HabitatEnvironment
@@ -109,8 +110,17 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironmentTest do
     assert python == System.find_executable("python3")
     assert experiment == "base_config_10distinctobj_dist_agent"
 
-    # The peer imports Monty, so the checkout is named rather than inherited.
+    # The peer imports Monty, so the checkout is named rather than inherited and
+    # named absolutely: a relative one would pick whatever is under the peer's
+    # working directory.
     assert ["--monty-root", root] = rest
-    assert File.dir?(Path.join(root, "src"))
+    assert root == Source.root()
+    assert Path.type(root) == :absolute
+  end
+
+  test "a checkout the caller names is the one the peer is told about" do
+    world = world(monty_root: "/elsewhere/monty")
+
+    assert Enum.take(world.command, -2) == ["--monty-root", "/elsewhere/monty"]
   end
 end
