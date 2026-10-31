@@ -750,5 +750,48 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert RunHistory.get(run.id) != nil
       assert RunHistory.get(other.id) != nil
     end
+
+    # The rows are a stream: a tick drawn from the selection only moves when the
+    # rows are sent again, so "2 selected" in the toolbar said nothing about the
+    # boxes — and Clear left the tick standing. These two assertions are the ones
+    # the toolbar count could not make.
+    test "a picked row shows its tick, and clearing takes it back", %{conn: conn} do
+      picked = insert_run(%{experiment: "base_ticked", status: "failed"})
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      assert has_element?(view, "#pick-#{picked.id}[aria-pressed=false]")
+
+      view |> element("#pick-#{picked.id}") |> render_click()
+
+      assert has_element?(view, "#pick-#{picked.id}[aria-pressed=true]")
+
+      view |> element("#clear-selection") |> render_click()
+
+      assert has_element?(view, "#pick-#{picked.id}[aria-pressed=false]")
+    end
+
+    test "select all picks every row on the page and says how many", %{conn: conn} do
+      insert_run(%{experiment: "base_one", status: "failed"})
+      insert_run(%{experiment: "base_two", status: "failed"})
+
+      {:ok, view, _html} = live(conn, ~p"/runs?state=failed")
+
+      assert view |> element("#select-all") |> render() =~ "Select all"
+
+      view |> element("#select-all") |> render_click()
+
+      assert view |> element("#selected-count") |> render() =~ "selected"
+      assert has_element?(view, "#pick-all[aria-pressed=true]")
+
+      # Every row on the page carries the tick, not only the toolbar its count.
+      for row <- RunHistory.search(state: "failed").runs do
+        assert has_element?(view, "#pick-#{row.id}[aria-pressed=true]"),
+               "row #{row.experiment} was not drawn as picked"
+      end
+
+      # Nothing left to select, so the sentence is not offered again.
+      refute has_element?(view, "#select-all")
+    end
   end
 end

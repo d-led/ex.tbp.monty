@@ -80,6 +80,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       total: found.total,
       counts: RunHistory.counts(),
       page_ids: Enum.map(found.runs, & &1.id),
+      # The rows are a stream, and a stream only renders what it is sent: the
+      # tick inside a row is drawn from the selection, so a selection change has
+      # to re-send the rows or the tick never moves. Hence the runs themselves,
+      # not just their ids.
+      page_runs: found.runs,
       queue: where_each_run_is(found.runs)
     )
     |> stream(:runs, found.runs, reset: true)
@@ -90,8 +95,15 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   defp selection(event, params, socket) do
     case Selection.handle(event, params, socket.assigns) do
-      {:assign, assigns} -> assign(socket, assigns)
+      {:assign, assigns} -> socket |> assign(assigns) |> redraw_rows()
       {:forget, scope} -> forget_every(socket, scope)
+    end
+  end
+
+  defp redraw_rows(socket) do
+    case socket.assigns[:page_runs] do
+      nil -> socket
+      runs -> stream(socket, :runs, runs, reset: true)
     end
   end
 
@@ -321,6 +333,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           Clear selection
         </button>
         <button
+          :if={@total > 0 and not all_picked?(@selected, @page_ids)}
+          id="select-all"
+          phx-click="toggle_all"
+          class="btn btn-ghost btn-xs"
+        >
+          Select all {length(@page_ids)} shown
+        </button>
+        <button
           :if={@total > 0}
           id="delete-matching"
           phx-click="ask_delete_matching"
@@ -335,13 +355,28 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           <thead>
             <tr class="text-xs text-base-content/60">
               <th class="w-6">
-                <input
-                  type="checkbox"
+                <%!-- daisyUI's pastel primary draws a pale tick on a pale box,
+                which is invisible; the state is drawn here instead: filled and
+                checked when every run on the page is picked. --%>
+                <button
                   id="pick-all"
                   phx-click="toggle_all"
-                  class="checkbox checkbox-xs"
+                  class="grid size-4 place-items-center rounded border border-base-300"
+                  aria-pressed={to_string(all_picked?(@selected, @page_ids))}
                   aria-label="Pick every run on this page"
-                />
+                  title="Pick every run on this page"
+                >
+                  <.icon
+                    name="hero-check-mini"
+                    class={[
+                      "size-3",
+                      if(all_picked?(@selected, @page_ids),
+                        do: "text-base-content",
+                        else: "text-transparent"
+                      )
+                    ]}
+                  />
+                </button>
               </th>
               <th class="w-full">experiment</th>
               <th>state</th>
@@ -360,15 +395,25 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
             </tr>
             <tr :for={{dom_id, run} <- @streams.runs} id={dom_id}>
               <td class="w-6">
-                <input
-                  type="checkbox"
+                <button
                   id={"pick-#{run.id}"}
                   phx-click="toggle"
                   phx-value-id={run.id}
-                  checked={MapSet.member?(@selected, run.id)}
-                  class="checkbox checkbox-xs"
+                  class="grid size-4 place-items-center rounded border border-base-300"
+                  aria-pressed={to_string(MapSet.member?(@selected, run.id))}
                   aria-label={"Pick the run of " <> run.experiment}
-                />
+                >
+                  <.icon
+                    name="hero-check-mini"
+                    class={[
+                      "size-3",
+                      if(MapSet.member?(@selected, run.id),
+                        do: "text-base-content",
+                        else: "text-transparent"
+                      )
+                    ]}
+                  />
+                </button>
               </td>
               <td class="w-full">
                 <.link navigate={~p"/runs/#{run.id}"} class="link link-hover font-mono text-sm">
@@ -971,6 +1016,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   # What state to show. A run's record is written the moment it is queued, so the
   # record says `running` before anything is running — the queue knows better.
+  defp all_picked?(selected, page_ids),
+    do: page_ids != [] and Enum.all?(page_ids, &MapSet.member?(selected, &1))
+
   defp run_state(%{status: "running"}, %{state: state})
        when state in ~w(available scheduled retryable),
        do: "queued"
