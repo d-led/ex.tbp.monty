@@ -416,6 +416,11 @@ Ask it rather than grepping:
 
 Every file names its source URL, so anything quoted here can be checked in one hop.
 
+The files themselves live in the neighbouring `ex.tbp.monty.input` folder: `out/` is the
+corpus as MemPalace sees it (`out/roadmap`, `out/docs-site`, one folder per category),
+`raw/` and `posts/` are the crawl's intermediate forms, and the three scripts that
+regenerate the lot (`crawl.py`, `build.py`, `scrape_docs.py`) sit beside them.
+
 ---
 
 ## Appendix — every roadmap task, all 94
