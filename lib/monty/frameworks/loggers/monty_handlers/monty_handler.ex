@@ -43,6 +43,16 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.MontyHandler do
   @callback close(handler :: struct()) :: :ok
 
   @doc """
+  Builds a handler from the keywords its config gives it.
+
+  Monty constructs a handler as `handler_class(**kwargs)`, where the keywords
+  are whatever the config wrote under the `_target_`. This is that call with the
+  config's map in place of the `**`: a handler reads the keys it knows and
+  ignores the ones it does not, exactly as `**kwargs` would.
+  """
+  @callback from_config(config :: map()) :: struct()
+
+  @doc """
   The level this handler filters out of the logs.
 
   A handler that wants the BASIC stats says `:basic`; one that wants the

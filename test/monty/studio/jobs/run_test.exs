@@ -85,6 +85,55 @@ defmodule Monty.Studio.Jobs.RunTest do
     end
   end
 
+  describe "the statistics a run leaves" do
+    # This experiment's logging group names the CSV handler and wandb — the one
+    # every benchmark config in Monty uses — so it is the run that leaves a file
+    # here and a note about the handler this port does not have.
+    test "writes the episode where the config's handler puts it, beside the run" do
+      {:ok, record} = start_run("base_config_10distinctobj_dist_agent", 2)
+
+      assert {:ok, closed} = perform(record)
+
+      assert [header, episode] = stats_rows(closed)
+      assert header =~ "primary_performance"
+      assert header =~ "lm_id"
+
+      # This world puts no object under the patch, so the module's performance is
+      # Monty's word for that (`patch_off_object`) rather than a recognition, and
+      # the row names the module it is about.
+      assert episode =~ "patch_off_object"
+      assert episode =~ "LM_0"
+    end
+
+    test "says what it logs with, and which classes it skipped, before stepping" do
+      {:ok, record} = start_run("base_config_10distinctobj_dist_agent", 2)
+
+      assert {:ok, closed} = perform(record)
+
+      log = File.read!(closed.log_path)
+
+      assert log =~
+               "the episode is reported to Monty.Frameworks.Loggers.MontyHandlers.BasicCSVStatsHandler"
+
+      assert log =~ "wandb_handlers.py::WandbWrapper is not ported yet"
+      assert log =~ Artifacts.dir(closed.id)
+    end
+
+    test "a config that asks for silent logging writes no statistics, and says so" do
+      {:ok, record} = start_run(2)
+
+      assert {:ok, closed} = perform(record)
+
+      refute File.exists?(Path.join(Artifacts.dir(closed.id), "eval_stats.csv"))
+      assert File.read!(closed.log_path) =~ "keeps no handlers, so this run writes no statistics"
+    end
+  end
+
+  defp stats_rows(closed) do
+    File.read!(Path.join(Artifacts.dir(closed.id), "eval_stats.csv"))
+    |> String.split("\n", trim: true)
+  end
+
   describe "a run that is stopped" do
     test "stops at its next step and says how far it got" do
       {:ok, record} = start_run(5)

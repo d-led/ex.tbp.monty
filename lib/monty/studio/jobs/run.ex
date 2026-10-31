@@ -21,7 +21,7 @@ defmodule Monty.Studio.Jobs.Run do
   alias Monty.Frameworks.Experiments.MontyExperiment
   alias Monty.Simulators.Synthetic.{Camera, Environment}
   alias Monty.Studio
-  alias Monty.Studio.{Artifacts, Run, RunHistory, RunLog, Setup, Summary}
+  alias Monty.Studio.{Artifacts, Logging, Run, RunHistory, RunLog, Setup, Summary}
 
   @doc "Enqueues a run of `attributes` (see `RunLog.attributes/2`) and returns the job."
   @spec enqueue(map()) :: {:ok, Oban.Job.t()} | {:error, term()}
@@ -91,6 +91,16 @@ defmodule Monty.Studio.Jobs.Run do
 
         broadcast(run_id, {:started, record.steps})
 
+        # What this run will leave behind is the config's answer, not the page's:
+        # a class the config names that this port does not have is said out loud
+        # once, at the start, and the run goes on without it.
+        logging = Logging.open(opened.setup)
+
+        Enum.each(
+          logging.notes ++ Logging.describe(logging, Artifacts.dir(run_id)),
+          &say(run_id, &1)
+        )
+
         {outcome, infos, {run, record}} =
           MontyExperiment.run_episode_steps(
             {run, record},
@@ -102,6 +112,12 @@ defmodule Monty.Studio.Jobs.Run do
           )
 
         conclusion = Run.conclusion(run)
+
+        # Monty's `post_episode` order, and it matters: the episode is logged
+        # before the memory a training episode writes, because that write
+        # rewrites the episode's ground truth and an episode logged afterwards
+        # would look confused about the object it just recognised.
+        log_statistics(run_id, logging, run)
 
         Run.stop(run)
         Registry.unregister(Monty.Runtime.Registry, key(run_id))
@@ -134,6 +150,17 @@ defmodule Monty.Studio.Jobs.Run do
   defp broken(run_id, run, reason) do
     say(run_id, "step #{run.step} died: #{inspect(reason)}")
     {:error, reason}
+  end
+
+  # A run whose statistics did not get written has still run: the episode is
+  # real, the file is missing. That is said in the run's log rather than raised,
+  # because the failure is about the artefact and not about the experiment.
+  defp log_statistics(run_id, logging, run) do
+    case Logging.report(logging, run, Artifacts.dir(run_id)) do
+      {:ok, _logging} -> :ok
+      {:skipped, _logging} -> :ok
+      {:error, reason} -> say(run_id, "statistics could not be written: #{inspect(reason)}")
+    end
   end
 
   # The stop lands in this process's mailbox because this process owns the clock.

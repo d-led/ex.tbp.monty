@@ -52,6 +52,7 @@ defmodule Monty.Studio.Setup do
             epochs: %{},
             seed: nil,
             supervised_lm_ids: [],
+            logging: %{output_dir: nil, run_name: nil, logger: nil, handlers: []},
             findings: [],
             positioning: [],
             object_names: nil,
@@ -113,6 +114,22 @@ defmodule Monty.Studio.Setup do
           kind: :sensor_input | :hierarchy | :vote
         }
 
+  @typedoc """
+  The experiment's `logging` section: where it would write, and what it would
+  write with.
+
+  `logger` is Monty's `monty_data_logger` — the class that pools an episode's
+  data — and `handlers` are the classes it hands that pool to, each with the
+  keywords its config gives it. Both are described rather than built, because
+  what a config names and what this port has are two different questions.
+  """
+  @type logging :: %{
+          output_dir: String.t() | nil,
+          run_name: String.t() | nil,
+          logger: module_description() | nil,
+          handlers: [%{module: module_description() | nil, config: map()}]
+        }
+
   @type t :: %__MODULE__{}
 
   @doc """
@@ -158,7 +175,8 @@ defmodule Monty.Studio.Setup do
         eval: Map.get(config, "n_eval_epochs")
       },
       seed: Map.get(config, "seed"),
-      supervised_lm_ids: Map.get(config, "supervised_lm_ids")
+      supervised_lm_ids: Map.get(config, "supervised_lm_ids"),
+      logging: logging(config)
     }
 
     findings = findings(setup, monty_config, config) ++ resolution_findings(unresolved?)
@@ -233,6 +251,30 @@ defmodule Monty.Studio.Setup do
   @doc "True when nothing would stop Monty."
   @spec valid?(t()) :: boolean()
   def valid?(%__MODULE__{findings: findings}), do: Finding.acceptable?(findings)
+
+  # Monty's `experiment.config.logging`: `monty_data_logger` is one class nested
+  # with its handlers, and a handler is a target plus the keywords that target
+  # is constructed with — so the config is read for both halves of each.
+  defp logging(config) do
+    logging = Map.get(config, "logging") || %{}
+    data_logger = Map.get(logging, "monty_data_logger") || %{}
+
+    %{
+      output_dir: Map.get(logging, "output_dir"),
+      run_name: Map.get(logging, "run_name"),
+      logger: describe_target(Map.get(data_logger, "_target_")),
+      handlers: Enum.map(Map.get(data_logger, "handlers") || [], &handler/1)
+    }
+  end
+
+  defp handler(entry) when is_map(entry) do
+    %{
+      module: describe_target(Map.get(entry, "_target_")),
+      config: Map.drop(entry, ["_target_"])
+    }
+  end
+
+  defp handler(_not_a_map), do: %{module: nil, config: %{}}
 
   @doc "The findings at one level."
   @spec findings(t(), Finding.level()) :: [Finding.t()]

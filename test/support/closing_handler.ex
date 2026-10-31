@@ -23,4 +23,8 @@ defmodule Monty.Test.ClosingHandler do
     send(self(), {:closed, __MODULE__})
     :ok
   end
+
+  @doc "`MontyHandler.from_config/1`: this handler takes no keywords."
+  @impl true
+  def from_config(_config), do: %__MODULE__{}
 end

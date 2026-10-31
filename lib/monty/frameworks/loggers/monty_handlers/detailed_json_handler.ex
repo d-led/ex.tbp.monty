@@ -53,6 +53,20 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.DetailedJSONHandler do
     }
   end
 
+  @doc "`MontyHandler.from_config/1`: the two keywords Monty's constructor takes."
+  @impl MontyHandler
+  @spec from_config(map()) :: t()
+  def from_config(config) do
+    new(
+      detailed_episodes_to_save:
+        episodes_to_save(Map.get(config, "detailed_episodes_to_save", "all")),
+      detailed_save_per_episode: Map.get(config, "detailed_save_per_episode", false)
+    )
+  end
+
+  defp episodes_to_save("all"), do: :all
+  defp episodes_to_save(episodes) when is_list(episodes), do: episodes
+
   @doc "`MontyHandler.log_level/0`: this handler filters out the DETAILED logs."
   @impl MontyHandler
   @spec log_level() :: :detailed

@@ -92,6 +92,11 @@ defmodule Monty.Frameworks.Loggers.MontyHandlers.BasicCSVStatsHandler do
   @spec new() :: t()
   def new, do: %__MODULE__{}
 
+  @doc "`MontyHandler.from_config/1`: this handler takes no keywords."
+  @impl MontyHandler
+  @spec from_config(map()) :: t()
+  def from_config(_config), do: new()
+
   @doc "The columns, in the order Monty writes them, with the module id last."
   @spec columns([{String.t(), map()}]) :: [String.t()]
   def columns(rows) do

@@ -179,6 +179,58 @@ defmodule Monty.Studio.Run do
   end
 
   @doc """
+  The coordinator's state, which is what a logger reads an episode out of.
+
+  Monty hands its logger the *model*, and the logger asks it for the episode
+  number, the mode, the modules and their terminal states. The coordinator's
+  state is this port's model: the same four answers, in one value.
+  """
+  @spec state(t()) :: Monty.Runtime.Step.State.t()
+  def state(%__MODULE__{model: model, model_id: model_id}), do: model.state(model_id)
+
+  @doc """
+  What this episode is about: the object the world says it put in front of the
+  agent, or `nil` for a world that does not ask the question.
+
+  Monty's `logger_args` records a target only for a `OneObjectPerEpisodeInterface`;
+  a world here answers it by exporting `primary_target/1`, which is the same
+  distinction made the same way the episode's target is told to the model.
+  """
+  @spec target(t()) :: map() | nil
+  def target(%__MODULE__{interface: interface}) do
+    world = interface.env
+
+    if function_exported?(world.__struct__, :primary_target, 1),
+      do: world.__struct__.primary_target(world)
+  end
+
+  @doc """
+  Monty's `logger_args`: the counters a handler keys an episode by.
+
+  They are counters of the *run so far*, which is why they are zero here: a studio
+  run is one episode and this is the first, and Monty's experiment increments them
+  after the logger has been given the episode — the episode being logged is the one
+  that has not been counted yet.
+  """
+  @spec logger_args(t()) :: map()
+  def logger_args(%__MODULE__{episode_seed: seed} = run) do
+    args = %{
+      "total_train_steps" => 0,
+      "train_episodes" => 0,
+      "train_epochs" => 0,
+      "total_eval_steps" => 0,
+      "eval_episodes" => 0,
+      "eval_epochs" => 0,
+      "episode_seed" => seed
+    }
+
+    case target(run) do
+      nil -> args
+      target -> Map.put(args, "target", target)
+    end
+  end
+
+  @doc """
   Runs one timestep, returning the report and the advanced run.
 
   The world is stepped with the actions the model chose on the *previous* step,
