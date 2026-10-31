@@ -21,7 +21,19 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   alias Monty.Prerequisites
   alias Monty.Studio
-  alias Monty.Studio.{Chart, Jobs, LogFilter, Logging, Replay, RunHistory, RunLog, Setup}
+
+  alias Monty.Studio.{
+    Chart,
+    Duration,
+    Jobs,
+    LogFilter,
+    Logging,
+    Replay,
+    RunHistory,
+    RunLog,
+    Setup
+  }
+
   alias Monty.Studio.Jobs.Reaper
 
   # A log is a thing a person reads back, not a database: the last few thousand
@@ -118,6 +130,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp run_state_class("finished"), do: "badge-success"
   defp run_state_class("failed"), do: "badge-error"
   defp run_state_class(_other), do: "badge-ghost"
+
+  # How long the stepping took. A run that has not finished has no answer yet —
+  # a number here would be a number about a different question.
+  defp run_duration(%{duration_us: nil}), do: "—"
+  defp run_duration(%{duration_us: us}), do: Duration.humanize(us)
 
   defp run_time(%{inserted_at: nil}), do: "unknown"
   defp run_time(%{inserted_at: at}), do: Calendar.strftime(at, "%H:%M:%S")
@@ -393,6 +410,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 <th class="font-normal">state</th>
                 <th class="font-normal text-right">steps</th>
                 <th class="font-normal text-right">seed</th>
+                <th class="font-normal text-right">parallel</th>
+                <th class="font-normal text-right">ran for</th>
                 <th class="font-normal">world</th>
                 <th></th>
               </tr>
@@ -414,6 +433,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 </td>
                 <td class="text-right font-mono">{run.steps}</td>
                 <td class="text-right font-mono">{input_of(run, "seed")}</td>
+                <td class="text-right font-mono">{input_of(run, "parallel")}</td>
+                <td class="text-right font-mono">{run_duration(run)}</td>
                 <td class="text-[11px]">{world_label(run)}</td>
                 <td class="text-right">
                   <.link
@@ -687,7 +708,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   defp handle_studio({:started, steps}, socket) do
-    assign(socket, status: "running", progress: {0, steps})
+    socket
+    |> assign(status: "running", progress: {0, steps})
+    |> refresh_runs()
   end
 
   defp handle_studio({:step, %{line: text, step: step, frames: frames} = event}, socket) do
@@ -702,14 +725,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp handle_studio({:finished, _summary}, socket) do
     # The record is the truth about a finished run; the message only says it is
     # time to look.
-    reconcile(socket)
+    socket |> reconcile() |> refresh_runs()
   end
 
   defp handle_studio({:failed, %{reason: reason}}, socket) do
     socket
     |> push(nil, "the run failed: #{inspect(reason)}", :error)
     |> reconcile()
+    |> refresh_runs()
   end
+
+  defp refresh_runs(%{assigns: %{opened: %{name: name}}} = socket) do
+    runs = recent_runs(name)
+    assign(socket, runs: runs, queue: Jobs.by_run(Enum.map(runs, & &1.id)))
+  end
+
+  defp refresh_runs(socket), do: socket
 
   # What each learning module believed after this step, appended to what it held
   # before it: the chart is the run's history, not the latest frame of it.
@@ -805,7 +836,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp start(socket, opened, steps, parallelism) do
     _ = Jobs.parallelism(parallelism)
 
-    results = Enum.map(0..(parallelism - 1), &queue(opened, steps, &1))
+    results = Enum.map(0..(parallelism - 1), &queue(opened, steps, &1, parallelism))
     records = Enum.flat_map(results, &started/1)
     refused = for {:error, changeset} <- results, do: changeset_errors(changeset)
 
@@ -843,10 +874,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp refused(socket, [reason | _rest]),
     do: push(socket, nil, "could not record every run: #{reason}", :error)
 
-  defp queue(opened, steps, episode) do
+  defp queue(opened, steps, episode, parallel) do
     if RunHistory.running_for(opened.name, episode),
       do: :going,
-      else: RunHistory.start(RunLog.attributes(opened, steps, episode))
+      else: RunHistory.start(RunLog.attributes(opened, steps, episode, parallel))
   end
 
   defp started({:ok, record}), do: [record]

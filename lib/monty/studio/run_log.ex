@@ -208,7 +208,7 @@ defmodule Monty.Studio.RunLog do
   given: the group choices, the seed, the budget, and the modules it addresses.
   """
   @spec attributes(map(), pos_integer()) :: map()
-  def attributes(opened, steps, episode \\ 0) do
+  def attributes(opened, steps, episode \\ 0, parallel \\ 1) do
     %{
       experiment: opened.name,
       episode: episode,
@@ -223,7 +223,11 @@ defmodule Monty.Studio.RunLog do
         "train_epochs" => opened.setup.epochs.train,
         "eval_epochs" => opened.setup.epochs.eval,
         "sensors" => Setup.sensor_ids(opened.setup),
-        "learning_modules" => Enum.map(opened.setup.learning_modules, & &1.id)
+        "learning_modules" => Enum.map(opened.setup.learning_modules, & &1.id),
+        # How many runs were started together: one episode each, the same
+        # experiment side by side. A property of the run's record, not of the
+        # page that started it.
+        "parallel" => parallel
       }
     }
   end

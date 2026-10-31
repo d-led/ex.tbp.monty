@@ -125,7 +125,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
           steps: 3,
           seed: 42,
           config: %{},
-          inputs: %{"seed" => 42, "world" => "synthetic"}
+          inputs: %{"seed" => 42, "world" => "synthetic", "parallel" => 2}
         })
 
       {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(queued)
@@ -167,11 +167,16 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert row =~ "queued"
       assert row =~ "42"
       assert row =~ "stand-in"
+      # How many runs went side by side, off the record rather than the page's
+      # current setting.
+      assert row =~ "2"
       assert row =~ ~s(href="#{~p"/runs/#{queued.id}"}")
 
       done = view |> element("#experiment-run-#{finished.id}") |> render()
       assert done =~ "finished"
       assert done =~ "7"
+      # A finished run has a time to show; the header says what it is.
+      assert render(view) =~ "ran for"
     end
 
     test "leaves another experiment's runs out", %{conn: conn, elsewhere: elsewhere} do
