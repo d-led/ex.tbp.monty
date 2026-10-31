@@ -241,3 +241,15 @@ __pycache__/
 
 # the throwaway Python environment `scripts/setup_monty_oracle.sh` builds
 .monty-oracle/
+
+# A wandb run writes its own directory beside whatever started it. The runs are
+# artifacts, not source, and an online test one day wrote one into this repo.
+/wandb/
+wandb/
+
+# The embedded interpreter `pythonx` builds from `config/pythonx.exs`. It lives
+# under `_build`, but a stray venv beside the project is the same mistake.
+.venv/
+
+# Whatever a run downloads or generates into Monty's own paths.
+/data/
