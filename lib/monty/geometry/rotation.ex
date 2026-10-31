@@ -112,9 +112,10 @@ defmodule Monty.Geometry.Rotation do
 
   The angles are rounded to `decimal_places`, because Monty compares them as
   labels (`np.round(pose.as_euler(...), 3) % 360`) and an unrounded 359.9999
-  would read as a different pose from 0.0.
+  would read as a different pose from 0.0. `nil` leaves them as computed, which
+  is what scipy answered and what a log keeps.
   """
-  @spec to_euler_degrees(t(), non_neg_integer()) :: vector()
+  @spec to_euler_degrees(t(), non_neg_integer() | nil) :: vector()
   def to_euler_degrees(%__MODULE__{} = rotation, decimal_places \\ 3) do
     rotation
     |> to_euler_radians()
@@ -272,6 +273,7 @@ defmodule Monty.Geometry.Rotation do
 
   defp rad_to_deg(radians), do: radians * 180 / :math.pi()
 
+  defp round_to(value, nil), do: value
   defp round_to(value, decimal_places), do: Float.round(value, decimal_places)
 
   defp unit(vector) do

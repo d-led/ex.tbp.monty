@@ -153,6 +153,29 @@ defmodule Monty.Frameworks.Models.Buffer.BufferEncoderTest do
       assert BufferEncoder.encode(~T[12:00:00]) == "12:00:00"
     end
 
+    test "encodes an action as the map it crosses a boundary as" do
+      # Monty registers one encoder for the whole `Action` family; every member
+      # answers `to_map/1`, which is the name plus its parameters.
+      action = %Monty.Frameworks.Actions.TurnLeft{agent_id: "agent_id_0", rotation_degrees: 90.0}
+
+      assert BufferEncoder.encode(action) == %{
+               "action" => "turn_left",
+               "agent_id" => "agent_id_0",
+               "rotation_degrees" => 90.0
+             }
+    end
+
+    test "encodes a rotation as the Euler angles in degrees, unrounded" do
+      # Monty's registration is scipy's `as_euler("xyz", degrees=True)`, and the
+      # numbers it produced are the ones a log keeps.
+      {:ok, rotation} = Monty.Geometry.Rotation.from_euler_degrees([10.0, 20.0, 30.0])
+
+      assert [ax, ay, az] = BufferEncoder.encode(rotation)
+      assert_in_delta ax, 10.0, 1.0e-9
+      assert_in_delta ay, 20.0, 1.0e-9
+      assert_in_delta az, 30.0, 1.0e-9
+    end
+
     test "something with no encoding at all says so, rather than being dropped" do
       assert_raise ArgumentError, ~r/cannot encode/, fn ->
         BufferEncoder.encode(self())

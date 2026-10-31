@@ -82,6 +82,24 @@ defmodule Monty.Runtime.Step do
   @spec state(server()) :: State.t()
   def state(server), do: GenServer.call(server, :state, :infinity)
 
+  @typedoc """
+  The model's modules as they stand now.
+
+  Monty's logger reads `model.learning_modules[i].buffer` because its model holds
+  the modules; here the modules are processes, and the coordinator is what owns
+  their ids. So this is the coordinator asking each of them, once — which is the
+  one moment a run needs a module's whole state, at the end of an episode.
+  """
+  @type detailed :: %{
+          learning_modules: [%{id: State.id(), module: module(), state: term()}],
+          sensor_modules: [%{id: State.id(), module: module(), state: term()}],
+          motor: struct() | nil
+        }
+
+  @doc "The modules' own states, and the motor system, for a detailed log."
+  @spec detailed(server()) :: detailed()
+  def detailed(server), do: GenServer.call(server, :detailed, :infinity)
+
   @doc """
   The four things a recognition policy may read off the model.
 
@@ -245,6 +263,16 @@ defmodule Monty.Runtime.Step do
   end
 
   def handle_call(:state, _from, state), do: {:reply, state, state}
+
+  def handle_call(:detailed, _from, %State{} = state) do
+    {:reply,
+     %{
+       learning_modules:
+         Enum.map(state.learning_modules, &live_learning_module(&1, state.model_id)),
+       sensor_modules: Enum.map(state.sensor_modules, &live_sensor_module(&1, state.model_id)),
+       motor: state.motor_state
+     }, state}
+  end
 
   # -- phases ---------------------------------------------------------------
 
@@ -666,6 +694,21 @@ defmodule Monty.Runtime.Step do
     end)
 
     state
+  end
+
+  # A module's own state, asked of the process that owns it. The coordinator's
+  # copy of a module is its wiring, not its memory: a training episode's buffer is
+  # tens of megabytes, and copying it into the coordinator on every step would be
+  # the cost of a log nobody has asked for yet.
+  defp live_learning_module(spec, model_id) do
+    %{
+      spec
+      | state: LearningModuleServer.state(Registry.via({:learning_module, model_id, spec.id}))
+    }
+  end
+
+  defp live_sensor_module(spec, model_id) do
+    %{spec | state: SensorModuleServer.state(Registry.via({:sensor_module, model_id, spec.id}))}
   end
 
   defp set_ground_truth_state(%State{model_id: model_id} = state, primary_target, opts) do

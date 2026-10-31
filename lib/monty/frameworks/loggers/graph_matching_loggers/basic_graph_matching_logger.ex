@@ -552,9 +552,17 @@ defmodule Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger
 
   defp actions(_state), do: []
 
-  @spec mode(map(), State.t()) :: atom()
-  defp mode(_logger_args, %State{experiment_mode: nil}), do: :eval
-  defp mode(_logger_args, %State{experiment_mode: mode}), do: mode
+  @doc """
+  The mode an episode was logged in.
+
+  Monty reads `model.experiment_mode`; a model that has not been told one — a run
+  that was never given an epoch — is evaluating, because training is the mode an
+  experiment has to ask for.
+  """
+  @spec mode(map(), State.t()) ::
+          Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.mode()
+  def mode(_logger_args, %State{experiment_mode: nil}), do: :eval
+  def mode(_logger_args, %State{experiment_mode: mode}), do: mode
 
   defp episode(logger_args, mode), do: Map.get(logger_args, "#{mode}_episodes", 0)
 

@@ -127,6 +127,27 @@ defmodule Monty.Studio.Jobs.RunTest do
       refute File.exists?(Path.join(Artifacts.dir(closed.id), "eval_stats.csv"))
       assert File.read!(closed.log_path) =~ "keeps no handlers, so this run writes no statistics"
     end
+
+    test "a config that asks for the detailed logger writes the episode in full" do
+      # Monty's detailed logging group pairs `DetailedGraphMatchingLogger` with
+      # `DetailedJSONHandler`: the BASIC stats and, in the same file, each module's
+      # buffer as the episode left it.
+      {:ok, record} = start_run("test/hierarchy/two_lms_eval", 2)
+
+      assert {:ok, closed} = perform(record)
+
+      path = Path.join(Artifacts.dir(closed.id), "detailed_run_stats.json")
+      assert File.exists?(path), File.read!(closed.log_path)
+
+      episode =
+        path |> File.read!() |> String.split("\n", trim: true) |> List.first() |> Jason.decode!()
+
+      [entry] = Map.values(episode)
+      assert %{"LM_0" => lm} = entry
+      assert is_list(lm["locations"])
+      assert is_list(lm["stepwise_targets_list"])
+      assert is_list(entry["motor_system"]["action_sequence"])
+    end
   end
 
   defp stats_rows(closed) do

@@ -1057,7 +1057,7 @@ defmodule Monty.ModuleMap.Data do
           python: "BasicGraphMatchingLogger"
         },
         %{
-          status: :planned,
+          status: :implemented,
           elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers.DetailedGraphMatchingLogger",
           python: "DetailedGraphMatchingLogger"
         },
@@ -2222,7 +2222,7 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Frameworks.Utils.LoggingUtils",
       package: "monty",
       python: "frameworks/utils/logging_utils.py",

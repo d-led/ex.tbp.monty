@@ -49,6 +49,15 @@ defmodule Monty.Runtime.Model do
   @spec state(atom() | String.t()) :: Monty.Runtime.Step.State.t()
   def state(model_id), do: Step.state(Registry.via({:step, model_id}))
 
+  @doc """
+  The modules' own states as they stand, for a logger writing an episode in full.
+
+  Monty's loggers read their modules straight off the model; here the modules are
+  processes, so this is the model being asked for all of them at once.
+  """
+  @spec detailed(atom() | String.t()) :: Monty.Runtime.Step.detailed()
+  def detailed(model_id), do: Step.detailed(Registry.via({:step, model_id}))
+
   @doc "The four things a recognition policy may read off the model."
   @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionPolicy.model()
   def status(model_id), do: Step.status(Registry.via({:step, model_id}))
