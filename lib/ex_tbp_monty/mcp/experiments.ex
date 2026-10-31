@@ -15,20 +15,43 @@ defmodule ExTbpMonty.Mcp.Experiments do
 
   alias Monty.Config.Source
   alias Monty.Studio
-  alias Monty.Studio.{Blueprint, Catalog, Drafts, Finding, Jobs, RunHistory, RunLog, Setup}
+  alias Monty.Studio.{Blueprint, Catalog, Drafts, Finding, Index, Jobs, RunHistory, RunLog, Setup}
+
+  @default_limit 25
+  @max_limit 200
 
   @doc """
-  Every experiment that can be opened, filtered by `:query`, `:group`/`:option`.
+  Every experiment that can be opened: how many there are, what shapes they
+  come in, and a page of the matching ones.
 
-  `:query` matches the name and the group choices, so "two objects, surf agent"
-  finds the experiment that is configured that way rather than the one with
-  those words in its name.
+  The counts lead, because the first question about a catalog of two hundred is
+  "how many, and of what" — answering it with two hundred names and their nine
+  group choices each is an answer a reader has to count for itself. So the same
+  `Monty.Studio.Index` the experiments page is built on answers here too: total,
+  the four facets with counts that respect the other filters, and then the
+  experiments themselves, paged.
+
+  Word filters the facets do not cover (`:group`/`:option`) narrow the set the
+  facets are then counted over, so "of the experiments that use evidence_1lm,
+  how many are surface agents" is one call.
   """
-  @spec list(keyword()) :: [map()]
+  @spec list(keyword()) :: map()
   def list(opts \\ []) do
-    Catalog.experiments()
-    |> Enum.filter(&matching?(&1, opts))
-    |> Enum.map(&brief/1)
+    all = Catalog.experiments()
+    chosen = Enum.filter(all, &chosen?(&1, opts))
+    result = chosen |> Index.build() |> Index.filter(facet_params(opts))
+    {page, truncated?} = window(result.entries, opts)
+    by_name = Map.new(chosen, &{&1.name, &1})
+
+    %{
+      total: length(all),
+      matching: result.matching,
+      returned: length(page),
+      offset: opts[:offset] || 0,
+      truncated?: truncated?,
+      facets: facets(result.facets),
+      experiments: Enum.map(page, &brief(&1, by_name[&1.name]))
+    }
   end
 
   @doc "One experiment: what it is made of, and which of that exists here."
@@ -151,11 +174,116 @@ defmodule ExTbpMonty.Mcp.Experiments do
     end
   end
 
-  @doc "The newest runs, newest first."
-  @spec runs(pos_integer()) :: [map()]
-  def runs(limit) do
-    RunHistory.list(limit: limit)
-    |> Enum.map(&report_of/1)
+  @doc """
+  The runs one filter matches, newest first, and how many there are of each kind.
+
+  `:state` is a run's own status or `"all"`, `:query` narrows on the
+  experiment's name (every word has to match), `:page`/`:limit` walk the list.
+  The counts are of every run, not of the page, because "how many failed" is a
+  question about the whole record.
+  """
+  @spec runs(keyword()) :: map()
+  def runs(opts \\ []) do
+    page =
+      RunHistory.search(
+        state: opts[:state] || "all",
+        text: opts[:query] || "",
+        page: opts[:page] || 1,
+        per_page: min(opts[:limit] || 10, @max_limit)
+      )
+
+    %{
+      total: page.total,
+      counts: RunHistory.counts(),
+      page: page.page,
+      pages: page.pages,
+      returned: length(page.runs),
+      runs: Enum.map(page.runs, &report_of/1)
+    }
+  end
+
+  @delete_limit 50
+
+  @doc """
+  Forgets runs — by id, or everything a filter matches — and only when asked to.
+
+  Two refuses stand between a question and a lost record:
+
+    * **nothing is deleted without `confirm: true`.** The answer says what would
+      go, by id and by experiment, which is the review a deletion needs;
+    * **a run that has not settled is never deleted.** A running run is the only
+      thing that can write down what it did; the tool says so and leaves it.
+
+  And one limit: a filter that matches more than #{@delete_limit} runs is refused
+  rather than carried out, because a filter nobody narrowed is not a decision.
+  """
+  @spec delete_runs(keyword()) :: {:ok, map()} | {:error, String.t()}
+  def delete_runs(opts) do
+    confirm? = opts[:confirm] == true
+
+    with {:ok, found, unknown} <- delete_targets(opts) do
+      settled = Enum.reject(found, &unsettled?/1)
+      refused = Enum.filter(found, &unsettled?/1)
+
+      if settled == [] and refused != [] do
+        {:error,
+         "All #{length(refused)} matching run(s) are still running. A run that has not " <>
+           "finished is the only thing that can record what it did, so it is not deleted: " <>
+           "wait for it, or stop it, then ask again."}
+      else
+        deleted = if confirm?, do: RunHistory.delete_ids(Enum.map(settled, & &1.id)), else: 0
+
+        {:ok,
+         %{
+           confirm?: confirm?,
+           deleted: deleted,
+           would_delete: Enum.map(settled, &summary_of/1),
+           refused_running: Enum.map(refused, &summary_of/1),
+           unknown_ids: unknown
+         }}
+      end
+    end
+  end
+
+  defp delete_targets(opts) do
+    case opts[:run_ids] do
+      ids when is_list(ids) and ids != [] ->
+        runs = Enum.map(ids, &RunHistory.get/1)
+        found = Enum.reject(runs, &is_nil/1)
+        unknown = for {id, nil} <- Enum.zip(ids, runs), do: id
+
+        {:ok, found, unknown}
+
+      _no_ids ->
+        page =
+          RunHistory.search(
+            state: opts[:state] || "all",
+            text: opts[:query] || "",
+            per_page: @delete_limit + 1
+          )
+
+        if page.total > @delete_limit do
+          {:error,
+           "That filter matches #{page.total} runs, more than the #{@delete_limit} a single " <>
+             "call will delete. Narrow it (`state`, `query`), or name the runs you mean " <>
+             "with `run_ids`."}
+        else
+          {:ok, page.runs, []}
+        end
+    end
+  end
+
+  defp unsettled?(run), do: run.status == "running"
+
+  defp summary_of(run) do
+    %{
+      run_id: run.id,
+      experiment: run.experiment,
+      status: run.status,
+      steps_done: length(run.log),
+      steps: run.steps,
+      started_at: run.started_at
+    }
   end
 
   # -- an experiment ---------------------------------------------------------
@@ -170,7 +298,19 @@ defmodule ExTbpMonty.Mcp.Experiments do
       motor_system: motor_system(opened.setup.motor_system),
       attention_system: class(opened.setup.attention_system),
       sensors: Enum.map(opened.setup.sensors, &sensor/1),
+      counts: %{
+        sensors: length(opened.setup.sensors),
+        learning_modules: length(opened.setup.learning_modules),
+        connections: length(opened.setup.connections)
+      },
       learning_modules: Enum.map(opened.setup.learning_modules, &learning_module/1),
+      objects: objects(opened.setup),
+      parallel: %{
+        num_parallel: num_parallel(opened.config),
+        note:
+          "Monty's own runner walks that many episodes in parallel; this studio queues " <>
+            "runs and steps them one at a time"
+      },
       connections: Enum.map(opened.setup.connections, &connection/1),
       epochs: opened.setup.epochs,
       seed: opened.setup.seed,
@@ -193,6 +333,33 @@ defmodule ExTbpMonty.Mcp.Experiments do
       ported: Setup.ported(setup),
       findings: findings(setup.findings)
     }
+  end
+
+  # `num_parallel` is Monty's own declaration. Hydra keeps the root's keys at the
+  # root of the composed tree and an experiment's override under `experiment`,
+  # so both are read; absent from both is "the config never said", which is not
+  # the same as one.
+  defp num_parallel(config) do
+    case config["num_parallel"] || get_in(config, ["experiment", "config", "num_parallel"]) do
+      count when is_integer(count) -> count
+      _not_declared -> nil
+    end
+  end
+
+  # Which objects a world starts with. A config that names none is not a config
+  # without objects: the interface's sampler places them, or the data path
+  # decides, and the answer says which of the two applies.
+  defp objects(setup) do
+    case setup.environment do
+      %{objects: names} when is_list(names) and names != [] ->
+        %{count: length(names), names: names, source: "env_init_args"}
+
+      %{data_path: path} when is_binary(path) ->
+        %{count: nil, names: [], source: "the object sampler in #{path}"}
+
+      _no_environment ->
+        %{count: nil, names: [], source: "unknown"}
+    end
   end
 
   defp sensor(sensor) do
@@ -270,31 +437,51 @@ defmodule ExTbpMonty.Mcp.Experiments do
   defp level_rank(:warning), do: 1
   defp level_rank(:info), do: 2
 
-  defp brief(experiment) do
+  defp brief(entry, experiment) do
     %{
-      name: experiment.name,
-      experiment_class: experiment.experiment_class,
-      groups: experiment.groups
+      name: entry.name,
+      experiment_class: experiment && experiment.experiment_class,
+      agent: entry.agent,
+      modules: entry.modules,
+      learning_module: entry.learning_module,
+      model: entry.model,
+      groups: entry.groups
     }
   end
 
-  defp matching?(experiment, opts) do
-    matches_query?(experiment, opts[:query]) and
-      matches_group?(experiment, opts[:group], opts[:option])
+  defp facets(facets) do
+    Enum.map(facets, fn facet ->
+      %{
+        key: facet.key,
+        label: facet.label,
+        values:
+          Enum.map(facet.values, fn value ->
+            %{value: to_string(value.value), label: value.label, count: value.count}
+          end)
+      }
+    end)
   end
 
-  defp matches_query?(_experiment, nil), do: true
+  defp facet_params(opts) do
+    %{
+      "q" => opts[:query],
+      "agent" => opts[:agent],
+      "modules" => opts[:modules],
+      "learning_module" => opts[:learning_module],
+      "model" => opts[:model]
+    }
+  end
 
-  defp matches_query?(experiment, query) do
-    haystack =
-      [experiment.name, experiment.experiment_class | Map.values(experiment.groups)]
-      |> Enum.join(" ")
-      |> String.downcase()
+  defp window(entries, opts) do
+    limit = min(opts[:limit] || @default_limit, @max_limit)
+    offset = opts[:offset] || 0
+    page = entries |> Enum.drop(offset) |> Enum.take(limit)
 
-    query
-    |> String.downcase()
-    |> String.split(~r/[^[:alnum:]-]+/u, trim: true)
-    |> Enum.all?(&String.contains?(haystack, &1))
+    {page, length(entries) > offset + limit}
+  end
+
+  defp chosen?(experiment, opts) do
+    matches_group?(experiment, opts[:group], opts[:option])
   end
 
   defp matches_group?(_experiment, nil, _option), do: true

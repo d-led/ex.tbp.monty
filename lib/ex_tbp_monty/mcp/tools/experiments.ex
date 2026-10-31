@@ -16,18 +16,31 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
 
   alias ExTbpMonty.Mcp.{Args, Experiments}
 
-  @doc "`monty_list_experiments`: the experiments that can be opened."
+  @doc "`monty_list_experiments`: how many there are, and what shapes they come in."
   def list(args, _ctx) do
     with {:ok, query} <- Args.optional(args, "query"),
          {:ok, group} <- Args.optional(args, "group"),
-         {:ok, option} <- Args.optional(args, "option") do
-      experiments = Experiments.list(query: query, group: group, option: option)
+         {:ok, option} <- Args.optional(args, "option"),
+         {:ok, agent} <- Args.optional(args, "agent"),
+         {:ok, modules} <- Args.optional(args, "modules"),
+         {:ok, learning_module} <- Args.optional(args, "learning_module"),
+         {:ok, model} <- Args.optional(args, "model"),
+         {:ok, limit} <- Args.integer(args, "limit", default: 25, min: 1, max: 200),
+         {:ok, offset} <- Args.integer(args, "offset", default: 0, min: 0, max: 10_000) do
+      index =
+        Experiments.list(
+          query: query,
+          group: group,
+          option: option,
+          agent: agent,
+          modules: modules,
+          learning_module: learning_module,
+          model: model,
+          limit: limit,
+          offset: offset
+        )
 
-      {:ok,
-       %{
-         text: list_text(experiments),
-         structured: %{count: length(experiments), experiments: experiments}
-       }}
+      {:ok, %{text: list_text(index), structured: index}}
     end
   end
 
@@ -127,30 +140,43 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
     end
   end
 
-  @doc "`monty_list_runs`: the newest runs."
+  @doc "`monty_list_runs`: the runs a filter matches, each with a link."
   def list_runs(args, ctx) do
-    with {:ok, limit} <- Args.integer(args, "limit", default: 10, min: 1, max: 50) do
-      runs = Experiments.runs(limit)
+    with {:ok, state} <- Args.optional(args, "state"),
+         {:ok, query} <- Args.optional(args, "query"),
+         {:ok, page} <- Args.integer(args, "page", default: 1, min: 1, max: 1000),
+         {:ok, limit} <- Args.integer(args, "limit", default: 10, min: 1, max: 50) do
+      runs = Experiments.runs(state: state, query: query, page: page, limit: limit)
 
       {:ok,
        %{
          text: runs_text(runs, ctx.base_url),
-         structured: %{count: length(runs), runs: runs}
+         structured:
+           Map.put(runs, :runs, Enum.map(runs.runs, &Map.put(&1, :url, run_url(&1, ctx))))
        }}
     end
   end
 
-  # -- text ------------------------------------------------------------------
-
-  defp list_text(experiments) do
-    if experiments == [] do
-      "No experiment matches. Call monty_list_experiments with no arguments to see them all."
-    else
-      Enum.map_join(experiments, "\n", fn experiment ->
-        "- `#{experiment.name}` — #{experiment.experiment_class}"
-      end)
+  @doc "`monty_delete_runs`: forgets runs, and says what it would forget first."
+  def delete_runs(args, _ctx) do
+    with {:ok, run_ids} <- Args.strings(args, "run_ids"),
+         {:ok, state} <- Args.optional(args, "state"),
+         {:ok, query} <- Args.optional(args, "query"),
+         {:ok, confirm} <- Args.boolean(args, "confirm"),
+         {:ok, deleted} <-
+           Experiments.delete_runs(
+             run_ids: run_ids,
+             state: state,
+             query: query,
+             confirm: confirm
+           ) do
+      {:ok, %{text: delete_text(deleted), structured: deleted}}
     end
   end
+
+  defp run_url(%{run_id: run_id}, ctx), do: ctx.base_url <> "/runs/" <> run_id
+
+  # -- text ------------------------------------------------------------------
 
   defp groups_text do
     "The groups a config is built from:\n" <>
@@ -162,14 +188,29 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
     """
     `#{summary.name}` — #{summary.experiment_class.class} (#{summary.source})
 
-    sensors: #{Enum.map_join(summary.sensors, ", ", & &1.id)}
-    learning modules: #{Enum.map_join(summary.learning_modules, ", ", & &1.id)}
-    connections: #{length(summary.connections)} · epochs: train #{summary.epochs.train}, eval #{summary.epochs.eval} · seed: #{inspect(summary.seed)}
+    sensors (#{summary.counts.sensors}): #{Enum.map_join(summary.sensors, ", ", & &1.id)}
+    learning modules (#{summary.counts.learning_modules}): #{Enum.map_join(summary.learning_modules, ", ", & &1.id)}
+    objects: #{objects_text(summary.objects)}
+    connections: #{summary.counts.connections} · epochs: train #{summary.epochs.train}, eval #{summary.epochs.eval} · seed: #{inspect(summary.seed)}
+    parallel: #{parallel_text(summary.parallel)}
     ported here: #{summary.ported.implemented}/#{summary.ported.total} classes
 
     #{findings_text(summary.findings)}
     """
   end
+
+  defp objects_text(%{count: count, names: names}) when is_integer(count) do
+    "#{count} named by the config (#{Enum.join(Enum.take(names, 6), ", ")}#{if count > 6, do: ", …"})"
+  end
+
+  defp objects_text(%{source: source}), do: "none named by the config — #{source}"
+
+  defp parallel_text(%{num_parallel: count}) when is_integer(count) do
+    "the config declares num_parallel #{count} for Monty's own runner; this studio queues " <>
+      "runs and steps them one at a time"
+  end
+
+  defp parallel_text(%{note: note}), do: note
 
   defp preview_text(preview) do
     "`#{preview.name}` from `#{preview.base}` — #{preview.experiment_class}\n\n" <>
@@ -212,12 +253,119 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
       end)
   end
 
-  defp runs_text([], _base_url), do: "No runs yet."
+  # The number first, then the shapes, then the page: a reader asking "how many"
+  # should not have to count lines to find out.
+  defp list_text(index) do
+    """
+    #{headline(index)}
+    #{facets_text(index.facets)}#{experiments_text(index)}
+    """
+  end
+
+  defp headline(%{total: total, matching: matching}) when total == matching do
+    "#{total} experiments."
+  end
+
+  defp headline(%{total: total, matching: matching}) do
+    "#{matching} of #{total} experiments match."
+  end
+
+  defp facets_text([]), do: ""
+
+  # The values, not the labels: a label is for reading, a value is what the
+  # caller passes back. Each count is with the *other* filters applied, which is
+  # what makes "surf" and "5 learning modules" answerable together — say so,
+  # because a count that looks like a total and is not one is worse than none.
+  defp facets_text(facets) do
+    lines =
+      facets
+      |> Enum.reject(fn facet -> Enum.all?(facet.values, &(&1.count == 0)) end)
+      |> Enum.map_join("\n", fn facet ->
+        values =
+          facet.values
+          |> Enum.reject(&(&1.count == 0))
+          |> Enum.sort_by(& &1.count, :desc)
+          |> Enum.take(8)
+          |> Enum.map_join(" · ", &"#{&1.value} #{&1.count}")
+
+        "#{facet.label}: #{values}"
+      end)
+
+    if lines == "",
+      do: "",
+      else: "\nChoices, each counted with the other filters applied:\n" <> lines <> "\n"
+  end
+
+  defp experiments_text(%{experiments: []}), do: "Nothing matches.\n"
+
+  defp experiments_text(page) do
+    shown =
+      Enum.map_join(page.experiments, "\n", fn experiment ->
+        "- `#{experiment.name}` — #{experiment.agent} agent, #{experiment.modules} learning " <>
+          "module(s), #{experiment.learning_module}, from #{experiment.model}"
+      end)
+
+    more =
+      if page.truncated?,
+        do: "\n(#{page.total} in total; ask again with `offset: #{page.offset + page.returned}`)",
+        else: ""
+
+    "\n#{shown}#{more}\n"
+  end
+
+  defp runs_text(%{runs: []}, _base_url),
+    do: "No run matches. Ask monty_list_runs with no filter."
 
   defp runs_text(runs, base_url) do
-    Enum.map_join(runs, "\n", fn run ->
-      "- `#{run.run_id}` — `#{run.experiment}`, #{run.status}, #{run.steps_done}/#{run.steps} steps\n" <>
-        "  #{base_url}/runs/#{run.run_id}"
-    end)
+    counts =
+      runs.counts
+      |> Enum.sort_by(fn {_state, count} -> -count end)
+      |> Enum.map_join(" · ", fn {state, count} -> "#{state} #{count}" end)
+
+    listed =
+      Enum.map_join(runs.runs, "\n", fn run ->
+        "- `#{run.run_id}` — `#{run.experiment}`, #{run.status}, " <>
+          "#{run.steps_done}/#{run.steps} steps\n  #{base_url}/runs/#{run.run_id}"
+      end)
+
+    "#{runs.total} run(s) match (#{counts}).\n\n#{listed}"
+  end
+
+  defp delete_text(deleted) do
+    [head(deleted), refuses(deleted.refused_running), unknown(deleted.unknown_ids)]
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join("\n\n")
+  end
+
+  defp head(%{would_delete: [], refused_running: refused} = deleted) when refused == [] do
+    if deleted.unknown_ids == [], do: "Nothing to delete: no run matches.", else: ""
+  end
+
+  defp head(%{would_delete: []}), do: "Nothing was deleted, and nothing was going to be."
+
+  defp head(deleted) do
+    listed = Enum.map_join(deleted.would_delete, "\n", &describe_run/1)
+
+    if deleted.confirm? do
+      "Deleted #{deleted.deleted} run(s), with the files they wrote:\n#{listed}"
+    else
+      "This would delete #{length(deleted.would_delete)} run(s), with the files they wrote:\n" <>
+        "#{listed}\n\nNothing was deleted. Call again with `confirm: true` to delete them."
+    end
+  end
+
+  defp refuses([]), do: ""
+
+  defp refuses(running) do
+    "Left alone because they are still running:\n" <>
+      Enum.map_join(running, "\n", &describe_run/1)
+  end
+
+  defp unknown([]), do: ""
+  defp unknown(ids), do: "No such run: #{Enum.join(ids, ", ")}"
+
+  defp describe_run(run) do
+    "- `#{run.run_id}` — `#{run.experiment}`, #{run.status}, " <>
+      "#{run.steps_done}/#{run.steps} steps"
   end
 end

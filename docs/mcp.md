@@ -57,12 +57,51 @@ of theory to source).
 
 **Experiments** — `monty_list_experiments`, `monty_describe_experiment`,
 `monty_experiment_options`, `monty_read_option`, `monty_preview_experiment`,
-`monty_create_experiment`, `monty_run_experiment`, `monty_run_report`,
-`monty_list_runs`.
+`monty_create_experiment`, `monty_run_experiment`.
+
+**Runs** — `monty_list_runs`, `monty_run_report`, `monty_delete_runs`.
 
 Every tool has an `inputSchema` and honest annotations: the ones that only read
-say `readOnlyHint`, and the two that write — a draft, a queued run — say that
-too.
+say `readOnlyHint`; the two that write — a draft, a queued run — say that too;
+and `monty_delete_runs` says `destructiveHint`, because it is.
+
+### Asking "how many experiments?"
+
+`monty_list_experiments` is a catalog answer, not a list: the total, the four
+choices counted (`agent`, `modules`, `learning_module`, `model`), and a page of
+the matching experiments. The counts respect the other filters, so one call
+answers "how many surface-agent experiments start from a pretrained model":
+
+```json
+{"name": "monty_list_experiments", "arguments": {"agent": "surf", "model": "pretrained"}}
+```
+
+```
+9 of 210 experiments match.
+
+Choices, each counted with the other filters applied:
+Agent: dist 98 · other 94 · surf 18
+Learning modules: 1 18
+...
+```
+
+`monty_describe_experiment` answers the next question — sensors and their count,
+learning modules, the objects the config names (or the sampler that places
+them), the connections, the epochs, the seed, `num_parallel`, and which classes
+are ported — in one response, so an assistant needs no filesystem of its own.
+
+### Runs, and deleting them
+
+`monty_list_runs` takes `state` (`running`, `finished`, `stopped`, `failed`),
+`query` (words of the experiment's name), `page` and `limit`, and answers the
+counts by state plus each run with a link. `monty_run_report` is one run in
+detail; `monty_run_experiment` returns the link of the run it queued.
+
+`monty_delete_runs` deletes nothing unless `confirm` is true: the first call
+answers exactly what would go, by id and experiment. It takes `run_ids`, or a
+`state`/`query` filter (at most 50 runs a call — a filter nobody narrowed is not
+a decision), and it never deletes a run that is still running: that run is the
+only thing that can record what it did.
 
 ## Defining and running an experiment
 

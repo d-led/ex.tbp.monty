@@ -39,6 +39,13 @@ defmodule ExTbpMonty.Mcp.Tools do
     "openWorldHint" => false
   }
 
+  @destructive %{
+    "readOnlyHint" => false,
+    "destructiveHint" => true,
+    "idempotentHint" => true,
+    "openWorldHint" => false
+  }
+
   @attributes %{
     "type" => "object",
     "description" =>
@@ -203,20 +210,38 @@ defmodule ExTbpMonty.Mcp.Tools do
     },
     %{
       "name" => "monty_list_experiments",
-      "title" => "List experiments",
+      "title" => "List experiments (counts and facets)",
       "description" =>
-        "Every experiment that can be opened here — Monty's own, plus this studio's drafts — " <>
-          "with the choices its config makes. Filter by words in the name or the choices, or " <>
-          "by one group's option (`group: \"monty/learning_module\", option: \"evidence_1lm\"`).",
+        "How many experiments there are, the choices they make counted, and a page of the " <>
+          "matching ones. `agent` (dist/surf), `modules` (learning modules, a number), " <>
+          "`learning_module`, `model` (pretrained/scratch) and a word `query` are all " <>
+          "optional and combine; the counts respect them. This is the tool for \"how many " <>
+          "experiments\", \"which use surface agents\", \"how many with five learning " <>
+          "modules\" — not a list to count yourself.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "query" => %{"type" => "string", "description" => "Words the experiment must mention."},
+          "query" => %{
+            "type" => "string",
+            "description" => "Words the name or choices must contain."
+          },
+          "agent" => %{"type" => "string", "description" => "`dist`, `surf`, or `other`."},
+          "modules" => %{
+            "type" => "string",
+            "description" => "How many learning modules, e.g. `5`."
+          },
+          "learning_module" => %{
+            "type" => "string",
+            "description" => "The learning module family, e.g. `evidence` or `feature`."
+          },
+          "model" => %{"type" => "string", "description" => "`pretrained` or `scratch`."},
           "group" => %{
             "type" => "string",
             "description" => "A group name, e.g. `monty/learning_module`."
           },
-          "option" => %{"type" => "string", "description" => "The option that group must choose."}
+          "option" => %{"type" => "string", "description" => "The option that group must choose."},
+          "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 200, "default" => 25},
+          "offset" => %{"type" => "integer", "minimum" => 0, "default" => 0}
         }
       },
       "annotations" => @read_only
@@ -348,14 +373,61 @@ defmodule ExTbpMonty.Mcp.Tools do
     %{
       "name" => "monty_list_runs",
       "title" => "List runs",
-      "description" => "The newest runs this studio has started, newest first, with links.",
+      "description" =>
+        "The runs this studio has started, newest first, each with a link — and how many " <>
+          "there are of each kind. Filter by `state` (`running`, `finished`, `stopped`, " <>
+          "`failed`) or by words in the experiment's name. For one run's detail ask " <>
+          "`monty_run_report`.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
+          "state" => %{
+            "type" => "string",
+            "description" => "running, finished, stopped, failed, or all (the default)."
+          },
+          "query" => %{
+            "type" => "string",
+            "description" => "Words the experiment's name must contain."
+          },
+          "page" => %{"type" => "integer", "minimum" => 1, "default" => 1},
           "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 50, "default" => 10}
         }
       },
       "annotations" => @read_only
+    },
+    %{
+      "name" => "monty_delete_runs",
+      "title" => "Delete runs",
+      "description" =>
+        "Forget runs and the files they wrote. Deletes nothing unless `confirm` is true: " <>
+          "the first call answers exactly what would go, by id and experiment. Name the " <>
+          "runs with `run_ids`, or narrow with `state`/`query` (at most 50 runs a call). " <>
+          "A run that is still running is never deleted — it is the only thing that can " <>
+          "record what it did.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "run_ids" => %{
+            "type" => "array",
+            "items" => %{"type" => "string"},
+            "description" => "The runs to delete, by id. Omit to delete by filter."
+          },
+          "state" => %{
+            "type" => "string",
+            "description" => "Delete the runs in this state, e.g. `failed`."
+          },
+          "query" => %{
+            "type" => "string",
+            "description" => "Delete the runs whose experiment's name contains these words."
+          },
+          "confirm" => %{
+            "type" => "boolean",
+            "default" => false,
+            "description" => "False (the default) answers what would be deleted; true deletes."
+          }
+        }
+      },
+      "annotations" => @destructive
     }
   ]
 
@@ -379,7 +451,8 @@ defmodule ExTbpMonty.Mcp.Tools do
     "monty_create_experiment" => {Experiments, :create},
     "monty_run_experiment" => {Experiments, :run},
     "monty_run_report" => {Experiments, :run_report},
-    "monty_list_runs" => {Experiments, :list_runs}
+    "monty_list_runs" => {Experiments, :list_runs},
+    "monty_delete_runs" => {Experiments, :delete_runs}
   }
 
   @doc "The `tools/list` result."
