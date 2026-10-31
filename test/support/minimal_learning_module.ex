@@ -52,5 +52,8 @@ defmodule Monty.Test.MinimalLearningModule do
   def set_target(state, _primary_target), do: state
 
   @impl true
+  def set_stepwise_target(state, _label), do: state
+
+  @impl true
   def fixme_update_ground_truth(state), do: state
 end

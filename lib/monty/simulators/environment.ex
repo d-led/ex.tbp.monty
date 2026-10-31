@@ -89,7 +89,16 @@ defmodule Monty.Simulators.Environment do
   """
   @callback primary_target(t()) :: map() | nil
 
-  @optional_callbacks stop: 1, positions_itself?: 0, primary_target: 1
+  @doc """
+  The map from semantic id to the object's name, when the world has one.
+
+  Monty's `OneObjectPerEpisodeInterface.semantic_id_to_label`: what turns the
+  semantic id a sensor reads at a pixel into the object a log can name. A world
+  without semantics says nothing here, which is the same as an empty map.
+  """
+  @callback semantic_id_to_label(t()) :: %{optional(integer()) => String.t()}
+
+  @optional_callbacks stop: 1, positions_itself?: 0, primary_target: 1, semantic_id_to_label: 1
 
   @spec stop(t()) :: :ok
   def stop(env) do

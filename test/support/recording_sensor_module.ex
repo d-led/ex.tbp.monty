@@ -32,7 +32,8 @@ defmodule Monty.Test.RecordingSensorModule do
         location: state.location,
         sender_id: to_string(state.id),
         pass_message: state.pass? and not motor_only?,
-        process_features_in_lm: state.features?
+        process_features_in_lm: state.features?,
+        semantic_id: Map.get(state, :semantic_id)
       })
 
     {percept, state}

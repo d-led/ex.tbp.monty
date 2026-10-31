@@ -106,6 +106,12 @@ defmodule Monty.Studio.Run do
     end
   end
 
+  # Monty's `MontyExperiment.pre_episode`: the experiment tells the model what the
+  # episode is about, and the two halves of that arrive from the same place. The
+  # world that chose the object also named the semantic ids in its scene, which
+  # is what lets a step say *which* object was under the patch rather than only
+  # that one was; Monty's own experiments pass both
+  # (`object_recognition_experiments.py`).
   defp tell_target(model, model_id, interface) do
     world = interface.env
 
@@ -113,9 +119,18 @@ defmodule Monty.Studio.Run do
       if function_exported?(world.__struct__, :primary_target, 1),
         do: world.__struct__.primary_target(world)
 
-    if is_map(target), do: model.fixme_set_ground_truth(model_id, target)
+    model.fixme_set_ground_truth(model_id, target, semantic_id_to_label: labels(world))
 
     :ok
+  end
+
+  # A world without semantics answers nothing, which is what an empty map says:
+  # every step's stepwise target is then `no_label`, Monty's own word for a
+  # sensor that cannot name what it is on.
+  defp labels(world) do
+    if function_exported?(world.__struct__, :semantic_id_to_label, 1),
+      do: world.__struct__.semantic_id_to_label(world),
+      else: %{}
   end
 
   # Monty's `pre_episode`: the world is reset, then looked at and stepped until

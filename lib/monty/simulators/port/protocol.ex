@@ -72,9 +72,10 @@ defmodule Monty.Simulators.Port.Protocol do
   bug to fix, not a case to handle.
 
   The fourth element is what the world said about the episode, which only a reset
-  answer has: `%{"primary_target" => target}`. It is a map rather than an option
-  so a world that says nothing costs nobody a clause, and one that has more to say
-  one day does not need a new arity.
+  answer has: `%{"primary_target" => target}` and the scene's
+  `"semantic_id_to_label"`. It is a map rather than an option so a world that says
+  nothing costs nobody a clause, and one that has more to say one day does not
+  need a new arity.
   """
   @spec reply(binary(), non_neg_integer()) ::
           {:ok, map(), map(), map()} | {:error, term()}
@@ -101,11 +102,15 @@ defmodule Monty.Simulators.Port.Protocol do
     end
   end
 
+  # What a world can say about an episode. A key it leaves out is a world that
+  # has no answer for it, which is not the same as an empty answer.
+  @episode_keys ["primary_target", "semantic_id_to_label"]
+
   defp episode(reply) do
-    case Map.get(reply, "primary_target") do
-      nil -> %{}
-      target -> %{"primary_target" => target}
-    end
+    reply
+    |> Map.take(@episode_keys)
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
   end
 
   @doc """

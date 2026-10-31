@@ -67,9 +67,9 @@ defmodule Monty.Runtime.Model do
   end
 
   @doc "Tells every module which object this episode is about."
-  @spec fixme_set_ground_truth(atom() | String.t(), map() | nil) :: :ok
-  def fixme_set_ground_truth(model_id, primary_target) do
-    Step.fixme_set_ground_truth(Registry.via({:step, model_id}), primary_target)
+  @spec fixme_set_ground_truth(atom() | String.t(), map() | nil, keyword()) :: :ok
+  def fixme_set_ground_truth(model_id, primary_target, opts \\ []) do
+    Step.fixme_set_ground_truth(Registry.via({:step, model_id}), primary_target, opts)
   end
 
   @doc "Hands what the episode saw to long-term memory."

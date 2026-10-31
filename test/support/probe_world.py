@@ -97,6 +97,9 @@ def main(argv):
                         "object": "probe",
                         "quat_rotation": [0.0, 0.0, 0.0, 1.0],
                     },
+                    # The ids the scene was built with, as Monty's own interface
+                    # reports them: JSON keys are strings.
+                    "semantic_id_to_label": {"1": "probe"},
                 },
             )
         elif command == "step":

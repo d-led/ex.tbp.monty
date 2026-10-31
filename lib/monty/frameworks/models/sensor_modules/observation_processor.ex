@@ -117,7 +117,11 @@ defmodule Monty.Frameworks.Models.SensorModules.ObservationProcessor do
         pass_message: true,
         process_features_in_lm: on_object? and valid_signals?,
         sender_id: to_string(processor.sensor_module_id),
-        sender_type: :sm
+        sender_type: :sm,
+        # The centre pixel's semantic id, which is Monty's `_semantic_id`: the
+        # world sends it with the point's coordinates, which are floats, and a
+        # semantic id is an integer — the id of an object, or 0 for background.
+        semantic_id: trunc(semantic_id)
       })
     end
   end

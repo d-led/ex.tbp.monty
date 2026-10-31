@@ -136,6 +136,45 @@ defmodule Monty.Runtime.StepTest do
     end
   end
 
+  describe "what a module is told it is looking at" do
+    test "the object under its sensor, named by the world's ids" do
+      model_id = start_model(sensor_modules: [sensor_module(:patch, semantic_id: 1)])
+
+      # The experiment knows the world's ids; the percept carries the one its
+      # centre pixel saw. Together they are the stepwise target — Monty's
+      # `_set_stepwise_targets` — and it is recorded before the module steps.
+      :ok = Model.fixme_set_ground_truth(model_id, nil, semantic_id_to_label: %{1 => "mug"})
+
+      assert {:ok, _, _info} = step(model_id)
+
+      assert_receive {:stepwise_target, :lm_0, "mug"}
+      assert_receive {:learning_step, :lm_0, _percepts, :matching}
+    end
+
+    test "and `no_label` when the world cannot name it" do
+      model_id = start_model(sensor_modules: [sensor_module(:patch, semantic_id: 1)])
+
+      # No map: a world without semantics, or a sensor without a label. Monty
+      # answers `no_label` here, and so does this, so an episode's log always has
+      # one entry per step rather than a gap.
+      :ok = Model.fixme_set_ground_truth(model_id, nil)
+
+      assert {:ok, _, _info} = step(model_id)
+
+      assert_receive {:stepwise_target, :lm_0, "no_label"}
+    end
+
+    test "and `no_label` for an id the world's map does not list" do
+      model_id = start_model(sensor_modules: [sensor_module(:patch, semantic_id: 9)])
+
+      :ok = Model.fixme_set_ground_truth(model_id, nil, semantic_id_to_label: %{1 => "mug"})
+
+      assert {:ok, _, _info} = step(model_id)
+
+      assert_receive {:stepwise_target, :lm_0, "no_label"}
+    end
+  end
+
   describe "voting" do
     test "every module votes before any module hears the result" do
       model_id =

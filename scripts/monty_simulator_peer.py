@@ -180,8 +180,15 @@ class World:
 
         # The model is told what the episode is about, and only this process
         # knows: it is Monty's interface that samples the object. A reply without
-        # it would leave the model scoring itself against nothing.
-        return {"ok": True, "primary_target": to_json(target) if target is not None else None}
+        # it would leave the model scoring itself against nothing. The semantic
+        # ids the scene was built with come along, because the same interface
+        # named them — they are what turns the id a sensor reads at a pixel into
+        # an object a log can name.
+        return {
+            "ok": True,
+            "primary_target": to_json(target) if target is not None else None,
+            "semantic_id_to_label": self._semantic_id_to_label(),
+        }
 
     def step(self, actions: list[dict]) -> dict:
         self.steps += 1
@@ -198,6 +205,17 @@ class World:
     def _target(self):
         """What the episode is about, when the interface says."""
         return getattr(self.interface, "primary_target", None)
+
+    def _semantic_id_to_label(self) -> dict:
+        """The scene's semantic ids by object name, as the interface has them.
+
+        JSON keys are strings, which the Elixir side turns back into the integer
+        ids a semantic image carries. An interface without semantics contributes
+        nothing rather than being an error: MuJoCo worlds have no ground-truth
+        labels, and Monty runs them.
+        """
+        mapping = getattr(self.interface, "semantic_id_to_label", None) or {}
+        return {str(int(semantic_id)): label for semantic_id, label in mapping.items()}
 
 
 def read_frame(stream):

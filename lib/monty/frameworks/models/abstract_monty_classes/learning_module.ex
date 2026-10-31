@@ -129,6 +129,16 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
   @callback set_target(state, map() | nil) :: state
 
   @doc """
+  Records which object the module's sensor is on this step.
+
+  Monty's `_set_stepwise_targets`: the model, not the module, reads the label
+  off the percept's semantic id, and hands it here. It is logging information —
+  the stepwise performance asks "was the object under the patch one the module
+  was considering", which an episode reports and nothing matches on.
+  """
+  @callback set_stepwise_target(state, String.t()) :: state
+
+  @doc """
   Records which objects the graph a training episode built came from.
 
   Monty's `fixme_update_ground_truth`, called after the episode's long-term

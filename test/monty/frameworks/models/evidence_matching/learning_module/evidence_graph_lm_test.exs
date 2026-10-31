@@ -564,6 +564,29 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     end
   end
 
+  describe "the object under the module's sensor, step by step" do
+    test "is recorded as each step is taken, and kept as a list" do
+      # The model names it from the percept's semantic id, so the module never
+      # has to know where the labels come from — Monty's `_set_stepwise_targets`.
+      lm =
+        learning_module(mug())
+        |> EvidenceGraphLM.set_stepwise_target("mug")
+        |> EvidenceGraphLM.set_stepwise_target("mug")
+        |> EvidenceGraphLM.set_stepwise_target("bowl")
+
+      assert lm.stepwise_target_object == "bowl"
+      assert lm.stepwise_targets_list == ["mug", "mug", "bowl"]
+    end
+
+    test "is forgotten when a new episode is told what it is about" do
+      lm =
+        learning_module(mug())
+        |> EvidenceGraphLM.set_stepwise_target("mug")
+
+      assert EvidenceGraphLM.set_target(lm, %{"object" => "mug"}).stepwise_targets_list == []
+    end
+  end
+
   describe "the ground truth a training episode records" do
     test "says which objects the graph it built came from, both ways round" do
       lm =

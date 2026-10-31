@@ -57,10 +57,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
   The experiment is the only one that knows, and a module that is never told cannot
   say whether it recognised anything — so this is part of the model's public
   surface, not the experiment's private business.
+
+  Monty's own signature takes the world's `semantic_id_to_label` beside the
+  target, and both come from the same place: the world that chose the object also
+  numbered it. It is an option here rather than a second positional argument,
+  because a world without semantics has none to give.
   """
-  @spec fixme_set_ground_truth(atom() | String.t(), map() | nil) :: :ok
-  def fixme_set_ground_truth(model_id, primary_target),
-    do: Model.fixme_set_ground_truth(model_id, primary_target)
+  @spec fixme_set_ground_truth(atom() | String.t(), map() | nil, keyword()) :: :ok
+  def fixme_set_ground_truth(model_id, primary_target, opts \\ []),
+    do: Model.fixme_set_ground_truth(model_id, primary_target, opts)
 
   @doc "The four things a recognition policy may read off the model."
   @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionPolicy.model()

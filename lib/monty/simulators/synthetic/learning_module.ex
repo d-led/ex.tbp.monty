@@ -111,6 +111,11 @@ defmodule Monty.Simulators.Synthetic.LearningModule do
   @impl true
   def set_target(state, primary_target), do: Map.put(state, :primary_target, primary_target)
 
+  # The stand-in keeps no stepwise targets: it has no buffer for an episode to
+  # be read from, and inventing a list here would be a statistic about nothing.
+  @impl true
+  def set_stepwise_target(state, _label), do: state
+
   @impl true
   def fixme_update_ground_truth(state), do: state
 

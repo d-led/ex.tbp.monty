@@ -87,7 +87,8 @@ defmodule Monty.Cmp do
       process_features_in_lm: payload["process_features_in_lm"],
       sender_id: payload["sender_id"],
       sender_type: decode_sender_type(payload["sender_type"]),
-      displacement: payload["displacement"]
+      displacement: payload["displacement"],
+      semantic_id: payload["semantic_id"]
     })
   end
 

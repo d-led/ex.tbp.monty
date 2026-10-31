@@ -16,6 +16,11 @@ defmodule Monty.Cmp.Message do
       is to keep the run alive.
     * Vectors are plain lists (`[x, y, z]`, `[[x, y, z], ...]`), the shape Nx
       and JSON both read without conversion.
+    * `semantic_id` is a field here and a private attribute in Python
+      (`percept._semantic_id`). Monty sets it "just for logging" — its own
+      words, on the line that sets it — and nothing in matching reads it; here
+      a private field does not exist, so the annotation is a field and the
+      promise is the same one Monty makes in a comment.
   """
 
   alias Monty.Geometry
@@ -30,7 +35,8 @@ defmodule Monty.Cmp.Message do
             process_features_in_lm: true,
             sender_id: nil,
             sender_type: nil,
-            displacement: nil
+            displacement: nil,
+            semantic_id: nil
 
   @typedoc """
   Where a message came from. `:gsg` only appears on `Monty.Cmp.Goal`.
@@ -49,7 +55,8 @@ defmodule Monty.Cmp.Message do
           process_features_in_lm: boolean(),
           sender_id: String.t(),
           sender_type: sender_type(),
-          displacement: %{optional(String.t()) => term()} | nil
+          displacement: %{optional(String.t()) => term()} | nil,
+          semantic_id: integer() | nil
         }
 
   @allowed_sender_types [:sm, :lm]

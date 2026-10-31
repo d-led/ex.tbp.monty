@@ -61,6 +61,19 @@ defmodule Monty.Studio.RunPrologueTest do
     end
   end
 
+  test "the ids the world's scene was built with reach the model too", %{setup: setup} do
+    # A target names the object an episode is about; the id map names every object
+    # a sensor can read at a pixel, which is what a stepwise target is made of.
+    # The two come from the same place, so they travel together.
+    {:ok, run} = Run.start(setup, steps: 1)
+
+    try do
+      assert Monty.Runtime.Model.state(run.model_id).semantic_id_to_label == %{1 => "probe"}
+    after
+      Run.stop(run)
+    end
+  end
+
   # What the probe behind the port was sent. A world that is never asked anything
   # writes nothing, which is itself the answer.
   defp requested?(log, command) do

@@ -50,7 +50,8 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
             command: nil,
             timeout: @default_timeout,
             server: nil,
-            primary_target: nil
+            primary_target: nil,
+            semantic_id_to_label: %{}
 
   @typedoc """
   A world named by an experiment, not yet started, and what its last episode was
@@ -62,7 +63,8 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
           command: [String.t()] | nil,
           timeout: timeout(),
           server: GenServer.server() | nil,
-          primary_target: map() | nil
+          primary_target: map() | nil,
+          semantic_id_to_label: %{optional(integer()) => String.t()}
         }
 
   @doc """
@@ -138,7 +140,12 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
 
     case Environment.reset(server) do
       {:ok, episode} ->
-        %{world | server: server, primary_target: Map.get(episode, "primary_target")}
+        %{
+          world
+          | server: server,
+            primary_target: Map.get(episode, "primary_target"),
+            semantic_id_to_label: episode_labels(Map.get(episode, "semantic_id_to_label"))
+        }
 
       {:error, reason} ->
         raise "the world behind #{world.experiment} could not reset: #{inspect(reason)}"
@@ -156,6 +163,26 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
   @impl true
   @spec primary_target(t()) :: map() | nil
   def primary_target(%__MODULE__{primary_target: primary_target}), do: primary_target
+
+  @doc """
+  The semantic ids the episode's objects were given, mapped to their names.
+
+  Monty's own `HabitatEnvironment` builds this from the objects it puts in the
+  scene, and it is the only thing that can name what a sensor's semantic id
+  points at: a run without it can say that something was under the patch, not
+  what.
+  """
+  @impl true
+  @spec semantic_id_to_label(t()) :: %{optional(integer()) => String.t()}
+  def semantic_id_to_label(%__MODULE__{semantic_id_to_label: labels}), do: labels
+
+  # The peer sends the map as JSON, where the ids are object keys; an episode
+  # that carried none is a world without semantics, which is an empty map.
+  defp episode_labels(%{} = labels) do
+    Map.new(labels, fn {id, label} -> {id |> to_string() |> String.to_integer(), label} end)
+  end
+
+  defp episode_labels(_none), do: %{}
 
   @doc """
   True: this world positions an episode itself.

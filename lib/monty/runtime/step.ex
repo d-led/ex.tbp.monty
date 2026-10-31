@@ -130,9 +130,9 @@ defmodule Monty.Runtime.Step do
   it, the modules cannot work it out, and without it nothing the episode does can
   be scored.
   """
-  @spec fixme_set_ground_truth(server(), map() | nil) :: :ok
-  def fixme_set_ground_truth(server, primary_target),
-    do: GenServer.call(server, {:fixme_set_ground_truth, primary_target}, :infinity)
+  @spec fixme_set_ground_truth(server(), map() | nil, keyword()) :: :ok
+  def fixme_set_ground_truth(server, primary_target, opts \\ []),
+    do: GenServer.call(server, {:fixme_set_ground_truth, primary_target, opts}, :infinity)
 
   @doc """
   Hands what the episode saw to long-term memory.
@@ -240,8 +240,8 @@ defmodule Monty.Runtime.Step do
     {:reply, :ok, set_experiment_mode_state(state, mode)}
   end
 
-  def handle_call({:fixme_set_ground_truth, primary_target}, _from, state) do
-    {:reply, :ok, set_ground_truth_state(state, primary_target)}
+  def handle_call({:fixme_set_ground_truth, primary_target, opts}, _from, state) do
+    {:reply, :ok, set_ground_truth_state(state, primary_target, opts)}
   end
 
   def handle_call(:state, _from, state), do: {:reply, state, state}
@@ -326,11 +326,15 @@ defmodule Monty.Runtime.Step do
         do: message
   end
 
-  defp step_learning_modules(%State{model_id: model_id, call_timeout: timeout}, inputs, ctx) do
+  defp step_learning_modules(
+         %State{model_id: model_id, call_timeout: timeout, semantic_id_to_label: labels},
+         inputs,
+         ctx
+       ) do
     requests =
       Enum.map(inputs, fn {lm_id, percepts} ->
         server = Registry.via({:learning_module, model_id, lm_id})
-        {lm_id, fn -> learn(server, percepts, ctx) end}
+        {lm_id, fn -> learn(server, percepts, ctx, labels) end}
       end)
 
     Barrier.run(requests, timeout)
@@ -341,19 +345,38 @@ defmodule Monty.Runtime.Step do
   # inputs is not stepped, and every module is told whether this step gave it
   # something to learn from. A step that carried only a location is buffered
   # but is not evidence, which is what keeps it out of the symmetry count.
-  defp learn(server, [], _ctx) do
+  #
+  # A module that does get input is named the object under its sensor first,
+  # which is Monty's `_set_stepwise_targets`: it belongs to the step, so it is
+  # recorded before the module reads the percepts it came with.
+  defp learn(server, [], _ctx, _labels) do
     LearningModuleServer.add_lm_processing_to_buffer_stats(server, false)
   end
 
-  defp learn(server, percepts, %{mode: :exploratory} = ctx) do
+  defp learn(server, percepts, %{mode: :exploratory} = ctx, labels) do
+    :ok = LearningModuleServer.set_stepwise_target(server, stepwise_target(percepts, labels))
     :ok = LearningModuleServer.exploratory_step(server, percepts, ctx)
     record_processing(server, percepts)
   end
 
-  defp learn(server, percepts, ctx) do
+  defp learn(server, percepts, ctx, labels) do
+    :ok = LearningModuleServer.set_stepwise_target(server, stepwise_target(percepts, labels))
     :ok = LearningModuleServer.matching_step(server, percepts, ctx)
     record_processing(server, percepts)
   end
+
+  # Monty reads the id off the first percept and looks it up. An id the map does
+  # not know, a world that sent no map at all, and a percept that says nothing
+  # about which object it came from are one answer there — `no_label` — and are
+  # one answer here, which is also what a sensor without semantics reports.
+  defp stepwise_target([percept | _rest], labels) when is_map(labels) do
+    case Map.fetch(labels, percept.semantic_id) do
+      {:ok, label} -> label
+      :error -> "no_label"
+    end
+  end
+
+  defp stepwise_target(_percepts, _no_map), do: "no_label"
 
   defp record_processing(server, percepts) do
     LearningModuleServer.add_lm_processing_to_buffer_stats(
@@ -645,7 +668,7 @@ defmodule Monty.Runtime.Step do
     state
   end
 
-  defp set_ground_truth_state(%State{model_id: model_id} = state, primary_target) do
+  defp set_ground_truth_state(%State{model_id: model_id} = state, primary_target, opts) do
     Enum.each(state.learning_modules, fn lm ->
       LearningModuleServer.set_target(
         Registry.via({:learning_module, model_id, lm.id}),
@@ -653,7 +676,10 @@ defmodule Monty.Runtime.Step do
       )
     end)
 
-    state
+    # Monty's `fixme_set_ground_truth(primary_target, semantic_id_to_label)`: the
+    # world's map is what turns a percept's semantic id into the object's name,
+    # and only the experiment knows it.
+    Map.put(state, :semantic_id_to_label, Keyword.get(opts, :semantic_id_to_label, %{}))
   end
 
   defp learning_servers(%State{model_id: model_id} = state, model_id) do

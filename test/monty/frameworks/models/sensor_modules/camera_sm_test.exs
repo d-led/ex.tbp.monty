@@ -171,6 +171,22 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
       assert percept.non_morphological_features == %{"pose_fully_defined" => false}
       assert percept.morphological_features["on_object"] == 1.0
     end
+
+    test "says which object its middle pixel is on, as the world numbered it" do
+      # The fourth column of a point is the world's semantic id — the same column
+      # the transform reads to decide a pixel is on the object — so a patch on
+      # object 3 says 3, and one that saw nothing says 0. It is Monty's logging
+      # annotation, kept off the features so nothing matches on it.
+      semantic = fn id -> List.duplicate(List.duplicate(id, 3), 3) end
+
+      assert percept(Patch.new(mask: semantic.(3.0))).semantic_id == 3
+      assert percept(Patch.new(mask: semantic.(0.0))).semantic_id == 0
+
+      refute Map.has_key?(
+               percept(Patch.new(mask: semantic.(3.0))).non_morphological_features,
+               "semantic_id"
+             )
+    end
   end
 
   describe "an observation with no point cloud" do

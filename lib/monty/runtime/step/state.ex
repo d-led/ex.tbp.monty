@@ -46,6 +46,7 @@ defmodule Monty.Runtime.Step.State do
             done?: false,
             vote_timeout: @default_timeout,
             call_timeout: @default_timeout,
+            semantic_id_to_label: %{},
             step: 0,
             episode_seed: nil
 
@@ -85,6 +86,7 @@ defmodule Monty.Runtime.Step.State do
           done?: boolean(),
           vote_timeout: timeout(),
           call_timeout: timeout(),
+          semantic_id_to_label: %{optional(integer()) => String.t()},
           step: non_neg_integer(),
           episode_seed: non_neg_integer() | nil
         }
@@ -121,7 +123,8 @@ defmodule Monty.Runtime.Step.State do
       num_exploratory_steps: Map.get(options, :num_exploratory_steps, 0),
       match_criterion: Map.get(options, :match_criterion, default_match_criterion()),
       vote_timeout: Map.get(options, :vote_timeout, @default_timeout),
-      call_timeout: Map.get(options, :call_timeout, @default_timeout)
+      call_timeout: Map.get(options, :call_timeout, @default_timeout),
+      semantic_id_to_label: Map.get(options, :semantic_id_to_label, %{})
     }
   end
 

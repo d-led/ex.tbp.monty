@@ -123,6 +123,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
             primary_target: nil,
             primary_target_rotation_quat: nil,
             stepwise_target_object: nil,
+            stepwise_targets_list: [],
             graph_id_to_target: %{},
             target_to_graph_id: %{}
 
@@ -1748,14 +1749,34 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   """
   @spec set_target(t(), map() | nil) :: t()
   @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
-  def set_target(%__MODULE__{} = lm, nil), do: %{lm | stepwise_target_object: nil}
+  def set_target(%__MODULE__{} = lm, nil),
+    do: %{lm | stepwise_target_object: nil, stepwise_targets_list: []}
 
   def set_target(%__MODULE__{} = lm, primary_target) do
     %{
       lm
       | primary_target: Map.get(primary_target, "object"),
         primary_target_rotation_quat: Map.get(primary_target, "quat_rotation"),
-        stepwise_target_object: nil
+        stepwise_target_object: nil,
+        stepwise_targets_list: []
+    }
+  end
+
+  @doc """
+  `GraphLM`'s stepwise target: the object under the module's sensor this step.
+
+  Set by the model from the percept's semantic id, and kept as a list because a
+  run's log says what the module was looking at on every step — the stepwise
+  performance of an episode is a statement about that list, and a graph built
+  from a patch that wandered off the object is explained by it.
+  """
+  @spec set_stepwise_target(t(), String.t()) :: t()
+  @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+  def set_stepwise_target(%__MODULE__{} = lm, label) do
+    %{
+      lm
+      | stepwise_target_object: label,
+        stepwise_targets_list: lm.stepwise_targets_list ++ [label]
     }
   end
 

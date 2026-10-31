@@ -9,19 +9,24 @@ defmodule Monty.CmpTest do
     SurfacePoseVectors.new([0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0])
   end
 
-  defp message(location) do
+  defp message(location, overrides \\ %{}) do
     {:ok, message} =
-      Message.new(%{
-        location: location,
-        morphological_features: %{
-          "pose_vectors" => pose_vectors(),
-          "pose_fully_defined" => true,
-          "on_object" => true
-        },
-        non_morphological_features: %{"hsv" => [0.5, 0.2, 0.9]},
-        sender_id: "sensor_module_0",
-        sender_type: :sm
-      })
+      Message.new(
+        Map.merge(
+          %{
+            location: location,
+            morphological_features: %{
+              "pose_vectors" => pose_vectors(),
+              "pose_fully_defined" => true,
+              "on_object" => true
+            },
+            non_morphological_features: %{"hsv" => [0.5, 0.2, 0.9]},
+            sender_id: "sensor_module_0",
+            sender_type: :sm
+          },
+          overrides
+        )
+      )
 
     message
   end
@@ -54,6 +59,15 @@ defmodule Monty.CmpTest do
 
     test "the wire form names the sender type the way Monty's Python classes do" do
       assert %{"kind" => "message", "sender_type" => "SM"} = Cmp.encode(message([0.0, 0.0, 0.0]))
+    end
+
+    test "a percept keeps the semantic id it came with" do
+      # Monty's `percept._semantic_id`: carried for logging, so a recorded step
+      # can say which object a sensor was on, and read back with everything else.
+      original = message([0.0, 0.0, 0.0], %{semantic_id: 3})
+
+      assert %{"semantic_id" => 3} = Cmp.encode(original)
+      assert {:ok, %Cmp.Message{semantic_id: 3}} = original |> Cmp.encode() |> Cmp.decode()
     end
 
     test "a goal survives the round trip, including its tolerances" do

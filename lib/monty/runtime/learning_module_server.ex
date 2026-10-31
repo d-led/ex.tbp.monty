@@ -119,6 +119,11 @@ defmodule Monty.Runtime.LearningModuleServer do
   def set_target(server, primary_target),
     do: GenServer.call(server, {:set_target, primary_target}, :infinity)
 
+  @doc "Records which object the module's sensor is on this step."
+  @spec set_stepwise_target(server(), String.t()) :: :ok
+  def set_stepwise_target(server, label),
+    do: GenServer.call(server, {:set_stepwise_target, label}, :infinity)
+
   @doc "Records which objects the graph a training episode built came from."
   @spec fixme_update_ground_truth(server()) :: :ok
   def fixme_update_ground_truth(server),
@@ -206,6 +211,11 @@ defmodule Monty.Runtime.LearningModuleServer do
 
   def handle_call({:set_target, primary_target}, _from, server) do
     state = server.module.set_target(server.state, primary_target)
+    {:reply, :ok, %{server | state: state}}
+  end
+
+  def handle_call({:set_stepwise_target, label}, _from, server) do
+    state = server.module.set_stepwise_target(server.state, label)
     {:reply, :ok, %{server | state: state}}
   end
 
