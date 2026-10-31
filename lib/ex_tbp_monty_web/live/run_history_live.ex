@@ -13,7 +13,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   use ExTbpMontyWeb, :live_view
 
-  alias Monty.Studio.{Artifacts, Jobs, Replay, RunHistory}
+  alias Monty.Studio.{Artifacts, Duration, Jobs, Json, Replay, RunHistory}
   alias Monty.Studio.Jobs.Reaper
   alias Monty.Studio.Replay.Chart
 
@@ -413,9 +413,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         <h2 class="text-sm font-medium">Config snapshot</h2>
         <pre
           id="run-config"
-          phx-no-curly-interpolation
           class="max-h-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-[11px]"
-        ><code><%= @run.config |> Jason.encode!(pretty: true) %></code></pre>
+        ><code>{Json.highlight(@run.config)}</code></pre>
       </section>
 
       <.confirm_delete :if={@confirming} run={@confirming} />
@@ -659,10 +658,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp status_class("failed"), do: "badge-error"
   defp status_class(_other), do: "badge-ghost"
 
-  defp duration(microseconds) when is_integer(microseconds) and microseconds >= 1_000,
-    do: "#{Float.round(microseconds / 1_000, 1)} ms"
-
-  defp duration(microseconds), do: "#{microseconds || 0} µs"
+  defp duration(microseconds), do: Duration.humanize(microseconds)
 
   # A file's size, in the unit a person reading a list of three files thinks in.
   defp bytes(size) when size >= 1_048_576, do: "#{Float.round(size / 1_048_576, 1)} MB"
