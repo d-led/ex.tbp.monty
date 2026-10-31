@@ -148,13 +148,23 @@ nothing about Elixir except the framing.
 config:
   layout: elk
 ---
-flowchart LR
-    step["Monty.Runtime.Step<br/>(BEAM)"] -->|"step(actions of step t−1)"| port["Port.Environment<br/>GenServer"]
-    port -->|"Port.command, id-prefixed JSON"| peer["peer process<br/>python, stdin"]
-    peer -->|"interface.step(actions)"| world["Monty's env interface<br/>MuJoCo or Habitat"]
+flowchart TD
+    subgraph beam["in the BEAM"]
+        step["Monty.Runtime.Step"]
+        port["Port.Environment<br/>one request at a time"]
+    end
+
+    subgraph python["the peer process"]
+        peer["monty_simulator_peer.py"]
+        world["Monty's env interface<br/>MuJoCo or Habitat"]
+    end
+
+    step -->|"step(actions of step t−1)"| port
+    port -->|"Port.command: id + JSON"| peer
+    peer -->|"interface.step(actions)"| world
     world -->|"observations, proprio"| peer
-    peer -->|"reply on stdout, same id"| port
-    port -->|"timeout, or the peer's exit status,<br/>as {:error, reason} to Step"| step
+    peer -->|"reply, same id"| port
+    port -->|"timeout or exit status,<br/>as {:error, reason}"| step
 ```
 
 The action produced at step *t* reaches the world at step *t+1* because the
@@ -171,12 +181,12 @@ from that checkout.
 config:
   layout: elk
 ---
-flowchart LR
-    root["--monty-root<br/>(a Monty checkout)"] -->|"prepended to sys.path"| imports["tbp.monty.*"]
-    imports -->|"imported for its side effect:<br/>registers ${monty.class:}"| hydra["tbp.monty.hydra"]
-    imports -->|"hydra.compose over tbp.monty.conf"| conf["experiment=NAME<br/>one composed config"]
-    imports -->|"setup_env() before torch loads"| env["tbp.monty.frameworks.run_env"]
-    conf -->|"instantiate(environment)<br/>then env_init_func"| mujoco["the experiment's world<br/>(MuJoCo, or Habitat)"]
+flowchart TD
+    root["--monty-root:<br/>a Monty checkout"] -->|"prepended to sys.path"| imports["tbp.monty.*"]
+    imports -->|"registers ${monty.class:}"| hydra["tbp.monty.hydra"]
+    imports -->|"setup_env(), before torch loads"| env["tbp.monty.frameworks.run_env"]
+    imports -->|"composes one config"| conf["experiment=NAME"]
+    conf -->|"instantiate(environment),<br/>then env_init_func"| mujoco["the experiment's world<br/>MuJoCo, or Habitat"]
     conf -->|"eval_env_interface_class + args"| iface["OneObjectPerEpisodeInterface<br/>+ the experiment's transforms"]
     imports -->|"episode_seed(seed, mode, n)"| seed["reseeds numpy per episode"]
 ```
@@ -198,12 +208,21 @@ Monty's config tree is read by Hydra (in the peer) and by `Monty.Config.Source`
 config:
   layout: elk
 ---
-flowchart LR
-    upstream["Monty checkout<br/>src/tbp/monty/conf"] -->|"mix monty.inputs<br/>fast-forwards main, then copies"| shipped["priv/monty/conf<br/>(checked in)"]
-    shipped -->|"Monty.Config.Source composes:<br/>defaults, packages, _self_"| setup["Monty.Studio.Setup<br/>the page and the run"]
+flowchart TD
+    subgraph checkout["a Monty checkout"]
+        upstream["src/tbp/monty/conf<br/>tests/conf/snapshots"]
+    end
+
+    subgraph copy["what ships in priv/monty"]
+        shipped["conf/"]
+        snapshots["snapshots/"]
+    end
+
+    upstream -->|"mix monty.inputs:<br/>fast-forward, then copy"| shipped
+    upstream -->|"copied verbatim"| snapshots
+    shipped -->|"Monty.Config.Source composes"| setup["Monty.Studio.Setup<br/>the page and the run"]
+    snapshots -->|"mix monty.config.snapshots"| verdict["same tree,<br/>or the diff"]
     upstream -->|"Hydra, on the peer's sys.path"| peerworld["the peer's world<br/>for the same experiment"]
-    upstream -->|"its tests/conf/snapshots<br/>are copied too"| snapshots["priv/monty/snapshots"]
-    snapshots -->|"mix monty.config.snapshots<br/>compares tree against tree"| verdict["same config, or the diff"]
 ```
 
 The copy is what makes a build, a test run and a CI job need no checkout at
@@ -242,10 +261,10 @@ the suite replays that JSON through this port.
 config:
   layout: elk
 ---
-flowchart LR
+flowchart TD
     scripts["scripts/record_monty_*.py"] -->|"imports tbp.monty,<br/>runs it once, offline"| fixtures["test/fixtures/*.json"]
     fixtures -->|"replayed by the suite"| modules["the Elixir module under test"]
-    modules -->|"asserted equal, path by path"| verdict["Monty's numbers, or a failure"]
+    modules -->|"asserted equal, path by path"| verdict["Monty's numbers,<br/>or a failure"]
 ```
 
 A recording is a fact about the commit it was taken from, which is why
