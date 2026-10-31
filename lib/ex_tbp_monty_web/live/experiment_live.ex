@@ -237,6 +237,27 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               </option>
             </select>
           </form>
+          <%!-- Which world the run steps. The deployment's default comes from
+          MONTY_WORLD, but the world a run records is the one chosen here: a
+          stand-in scene and Monty's simulator answer different questions. --%>
+          <form id="world-choice" phx-change="world" class="flex items-center gap-1">
+            <label for="world-select" class="text-[11px] text-base-content/60">world</label>
+            <select
+              :if={@opened}
+              id="world-select"
+              name="world"
+              class="select select-xs w-56"
+              aria-label="Which world the run steps"
+            >
+              <option
+                :for={world <- [:synthetic, :habitat]}
+                value={world}
+                selected={world == @opened.setup.world}
+              >
+                {Setup.world_name(world)}
+              </option>
+            </select>
+          </form>
           <button :if={@run_id} id="stop" phx-click="stop" class="btn btn-ghost btn-sm">Stop</button>
           <span :if={@run_id} id="run-progress" class="badge badge-ghost">
             step {elem(@progress, 0)} / {elem(@progress, 1)}
@@ -426,6 +447,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   def handle_event("parallelism", %{"parallelism" => count}, socket) do
     {:noreply, assign(socket, parallelism: parallelism(%{"parallelism" => count}))}
+  end
+
+  # The world is a choice made here and recorded on the run, not a property of
+  # the deployment: the queue executes what the record says it was given, so two
+  # workers with different settings cannot disagree about it afterwards.
+  def handle_event("world", %{"world" => choice}, socket) do
+    case world_of(choice) do
+      nil -> {:noreply, socket}
+      world -> {:noreply, reopened(socket, world)}
+    end
   end
 
   # One step is a run of one step: a person clicking it twice wants two runs to
@@ -766,8 +797,29 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   defp world_note(_setup) do
     "This port's own scene: one sphere, stepped in the BEAM. A run here exercises " <>
-      "the port, not the experiment — set MONTY_WORLD=monty and MONTY_PYTHON to " <>
-      "step Monty's simulator instead."
+      "the port, not the experiment — choose Monty's simulator above, and set " <>
+      "MONTY_PYTHON to the interpreter Monty lives in."
+  end
+
+  # What the selector sends back, as the atom a setup carries. A value that is
+  # neither is nothing to do, because a page cannot ask for a world no port here
+  # has.
+  defp world_of("habitat"), do: :habitat
+  defp world_of("synthetic"), do: :synthetic
+  defp world_of(_other), do: nil
+
+  # The experiment, re-opened in the world that was just chosen: the badge, the
+  # findings and the record a run leaves all come from the setup, so they follow
+  # from one open rather than from a field patched in three places.
+  defp reopened(socket, world) do
+    case Studio.open(socket.assigns.opened.name, world_simulator: world) do
+      {:ok, opened} ->
+        socket
+        |> assign(opened: opened, logging: Logging.open(opened.setup).notes, error: nil)
+
+      {:error, reason} ->
+        assign(socket, error: reason)
+    end
   end
 
   # How many episodes to run at once. Eight is a ceiling rather than a judgement

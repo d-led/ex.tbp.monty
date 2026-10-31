@@ -506,8 +506,9 @@ defmodule Monty.Studio.Setup do
   one it is looking at, so it is said in the header rather than in a warning
   somewhere below.
   """
-  @spec world_name(t()) :: String.t()
+  @spec world_name(t() | :synthetic | :habitat) :: String.t()
   def world_name(%__MODULE__{world: world}), do: world_name_of(world)
+  def world_name(world) when world in [:synthetic, :habitat], do: world_name_of(world)
 
   defp world_name_of(:habitat), do: "Monty's simulator (python process)"
   defp world_name_of(:synthetic), do: "stand-in scene (Elixir)"
@@ -1418,8 +1419,9 @@ defmodule Monty.Studio.Setup do
         :warning,
         :world_is_a_stand_in,
         "A run steps this port's synthetic scene, not Monty's world, so its results are not " <>
-          "Monty's. Monty's own simulator runs out of process: set " <>
-          "`MONTY_WORLD=monty` and `MONTY_PYTHON` to the interpreter Monty lives in.",
+          "Monty's. Monty's own simulator runs out of process: choose `monty` for the run " <>
+          "and set `MONTY_PYTHON` to the interpreter Monty lives in — or set " <>
+          "`MONTY_WORLD=monty` to make that the default here.",
         "monty_config"
       )
     ]

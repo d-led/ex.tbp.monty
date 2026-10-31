@@ -15,8 +15,10 @@ Elixir side, both written and tested:
 The Python side is [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py):
 Monty's own `HabitatEnvironment` and the experiment's eval interface, on the far
 side of the port, driven by Hydra out of a checkout. `Monty.Simulators.Habitat.Environment.HabitatEnvironment`
-is the handle a run holds and the name in the module map, and
-`MONTY_WORLD=monty` is what makes `Monty.Studio.Setup` build it. Under test the
+is the handle a run holds and the name in the module map, and a run that
+chooses Monty's world makes `Monty.Studio.Setup` build it — per run, from the
+page's world selector or `world` on `monty_run_experiment`. `MONTY_WORLD=monty`
+only makes that the default for a run that does not choose. Under test the
 peer is [`test/support/probe_world.py`](../test/support/probe_world.py) — a probe,
 not a world: it answers from what it was sent, which is exactly what a test of
 the framing wants — and
@@ -29,8 +31,9 @@ case in [`parallel-and-live.md`](parallel-and-live.md), not this one.
 
 ## The world the runtime develops against
 
-Without a world of Monty's — `MONTY_WORLD` unset — runs are stepped against
-`Monty.Simulators.Synthetic.Environment`, which implements the same idea as a
+Without a world of Monty's — no choice on the run, and no `MONTY_WORLD` — runs
+are stepped against `Monty.Simulators.Synthetic.Environment`, which implements
+the same idea as a
 value (`Monty.Simulators.Environment`): `new/1`, `step/2`, `reset/1`, answering
 `{observations, proprioceptive_state, world}`. It moves the agent by the actions
 the body chose — `Monty.Simulators.Synthetic.Kinematics` follows MuJoCo's

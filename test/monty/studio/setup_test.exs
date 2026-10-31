@@ -286,12 +286,13 @@ defmodule Monty.Studio.SetupTest do
 
       assert world.level == :warning
 
-      # The finding says what a run steps instead, and the two settings that
-      # make it step Monty's own world — one of which is the interpreter Monty
-      # lives in, which is why a name alone was not enough.
+      # The finding says what a run steps instead, how to ask for Monty's own
+      # world on the run itself, and which interpreter that needs — a name
+      # alone was not enough, and a deployment-wide setting is not the only way.
       assert world.message =~ "not Monty's"
-      assert world.message =~ "MONTY_WORLD=monty"
+      assert world.message =~ "choose `monty` for the run"
       assert world.message =~ "MONTY_PYTHON"
+      assert world.message =~ "MONTY_WORLD=monty"
     end
 
     test "and says nothing about the world when Monty's own is what a run steps" do

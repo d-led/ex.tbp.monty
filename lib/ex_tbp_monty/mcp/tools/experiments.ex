@@ -156,19 +156,36 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
   def run(args, ctx) do
     with {:ok, name} <- Args.required(args, "name"),
          {:ok, steps} <- Args.integer(args, "steps", default: 12, min: 1, max: 500),
-         {:ok, run} <- Experiments.run(name, steps) do
+         {:ok, world} <- world(args),
+         {:ok, run} <- Experiments.run(name, steps, world: world) do
       url = ctx.base_url <> "/runs/" <> run.run_id
 
       {:ok,
        %{
          text:
-           "Queued #{steps} step(s) of `#{run.experiment}`.\n#{url}\n" <>
+           "Queued #{steps} step(s) of `#{run.experiment}` in #{world_name(run.world)}.\n" <>
+             "#{url}\n" <>
              "Run id: `#{run.run_id}`. Watch it at the link, or ask " <>
              "monty_run_report for what it has done.",
          structured: Map.put(run, :url, url)
        }}
     end
   end
+
+  # `world` is the same choice the run page offers, in the words the page and
+  # Monty's configs use: Monty's own simulator answers a different question from
+  # this port's stand-in scene, so the caller says which one it wants.
+  defp world(args) do
+    case Args.optional(args, "world") do
+      {:ok, nil} -> {:ok, nil}
+      {:ok, "synthetic"} -> {:ok, :synthetic}
+      {:ok, world} when world in ["monty", "habitat"] -> {:ok, :habitat}
+      {:ok, other} -> {:error, "`world` must be `synthetic` or `monty`, not `#{other}`."}
+    end
+  end
+
+  defp world_name("habitat"), do: "Monty's simulator, out of process"
+  defp world_name(_synthetic), do: "this port's synthetic scene"
 
   @doc "`monty_run_report`: what a run did, and what it is doing."
   def run_report(args, ctx) do

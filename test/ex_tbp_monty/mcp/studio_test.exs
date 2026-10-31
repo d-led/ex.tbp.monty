@@ -19,12 +19,15 @@ defmodule ExTbpMonty.Mcp.StudioTest do
     test "reports the parallelism from the queue, not from a document" do
       studio = Studio.describe()
 
-      assert is_nil(studio.parallel.episodes_at_once) or
-               (is_integer(studio.parallel.episodes_at_once) and
-                  studio.parallel.episodes_at_once >= 1)
+      # A limit, when there is a queue to read it from; and a process with no
+      # queue says exactly that instead of naming a number it cannot see.
+      case studio.parallel.episodes_at_once do
+        nil -> refute studio.parallel.live?
+        limit -> assert limit >= 1 and studio.parallel.live?
+      end
 
       # `running` is a list of ids in Oban; a caller wants the number.
-      assert is_nil(studio.parallel.running_now) or is_integer(studio.parallel.running_now)
+      assert is_integer(studio.parallel.running_now)
       assert studio.parallel.one_episode_per_run
       assert studio.parallel.how =~ ":studio"
     end

@@ -176,20 +176,42 @@ defmodule ExTbpMonty.Mcp.Experiments do
   The run is a job from here, exactly as the page's Run button: it outlives this
   request and it is watched by its id. A setup Monty would refuse is refused
   here too, before anything is queued, because a failed run looks like a run.
+
+  `:world` decides which world the run steps — `:synthetic` for this port's
+  scene, `:habitat` for Monty's own through the peer — and the record carries
+  the choice, so the queue steps what was asked for rather than whatever the
+  worker's environment happens to say. Absent, the deployment's default
+  (`MONTY_WORLD`) applies.
   """
-  @spec run(String.t(), pos_integer()) :: {:ok, map()} | {:error, String.t()}
-  def run(name, steps) when is_integer(steps) and steps > 0 do
-    with {:ok, opened} <- Studio.open(name),
+  @spec run(String.t(), pos_integer(), keyword()) :: {:ok, map()} | {:error, String.t()}
+  def run(name, steps, opts \\ [])
+
+  def run(name, steps, opts) when is_integer(steps) and steps > 0 do
+    with {:ok, opened} <- Studio.open(name, open_opts(opts)),
          :ok <- runnable(opened),
          {:ok, record} <- record(opened, steps),
          {:ok, _job} <- Jobs.Run.enqueue_run(record) do
-      {:ok, %{run_id: record.id, experiment: opened.name, steps: steps, status: record.status}}
+      {:ok,
+       %{
+         run_id: record.id,
+         experiment: opened.name,
+         steps: steps,
+         status: record.status,
+         world: to_string(opened.setup.world)
+       }}
     else
       {:error, reason} -> {:error, error_message(reason, name)}
     end
   end
 
-  def run(_name, _steps), do: {:error, "`steps` must be a positive integer."}
+  def run(_name, _steps, _opts), do: {:error, "`steps` must be a positive integer."}
+
+  defp open_opts(opts) do
+    case opts[:world] do
+      nil -> []
+      world -> [world_simulator: world]
+    end
+  end
 
   @doc "What a run did, and what it is doing."
   @spec report(String.t()) :: {:ok, map()} | {:error, String.t()}

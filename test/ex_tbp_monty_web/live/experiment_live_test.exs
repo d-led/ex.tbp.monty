@@ -28,6 +28,37 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert view |> element("#world") |> render() =~ "stand-in scene"
       assert has_element?(view, "#world[title]")
     end
+
+    test "the page lets the run choose it, rather than the deployment", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      assert has_element?(view, "#world-select")
+
+      # Choosing Monty's world changes what the page says, and what it will
+      # queue: the stand-in warning is gone because the run is no longer one.
+      view |> element("#world-choice") |> render_change(%{"world" => "habitat"})
+
+      # The badge reads "(python process)" for Monty's world and "stand-in
+      # scene" for this port's — the two answers a reader has to tell apart.
+      assert view |> element("#world") |> render() =~ "simulator (python process)"
+      refute render(view) =~ "world_is_a_stand_in"
+
+      assert view |> element("#world-select") |> render() =~ ~s(selected)
+    end
+
+    test "the run is recorded with the world it was given", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      view |> element("#world-choice") |> render_change(%{"world" => "habitat"})
+      view |> element("#run") |> render_click()
+
+      assert [%{inputs: %{"world" => "habitat"}} = run | _] =
+               RunHistory.search(state: "all", text: "base_config_10distinctobj_dist_agent").runs
+
+      # The queue steps what the record says, not what the worker's environment
+      # happens to be — the two can differ, and did.
+      assert run.experiment == "base_config_10distinctobj_dist_agent"
+    end
   end
 
   describe "the experiment as a file" do

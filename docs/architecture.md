@@ -169,9 +169,9 @@ logger ([`config/pythonx.exs`](../config/pythonx.exs),
 `Monty.Frameworks.Loggers.WandbHandlers.PythonxClient`).
 The other is *yours*: `MONTY_PYTHON` (or `python3` on the PATH if it is unset), an
 interpreter with Monty installed, which runs the world on the other side of the
-port. A run with `MONTY_WORLD` unset steps neither of those worlds — the stand-in
-scene is Elixir — although a config that names a wandb logger reaches the
-embedded interpreter whatever the world is.
+port. A run that chooses neither — no `world` on the run and no `MONTY_WORLD` —
+steps a third: the stand-in scene, which is Elixir, although a config that names
+a wandb logger reaches the embedded interpreter whatever the world is.
 
 ```mermaid
 ---
@@ -194,8 +194,10 @@ The peer is [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.
 is the handle a run holds — `new/1` starts nothing, because a run may never step
 — and the first step starts the peer as an OS process (`Port.open` with
 `{:packet, 4}`). It speaks length-prefixed JSON and knows nothing about Elixir
-except the framing. `MONTY_WORLD=monty` is what makes `Monty.Studio.Setup` build
-this world instead of the synthetic scene.
+except the framing. A run that chooses Monty's world — `world: "monty"` on
+`monty_run_experiment`, the run page's selector, or `MONTY_WORLD=monty` as the
+deployment's default — is what makes `Monty.Studio.Setup` build this world
+instead of the synthetic scene, and the choice is recorded on the run.
 
 ```mermaid
 ---

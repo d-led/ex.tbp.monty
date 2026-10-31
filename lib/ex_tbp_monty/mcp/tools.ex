@@ -389,8 +389,10 @@ defmodule ExTbpMonty.Mcp.Tools do
       "description" =>
         "Queues a run of an experiment and answers with the run's id and a link to it. The " <>
           "run happens in the studio's queue at its own pace, and the page shows the sensors, " <>
-          "the log and the summary as they arrive. A setup Monty would refuse is refused here " <>
-          "instead of queued.",
+          "the log and the summary as they arrive. `world` chooses which world it steps: " <>
+          "`synthetic` is this port's stand-in scene, `monty` is Monty's own simulator out of " <>
+          "process — absent, the deployment's default applies, and the run records which one " <>
+          "it was given. A setup Monty would refuse is refused here instead of queued.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -401,6 +403,13 @@ defmodule ExTbpMonty.Mcp.Tools do
             "maximum" => 500,
             "default" => 12,
             "description" => "How many timesteps the run should take."
+          },
+          "world" => %{
+            "type" => "string",
+            "enum" => ["synthetic", "monty"],
+            "description" =>
+              "`synthetic` steps this port's scene; `monty` steps Monty's own simulator " <>
+                "through a Python peer, and needs MONTY_PYTHON. Default: the deployment's."
           }
         },
         "required" => ["name"]

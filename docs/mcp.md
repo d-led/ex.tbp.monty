@@ -87,9 +87,11 @@ the limit to the same number — one object per episode.
 Monty does the same thing its own way: Monty's run_parallel.py, one process per
 episode.
 
-World: synthetic — runs step this port's synthetic scene, so their numbers are
-not Monty's; MONTY_WORLD=monty with MONTY_PYTHON set runs Monty's own simulator
-out of process.
+World: synthetic — this is the default for a run that does not choose one; a run
+can step Monty's own simulator instead (`monty_run_experiment` with
+`world: "monty"`, or the run page's world selector) and records which world it
+stepped. MONTY_WORLD=monty makes Monty's world the default here; MONTY_PYTHON is
+the interpreter it runs in.
 
 Prerequisites: 2/2 present (pretrained_ycb_v13 present · pretrained_ycb_v13_zip present)
 ```

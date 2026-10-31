@@ -229,11 +229,15 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       assert text =~ "No run matches."
     end
 
-    test "a new run answers with its link, and reports what it has done" do
+    test "a new run answers with its link, and says which world it steps" do
       assert {:ok, %{text: text, structured: run}} =
                Tools.call("monty_run_experiment", %{"name" => @experiment, "steps" => 2}, @ctx)
 
-      assert text =~ "Queued 2 step(s) of `#{@experiment}`."
+      # The deployment's default when the caller does not choose, and said out
+      # loud, because a stand-in scene and Monty's world answer different
+      # questions.
+      assert run.world == "synthetic"
+      assert text =~ "Queued 2 step(s) of `#{@experiment}` in this port's synthetic scene."
       assert run.url == "http://studio.test/runs/#{run.run_id}"
 
       assert {:ok, %{text: report_text, structured: report}} =
@@ -242,6 +246,33 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       assert report.run_id == run.run_id
       assert report_text =~ "`#{@experiment}` — "
       assert report_text =~ run.url
+    end
+
+    test "the world is the caller's choice, and the record keeps it" do
+      assert {:ok, %{text: text, structured: run}} =
+               Tools.call(
+                 "monty_run_experiment",
+                 %{"name" => @experiment, "steps" => 1, "world" => "monty"},
+                 @ctx
+               )
+
+      assert run.world == "habitat"
+      assert text =~ "in Monty's simulator, out of process"
+
+      # What the queue will step is the record, not the worker's environment.
+      record = RunHistory.get(run.run_id)
+      assert record.inputs["world"] == "habitat"
+    end
+
+    test "refuses a world no port here has" do
+      assert {:error, message} =
+               Tools.call(
+                 "monty_run_experiment",
+                 %{"name" => @experiment, "world" => "habitat2"},
+                 @ctx
+               )
+
+      assert message =~ "`world` must be `synthetic` or `monty`"
     end
 
     test "a run nobody can find is named as missing" do

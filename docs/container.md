@@ -134,7 +134,7 @@ setup page says so.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `MONTY_WORLD` | unset (synthetic) | `synthetic` steps the built-in scene; `monty` or `habitat` step Monty's own environment through the peer. Any other value fails the boot rather than the run. |
+| `MONTY_WORLD` | unset (synthetic) | The **default** world for a run that does not choose one. A run's own choice — the run page's world selector, or `world` on `monty_run_experiment` — is recorded on the run and wins, so this variable decides what a person gets when they do not say. `synthetic` steps the built-in scene; `monty` or `habitat` step Monty's own environment through the peer. Any other value fails the boot rather than the run. |
 | `MONTY_PYTHON` | `python3` on the PATH | The interpreter the peer runs on. It is *not* the embedded one: Monty's simulator brings its own dependencies. |
 | `MONTY_OVERRIDES` | unset | Hydra overrides for the peer, space separated as on Monty's own command line, e.g. `constants.pretrained_dir=/data/models`. How a config that names a world this machine cannot run is pointed at one it can (`environment=habitat_dist_agent`). |
 
