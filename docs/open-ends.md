@@ -396,8 +396,8 @@ outside world is asking for.
 
 ## Where the corpus is
 
-The whole crawl is loaded into **MemPalace, wing `tbp_forum`** — 791 source files,
-11,511 drawers: 566 threads, 3,073 posts, 178 docs pages, 94 roadmap tasks, one digest
+The whole crawl is loaded into **MemPalace, wing `tbp_forum`** — 792 source files,
+11,515 drawers: 566 threads, 3,073 posts, 178 docs pages, 94 roadmap tasks, one digest
 per team member.
 
 | Room | Contents |
@@ -408,6 +408,7 @@ per team member.
 | `team` | one digest per TBP team member: every post they wrote, with dates and thread links |
 | `roadmap` | one file per future-work area, one section per task with its metadata |
 | `docs-site` | the published docs: the roadmap page plus all 178 task and reference pages |
+| `plan` | how the archive was made, what is still open in it, and how to refresh it |
 
 Ask it rather than grepping:
 
