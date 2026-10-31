@@ -17,6 +17,17 @@ defmodule Monty.PrerequisitesTest do
   end
 
   describe "the shipped manifest" do
+    test "is found where the application keeps it, not where it happens to be running" do
+      # A release runs from its own `bin`, so a relative `priv/...` would be a
+      # file that is not there: the page that lists the prerequisites would
+      # answer 500 in the image and work in a checkout.
+      path = Prerequisites.manifest_path()
+
+      assert File.exists?(path)
+      assert Path.type(path) == :absolute
+      assert Path.basename(path) == "prerequisites.yaml"
+    end
+
     test "lists Monty's documented pretrained-model archives" do
       ids = Enum.map(Prerequisites.all(), & &1.id)
 

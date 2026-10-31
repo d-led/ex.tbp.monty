@@ -77,9 +77,27 @@ defmodule Monty.Prerequisites do
   @spec present?(prerequisite()) :: boolean()
   def present?(prerequisite), do: File.exists?(target_path(prerequisite))
 
-  @doc "The manifest location, overridable for tests and packagers."
+  @doc """
+  The manifest this application ships, unless a test or an operator points
+  somewhere else with `:prerequisites_manifest`.
+
+  It is resolved through the application's priv directory rather than as the
+  relative `priv/...` it names: a release keeps its priv somewhere other than the
+  working directory, so a relative path works in a checkout and is "no such file"
+  in the image. (What a *run writes* is the other way round — that belongs next
+  to the working directory, see `Monty.Studio.Artifacts`.)
+  """
   @spec manifest_path() :: Path.t()
-  def manifest_path, do: Application.get_env(:ex_tbp_monty, :prerequisites_manifest, @manifest)
+  def manifest_path do
+    Application.get_env(:ex_tbp_monty, :prerequisites_manifest, shipped_manifest())
+  end
+
+  defp shipped_manifest do
+    case :code.priv_dir(:ex_tbp_monty) do
+      {:error, _reason} -> @manifest
+      dir -> dir |> List.to_string() |> Path.join("prerequisites.yaml")
+    end
+  end
 
   defp env_path(variable, default) do
     variable |> System.get_env(default) |> Path.expand()
