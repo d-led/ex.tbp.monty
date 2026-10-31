@@ -186,8 +186,13 @@ COPY --from=builder --chown=10001:10001 /app/priv /app/priv
 # Mount a volume here (a Fly volume, a Kubernetes PVC) to keep all of it across
 # restarts. `-e HOME=...` and `-e WANDB_DIR=...` at run time still win. A volume
 # mounted here also hides the prerequisites this image carries — put a tree with
-# them on it, or download them again at /prerequisites.
-RUN mkdir -p /app/priv/wandb \
+# them on it, or download them again at /prerequisites. `~/tbp` below is the
+# narrower volume: it takes the downloads and leaves the shipped tree alone.
+#
+# `/app/priv/tbp` has to exist here even though it starts empty: a named volume
+# mounts root-owned unless the image has something at that path to inherit the
+# owner from, and uid 10001 would then have nowhere to download to.
+RUN mkdir -p /app/priv/wandb /app/priv/tbp \
   && ln -s /app/priv /app/bin/priv \
   && chown -R 10001:10001 /app/priv
 

@@ -173,6 +173,12 @@ Three ways to have them:
 | a Monty tree you already have | `-v ~/tbp:/app/priv/tbp:ro` — the defaults hang off `HOME`, which is `/app/priv`, so `~/tbp` inside the container is exactly where this machine's `~/tbp` lands. `scripts/image.sh run --data ~/tbp` is this row with the flag spelled out |
 | anywhere else | `-e MONTY_DATA=… -e MONTY_MODELS=… -e MONTY_LOGS=…` — the variables Monty's own documentation uses — each pointing at a mounted path |
 
+The volume to mount for downloads is `/app/priv/tbp`, and that is what the
+`docker-compose.yml` at the root of the repository names: one named volume, so a
+downloaded bundle survives `docker compose down` (and `down -v` deletes it).
+Mounting `/app/priv` itself also works but hides the prerequisites the image
+carries; mounting `/app/priv/tbp` leaves them alone.
+
 A read-only mount is enough to *run* against data you already have. Downloading
 into it needs write access, so leave the mount out (or make it writable) when the
 app should fetch them itself; either way they land on the volume and survive a

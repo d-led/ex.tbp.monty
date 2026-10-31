@@ -26,8 +26,9 @@ docker compose up
 
 Then <http://localhost:4001>: every experiment Monty ships, and a run you can
 start from any of them. The published image and a Postgres, the migration runs
-itself, the prerequisites are in the image, and nothing is mounted.
-`docker compose down` takes it all away again.
+itself, Monty's config tree and pretrained libraries are in the image, and the
+data and model bundles `/prerequisites` downloads are kept in a volume — so an
+`up` after a `down` does not fetch them again.
 
 ## An MCP server
 
@@ -78,6 +79,23 @@ gates CI runs, and how a module is added.
   which numbers, is [docs/validation.md](docs/validation.md); every deliberate
   difference is [docs/monty-bugs.md](docs/monty-bugs.md); what is ported today,
   and the evidence for each, is measured in [docs/features.md](docs/features.md).
+
+## Where it differs
+
+Monty steps one object graph in one loop; here every module is a process. What
+follows from that is argued in [docs/monty-bugs.md](docs/monty-bugs.md) §2.
+
+* **Voting is a message round.** With no deadline it is Monty's synchronous
+  round; with one, the round closes when time is up and the step says how many
+  votes it used and whether it ran short.
+* **A module can fail on its own.** A dead one is replaced; a slow one is named
+  in that step and the step goes on.
+* **A stream per module, not one shared stream.** A seeded episode repeats
+  Python's numbers where the drawing order is the same.
+* **Values returned, not mutated.** Python's subclasses and self-mutating objects
+  become functions and returned state.
+* **A UI and an MCP server.** A page per experiment, runs kept in Postgres, and
+  `/mcp` — nothing Python has.
 
 ## Headless
 

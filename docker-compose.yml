@@ -2,8 +2,9 @@
 #
 #   docker compose up
 #
-# Then http://localhost:4001. `docker compose down` takes it all away again:
-# nothing is mounted and nothing is kept between runs.
+# Then http://localhost:4001. What a run writes lives in containers and goes
+# with `docker compose down`; what `/prerequisites` downloads survives it, in a
+# volume of its own, so the next `up` does not fetch it again.
 #
 # `TAG=v1.2.3 docker compose up` runs a release instead of `:latest`; the tags
 # are in docs/container.md, which also has every variable the image reads.
@@ -41,8 +42,15 @@ services:
     environment:
       <<: *environment
       PHX_HOST: localhost
+    volumes:
+      # `~/tbp` inside the container: the datasets and model bundles
+      # `/prerequisites` downloads. Named, so they outlive `docker compose down`.
+      - prerequisites:/app/priv/tbp
     depends_on:
       db:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+
+volumes:
+  prerequisites:
