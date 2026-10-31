@@ -38,6 +38,24 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert render(view) =~ "EvidenceGoalGenerator"
     end
 
+    test "says what the run will log with before it runs", %{conn: conn} do
+      # This experiment's logging group names the CSV handler and wandb. The
+      # handler this port does not have is said here, beside the findings, rather
+      # than only in the log of a run that has already happened.
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      assert has_element?(view, "#logging-notes")
+      assert render(view) =~ "WandbWrapper is not ported yet"
+    end
+
+    test "says nothing about logging for a config that asks for none", %{conn: conn} do
+      # The tutorial's group names a logger with no handlers: nothing to skip, and
+      # no note pretending otherwise.
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment")
+
+      refute has_element?(view, "#logging-notes")
+    end
+
     test "an experiment that would not start says so, and refuses to run", %{conn: conn, tmp: tmp} do
       File.write!(Path.join(tmp, "broken.yaml"), broken_config())
 

@@ -20,7 +20,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   use ExTbpMontyWeb, :live_view
 
   alias Monty.Studio
-  alias Monty.Studio.{Chart, Jobs, LogFilter, Replay, RunHistory, RunLog, Setup}
+  alias Monty.Studio.{Chart, Jobs, LogFilter, Logging, Replay, RunHistory, RunLog, Setup}
 
   # A log is a thing a person reads back, not a database: the last few thousand
   # lines are enough to scroll through a run and bounded enough that a runaway
@@ -34,14 +34,28 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         {:ok, follow_running(assign_opened(socket, opened, steps(params)))}
 
       {:error, reason} ->
-        {:ok, assign(socket, opened: nil, error: reason, run_id: nil, lines: [], filter: "")}
+        {:ok,
+         assign(socket,
+           opened: nil,
+           logging: [],
+           error: reason,
+           run_id: nil,
+           lines: [],
+           filter: ""
+         )}
     end
   end
 
   defp assign_opened(socket, opened, steps) do
+    # What this experiment will leave behind, and what it would have left behind
+    # if this port had it — said here as well as in the run's log, because a
+    # config that logs nothing is worth knowing before the run, not after.
+    logging = Logging.open(opened.setup)
+
     socket
     |> assign(
       opened: opened,
+      logging: logging.notes,
       error: nil,
       steps: steps,
       run_id: nil,
@@ -145,6 +159,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       <ExTbpMontyWeb.StudioComponents.diagram :if={@opened.diagram} diagram={@opened.diagram} />
 
       <ExTbpMontyWeb.StudioComponents.findings findings={@opened.setup.findings} />
+
+      <p :if={@logging != []} id="logging-notes" class="text-xs text-base-content/70">
+        <%= for note <- @logging do %>
+          <span class="block">{note}</span>
+        <% end %>
+      </p>
 
       <section class="space-y-2">
         <header class="flex flex-wrap items-center gap-3">
