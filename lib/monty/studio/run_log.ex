@@ -208,9 +208,10 @@ defmodule Monty.Studio.RunLog do
   given: the group choices, the seed, the budget, and the modules it addresses.
   """
   @spec attributes(map(), pos_integer()) :: map()
-  def attributes(opened, steps) do
+  def attributes(opened, steps, episode \\ 0) do
     %{
       experiment: opened.name,
+      episode: episode,
       source: to_string(opened.source),
       steps: steps,
       seed: opened.setup.seed,

@@ -139,6 +139,38 @@ defmodule Monty.Experiment.Environment.OneObjectPerEpisodeInterfaceTest do
              {:error, {:distractors_not_supported, 2}}
   end
 
+  describe "which object an episode is about" do
+    # The cycle `cycle_object/2` walks, without a scene: episode 0 is the first
+    # name, and past the end of the list it starts again.
+    test "each episode takes the next object, and then the first again", %{fixture: fixture} do
+      interface = start(recorded("a plain list"), fixture)
+
+      assert Enum.map(0..4, &OneObjectPerEpisodeInterface.object_for(interface, &1)) == [
+               "cone",
+               "sphere",
+               "cube",
+               "cone",
+               "sphere"
+             ]
+    end
+
+    test "and answers the name the episode would have been given", %{fixture: fixture} do
+      # The name is the one `change_object_by_idx/3` would have added, so a run
+      # that never built a scene still knows what it was looking for.
+      interface = start(recorded("a plain list"), fixture)
+
+      {:ok, changed, _scene} =
+        OneObjectPerEpisodeInterface.change_object_by_idx(interface, 2, %RecordingScene{})
+
+      assert OneObjectPerEpisodeInterface.object_for(interface, 2) ==
+               OneObjectPerEpisodeInterface.object_name(changed)
+    end
+
+    test "a config that names no objects is about nothing", %{fixture: fixture} do
+      assert OneObjectPerEpisodeInterface.object_for(start([], fixture), 0) == nil
+    end
+  end
+
   # -- the recording ---------------------------------------------------------
 
   defp start(object_names, fixture) do

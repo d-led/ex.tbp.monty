@@ -24,6 +24,23 @@ defmodule Monty.Studio.RunHistoryTest do
       assert run.finished_at == nil
     end
 
+    test "is one episode, and says which" do
+      assert {:ok, run} = RunHistory.start(@attributes)
+      assert run.episode == 0
+
+      assert {:ok, third} = RunHistory.start(Map.put(@attributes, :episode, 3))
+      assert third.episode == 3
+    end
+
+    test "the run of one episode is found without finding another's" do
+      {:ok, first} = RunHistory.start(Map.put(@attributes, :episode, 0))
+      {:ok, second} = RunHistory.start(Map.put(@attributes, :episode, 1))
+
+      assert RunHistory.running_for("tutorial/first_experiment", 1).id == second.id
+      assert RunHistory.running_for("tutorial/first_experiment", 0).id == first.id
+      assert RunHistory.running_for("tutorial/first_experiment", 2) == nil
+    end
+
     test "cannot be recorded without an experiment" do
       assert {:error, changeset} = RunHistory.start(Map.delete(@attributes, :experiment))
       assert %{experiment: ["can't be blank"]} = errors_on(changeset)

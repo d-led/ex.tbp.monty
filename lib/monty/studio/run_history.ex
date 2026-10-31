@@ -229,11 +229,20 @@ defmodule Monty.Studio.RunHistory do
     run |> Run.changeset(%{log_path: path}) |> Repo.update()
   end
 
-  @doc "The run of an experiment that is still going, if there is one."
-  @spec running_for(String.t()) :: Run.t() | nil
-  def running_for(experiment) do
+  @doc """
+  The run of an experiment that is still going, if there is one.
+
+  With an `episode`, only that episode's run: an experiment can have several
+  going at once, one per episode, and a page that joined the wrong one would be
+  watching somebody else's object.
+  """
+  @spec running_for(String.t(), non_neg_integer() | nil) :: Run.t() | nil
+  def running_for(experiment, episode \\ nil) do
     Run
     |> where([run], run.experiment == ^experiment and run.status == "running")
+    |> then(fn query ->
+      if episode, do: where(query, [run], run.episode == ^episode), else: query
+    end)
     |> order_by(desc: :inserted_at)
     |> limit(1)
     |> Repo.one()

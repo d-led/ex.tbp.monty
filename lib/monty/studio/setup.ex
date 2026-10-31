@@ -1114,15 +1114,21 @@ defmodule Monty.Studio.Setup do
   @doc """
   The semantic id of the object an episode is about.
 
-  The stand-in world has one sphere and stamps it `1` (`Scene.render/3`). Monty's
-  worlds number their objects as they are added (`create_semantic_mapping`), which
-  is a thing to port with the worlds themselves, not before them.
+  Which object an episode is about is the experiment's own answer: a config that
+  names ten objects runs ten episodes, one object each, and episode 3 is about
+  the fourth name — `OneObjectPerEpisodeInterface.object_for/2`, which is the
+  cycle Monty's `pre_episode` walks. A config that names none leaves the
+  stand-in world's single sphere, which is why that case answers the id the scene
+  stamps on it.
+
+  `episode` is the index of the episode inside the epoch, not of the epoch: a run
+  here is one episode, and this is what it is about.
   """
-  @spec target_semantic_id(t()) :: integer()
-  def target_semantic_id(%__MODULE__{} = setup) do
+  @spec target_semantic_id(t(), non_neg_integer()) :: integer()
+  def target_semantic_id(%__MODULE__{} = setup, episode \\ 0) do
     interface = object_interface(setup)
 
-    case List.first(interface.object_names) do
+    case OneObjectPerEpisodeInterface.object_for(interface, episode) do
       nil ->
         # A config that names no objects leaves the stand-in world's single
         # sphere, and the scene stamps it 1. That is a fact about the stand-in —

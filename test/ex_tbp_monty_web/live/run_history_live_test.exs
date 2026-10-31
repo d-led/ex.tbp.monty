@@ -280,6 +280,24 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert has_element?(view, "#log-1")
     end
 
+    test "says which episode it is", %{conn: conn} do
+      # After a parallel start the name alone does not say which row this is.
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "base_10simobj_surf_agent",
+          source: "monty",
+          steps: 0,
+          episode: 3,
+          config: %{}
+        })
+
+      {:ok, run} = RunHistory.finish(run, %{})
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#run-episode") |> render() =~ "episode 3"
+    end
+
     test "a run id that does not exist is a page, not a crash", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/runs/00000000-0000-4000-8000-000000000000")
 

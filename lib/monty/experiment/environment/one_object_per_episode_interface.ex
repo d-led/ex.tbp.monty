@@ -152,6 +152,22 @@ defmodule Monty.Experiment.Environment.OneObjectPerEpisodeInterface do
   def target_semantic_id(%__MODULE__{}), do: nil
 
   @doc """
+  The object episode `episode` is about, without a scene to ask.
+
+  Monty's interface advances one object per episode by removing every object and
+  adding the next one, and past the end of the list it starts again. A run here
+  is one episode and starts a fresh interface, so the cycle is arithmetic rather
+  than state: `rem(episode, n)` names the object `cycle_object/2` would have
+  reached after `episode` episodes.
+  """
+  @spec object_for(t(), non_neg_integer()) :: object_name() | nil
+  def object_for(%__MODULE__{n_objects: 0}, _episode), do: nil
+
+  def object_for(%__MODULE__{} = interface, episode) do
+    Enum.at(interface.object_names, rem(episode, interface.n_objects))
+  end
+
+  @doc """
   Which object comes next: past the end of the list is the beginning again.
   """
   @spec cycle_object(t(), scene) :: {:ok, t(), scene} | {:error, term()}

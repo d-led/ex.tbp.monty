@@ -333,6 +333,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                 <.link navigate={~p"/runs/#{run.id}"} class="link link-hover font-mono text-sm">
                   {run.experiment}
                 </.link>
+                <%!-- Which episode, always: after a parallel run the name alone
+                does not say which of the rows this one is. --%>
+                <span class="ms-1.5 font-mono text-[10px] text-base-content/50">
+                  ep {run.episode}
+                </span>
               </td>
               <td>
                 <span class={["badge badge-sm", status_class(run_state(run, @queue[run.id]))]}>
@@ -412,6 +417,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       <header :if={@run} class="space-y-1">
         <div class="flex flex-wrap items-center gap-2">
           <h1 class="font-mono text-2xl font-semibold tracking-tight">{@run.experiment}</h1>
+          <span class="badge badge-sm" id="run-episode">episode {@run.episode}</span>
           <span class={["badge badge-sm", status_class(@run.status)]}>{@run.status}</span>
           <span class="badge badge-ghost badge-sm">{@run.source}</span>
           <button

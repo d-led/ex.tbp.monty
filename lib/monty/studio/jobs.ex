@@ -91,6 +91,18 @@ defmodule Monty.Studio.Jobs do
   end
 
   @doc """
+  How many runs may step at once.
+
+  The queue is the truth, not the number a page holds: enqueueing ten runs behind
+  a limit of two is how ten runs become five rounds of two. Monty starts a
+  parallel run with a second script, and the script's real setting is how many
+  processes go at once; this is that setting, and it can be changed while the
+  queue is running.
+  """
+  @spec parallelism(pos_integer()) :: :ok | {:error, term()}
+  def parallelism(limit), do: Oban.scale_queue(queue: :studio, limit: limit)
+
+  @doc """
   The latest job of each of `run_ids`, keyed by run id — absent where a run has
   none any more.
 

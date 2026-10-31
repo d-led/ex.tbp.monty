@@ -19,6 +19,7 @@ defmodule Monty.Studio.RunHistory.Run do
 
   schema "studio_runs" do
     field :experiment, :string
+    field :episode, :integer, default: 0
     field :source, :string, default: "monty"
     field :status, :string, default: "running"
     field :steps, :integer, default: 0
@@ -48,6 +49,7 @@ defmodule Monty.Studio.RunHistory.Run do
     run
     |> cast(attributes, [
       :experiment,
+      :episode,
       :source,
       :status,
       :steps,

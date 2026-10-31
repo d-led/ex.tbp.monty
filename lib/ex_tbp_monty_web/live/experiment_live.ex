@@ -59,6 +59,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       logging: logging.notes,
       error: nil,
       steps: steps,
+      # One run until somebody asks for more: parallelism is a choice made on
+      # this page, not something a link should be able to set for them.
+      parallelism: 1,
       run_id: nil,
       status: nil,
       progress: {0, steps},
@@ -154,6 +157,17 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           <span :if={@opened.source == :monty} class="badge badge-ghost badge-sm">
             from Monty's conf
           </span>
+          <%!-- The file, not a description of the file: exporting Monty's own
+          experiment is how you take one and change it. --%>
+          <.link
+            id="export-experiment"
+            href={~p"/export/experiments/#{@opened.name}"}
+            download
+            class="btn btn-ghost btn-xs gap-1.5 font-normal"
+            title="Save this experiment's YAML"
+          >
+            <.icon name="hero-arrow-down-tray-mini" class="size-3.5" /> yaml
+          </.link>
         </div>
         <p class="max-w-3xl text-base-content/70">
           {@opened.setup.experiment_class.class} · {@opened.setup.monty_class.class}
@@ -197,6 +211,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           <button id="step" phx-click="step" class="btn btn-sm" disabled={!runable?(assigns)}>
             <.icon name="hero-forward-mini" class="size-4" /> One step
           </button>
+          <%!-- Monty starts a parallel run with a second script; here it is a
+          number, and it means what it means there: n processes, n episodes, one
+          object each. --%>
+          <form id="parallelism" phx-change="parallelism" class="flex items-center gap-1">
+            <label for="parallelism-count" class="text-[11px] text-base-content/60">in parallel</label>
+            <select
+              id="parallelism-count"
+              name="parallelism"
+              class="select select-xs w-16"
+              aria-label="How many episodes to run at once"
+            >
+              <option :for={count <- 1..8} value={count} selected={count == @parallelism}>
+                {count}
+              </option>
+            </select>
+          </form>
           <button :if={@run_id} id="stop" phx-click="stop" class="btn btn-ghost btn-sm">Stop</button>
           <span :if={@run_id} id="run-progress" class="badge badge-ghost">
             step {elem(@progress, 0)} / {elem(@progress, 1)}
@@ -379,26 +409,19 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   @impl true
   def handle_event("run", _params, %{assigns: %{opened: opened, steps: steps}} = socket) do
-    cond do
-      not Setup.valid?(opened.setup) ->
-        {:noreply, socket}
+    if Setup.valid?(opened.setup),
+      do: start(socket, opened, steps, socket.assigns.parallelism),
+      else: {:noreply, socket}
+  end
 
-      # Somebody else is already running this experiment, and a run is the
-      # experiment's — this page joins it rather than starting a second one that
-      # would step the same world twice.
-      record = RunHistory.running_for(opened.name) ->
-        {:noreply,
-         socket |> follow(record) |> push(nil, "a run is already going: watching it", :info)}
-
-      true ->
-        start(socket, opened, steps)
-    end
+  def handle_event("parallelism", %{"parallelism" => count}, socket) do
+    {:noreply, assign(socket, parallelism: parallelism(%{"parallelism" => count}))}
   end
 
   # One step is a run of one step: a person clicking it twice wants two runs to
   # look at, not one run that pretends to have done two.
   def handle_event("step", _params, %{assigns: %{opened: opened}} = socket) do
-    if Setup.valid?(opened.setup), do: start(socket, opened, 1), else: {:noreply, socket}
+    if Setup.valid?(opened.setup), do: start(socket, opened, 1, 1), else: {:noreply, socket}
   end
 
   def handle_event("stop", _params, %{assigns: %{run_id: nil}} = socket), do: {:noreply, socket}
@@ -579,44 +602,98 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # -- starting a run --------------------------------------------------------
 
-  defp start(socket, opened, steps) do
-    case RunHistory.start(RunLog.attributes(opened, steps)) do
-      {:ok, record} ->
+  # Parallelism is the experiment's own answer to "one object after another, or
+  # several at once": Monty starts a parallel run with a second script, and the
+  # scripts differ only in how many episodes go at the same time. Here that is a
+  # number — n runs of n episodes, each its own record, its own topic and its own
+  # seed — and the queue is told the same number, because a queue limit of two
+  # would quietly turn ten runs into five rounds of two.
+  defp start(socket, opened, steps, parallelism) do
+    _ = Jobs.parallelism(parallelism)
+
+    results = Enum.map(0..(parallelism - 1), &queue(opened, steps, &1))
+    records = Enum.flat_map(results, &started/1)
+    refused = for {:error, changeset} <- results, do: changeset_errors(changeset)
+
+    case records do
+      [] ->
+        already_going(socket, opened)
+
+      records ->
         # Subscribe before enqueueing: the queue can start a job within
         # milliseconds of the insert, and a run that finishes before the page
         # listens is a run the page watched happen and never heard about.
-        Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
+        Enum.each(records, &Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(&1.id)))
+        Enum.each(records, &enqueue/1)
 
-        case Jobs.Run.enqueue_run(record) do
-          {:ok, _job} ->
-            {:noreply,
-             socket
-             |> assign(
-               run_id: record.id,
-               status: "running",
-               progress: {0, steps},
-               summary: nil,
-               lines: [],
-               log_path: record.log_path
-             )
-             |> push(nil, "queued: #{steps} step(s) of #{opened.name}", :info)
-             |> watch()}
+        [first | _rest] = records
 
-          {:error, reason} ->
-            not_queued(socket, record, reason)
-        end
-
-      {:error, changeset} ->
         {:noreply,
-         push(socket, nil, "cannot record this run: #{changeset_errors(changeset)}", :error)}
+         socket
+         |> assign(
+           run_id: first.id,
+           status: "running",
+           progress: {0, steps},
+           summary: nil,
+           lines: [],
+           log_path: first.log_path
+         )
+         |> push(nil, queued(records, steps, opened.name), :info)
+         |> refused(refused)
+         |> watch()}
     end
   end
 
-  # A run that cannot be queued is not a run: say so where the log is, because
-  # that is where somebody would look, and close the record with the reason.
-  defp not_queued(socket, record, reason) do
-    {:ok, _} = RunHistory.finish(record, %{"reason" => inspect(reason)}, "failed")
-    {:noreply, push(socket, nil, "could not queue the run: #{inspect(reason)}", :error)}
+  defp refused(socket, []), do: socket
+
+  defp refused(socket, [reason | _rest]),
+    do: push(socket, nil, "could not record every run: #{reason}", :error)
+
+  defp queue(opened, steps, episode) do
+    if RunHistory.running_for(opened.name, episode),
+      do: :going,
+      else: RunHistory.start(RunLog.attributes(opened, steps, episode))
+  end
+
+  defp started({:ok, record}), do: [record]
+  defp started(_going_or_refused), do: []
+
+  # A run that cannot be queued is not a run: close its record with the reason,
+  # because a row that says "running" with nothing working on it is the lie the
+  # Reaper exists to undo.
+  defp enqueue(record) do
+    case Jobs.Run.enqueue_run(record) do
+      {:ok, _job} ->
+        :ok
+
+      {:error, reason} ->
+        {:ok, _closed} = RunHistory.finish(record, %{"reason" => inspect(reason)}, "failed")
+        :ok
+    end
+  end
+
+  # Nothing to start: every episode asked for is already being run — which is a
+  # second click on Run, and the answer is to watch what is already happening.
+  defp already_going(socket, opened) do
+    case RunHistory.running_for(opened.name) do
+      nil ->
+        {:noreply, push(socket, nil, "nothing new to start", :warning)}
+
+      record ->
+        {:noreply,
+         socket |> follow(record) |> push(nil, "a run is already going: watching it", :info)}
+    end
+  end
+
+  defp queued([only], steps, name),
+    do: "queued: #{steps} step(s) of #{name} (episode #{only.episode})"
+
+  defp queued(records, steps, name) do
+    first = hd(records)
+    last = List.last(records)
+
+    "queued #{length(records)} runs of #{name}, episodes #{first.episode}–#{last.episode}, " <>
+      "#{steps} step(s) each: watching episode #{first.episode}, the rest are on Runs"
   end
 
   # -- the log ---------------------------------------------------------------
@@ -664,6 +741,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     case Integer.parse(to_string(params["steps"] || "")) do
       {count, ""} when count > 0 -> count
       _default -> Monty.Studio.Run.default_steps()
+    end
+  end
+
+  # How many episodes to run at once. Eight is a ceiling rather than a judgement
+  # about what a machine can do: each run is its own world and its own simulator
+  # process, and a number large enough to matter is a number that ends in swap.
+  @most_in_parallel 8
+
+  defp parallelism(params) do
+    case Integer.parse(to_string(params["parallelism"] || "")) do
+      {count, ""} -> count |> max(1) |> min(@most_in_parallel)
+      _default -> 1
     end
   end
 

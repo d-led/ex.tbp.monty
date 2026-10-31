@@ -80,7 +80,7 @@ defmodule Monty.Studio.Run do
 
     with {:ok, factories} <- Setup.positioning_procedures(setup),
          {:ok, policy} <- Setup.recognition_policy(setup),
-         {:ok, interface, positioning} <- position(setup, factories) do
+         {:ok, interface, positioning} <- position(setup, factories, episode) do
       case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {model, spec}) do
         {:ok, _pid} ->
           # Monty's `pre_episode`: the experiment tells the model what the episode
@@ -153,7 +153,7 @@ defmodule Monty.Studio.Run do
   # done the positioning inside that reset, with Monty's random stream; stepping
   # the procedures again would move an agent Monty had placed and make the episode
   # a different one.
-  defp position(%Setup{} = setup, factories) do
+  defp position(%Setup{} = setup, factories, episode) do
     world = Setup.world(setup)
 
     interface =
@@ -176,7 +176,7 @@ defmodule Monty.Studio.Run do
 
       case Positioning.prepare(
              factories,
-             Setup.target_semantic_id(setup),
+             Setup.target_semantic_id(setup, episode),
              interface,
              observe,
              distractors: Setup.distractors(setup)

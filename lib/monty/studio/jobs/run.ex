@@ -126,6 +126,7 @@ defmodule Monty.Studio.Jobs.Run do
 
     case Run.start(opened.setup,
            steps: record.steps,
+           episode: record.episode,
            has_detailed_logger: Logging.detailed?(logging)
          ) do
       {:ok, run} ->
@@ -133,7 +134,7 @@ defmodule Monty.Studio.Jobs.Run do
 
         say(
           run_id,
-          "run started: #{record.experiment}, #{record.steps} steps, seed #{record.seed}"
+          "run started: #{record.experiment}, episode #{record.episode}, #{record.steps} steps"
         )
 
         broadcast(run_id, {:started, record.steps})

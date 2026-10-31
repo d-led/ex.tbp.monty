@@ -19,6 +19,32 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     {:ok, tmp: tmp}
   end
 
+  describe "the experiment as a file" do
+    test "the page offers it, and the download is the YAML Monty ships", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      assert has_element?(view, "#export-experiment")
+
+      response =
+        conn
+        |> get("/export/experiments/base_config_10distinctobj_dist_agent")
+
+      assert response.status == 200
+      assert [content_type] = get_resp_header(response, "content-type")
+      assert content_type =~ "yaml"
+      assert [disposition] = get_resp_header(response, "content-disposition")
+      assert disposition =~ "base_config_10distinctobj_dist_agent.yaml"
+      assert response.resp_body =~ "defaults:"
+    end
+
+    test "an experiment that does not exist is a 404, not a file", %{conn: conn} do
+      response = get(conn, "/export/experiments/no_such_experiment")
+
+      assert response.status == 404
+      assert response.resp_body =~ "neither a draft nor an experiment"
+    end
+  end
+
   describe "before the run" do
     test "the experiment is shown as a diagram of what it wires together", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
@@ -105,6 +131,25 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert current_run_id(two) == started
       assert RunHistory.list_for("base_config_10distinctobj_dist_agent") |> length() == 1
       assert render(two) =~ "watching it"
+    end
+
+    test "in parallel starts one run per episode, one object each", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+
+      view |> element("#parallelism") |> render_change(%{"parallelism" => "3"})
+      view |> element("#run") |> render_click()
+
+      # Three runs, three episodes, and the page watches the first of them. The
+      # episodes are why this is not just "three of the same": each carries its
+      # own seed, and a config that names ten objects has ten of them.
+      runs = RunHistory.list_for("base_config_10distinctobj_dist_agent")
+
+      assert runs |> Enum.map(& &1.episode) |> Enum.sort() == [0, 1, 2]
+      assert current_run_id(view) in Enum.map(runs, & &1.id)
+
+      # Each is a job of its own, so the queue steps them side by side.
+      assert map_size(Monty.Studio.Jobs.by_run(Enum.map(runs, & &1.id))) == 3
     end
 
     test "each sensor has its own view, updated as the run steps", %{conn: conn} do
