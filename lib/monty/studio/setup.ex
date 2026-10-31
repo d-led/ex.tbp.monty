@@ -24,6 +24,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
   alias Monty.Frameworks.Models.SensorModules.CameraSM
+  alias Monty.Frameworks.Utils.SpatialArithmetics
   alias Monty.Geometry.Rotation
   alias Monty.ModuleMap
   alias Monty.Simulators.Habitat.Environment.HabitatEnvironment
@@ -702,14 +703,19 @@ defmodule Monty.Studio.Setup do
   defp scene(config) do
     args = get_in(config, ["environment", "env_init_args"]) || %{}
     agent = agent(args)
+    objects = objects(args, agent)
 
-    %{agent: agent_pose(agent), sensors: sensor_poses(agent), objects: objects(args)}
+    %{agent: agent_pose(agent), sensors: sensor_poses(agent, objects), objects: objects}
   end
 
   defp agent(args) do
     case Map.get(args, "agents") do
       [%{} = agent | _more] ->
-        %{"position" => Map.get(agent, "position"), "rotation" => Map.get(agent, "rotation")}
+        %{
+          "position" => Map.get(agent, "position"),
+          "rotation" => Map.get(agent, "rotation"),
+          "sensor_configs" => Map.get(agent, "sensor_configs")
+        }
 
       %{} = agents ->
         Map.get(agents, "agent_args") || %{}
@@ -729,7 +735,27 @@ defmodule Monty.Studio.Setup do
     end
   end
 
-  defp sensor_poses(agent_args) do
+  # A MuJoCo agent declares its sensors rather than placing them: every camera
+  # sits on the agent's body with `IDENTITY_QUATERNION`, and MuJoCo's identity
+  # camera looks along the world's −z. In this port's frame — Monty's y-up one —
+  # that is not the same axis, so the pose would be a guess about a quaternion
+  # convention instead of a view of the object.
+  #
+  # So this scene aims each sensor at the object the config names. That is what
+  # the world is for: a camera that renders nothing teaches nobody anything, and
+  # where a MuJoCo camera looks is decided by the MJCF model, which this port does
+  # not read. Saying so here is more honest than deriving a pitch that happens to
+  # miss the object by a degree.
+  defp sensor_poses(%{"sensor_configs" => %{} = configs} = agent, objects) do
+    origin = Map.get(agent, "position") || [0.0, 0.0, 0.0]
+    rotation = look_at(origin, objects)
+
+    for {sensor_id, _config} <- configs, into: %{} do
+      {sensor_id, %{position: origin, rotation: rotation}}
+    end
+  end
+
+  defp sensor_poses(agent_args, _objects) do
     sensor_ids = List.wrap(Map.get(agent_args, "sensor_ids"))
     positions = List.wrap(Map.get(agent_args, "positions"))
     rotations = List.wrap(Map.get(agent_args, "rotations"))
@@ -741,15 +767,79 @@ defmodule Monty.Studio.Setup do
     end
   end
 
-  defp objects(args) do
+  # A sensor looks along its own −z, so the rotation that shows the object is the
+  # one that turns −z onto the direction of the object.
+  defp look_at(origin, [%{position: target} | _more]) do
+    gaze = SpatialArithmetics.normalize(difference(target, origin))
+    turn([0.0, 0.0, -1.0], gaze)
+  end
+
+  defp look_at(_origin, _no_objects) do
+    {:ok, rotation} = Rotation.from_euler_degrees([-90.0, 0.0, 0.0])
+    rotation
+  end
+
+  defp turn(from, to) do
+    case SpatialArithmetics.cross(from, to) do
+      [x, y, z] when x == 0.0 and y == 0.0 and z == 0.0 ->
+        # Parallel or exactly opposite: the cross product gives no axis. Which of
+        # the two it is, the dot product says — already looking at it needs no
+        # turn at all, which is the usual case: a MuJoCo agent sits directly
+        # above its object, and its camera already looks down that axis.
+        if SpatialArithmetics.dot(from, to) < 0.0 do
+          {:ok, rotation} = Rotation.from_euler_degrees([180.0, 0.0, 0.0])
+          rotation
+        else
+          {:ok, rotation} = Rotation.from_euler_degrees([0.0, 0.0, 0.0])
+          rotation
+        end
+
+      axis ->
+        {:ok, rotation} =
+          Rotation.from_axis_angle(
+            SpatialArithmetics.normalize(axis),
+            SpatialArithmetics.get_angle_between(from, to)
+          )
+
+        rotation
+    end
+  end
+
+  defp difference([ax, ay, az], [bx, by, bz]), do: [ax - bx, ay - by, az - bz]
+
+  # A MuJoCo environment lists no objects at all: its simulator loads the YCB set
+  # from `data_path`, and the config only says which dataset. A world with nothing
+  # in it is one no sensor can see, so the stand-in gets one object at the origin —
+  # MuJoCo's own default position for a custom object.
+  defp objects(args, agent) do
+    case placed(args) do
+      [] ->
+        if Map.has_key?(agent, "sensor_configs"),
+          do: [%{name: nil, position: [0.0, 0.0, 0.0]}],
+          else: []
+
+      objects ->
+        objects
+    end
+  end
+
+  defp placed(args) do
     args
     |> Map.get("objects")
     |> List.wrap()
     |> Enum.flat_map(fn
       %{} = object ->
         case Map.get(object, "position") do
-          [_x, _y, _z] = position -> [%{name: Map.get(object, "name"), position: position}]
-          _absent -> []
+          [_x, _y, _z] = position ->
+            [%{name: Map.get(object, "name"), position: position}]
+
+          # MuJoCo places a custom object at `pos=position` and defaults that to
+          # `ZERO_VECTOR`, and a MuJoCo config names its objects without a place
+          # at all. Dropping them left the scene with nothing in it — and a world
+          # with no object raises `ObjectNotVisibleError` on the first step, so
+          # the missing place was being reported as a camera fault.
+          _no_position ->
+            [%{name: Map.get(object, "name"), position: [0.0, 0.0, 0.0]}]
         end
 
       _scenery ->
