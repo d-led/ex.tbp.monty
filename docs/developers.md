@@ -3,6 +3,109 @@
 Working on the code: invariants, the module contract, tests and gates.
 Deployment and operations live in the Dockerfile and `rel/`.
 
+## To whom it may concern
+
+This is a reimplementation, not a fork. Monty's Python is the reference for
+behaviour, names, units and config shape; the BEAM is where it runs. Nothing
+here is allowed to *drift* from that, and nothing keeps it in step by memory:
+each kind of drift has a command that fails when it happens. Starting cold,
+trust those commands rather than any prose, including this page.
+
+The loop is the same for every change:
+
+```bash
+mix test                      # the suite alone; creates and migrates the test database
+scripts/quality.sh --fast     # lint only: compile, format, credo, sobelow — seconds
+scripts/quality.sh            # lint, cover, CRAP — what CI runs
+```
+
+Behaviour first: a test that says what the port decides, then the port, then the
+gate. A test that asserts the implementation is what it is has bought nothing.
+
+### When Monty moves
+
+A pull, a new release, or a checkout of a newer Monty all arrive the same way.
+Work through this in order; each step tells you whether the next one matters.
+
+```bash
+export MONTY_SOURCE=../monty-orig      # the default; any checkout works
+mix monty.inputs                       # fast-forward main, then copy conf + snapshots
+mix monty.inputs --check               # read-only: is priv/monty what that checkout holds?
+mix monty.config.snapshots             # composes every config, compares tree to snapshot
+mix monty.module_map.gen               # new, renamed and deleted Python files
+mix monty.module_map.verify            # every file mapped, every implemented entry real
+mix monty.port_census                  # what the newly planned classes actually are
+```
+
+1. **Inputs.** `mix monty.inputs` only ever fast-forwards `main`, and only when
+   the checkout is on `main` with nothing uncommitted; anything else is reported
+   and left alone, because a copy taken from a tree that is not what it claims to
+   be is worse than a stale copy. The revision is recorded in
+   `priv/monty/inputs.json` (`monty`, `conf_files`, `snapshot_files`) — that file
+   is the answer to "which Monty is this?", and it moves with the copy.
+2. **Configs.** `mix monty.config.snapshots` is the compatibility gate: it
+   composes each experiment from the YAML in `priv/monty/conf` and compares the
+   result with Monty's own `tests/conf/snapshots`, path by path. A missing key is
+   as much a difference as a wrong value, and "close enough" is how a config
+   quietly means something else. Add `--source ../monty-orig` to check a
+   checkout whose copy you have not refreshed yet.
+3. **Files.** `mix monty.module_map.gen` (re)writes `lib/monty/module_map/data.ex`
+   from both packages: every Python file, the Elixir module its path maps to, its
+   classes, and whether that module exists. An entry already marked `excluded`
+   with a reason stays excluded; an entry whose module now exists becomes
+   `implemented`. `mix monty.module_map.verify` then fails on a Python file with
+   no entry, an `implemented` entry with no module, or an `excluded` entry
+   without a reason, and reports a checkout that has moved since the map was
+   generated.
+4. **Scope.** Before writing anything, `mix monty.port_census` says what each
+   still-planned class *is* in Monty — a `Protocol`, an `ABC` whose methods raise,
+   a `TypedDict`, or a dataclass that does arithmetic. Only the last is a module
+   to port; the counts it prints are the honest backlog, not a "classes remaining"
+   number.
+5. **Behaviour.** Read what changed before porting it. [`monty-bugs.md`](monty-bugs.md)
+   records the places where Monty looks wrong and what this port does instead,
+   with the reason; [`open-ends.md`](open-ends.md) records what upstream says is
+   not done; [`validation.md`](validation.md) is what has actually been checked
+   against Monty's numbers, and a claim that is not there is not a claim.
+6. **Port.** Add the module under the name the map gives it, as pure functions,
+   with a test that says what it decides — and where numbers matter, against a
+   fixture recorded from Monty (`scripts/record_monty_*.py` run Monty in Monty's
+   environment and write what it answered; the suite replays that JSON).
+7. **Gate.** `scripts/quality.sh`, and `mix dialyzer` for the types job.
+
+### Where to look
+
+| Question | Look at |
+| --- | --- |
+| Where would Monty's `a/b.py::C` live here? | `lib/monty/module_map/data.ex`, rule in [`module-map.md`](module-map.md) |
+| Is this ported, planned or excluded? | the same entry's `status`; `mix monty.port_census` for what planned means |
+| Does this config still mean what Monty means? | [`config-compatibility.md`](config-compatibility.md), then `mix monty.config.snapshots` |
+| How does a timestep run, and where is Python involved? | [`architecture.md`](architecture.md) |
+| What does the world boundary allow? | [`simulator-port.md`](simulator-port.md) |
+| Why does this disagree with Python? | [`monty-bugs.md`](monty-bugs.md) |
+| What is actually proven? | [`validation.md`](validation.md) and `test/fixtures/` |
+| What is not built yet? | [`roadmap.md`](roadmap.md), [`open-ends.md`](open-ends.md) |
+| Which Monty is this repo pinned to? | `priv/monty/inputs.json` |
+| Which build am I looking at? | `priv/build_info.json` (`mix build.info`), also in the footer of every page |
+| How does it run in a container? | [`container.md`](container.md), `Dockerfile` |
+
+### What not to do
+
+- **Do not rename a mapped module** to a prettier Elixir name, and do not
+  collapse the one-to-one structure. Finding Monty's file is the feature.
+- **Do not add a config key, resolver or default Monty's `conf/` does not use.**
+  If a value is missing, the finding is that the copy is stale, not that the
+  resolver should be generous.
+- **Do not regenerate the copy from a dirty or non-`main` checkout**, and do not
+  edit `priv/monty` by hand. There is exactly one writer: `mix monty.inputs`.
+- **Do not paper over a disagreement.** A run that "works" with a stand-in module
+  is worse than a run that refuses: an unimplemented class is an error, never a
+  substitute. A deliberate difference goes in `monty-bugs.md` with a reason.
+- **Do not let a number live in prose.** Counts belong to the command that
+  prints them (`mix monty.port_census`, `mix monty.module_map.verify`, and
+  `scripts/refresh_features.py` for `features.md`), because a number copied into
+  a sentence is wrong by the next commit.
+
 ## Local setup
 
 ```bash
