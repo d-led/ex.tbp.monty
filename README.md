@@ -21,19 +21,20 @@ without leaving the conversation.
 ## Quickstart
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/docker-compose.yml | docker compose -f - up
+curl -fsSLO https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/docker-compose.yml
+docker compose up
 ```
 
-That is the whole install — no checkout, nothing to clone, nothing to install:
-the compose file comes from the repository and compose runs it. In a checkout
-it is just `docker compose up`.
+That is the whole install — no checkout, nothing to build: the repository's own
+compose file, which compose then runs. In a checkout it is just
+`docker compose up`.
 
 Then <http://localhost:4001>: every experiment Monty ships, and a run you can
 start from any of them. The published image and a Postgres, the migration runs
 itself, Monty's config tree and pretrained libraries are in the image — and the
 database and the bundles `/prerequisites` downloads both sit in volumes, so a
-restart is a restart, not a re-fetch and a re-run. `docker compose -p
-ex-tbp-monty down -v` throws the volumes away too.
+restart is a restart, not a re-fetch and a re-run. `docker compose down -v`
+deletes the volumes too.
 
 ## An MCP server
 
