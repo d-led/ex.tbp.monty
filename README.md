@@ -54,7 +54,7 @@ sources: Monty's `docs/` in a checkout, the module map, `Monty.Studio` and the
 run table.
 
 `http://localhost:4001/mcp` is the quickstart's port, and VS Code is already
-pointed at it in `.vscode/mcp.json`. [docs/mcp.md](docs/mcp.md) lists the tools
+pointed at it in [`.vscode/mcp.json`](.vscode/mcp.json). [docs/mcp.md](docs/mcp.md) lists the tools
 and a first request.
 
 ## From source
@@ -74,17 +74,21 @@ gates CI runs, and how a module is added.
 
 * **The same modules.** Python `path/file.py::Class` becomes
   `Monty.Path.File.Class` by one rule, with no module renamed to suit Elixir.
-  `lib/monty/module_map/data.ex` is that mapping, and
+  [`lib/monty/module_map/data.ex`](lib/monty/module_map/data.ex) is that mapping, and
   `mix monty.module_map.verify` fails when a Monty file has no entry, or an
   entry claiming to be ported has no module —
   [docs/module-map.md](docs/module-map.md).
 * **The same configs.** Monty's Hydra YAML is read unchanged, and the tree ships
-  in `priv/monty`, so no Monty checkout is needed. Every experiment Monty
+  in [`priv/monty`](priv/monty), so no Monty checkout is needed. Every experiment Monty
   commits a snapshot for composes to the same tree here —
   [docs/config-compatibility.md](docs/config-compatibility.md).
 * **Processes, not a loop.** A step is a barrier over processes: sensor modules,
   learning modules and the motor system exchange CMP messages, and a vote is a
   round with a deadline — [docs/architecture.md](docs/architecture.md).
+* **The same world, when you ask for it.** A run steps an Elixir stand-in scene
+  by default; `MONTY_WORLD=monty` steps Monty's own Habitat world through a Python
+  peer, which *imports* Monty rather than copying it —
+  [docs/simulator-port.md](docs/simulator-port.md).
 * **Checked against Monty, not asserted.** What has been compared, and with
   which numbers, is [docs/validation.md](docs/validation.md); every deliberate
   difference is [docs/monty-bugs.md](docs/monty-bugs.md); what is ported today,
