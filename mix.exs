@@ -71,6 +71,7 @@ defmodule ExTbpMonty.MixProject do
       extras: [
         "README.md",
         "docs/developers.md",
+        "docs/container.md",
         "docs/architecture.md",
         "docs/config-compatibility.md",
         "docs/module-map.md"

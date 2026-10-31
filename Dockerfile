@@ -179,7 +179,19 @@ RUN mkdir -p /app/priv/wandb \
   && ln -s /app/priv /app/bin/priv \
   && chown -R 10001:10001 /app/priv
 
+# This image does not talk to wandb. Monty's configs name wandb loggers, and
+# the `PythonxClient` would happily open a run — but a container that reports
+# somewhere else needs a credential, a network and somebody to read the result,
+# and the observability this image is built around is its own: the run record in
+# Postgres, the log and artifacts a run leaves in /app/priv, the /runs pages and
+# /health. `disabled` is wandb's own no-op mode, so a config naming those
+# handlers still runs and nothing is uploaded or written.
+#
+# To send runs to wandb anyway, `-e WANDB_MODE=online -e WANDB_API_KEY=...`:
+# the client forwards every WANDB_* variable into the interpreter on each init,
+# and `WANDB_DIR` above is where it would write.
 ENV WANDB_DIR=/app/priv/wandb \
+    WANDB_MODE=disabled \
     HOME=/app/priv
 
 USER 10001:10001

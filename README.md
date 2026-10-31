@@ -194,7 +194,9 @@ docker run --rm -p 4000:4000 \
 
 The image runs as **uid 10001** and needs no privilege of any kind — no root, no
 writable filesystem outside the volume. `CI` scans it with Trivy before pushing,
-and the publishing job starts it as that uid.
+and the publishing job starts it as that uid. [docs/container.md](docs/container.md)
+is the operator's page: every variable the release reads, what is on the volume,
+and what the app reports about itself.
 
 One directory is writable, `/app/priv`, and everything that writes is pointed
 at it, because a release resolves those paths somewhere else: the studio's
@@ -236,6 +238,7 @@ docs/                    architecture, config compatibility, module map, MCP, va
 | Doc | Answers |
 | --- | --- |
 | [docs/developers.md](docs/developers.md) | how do I work on this? invariants, tests, gates — **start here** |
+| [docs/container.md](docs/container.md) | how do I run the image? every variable, the volume, what it reports |
 | [docs/architecture.md](docs/architecture.md) | what happens in one timestep? |
 | [docs/module-map.md](docs/module-map.md) | where is that Python file here? |
 | [docs/config-compatibility.md](docs/config-compatibility.md) | which Hydra features are implemented, and how far parity goes |
