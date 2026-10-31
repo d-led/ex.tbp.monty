@@ -37,14 +37,12 @@ Source: <https://github.com/thousandbrainsproject/tbp.monty>. The full text is
 kept beside the copy it applies to, as
 [`priv/monty/LICENSE`](priv/monty/LICENSE).
 
-| What is shipped                                          | Where                   | Provenance                                                            |
-| -------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------- |
-| Hydra config tree, verbatim (`*.yaml`)                   | `priv/monty/conf/`      | `src/tbp/monty/conf/`                                                 |
-| Composed-config snapshots, verbatim (`*.yaml`)           | `priv/monty/snapshots/` | `tests/conf/snapshots/`                                               |
-| Pretrained learning-module memories, exported losslessly | `priv/monty/libraries/` | Monty's published prerequisites; see `priv/monty/libraries/README.md` |
-
-The Monty commit the copy was taken from is recorded in
-`priv/monty/inputs.json`; `priv/monty/README.md` says how to refresh it.
+What is shipped under it is Monty's Hydra config tree, the snapshots it was
+composed into, and the pretrained learning-module memories exported for this
+port — copied, verbatim where the format allows. Every path, the task that
+writes it and the command that checks it are in
+[`docs/from-monty.md`](docs/from-monty.md); the commit the copy was taken from
+is `priv/monty/inputs.json`.
 
 ## Browser packages
 

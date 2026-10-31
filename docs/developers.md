@@ -37,6 +37,11 @@ mix monty.module_map.verify            # every file mapped, every implemented en
 mix monty.port_census                  # what the newly planned classes actually are
 ```
 
+This block is the only place a Monty checkout is read. Everything these tasks
+produce is committed (`priv/monty`, the module map), so nothing the application
+runs at run time needs one — not the studio, not the MCP server, which reads
+Monty's documentation and roadmap from the project's published site instead.
+
 1. **Inputs.** `mix monty.inputs` only ever fast-forwards `main`, and only when
    the checkout is on `main` with nothing uncommitted; anything else is reported
    and left alone, because a copy taken from a tree that is not what it claims to
@@ -86,7 +91,7 @@ mix monty.port_census                  # what the newly planned classes actually
 | Does this config still mean what Monty means? | [`config-compatibility.md`](config-compatibility.md), then `mix monty.config.snapshots` |
 | How does a timestep run, and where is Python involved? | [`architecture.md`](architecture.md) — and [what is Python here](#what-is-python-here-and-what-it-does) below |
 | What does the world boundary allow? | [`simulator-port.md`](simulator-port.md) |
-| Which files are Monty's, copied, and which are ours? | [`architecture.md`](architecture.md#what-comes-from-monty), section "What comes from Monty"; [`priv/monty/README.md`](../priv/monty/README.md) |
+| Which files are Monty's, copied, and which are ours? | [`from-monty.md`](from-monty.md) — every path, glob and the task that writes it; [`architecture.md`](architecture.md#what-comes-from-monty) for why the boundary is there |
 | How do I refresh Monty's YAML, snapshots or memories? | `mix monty.inputs`, [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) |
 | Why does this disagree with Python? | [`monty-differences.md`](monty-differences.md) |
 | What is actually proven? | [`validation.md`](validation.md) and [`test/fixtures/`](../test/fixtures) |
@@ -173,8 +178,8 @@ docs/                    architecture, config compatibility, module map, MCP, va
 The one directory that is not code is [`priv/monty`](../priv/monty): it is
 Monty's data, copied rather than written — `mix monty.inputs` for the YAML,
 [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) for the
-pretrained memories. [`architecture.md`](architecture.md#what-comes-from-monty)
-lists it beside the things that are *not* copied.
+pretrained memories. [`from-monty.md`](from-monty.md) is the list of everything
+that comes from Monty, including what is generated or started rather than copied.
 
 ## What is Python here, and what it does
 

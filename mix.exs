@@ -73,6 +73,7 @@ defmodule ExTbpMonty.MixProject do
         "docs/developers.md",
         "docs/container.md",
         "docs/architecture.md",
+        "docs/from-monty.md",
         "docs/config-compatibility.md",
         "docs/module-map.md"
       ]

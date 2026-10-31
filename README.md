@@ -106,6 +106,7 @@ follows from that is argued in [docs/monty-differences.md](docs/monty-difference
 | [docs/features.md](docs/features.md) | what works, and what proves it |
 | [docs/architecture.md](docs/architecture.md) | what happens in one timestep? |
 | [docs/module-map.md](docs/module-map.md) | where is that Python file here? |
+| [docs/from-monty.md](docs/from-monty.md) | what comes from Monty, where it lands, and the task that writes it |
 | [docs/config-compatibility.md](docs/config-compatibility.md) | which Hydra features are implemented, and how far parity goes |
 | [docs/validation.md](docs/validation.md) | what has been compared with Monty, and how closely |
 | [docs/monty-differences.md](docs/monty-differences.md) | every deliberate difference, and what looks wrong upstream |
