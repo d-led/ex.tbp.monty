@@ -139,8 +139,49 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          socket
          |> assign(run: run)
          |> assign(files: Artifacts.files(run.id))
+         |> assign(queue: where_each_run_is([run]))
+         |> follow(run)
          |> stream(:log, run.log, reset: true)
          |> assign_replay(run, Replay.last_step(run))}
+    end
+  end
+
+  # A run that is still going is watched, not photographed: the worker
+  # broadcasts each step, so the page reads the record again and the steps, the
+  # status and the progress line move while it is open. A finished run is read
+  # once and stays still.
+  defp follow(socket, run) do
+    following = socket.assigns[:followed]
+
+    cond do
+      not connected?(socket) or not in_flight?(run, socket.assigns.queue) ->
+        socket
+
+      following == run.id ->
+        socket
+
+      true ->
+        # Navigating from one run to another leaves the first topic behind: a
+        # late step from a run this page is not showing would refresh it with
+        # the wrong record.
+        if following, do: Phoenix.PubSub.unsubscribe(ExTbpMonty.PubSub, Jobs.Run.topic(following))
+
+        Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(run.id))
+
+        assign(socket, followed: run.id)
+    end
+  end
+
+  defp refresh_run(socket, id) do
+    case RunHistory.get(id) do
+      nil ->
+        assign(socket, run: nil)
+
+      run ->
+        socket
+        |> assign(run: run, files: Artifacts.files(run.id), queue: where_each_run_is([run]))
+        |> stream(:log, run.log, reset: true)
+        |> assign_replay(run, socket.assigns[:step])
     end
   end
 
@@ -351,7 +392,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                 <%!-- Two ways out: a run that is stepping ends at its next step of
                 its own accord, one stuck in a step has to be ended. --%>
                 <button
-                  :if={unfinished?(@queue[run.id])}
+                  :if={in_flight?(run, @queue)}
                   id={"stop-#{run.id}"}
                   phx-click="stop"
                   phx-value-id={run.id}
@@ -361,7 +402,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                   Stop
                 </button>
                 <button
-                  :if={going?(@queue[run.id])}
+                  :if={running_now?(run, @queue)}
                   id={"end-#{run.id}"}
                   phx-click="end_now"
                   phx-value-id={run.id}
@@ -370,7 +411,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                 >
                   End now
                 </button>
+                <%!-- A record nobody needs is deleted; a run in flight is
+                stopped or ended. Offering Delete while it runs would be
+                offering a button the studio refuses. --%>
                 <button
+                  :if={not in_flight?(run, @queue)}
                   id={"delete-#{run.id}"}
                   phx-click="ask_delete"
                   phx-value-id={run.id}
@@ -419,15 +464,62 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           <h1 class="font-mono text-2xl font-semibold tracking-tight">{@run.experiment}</h1>
           <span class="badge badge-sm" id="run-episode">episode {@run.episode}</span>
           <span class={["badge badge-sm", status_class(@run.status)]}>{@run.status}</span>
-          <span class="badge badge-ghost badge-sm">{@run.source}</span>
-          <button
-            id={"delete-#{@run.id}"}
-            phx-click="ask_delete"
-            phx-value-id={@run.id}
-            class="btn btn-ghost btn-xs ms-auto text-error"
+          <span
+            :if={in_flight?(@run, @queue)}
+            id="run-progress"
+            class="badge badge-ghost badge-sm"
           >
-            Delete
-          </button>
+            step {length(@run.log)} / {@run.steps}
+          </span>
+          <span class="badge badge-ghost badge-sm">{@run.source}</span>
+
+          <%!-- The experiment page is where a run can be watched while it
+          steps: sensor views, progress, the log. This page is the record. A
+          reader who lands here from a link should not have to know that. --%>
+          <div class="ms-auto flex items-center gap-1">
+            <.link
+              id="open-experiment"
+              navigate={~p"/experiments/#{@run.experiment}"}
+              class="btn btn-primary btn-xs"
+            >
+              <span :if={in_flight?(@run, @queue)}>Watch it run</span>
+              <span :if={not in_flight?(@run, @queue)}>Open the experiment</span>
+            </.link>
+
+            <%!-- Three different things, three different words: a run that is
+            stepping ends at its next step, one stuck inside a step has to be
+            ended, and deleting is for records nobody needs any more — which is
+            why it is not offered while the run is still going. --%>
+            <button
+              :if={in_flight?(@run, @queue)}
+              id={"stop-#{@run.id}"}
+              phx-click="stop"
+              phx-value-id={@run.id}
+              class="btn btn-ghost btn-xs text-warning"
+              title="Stop it at its next step"
+            >
+              Stop
+            </button>
+            <button
+              :if={running_now?(@run, @queue)}
+              id={"end-#{@run.id}"}
+              phx-click="end_now"
+              phx-value-id={@run.id}
+              class="btn btn-ghost btn-xs text-error"
+              title="End it now"
+            >
+              End now
+            </button>
+            <button
+              :if={not in_flight?(@run, @queue)}
+              id={"delete-#{@run.id}"}
+              phx-click="ask_delete"
+              phx-value-id={@run.id}
+              class="btn btn-ghost btn-xs text-error"
+            >
+              Delete
+            </button>
+          </div>
         </div>
         <p class="text-xs text-base-content/60">
           started {when_ran(@run)} · {@run.steps} steps · {duration(@run.duration_us)}
@@ -507,7 +599,18 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           phx-update="stream"
           class="max-h-[28rem] overflow-auto rounded-box border border-base-300 bg-base-100 p-2 font-mono text-[11px] leading-5"
         >
-          <li id="run-log-empty" class="hidden only:block text-base-content/50">no steps recorded</li>
+          <%!-- What the reader is waiting for is said where the waiting
+          happens: a queued or stepping run's steps arrive here, one line per
+          step, and the page keeps itself up to date while it is open. --%>
+          <li id="run-log-empty" class="hidden only:block text-base-content/50">
+            <%= if in_flight?(@run, @queue) do %>
+              <span id="run-waiting">
+                Waiting for the first step — the steps appear here as the run goes.
+              </span>
+            <% else %>
+              no steps recorded
+            <% end %>
+          </li>
           <li :for={{dom_id, entry} <- @streams.log} id={dom_id}>{log_line(entry)}</li>
         </ul>
       </section>
@@ -515,8 +618,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       <section :if={@run} class="space-y-1">
         <h2 class="text-sm font-medium">Artefacts</h2>
         <p :if={@files == []} id="run-files-empty" class="text-xs text-base-content/60">
-          This run wrote no files. Its log says which classes its config asked for and
-          which of them this port does not have.
+          <%= if in_flight?(@run, @queue) do %>
+            The files appear here when the run finishes: summary, statistics and the
+            sensors' pictures.
+          <% else %>
+            This run wrote no files. Its log says which classes its config asked for and
+            which of them this port does not have.
+          <% end %>
         </p>
         <ul
           :if={@files != []}
@@ -588,13 +696,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   def handle_event("stop", %{"id" => run_id}, socket) do
     with %{id: job_id} <- socket.assigns.queue[run_id],
          {:ok, ended} <- Jobs.cancel(job_id) do
-      {:noreply, socket |> put_flash(:info, stopped_message(ended)) |> refresh_runs()}
+      {:noreply, socket |> put_flash(:info, stopped_message(ended)) |> after_queue_change()}
     else
       _nothing_to_stop ->
         {:noreply,
          socket
          |> put_flash(:error, "That run had already finished — nothing was stopped.")
-         |> refresh_runs()}
+         |> after_queue_change()}
     end
   end
 
@@ -602,13 +710,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     with %{id: job_id} <- socket.assigns.queue[run_id],
          {:ok, _settled} <- Jobs.halt(job_id) do
       {:noreply,
-       socket |> put_flash(:info, "Ended: the run stopped where it was.") |> refresh_runs()}
+       socket |> put_flash(:info, "Ended: the run stopped where it was.") |> after_queue_change()}
     else
       _not_running ->
         {:noreply,
          socket
          |> put_flash(:error, "That run is not running — there is nothing to end.")
-         |> refresh_runs()}
+         |> after_queue_change()}
     end
   end
 
@@ -665,6 +773,16 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   def handle_info(:replay_tick, socket), do: {:noreply, socket}
+
+  # The run said something: a step, the end of it, or a failure. Reading the
+  # record again is what keeps one source of truth — the worker writes it, the
+  # page shows it.
+  def handle_info({event, _payload}, %{assigns: %{live_action: :show, run: run}} = socket)
+      when event in [:started, :step, :finished, :failed] and not is_nil(run) do
+    {:noreply, refresh_run(socket, run.id)}
+  end
+
+  def handle_info(_late_message, socket), do: {:noreply, socket}
 
   defp replay_to(socket, run, step) do
     step = step |> max(Replay.first_step(run) || 0) |> min(Replay.last_step(run) || 0)
@@ -859,10 +977,25 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   defp run_state(run, _not_yet_started), do: run.status
 
+  # In flight means both halves agree: the record says `running` *and* a job
+  # still owns it. Either alone puts Stop in front of a run that is over.
+  defp in_flight?(%{status: "running"} = run, queue), do: unfinished?(queue[run.id])
+  defp in_flight?(_run, _queue), do: false
+
+  defp running_now?(%{status: "running"} = run, queue), do: going?(queue[run.id])
+  defp running_now?(_run, _queue), do: false
+
   defp unfinished?(nil), do: false
   defp unfinished?(%{state: state}), do: state in ~w(executing available scheduled retryable)
   defp going?(%{state: "executing"}), do: true
   defp going?(_not_running), do: false
+
+  # The stop and end buttons exist on both pages, so the answer to "what
+  # changed" is the page that is open, not the list.
+  defp after_queue_change(%{assigns: %{live_action: :show, run: run}} = socket),
+    do: refresh_run(socket, run.id)
+
+  defp after_queue_change(socket), do: refresh_runs(socket)
 
   defp refresh_runs(socket) do
     runs = RunHistory.list()

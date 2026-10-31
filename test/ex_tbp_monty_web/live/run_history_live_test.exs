@@ -270,6 +270,74 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     end
   end
 
+  # A reader who lands on a queued run has three questions: how far along is
+  # it, where do I watch it, and how do I stop it — and the page answers all
+  # three, with Stop and Delete kept apart.
+  describe "a run that is still going" do
+    setup do
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 3,
+          config: %{}
+        })
+
+      {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(run)
+
+      {:ok, running: run}
+    end
+
+    test "says how far along it is, and that the steps land in the log", %{
+      conn: conn,
+      running: run
+    } do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#run-progress") |> render() =~ "step 0 / 3"
+      assert view |> element("#run-waiting") |> render() =~ "appear here as the run goes"
+    end
+
+    test "links to the experiment page, which is where it can be watched", %{
+      conn: conn,
+      running: run
+    } do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#open-experiment") |> render() =~
+               ~s(href="#{~p"/experiments/#{run.experiment}"}")
+
+      assert view |> element("#open-experiment") |> render() =~ "Watch it run"
+    end
+
+    test "offers Stop, not Delete, while it is in flight", %{conn: conn, running: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert has_element?(view, "#stop-#{run.id}")
+      refute has_element?(view, "#delete-#{run.id}")
+    end
+
+    test "follows the worker: when it finishes, the page says so and Delete appears", %{
+      conn: conn,
+      running: run
+    } do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      {:ok, _closed} = RunHistory.finish(run, %{"steps" => 3})
+
+      Phoenix.PubSub.broadcast(
+        ExTbpMonty.PubSub,
+        Monty.Studio.Jobs.Run.topic(run.id),
+        {:finished, %{}}
+      )
+
+      assert render(view) =~ "finished"
+      assert has_element?(view, "#delete-#{run.id}")
+      refute has_element?(view, "#stop-#{run.id}")
+      refute has_element?(view, "#run-waiting")
+    end
+  end
+
   describe "one run" do
     test "keeps its config snapshot, its inputs and its log", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
@@ -278,6 +346,29 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert render(view) =~ "monty/learning_module"
       assert has_element?(view, "#log-0")
       assert has_element?(view, "#log-1")
+    end
+
+    # The tooltip is drawn by a hook, but the words and numbers in it come from
+    # the server — so the fixture is the page: one sample per step, each with
+    # the object it belongs to, the step, and what that step was worth.
+    test "the chart carries a labelled sample for what the pointer would show", %{
+      conn: conn,
+      run: run
+    } do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      samples =
+        view
+        |> element("#replay-chart-hover")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.attribute("data-samples")
+
+      decoded = Jason.decode!(hd(samples))
+
+      assert decoded != []
+      assert Enum.all?(decoded, &(&1["label"] =~ "step "))
+      assert Enum.at(decoded, 0)["label"] =~ "·"
     end
 
     test "says which episode it is", %{conn: conn} do

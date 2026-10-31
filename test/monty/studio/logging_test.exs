@@ -103,6 +103,15 @@ defmodule Monty.Studio.LoggingTest do
            ]
   end
 
+  # The container disables wandb, so a run there has nothing to lose to the
+  # handlers this port lacks — and three lines saying so on every run is noise a
+  # reader cannot act on.
+  test "says nothing about wandb handlers when wandb is disabled" do
+    Tmp.system_env("WANDB_MODE", "disabled")
+
+    assert %{notes: []} = plan(@csv_and_wandb)
+  end
+
   test "a config that asks for silent logging gets a logger with no handlers" do
     assert %{logger: %Monty.Frameworks.Loggers.ExpLogger.BaseMontyLogger{handlers: []}, notes: []} =
              plan(@silent)

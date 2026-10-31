@@ -492,7 +492,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
                 "pointer-events-none absolute top-0.5 z-10 whitespace-nowrap rounded bg-base-content px-1 py-0.5 font-mono text-[10px] leading-none text-base-100"
               this.label.hidden = true
 
-              this.el.append(this.marker, this.label)
+              this.attach()
 
               this.el.addEventListener("pointermove", event => this.hover(event))
               this.el.addEventListener("pointerleave", () => this.hide())
@@ -504,8 +504,17 @@ defmodule ExTbpMontyWeb.StudioComponents do
               this.read()
             },
 
+            // LiveView re-renders this box whenever the step changes, and a
+            // re-render replaces its children — including the two nodes this
+            // hook appended. Without putting them back, hover writes into
+            // nodes nobody can see: it works until the first update.
             updated() {
               this.read()
+              this.attach()
+            },
+
+            attach() {
+              if (!this.el.contains(this.marker)) this.el.append(this.marker, this.label)
             },
 
             read() {

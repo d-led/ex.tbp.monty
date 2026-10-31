@@ -45,10 +45,15 @@ defmodule Monty.Studio.Logging do
     case logger_module(logging.logger) do
       {:ok, module} ->
         {handlers, notes} = handlers(logging.handlers)
-        %{logger: module.new(handlers), notes: notes, detailed?: wants_detail?(handlers)}
+
+        %{
+          logger: module.new(handlers),
+          notes: worth_saying(notes),
+          detailed?: wants_detail?(handlers)
+        }
 
       {:error, note} ->
-        %{logger: nil, notes: [note], detailed?: false}
+        %{logger: nil, notes: worth_saying([note]), detailed?: false}
     end
   end
 
@@ -147,6 +152,17 @@ defmodule Monty.Studio.Logging do
 
     {Enum.reverse(built), notes}
   end
+
+  # A note is for a reader who can act on it. That wandb handlers are not ported
+  # is worth saying to a run that would otherwise report to wandb; with
+  # `WANDB_MODE=disabled` — what the container sets — nothing was going to leave
+  # the process, so naming the classes would be three lines about nothing.
+  defp worth_saying(notes),
+    do: if(wandb_off?(), do: Enum.reject(notes, &wandb_note?/1), else: notes)
+
+  defp wandb_off?, do: System.get_env("WANDB_MODE") == "disabled"
+
+  defp wandb_note?(note), do: note |> String.downcase() |> String.contains?("wandb")
 
   # A handler is built from the keywords its config gives it, and those keywords
   # can name classes themselves — a `WandbWrapper` is given its `wandb_handlers`
