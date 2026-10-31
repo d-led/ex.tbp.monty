@@ -10,16 +10,7 @@ defmodule ExTbpMontyWeb.McpLive do
 
   use ExTbpMontyWeb, :live_view
 
-  @tool_families [
-    {"Documentation", "monty_search_docs · monty_read_doc · monty_docs_index"},
-    {"Roadmap", "monty_roadmap · monty_roadmap_task"},
-    {"The port", "monty_lookup_module · monty_port_status · monty_code_in_doc"},
-    {"Experiments",
-     "monty_list_experiments · monty_describe_experiment · monty_experiment_options · " <>
-       "monty_read_option · monty_preview_experiment · monty_create_experiment · " <>
-       "monty_export_experiment · monty_import_experiment · monty_run_experiment"},
-    {"Runs", "monty_list_runs · monty_run_report · monty_delete_runs"}
-  ]
+  alias ExTbpMonty.Mcp.Tools
 
   @impl true
   def mount(_params, _session, socket) do
@@ -30,18 +21,13 @@ defmodule ExTbpMontyWeb.McpLive do
        endpoint: endpoint,
        server_name: "monty-studio",
        config: config_text("monty-studio", endpoint),
-       tool_families: @tool_families,
-       tool_count: tool_count()
+       # The page is a view of `tools/list`: the names, the titles and which of
+       # them write all come from the definitions a client is served, so this
+       # section cannot claim a tool that does not exist.
+       tool_families: Tools.families(),
+       tool_count: Tools.count(),
+       writers: Tools.writers()
      )}
-  end
-
-  # Counted from the list above rather than written down beside it: a tool added
-  # to the server should not need this page edited, and a number in prose is
-  # wrong by the next commit.
-  defp tool_count do
-    @tool_families
-    |> Enum.map(fn {_family, tools} -> length(String.split(tools, "·")) end)
-    |> Enum.sum()
   end
 
   @impl true
@@ -107,21 +93,29 @@ defmodule ExTbpMontyWeb.McpLive do
       <section id="mcp-tools" class="space-y-2">
         <h2 class="text-lg font-semibold tracking-tight">What it answers</h2>
         <p class="max-w-3xl text-sm text-base-content/70">
-          {@tool_count} tools, and the answers come from the same places the pages do: Monty's
-          documentation and future-work files, the checked-in module map, the composed config
-          tree, and the run records. A documentation answer carries the page's path and its
-          published address, so a claim can be checked rather than believed.
+          {@tool_count} tools, listed below exactly as a client is offered them: {"#{length(@writers)} of them change something — a draft, an imported file, a queued run, a deleted run — and say so in their annotations."} The answers come from the same places the pages do: Monty's documentation and
+          future-work files, the checked-in module map, the composed config tree, and the run
+          records. A documentation answer carries the page's path and its published address,
+          so a claim can be checked rather than believed.
         </p>
-        <dl class="grid gap-2 sm:grid-cols-2">
+        <div class="grid gap-2 sm:grid-cols-2">
           <div
             :for={{family, tools} <- @tool_families}
             id={"mcp-tools-#{String.downcase(family) |> String.replace(" ", "-")}"}
             class="rounded-box border border-base-300 bg-base-100 p-3"
           >
-            <dt class="text-sm font-medium">{family}</dt>
-            <dd class="mt-1 font-mono text-xs leading-relaxed text-base-content/60">{tools}</dd>
+            <p class="text-sm font-medium">{family}</p>
+            <ul class="mt-1 space-y-0.5">
+              <li :for={tool <- tools} class="font-mono text-xs leading-relaxed">
+                <span class="text-base-content/80">{tool["name"]}</span>
+                <span class="text-base-content/50"> — {tool["title"]}</span>
+                <span :if={not tool["annotations"]["readOnlyHint"]} class="badge badge-ghost badge-xs">
+                  {if tool["annotations"]["destructiveHint"], do: "deletes", else: "writes"}
+                </span>
+              </li>
+            </ul>
           </div>
-        </dl>
+        </div>
         <p class="text-sm text-base-content/70">
           The full contract — where each answer is read from, and what it refuses to guess —
           is in <a

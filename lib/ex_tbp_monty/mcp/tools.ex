@@ -498,6 +498,51 @@ defmodule ExTbpMonty.Mcp.Tools do
     "monty_delete_runs" => {Experiments, :delete_runs}
   }
 
+  # How a reader asks for them, which is not how the protocol needs them ordered.
+  # A test holds this to `@tools` in both directions, so a tool that is added and
+  # not put in a family (or a family that names a tool that no longer exists) is
+  # a failing test rather than a page that quietly lists the wrong thing.
+  @families [
+    {"Documentation", ~w(monty_search_docs monty_read_doc monty_docs_index)},
+    {"Roadmap", ~w(monty_roadmap monty_roadmap_task)},
+    {"The port", ~w(monty_lookup_module monty_port_status monty_code_in_doc)},
+    {"Experiments", ~w(monty_list_experiments monty_describe_experiment monty_experiment_options
+        monty_read_option monty_preview_experiment monty_create_experiment
+        monty_export_experiment monty_import_experiment monty_run_experiment)},
+    {"Runs", ~w(monty_list_runs monty_run_report monty_delete_runs)}
+  ]
+
+  # A family that names a tool nobody defined is a compile error, not a page
+  # with a hole in it.
+  for {_label, names} <- @families, name <- names do
+    unless Enum.any?(@tools, &(&1["name"] == name)) do
+      raise "the family list names #{inspect(name)}, which is not a tool"
+    end
+  end
+
+  @doc """
+  The tools, grouped the way a reader asks for them, as their own definitions.
+
+  Each entry is `{label, [definition]}`, and a definition is the map the protocol
+  serves — name, title, description, `inputSchema` and annotations — so a page
+  that renders this shows what a client is actually offered, not a retelling.
+  """
+  @spec families() :: [{String.t(), [map()]}]
+  def families do
+    by_name = Map.new(@tools, &{&1["name"], &1})
+
+    for {label, names} <- @families,
+        do: {label, Enum.map(names, &Map.fetch!(by_name, &1))}
+  end
+
+  @doc "How many tools there are, for the pages that say so."
+  @spec count() :: non_neg_integer()
+  def count, do: length(@tools)
+
+  @doc "The tools that change something, so a page need not claim it by hand."
+  @spec writers() :: [map()]
+  def writers, do: Enum.reject(@tools, &(&1["annotations"]["readOnlyHint"] == true))
+
   @doc "The `tools/list` result."
   @spec definitions() :: [map()]
   def definitions, do: @tools

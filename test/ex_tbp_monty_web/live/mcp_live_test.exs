@@ -35,12 +35,31 @@ defmodule ExTbpMontyWeb.McpLiveTest do
       assert has_element?(view, "#copy-mcp-config[phx-hook]")
     end
 
-    test "says which tools it answers, and where the contract is", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/mcp/config")
+    test "lists every tool a client is offered, with what it does", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/mcp/config")
 
+      # The section is rendered from `tools/list`, so the page cannot list a tool
+      # that does not exist, or miss one that does.
+      for name <- ExTbpMonty.Mcp.Tools.names() do
+        assert html =~ name, "the page does not list #{name}"
+      end
+
+      assert html =~ "#{ExTbpMonty.Mcp.Tools.count()} tools"
       assert has_element?(view, "#mcp-tools-documentation")
-      assert render(view) =~ "monty_search_docs"
       assert has_element?(view, "#mcp-tools-experiments")
+      assert has_element?(view, "#mcp-tools-runs")
+    end
+
+    test "says which of them change something", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/mcp/config")
+
+      writers = length(ExTbpMonty.Mcp.Tools.writers())
+      assert html =~ "#{writers} of them change something"
+
+      # The one that deletes says so, in the list, from its own annotation.
+      runs = view |> element("#mcp-tools-runs") |> render()
+      assert runs =~ "monty_delete_runs"
+      assert runs =~ "deletes"
     end
   end
 end
