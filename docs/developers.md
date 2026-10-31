@@ -340,6 +340,14 @@ that same total to the CRAP ranking (`mix cover.merge` writes the one file
 `mix crap` reads). The parity oracles run there too, once, because a total of
 four quarters is not one of the quarters.
 
+Each partition also publishes what it ran: when `CI` is set, `test/test_helper.exs`
+adds `JUnitFormatter` and `mix test` writes `junit/junit-<partition>.xml`, which
+`dorny/test-reporter` turns into a **check run** named `test <n>/4` — the failing
+tests named, their lines annotated, and a count of what the quarter ran. The raw
+XML is kept as an artifact beside the coverage export, so a check and its file can
+be compared when they disagree. Nothing is written when `CI` is unset, because a
+local run leaves no file for anybody to read.
+
 The same three steps run at home:
 
 ```bash

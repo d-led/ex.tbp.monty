@@ -109,6 +109,12 @@ jobs:
     runs-on: ubuntu-24.04
     # A quarter of the suite, plus the compile and the setup.
     timeout-minutes: 20
+    # The results are published as a check run, which is a write to the commit
+    # this run is about. A fork's pull request does not run this job at all (see
+    # the `if` above), so this is a same-repository token either way.
+    permissions:
+      contents: read
+      checks: write
     # One broken quarter still reports the other three: which quarter is the
     # question, and cancelling them is not an answer to it.
     strategy:
@@ -157,7 +163,36 @@ jobs:
 
       # This partition's share of the files, and the coverage it collected on
       # the way: `--partitions` exports it to cover/<partition>.coverdata.
+      # `CI` also makes the suite write the JUnit report the next step reads.
       - run: mix test --partitions 4 --cover
+
+      # The results, where a reviewer looks for them: one check per partition,
+      # each failing test named and its line linked, and a summary of the
+      # quarter's counts. `if: always()` because a failed partition is the one
+      # whose results somebody needs.
+      - name: Publish this partition's results
+        if: always()
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
+        with:
+          name: test ${{ matrix.partition }}/4
+          path: junit/junit-${{ matrix.partition }}.xml
+          reporter: java-junit
+          # The step above already failed the job; a check that fails it again
+          # says the same thing twice and hides which test broke.
+          fail-on-error: "false"
+          # A check run rather than a job summary: it is the same shape as the
+          # other checks, and it annotates the failing lines.
+          use-actions-summary: "false"
+
+      # The raw report, for when a check and its XML disagree.
+      - name: Keep this partition's report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: junit-partial-${{ matrix.partition }}
+          path: junit/junit-${{ matrix.partition }}.xml
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Keep this partition's coverage
         if: always()

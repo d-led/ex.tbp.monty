@@ -127,6 +127,9 @@ defmodule ExTbpMonty.MixProject do
       {:ex_crap, "~> 0.1.1", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:stream_data, "~> 1.1", only: [:dev, :test]},
+      # What the Checks tab reads: the suite can write its results as JUnit XML,
+      # which is the only shape GitHub's test reporters understand.
+      {:junit_formatter, "~> 3.4", only: :test},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false}
     ]
   end

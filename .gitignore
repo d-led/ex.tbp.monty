@@ -254,3 +254,6 @@ wandb/
 # Whatever a run downloads or generates into Monty's own paths.
 /data/
 MUJOCO_LOG.TXT
+
+# JUnit reports written when `CI` is set, for the Checks tab to read.
+/junit/

@@ -140,7 +140,9 @@ what CI runs.
   [`.trivyignore.yaml`](../.trivyignore.yaml).
   ([`Dockerfile`](../Dockerfile))
 - CI: `lint` → `test` ×4 partitions (Postgres 17 service) → `report` (merged coverage
-  ≥ 85, CRAP ranking, both parity oracles) → `types` → `image`. Prose-only pushes are
+  ≥ 85, CRAP ranking, both parity oracles) → `types` → `image`. Each partition
+  publishes its results as a check run (`test n/4`, failing tests annotated) from
+  the JUnit report the suite writes when `CI` is set. Prose-only pushes are
   skipped. Elixir 1.20.4 / OTP 29.1.2.
   ([`ci.yml`](../.github/workflows/ci.yml))
 - Stack: Phoenix 1.8, LiveView 1.2, Ecto/Postgres, Oban 2.20, Bandit, Req, Tailwind 4
