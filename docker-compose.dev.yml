@@ -1,0 +1,36 @@
+# Development services only: Postgres for the app and Adminer to look inside it.
+# `scripts/init-dev.sh` starts it; the application itself runs on the host with
+# `mix phx.server` and needs none of this — see docs/developers.md.
+#
+# Images are pinned rather than floating: Postgres 17 is the version CI runs and
+# the one the suite was written against, so bump it in .github/workflows/ci.yml
+# and here together.
+#
+# The root docker-compose.yml is the other direction: the published image and a
+# Postgres of its own, in one `docker compose up`.
+
+services:
+  postgres:
+    image: postgres:17
+    ports:
+      - 6432:5432
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - data-postgres:/var/lib/postgresql/data
+
+  # http://localhost:8092/?pgsql=postgres&username=postgres&db=postgres&ns=public
+  # Multi-arch: no `platform:` override, so an Apple Silicon laptop runs it
+  # natively instead of emulating amd64.
+  adminer:
+    image: adminer:6.1.2
+    links:
+      - postgres
+    ports:
+      - 9092:8080
+
+volumes:
+  data-postgres:

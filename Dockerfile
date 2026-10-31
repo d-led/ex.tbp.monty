@@ -159,6 +159,16 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 COPY --from=builder --chown=10001:10001 /app/_build/prod/rel/ex_tbp_monty ./
 
+# The prerequisites travel with the image, at the place the running release
+# looks for them. `HOME=/app/priv` (below) is what makes the two meet: Monty's
+# own defaults — `~/tbp/data`, `~/tbp/results/monty/pretrained_models`,
+# `~/tbp/results/monty/projects` — resolve inside this directory, and a relative
+# `priv/…` lands here through the `bin/priv` symlink. What is copied is the
+# builder's `priv`: the Monty config tree and its snapshots, the pretrained
+# libraries in `priv/monty/libraries`, the generated assets, and the
+# prerequisite manifest `/prerequisites` reads.
+COPY --from=builder --chown=10001:10001 /app/priv /app/priv
+
 # Everything a non-root container has to be able to write, in one directory:
 #
 #   * the studio's drafts and a run's files, which it resolves as `priv/...`
@@ -174,7 +184,9 @@ COPY --from=builder --chown=10001:10001 /app/_build/prod/rel/ex_tbp_monty ./
 #     directory, which is outside the volume.
 #
 # Mount a volume here (a Fly volume, a Kubernetes PVC) to keep all of it across
-# restarts. `-e HOME=...` and `-e WANDB_DIR=...` at run time still win.
+# restarts. `-e HOME=...` and `-e WANDB_DIR=...` at run time still win. A volume
+# mounted here also hides the prerequisites this image carries — put a tree with
+# them on it, or download them again at /prerequisites.
 RUN mkdir -p /app/priv/wandb \
   && ln -s /app/priv /app/bin/priv \
   && chown -R 10001:10001 /app/priv

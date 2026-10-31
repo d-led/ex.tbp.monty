@@ -45,9 +45,8 @@ scripts/image.sh stop               # stop it and remove its volume
 ```
 
 A single architecture is loaded into the local daemon; `--arch all` (and
-`publish`) builds amd64 and arm64 into one index and pushes it, which is what a
-release tag publishes. `--arch amd64|arm64` cross-builds one platform the same
-way.
+`publish`) builds amd64 and arm64 into one index and pushes it, which is what
+CI publishes. `--arch amd64|arm64` cross-builds one platform the same way.
 
 ## Tags
 
@@ -55,12 +54,14 @@ way.
 | --- | --- |
 | a push to `main` | `:main` and `:latest` |
 | a push to any other branch | `:<branch>` — `feature/x` becomes `:feature-x` |
-| a tag `v1.2.3` | `:v1.2.3`, amd64 **and** arm64 |
+| a tag `v1.2.3` | `:v1.2.3` |
 
-A branch publishes amd64 only; the arm64 half is compiled under QEMU and is the
-expensive part, so a release tag (or `gh workflow run ci --field image=true`)
-pays for it. There are no commit-hash tags: the image carries its commit
-instead, in `priv/build_info.json`, and the footer of every page shows it.
+Every published tag carries amd64 **and** arm64. The arm64 half is compiled
+under QEMU and is the expensive part, and it is not optional either: the amd64
+release does not boot under emulation on Apple Silicon (`{failed_to_start_child,
+user,nouser}` from the kernel), so an amd64-only tag is an image an arm64 laptop
+cannot run. There are no commit-hash tags: the image carries its commit instead,
+in `priv/build_info.json`, and the footer of every page shows it.
 
 ## What it reports about itself
 
@@ -151,14 +152,17 @@ setup page says so.
 Not used by the image: `MONTY_SOURCE` and `TELEOP_SOURCE` (only the tasks that
 regenerate from upstream read a checkout), `PYTHON` (one Mix task),
 `MIX_TEST_PARTITION` and `COVERAGE_THRESHOLD` (CI). The configs and snapshots the
-studio reads are **inside** the image, under `/app/lib/ex_tbp_monty-*/priv/monty`;
-they need no checkout and take no volume.
+studio reads are **inside** the image — `/app/lib/ex_tbp_monty-*/priv/monty` for
+the release's own copy and `/app/priv/monty` for the one `HOME` and the `bin/priv`
+symlink point at; they need no checkout and take no volume.
 
 ## Data and models: the prerequisites
 
-The image carries the software, not the data. Monty's datasets and pretrained
-models are large, they change on their own schedule, and a pull that shipped
-them would be a pull nobody wants. `/prerequisites` lists what an experiment
+The image carries the software and Monty's own config tree, pretrained
+libraries included (`/app/priv/monty/libraries`, ready for a run to read). The
+datasets and the larger model bundles are not in it: they are big, they change
+on their own schedule, and a pull that shipped them would be a pull nobody
+wants. `/prerequisites` lists what an experiment
 needs, the path each file goes to, and which of them are already there.
 
 Three ways to have them:

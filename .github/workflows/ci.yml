@@ -174,12 +174,14 @@ jobs:
         if: always()
         uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
-          name: test ${{ matrix.partition }}/4
+          # Not `test n/4`: that is the job's own check, and two checks with one
+          # name is a reviewer guessing which is which.
+          name: test results ${{ matrix.partition }}/4
           path: junit/junit-${{ matrix.partition }}.xml
           reporter: java-junit
-          # The step above already failed the job; a check that fails it again
-          # says the same thing twice and hides which test broke.
-          fail-on-error: "false"
+          # The check's colour follows what it says. A green check titled "3
+          # failed" would be the one thing a reviewer trusts and should not.
+          fail-on-error: "true"
           # A check run rather than a job summary: it is the same shape as the
           # other checks, and it annotates the failing lines.
           use-actions-summary: "false"
@@ -310,7 +312,7 @@ jobs:
     needs: [lint, test, types, report]
     runs-on: ubuntu-24.04
     # The arm64 half is built under QEMU, which is the slow part.
-    timeout-minutes: 45
+    timeout-minutes: 60
     if: github.event_name == 'push' || inputs.image
     permissions:
       contents: read
@@ -352,15 +354,12 @@ jobs:
             echo "TAGS"
           } >> "$GITHUB_OUTPUT"
 
-          # The index is what an arm64 machine pulls natively, and building its
-          # half means compiling the release under QEMU — most of the job. A
-          # branch says nothing about wanting that, so it publishes the amd64
-          # image the checks built; a release tag or a dispatch asks for both.
-          if [ "${{ inputs.image || startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
-            echo "platforms=linux/amd64,linux/arm64" >> "$GITHUB_OUTPUT"
-          else
-            echo "platforms=linux/amd64" >> "$GITHUB_OUTPUT"
-          fi
+          # Both architectures, every time. The index is what an arm64 machine
+          # pulls natively, and it is not optional there: the amd64 release does
+          # not boot under emulation on Apple Silicon (`{failed_to_start_child,
+          # user,nouser}` from the kernel), so an amd64-only tag is an image an
+          # arm64 laptop cannot run at all.
+          echo "platforms=linux/amd64,linux/arm64" >> "$GITHUB_OUTPUT"
 
       # Built for the runner's own architecture so Trivy and the uid check read
       # a real image rather than a manifest list — and so those two checks stay

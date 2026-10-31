@@ -22,11 +22,15 @@
 /priv/static/cache_manifest.json
 *.ez
 
-# Local runtime state — these are somebody's mirror, not source.
+# Local runtime state — these are somebody's mirror, not source. The PLTs and
+# the recorded runs live under priv/, which the release would otherwise carry
+# into the image.
 /var/
 /tmp/
 /cover/
 /doc/
+/priv/plts/
+/priv/studio_runs/
 erl_crash.dump
 *.log
 

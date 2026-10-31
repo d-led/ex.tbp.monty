@@ -74,8 +74,9 @@ defmodule ExTbpMontyWeb.Tour do
       popover: %{
         title: "Data and models",
         description:
-          "The training data and model bundles are not in the container. That page " <>
-            "downloads them into the running instance, or explains mounting your own."
+          "Monty's config tree and the pretrained libraries it ships are in the " <>
+            "container. The larger training and model bundles on that page are not — " <>
+            "it downloads them into the running instance."
       }
     },
     %{

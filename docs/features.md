@@ -148,7 +148,9 @@ what CI runs.
 - Stack: Phoenix 1.8, LiveView 1.2, Ecto/Postgres, Oban 2.20, Bandit, Req, Tailwind 4
   + daisyUI 5 + heroicons, `yaml_elixir` for Hydra YAML, `pythonx` for Python.
   ([`mix.exs`](../mix.exs))
-- `docker compose up -d` gives Postgres 17 and adminer. ([compose](../docker-compose.yml))
+- `docker compose -f docker-compose.dev.yml up -d` gives development Postgres 17
+  and adminer; the root `docker-compose.yml` is the image itself.
+  ([dev compose](../docker-compose.dev.yml))
 - 1,826 `test` declarations in the suite.
 
 ## Not built — do not assume these

@@ -21,28 +21,13 @@ without leaving the conversation.
 ## Quickstart
 
 ```bash
-scripts/quickstart.sh
+docker compose up
 ```
 
-That pulls the published image, starts a Postgres and the application in
-containers of their own, and opens
-
-```
-http://localhost:4001
-```
-
-Docker is all it needs. `scripts/quickstart.sh --stop` stops it and keeps the
-database and the app's files; `--purge` deletes them as well.
-
-The page you land on lists every experiment Monty ships. Open one, press run,
-and the run streams as it steps: the step log, the evidence each learning module
-built, and the votes. A finished run stays in the history, where it can be
-replayed step by step — what the sensor saw, the hypotheses counted, and why it
-stopped.
-
-Nothing large is in the image. Data and pretrained models are downloaded at
-`/prerequisites`, into the same paths Monty uses, and a run says what it is
-missing.
+Then <http://localhost:4001>: every experiment Monty ships, and a run you can
+start from any of them. The published image and a Postgres, the migration runs
+itself, the prerequisites are in the image, and nothing is mounted.
+`docker compose down` takes it all away again.
 
 ## An MCP server
 
@@ -53,17 +38,17 @@ JSON-RPC message in and one answer out, and the answers are read from the
 sources: Monty's `docs/` in a checkout, the module map, `Monty.Studio` and the
 run table.
 
-`http://localhost:4001/mcp` is the quickstart's port, and VS Code is already
-pointed at it in [`.vscode/mcp.json`](.vscode/mcp.json). [docs/mcp.md](docs/mcp.md) lists the tools
-and a first request.
+`http://localhost:4001/mcp` is the port the compose file publishes, and VS Code
+is already pointed at it in [`.vscode/mcp.json`](.vscode/mcp.json).
+[docs/mcp.md](docs/mcp.md) lists the tools and a first request.
 
 ## From source
 
 Needs Elixir 1.20 with the OTP it runs on, node/npm for the assets, and Docker
-for Postgres:
+for a Postgres on 6432:
 
 ```bash
-scripts/init-dev.sh    # Postgres in Docker, dependencies, database, assets
+scripts/init-dev.sh    # docker-compose.dev.yml, dependencies, database, assets
 scripts/run-dev.sh     # http://localhost:4000
 ```
 

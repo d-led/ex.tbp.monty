@@ -1,35 +1,48 @@
-# Local development services only: Postgres for the app, Adminer to look inside
-# it, smtp4dev as the mail sink. The application itself is deployed as a
-# release and needs none of this — see docs/deployment.md.
+# The published image and a Postgres of its own:
 #
-# Images are pinned rather than floating: Postgres 17 is the version CI runs and
-# the one the suite was written against, so bump it in .github/workflows/ci.yml
-# and here together. The other two are pinned to the release they were tried
-# with, and dabbling in a newer tag is then a deliberate act.
+#   docker compose up
+#
+# Then http://localhost:4001. `docker compose down` takes it all away again:
+# nothing is mounted and nothing is kept between runs.
+#
+# `TAG=v1.2.3 docker compose up` runs a release instead of `:latest`; the tags
+# are in docs/container.md, which also has every variable the image reads.
+
+name: ex-tbp-monty
 
 services:
-
-  postgres:
+  db:
     image: postgres:17
-    ports:
-      - 6432:5432
     environment:
-      - POSTGRES_DB=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_USER=postgres
-      - PGDATA=/var/lib/postgresql/data/pgdata
-    volumes:
-      - data-postgres:/var/lib/postgresql/data
+      POSTGRES_DB: monty
+      POSTGRES_USER: monty
+      POSTGRES_PASSWORD: monty
+    healthcheck:
+      test: pg_isready -U monty -d monty
+      interval: 2s
 
-  # http://localhost:8092/?pgsql=postgres&username=postgres&db=postgres&ns=public
-  # Multi-arch: no `platform:` override, so an Apple Silicon laptop runs it
-  # natively instead of emulating amd64.
-  adminer:
-    image: adminer:6.1.2
-    links:
-      - postgres
+  # Once per `up`: the migration a deploy runs, before the server starts, so the
+  # release never boots against a schema it does not know.
+  migrate:
+    image: &image ghcr.io/d-led/ex.tbp.monty:${TAG:-latest}
+    entrypoint: ["/app/bin/migrate"]
+    environment: &environment
+      DATABASE_URL: ecto://monty:monty@db:5432/monty
+      # Not a secret: this is a local look, and the same for everybody.
+      SECRET_KEY_BASE: local-look-only-2f8d1c6a9e4b7d0f3a6c9e2b5d8f1a4c7e0b3d6f9a2c5e8b1d4f7a0c3e6b9d2f5a8c1e4b7d0f3a6c9e2b5d8f1a4c7e0b3d6f9a2c5e8b
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    image: *image
     ports:
-      - 9092:8080
-
-volumes:
-  data-postgres:
+      - 4001:4000
+    environment:
+      <<: *environment
+      PHX_HOST: localhost
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully

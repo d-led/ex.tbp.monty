@@ -128,7 +128,8 @@ scripts/run-dev.sh     # http://localhost:4000
 [`scripts/init-dev.sh`](../scripts/init-dev.sh) needs Elixir 1.20 with the OTP it
 runs on, node/npm for the asset bundle, and Docker for the Postgres
 [`config/dev.exs`](../config/dev.exs) expects on port 6432; it runs
-`docker compose up -d` and `mix setup`, and is worth running again after a pull
+`docker compose -f docker-compose.dev.yml up -d` and `mix setup`, and is worth
+running again after a pull
 that moves a dependency or a migration. [`scripts/run-dev.sh`](../scripts/run-dev.sh)
 is `mix phx.server` with the code reloader — `PORT=4001 scripts/run-dev.sh` moves
 it, and `MONTY_WORLD=monty MONTY_PYTHON=… scripts/run-dev.sh` steps Monty's own

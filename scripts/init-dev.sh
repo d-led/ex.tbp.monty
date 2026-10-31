@@ -41,18 +41,18 @@ command -v npm >/dev/null 2>&1 ||
 command -v docker >/dev/null 2>&1 ||
   die "docker is not on PATH: install Docker Desktop (https://docs.docker.com/get-docker/) for the development Postgres and run this again"
 
-echo "starting Postgres (docker compose)" >&2
-docker compose up -d
+echo "starting Postgres (docker compose -f docker-compose.dev.yml)" >&2
+docker compose -f docker-compose.dev.yml up -d
 
 ready=0
 for _ in $(seq 1 60); do
-  if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+  if docker compose -f docker-compose.dev.yml exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
     ready=1
     break
   fi
   sleep 1
 done
-((ready)) || die "Postgres did not answer within 60 s; see: docker compose logs postgres"
+((ready)) || die "Postgres did not answer within 60 s; see: docker compose -f docker-compose.dev.yml logs postgres"
 
 mix setup
 
