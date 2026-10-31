@@ -135,7 +135,9 @@ defmodule ExTbpMonty.MixProject do
     [
       plt_core_path: "priv/plts",
       plt_local_path: "priv/plts",
-      plt_add_apps: [:mix, :ex_unit],
+      # `:cover` — which `mix cover.merge` calls — lives in `tools`, so a PLT
+      # without it reads those calls as functions that do not exist.
+      plt_add_apps: [:mix, :ex_unit, :tools],
       # The types job is about the application: Mix tasks are operator tooling
       # whose contract is the command line, and tests are exercised by running
       # them. Warnings there would drown the signal.

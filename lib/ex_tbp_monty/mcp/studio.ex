@@ -93,8 +93,8 @@ defmodule ExTbpMonty.Mcp.Studio do
 
   defp monty_equivalent, do: "Monty's run_parallel.py, one process per episode"
 
-  defp running_count(ids) when is_list(ids), do: length(ids)
-  defp running_count(_not_reported), do: nil
+  # `running` is the producer's list of executing job ids, not a count.
+  defp running_count(ids), do: length(ids)
 
   defp world do
     mode = Application.get_env(:ex_tbp_monty, :world_simulator, :synthetic)

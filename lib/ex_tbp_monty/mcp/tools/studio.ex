@@ -43,9 +43,7 @@ defmodule ExTbpMonty.Mcp.Tools.Studio do
     "Parallel: #{parallel.episodes_at_once} episode(s) at a time#{running(parallel)}."
   end
 
-  defp running(%{running_now: nil, paused?: false}), do: ""
-  defp running(%{running_now: nil, paused?: true}), do: " (queue paused)"
-  defp running(%{running_now: count, paused?: true}), do: " (#{count} running, queue paused)"
+  defp running(%{paused?: true, running_now: count}), do: " (#{count} running, queue paused)"
   defp running(%{running_now: count}), do: " (#{count} running now)"
 
   defp runs_line(counts) when counts == %{}, do: "no runs yet"
