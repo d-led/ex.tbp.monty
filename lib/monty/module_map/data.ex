@@ -1062,7 +1062,7 @@ defmodule Monty.ModuleMap.Data do
           python: "DetailedGraphMatchingLogger"
         },
         %{
-          status: :planned,
+          status: :implemented,
           elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers.SelectiveEvidenceLogger",
           python: "SelectiveEvidenceLogger"
         }
