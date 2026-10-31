@@ -52,8 +52,8 @@ not recalled — run it after anything lands that can move one.
 - **Monty's real world through a Python peer:**
   `Monty.Simulators.Habitat.Environment.HabitatEnvironment` is `implemented` in the
   map and runs [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py);
-  `MONTY_WORLD=monty|habitat|synthetic` picks the world at boot.
-  ([`runtime.exs`](../config/runtime.exs))
+  a run steps it unless it chooses this port's stand-in, and the choice is
+  recorded on the run.
 - **Port contract:** 4-byte big-endian length + UTF-8 JSON, one request in flight, a
   timeout is an error, actions in Monty's own JSON shape.
   ([`port/protocol.ex`](../lib/monty/simulators/port/protocol.ex))

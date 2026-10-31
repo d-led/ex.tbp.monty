@@ -169,9 +169,10 @@ logger ([`config/pythonx.exs`](../config/pythonx.exs),
 `Monty.Frameworks.Loggers.WandbHandlers.PythonxClient`).
 The other is *yours*: `MONTY_PYTHON` (or `python3` on the PATH if it is unset), an
 interpreter with Monty installed, which runs the world on the other side of the
-port. A run that chooses neither — no `world` on the run and no `MONTY_WORLD` —
-steps a third: the stand-in scene, which is Elixir, although a config that names
-a wandb logger reaches the embedded interpreter whatever the world is.
+port. A run that chooses nothing steps that world — MuJoCo or Habitat-Sim, named
+by the experiment's own config. The third is chosen deliberately: the stand-in
+scene, which is Elixir, although a config that names a wandb logger reaches the
+embedded interpreter whatever the world is.
 
 ```mermaid
 ---
@@ -181,7 +182,7 @@ config:
 flowchart TD
     studio["studio (Elixir)"] -->|"a wandb logger writes an episode<br/>pythonx, in-process"| embedded["embedded CPython 3.13<br/>uv-built at compile time<br/>dependency: wandb 0.19.1"]
     studio -->|"a run steps a world<br/>port, one JSON round trip per step"| monty["$MONTY_PYTHON<br/>tbp.monty + MuJoCo installed"]
-    studio -->|"MONTY_WORLD unset<br/>no process, no interpreter"| synthetic["synthetic scene (Elixir)<br/>one sphere, in the BEAM"]
+    studio -->|"no MONTY_PYTHON<br/>no process, no interpreter"| synthetic["synthetic scene (Elixir)<br/>one sphere, in the BEAM"]
 ```
 
 That the embedded interpreter is a real dependency rather than a decoration is
@@ -194,10 +195,9 @@ The peer is [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.
 is the handle a run holds — `new/1` starts nothing, because a run may never step
 — and the first step starts the peer as an OS process (`Port.open` with
 `{:packet, 4}`). It speaks length-prefixed JSON and knows nothing about Elixir
-except the framing. A run that chooses Monty's world — `world: "monty"` on
-`monty_run_experiment`, the run page's selector, or `MONTY_WORLD=monty` as the
-deployment's default — is what makes `Monty.Studio.Setup` build this world
-instead of the synthetic scene, and the choice is recorded on the run.
+except the framing. A run steps this world unless it chooses otherwise —
+`world: "synthetic"` on `monty_run_experiment`, or the run page's selector — and
+which world a run stepped is recorded on the run.
 
 ```mermaid
 ---
@@ -308,7 +308,7 @@ flowchart TD
     gen["mix monty.module_map.gen<br/>mix monty.module_map.verify"] -->|"walks both packages"| source["$MONTY_SOURCE<br/>(default ../monty-orig)"]
     census["mix monty.port_census"] -->|"classifies planned classes"| source
     inputs["mix monty.inputs"] -->|"refreshes from, never edits"| source
-    run["a run with MONTY_WORLD=monty"] -->|"imports at run time"| python["$MONTY_PYTHON's tbp.monty"]
+    run["a run in an external process"] -->|"imports at run time"| python["$MONTY_PYTHON's tbp.monty"]
 ```
 
 `MONTY_SOURCE` and `TELEOP_SOURCE` point at checkouts for the tasks that

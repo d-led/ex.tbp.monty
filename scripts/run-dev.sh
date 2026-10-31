@@ -9,11 +9,11 @@
 # scripts/init-dev.sh has to have run once: this starts the application, not the
 # database or the assets.
 #
-# A world of Monty's own is optional and off by default. Without it a run steps
-# the synthetic scene this port carries; with it a run steps Monty's simulator
-# in a Python of your own (config/runtime.exs):
+# A run steps the simulator of the experiment's own config, in a Python of your
+# own; the stand-in scene is what a run chooses instead. `MONTY_PYTHON` is the
+# interpreter with `tbp.monty` in it:
 #
-#   MONTY_WORLD=monty MONTY_PYTHON=../monty-orig/.venv/bin/python scripts/run-dev.sh
+#   MONTY_PYTHON=../monty-orig/.venv/bin/python scripts/run-dev.sh
 
 set -euo pipefail
 

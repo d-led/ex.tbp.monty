@@ -19,11 +19,11 @@ from the composed config rather than from this port: the `mujoco_*` environments
 name `MuJoCoSimulator` (nineteen of the shipped ones, `tutorial/first_experiment`
 and `base_config_10distinctobj_dist_agent` among them) and the `habitat_*` ones
 name `HabitatEnvironment`, Habitat-Sim. The page's world selector names the
-engine it finds there, so "Monty's own world" is never a guess. `Monty.Simulators.Habitat.Environment.HabitatEnvironment`
+engine it finds there, so "via Monty's Python" names the engine rather than a
+guess. `Monty.Simulators.Habitat.Environment.HabitatEnvironment`
 is the handle a run holds and the name in the module map, and a run that
-chooses Monty's world makes `Monty.Studio.Setup` build it — per run, from the
-page's world selector or `world` on `monty_run_experiment`. `MONTY_WORLD=monty`
-only makes that the default for a run that does not choose. Under test the
+does not choose otherwise makes `Monty.Studio.Setup` build it — per run, from
+the page's world selector or `world` on `monty_run_experiment`. Under test the
 peer is [`test/support/probe_world.py`](../test/support/probe_world.py) — a probe,
 not a world: it answers from what it was sent, which is exactly what a test of
 the framing wants — and
@@ -36,8 +36,8 @@ case in [`parallel-and-live.md`](parallel-and-live.md), not this one.
 
 ## The world the runtime develops against
 
-Without a world of Monty's — no choice on the run, and no `MONTY_WORLD` — runs
-are stepped against `Monty.Simulators.Synthetic.Environment`, which implements
+A run that chooses the stand-in steps against
+`Monty.Simulators.Synthetic.Environment`, which implements
 the same idea as a
 value (`Monty.Simulators.Environment`): `new/1`, `step/2`, `reset/1`, answering
 `{observations, proprioceptive_state, world}`. It moves the agent by the actions

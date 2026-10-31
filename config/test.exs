@@ -1,5 +1,11 @@
 import Config
 
+# A test that steps a world steps this port's stand-in unless it says otherwise:
+# the external process needs an interpreter with `tbp.monty` in it, which a test
+# machine is not required to have. The production default is the other way
+# round — see `Monty.Studio.Setup.configured_world/0`.
+config :ex_tbp_monty, world_simulator: :synthetic
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used

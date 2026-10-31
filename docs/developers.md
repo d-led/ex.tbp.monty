@@ -132,8 +132,21 @@ runs on, node/npm for the asset bundle, and Docker for the Postgres
 running again after a pull
 that moves a dependency or a migration. [`scripts/run-dev.sh`](../scripts/run-dev.sh)
 is `mix phx.server` with the code reloader — `PORT=4001 scripts/run-dev.sh` moves
-it, and `MONTY_WORLD=monty MONTY_PYTHON=… scripts/run-dev.sh` steps Monty's own
-simulator instead of the synthetic scene.
+it, and `MONTY_PYTHON=… scripts/run-dev.sh` says where Monty's Python is, which
+is what lets a run step an experiment's own engine instead of the stand-in.
+
+Habitat in development: habitat-sim exists only as a conda package for **Python
+3.9**, and MuJoCo needs 3.10 or newer, so the two live in different
+environments — one interpreter cannot hold both:
+
+```sh
+micromamba create -n monty-habitat -c conda-forge -c aihabitat \
+  python=3.9 habitat-sim=0.2.4
+MONTY_PYTHON="$HOME/micromamba/envs/monty-habitat/bin/python" PORT=4001 scripts/run-dev.sh
+```
+
+The page's world selector then names Habitat-Sim for the `habitat_*` experiments
+and MuJoCo for the rest; `/prerequisites` says per engine what this machine has.
 
 Tests need the same database; `mix test` creates and migrates it.
 
@@ -169,7 +182,7 @@ Only the world and the recorders. Nothing of Monty's own source is vendored:
 
 | Python | What it is | Needs |
 | --- | --- | --- |
-| [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) | Monty's `HabitatEnvironment` and eval interface, behind the port's protocol — the world a run steps when `MONTY_WORLD=monty` | `$MONTY_PYTHON` with `tbp.monty` and its simulator installed |
+| [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) | the simulator and eval interface of the experiment's own config, behind the port's protocol — the world a run steps unless it chooses the stand-in | `$MONTY_PYTHON` with `tbp.monty` and its simulator installed |
 | [`scripts/record_monty_*.py`](../scripts) | produce the fixtures the parity tests replay; run Monty once, offline, and write what it answered | `$MONTY_PYTHON` with the modules each recorder touches |
 | [`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py), [`scripts/classify_monty_classes.py`](../scripts/classify_monty_classes.py) | behind [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) and `mix monty.port_census` | `torch` for the export; plain `ast` for the census |
 

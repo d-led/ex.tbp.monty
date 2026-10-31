@@ -14,12 +14,12 @@ defmodule ExTbpMonty.Mcp.Studio do
   """
 
   alias Monty.Prerequisites
-  alias Monty.Studio.{Catalog, RunHistory}
+  alias Monty.Studio.{Artifacts, Catalog, RunHistory, Storage}
 
   @queue :studio
 
   @doc """
-  The deployment as a value: counts, parallelism, world, prerequisites.
+  The deployment as a value: counts, parallelism, world, storage, prerequisites.
   """
   @spec describe() :: map()
   def describe do
@@ -28,6 +28,7 @@ defmodule ExTbpMonty.Mcp.Studio do
       runs: RunHistory.counts(),
       parallel: parallel(),
       world: world(),
+      storage: storage(),
       prerequisites: prerequisites()
     }
   end
@@ -105,13 +106,25 @@ defmodule ExTbpMonty.Mcp.Studio do
       note:
         if(mode == :synthetic,
           do:
-            "this is the default for a run that does not choose one; a run can step Monty's " <>
-              "own simulator instead (`monty_run_experiment` with `world: \"monty\"`, or the " <>
-              "run page's world selector), and records which world it stepped. MONTY_WORLD=monty " <>
-              "makes Monty's world the default here; MONTY_PYTHON is the interpreter it runs in",
-          else: "a run steps Monty's own simulator out of process unless it chooses otherwise"
+            "a run steps this port's own scene; Monty's simulator in an external process is " <>
+              "the default, and `monty_run_experiment` with `world: \"monty\"` (or the run " <>
+              "page's selector) chooses it. `MONTY_PYTHON` is the interpreter it runs in",
+          else: "the simulator runs in an external process — the experiment's own engine — " <>
+              "unless the run chooses the stand-in"
         )
     }
+  end
+
+  # The two places a run adds to the disk: what it leaves behind, and what it had
+  # to download first. In the container both are the one volume at `/app/priv`;
+  # in a checkout they are `priv/` and `~/tbp`, which may be the same disk or
+  # not — so the answer is per place rather than one figure for "the disk".
+  defp storage do
+    [
+      {"run artifacts and logs", Artifacts.root()},
+      {"prerequisite downloads", Prerequisites.root_path("MONTY_DATA")}
+    ]
+    |> Enum.map(fn {what, path} -> Map.put(Storage.usage(path), :what, what) end)
   end
 
   defp prerequisites do

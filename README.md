@@ -77,10 +77,10 @@ gates CI runs, and how a module is added.
 * **Processes, not a loop.** A step is a barrier over processes: sensor modules,
   learning modules and the motor system exchange CMP messages, and a vote is a
   round with a deadline — [docs/architecture.md](docs/architecture.md).
-* **The same world, when you ask for it.** A run steps an Elixir stand-in scene
-  by default; `MONTY_WORLD=monty` steps Monty's own Habitat world through a Python
-  peer, which *imports* Monty rather than copying it —
-  [docs/simulator-port.md](docs/simulator-port.md).
+* **The experiment's own engine, unless you choose otherwise.** A run steps
+  MuJoCo or Habitat-Sim through Monty's Python, in an external process that
+  *imports* Monty rather than copying it; the Elixir stand-in scene is what a run
+  chooses instead — [docs/simulator-port.md](docs/simulator-port.md).
 * **Checked against Monty, not asserted.** What has been compared, and with
   which numbers, is [docs/validation.md](docs/validation.md); every deliberate
   difference is [docs/monty-bugs.md](docs/monty-bugs.md); what is ported today,

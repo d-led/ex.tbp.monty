@@ -236,7 +236,15 @@ defmodule Monty.Studio.Setup do
   # Which world a run steps is the machine's, not the experiment's: a config
   # says nothing about whether this host can run Monty's simulator, so it stays
   # apart from the config tree and the finding below says what it means.
-  defp configured_world, do: Application.get_env(:ex_tbp_monty, :world_simulator, :synthetic)
+  #
+  # The external process is the default, because that is the world that answers
+  # the question the experiment asks. The stand-in is a choice a run makes — the
+  # selector, or `world_simulator: :synthetic` — never a silent consequence of a
+  # missing interpreter; what a missing interpreter costs is that the run cannot
+  # start, and the page says which pieces are absent.
+  # `||`, not a default argument: a key that exists and is nil is "nothing
+  # configured", and `Application.get_env/3` would hand that nil on as a world.
+  defp configured_world, do: Application.get_env(:ex_tbp_monty, :world_simulator) || :habitat
 
   defp resolution_findings(false), do: []
 
@@ -498,11 +506,12 @@ defmodule Monty.Studio.Setup do
   @doc """
   Which world this experiment would step, in the words a page can show.
 
-  The two are not two simulators of ours: one is *Monty's own world*, run out of
-  process, and the other is this port's stand-in. Monty's world is whatever the
-  experiment's config names — `MuJoCoSimulator` for every experiment that names a
-  `mujoco_*` environment, Monty's `HabitatEnvironment` (Habitat-Sim) for the
-  `habitat_*` ones — so the name says which engine that is rather than repeating
+  Neither is a second implementation of the experiment. One runs the *simulator*
+  in an external process — the connector this project ships
+  (`scripts/monty_simulator_peer.py`) drives upstream's `MuJoCoSimulator` or
+  `HabitatEnvironment` there, and no upstream Monty model runs beside it — and
+  the other is this port's stand-in. Which engine that is comes from the
+  experiment's own config, so the name says the engine rather than repeating
   "python".
 
   `:synthetic` is this port's scene: one sphere stepped in the BEAM, which exists
@@ -510,16 +519,17 @@ defmodule Monty.Studio.Setup do
   is a result of the experiment, and a page deciding whether to trust a run has to
   be able to say so in the header rather than in a warning somewhere below.
 
-  (`:habitat` is the historical name for "Monty's own world", from when
-  Habitat-Sim was the only one Monty had. It is still the atom a run records, so
-  old runs keep meaning what they meant.)
+  (`:habitat` is the historical name for "the simulator in an external
+  process", from when Habitat-Sim was the only engine Monty had. It is still the
+  atom a run records, so old runs keep meaning what they meant.)
   """
   @spec world_name(t()) :: String.t()
   def world_name(%__MODULE__{world: world} = setup), do: world_name(setup, world)
 
   @doc """
   One of the two worlds, named in the context of this setup — which is what the
-  selector offers, because the engine behind "Monty's own world" is the config's.
+  selector offers, because the engine behind the external process is the
+  config's.
   """
   @spec world_name(t(), :synthetic | :habitat) :: String.t()
   def world_name(_setup, :synthetic), do: "stand-in scene (Elixir, one sphere)"
@@ -529,14 +539,14 @@ defmodule Monty.Studio.Setup do
   # tree rather than guessed from the experiment's name.
   defp monty_world_name(%__MODULE__{environment: %{module: %{class: class}}}) do
     case class do
-      "MuJoCoSimulator" -> "MuJoCo (Monty's, out of process)"
-      "HabitatEnvironment" -> "Habitat-Sim (Monty's, out of process)"
-      "HabitatSim" -> "Habitat-Sim (Monty's, out of process)"
-      other -> "#{other} (Monty's, out of process)"
+      "MuJoCoSimulator" -> "MuJoCo via Monty's Python"
+      "HabitatEnvironment" -> "Habitat-Sim via Monty's Python"
+      "HabitatSim" -> "Habitat-Sim via Monty's Python"
+      other -> "#{other} via Monty's Python"
     end
   end
 
-  defp monty_world_name(%__MODULE__{}), do: "Monty's own world (out of process)"
+  defp monty_world_name(%__MODULE__{}), do: "simulator via Monty's Python"
 
   @doc """
   The world a run of this experiment steps: Monty's own, or the stand-in.
@@ -1443,10 +1453,10 @@ defmodule Monty.Studio.Setup do
       Finding.new(
         :warning,
         :world_is_a_stand_in,
-        "A run steps this port's synthetic scene, not Monty's world, so its results are not " <>
-          "Monty's. Monty's own simulator runs out of process: choose `monty` for the run " <>
-          "and set `MONTY_PYTHON` to the interpreter Monty lives in — or set " <>
-          "`MONTY_WORLD=monty` to make that the default here.",
+        "No interpreter is configured, so a run steps this port's synthetic scene and its " <>
+          "results are not Monty's. The simulator can run out of process instead: set " <>
+          "`MONTY_PYTHON` to an interpreter with `tbp.monty` in it and that becomes the " <>
+          "default here — or choose it for one run.",
         "monty_config"
       )
     ]

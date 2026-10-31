@@ -1,6 +1,5 @@
 # The studio's own run path, against Monty's world, watched to the end.
 #
-#   MONTY_WORLD=habitat \
 #   MONTY_PYTHON="$(conda info --base)/envs/tbp.monty/bin/python" \
 #     mix run scripts/probe_studio_habitat_run.exs [experiment] [steps]
 #
@@ -18,8 +17,8 @@ alias Monty.Studio.{Jobs, RunHistory, RunLog, Setup}
 experiment = List.first(System.argv()) || "base_config_10distinctobj_dist_agent"
 steps = System.argv() |> Enum.at(1) |> then(&(&1 && String.to_integer(&1))) || 12
 
-unless Application.get_env(:ex_tbp_monty, :world_simulator) == :habitat do
-  IO.puts("set MONTY_WORLD=habitat: this probe is about Monty's own world")
+unless Application.get_env(:ex_tbp_monty, :world_simulator, :habitat) == :habitat do
+  IO.puts("this probe is about the simulator in an external process; it is the default")
   System.halt(1)
 end
 

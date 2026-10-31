@@ -10,6 +10,7 @@ defmodule Monty.Studio.SetupTest do
   alias Monty.Simulators.Habitat.Environment.HabitatEnvironment
   alias Monty.Simulators.Synthetic
   alias Monty.Studio.{Finding, Setup}
+  alias Monty.Test.Tmp
 
   # The four connectivity rules below are Monty's own: `MontyBase.__init__`
   # refuses to build a model that breaks them. Each test says what Monty says,
@@ -17,6 +18,24 @@ defmodule Monty.Studio.SetupTest do
   # is a real config rather than a map shaped like one.
 
   defp setup_for(name, options \\ []), do: elem(Setup.from_experiment(name, options), 1)
+
+  describe "the default world" do
+    # A run that says nothing steps the simulator in an external process, the way
+    # an experiment is meant to run. The stand-in is something a run chooses.
+    test "is Monty's Python, so an experiment's own engine steps it" do
+      Tmp.without_env("MONTY_PYTHON")
+      Tmp.app_env(:world_simulator, nil)
+
+      assert setup_for("tutorial/first_experiment").world == :habitat
+    end
+
+    test "is what the run asked for, instead" do
+      Tmp.app_env(:world_simulator, nil)
+
+      assert setup_for("tutorial/first_experiment", world_simulator: :synthetic).world ==
+               :synthetic
+    end
+  end
 
   # `config:` with nothing under it would wipe the groups' `monty_config` on the
   # way through the composer, which is a fixture bug and not the thing under
@@ -286,13 +305,13 @@ defmodule Monty.Studio.SetupTest do
 
       assert world.level == :warning
 
-      # The finding says what a run steps instead, how to ask for Monty's own
-      # world on the run itself, and which interpreter that needs — a name
-      # alone was not enough, and a deployment-wide setting is not the only way.
+      # The finding says why the run is a stand-in — no interpreter — and both
+      # ways out: configuring one, which makes it the default, or choosing it
+      # for one run.
       assert world.message =~ "not Monty's"
-      assert world.message =~ "choose `monty` for the run"
+      assert world.message =~ "No interpreter is configured"
       assert world.message =~ "MONTY_PYTHON"
-      assert world.message =~ "MONTY_WORLD=monty"
+      assert world.message =~ "choose it for one run"
     end
 
     test "and says nothing about the world when Monty's own is what a run steps" do
@@ -360,7 +379,7 @@ defmodule Monty.Studio.SetupTest do
       # And Monty's own world is named by the engine its config picks: this
       # experiment names `MuJoCoSimulator`, not Habitat.
       assert Setup.world_name(setup_for("tutorial/first_experiment", world_simulator: :habitat)) ==
-               "MuJoCo (Monty's, out of process)"
+               "MuJoCo via Monty's Python"
     end
 
     test "names Habitat-Sim when the experiment's config is a habitat one" do
@@ -372,7 +391,7 @@ defmodule Monty.Studio.SetupTest do
         | environment: %{setup.environment | module: %{class: "HabitatEnvironment"}}
       }
 
-      assert Setup.world_name(habitat) == "Habitat-Sim (Monty's, out of process)"
+      assert Setup.world_name(habitat) == "Habitat-Sim via Monty's Python"
     end
 
     test "is Monty's HabitatEnvironment, named by the experiment, when it can be" do
