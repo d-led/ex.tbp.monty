@@ -35,9 +35,8 @@ defmodule Mix.Tasks.Monty.TargetCensus do
   @impl Mix.Task
   def run(arguments) do
     {options, _rest} = OptionParser.parse!(arguments, strict: [json: :string])
-    root = Source.root()
-    conf_dir = Source.conf_dir(root)
-    names = SnapshotCheck.names(root)
+    conf_dir = Source.conf_dir()
+    names = SnapshotCheck.names()
 
     counts = count_targets(names, conf_dir)
 

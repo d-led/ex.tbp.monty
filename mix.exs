@@ -146,7 +146,7 @@ defmodule ExTbpMonty.MixProject do
 
   defp aliases do
     [
-      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
+      setup: ["deps.get", "ecto.setup", "monty.inputs --warn-only", "assets.setup", "assets.build"],
       # Migrations come in two directories: the ones that must run on deploy and
       # the manual ones (slow, destructive, data). Dev and test want both.
       "ecto.migrate_all":

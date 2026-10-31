@@ -5,27 +5,25 @@ defmodule Monty.Config.ComposerTest do
 
   @moduletag :monty_source
 
+  # The configs composed here are Monty's, shipped verbatim in priv/monty/conf by
+  # `mix monty.inputs`. There is nothing to skip: a checkout is not needed, and a
+  # missing copy means the release is broken.
   setup_all do
-    if File.dir?(Source.conf_dir()) do
-      :ok
-    else
-      {:ok, unavailable: true}
-    end
+    assert File.dir?(Source.conf_dir()),
+           "priv/monty/conf is missing — run `mix monty.inputs --no-update`"
+
+    :ok
   end
 
   describe "compose/2" do
-    test "places the active experiment's keys at experiment.config", context do
-      skip_without_source(context)
-
+    test "places the active experiment's keys at experiment.config" do
       assert {:ok, config} = Composer.compose("randrot_noise_10distinctobj_dist_agent")
 
       assert get_in(config, ["experiment", "config", "monty_config", "monty_class"]) ==
                "${monty.class:tbp.monty.frameworks.models.evidence_matching.model.MontyForEvidenceGraphMatching}"
     end
 
-    test "keeps the connectivity wiring exactly as written", context do
-      skip_without_source(context)
-
+    test "keeps the connectivity wiring exactly as written" do
       assert {:ok, config} = Composer.compose("randrot_noise_10distinctobj_dist_agent")
       monty_config = get_in(config, ["experiment", "config", "monty_config"])
 
@@ -39,9 +37,7 @@ defmodule Monty.Config.ComposerTest do
       assert monty_config["lm_to_lm_vote_matrix"] == nil
     end
 
-    test "a nested default lands at the package its parent names", context do
-      skip_without_source(context)
-
+    test "a nested default lands at the package its parent names" do
       assert {:ok, config} = Composer.compose("randrot_noise_10distinctobj_dist_agent")
 
       learning_module =
@@ -59,9 +55,7 @@ defmodule Monty.Config.ComposerTest do
       assert learning_module["hypotheses_updater_args"] == %{"max_nneighbors" => 10}
     end
 
-    test "Monty's own defaults are folded in before the experiment's overrides", context do
-      skip_without_source(context)
-
+    test "Monty's own defaults are folded in before the experiment's overrides" do
       assert {:ok, config} = Composer.compose("randrot_noise_10distinctobj_dist_agent")
 
       # experiment.yaml sets do_eval: false; base_config sets do_eval: true.
@@ -71,19 +65,14 @@ defmodule Monty.Config.ComposerTest do
       assert config["num_parallel"] == 16
     end
 
-    test "reports a config file that does not exist instead of composing a partial tree",
-         context do
-      skip_without_source(context)
-
+    test "reports a config file that does not exist instead of composing a partial tree" do
       assert {:error, {:cannot_read, path, :enoent}} = Composer.compose("no_such_experiment")
       assert path =~ "no_such_experiment.yaml"
     end
   end
 
   describe "every snapshot Monty ships" do
-    test "composes to the same tree", context do
-      skip_without_source(context)
-
+    test "composes to the same tree" do
       # `{:ok, count}` is the whole claim: every snapshot composed to the tree
       # Monty recorded for it. The floor only proves the walk read the directory —
       # a check that compared nothing would pass silently. Monty at `760ad174`
@@ -91,12 +80,6 @@ defmodule Monty.Config.ComposerTest do
       # deleted their snapshots.
       assert {:ok, count} = SnapshotCheck.run()
       assert count >= 50
-    end
-  end
-
-  defp skip_without_source(context) do
-    if context[:unavailable] do
-      flunk("Monty checkout not found at #{Source.root()}; set MONTY_SOURCE")
     end
   end
 end

@@ -2,9 +2,11 @@ defmodule Monty.Config.SnapshotCheck do
   @moduledoc """
   Compares composed configs against Monty's committed snapshots.
 
-  `tests/conf/snapshots/*.yaml` in a Monty checkout is the oracle: each file is
-  the config Hydra composed when it was written. If our composer produces the
-  same tree, an experiment config means the same thing here as it does there.
+  Monty's `tests/conf/snapshots/*.yaml` is the oracle: each file is the config
+  Hydra composed when it was written. If our composer produces the same tree, an
+  experiment config means the same thing here as it does there. The snapshots
+  are copied into `priv/monty/snapshots` by `mix monty.inputs` and
+  checked in, so the comparison needs no Monty checkout.
 
   Used by both `mix monty.config.snapshots` and the parity test, so the number a
   contributor sees in the terminal is the number CI asserts on.
@@ -20,15 +22,14 @@ defmodule Monty.Config.SnapshotCheck do
         }
 
   @doc """
-  Checks every snapshot in the checkout.
+  Checks every snapshot.
 
   Returns the number of experiments compared, or the differences found.
   """
   @spec run(keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
   def run(opts \\ []) do
-    root = Keyword.get_lazy(opts, :source, fn -> Source.root() end)
-    conf_dir = Source.conf_dir(root)
-    snapshots_dir = Path.join([root, "tests", "conf", "snapshots"])
+    conf_dir = Keyword.get_lazy(opts, :conf_dir, &Source.conf_dir/0)
+    snapshots_dir = Keyword.get_lazy(opts, :snapshots_dir, &Source.snapshots_dir/0)
 
     with :ok <- ensure_directory(conf_dir),
          :ok <- ensure_directory(snapshots_dir) do
@@ -99,16 +100,23 @@ defmodule Monty.Config.SnapshotCheck do
   wildcard over the conf tree, which also finds groups and modules.
   """
   @spec names(Path.t() | nil) :: [String.t()]
-  def names(root \\ nil) do
-    root = root || Source.root()
-    snapshot_names(Path.join([root, "tests", "conf", "snapshots"]))
+  def names(snapshots_dir \\ nil) do
+    snapshot_names(snapshots_dir || Source.snapshots_dir())
   end
 
+  # Recursive, and named relative to the directory: Monty keeps the tutorial
+  # experiment snapshots in `snapshots/tutorial/`, and an experiment's name
+  # (`tutorial/first_experiment`) is how it is composed, so a top-level-only
+  # glob quietly skipped nine of them — including the one the tour points at.
   defp snapshot_names(snapshots_dir) do
     snapshots_dir
-    |> Path.join("*.yaml")
+    |> Path.join("**/*.yaml")
     |> Path.wildcard()
-    |> Enum.map(&(&1 |> Path.basename() |> String.trim_trailing(".yaml")))
+    |> Enum.map(fn path ->
+      path
+      |> Path.relative_to(snapshots_dir)
+      |> String.trim_trailing(".yaml")
+    end)
     |> Enum.sort()
   end
 

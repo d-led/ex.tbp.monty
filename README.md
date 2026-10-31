@@ -53,17 +53,22 @@ evidence and the vote telemetry as they happen.
 
 The counts are a snapshot; `mix monty.module_map.verify` prints the current ones.
 
-## Configure the checkouts
+## Where Monty's configs come from
 
-Monty's configs — and the module map — are read from checkouts:
+They are **in the repository**, verbatim: `priv/monty/conf` (Monty's Hydra tree)
+and `priv/monty/snapshots` (the trees Hydra composed for the experiments Monty
+ships). Nothing needs a Monty checkout to build, test or run this — the image has
+the configs inside it.
 
 ```bash
-export MONTY_SOURCE=../monty-orig   # default; any tbp.monty checkout works
-export TELEOP_SOURCE=../tbp.teleop # default; the teleop tool being replaced
+export MONTY_SOURCE=../monty-orig   # only to refresh the copy, or to regenerate
+mix monty.inputs        # copies conf + snapshots, rewrites inputs.json
 ```
 
-The config tests need `MONTY_SOURCE`, the module map needs both. Without them
-they fail rather than pass quietly.
+The copy's revision is in `priv/monty/inputs.json`, and `priv/monty/README.md`
+says what is in it, what deliberately is not, and whose licence it is under. A
+checkout is still what `mix monty.module_map.gen` reads (the Python) and what the
+MCP server reads Monty's docs from.
 
 ## The studio
 
@@ -230,8 +235,9 @@ lib/monty/studio/        experiments, setups, run history (the app's domain)
 lib/monty/simulators/    the world: synthetic, port protocol, recordings
 lib/ex_tbp_monty/        the OTP application: repo, MCP server, release plumbing
 lib/ex_tbp_monty_web/    Phoenix endpoint, LiveViews, components
-priv/monty/              generated module map, exported pretrained libraries
+priv/monty/              Monty's config tree and snapshots, verbatim; exported pretrained libraries
 priv/prerequisites.yaml  what a run downloads, checksummed
+THIRD-PARTY.md           what this project did not write, and under which terms
 docs/                    architecture, config compatibility, module map, MCP, validation
 ```
 
@@ -254,5 +260,14 @@ docs/                    architecture, config compatibility, module map, MCP, va
 
 ## Licence
 
-MPL-2.0. Monty itself is MIT-licensed; the module names and structure follow it
-so the two can be read side by side.
+MPL-2.0 — see [LICENSE](LICENSE). Monty itself is MIT-licensed, and this project
+ships a verbatim copy of its config tree and of the snapshots our composer is
+checked against: those files stay Monty's (`Copyright 2025 Thousand Brains
+Project`, `Copyright 2021-2024 Numenta Inc.`), with its licence beside them in
+[priv/monty/LICENSE](priv/monty/LICENSE). The module names and structure follow
+Monty so the two can be read side by side.
+
+Everything the repository and the image carry that this project did not write —
+Monty's configs, snapshots and pretrained memories, driver.js, daisyUI,
+Heroicons, topbar, the Erlang and Python libraries — is listed with its licence
+in [THIRD-PARTY.md](THIRD-PARTY.md).

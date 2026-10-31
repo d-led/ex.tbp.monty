@@ -11,10 +11,15 @@ mix setup
 mix phx.server
 ```
 
-Tests need the same database; `mix test` creates and migrates it. Config tests
-need a Monty checkout (`MONTY_SOURCE`, default `../monty-orig`), and the module
-contract needs both checkouts (`MONTY_SOURCE` and `TELEOP_SOURCE`, default
-`../tbp.teleop`); without one they fail rather than pass quietly.
+Tests need the same database; `mix test` creates and migrates it. **No Monty
+checkout is needed** to compile, test or build: what the application reads from
+Monty — its config tree and the snapshots the composer is held to — is checked
+in under `priv/monty`, copied by `mix monty.inputs` and refreshed
+deliberately (its revision is in `priv/monty/inputs.json`).
+
+A checkout is needed only to regenerate: `mix monty.module_map.gen` reads the
+Python of both packages (`MONTY_SOURCE`, `TELEOP_SOURCE`, default `../monty-orig`
+and `../tbp.teleop`), and `mix monty.port_census` reads it too.
 
 ## Invariants
 

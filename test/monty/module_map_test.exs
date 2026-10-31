@@ -62,14 +62,18 @@ defmodule Monty.ModuleMapTest do
   end
 
   describe "the generated map" do
-    test "covers every Python file in both packages" do
-      if File.dir?(Path.join(Monty.Config.Source.root(), "src/tbp/monty")) do
-        assert {:ok, summary} = ModuleMap.verify()
-        assert summary.files > 100
-        assert summary.classes > summary.files
-        assert summary.by_package["monty"] > 100
-        assert summary.by_package["teleop"] >= 7
-      end
+    test "covers every Python file in both packages, or says it could not look" do
+      assert {:ok, summary} = ModuleMap.verify()
+      assert summary.files > 100
+      assert summary.classes > summary.files
+      assert summary.by_package["monty"] > 100
+      assert summary.by_package["teleop"] >= 7
+
+      # No checkout here is not a failure and not a silent pass: the map is
+      # verified against the Elixir side and against the checked-in censuses,
+      # and the walk over Monty's own files happens only where there is one.
+      assert summary.unchecked == [] or
+               Enum.sort(summary.unchecked) == ["monty", "teleop"]
     end
 
     test "only claims implemented for modules that exist" do

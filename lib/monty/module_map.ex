@@ -123,9 +123,17 @@ defmodule Monty.ModuleMap do
         missing_reasons(entries)
 
     case problems do
-      [] -> {:ok, summary(entries)}
+      [] -> {:ok, summary(entries) |> Map.put(:unchecked, absent_checkouts(packages))}
       problems -> {:error, problems}
     end
+  end
+
+  # A package whose checkout is not on this machine: its source-side coverage
+  # was not checked, and the caller says so rather than implying it was.
+  defp absent_checkouts(packages) do
+    for package <- packages,
+        not File.dir?(Path.join(package.root.(), package.relative)),
+        do: package.name
   end
 
   @doc """
@@ -291,7 +299,7 @@ defmodule Monty.ModuleMap do
         "unmapped #{package.name} file: #{file}"
       end
     else
-      ["#{package.name} checkout not found at #{dir}"]
+      []
     end
   end
 

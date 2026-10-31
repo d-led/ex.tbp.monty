@@ -5,8 +5,9 @@ document says exactly how far that goes, so nobody has to guess.
 
 ## What is read
 
-`Monty.Config.Source` reads a Monty checkout (`MONTY_SOURCE`, default
-`../monty-orig`) and finds:
+`Monty.Config.Source` reads the copy of Monty's config tree that ships with this
+application — `priv/monty/conf`, copied verbatim from `src/tbp/monty/conf` by
+`mix monty.inputs` — and finds:
 
 * `src/tbp/monty/conf/experiment.yaml` — the root config;
 * the `defaults:` groups it pulls in (`monty`, `monty/learning_module`,

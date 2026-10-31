@@ -147,9 +147,11 @@ these a run steps this port's synthetic scene, and the setup page says so.
 | `LANG`, `LC_ALL` | `en_US.UTF-8` | Experiment names sort and log as written. |
 | `MIX_ENV` | `prod` | The release is a prod build; this is only informational at run time. |
 
-Not used by the image, though they exist in a checkout: `MONTY_SOURCE` and
-`TELEOP_SOURCE` (the parity checks read those checkouts), `PYTHON` (one Mix
-task), `MIX_TEST_PARTITION` and `COVERAGE_THRESHOLD` (CI).
+Not used by the image: `MONTY_SOURCE` and `TELEOP_SOURCE` (only the tasks that
+regenerate from upstream read a checkout), `PYTHON` (one Mix task),
+`MIX_TEST_PARTITION` and `COVERAGE_THRESHOLD` (CI). The configs and snapshots the
+studio reads are **inside** the image, under `/app/lib/ex_tbp_monty-*/priv/monty`;
+they need no checkout and take no volume.
 
 ## Data and models: the prerequisites
 

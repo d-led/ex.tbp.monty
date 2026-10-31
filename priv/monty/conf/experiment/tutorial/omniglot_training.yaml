@@ -1,0 +1,26 @@
+# @package _global_
+
+defaults:
+  - /monty: graph_exp1000_emin_t3
+  - /monty/motor_system_config: informed_random_walk_1
+  - /monty/learning_module: displacement_1lm
+  - /monty/sensor_module: camera_dist_omniglot_tutorial
+  - /monty/connectivity: 1lm_1sm
+  - /environment: two_d_data_omniglot
+  - /env_interface: train_omniglot
+  - /env_interface/transform: depthto3d_sensor1
+  - /termination: any1_train_steps_3_1000_tot6000
+  - /logging: silent_warning_train
+  - /telemetry: warning
+
+experiment:
+  _target_: tbp.monty.frameworks.experiments.pretraining_experiments.MontySupervisedObjectPretrainingExperiment
+  config:
+    show_sensor_output: false
+    n_train_epochs: 1
+    n_eval_epochs: 3
+    model_name_or_path: ""
+    seed: 42
+    supervised_lm_ids: all
+    logging:
+      run_name: omniglot_training

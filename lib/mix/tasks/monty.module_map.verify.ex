@@ -43,6 +43,14 @@ defmodule Mix.Tasks.Monty.ModuleMap.Verify do
             "#{summary.excluded} excluded, per package: #{inspect(summary.by_package)}"
         )
 
+        if summary.unchecked != [] do
+          Mix.shell().info(
+            "module map: source-side coverage not checked for " <>
+              "#{Enum.join(summary.unchecked, ", ")} — no checkout here, and nothing needs one; " <>
+              "the map names #{describe_sources()}. `--source` walks a checkout."
+          )
+        end
+
         ModuleMap.moved()
         |> Enum.each(fn {package, recorded, current} ->
           Mix.shell().error(
@@ -60,4 +68,9 @@ defmodule Mix.Tasks.Monty.ModuleMap.Verify do
 
   defp short(nil), do: "?"
   defp short(commit), do: String.slice(commit, 0, 7)
+
+  defp describe_sources do
+    ModuleMap.sources()
+    |> Enum.map_join(", ", fn {name, %{"commit" => commit}} -> "#{name}@#{short(commit)}" end)
+  end
 end

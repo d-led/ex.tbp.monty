@@ -4,24 +4,29 @@ defmodule Mix.Tasks.Monty.Config.Snapshots do
   @moduledoc """
   The compatibility gate for experiment configs:
 
-      mix monty.config.snapshots
-      mix monty.config.snapshots --source ../monty-orig
+      mix monty.config.snapshots                 # against the shipped copy
+      mix monty.config.snapshots --source ../monty-orig   # against a checkout
 
   Monty ships `tests/conf/snapshots/<experiment>.yaml` — the tree Hydra
   composed. This task composes the same experiment from the same YAML files and
   reports any difference, path by path. Both a missing key and an extra one are
   differences; "close enough" is how a config silently means something else.
+
+  The config tree and the snapshots are copied verbatim into `priv/monty` by
+  `mix monty.inputs`, so this runs with no Monty checkout at all.
+  `--source` points both halves at a checkout instead, which is what a person
+  reviewing an upstream pull wants.
   """
 
   use Mix.Task
 
-  alias Monty.Config.SnapshotCheck
+  alias Monty.Config.{SnapshotCheck, Source}
 
   @impl true
   def run(args) do
     {opts, _rest} = OptionParser.parse!(args, strict: [source: :string])
 
-    case SnapshotCheck.run(opts) do
+    case SnapshotCheck.run(check_opts(opts)) do
       {:ok, count} ->
         Mix.shell().info("config: #{count} snapshot(s) match")
 
@@ -38,6 +43,17 @@ defmodule Mix.Tasks.Monty.Config.Snapshots do
 
       {:error, reason} ->
         Mix.raise("cannot check snapshots: #{inspect(reason)}")
+    end
+  end
+
+  defp check_opts(opts) do
+    case opts[:source] do
+      nil ->
+        []
+
+      source ->
+        root = Path.expand(source)
+        [conf_dir: Source.conf_dir(root), snapshots_dir: Source.snapshots_dir(root)]
     end
   end
 end

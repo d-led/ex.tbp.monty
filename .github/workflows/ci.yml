@@ -64,13 +64,10 @@ env:
   MIX_ENV: test
   ELIXIR_VERSION: "1.20.4"
   OTP_VERSION: "29.1.2"
-  # The Monty revision the config and module-map parity is checked against.
-  # Bump it deliberately: a Monty change that our composer cannot read should
-  # be a decision, not a surprise in an unrelated pull request.
-  MONTY_REVISION: "91303642784ce176e2b8196c7bb990fef57688b6"
-  MONTY_SOURCE: ${{ github.workspace }}/monty-orig
-  TELEOP_REVISION: "2476e5c06a23fb8916ccfcd015a93990316bcbdc"
-  TELEOP_SOURCE: ${{ github.workspace }}/teleop
+  # No Monty checkout anywhere in this workflow. What the gates need from Monty
+  # is data, and the data is checked in: `priv/monty/conf` and
+  # `priv/monty/snapshots` (which revision they came from is in
+  # `priv/monty/inputs.json`, written by `mix monty.inputs`).
 
 jobs:
   # Fork pull requests only: a same-repository branch has a push run already,
@@ -137,22 +134,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The parity oracles: config snapshots and the module map are only
-      # meaningful against a real Monty checkout.
-      - name: Check out Monty
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: thousandbrainsproject/tbp.monty
-          ref: ${{ env.MONTY_REVISION }}
-          path: monty-orig
-
-      - name: Check out teleop
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: thousandbrainsproject/tbp.teleop
-          ref: ${{ env.TELEOP_REVISION }}
-          path: teleop
-
       - name: Install Erlang/Elixir
         uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
@@ -200,21 +181,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # The parity oracles read Monty's own config and module tree.
-      - name: Check out Monty
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: thousandbrainsproject/tbp.monty
-          ref: ${{ env.MONTY_REVISION }}
-          path: monty-orig
-
-      - name: Check out teleop
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: thousandbrainsproject/tbp.teleop
-          ref: ${{ env.TELEOP_REVISION }}
-          path: teleop
 
       - name: Install Erlang/Elixir
         uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1

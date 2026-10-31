@@ -24,10 +24,23 @@ defmodule Monty.Config.Source do
           :self | {:group, String.t(), String.t() | :missing, String.t() | nil}
 
   @doc """
-  The Monty checkout to read configs from.
+  The Monty inputs this application ships: the Hydra configs it composes and the
+  snapshots it checks them against.
+
+  Copied from a checkout by `mix monty.inputs` and checked in, so that building
+  the image, running the suite and running CI need no Monty checkout.
+  `:code.priv_dir/1` rather than a relative `priv/`, because a release runs from
+  `bin/` while its files live under `lib/`.
+  """
+  @spec inputs_root() :: Path.t()
+  def inputs_root, do: Path.join(:code.priv_dir(:ex_tbp_monty), "monty")
+
+  @doc """
+  The Monty checkout, for the tasks that regenerate against upstream.
 
   `MONTY_SOURCE` wins; otherwise `../monty-orig` next to the project, which is
-  where the reference checkout lives in this workspace.
+  where the reference checkout lives in this workspace. Nothing the application
+  does at run time reads it — see `inputs_root/0`.
   """
   @spec root() :: Path.t()
   def root do
@@ -35,9 +48,26 @@ defmodule Monty.Config.Source do
       Path.expand(System.get_env("MONTY_SOURCE", "../monty-orig"))
   end
 
+  @doc """
+  The config tree to compose from.
+
+  The shipped copy by default; `conf_dir/1` names the same tree inside a
+  checkout, which is what a person comparing against an upstream pull wants.
+  """
+  @spec conf_dir() :: Path.t()
+  def conf_dir, do: Path.join(inputs_root(), "conf")
+
   @doc "The Hydra config directory inside a Monty checkout."
   @spec conf_dir(Path.t()) :: Path.t()
-  def conf_dir(root \\ root()), do: Path.join([root, "src", "tbp", "monty", "conf"])
+  def conf_dir(root), do: Path.join([root, "src", "tbp", "monty", "conf"])
+
+  @doc "The snapshots to check composed configs against, shipped with them."
+  @spec snapshots_dir() :: Path.t()
+  def snapshots_dir, do: Path.join(inputs_root(), "snapshots")
+
+  @doc "The snapshot directory inside a Monty checkout."
+  @spec snapshots_dir(Path.t()) :: Path.t()
+  def snapshots_dir(root), do: Path.join([root, "tests", "conf", "snapshots"])
 
   @doc """
   The teleop checkout to read from.
