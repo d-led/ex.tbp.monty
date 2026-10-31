@@ -99,6 +99,10 @@ defmodule ExTbpMonty.MixProject do
       # unchanged is the compatibility promise, so the parser is a real
       # dependency rather than a hand-rolled subset.
       {:yaml_elixir, "~> 2.11"},
+      # Monty's loggers call the Python `wandb` client, and this is how the port
+      # reaches Python without an external interpreter to install or keep in step:
+      # an embedded runtime the application manages itself.
+      {:pythonx, "~> 0.4.11"},
       {:oban, "~> 2.20"},
       {:req, "~> 0.5"},
       {:telemetry_metrics, "~> 1.0"},
