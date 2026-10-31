@@ -84,8 +84,13 @@ defmodule Monty.Config.ComposerTest do
     test "composes to the same tree", context do
       skip_without_source(context)
 
+      # `{:ok, count}` is the whole claim: every snapshot composed to the tree
+      # Monty recorded for it. The floor only proves the walk read the directory —
+      # a check that compared nothing would pass silently. Monty at `760ad174`
+      # ships 54, because the pull folded the MuJoCo presets into the defaults and
+      # deleted their snapshots.
       assert {:ok, count} = SnapshotCheck.run()
-      assert count > 100
+      assert count >= 50
     end
   end
 

@@ -207,11 +207,31 @@ defmodule Monty.ModuleMap do
   def resolve(dotted, opts \\ []) do
     entries = Keyword.get_lazy(opts, :entries, &load/0)
 
-    with {:ok, package, file, class} <- split_target(dotted),
-         {:ok, entry} <- find_entry(entries, package, file) do
-      {:ok, describe_target(entry, class)}
+    with {:ok, package, file, class} <- split_target(dotted) do
+      case find_entry(entries, package, file) do
+        {:ok, entry} -> {:ok, describe_target(entry, class)}
+        :error -> resolve_exported(entries, package, class)
+      end
     end
   end
+
+  # A config may name a class where Python *exports* it rather than where it is
+  # defined. `MuJoCoSimulator` is defined in `simulators/mujoco/simulator.py` and
+  # re-exported by the package's `__init__.py`, and Monty's own env configs name
+  # it `tbp.monty.simulators.mujoco.MuJoCoSimulator` — a path with no file behind
+  # it. So a path that is not a file is asked again by class name, and answered
+  # only when exactly one entry in that package defines the class: two classes
+  # sharing a name is a reason to say "unknown", not to pick one.
+  defp resolve_exported(entries, package, class) do
+    entries
+    |> Enum.filter(&(&1.package == package and has_class?(&1, class)))
+    |> case do
+      [entry] -> {:ok, describe_target(entry, class)}
+      _none_or_several -> :error
+    end
+  end
+
+  defp has_class?(entry, class), do: Enum.any?(entry.classes, &(&1.python == class))
 
   @doc "Whether a target resolves to a module that exists here."
   @spec implemented?(String.t(), keyword()) :: boolean()

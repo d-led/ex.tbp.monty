@@ -188,6 +188,22 @@ defmodule Monty.Studio.Run do
   end
 
   @doc """
+  What the world rendered this step, before the experiment's transforms ran.
+
+  `step/1` answers the transformed observations, because that is what the model is
+  given. A page showing the object wants the picture the world drew — a transform
+  that clips depth to the patch's reach turns a surface into a flat slab — so this
+  asks the world directly, and answers `nil` for a world that cannot say.
+  """
+  @spec rendered_observations(t()) :: map() | nil
+  def rendered_observations(%__MODULE__{interface: interface}) do
+    world = interface.env
+
+    if function_exported?(world.__struct__, :observation, 1),
+      do: world.__struct__.observation(world)
+  end
+
+  @doc """
   What each learning module believes after the run's last step, keyed by module id.
 
   The coordinator's report says what the modules *were given*; this says what they

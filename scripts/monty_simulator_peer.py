@@ -34,22 +34,34 @@ import json
 import os
 import struct
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import numpy as np
 
 
 def to_json(value):
-    """Turns Monty's arrays, dataclasses and dicts into something JSON can carry."""
+    """Turns Monty's arrays, dataclasses, containers and scalars into JSON.
+
+    Hydra's own containers are here for a reason: an object's pose comes from the
+    interface's sampler, and that sampler returns Hydra's `ListConfig` and
+    `DictConfig` rather than lists and dicts. They are `Sequence` and `Mapping`
+    but not `list` and `dict`, so a check against the concrete types let them
+    through to `json.dumps`, which answered `TypeError: Object of type ListConfig
+    is not JSON serializable` at the first episode — after the world had already
+    been built and posed.
+    """
+    if value is None or isinstance(value, (str, bytes, bool, int, float)):
+        return value
     if isinstance(value, np.ndarray):
         return value.tolist()
     if isinstance(value, np.floating):
         return float(value)
     if isinstance(value, np.integer):
         return int(value)
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
         return {str(key): to_json(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, Sequence):
         return [to_json(item) for item in value]
     # `AgentState` and `SensorState` are dataclasses, and a sensor's rotation is
     # a `quaternion`, which Monty passes around as `wxyz`.

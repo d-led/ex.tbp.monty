@@ -20,11 +20,19 @@ defmodule Monty.Studio.RunLogTest do
       assert moment["sensors"]["patch"]["principal_curvatures"] == [-20.0, -20.0]
     end
 
-    test "and none of the camera's per-pixel arrays" do
+    test "and the pictures those arrays make, rather than the arrays" do
       moment = RunLog.moment(%{step: 0}, observations())
-      kept = moment["sensors"] |> Map.fetch!("patch") |> Map.keys() |> Enum.sort()
+      sensor = Map.fetch!(moment["sensors"], "patch")
 
-      assert kept == ["location", "pose_vectors", "principal_curvatures"]
+      # Four thousand numbers a step is not something a history row carries; the
+      # PNG they made is a few kilobytes and is what a page shows, so a finished
+      # run — and a replay — still shows what the sensor saw.
+      assert sensor |> Map.keys() |> Enum.sort() ==
+               ~w(images location pose_vectors principal_curvatures)
+
+      assert %{"depth" => depth, "colour" => colour, "range" => [0.05, 0.05]} = sensor["images"]
+      assert <<137, 80, 78, 71, _rest::binary>> = Base.decode64!(depth)
+      assert <<137, 80, 78, 71, _rest::binary>> = Base.decode64!(colour)
     end
   end
 

@@ -87,6 +87,26 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert view |> element("#log-#{first_id}") |> render() =~ "queued: 3 step(s)"
     end
 
+    test "a second viewer joins the run that is going instead of starting another", %{conn: conn} do
+      {:ok, one, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+
+      {:ok, two, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+
+      one |> element("#run") |> render_click()
+      started = current_run_id(one)
+
+      # A run belongs to the experiment, not to the page that started it: a
+      # second click attaches to the run in flight rather than stepping the same
+      # world twice, and both pages then watch the same steps.
+      two |> element("#run") |> render_click()
+
+      assert current_run_id(two) == started
+      assert RunHistory.list_for("base_config_10distinctobj_dist_agent") |> length() == 1
+      assert render(two) =~ "watching it"
+    end
+
     test "each sensor has its own view, updated as the run steps", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
@@ -98,9 +118,26 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert has_element?(view, "#frame-patch")
       assert has_element?(view, "#frame-view_finder")
 
+      # Two pictures per sensor — what the camera saw and the depth image — the
+      # way the PyView dashboard this studio follows shows them.
       patch = view |> element("#frame-patch") |> render()
-      assert patch =~ "<svg"
+
+      assert length(String.split(patch, "data:image/png;base64,")) - 1 == 2
       assert patch =~ "step 1"
+    end
+
+    test "where the agent is relative to the object is drawn as the run steps", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # A patch view says what one camera saw; it cannot say whether the agent is
+      # anywhere near the object, which is the first thing to check when a run
+      # reports nothing.
+      assert has_element?(view, "#centre-view svg circle")
+      assert view |> element("#centre-view") |> render() =~ "m from the surface"
     end
 
     test "what the learning module believes is drawn while the run steps", %{conn: conn} do
@@ -205,7 +242,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert has_element?(view, "#open-history")
     end
 
-    test "a run that is not there any more is recorded as failed, not left running" do
+    test "a run no process holds is settled instead of watched" do
       {:ok, record} =
         RunHistory.start(%{
           experiment: "base_config_10distinctobj_dist_agent",
@@ -220,12 +257,93 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
 
-      # The page followed the row, but no worker holds it: waiting for news that
-      # cannot come is the worst state a page can be in.
+      # The row said `running`, but no job will ever run it and no process holds
+      # it. Waiting for news that cannot come is the worst state a page can be
+      # in — and it would also refuse the run the reader came here to start.
+      refute has_element?(view, "#open-history")
+      assert has_element?(view, "#run")
+
+      settled = RunHistory.get(record.id)
+      assert settled.status == "failed"
+      assert settled.summary["reason"] =~ "stopped before it finished"
+    end
+
+    test "a run waiting its turn that no process is holding is stopped with the reason" do
+      {:ok, record} =
+        RunHistory.start(%{
+          experiment: "base_config_10distinctobj_dist_agent",
+          source: "monty",
+          steps: 2,
+          config: %{},
+          inputs: %{}
+        })
+
+      # Queued, so the reaper leaves it alone — but on this node nothing holds
+      # it, which is what Stop has to say out loud.
+      {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(record)
+
+      conn = Phoenix.ConnTest.build_conn()
+
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+
       assert current_run_id(view) == record.id
       view |> element("#stop") |> render_click()
 
-      assert RunHistory.get(record.id).status == "failed"
+      assert render(view) =~ "that run is not running any more"
+
+      stopped = RunHistory.get(record.id)
+      assert stopped.status == "failed"
+      assert stopped.summary["reason"] == "nothing was running it any more"
+    end
+  end
+
+  describe "a page that was open before a run started" do
+    test "picks the run up from the record instead of waiting for a click", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+
+      refute has_element?(view, "#open-history")
+
+      record = running_run()
+
+      # The page asks: "is there a run of this experiment now?" A run belongs to
+      # the experiment, not to the page that started it.
+      poll(view)
+
+      assert current_run_id(view) == record.id
+    end
+
+    test "keeps the run it is already watching", %{conn: conn} do
+      record = running_run()
+
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+
+      assert current_run_id(view) == record.id
+
+      poll(view)
+
+      assert current_run_id(view) == record.id
+    end
+
+    test "moves to a newer run once the one it watched has ended", %{conn: conn} do
+      watched = running_run()
+
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+
+      assert current_run_id(view) == watched.id
+
+      {:ok, _closed} = RunHistory.finish(watched, %{"reason" => "as the test asked"}, "failed")
+      newer = running_run()
+
+      # The first poll hears the record it already follows has ended; the second
+      # one finds the run that is going now.
+      poll(view)
+      poll(view)
+
+      assert current_run_id(view) == newer.id
     end
   end
 
@@ -273,6 +391,26 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   # The queue is manual in tests, so the page test performs the run itself
   # rather than racing a queue: what is under test is the run and the page, not
   # Oban's scheduler.
+  # A run that is going, as another page — or `mix monty.run` — would leave it: a
+  # record, and a job in the queue behind it.
+  defp running_run do
+    {:ok, record} =
+      RunHistory.start(%{
+        experiment: "base_config_10distinctobj_dist_agent",
+        source: "monty",
+        steps: 2,
+        config: %{}
+      })
+
+    {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(record)
+    record
+  end
+
+  defp poll(view) do
+    send(view.pid, :studio_poll)
+    _ = :sys.get_state(view.pid)
+  end
+
   defp perform_run(view) do
     job = %Oban.Job{args: %{"run_id" => current_run_id(view)}, attempt: 1}
     assert {:ok, _record} = Monty.Studio.Jobs.Run.perform(job)

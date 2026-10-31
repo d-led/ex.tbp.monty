@@ -41,6 +41,10 @@ defmodule ExTbpMonty.Application do
         # One log line per request, none for the health probe: Phoenix's own
         # request logger is off in `config :phoenix, :logger`.
         ExTbpMontyWeb.Telemetry.RequestLog.attach()
+        # A run's record is closed by the job that executes it, and a node that
+        # restarts takes those jobs with it: whatever was `running` a moment ago
+        # is not running now.
+        Monty.Studio.Jobs.Reaper.sweep()
         {:ok, pid}
 
       error ->

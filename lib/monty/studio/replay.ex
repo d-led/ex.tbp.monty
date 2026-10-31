@@ -17,7 +17,7 @@ defmodule Monty.Studio.Replay do
   alias Monty.Simulators.Synthetic.Camera
   alias Monty.Studio.RunHistory.Run
 
-  @logged_series ["percepts", "votes_used", "duration_us"]
+  @logged_series ["evidence", "percepts", "votes_used", "duration_us"]
 
   @type step_number :: integer()
 
@@ -52,6 +52,20 @@ defmodule Monty.Studio.Replay do
   @doc "The last step a replay can show, or `nil`."
   @spec last_step(Run.t()) :: step_number() | nil
   def last_step(run), do: run |> steps() |> List.last()
+
+  @doc """
+  Whether the run kept any picture at all.
+
+  A run recorded before a step kept its pictures has none, and a replay that drew
+  a row of empty frames for every one of its steps would be space that says
+  nothing. The page says it once instead.
+  """
+  @spec pictures?(Run.t()) :: boolean()
+  def pictures?(%Run{timeline: timeline}) do
+    timeline
+    |> Enum.flat_map(&(&1 |> Map.get("sensors", %{}) |> Map.values()))
+    |> Enum.any?(&Camera.pictures?/1)
+  end
 
   @doc """
   One recorded step.
@@ -158,11 +172,17 @@ defmodule Monty.Studio.Replay do
       step: moment.step,
       sensors: moment.sensors,
       entry: moment.entry,
-      frames:
-        Enum.map(moment.sensors, fn {sensor_id, observation} ->
-          Camera.frame(sensor_id, observation, moment.step)
-        end)
+      frames: frames(moment)
     }
+  end
+
+  # Only the sensors that kept a picture. A step from a run recorded before runs
+  # kept them has no pictures at all, and a page of empty frames is not a replay —
+  # it is space that says nothing.
+  defp frames(moment) do
+    for {sensor_id, observation} <- moment.sensors,
+        Camera.pictures?(observation),
+        do: Camera.frame(sensor_id, observation, moment.step)
   end
 
   defp sensor_series(%Run{} = run) do
@@ -179,11 +199,38 @@ defmodule Monty.Studio.Replay do
   end
 
   defp value_of(%{sensors: sensors}, "sensor:" <> sensor_id),
-    do: sensors |> Map.get(sensor_id, %{}) |> Map.get("location") |> x()
+    do: sensors |> Map.get(sensor_id, %{}) |> position() |> x()
 
   defp value_of(%{entry: entry}, "percepts"), do: length(get_in(entry || %{}, ["percepts"]) || [])
   defp value_of(%{entry: entry}, "votes_used"), do: get_in(entry || %{}, ["votes", "used"]) || 0
   defp value_of(%{entry: entry}, "duration_us"), do: Map.get(entry || %{}, "duration_us", 0)
+
+  # How sure the run was on that step: the best evidence any learning module held
+  # for any object. That is the curve an episode is judged by — it climbs to the
+  # recognition or it does not — and it is what the live page draws while a run is
+  # going, so a replay can draw the same one.
+  defp value_of(%{entry: entry}, "evidence"), do: best_evidence(entry)
+
+  defp best_evidence(nil), do: 0.0
+
+  defp best_evidence(entry) do
+    entry
+    |> Map.get("beliefs", %{})
+    |> Map.values()
+    |> Enum.flat_map(&(&1 |> Map.get("graphs", %{}) |> Map.values()))
+    |> Enum.map(&(Map.get(&1, "max_evidence") || 0.0))
+    |> Enum.max(fn -> 0.0 end)
+  end
+
+  # Where a sensor was on that step: the `location` the transforms filled in, or
+  # the camera pose the world sent back, whose last column is the sensor's place
+  # in the world. A world behind the port answers no `location`, so without the
+  # second the chart draws a flat line at zero for a sensor that did move.
+  defp position(observation),
+    do: Map.get(observation, "location") || translation(observation["cam_to_world"])
+
+  defp translation([row | _rest] = matrix) when is_list(row), do: Enum.map(matrix, &List.last/1)
+  defp translation(_absent), do: nil
 
   defp x([x | _rest]), do: x
   defp x(_not_a_location), do: 0.0
@@ -192,6 +239,7 @@ defmodule Monty.Studio.Replay do
   defp label_of("percepts"), do: "percepts per step"
   defp label_of("votes_used"), do: "votes used"
   defp label_of("duration_us"), do: "step duration"
+  defp label_of("evidence"), do: "best evidence"
   defp label_of(other), do: other
 
   defp unit_of("sensor:" <> _sensor_id), do: "m"

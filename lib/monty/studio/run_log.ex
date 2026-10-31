@@ -9,6 +9,7 @@ defmodule Monty.Studio.RunLog do
   same thing whichever way the run was started.
   """
 
+  alias Monty.Simulators.Synthetic.Camera
   alias Monty.Studio.{RunHistory, Setup, Summary}
 
   @doc """
@@ -79,11 +80,31 @@ defmodule Monty.Studio.RunLog do
     }
   end
 
-  # The arrays a camera answers with, one entry per pixel.
+  # The arrays a camera answers with, one entry per pixel. They are dropped on
+  # the way into the database — four thousand numbers a step, per sensor, is not
+  # something a history row should carry — and the two *pictures* they make are
+  # kept instead: a few kilobytes of PNG, which is what a page shows anyway. So a
+  # run that has finished still shows what its sensors saw, and a replay is the
+  # episode as it happened rather than a table of numbers.
   @camera_arrays ["depth", "rgba", "semantic", "semantic_3d", "sensor_frame_data"]
 
-  defp sensor_moment({sensor_id, observation}),
-    do: {sensor_id, Map.drop(observation, @camera_arrays)}
+  defp sensor_moment({sensor_id, observation}) do
+    images = Camera.images(observation)
+
+    recorded =
+      %{
+        "depth" => images.depth,
+        "colour" => images.colour,
+        "range" => images.range && Tuple.to_list(images.range)
+      }
+      |> Map.reject(fn {_key, value} -> is_nil(value) end)
+
+    kept = Map.drop(observation, @camera_arrays)
+
+    if map_size(recorded) == 0,
+      do: {sensor_id, kept},
+      else: {sensor_id, Map.put(kept, "images", recorded)}
+  end
 
   @doc "One timestep, as a line of text."
   @spec line(map()) :: String.t()

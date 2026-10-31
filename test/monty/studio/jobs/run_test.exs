@@ -58,6 +58,25 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert %{"patch" => %{"location" => [_, _, _]}} = second["sensors"]
     end
 
+    test "keeps the picture each step saw, not the arrays behind it" do
+      # What a replay draws is the world's own rendering — a run recorded from
+      # the transformed observations has poses in it and no pixels, so a finished
+      # run shows blank frames. The camera arrays themselves stay out of the row.
+      {:ok, record} = start_run("base_config_10distinctobj_dist_agent", 2)
+      {:ok, closed} = perform(record)
+
+      [first | _rest] = closed.timeline
+      patch = first["sensors"]["patch"]
+
+      assert %{"depth" => depth, "colour" => colour, "range" => [low, high]} = patch["images"]
+      assert png?(depth)
+      assert png?(colour)
+      assert low < high
+
+      refute Map.has_key?(patch, "depth")
+      refute Map.has_key?(patch, "rgba")
+    end
+
     test "writes a log file beside the record, and points at it" do
       {:ok, record} = start_run("base_config_10distinctobj_dist_agent", 2)
 
@@ -162,6 +181,11 @@ defmodule Monty.Studio.Jobs.RunTest do
     |> String.split("\n", trim: true)
   end
 
+  # A picture a step kept: PNG, base64 because it travels in JSON.
+  defp png?(base64) do
+    match?({:ok, <<0x89, "PNG", _rest::binary>>}, Base.decode64(base64))
+  end
+
   describe "a run that is stopped" do
     test "stops at its next step and says how far it got" do
       {:ok, record} = start_run(5)
@@ -219,6 +243,36 @@ defmodule Monty.Studio.Jobs.RunTest do
       closed = RunHistory.get(record.id)
       assert closed.status == "failed"
       assert closed.timeline == []
+    end
+  end
+
+  describe "a run whose world will not start" do
+    # The failure that prompted this: a record was written, the world exited,
+    # `Run.start/2` raised — and the record said "running" for ever, because the
+    # exception left `perform/1` before anything could close it. The page then
+    # showed a run with no steps and no pictures, and the experiment refused to
+    # run again because its old run was "already running".
+    test "leaves its record failed, with the reason, instead of running for ever" do
+      Tmp.app_env(:world_simulator, :habitat)
+
+      Tmp.app_env(:monty_peer,
+        python: System.find_executable("python3"),
+        peer: Path.expand("../../../support/broken_world.py", __DIR__)
+      )
+
+      {:ok, record} = start_run(2)
+
+      assert_raise RuntimeError, ~r/could not reset/, fn -> perform(record) end
+
+      closed = RunHistory.get(record.id)
+      assert closed.status == "failed"
+      assert closed.summary["reason"] =~ "could not reset"
+
+      # In its own log as well, because that file is what someone reads when the
+      # page is not enough.
+      assert File.read!(closed.log_path) =~ "the run died"
+
+      refute Enum.any?(RunHistory.running(), &(&1.id == record.id))
     end
   end
 

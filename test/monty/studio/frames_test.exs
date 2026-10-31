@@ -58,12 +58,22 @@ defmodule Monty.Studio.FramesTest do
     end
 
     test "the picture moves when the percept moves" do
-      {[first], _sent} = Frames.for_step(["patch"], observations(["patch"], 0), 0, %{}, 1_000, 0)
+      # The frame is the image the world rendered, so a different image is a
+      # different picture; the step number travels with it either way.
+      near = %{
+        @agent => %{"patch" => %{"depth" => [[0.02, 0.02]], "rgba" => [[[1.0, 0.0, 0.0, 1.0]]]}}
+      }
 
-      {[later], _sent} =
-        Frames.for_step(["patch"], observations(["patch"], 10), 10, %{}, 1_000, 0)
+      far = %{
+        @agent => %{"patch" => %{"depth" => [[0.5, 0.5]], "rgba" => [[[0.0, 1.0, 0.0, 1.0]]]}}
+      }
+
+      {[first], _sent} = Frames.for_step(["patch"], near, 0, %{}, 1_000, 0)
+      {[later], _sent} = Frames.for_step(["patch"], far, 10, %{}, 1_000, 0)
 
       assert first.data != later.data
+      assert first.note =~ "flat at 0.020 m"
+      assert later.note =~ "flat at 0.500 m"
     end
 
     test "a sensor with nothing to show gets no frame" do

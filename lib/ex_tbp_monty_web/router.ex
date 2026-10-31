@@ -52,14 +52,15 @@ defmodule ExTbpMontyWeb.Router do
     live "/build", BuildLive, :new
     # A glob: Monty names experiments by path (`tutorial/first_experiment`).
     live "/experiments/*name", ExperimentLive, :show
-    live "/runs/demo", RunsLive, :demo
     live "/runs", RunHistoryLive, :index
     live "/runs/:id", RunHistoryLive, :show
     # A file the run wrote — its log, its CSV, its detailed JSON — as it is, so
     # it can be read, diffed or plotted outside this page.
     get "/runs/:id/files/:name", RunFileController, :show
     # The queue a run waits in before it has anything to report.
-    live "/jobs", JobsLive, :index
+    # One page for runs: a queued run is a run, and the old address still opens
+    # the list a colleague was sent.
+    live "/jobs", RunHistoryLive, :index
     live "/prerequisites", PrerequisitesLive, :index
   end
 

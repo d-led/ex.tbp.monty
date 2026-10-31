@@ -66,7 +66,7 @@ defmodule Monty.Studio.SetupTest do
     "monty/learning_module" => "evidence_1lm_nn5_dod003",
     "monty/sensor_module" => "camera_dist_delta_salience",
     "monty/connectivity" => "1lm_1sm",
-    "environment" => "habitat_ycb_dist_agent_semantics0",
+    "environment" => "habitat_dist_agent_semantics1",
     "termination" => "any1_objectrecognition_t1000_e500_tot6000",
     "logging" => "silent_warning_train",
     "telemetry" => "warning"
@@ -96,16 +96,33 @@ defmodule Monty.Studio.SetupTest do
 
       assert setup.environment.module.class
       assert setup.environment.interface.class
-      assert setup.environment.objects == ["coneSolid"]
+    end
+
+    test "a MuJoCo config names no objects: its simulator loads the YCB set" do
+      setup = setup_for("tutorial/first_experiment")
+
+      assert setup.environment.objects == []
+      assert setup.environment.data_path =~ "mujoco/objects/ycb"
     end
 
     test "the agent starts where the experiment starts it, with its sensors on it" do
       setup = setup_for("base_10simobj_surf_agent")
 
       assert setup.scene.agent.position == [0.0, 1.5, 0.1]
+      # On the agent, in the agent's frame: that is how Monty's proprioception
+      # reports a sensor, and how the world composes one into the scene.
       assert setup.scene.sensors["patch"].position == [0.0, 0.0, 0.0]
       assert setup.scene.sensors["view_finder"].position == [0.0, 0.0, 0.03]
-      assert setup.scene.objects == [%{name: "coneSolid", position: [0.0, 1.5, -0.1]}]
+    end
+
+    test "a MuJoCo config names no object place: the interface's sampler does" do
+      # `Predefined` and `RandomRotation` both default to `(0.0, 1.5, 0.0)` — the
+      # same y the agent stands at, ten centimetres nearer the floor. The origin
+      # is not that place, and an object a metre and a half away is a surface a
+      # surface agent's five-centimetre reach never touches.
+      setup = setup_for("base_10simobj_surf_agent")
+
+      assert setup.scene.objects == [%{name: nil, position: [0.0, 1.5, 0.0]}]
     end
 
     test "each sensor's camera is the one the experiment's agent declares" do
@@ -268,9 +285,13 @@ defmodule Monty.Studio.SetupTest do
                for(%{code: :world_is_a_stand_in} = finding <- setup.findings, do: finding)
 
       assert world.level == :warning
-      assert world.message =~ "HabitatEnvironment"
+
+      # The finding says what a run steps instead, and the two settings that
+      # make it step Monty's own world — one of which is the interpreter Monty
+      # lives in, which is why a name alone was not enough.
       assert world.message =~ "not Monty's"
-      assert world.message =~ "world_simulator: :habitat"
+      assert world.message =~ "MONTY_WORLD=monty"
+      assert world.message =~ "MONTY_PYTHON"
     end
 
     test "and says nothing about the world when Monty's own is what a run steps" do
@@ -334,6 +355,17 @@ defmodule Monty.Studio.SetupTest do
                Setup.world(setup_for("tutorial/first_experiment"), :habitat)
 
       assert "patch" in sensors
+    end
+
+    test "shows the experiment's object to every sensor" do
+      world = Setup.world(setup_for("base_10simobj_surf_agent"))
+
+      {observations, _proprioception, _world} = Synthetic.Environment.step(world, [])
+
+      for {sensor_id, observation} <- observations[Synthetic.Environment.agent_id()] do
+        assert observation["depth"] |> List.flatten() |> Enum.any?(&(&1 > 0.0)),
+               "expected #{sensor_id} to see the object, but every ray missed"
+      end
     end
   end
 

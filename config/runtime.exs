@@ -26,9 +26,13 @@ config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
 # Which world a studio run steps, and which interpreter Monty's world runs in.
 # A host that has Monty's conda environment can step the real thing:
 #
-#     MONTY_WORLD=habitat \
-#     MONTY_PYTHON="$(conda info --base)/envs/tbp.monty/bin/python" \
+#     MONTY_WORLD=monty \
+#     MONTY_PYTHON="$MONTY_SOURCE/.venv/bin/python" \
 #       mix phx.server
+#
+# `monty` runs Monty's own simulator out of process, whichever one the experiment
+# names — MuJoCo now, Habitat for the experiments that still use it. `habitat` is
+# the same thing under its old name, kept because scripts and notes use it.
 #
 # Without `MONTY_WORLD` a run steps this port's synthetic scene, and the setup
 # page warns that its numbers are therefore not Monty's.
@@ -36,14 +40,14 @@ case System.get_env("MONTY_WORLD") do
   nil ->
     :ok
 
-  "habitat" ->
+  monty when monty in ["monty", "habitat"] ->
     config :ex_tbp_monty, world_simulator: :habitat
 
   "synthetic" ->
     config :ex_tbp_monty, world_simulator: :synthetic
 
   other ->
-    raise "MONTY_WORLD must be `habitat` or `synthetic`, got: #{inspect(other)}"
+    raise "MONTY_WORLD must be `monty`, `habitat` or `synthetic`, got: #{inspect(other)}"
 end
 
 if config_env() == :dev do

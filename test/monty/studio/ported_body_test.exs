@@ -65,4 +65,27 @@ defmodule Monty.Studio.PortedBodyTest do
       Run.stop(run)
     end
   end
+
+  test "the patch lands on the object, so the module has something to match" do
+    {:ok, opened} = Monty.Studio.open(@experiment, pretrained_dir: pretrained_dir())
+    {:ok, run} = Run.start(opened.setup, steps: 1)
+
+    try do
+      {:ok, _info, _observations, run} = Run.step(run)
+
+      # A patch that misses the object reports `on_object: 0`, the buffer never
+      # counts an observation, and the module builds no hypothesis space at all:
+      # the run then steps for as long as you let it with nothing to match.
+      assert [belief] = run |> Run.beliefs() |> Map.values()
+      assert belief.possible_matches != []
+      assert belief.mlh.graph_id in opened.setup.object_names
+      assert belief.mlh.evidence > 0.0
+    after
+      Run.stop(run)
+    end
+  end
+
+  # The exported library, named by the release it came from. Only the last two
+  # segments are read, so the test runs without Monty's models on this machine.
+  defp pretrained_dir, do: Path.join(__DIR__, "pretrained_ycb_v13")
 end

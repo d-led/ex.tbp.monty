@@ -34,7 +34,11 @@ defmodule Mix.Tasks.Monty.TargetCensusTest do
                "tbp.monty.frameworks.experiments.object_recognition_experiments.MontyObjectRecognitionExperiment"
              ]
 
-    assert named > 50
+    # A floor, not a count: the census's job is to prove the walk still finds
+    # `_target_`s after a pull, and `760ad174` ships 39 snapshots naming this
+    # class. Pinning 39 would make every upstream pull an edit here; a floor
+    # catches the failure this test is for, which is the walk finding nothing.
+    assert named >= 30
 
     # A class this port has written comes back implemented: the census says what
     # the map says, from the same map.

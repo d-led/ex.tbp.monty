@@ -35,6 +35,11 @@ defmodule Monty.Studio.Setup do
   # Monty's agents take a resolution and a zoom and no field of view.
   @habitat_hfov 90.0
 
+  # Where Monty's object samplers put the object when a config names no place:
+  # `Predefined` and `RandomRotation` both default to it, and it is the same spot
+  # the agent stands in — ten centimetres nearer the floor.
+  @sampler_position [0.0, 1.5, 0.0]
+
   defstruct name: nil,
             experiment_class: nil,
             monty_class: nil,
@@ -136,11 +141,14 @@ defmodule Monty.Studio.Setup do
   @doc """
   Reads a composed experiment tree.
 
-  Options: `:name`, used only for display and logging, and `:world_simulator`
-  (`:synthetic` or `:habitat`), which world a run is being read for.
+  Options: `:name`, used only for display and logging, `:world_simulator`
+  (`:synthetic` or `:habitat`), which world a run is being read for, and
+  `:pretrained_dir`, the release to load pretrained models from instead of the
+  one the config names — see `pretrained_dir/2`.
   """
   @spec new(map(), keyword()) :: t()
   def new(tree, opts \\ []) do
+    tree = pretrained_dir(tree, Keyword.get(opts, :pretrained_dir))
     {tree, unresolved?} = resolved(tree, opts)
     # `config:` with nothing under it is a config that names nothing, not a
     # reason to crash on the way to a finding.
@@ -204,6 +212,24 @@ defmodule Monty.Studio.Setup do
 
   defp default_for(_name), do: nil
 
+  # The release a config names is Monty's choice; whether this machine has it is
+  # the machine's. Every config now names `pretrained_ycb_v14`, and a machine
+  # with v10 or v13 exported can still run — with the graphs it has, which is
+  # what the `memory_from_another_release` finding says out loud. So the
+  # directory is a run's input, not a rewrite of the config: the value is put in
+  # before resolution, so `${constants.pretrained_dir}` interpolates to it.
+  defp pretrained_dir(tree, nil), do: tree
+
+  defp pretrained_dir(tree, directory) do
+    case Map.get(tree, "constants") do
+      %{} = constants ->
+        Map.put(tree, "constants", Map.put(constants, "pretrained_dir", directory))
+
+      _none ->
+        tree
+    end
+  end
+
   defp monty_root(opts),
     do: Keyword.get_lazy(opts, :monty_root, fn -> Monty.Config.Source.root() end)
 
@@ -229,7 +255,8 @@ defmodule Monty.Studio.Setup do
   @spec from_experiment(String.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def from_experiment(name, opts \\ []) do
     with {:ok, tree} <- Monty.Config.Composer.compose(name, Keyword.take(opts, [:conf_dir])) do
-      {:ok, new(tree, [name: name] ++ Keyword.take(opts, [:name, :world_simulator]))}
+      {:ok,
+       new(tree, [name: name] ++ Keyword.take(opts, [:name, :world_simulator, :pretrained_dir]))}
     end
   end
 
@@ -484,11 +511,56 @@ defmodule Monty.Studio.Setup do
   def world(%__MODULE__{} = setup, :synthetic) do
     Monty.Simulators.Synthetic.Environment.new(
       sensor_ids(setup),
-      Monty.Simulators.Synthetic.Scene.new(centre: object_centre(setup)),
+      Monty.Simulators.Synthetic.Scene.new(
+        centre: object_centre(setup),
+        radius: stand_in_radius(setup)
+      ),
       views: setup.cameras,
       agent: setup.scene.agent,
       sensors: setup.scene.sensors
     )
+  end
+
+  # How big the stand-in's sphere is. Its *position* is the config's — where the
+  # interface's sampler puts the object — so its size is what is left to choose,
+  # and what it has to satisfy is how far the patch can see. A surface
+  # experiment clips everything past `clip_value` and zeroes the on-surface mask
+  # there, so a sphere whose surface is further than that is invisible: the module
+  # never sees that it is on an object and builds no hypothesis space. So the
+  # surface is put where the policy aims to keep it (`desired_object_distance`),
+  # and never past half the clip, where a rounding error in the depth image could
+  # put it on the wrong side of the boundary.
+  #
+  # A distant experiment clips nothing — it looks across the room — and there the
+  # sphere is simply the scene's own size: sizing it to a surface policy's
+  # standoff would shrink the object to a millimetre and lose it the same way.
+  defp stand_in_radius(
+         %__MODULE__{scene: %{objects: [%{position: object}], agent: %{position: agent}}} = setup
+       )
+       when is_list(agent) do
+    gap = SpatialArithmetics.magnitude(SpatialArithmetics.subtract(agent, object))
+
+    case patch_reach(setup) do
+      nil -> Monty.Simulators.Synthetic.Scene.radius()
+      reach -> max(gap - min(desired_object_distance(setup), reach / 2.0), 0.001)
+    end
+  end
+
+  defp stand_in_radius(%__MODULE__{}), do: Monty.Simulators.Synthetic.Scene.radius()
+
+  # How far a patch sees, when the experiment limits it: the `clip_value` of the
+  # transform that clips depth, on the configs that clip any sensor at all.
+  defp patch_reach(%__MODULE__{transforms: transforms}) do
+    Enum.find_value(transforms, fn transform ->
+      case Map.get(transform, "depth_clip_sensors") do
+        sensors when is_list(sensors) and sensors != [] -> Map.get(transform, "clip_value")
+        _no_clip -> nil
+      end
+    end)
+  end
+
+  defp desired_object_distance(%__MODULE__{motor_system_config: config}) do
+    get_in(config, ["policy_selector", "policy", "desired_object_distance"]) || 0.025
   end
 
   # The stand-in world has one object. Where the experiment puts the first one is
@@ -543,12 +615,36 @@ defmodule Monty.Studio.Setup do
 
   def memory_for(%__MODULE__{model_name_or_path: path}) do
     with name when is_binary(name) <- Memory.name_of(path),
-         release when is_binary(release) <- Memory.release_of(path),
-         {:ok, memory} <- Memory.load(name, release) do
-      memory
+         release when is_binary(release) <- Memory.release_of(path) do
+      load_memory(name, release)
     else
       _absent -> :none
     end
+  end
+
+  # The release the config names, and failing that any release this machine has
+  # the model exported from — which is what `memory_from_another_release` says
+  # happens ("the run uses the graphs that are here"). Loading nothing while the
+  # finding promised graphs would make every experiment whose config names a
+  # release nobody exported here run with an empty memory: no possible matches,
+  # no evidence, nothing to draw, however long it runs.
+  defp load_memory(name, release) do
+    case Memory.load(name, release) do
+      {:ok, memory} -> memory
+      {:error, _not_found} -> newest_exported(name)
+    end
+  end
+
+  defp newest_exported(name) do
+    name
+    |> Memory.releases_for()
+    |> Enum.reverse()
+    |> Enum.reduce_while(:none, fn release, _none ->
+      case Memory.load(name, release) do
+        {:ok, memory} -> {:halt, memory}
+        {:error, _not_found} -> {:cont, :none}
+      end
+    end)
   end
 
   @doc "The sensor ids a run reads observations for."
@@ -696,16 +792,15 @@ defmodule Monty.Studio.Setup do
 
   # Where a config's simulator puts everything. Habitat gives the agent a
   # position through `agents.agent_args`, plus the sensors' offsets relative to
-  # the agent; MuJoCo gives `agents` as a list of agent objects, and mounts the
-  # sensors in the scene rather than placing them from the config. Either way the
-  # agent's own pose is what the scene needs, and `env_init_args.objects` give the
-  # object a place 0.2 m in front of it.
+  # the agent; MuJoCo gives `agents` as a list of agent objects carrying each
+  # sensor's own config. Either way the agent's own pose is what the scene needs,
+  # and `env_init_args.objects` give the object a place 0.2 m in front of it.
   defp scene(config) do
     args = get_in(config, ["environment", "env_init_args"]) || %{}
     agent = agent(args)
-    objects = objects(args, agent)
+    objects = objects(args, agent, sampler_position(config))
 
-    %{agent: agent_pose(agent), sensors: sensor_poses(agent, objects), objects: objects}
+    %{agent: agent_pose(agent, objects), sensors: sensor_poses(agent), objects: objects}
   end
 
   defp agent(args) do
@@ -725,37 +820,45 @@ defmodule Monty.Studio.Setup do
     end
   end
 
-  defp agent_pose(agent_args) do
+  # A config that declares no rotation means "not turned" — except for a MuJoCo
+  # agent, which declares none and is modelled in the MJCF file this port does
+  # not read. Such an agent is aimed at the object instead: every action Monty's
+  # surface policies emit is written for a body whose −z already points at it
+  # (`MoveForward` closes in along that axis, `OrientHorizontal` steps sideways,
+  # yaws and steps along it again to orbit), so a body left pointing at the world
+  # rather than at the object would walk away from the thing it is meant to
+  # inspect.
+  defp agent_pose(agent_args, objects) do
     case Map.get(agent_args, "position") do
       [_x, _y, _z] = position ->
-        %{position: position, rotation: rotation(Map.get(agent_args, "rotation"))}
+        %{
+          position: position,
+          rotation: facing(Map.get(agent_args, "rotation"), position, objects)
+        }
 
       _absent ->
         nil
     end
   end
 
-  # A MuJoCo agent declares its sensors rather than placing them: every camera
-  # sits on the agent's body with `IDENTITY_QUATERNION`, and MuJoCo's identity
-  # camera looks along the world's −z. In this port's frame — Monty's y-up one —
-  # that is not the same axis, so the pose would be a guess about a quaternion
-  # convention instead of a view of the object.
-  #
-  # So this scene aims each sensor at the object the config names. That is what
-  # the world is for: a camera that renders nothing teaches nobody anything, and
-  # where a MuJoCo camera looks is decided by the MJCF model, which this port does
-  # not read. Saying so here is more honest than deriving a pitch that happens to
-  # miss the object by a degree.
-  defp sensor_poses(%{"sensor_configs" => %{} = configs} = agent, objects) do
-    origin = Map.get(agent, "position") || [0.0, 0.0, 0.0]
-    rotation = look_at(origin, objects)
+  defp facing(nil, position, objects), do: look_at(position, objects)
+  defp facing(rotation, _position, _objects), do: rotation(rotation)
 
-    for {sensor_id, _config} <- configs, into: %{} do
-      {sensor_id, %{position: origin, rotation: rotation}}
+  # A MuJoCo agent declares its sensors instead of listing where they are: each
+  # `SensorConfig` carries a `position` and a `rotation` relative to the agent,
+  # which is exactly the shape a scene's sensors are in. So they are read as they
+  # are — the aiming is the agent's job (`agent_pose/2`).
+  defp sensor_poses(%{"sensor_configs" => %{} = configs}) do
+    for {sensor_id, %{} = config} <- configs, into: %{} do
+      {sensor_id,
+       %{
+         position: Map.get(config, "position") || [0.0, 0.0, 0.0],
+         rotation: rotation(Map.get(config, "rotation"))
+       }}
     end
   end
 
-  defp sensor_poses(agent_args, _objects) do
+  defp sensor_poses(agent_args) do
     sensor_ids = List.wrap(Map.get(agent_args, "sensor_ids"))
     positions = List.wrap(Map.get(agent_args, "positions"))
     rotations = List.wrap(Map.get(agent_args, "rotations"))
@@ -808,20 +911,56 @@ defmodule Monty.Studio.Setup do
   defp difference([ax, ay, az], [bx, by, bz]), do: [ax - bx, ay - by, az - bz]
 
   # A MuJoCo environment lists no objects at all: its simulator loads the YCB set
-  # from `data_path`, and the config only says which dataset. A world with nothing
-  # in it is one no sensor can see, so the stand-in gets one object at the origin —
-  # MuJoCo's own default position for a custom object.
-  defp objects(args, agent) do
+  # from `data_path`, and the config only says which dataset. Where the object
+  # goes is the **interface's** business — it adds one per episode and asks a
+  # sampler for the pose. So the stand-in puts its sphere where that sampler would,
+  # which for every sampler Monty's experiment groups name is the same place as
+  # the agent, ten centimetres below it.
+  #
+  # That number is not decoration. A surface agent's patch reaches five
+  # centimetres (`clip_value: 0.05`) and everything past it is clipped flat, so an
+  # object a metre and a half away is not "far away" but *invisible*: every pixel
+  # comes back at the clip distance with the on-surface mask off, `on_object` is
+  # false, no hypothesis space is ever built and the run steps happily for as long
+  # as you let it with nothing to match. That is what an object at the origin did.
+  defp objects(args, agent, sampler_position) do
     case placed(args) do
       [] ->
         if Map.has_key?(agent, "sensor_configs"),
-          do: [%{name: nil, position: [0.0, 0.0, 0.0]}],
+          do: [%{name: nil, position: sampler_position}],
           else: []
 
       objects ->
         objects
     end
   end
+
+  # Where a config's interface samples its object. `Predefined` and
+  # `RandomRotation` both default to `(0.0, 1.5, 0.0)`; the bare `Default` sampler
+  # draws a position per episode instead, and a scene built before the draw cannot
+  # say where that is — so it answers the default and the scene is a stand-in for
+  # the world, not a copy of one episode of it.
+  defp sampler_position(config) do
+    config
+    |> interface_args()
+    |> Map.get("object_init_sampler", %{})
+    |> case do
+      %{} = sampler ->
+        case Map.get(sampler, "positions") || Map.get(sampler, "position") do
+          [_x, _y, _z] = position -> position
+          [[_x, _y, _z] = position | _more] -> position
+          _absent -> @sampler_position
+        end
+
+      _no_sampler ->
+        @sampler_position
+    end
+  end
+
+  defp interface_args(config),
+    do:
+      Map.get(config, "eval_env_interface_args") ||
+        Map.get(config, "train_env_interface_args") || %{}
 
   defp placed(args) do
     args
@@ -1256,8 +1395,8 @@ defmodule Monty.Studio.Setup do
         :warning,
         :world_is_a_stand_in,
         "A run steps this port's synthetic scene, not Monty's world, so its results are not " <>
-          "Monty's. Monty's own HabitatEnvironment runs out of process: set " <>
-          "`config :ex_tbp_monty, world_simulator: :habitat`.",
+          "Monty's. Monty's own simulator runs out of process: set " <>
+          "`MONTY_WORLD=monty` and `MONTY_PYTHON` to the interpreter Monty lives in.",
         "monty_config"
       )
     ]

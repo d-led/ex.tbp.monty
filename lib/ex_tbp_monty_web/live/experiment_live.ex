@@ -21,6 +21,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   alias Monty.Studio
   alias Monty.Studio.{Chart, Jobs, LogFilter, Logging, Replay, RunHistory, RunLog, Setup}
+  alias Monty.Studio.Jobs.Reaper
 
   # A log is a thing a person reads back, not a database: the last few thousand
   # lines are enough to scroll through a run and bounded enough that a runaway
@@ -69,7 +70,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # template draws from them. Kept per module because a run with two modules
       # has two answers, and averaging them would be a third.
       beliefs: %{},
-      charts: %{}
+      charts: %{},
+      # The object and the agent in one picture per step: the views a sensor
+      # streams say what a camera saw, this says whether there was anything to see.
+      centre: nil
     )
     |> stream_configure(:frames, dom_id: &"frame-#{&1.sensor_id}")
     |> stream(:frames, [])
@@ -78,6 +82,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # A run outlives its page, so a page that loads must find the run its
   # experiment is in the middle of instead of pretending nothing is happening.
   defp follow_running(%{assigns: %{opened: %{name: name}}} = socket) do
+    # A record that says `running` may be the only thing left of a run whose node
+    # went away. Settle those before believing one, or this page watches a corpse
+    # and refuses to start the run the reader actually asked for.
+    _ = Reaper.sweep()
+
     case RunHistory.running_for(name) do
       nil -> socket
       record -> follow(socket, record)
@@ -88,13 +97,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     if connected?(socket),
       do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
 
+    # A page that moves to another run starts that run's story, not the last
+    # one's: charts, beliefs and frames are per run, and two runs' steps in one
+    # chart would be a line through episodes that never happened.
     socket
     |> assign(
       run_id: record.id,
       status: record.status,
       progress: {length(record.timeline), record.steps},
-      log_path: record.log_path
+      log_path: record.log_path,
+      summary: nil,
+      beliefs: %{},
+      charts: %{},
+      centre: nil
     )
+    |> stream(:frames, [], reset: true)
     |> seed_log(record)
     |> watch()
   end
@@ -199,7 +216,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         </p>
 
         <p :if={@run_id == nil and runable?(assigns)} class="text-sm text-base-content/60">
-          A run is a job: it keeps going if this page is closed, and its log and history are
+          A run keeps going if this page is closed, and its log and history are
           written as it goes. It uses stand-in modules until the ported ones land.
         </p>
 
@@ -277,6 +294,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           </div>
         </section>
 
+        <section :if={@centre} id="centre-view" class="space-y-2">
+          <h3 class="text-sm font-medium">Where the agent is</h3>
+          <figure class="max-w-sm rounded-field border border-base-300 bg-base-100 p-2">
+            <figcaption class="px-0.5 pb-1 font-mono text-[11px] text-base-content/60">
+              step {@centre.step} · {@centre.note}
+            </figcaption>
+            <div class="text-base-content/80">{@centre.data}</div>
+          </figure>
+        </section>
+
         <div id="frames" phx-update="stream" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <p id="frames-empty" class="hidden only:block text-xs text-base-content/50">
             Sensor views appear here as the run steps.
@@ -307,7 +334,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 type="search"
                 name="filter"
                 placeholder="filter: every word must match"
-                class="input input-xs w-full max-w-sm font-mono"
+                class="input input-xs w-full min-w-[16rem] max-w-sm font-mono"
                 aria-label="Filter the log: every word must appear in a line"
               />
             </form>
@@ -352,7 +379,20 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   @impl true
   def handle_event("run", _params, %{assigns: %{opened: opened, steps: steps}} = socket) do
-    if Setup.valid?(opened.setup), do: start(socket, opened, steps), else: {:noreply, socket}
+    cond do
+      not Setup.valid?(opened.setup) ->
+        {:noreply, socket}
+
+      # Somebody else is already running this experiment, and a run is the
+      # experiment's — this page joins it rather than starting a second one that
+      # would step the same world twice.
+      record = RunHistory.running_for(opened.name) ->
+        {:noreply,
+         socket |> follow(record) |> push(nil, "a run is already going: watching it", :info)}
+
+      true ->
+        start(socket, opened, steps)
+    end
   end
 
   # One step is a run of one step: a person clicking it twice wants two runs to
@@ -387,15 +427,45 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   def handle_info({:studio, _other_run, _event}, socket), do: {:noreply, socket}
 
-  def handle_info(:studio_poll, %{assigns: %{run_id: nil}} = socket), do: {:noreply, socket}
-
+  # A run is the experiment's, not the page's: two people (or two tabs) looking at
+  # the same experiment watch the same run. So a page with nothing to watch asks
+  # whether one has started since it opened, and a page whose run has finished
+  # asks whether another has begun — the answer is the same run for everybody.
   def handle_info(:studio_poll, socket) do
+    socket = follow_started(socket)
     socket = reconcile(socket)
 
     if socket.assigns.status == "running" do
       {:noreply, watch(socket)}
     else
       {:noreply, socket}
+    end
+  end
+
+  # A run that this page is not showing, because somebody started it after the
+  # page opened.
+  defp follow_started(%{assigns: %{run_id: nil, opened: %{name: name}}} = socket) do
+    case RunHistory.running_for(name) do
+      nil ->
+        socket
+
+      record ->
+        socket |> follow(record) |> push(nil, "watching a run that was already going", :info)
+    end
+  end
+
+  defp follow_started(%{assigns: %{status: "running"}} = socket), do: socket
+
+  defp follow_started(%{assigns: %{opened: %{name: name}}} = socket) do
+    case RunHistory.running_for(name) do
+      nil ->
+        socket
+
+      record when record.id == socket.assigns.run_id ->
+        socket
+
+      record ->
+        socket |> follow(record) |> push(nil, "a new run of this experiment has started", :info)
     end
   end
 
@@ -409,6 +479,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> assign(progress: {step + 1, elem(socket.assigns.progress, 1)})
     |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
     |> remember(step, Map.get(event, :beliefs, %{}))
+    |> assign(centre: Map.get(event, :centre))
   end
 
   defp handle_studio({:finished, _summary}, socket) do
@@ -569,7 +640,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp settle(socket, run_id) do
     case RunHistory.get(run_id) do
       %{status: "running"} = record ->
-        {:ok, _} = RunHistory.finish(record, %{"reason" => "the run's job is gone"}, "failed")
+        {:ok, _} =
+          RunHistory.finish(record, %{"reason" => "nothing was running it any more"}, "failed")
+
         assign(socket, status: "failed")
 
       _finished_or_gone ->

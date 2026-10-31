@@ -26,6 +26,8 @@ defmodule Mix.Tasks.Monty.Run do
 
     * `--steps N` — timesteps to run (default: #{12})
     * `--seed N` — episode seed, overriding the config's
+    * `--pretrained-dir DIR` — the release to load pretrained models from, when
+      the one the config names is not on this machine
     * `--record` / `--no-record` — whether to write a run history row
     * `--quiet` — findings and summary only, no per-step lines
   """
@@ -36,7 +38,13 @@ defmodule Mix.Tasks.Monty.Run do
 
   @default_steps 12
 
-  @switches [steps: :integer, seed: :integer, record: :boolean, quiet: :boolean]
+  @switches [
+    steps: :integer,
+    seed: :integer,
+    record: :boolean,
+    quiet: :boolean,
+    pretrained_dir: :string
+  ]
 
   @impl true
   def run(args) do
@@ -68,7 +76,7 @@ defmodule Mix.Tasks.Monty.Run do
   end
 
   defp open(name, opts) do
-    case Monty.Studio.open(name) do
+    case Monty.Studio.open(name, pretrained_dir: opts[:pretrained_dir]) do
       {:ok, opened} -> with_seed(opened, opts)
       {:error, reason} -> Mix.raise("could not open #{name}: #{inspect(reason)}")
     end

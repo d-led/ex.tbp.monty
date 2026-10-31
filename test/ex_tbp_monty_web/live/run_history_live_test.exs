@@ -1,9 +1,34 @@
 defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   use ExTbpMontyWeb.ConnCase
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
 
   alias Monty.Studio.RunHistory
+
+  # A run as a finished experiment leaves it, in whatever state a test needs.
+  defp insert_run(%{experiment: experiment, status: status}) do
+    {:ok, run} =
+      RunHistory.start(%{experiment: experiment, source: "monty", steps: 0, config: %{}})
+
+    if status == "running" do
+      run
+    else
+      {:ok, closed} = RunHistory.finish(run, %{"reason" => "as the test asked"}, status)
+      closed
+    end
+  end
+
+  # A job Oban has started: `executing` from `attempted_at` until an outcome.
+  defp running(job) do
+    {1, nil} =
+      ExTbpMonty.Repo.update_all(
+        from(j in Oban.Job, where: j.id == ^job.id),
+        set: [state: "executing", attempted_at: DateTime.utc_now()]
+      )
+
+    :ok
+  end
 
   setup do
     {:ok, run} =
@@ -51,12 +76,22 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     {:ok, run: run}
   end
 
-  # A step's moment: what the sensor was looking at, so a replay has a frame.
+  # A step's moment, recorded the way a run records one: the arrays a camera
+  # answers with go in, and the pictures a page draws them into come out. The
+  # depth grows with the step, so a step is visibly a different step.
   defp moment(step) do
-    %{
-      "step" => step,
-      "sensors" => %{"patch" => %{"location" => [step * 0.01, 0.0, 0.1], "value" => 0.0}}
-    }
+    near = 0.02 + step * 0.01
+
+    Monty.Studio.RunLog.moment(%{step: step}, %{
+      Monty.Simulators.Synthetic.Environment.agent_id() => %{
+        "patch" => %{
+          "location" => [step * 0.01, 0.0, 0.1],
+          "value" => 0.0,
+          "depth" => [[near, near + 0.02], [near, near + 0.02]],
+          "rgba" => [[[0.2, 0.7, 0.2, 1.0]], [[0.2, 0.7, 0.2, 1.0]]]
+        }
+      }
+    })
   end
 
   describe "the list of runs" do
@@ -68,6 +103,20 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert render(view) =~ "finished"
     end
 
+    test "a run that has not started says queued, not running", %{conn: conn} do
+      # A record is written the moment a run is queued, so its own status says
+      # `running` before anything is running. The list says what is true.
+      {:ok, queued} =
+        RunHistory.start(%{experiment: "tutorial/first_experiment", source: "monty", steps: 2})
+
+      {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(queued)
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      assert view |> element("#run-#{queued.id}") |> render() =~ "queued"
+      refute view |> element("#run-#{queued.id}") |> render() =~ "running"
+    end
+
     test "says so when nothing has run", %{conn: conn} do
       # Empty is the state a fresh database is in, and it has to be a page.
       ExTbpMonty.Repo.delete_all(Monty.Studio.RunHistory.Run)
@@ -75,6 +124,104 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       {:ok, view, _html} = live(conn, ~p"/runs")
 
       assert has_element?(view, "#runs")
+    end
+  end
+
+  describe "narrowing the list" do
+    test "a state pill filters the list, and the address carries it", %{conn: conn, run: run} do
+      failed =
+        insert_run(%{experiment: "base_config_10distinctobj_dist_agent", status: "failed"})
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      assert has_element?(view, "#run-#{run.id}")
+      assert has_element?(view, "#run-#{failed.id}")
+
+      view |> element("#filter-failed") |> render_click()
+
+      assert_patch(view, ~p"/runs?#{[state: "failed", q: ""]}")
+      assert has_element?(view, "#run-#{failed.id}")
+      refute has_element?(view, "#run-#{run.id}")
+    end
+
+    test "every word of the filter must match", %{conn: conn, run: run} do
+      _base =
+        insert_run(%{experiment: "base_config_10distinctobj_dist_agent", status: "finished"})
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      # One word narrows to the two names that carry it.
+      view |> element("#run-search") |> render_change(%{"q" => "base"})
+      assert_patch(view, ~p"/runs?#{[state: "all", q: "base"]}")
+      refute has_element?(view, "#run-#{run.id}")
+
+      # A second word narrows further: both have to appear, not either.
+      view |> element("#run-search") |> render_change(%{"q" => "base dist"})
+      assert_patch(view, ~p"/runs?#{[state: "all", q: "base dist"]}")
+
+      view |> element("#run-search") |> render_change(%{"q" => "base nothing"})
+      assert view |> render() =~ "No run matches"
+    end
+
+    test "the list is paged when there are more runs than a page", %{conn: conn} do
+      for _ <- 1..26,
+          do: insert_run(%{experiment: "tutorial/first_experiment", status: "finished"})
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      # The setup's own run makes twenty-seven.
+      assert view |> element("#run-count") |> render() =~ "1–25 of 27"
+      refute has_element?(view, "#page-previous")
+
+      view |> element("#page-next") |> render_click()
+
+      assert_patch(view, ~p"/runs?#{[state: "all", q: "", page: 2]}")
+      assert view |> element("#run-count") |> render() =~ "26–27 of 27"
+      assert view |> element("#page-number") |> render() =~ "page 2 of 2"
+    end
+  end
+
+  describe "stopping a run from the list" do
+    test "a run that is waiting can be stopped", %{conn: conn} do
+      {:ok, queued} =
+        RunHistory.start(%{experiment: "tutorial/first_experiment", source: "monty", steps: 2})
+
+      {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(queued)
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      view |> element("#stop-#{queued.id}") |> render_click()
+
+      assert render(view) =~ "Stopped: the run never started."
+      assert RunHistory.get(queued.id).status == "failed"
+
+      # Nothing is left to stop.
+      refute has_element?(view, "#stop-#{queued.id}")
+    end
+
+    test "ending is offered only for a run that is going", %{conn: conn} do
+      {:ok, queued} =
+        RunHistory.start(%{experiment: "tutorial/first_experiment", source: "monty", steps: 2})
+
+      {:ok, job} = Monty.Studio.Jobs.Run.enqueue_run(queued)
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      refute has_element?(view, "#end-#{queued.id}")
+
+      :ok = running(job)
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      assert has_element?(view, "#end-#{queued.id}")
+    end
+
+    test "a run that finished offers nothing to stop", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      refute has_element?(view, "#stop-#{run.id}")
+      refute has_element?(view, "#end-#{run.id}")
+      assert has_element?(view, "#delete-#{run.id}")
     end
   end
 
@@ -120,6 +267,35 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     end
   end
 
+  describe "a run that did not finish" do
+    test "says what stopped it, above everything else", %{conn: conn, run: run} do
+      {:ok, failed} =
+        RunHistory.finish(run, %{"reason" => "the world would not start"}, "failed")
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{failed.id}")
+
+      assert view |> element("#run-failure") |> render() =~ "the world would not start"
+    end
+
+    test "a run whose process is gone is closed when its page is opened", %{conn: conn} do
+      # The row a restart leaves behind: `running`, with no job and no process.
+      # Opening the page is the first thing that could notice, so it notices.
+      {:ok, abandoned} =
+        RunHistory.start(%{experiment: "tutorial/first_experiment", source: "monty", steps: 2})
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{abandoned.id}")
+
+      assert RunHistory.get(abandoned.id).status == "failed"
+      assert view |> element("#run-failure") |> render() =~ "stopped before it finished"
+    end
+
+    test "a run that finished says nothing about how it ended", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      refute has_element?(view, "#run-failure")
+    end
+  end
+
   describe "replaying a run" do
     test "opens at the last step, with the picture that step saw", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
@@ -137,7 +313,14 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       view |> element("#replay-seek") |> render_change(%{"step" => "0"})
 
       assert view |> element("#replay-step") |> render() =~ "step 0"
-      assert view |> element("#replay-frame-patch") |> render() =~ "x 0.00 m"
+
+      # Step 0 saw the surface 2 cm away, step 1 further back: the frame says
+      # which, in the same words the run's own log used.
+      assert view |> element("#replay-frame-patch") |> render() =~ "depth 0.020–0.040 m"
+
+      view |> element("#replay-seek") |> render_change(%{"step" => "1"})
+
+      assert view |> element("#replay-frame-patch") |> render() =~ "depth 0.030–0.050 m"
     end
 
     test "the chart follows the step and can be zoomed", %{conn: conn, run: run} do

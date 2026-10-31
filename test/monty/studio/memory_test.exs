@@ -74,10 +74,16 @@ defmodule Monty.Studio.MemoryTest do
   end
 
   describe "a run of an experiment that names a model" do
-    test "gets that model's memory in its learning module, and no memory finding" do
+    test "gets that model's memory in its learning module, and says which release it came from" do
       {:ok, opened} = Monty.Studio.open(@experiment)
 
-      assert Setup.memory_findings(opened.setup) == []
+      # Every config now names `pretrained_ycb_v14`, which nobody has exported
+      # here, so the run gets this machine's export of the same model — and says
+      # so rather than loading nothing while claiming otherwise.
+      assert [%{code: :memory_from_another_release, message: message}] =
+               Setup.memory_findings(opened.setup)
+
+      assert message =~ "surf_agent_1lm_10distinctobj"
 
       %{learning_modules: [learning_module]} = Setup.model_spec(opened.setup, "memory-test")
 

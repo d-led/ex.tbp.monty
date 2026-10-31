@@ -201,6 +201,14 @@ defmodule ExTbpMontyWeb.StudioComponents do
   def duration(microseconds) when microseconds < 1_000, do: "#{microseconds} µs"
   def duration(microseconds), do: "#{Float.round(microseconds / 1_000, 1)} ms"
 
+  # Why there is nothing to look at, in the run's own terms: a run from before a
+  # step kept its pictures has none anywhere, and one step can miss its own.
+  defp no_pictures(false),
+    do:
+      "This run kept no pictures of what its sensors saw, so the steps have no views — the numbers are what it recorded."
+
+  defp no_pictures(true), do: "This step kept no pictures."
+
   @doc """
   A finished run, step by step: the slider, the frames at that step, and a chart.
 
@@ -214,6 +222,10 @@ defmodule ExTbpMontyWeb.StudioComponents do
   attr :series_id, :string, default: nil
   attr :recorded, :integer, default: 0
   attr :playing, :boolean, default: false
+  # Whether the run kept any picture at all: a run recorded before a step kept
+  # them has none, and that is said in one sentence rather than drawn as a row of
+  # empty frames per step.
+  attr :pictures, :boolean, default: false
   attr :id, :string, default: "replay"
 
   def replay(assigns) do
@@ -281,7 +293,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
       </form>
 
       <div :if={@moment} class="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <div id="replay-frames" class="grid gap-1.5 sm:grid-cols-2">
+        <div :if={@moment.frames != []} id="replay-frames" class="grid gap-1.5 sm:grid-cols-2">
           <figure
             :for={frame <- @moment.frames}
             id={"replay-frame-#{frame.sensor_id}"}
@@ -294,6 +306,10 @@ defmodule ExTbpMontyWeb.StudioComponents do
             <div class="text-base-content/80">{frame.data}</div>
           </figure>
         </div>
+
+        <p :if={@moment.frames == []} id="replay-no-pictures" class="text-xs text-base-content/60">
+          {no_pictures(@pictures)}
+        </p>
 
         <dl :if={@moment.entry} class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
           <div>

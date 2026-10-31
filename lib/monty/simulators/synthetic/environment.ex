@@ -30,7 +30,15 @@ defmodule Monty.Simulators.Synthetic.Environment do
   @default_sensor "patch"
 
   @enforce_keys [:sensor_ids, :world]
-  defstruct [:sensor_ids, :world, scene: nil, views: %{}, agent: nil, sensors: %{}]
+  defstruct [
+    :sensor_ids,
+    :world,
+    scene: nil,
+    views: %{},
+    agent: nil,
+    sensors: %{},
+    last_observations: nil
+  ]
 
   @type t :: %__MODULE__{
           sensor_ids: [Monty.Simulators.Environment.sensor_id()],
@@ -38,7 +46,8 @@ defmodule Monty.Simulators.Synthetic.Environment do
           scene: Scene.t() | nil,
           views: %{optional(Monty.Simulators.Environment.sensor_id()) => keyword()},
           agent: Kinematics.pose() | nil,
-          sensors: %{optional(Monty.Simulators.Environment.sensor_id()) => Kinematics.pose()}
+          sensors: %{optional(Monty.Simulators.Environment.sensor_id()) => Kinematics.pose()},
+          last_observations: map() | nil
         }
 
   @impl true
@@ -87,9 +96,22 @@ defmodule Monty.Simulators.Synthetic.Environment do
   @spec step(t(), [Monty.Frameworks.Actions.Action.t()]) :: {map(), map(), t()}
   def step(%__MODULE__{} = environment, actions) do
     world = Kinematics.step(environment.world, actions)
+    observations = observations(environment, world)
 
-    {observations(environment, world), proprioceptive_state(world), %{environment | world: world}}
+    {observations, proprioceptive_state(world),
+     %{environment | world: world, last_observations: observations}}
   end
+
+  @doc """
+  What the world rendered on its last step, before any transform ran.
+
+  A page that shows the object wants the picture the world drew, not the one a
+  transform rewrote: `MissingToMaxDepth` turns "no return" into a metre, and a
+  surface experiment clips everything past five centimetres, which is right for
+  matching and useless for looking at.
+  """
+  @spec observation(t()) :: map() | nil
+  def observation(%__MODULE__{last_observations: observations}), do: observations
 
   @impl true
   @spec reset(t()) :: t()

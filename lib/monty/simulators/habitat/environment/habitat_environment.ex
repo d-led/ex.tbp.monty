@@ -97,14 +97,29 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
 
   @doc """
   What this machine tells Monty's process: `:monty_peer` in the application
-  configuration, with `$MONTY_PYTHON` for the interpreter when the configuration
-  does not name one.
+  configuration, with `$MONTY_PYTHON` for the interpreter and `$MONTY_OVERRIDES`
+  for Hydra overrides when the configuration does not name them.
+
+  An override is how a config that names a world this machine cannot run still
+  steps a real one: every experiment now names MuJoCo, and MuJoCo refuses to
+  import in an x86_64 interpreter on Apple Silicon — so a run here asks Monty for
+  `environment=habitat_dist_agent` and gets the same experiment against the world
+  that does run. The overrides are Hydra's own syntax, space separated, because
+  that is what the command line takes.
   """
   @spec peer_options() :: keyword()
   def peer_options do
     :ex_tbp_monty
     |> Application.get_env(:monty_peer, [])
     |> Keyword.put_new_lazy(:python, fn -> System.get_env("MONTY_PYTHON") end)
+    |> Keyword.put_new_lazy(:overrides, fn -> environment_overrides() end)
+  end
+
+  defp environment_overrides do
+    case System.get_env("MONTY_OVERRIDES") do
+      nil -> []
+      overrides -> overrides |> String.split(" ", trim: true)
+    end
   end
 
   @doc """

@@ -80,6 +80,76 @@ defmodule Monty.Studio.RunHistory do
     |> Repo.all()
   end
 
+  @per_page 25
+
+  @doc """
+  One page of runs, narrowed by state and by text.
+
+  `state` is a run's own status (`"running"`, `"finished"`, `"stopped"`,
+  `"failed"`), or `"all"` for every one. `text` filters on the experiment's name,
+  and **every word of it must match** — two words narrow the list instead of
+  widening it, which is what a person typing a second word means.
+
+  Answers the page, the total it is a page of, and how many pages that makes, so
+  a view can draw its pager without asking again.
+  """
+  @spec search(keyword()) :: %{
+          runs: [Run.t()],
+          total: non_neg_integer(),
+          page: pos_integer(),
+          per_page: pos_integer(),
+          pages: pos_integer()
+        }
+  def search(options \\ []) do
+    state = Keyword.get(options, :state, "all")
+    text = Keyword.get(options, :text, "")
+    page = options |> Keyword.get(:page, 1) |> max(1)
+    per_page = Keyword.get(options, :per_page, @per_page)
+
+    narrowed = Run |> by_state(state) |> by_text(text)
+    total = Repo.aggregate(narrowed, :count, :id)
+
+    runs =
+      narrowed
+      |> order_by(desc: :inserted_at)
+      |> limit(^per_page)
+      |> offset(^((page - 1) * per_page))
+      |> Repo.all()
+
+    %{runs: runs, total: total, page: page, per_page: per_page, pages: pages(total, per_page)}
+  end
+
+  defp pages(0, _per_page), do: 1
+  defp pages(total, per_page), do: div(total + per_page - 1, per_page)
+
+  @doc "How many runs there are in each state — what the filter pills show."
+  @spec counts() :: %{String.t() => non_neg_integer()}
+  def counts do
+    Run
+    |> group_by([run], run.status)
+    |> select([run], {run.status, count(run.id)})
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  defp by_state(query, state) when state in ~w(running finished stopped failed),
+    do: where(query, [run], run.status == ^state)
+
+  defp by_state(query, _every_state), do: query
+
+  # Every word is its own condition, so the conditions narrow each other. What a
+  # word may not do is act as a wildcard: `%` and `_` are characters a person
+  # typed, not patterns.
+  defp by_text(query, text) do
+    text
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.reduce(query, fn word, narrowed ->
+      where(narrowed, [run], fragment("? ILIKE ?", run.experiment, ^"%#{escape(word)}%"))
+    end)
+  end
+
+  defp escape(word), do: Regex.replace(~r/([%_\\])/, word, "\\\\\\1")
+
   @doc "Runs of one experiment, newest first."
   @spec list_for(String.t(), keyword()) :: [Run.t()]
   def list_for(experiment, opts \\ []) do
@@ -127,6 +197,21 @@ defmodule Monty.Studio.RunHistory do
     |> order_by(desc: :inserted_at)
     |> limit(1)
     |> Repo.one()
+  end
+
+  @doc """
+  Every run still marked `running`, oldest first.
+
+  A mark, not a fact: what closes a record is the job that executes it, and a
+  record can outlive that job. `Monty.Studio.Jobs.Reaper` is what separates the
+  two.
+  """
+  @spec running() :: [Run.t()]
+  def running do
+    Run
+    |> where([run], run.status == "running")
+    |> order_by(asc: :inserted_at)
+    |> Repo.all()
   end
 
   defp duration(nil, _finished_at), do: 0

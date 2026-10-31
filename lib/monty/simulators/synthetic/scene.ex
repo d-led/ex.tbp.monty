@@ -75,6 +75,10 @@ defmodule Monty.Simulators.Synthetic.Scene do
     }
   end
 
+  @doc "The radius a scene has when nobody says: five centimetres."
+  @spec radius() :: float()
+  def radius, do: @radius
+
   @doc """
   What a sensor at `pose` sees through a pinhole camera.
 

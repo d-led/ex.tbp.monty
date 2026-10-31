@@ -43,6 +43,24 @@ defmodule Monty.ModuleMapTest do
     end
   end
 
+  describe "resolving a target a config names" do
+    test "a class a package exports is found where it is defined" do
+      # Monty's env configs name `MuJoCoSimulator` where the package exports it —
+      # `simulators/mujoco/__init__.py` — and there is no `mujoco.py` behind that
+      # path. Read as a file, the class came back unknown and a config that names
+      # the simulator this port has read about looked like a config that names
+      # nothing at all.
+      assert {:ok, resolved} = ModuleMap.resolve("tbp.monty.simulators.mujoco.MuJoCoSimulator")
+
+      assert resolved.elixir == "Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator"
+      assert resolved.python == "simulators/mujoco/simulator.py"
+    end
+
+    test "a name no class answers stays unknown rather than guessed" do
+      assert ModuleMap.resolve("tbp.monty.simulators.mujoco.NoSuchClass") == :error
+    end
+  end
+
   describe "the generated map" do
     test "covers every Python file in both packages" do
       if File.dir?(Path.join(Monty.Config.Source.root(), "src/tbp/monty")) do

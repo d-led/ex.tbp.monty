@@ -88,7 +88,8 @@ defmodule Monty.Studio do
   end
 
   defp describe(name, source, tree, yaml, groups, opts) do
-    setup = Setup.new(tree, [name: name] ++ Keyword.take(opts, [:world_simulator]))
+    setup =
+      Setup.new(tree, [name: name] ++ Keyword.take(opts, [:world_simulator, :pretrained_dir]))
 
     %{
       name: name,

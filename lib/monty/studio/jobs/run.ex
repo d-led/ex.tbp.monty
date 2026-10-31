@@ -21,7 +21,7 @@ defmodule Monty.Studio.Jobs.Run do
   alias Monty.Frameworks.Experiments.MontyExperiment
   alias Monty.Simulators.Synthetic.{Camera, Environment}
   alias Monty.Studio
-  alias Monty.Studio.{Artifacts, Logging, Run, RunHistory, RunLog, Setup, Summary}
+  alias Monty.Studio.{Artifacts, CentreView, Logging, Run, RunHistory, RunLog, Setup, Summary}
 
   @doc "Enqueues a run of `attributes` (see `RunLog.attributes/2`) and returns the job."
   @spec enqueue(map()) :: {:ok, Oban.Job.t()} | {:error, term()}
@@ -64,13 +64,52 @@ defmodule Monty.Studio.Jobs.Run do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"run_id" => run_id}}) do
-    with {:ok, record} <- fetch(run_id),
-         {:ok, opened} <- open(record) do
-      run_experiment(record, opened)
-    else
-      {:error, reason} -> give_up(run_id, reason)
+    # Ownership first, before anything can fail. "Is a process working on this
+    # run" is the question `Monty.Studio.Jobs.Reaper` asks, and a run that is
+    # being attempted has an owner even while it is still opening its world.
+    register(run_id)
+
+    try do
+      with {:ok, record} <- fetch(run_id),
+           {:ok, opened} <- open(record) do
+        run_experiment(record, opened)
+      else
+        {:error, reason} -> give_up(run_id, reason)
+      end
+    rescue
+      exception ->
+        died(run_id, Exception.message(exception))
+        reraise exception, __STACKTRACE__
+    catch
+      kind, reason ->
+        died(run_id, Exception.format(kind, reason, __STACKTRACE__))
+        :erlang.raise(kind, reason, __STACKTRACE__)
+    after
+      unregister(run_id)
     end
   end
+
+  @doc """
+  Whether a process on this node is working on `run_id` right now.
+
+  This is the only evidence of a live run that cannot be stale: a record says
+  "running" until somebody closes it, and an Oban job says `executing` until its
+  node is gone and nothing notices. A registered worker is a process that exits
+  when it stops working, and the registry forgets it then.
+  """
+  @spec held?(binary()) :: boolean()
+  def held?(run_id), do: Registry.lookup(Monty.Runtime.Registry, key(run_id)) != []
+
+  @doc """
+  The process working on a run, and the model it is stepping — `[]` when nobody
+  is.
+
+  The model id is what a cancelled run's leftover processes are found by, so a
+  caller that ends a run out of band (see `Monty.Studio.Jobs.halt/1`) needs it
+  before the process that owns it is gone.
+  """
+  @spec owner(binary()) :: [{pid(), term()}]
+  def owner(run_id), do: Registry.lookup(Monty.Runtime.Registry, key(run_id))
 
   # -- the run ---------------------------------------------------------------
 
@@ -90,7 +129,7 @@ defmodule Monty.Studio.Jobs.Run do
            has_detailed_logger: Logging.detailed?(logging)
          ) do
       {:ok, run} ->
-        Registry.register(Monty.Runtime.Registry, key(run_id), run.model_id)
+        Registry.update_value(Monty.Runtime.Registry, key(run_id), fn _ -> run.model_id end)
 
         say(
           run_id,
@@ -125,7 +164,6 @@ defmodule Monty.Studio.Jobs.Run do
         log_statistics(run_id, logging, run)
 
         Run.stop(run)
-        Registry.unregister(Monty.Runtime.Registry, key(run_id))
         close(record, opened, outcome, infos, conclusion, run_id)
 
       {:error, reason} ->
@@ -140,8 +178,16 @@ defmodule Monty.Studio.Jobs.Run do
   defp step_once(run_id, {run, record}, sensor_ids) do
     {:ok, info, observations, run} = Run.step(run)
     beliefs = Run.beliefs(run)
-    record = RunLog.record_step(record, info, observations, beliefs)
-    emit(run_id, info, observations, sensor_ids, beliefs)
+
+    # The world's own answer, not the transformations' — the transformed
+    # observations say what the model was *given* (poses, curvatures, and for the
+    # ports not even a location), and a picture of the object is what the world
+    # rendered. An experiment behind the port records nothing drawable otherwise,
+    # which is a replay of blank frames.
+    rendered = Run.rendered_observations(run) || observations
+    record = RunLog.record_step(record, info, rendered, beliefs)
+
+    emit(run_id, info, rendered, sensor_ids, beliefs, centre_view(run, info.step))
     {:ok, info, {run, record}}
   catch
     # An exit and a raise are the same thing here: the step did not produce a
@@ -177,13 +223,29 @@ defmodule Monty.Studio.Jobs.Run do
     end
   end
 
-  defp emit(run_id, info, observations, sensor_ids, beliefs) do
+  defp emit(run_id, info, observations, sensor_ids, beliefs, centre) do
     entry = RunLog.entry(info, beliefs)
     line = RunLog.line(entry)
     say(run_id, line)
     frames = frames_for(sensor_ids, observations, info.step)
-    broadcast(run_id, {:step, %{line: line, step: info.step, frames: frames, beliefs: beliefs}})
+
+    broadcast(
+      run_id,
+      {:step,
+       %{
+         line: line,
+         step: info.step,
+         frames: frames,
+         beliefs: beliefs,
+         centre: centre
+       }}
+    )
   end
+
+  # Where the agent is, relative to the object it is meant to be looking at. A
+  # world with no scene has nothing to centre on and answers `nil`, which the page
+  # reads as "no such panel".
+  defp centre_view(run, step), do: CentreView.frame(run.interface.env, step)
 
   # Every sensor, every step: a queued run has no socket waiting on it, so the
   # throttle that protects a live page has nothing to protect. The frames are
@@ -230,10 +292,26 @@ defmodule Monty.Studio.Jobs.Run do
 
   # -- failing loudly enough -------------------------------------------------
 
+  # A run whose worker raised has ended. Oban records the crash on the job, but
+  # jobs are pruned and a person reads the run — so the reason goes where the
+  # run's own page can show it, in the database and in the run's own log, and
+  # only then is the exception let out, for the job's attempt to be counted.
+  defp died(run_id, message) do
+    Logger.error("studio run #{run_id} died: #{message}")
+    _ = Artifacts.start(run_id)
+    _ = say(run_id, "the run died: #{message}")
+
+    with {:ok, record} <- fetch(run_id),
+         do: RunHistory.finish(record, %{"reason" => message}, "failed")
+
+    broadcast(run_id, {:failed, %{reason: message}})
+  end
+
   defp give_up(run_id, reason) do
     Logger.error("studio run #{run_id} did not happen: #{inspect(reason)}")
 
     with {:ok, record} <- fetch(run_id) do
+      _ = Artifacts.start(run_id)
       _ = say(run_id, "run did not happen: #{inspect(reason)}")
       _ = RunHistory.finish(record, %{"reason" => inspect(reason)}, "failed")
     end
@@ -299,6 +377,17 @@ defmodule Monty.Studio.Jobs.Run do
   defp broadcast(run_id, event) do
     Phoenix.PubSub.broadcast(ExTbpMonty.PubSub, topic(run_id), {:studio, run_id, event})
   end
+
+  # A run has one owner: this worker, until it stops working on it. Registering
+  # is how it proves it is alive (see `held?/1` and `Monty.Studio.Jobs.Reaper`).
+  defp register(run_id) do
+    case Registry.register(Monty.Runtime.Registry, key(run_id), :starting) do
+      {:ok, _owner} -> :ok
+      {:error, {:already_registered, _pid}} -> :ok
+    end
+  end
+
+  defp unregister(run_id), do: Registry.unregister(Monty.Runtime.Registry, key(run_id))
 
   defp key(run_id), do: {:studio_run, run_id}
 end

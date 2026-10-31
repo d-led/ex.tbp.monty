@@ -55,7 +55,11 @@ defmodule ExTbpMontyWeb.Layouts do
               label="Prerequisites"
               icon="hero-arrow-down-tray-mini"
             />
-            <.nav_link navigate={~p"/runs/demo"} label="Runtime" icon="hero-play-mini" />
+            <%!-- One entry for "what happened": the runs page says what a run
+            decided and, while a run is unfinished, where it is in the queue.
+            The queue's own page is one click from there, for the operator who
+            needs to stop something. --%>
+            <.nav_link navigate={~p"/runs"} label="Runs" icon="hero-play-mini" />
           </nav>
         </div>
       </header>

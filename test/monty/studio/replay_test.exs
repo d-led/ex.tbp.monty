@@ -35,6 +35,20 @@ defmodule Monty.Studio.ReplayTest do
     }
   end
 
+  # A step's report with what the learning modules believed, in the shape the
+  # database keeps: `max_evidence` under the object it is about.
+  defp believe(entry, evidence) when is_number(evidence),
+    do: believe(entry, %{"learning_module_0" => evidence})
+
+  defp believe(entry, by_module) do
+    beliefs =
+      Map.new(by_module, fn {module, evidence} ->
+        {module, %{"graphs" => %{"mug" => %{"max_evidence" => evidence}}}}
+      end)
+
+    Map.put(entry, "beliefs", beliefs)
+  end
+
   describe "the steps a run recorded" do
     test "are the steps the timeline has, in order" do
       assert Replay.steps(run(0..2)) == [0, 1, 2]
@@ -59,9 +73,13 @@ defmodule Monty.Studio.ReplayTest do
       assert moment.step == 2
       assert moment.frames |> Enum.map(& &1.sensor_id) |> Enum.sort() == ["patch", "view_finder"]
 
-      # The camera draws the recorded location, so the frame is history.
+      # The camera draws the recorded location, so the frame is history. A
+      # recorded step keeps the percept, not the pixels — the camera arrays are
+      # dropped on the way into the database, because they are four thousand
+      # numbers a step — so the frame says there is no picture rather than
+      # drawing one that the run never had.
       assert moment.frames |> Enum.find(&(&1.sensor_id == "patch")) |> Map.get(:note) =~
-               "x 0.02 m"
+               "no image"
     end
 
     test "carries the report the modules gave at the same step" do
@@ -121,6 +139,56 @@ defmodule Monty.Studio.ReplayTest do
                %{step: 0, value: 1},
                %{step: 1, value: 0}
              ]
+    end
+
+    test "show the evidence the run climbed to, which is how an episode is judged" do
+      run = %Run{
+        timeline: [moment(0), moment(1), moment(2)],
+        log: [believe(entry(0), 0.5), believe(entry(1), 4.0), believe(entry(2), 9.5)]
+      }
+
+      assert %{label: "best evidence", unit: ""} = Replay.chart_series(run, "evidence")
+
+      assert Replay.chart_series(run, "evidence").points == [
+               %{step: 0, value: 0.5},
+               %{step: 1, value: 4.0},
+               %{step: 2, value: 9.5}
+             ]
+    end
+
+    test "take the best evidence across the modules that reported" do
+      run = %Run{
+        timeline: [moment(0)],
+        log: [believe(entry(0), %{"learning_module_0" => 1.0, "learning_module_1" => 7.0})]
+      }
+
+      assert Replay.chart_series(run, "evidence").points == [%{step: 0, value: 7.0}]
+    end
+
+    test "say a run believed nothing when no module believed anything" do
+      assert Replay.chart_series(run(0..1), "evidence").points == [
+               %{step: 0, value: 0.0},
+               %{step: 1, value: 0.0}
+             ]
+    end
+
+    test "find a sensor's place in the camera pose, for a world that sends no location" do
+      # `cam_to_world`'s last column is where the camera was: the world behind
+      # the port answers this and not `location`, and a chart of zeros would claim
+      # the sensor never moved.
+      camera = [
+        [1.0, 0.0, 0.0, 0.5],
+        [0.0, 1.0, 0.0, 1.5],
+        [0.0, 0.0, 1.0, 0.08],
+        [0.0, 0.0, 0.0, 1.0]
+      ]
+
+      run = %Run{
+        timeline: [%{"step" => 0, "sensors" => %{"patch" => %{"cam_to_world" => camera}}}],
+        log: [entry(0)]
+      }
+
+      assert Replay.chart_series(run, "sensor:patch").points == [%{step: 0, value: 0.5}]
     end
   end
 
