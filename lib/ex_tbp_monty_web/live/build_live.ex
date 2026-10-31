@@ -30,7 +30,16 @@ defmodule ExTbpMontyWeb.BuildLive do
     {:ok,
      socket
      |> assign(blueprint: blueprint, preview: Studio.preview(blueprint), choices: choices())
-     |> assign_forms()}
+     |> assign_forms()
+     |> assign(import_form: to_form(%{"name" => ""}, as: :import))
+     |> allow_upload(:yaml,
+       # `accept` is not asked to do the checking: Phoenix validates that list
+       # against the MIME table, where `.yaml` is not a known extension, so the
+       # file name is checked here instead — one error message, in one place.
+       accept: :any,
+       max_entries: 1,
+       max_file_size: 1_000_000
+     )}
   end
 
   @impl true
@@ -122,6 +131,39 @@ defmodule ExTbpMontyWeb.BuildLive do
           class="max-h-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-xs"
         ><code><%= @preview.yaml %></code></pre>
       </section>
+      <%!-- The other direction: a file from elsewhere becomes a draft here. It is
+      composed before it is saved, so a file that is not a Hydra config is
+      refused instead of becoming a draft nobody can open. --%>
+      <section id="import" class="space-y-2 border-t border-base-300 pt-4">
+        <h2 class="text-lg font-semibold tracking-tight">Import an experiment file</h2>
+        <p class="max-w-3xl text-sm text-base-content/70">
+          A config from another machine, or one of Monty's own that you saved and
+          changed. It is composed first; anything that would stop it running is
+          reported on the experiment's page.
+        </p>
+
+        <.form
+          for={@import_form}
+          id="import-form"
+          phx-change="validate-import"
+          phx-submit="import"
+          class="flex flex-wrap items-end gap-2"
+        >
+          <.input field={@import_form[:name]} label="Name for the draft" type="text" required />
+          <div class="space-y-1">
+            <span class="text-sm font-medium">File</span>
+            <.live_file_input upload={@uploads.yaml} class="file-input file-input-sm" />
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Import</button>
+        </.form>
+
+        <p :for={error <- upload_errors(@uploads.yaml)} class="text-sm text-error">
+          {upload_error_message(error)}
+        </p>
+        <p :for={entry <- @uploads.yaml.entries} class="text-xs text-base-content/60">
+          {entry.client_name}
+        </p>
+      </section>
     </Layouts.app>
     """
   end
@@ -134,6 +176,31 @@ defmodule ExTbpMontyWeb.BuildLive do
      socket
      |> assign(blueprint: blueprint, preview: Studio.preview(blueprint))
      |> assign_forms()}
+  end
+
+  @impl true
+  def handle_event("validate-import", _params, socket), do: {:noreply, socket}
+
+  def handle_event("import", %{"import" => %{"name" => name}}, socket) do
+    case read_upload(socket) do
+      {:ok, text, socket} ->
+        case Drafts.import(name, text) do
+          {:ok, imported} ->
+            {:noreply,
+             push_navigate(socket,
+               to: ~p"/experiments/#{String.split(imported.name, "/")}"
+             )}
+
+          {:error, message} ->
+            {:noreply, put_flash(socket, :error, message)}
+        end
+
+      {:error, :no_file, socket} ->
+        {:noreply, put_flash(socket, :error, "Choose a .yaml file to import.")}
+
+      {:error, :not_yaml, socket} ->
+        {:noreply, put_flash(socket, :error, "That file is not a .yaml file.")}
+    end
   end
 
   def handle_event("save", %{"blueprint" => params}, socket) do
@@ -183,6 +250,27 @@ defmodule ExTbpMontyWeb.BuildLive do
   end
 
   defp coerce(_key, value), do: value
+
+  defp read_upload(socket) do
+    case consume_uploaded_entries(socket, :yaml, fn %{path: path}, entry ->
+           {:ok, {entry.client_name, File.read!(path)}}
+         end) do
+      [{file_name, text}] -> classify(file_name, text, socket)
+      [] -> {:error, :no_file, socket}
+    end
+  end
+
+  defp classify(file_name, text, socket) do
+    if String.ends_with?(String.downcase(file_name), [".yaml", ".yml"]),
+      do: {:ok, text, socket},
+      else: {:error, :not_yaml, socket}
+  end
+
+  defp upload_error_message(:too_large), do: "That file is larger than 1 MB."
+
+  defp upload_error_message(error) do
+    "The file cannot be uploaded: #{error}"
+  end
 
   defp assign_forms(socket) do
     blueprint = socket.assigns.blueprint

@@ -157,6 +157,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           <span :if={@opened.source == :monty} class="badge badge-ghost badge-sm">
             from Monty's conf
           </span>
+          <%!-- Which world a run here would step. A stand-in scene is not Monty
+          and its numbers are this port's own, so the page says which one it is
+          before anything is run, not only in a warning further down. --%>
+          <span
+            id="world"
+            class={["badge badge-sm", world_badge(@opened.setup)]}
+            title={world_note(@opened.setup)}
+          >
+            world: {Setup.world_name(@opened.setup)}
+          </span>
           <%!-- The file, not a description of the file: exporting Monty's own
           experiment is how you take one and change it. --%>
           <.link
@@ -742,6 +752,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       {count, ""} when count > 0 -> count
       _default -> Monty.Studio.Run.default_steps()
     end
+  end
+
+  # A stand-in world is a warning, not a badge of honour: the experiment's own
+  # numbers come from Monty's simulator, and this one is not it.
+  defp world_badge(%{world: :habitat}), do: "badge-ghost"
+  defp world_badge(_setup), do: "badge-warning"
+
+  defp world_note(%{world: :habitat}) do
+    "MuJoCo or Habitat, whichever this experiment names, stepped in a Python " <>
+      "process behind Monty.Simulators.Port"
+  end
+
+  defp world_note(_setup) do
+    "This port's own scene: one sphere, stepped in the BEAM. A run here exercises " <>
+      "the port, not the experiment — set MONTY_WORLD=monty and MONTY_PYTHON to " <>
+      "step Monty's simulator instead."
   end
 
   # How many episodes to run at once. Eight is a ceiling rather than a judgement

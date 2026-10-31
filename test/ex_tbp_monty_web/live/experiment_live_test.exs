@@ -19,6 +19,17 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     {:ok, tmp: tmp}
   end
 
+  describe "which world a run would step" do
+    test "the page says so before anything runs", %{conn: conn} do
+      # Without MONTY_WORLD a run steps the stand-in, and a stand-in is not the
+      # experiment: the header says which one it is, not a footnote.
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      assert view |> element("#world") |> render() =~ "stand-in scene"
+      assert has_element?(view, "#world[title]")
+    end
+  end
+
   describe "the experiment as a file" do
     test "the page offers it, and the download is the YAML Monty ships", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")

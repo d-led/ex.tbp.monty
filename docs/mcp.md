@@ -57,7 +57,8 @@ of theory to source).
 
 **Experiments** — `monty_list_experiments`, `monty_describe_experiment`,
 `monty_experiment_options`, `monty_read_option`, `monty_preview_experiment`,
-`monty_create_experiment`, `monty_run_experiment`.
+`monty_create_experiment`, `monty_export_experiment`, `monty_import_experiment`,
+`monty_run_experiment`.
 
 **Runs** — `monty_list_runs`, `monty_run_report`, `monty_delete_runs`.
 
@@ -89,6 +90,37 @@ Learning modules: 1 18
 learning modules, the objects the config names (or the sampler that places
 them), the connections, the epochs, the seed, `num_parallel`, and which classes
 are ported — in one response, so an assistant needs no filesystem of its own.
+
+### Taking one of Monty's experiments and changing it
+
+An experiment is a file, and the round trip through a file is the shortest path
+from "Monty ships one that is nearly right" to "a run of my own":
+
+```jsonc
+// 1. the file Monty ships — the short defaults list, not the composed tree
+{"name": "monty_export_experiment", "arguments": {"name": "base_10simobj_surf_agent"}}
+
+// 2. change it (the answer also serves it at /export/experiments/<name>)
+
+// 3. keep it under a new name; it is composed before it is written
+{"name": "monty_import_experiment", "arguments": {
+  "name": "my_four_objects", "yaml": "<the edited file>"
+}}
+
+// 4. run it, and watch it
+{"name": "monty_run_experiment", "arguments": {"name": "my_four_objects", "steps": 20}}
+{"name": "monty_run_report", "arguments": {"run_id": "<from the previous answer>"}}
+```
+
+`monty_import_experiment` refuses a name that is not one file name (a file is
+named after the draft), refuses a file that does not compose, and refuses to
+replace an existing draft unless `overwrite` is true. A file that composes but
+would not run is saved and its findings are reported — that is the answer to
+"what is wrong with it".
+
+The same two ends exist in the browser: every experiment page has a `yaml`
+download (`/export/experiments/<name>`), and the build page imports a file as a
+new draft.
 
 ### Runs, and deleting them
 

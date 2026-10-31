@@ -17,7 +17,7 @@ defmodule ExTbpMontyWeb.McpLive do
     {"Experiments",
      "monty_list_experiments · monty_describe_experiment · monty_experiment_options · " <>
        "monty_read_option · monty_preview_experiment · monty_create_experiment · " <>
-       "monty_run_experiment"},
+       "monty_export_experiment · monty_import_experiment · monty_run_experiment"},
     {"Runs", "monty_list_runs · monty_run_report · monty_delete_runs"}
   ]
 

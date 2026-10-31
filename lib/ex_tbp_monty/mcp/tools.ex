@@ -329,6 +329,47 @@ defmodule ExTbpMonty.Mcp.Tools do
       "annotations" => @writes
     },
     %{
+      "name" => "monty_export_experiment",
+      "title" => "Export an experiment as a file",
+      "description" =>
+        "The experiment as the YAML file a person would edit — a draft as it was saved, a " <>
+          "Monty experiment as its own short `defaults:` list. This is how you take one of " <>
+          "Monty's experiments, change it to what you want, and keep the result: edit the " <>
+          "text and bring it back with `monty_import_experiment`.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "name" => %{"type" => "string", "description" => "The experiment to export."}
+        },
+        "required" => ["name"]
+      },
+      "annotations" => @read_only
+    },
+    %{
+      "name" => "monty_import_experiment",
+      "title" => "Import an experiment file",
+      "description" =>
+        "Keeps an experiment YAML file from somewhere else as a draft. It is composed " <>
+          "before it is written, so a file that is not a Hydra config is refused; one that " <>
+          "composes but would not run is saved and the findings say what is wrong. The name " <>
+          "is a new draft's name (one file name, no slashes); replacing an existing draft " <>
+          "takes `overwrite`.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "name" => %{"type" => "string", "description" => "The draft's name."},
+          "yaml" => %{"type" => "string", "description" => "The file's text."},
+          "overwrite" => %{
+            "type" => "boolean",
+            "default" => false,
+            "description" => "Replace a draft of the same name."
+          }
+        },
+        "required" => ["name", "yaml"]
+      },
+      "annotations" => @writes
+    },
+    %{
       "name" => "monty_run_experiment",
       "title" => "Run an experiment",
       "description" =>
@@ -449,6 +490,8 @@ defmodule ExTbpMonty.Mcp.Tools do
     "monty_read_option" => {Experiments, :read_option},
     "monty_preview_experiment" => {Experiments, :preview},
     "monty_create_experiment" => {Experiments, :create},
+    "monty_export_experiment" => {Experiments, :export_experiment},
+    "monty_import_experiment" => {Experiments, :import_experiment},
     "monty_run_experiment" => {Experiments, :run},
     "monty_run_report" => {Experiments, :run_report},
     "monty_list_runs" => {Experiments, :list_runs},

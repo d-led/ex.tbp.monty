@@ -112,6 +112,45 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
     end
   end
 
+  @doc "`monty_export_experiment`: the experiment as a file."
+  def export_experiment(args, ctx) do
+    with {:ok, name} <- Args.required(args, "name"),
+         {:ok, exported} <- Experiments.export(name) do
+      url = ctx.base_url <> "/export/experiments/" <> exported.name
+
+      {:ok,
+       %{
+         text:
+           "`#{exported.name}` as `#{exported.filename}` (#{exported.source}, the file you " <>
+             "would edit — not what it composes to).\n#{url}\n\n```yaml\n" <>
+             exported.yaml <> "\n```",
+         structured: Map.put(exported, :url, url)
+       }}
+    end
+  end
+
+  @doc "`monty_import_experiment`: keep an experiment file from somewhere else."
+  def import_experiment(args, ctx) do
+    with {:ok, name} <- Args.required(args, "name"),
+         {:ok, yaml} <- Args.required(args, "yaml"),
+         {:ok, overwrite} <- Args.boolean(args, "overwrite"),
+         {:ok, imported} <- Experiments.import(name, yaml, overwrite: overwrite) do
+      url = ctx.base_url <> "/experiments/" <> imported.name
+      verdict =
+        if imported.valid?,
+          do: "It composes and nothing would stop it running.",
+          else: "It is saved, but it would not run as it stands:"
+
+      {:ok,
+       %{
+         text:
+           "Saved `#{imported.name}` as a draft. #{verdict}\n#{url}\n\n" <>
+             findings_text(imported.findings),
+         structured: Map.put(imported, :url, url)
+       }}
+    end
+  end
+
   @doc "`monty_run_experiment`: queue a run, and answer with its link."
   def run(args, ctx) do
     with {:ok, name} <- Args.required(args, "name"),

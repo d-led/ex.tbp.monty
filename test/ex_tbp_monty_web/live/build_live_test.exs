@@ -33,6 +33,16 @@ defmodule ExTbpMontyWeb.BuildLiveTest do
     end
   end
 
+  describe "importing a file" do
+    test "the page offers an upload, with the name it will be saved as", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/build")
+
+      assert has_element?(view, "#import-form")
+      assert has_element?(view, "#import-form input[name='import[name]']")
+      assert has_element?(view, "#import-form input[type=file]")
+    end
+  end
+
   describe "changing a component" do
     test "a different learning module is shown in the diagram and in the config", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/build")

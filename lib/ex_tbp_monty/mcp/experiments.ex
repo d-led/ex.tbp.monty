@@ -66,6 +66,32 @@ defmodule ExTbpMonty.Mcp.Experiments do
     end
   end
 
+  @doc """
+  The experiment as a file: the text a person would edit.
+
+  A draft is a file already; Monty's own experiment is exported from its config
+  tree, because the short `defaults:` list that names groups is the thing worth
+  copying and changing.
+  """
+  @spec export(String.t()) :: {:ok, map()} | {:error, String.t()}
+  def export(name), do: Drafts.export(name)
+
+  @doc """
+  Keeps an experiment file from somewhere else as a draft.
+
+  Composed before it is written, so a file that is not a Hydra config is an
+  error rather than a draft nobody can open. A file that composes but would not
+  run is saved and reported: the findings are the answer to "what is wrong with
+  it".
+  """
+  @spec import(String.t(), String.t(), keyword()) :: {:ok, map()} | {:error, String.t()}
+  def import(name, yaml, opts \\ []) do
+    case Drafts.import(name, yaml, opts) do
+      {:ok, imported} -> {:ok, %{imported | findings: findings(imported.findings)}}
+      {:error, message} -> {:error, message}
+    end
+  end
+
   @doc "The groups a config is built from."
   @spec groups() :: [String.t()]
   def groups, do: Catalog.groups()

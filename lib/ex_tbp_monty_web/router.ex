@@ -66,6 +66,9 @@ defmodule ExTbpMontyWeb.Router do
     # GET is declined with 405). This is the page that says how to point a client
     # at it, with the port this instance actually answers on.
     live "/mcp/config", McpLive, :index
+    # The experiment as a file. A glob of its own rather than a suffix of
+    # `/experiments/*name`, which is the LiveView's address.
+    get "/export/experiments/*name", ExperimentExportController, :show
   end
 
   # Other scopes may use custom stacks.
