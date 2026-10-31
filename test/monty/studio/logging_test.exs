@@ -16,6 +16,7 @@ defmodule Monty.Studio.LoggingTest do
   alias Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger
   alias Monty.Frameworks.Loggers.MontyHandlers.{BasicCSVStatsHandler, DetailedJSONHandler}
   alias Monty.Studio.{Logging, Run, Setup}
+  alias Monty.Test.Tmp
 
   @csv_and_json """
   # @package _global_
