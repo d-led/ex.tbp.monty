@@ -1,78 +1,76 @@
 # Monty on the BEAM
 
-A rewrite of the [Thousand Brains Project's Monty](https://github.com/thousandbrainsproject/tbp.monty)
-in Elixir.
+[Monty](https://github.com/thousandbrainsproject/tbp.monty) is the Thousand
+Brains Project's system: a sensor module moves over an object, learning modules
+model it and say where the sensor is on it. This is that system rewritten in
+Elixir — one process per module, every experiment Monty ships on a page in a
+browser, and an MCP endpoint for an assistant.
 
-Monty implements the Thousand Brains Theory of Intelligence: a sensor module
-moves over an object and senses it, learning modules keep models of objects and
-use those senses to recognise the object and to say where the sensor is on it.
-Monty is written in Python; this is the same system on the Erlang VM, where
-every sensor module, learning module and the motor system is a process, and
-every experiment Monty ships has a page in a browser UI.
+The port is module for module, and checked against Monty's own numbers rather
+than against a description of it. Where it deliberately differs, it says so.
 
-The port follows Monty module for module, so the two can be read side by side,
-and it is checked against Monty rather than against a description of it. Where
-it deliberately differs, it says so.
-
-It speaks the Model Context Protocol as well, so an assistant can ask it about
-Monty — its theory, its roadmap, its code — and define and run an experiment
-without leaving the conversation.
-
-## Quickstart
+## Run it
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/docker-compose.yml
 docker compose up
 ```
 
-That is the whole install — no checkout, nothing to build: the repository's own
-compose file, which compose then runs. In a checkout it is just
-`docker compose up`.
+→ <http://localhost:4001>
 
-Then <http://localhost:4001>: every experiment Monty ships, and a run you can
-start from any of them. The published image and a Postgres, the migration runs
-itself, Monty's config tree and pretrained libraries are in the image — and the
-database and the bundles `/prerequisites` downloads both sit in volumes, so a
-restart is a restart, not a re-fetch and a re-run. `docker compose down -v`
-deletes the volumes too.
+No checkout, no build, nothing to configure. The image is
+`ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64); compose adds the Postgres
+it needs and runs the migration itself. The database and everything
+`/prerequisites` downloads live in volumes, so a restart is a restart —
+`docker compose down -v` deletes them.
 
-## An MCP server
+The image alone, against a Postgres you already have:
 
-The studio also speaks the Model Context Protocol at `/mcp`, so an assistant can
-ask it about Monty's theory, its roadmap and its code, and about this port — and
-preview, save and run an experiment from the conversation. Each request is one
-JSON-RPC message in and one answer out, and the answers are read from the
-sources: Monty's `docs/` in a checkout, the module map, `Monty.Studio` and the
-run table.
+```bash
+docker run --rm \
+  -e DATABASE_URL=ecto://user:pass@host:5432/monty \
+  -e SECRET_KEY_BASE="$(openssl rand -base64 48)" \
+  ghcr.io/d-led/ex.tbp.monty:latest /app/bin/migrate      # once per deploy
 
-`http://localhost:4001/mcp` is the port the compose file publishes, and VS Code
-is already pointed at it in [`.vscode/mcp.json`](.vscode/mcp.json).
-[docs/mcp.md](docs/mcp.md) lists the tools and a first request.
+docker run -d -p 4001:4000 \
+  -e DATABASE_URL=ecto://user:pass@host:5432/monty \
+  -e SECRET_KEY_BASE="$(openssl rand -base64 48)" \
+  -e PHX_HOST=localhost \
+  ghcr.io/d-led/ex.tbp.monty:latest
+```
+
+Tags, every variable, the one writable directory:
+[docs/container.md](docs/container.md).
 
 ## From source
 
-Needs Elixir 1.20 with the OTP it runs on, node/npm for the assets, and Docker
-for a Postgres on 6432:
-
 ```bash
-scripts/init-dev.sh    # docker-compose.dev.yml, dependencies, database, assets
+scripts/init-dev.sh    # Postgres on 6432, dependencies, database, assets
 scripts/run-dev.sh     # http://localhost:4000
 ```
 
-[docs/developers.md](docs/developers.md) has the rest: invariants, tests, the
-gates CI runs, and how a module is added.
+Needs Elixir 1.20 with its OTP, node/npm and Docker.
+[docs/developers.md](docs/developers.md) has the tests, the gates CI runs and how
+a module is added.
+
+## Also
+
+* **MCP.** `/mcp` answers an assistant about Monty's theory, roadmap and code, and
+  previews, saves and runs experiments. `http://localhost:4001/mcp` is already in
+  [`.vscode/mcp.json`](.vscode/mcp.json) — [docs/mcp.md](docs/mcp.md).
+* **Headless.** `mix monty.run tutorial/first_experiment --steps 20` is the same
+  run record without the browser; flags and `mix monty.bench` in
+  [docs/features.md](docs/features.md).
 
 ## How it follows Monty
 
 * **The same modules.** Python `path/file.py::Class` becomes
-  `Monty.Path.File.Class` by one rule, with no module renamed to suit Elixir.
-  [`lib/monty/module_map/data.ex`](lib/monty/module_map/data.ex) is that mapping, and
-  `mix monty.module_map.verify` fails when a Monty file has no entry, or an
-  entry claiming to be ported has no module —
-  [docs/module-map.md](docs/module-map.md).
-* **The same configs.** Monty's Hydra YAML is read unchanged, and the tree ships
-  in [`priv/monty`](priv/monty), so no Monty checkout is needed. Every experiment Monty
-  commits a snapshot for composes to the same tree here —
+  `Monty.Path.File.Class` by one rule, with nothing renamed to suit Elixir —
+  [`lib/monty/module_map/data.ex`](lib/monty/module_map/data.ex), checked by
+  `mix monty.module_map.verify`.
+* **The same configs.** Monty's Hydra YAML is read unchanged from
+  [`priv/monty`](priv/monty), so no Monty checkout is needed; every experiment
+  Monty snapshots composes to the same tree here —
   [docs/config-compatibility.md](docs/config-compatibility.md).
 * **Processes, not a loop.** A step is a barrier over processes: sensor modules,
   learning modules and the motor system exchange CMP messages, and a vote is a
@@ -81,10 +79,10 @@ gates CI runs, and how a module is added.
   MuJoCo or Habitat-Sim through Monty's Python, in an external process that
   *imports* Monty rather than copying it; the Elixir stand-in scene is what a run
   chooses instead — [docs/simulator-port.md](docs/simulator-port.md).
-* **Checked against Monty, not asserted.** What has been compared, and with
-  which numbers, is [docs/validation.md](docs/validation.md); every deliberate
-  difference is [docs/monty-bugs.md](docs/monty-bugs.md); what is ported today,
-  and the evidence for each, is measured in [docs/features.md](docs/features.md).
+* **Checked against Monty, not asserted.** What was compared, with which numbers,
+  is [docs/validation.md](docs/validation.md); every difference is
+  [docs/monty-bugs.md](docs/monty-bugs.md); what is ported is measured in
+  [docs/features.md](docs/features.md).
 
 ## Where it differs
 
@@ -103,18 +101,7 @@ follows from that is argued in [docs/monty-bugs.md](docs/monty-bugs.md) §2.
 * **A UI and an MCP server.** A page per experiment, runs kept in Postgres, and
   `/mcp` — nothing Python has.
 
-## Headless
-
-The studio is one way to run an experiment; the command line is the other, with
-the same record of what happened:
-
-```bash
-mix monty.run tutorial/first_experiment --steps 20
-```
-
-[docs/features.md](docs/features.md) has the flags and `mix monty.bench`.
-
-## Documentation
+## Docs
 
 | Doc | Answers |
 | --- | --- |
@@ -126,7 +113,7 @@ mix monty.run tutorial/first_experiment --steps 20
 | [docs/monty-bugs.md](docs/monty-bugs.md) | every deliberate difference, and what looks wrong upstream |
 | [docs/simulator-port.md](docs/simulator-port.md) | where the world lives, and what is still Python |
 | [docs/developers.md](docs/developers.md) | how do I work on this? |
-| [docs/container.md](docs/container.md) | how do I run the image? every variable, the volume, what it reports |
+| [docs/container.md](docs/container.md) | how do I run the image? every variable, the volumes, what it reports |
 | [docs/mcp.md](docs/mcp.md) | `POST /mcp` — ask this app about Monty's docs, roadmap and code |
 | [docs/roadmap.md](docs/roadmap.md) | the order the rest of Monty arrives in |
 
