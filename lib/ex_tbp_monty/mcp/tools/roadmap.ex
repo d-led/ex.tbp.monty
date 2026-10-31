@@ -1,12 +1,12 @@
 defmodule ExTbpMonty.Mcp.Tools.Roadmap do
   @moduledoc """
-  Monty's roadmap: what the project intends to do, one task per page.
+  Monty's roadmap: what the project intends to do, one task per record.
 
-  A task's front matter is what the project's own future-work table is built
-  from, so a status here is the project's status, not this server's opinion. The
-  tools filter by section, status, skill and words; the full task page is a
-  second call, because a list of forty tasks with their bodies in it is a list
-  nobody reads.
+  The status, scope, output type and skills are the ones the project records for
+  each task on its own roadmap page — this server reads the same data that page
+  renders, so a status here is the project's status, not an opinion. The tools
+  filter by section, status, skill and words; the full task is a second call,
+  because a list of ninety tasks with their bodies in it is a list nobody reads.
   """
 
   alias ExTbpMonty.Mcp.{Args, Roadmap}
@@ -18,13 +18,17 @@ defmodule ExTbpMonty.Mcp.Tools.Roadmap do
          {:ok, skill} <- Args.optional(args, "skill"),
          {:ok, query} <- Args.optional(args, "query"),
          {:ok, limit} <- Args.integer(args, "limit", default: 25, min: 1, max: 200) do
-      found = Roadmap.tasks(section: section, status: status, skill: skill, query: query)
+      case Roadmap.tasks(section: section, status: status, skill: skill, query: query) do
+        {:ok, found} ->
+          {:ok,
+           %{
+             text: list_text(found, limit),
+             structured: %{count: length(found), tasks: Enum.take(found, limit)}
+           }}
 
-      {:ok,
-       %{
-         text: list_text(found, limit),
-         structured: %{count: length(found), tasks: Enum.take(found, limit)}
-       }}
+        {:error, message} ->
+          {:error, message}
+      end
     end
   end
 

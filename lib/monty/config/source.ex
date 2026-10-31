@@ -36,11 +36,17 @@ defmodule Monty.Config.Source do
   def inputs_root, do: Path.join(:code.priv_dir(:ex_tbp_monty), "monty")
 
   @doc """
-  The Monty checkout, for the tasks that regenerate against upstream.
+  The Monty checkout: a maintainer's input, never a running system's.
 
   `MONTY_SOURCE` wins; otherwise `../monty-orig` next to the project, which is
-  where the reference checkout lives in this workspace. Nothing the application
-  does at run time reads it — see `inputs_root/0`.
+  where the reference checkout lives in this workspace. What reads it: the mix
+  tasks that regenerate from upstream (`mix monty.inputs`, `mix monty.module_map`,
+  `mix monty.port_census`) and the tests of those tasks. Reading a neighbouring
+  checkout is a *development* thing — copying its files in, comparing against
+  it — and the image does not carry one, so nothing a release runs may fall back
+  to this path: a tool that needs documentation or roadmap data reads the
+  project's published site, and one that needs configs reads those `priv/monty`
+  already ships.
   """
   @spec root() :: Path.t()
   def root do

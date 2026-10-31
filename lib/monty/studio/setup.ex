@@ -230,8 +230,11 @@ defmodule Monty.Studio.Setup do
     end
   end
 
-  defp monty_root(opts),
-    do: Keyword.get_lazy(opts, :monty_root, fn -> Monty.Config.Source.root() end)
+  # Only when the caller says where: `${path.tests:…}` is Monty's own tests
+  # directory, which a checkout has and a release does not. Resolution that
+  # cannot name it fails, and the finding below says the value is unresolved
+  # rather than pointing a run at a path that does not exist.
+  defp monty_root(opts), do: Keyword.get(opts, :monty_root)
 
   # Which world a run steps is the machine's, not the experiment's: a config
   # says nothing about whether this host can run Monty's simulator, so it stays

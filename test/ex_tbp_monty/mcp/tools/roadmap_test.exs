@@ -1,13 +1,45 @@
 defmodule ExTbpMonty.Mcp.Tools.RoadmapTest do
-  # The roadmap is read from the same configured corpus as the docs.
+  # The roadmap data is application configuration, so these read one stub at a time.
   use ExUnit.Case, async: false
 
+  alias ExTbpMonty.Mcp.Test.FakeDocsHttp
   alias ExTbpMonty.Mcp.Tools.Roadmap
 
+  @data "https://futureworkwidget.thousandbrains.ai/data.json"
+
+  @tasks """
+  [
+    {
+      "path": "docs/future-work/voting-improvements/vote-on-state.md",
+      "path2": "voting-improvements",
+      "title": "Vote on state",
+      "description": "Columns could carry the state of what they see.",
+      "slug": "vote-on-state",
+      "text": "Columns could carry something about the state of what they see.",
+      "estimated-scope": "medium",
+      "improved-metric": ["accuracy"],
+      "output-type": ["RFC"],
+      "status": "open",
+      "skills": ["python", "monty-advanced"]
+    },
+    {
+      "path": "docs/future-work/voting-improvements/clean-up-voting.md",
+      "path2": "voting-improvements",
+      "title": "Clean up voting",
+      "description": "Tidy the voting module.",
+      "slug": "clean-up-voting",
+      "text": "Tidy the voting module.",
+      "estimated-scope": "small",
+      "improved-metric": ["community-engagement"],
+      "output-type": ["documentation"],
+      "status": "completed",
+      "skills": ["python"]
+    }
+  ]
+  """
+
   setup do
-    previous = Application.get_env(:ex_tbp_monty, :monty_docs_dir)
-    Application.put_env(:ex_tbp_monty, :monty_docs_dir, Path.expand("test/fixtures/mcp_docs"))
-    on_exit(fn -> Application.put_env(:ex_tbp_monty, :monty_docs_dir, previous) end)
+    FakeDocsHttp.serve(%{@data => @tasks})
   end
 
   describe "monty_roadmap" do
@@ -16,6 +48,7 @@ defmodule ExTbpMonty.Mcp.Tools.RoadmapTest do
 
       assert length(tasks) == 2
       assert text =~ "vote-on-state"
+      assert text =~ "open, medium scope, RFC"
     end
 
     test "says how many more there are when the limit cuts the list" do
@@ -34,9 +67,15 @@ defmodule ExTbpMonty.Mcp.Tools.RoadmapTest do
       assert text =~ "voting-improvements"
     end
 
+    test "says the roadmap could not be read rather than failing when the data does not answer" do
+      FakeDocsHttp.serve(%{@data => {:error, :econnrefused}})
+
+      assert {:error, message} = Roadmap.tasks(%{}, %{})
+      assert message =~ "could not be read"
+    end
+
     test "refuses a limit that is not a number" do
-      assert Roadmap.tasks(%{"limit" => "many"}, %{}) ==
-               {:error, "`limit` must be an integer."}
+      assert Roadmap.tasks(%{"limit" => "many"}, %{}) == {:error, "`limit` must be an integer."}
     end
   end
 

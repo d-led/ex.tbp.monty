@@ -159,8 +159,14 @@ defmodule Monty.Config.Resolvers do
 
   defp apply_prefix("path.expanduser:", path, _opts), do: {:ok, Path.expand(path)}
 
+  # Monty's own `tests/` directory. A checkout has one; a release does not, and a
+  # config that names it is a config written for running Monty's tests, so the
+  # value stays unresolved rather than becoming a path that is not there.
   defp apply_prefix("path.tests:", path, opts) do
-    {:ok, Path.join([opts[:monty_root], "tests", path])}
+    case opts[:monty_root] do
+      nil -> {:error, {:unresolved_reference, "path.tests:" <> path}}
+      root -> {:ok, Path.join([root, "tests", path])}
+    end
   end
 
   defp lookup(path, root) do
@@ -200,7 +206,7 @@ defmodule Monty.Config.Resolvers do
   defp normalize_opts(opts) do
     [
       env: Keyword.get(opts, :env, &System.get_env/1),
-      monty_root: Keyword.get_lazy(opts, :monty_root, fn -> Monty.Config.Source.root() end)
+      monty_root: Keyword.get(opts, :monty_root)
     ]
   end
 end

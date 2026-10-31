@@ -1,118 +1,194 @@
 defmodule ExTbpMonty.Mcp.Roadmap do
   @moduledoc """
-  Monty's future work, read as tasks.
+  Monty's roadmap: what the project says it intends to do, one task per record.
 
-  Each page under `docs/future-work/<section>/` is one task, and its front
-  matter is the same metadata the project's future-work widget is built from:
-  status, scope, output type, the skills it wants, the metric it would improve.
-  Reading the file rather than a copy of the table means "what is on the
-  roadmap" and "what does this task ask for" cannot answer differently.
+  The data is the file the project's own roadmap page renders. That page
+  (`docs.thousandbrains.org/docs/project-roadmap`) embeds the future-work widget,
+  and the widget loads `data.json` from its own host — one record per task, with
+  the status, scope, output type, skills and metric the project records for it.
+  Reading the same file the widget reads means a task added, finished or
+  re-scoped on the roadmap page changes the answer here, with nothing in this
+  application to edit; it also means no checkout has to exist beside this one at
+  run time, which is the only reason the roadmap used to be unanswerable in an
+  image.
 
-  The pages directly under `future-work/` are section introductions, not tasks,
-  and are read as such: a section names itself and counts what is in it.
+  The widget also has a "hide completed" toggle, and that is a reader's filter,
+  not project data: the tasks come back whatever their status, and a caller asks
+  for the ones it wants.
   """
 
-  alias ExTbpMonty.Mcp.{Docs, Markdown}
+  require Logger
 
-  @section_dir "future-work"
+  alias ExTbpMonty.Mcp.Docs
 
-  @doc "The directory Monty's future work is read from."
-  @spec root() :: Path.t()
-  def root, do: Path.join(Docs.root(), @section_dir)
+  @default_url "https://futureworkwidget.thousandbrains.ai/data.json"
+
+  @type task :: %{
+          id: String.t(),
+          section: String.t() | nil,
+          title: String.t(),
+          description: String.t(),
+          status: String.t(),
+          scope: String.t(),
+          output: String.t(),
+          skills: String.t(),
+          metric: String.t(),
+          rfc: String.t(),
+          contributor: String.t(),
+          path: String.t() | nil,
+          online: String.t(),
+          body: String.t()
+        }
+
+  @doc """
+  Where the roadmap data is read from.
+
+  `:monty_roadmap_url` replaces it, which is how a test pins the data instead of
+  asking the project's server.
+  """
+  @spec url() :: String.t()
+  def url, do: Application.get_env(:ex_tbp_monty, :monty_roadmap_url, @default_url)
 
   @doc """
   Every task, filtered by any of `:section`, `:status`, `:skill` and `:query`.
 
-  The body is left out — a list is a list — and `task/1` is what reads one page
-  whole.
+  The body is left in place: `tools/roadmap.ex` drops it from a list, and
+  `task/1` is the call that shows one task whole.
+
+  `{:error, message}` when the roadmap cannot be read — the tool says it in
+  those words rather than failing; a server that cannot reach a data file still
+  owes a caller an answer.
   """
-  @spec tasks(keyword()) :: [map()]
+  @spec tasks(keyword()) :: {:ok, [task()]} | {:error, String.t()}
   def tasks(opts \\ []) do
-    @section_dir
-    |> task_paths()
-    |> Enum.flat_map(&load/1)
-    |> Enum.filter(&matches?(&1, opts))
-    |> Enum.sort_by(&{&1.section, &1.title})
-    |> Enum.map(&Map.drop(&1, [:body]))
+    with {:ok, all} <- all() do
+      {:ok,
+       all
+       |> Enum.filter(&matches?(&1, opts))
+       |> Enum.sort_by(&{&1.section, &1.title})}
+    end
   end
 
-  @doc "One task, by id (its file name) or by path under `docs/`."
-  @spec task(String.t()) :: {:ok, map()} | {:error, String.t()}
+  @doc "One task, by slug, by repo path, or by `future-work/<section>/<slug>.md`."
+  @spec task(String.t()) :: {:ok, task()} | {:error, String.t()}
   def task(id_or_path) do
-    wanted = String.trim_trailing(id_or_path, ".md")
+    wanted = normalise(id_or_path)
 
-    @section_dir
-    |> task_paths()
-    |> Enum.flat_map(&load/1)
-    |> Enum.find(fn task ->
-      wanted in [task.id, task.path, String.trim_trailing(task.path, ".md")]
-    end)
-    |> case do
-      nil -> {:error, "No roadmap task `#{id_or_path}`. Try monty_roadmap to list them."}
-      task -> {:ok, task}
+    with {:ok, all} <- all() do
+      case Enum.find(all, &(wanted in Enum.map(names(&1), fn name -> normalise(name) end))) do
+        nil ->
+          {:error, "No roadmap task `#{id_or_path}`. Try monty_roadmap to list them."}
+
+        task ->
+          {:ok, task}
+      end
     end
   end
 
-  @doc "The sections of the roadmap, and how many tasks each holds."
-  @spec sections() :: [%{name: String.t(), title: String.t(), tasks: non_neg_integer()}]
-  # The paths are a wildcard over the roadmap directory; no caller supplies one.
-  # sobelow_skip ["Traversal.FileModule"]
+  @doc """
+  The sections of the roadmap and how many tasks each holds.
+
+  `[]` when the roadmap cannot be read: this only ever decorates an answer (it
+  names the sections when a filter matches nothing), so a failure here must not
+  turn a useful message into a second failure.
+  """
+  @spec sections() :: [%{name: String.t(), tasks: non_neg_integer()}]
   def sections do
-    counts =
-      @section_dir |> task_paths() |> Enum.flat_map(&load/1) |> Enum.frequencies_by(& &1.section)
+    case all() do
+      {:ok, all} ->
+        all
+        |> Enum.frequencies_by(& &1.section)
+        |> Enum.map(fn {name, count} -> %{name: name, tasks: count} end)
+        |> Enum.sort_by(& &1.name)
 
-    root()
-    |> Path.join("*.md")
-    |> Path.wildcard()
-    |> Enum.map(fn path ->
-      name = Path.basename(path, ".md")
-      {meta, body} = path |> File.read!() |> Markdown.frontmatter()
-
-      %{
-        name: name,
-        title: meta["title"] || Markdown.first_heading(body) || name,
-        tasks: Map.get(counts, name, 0)
-      }
-    end)
-    |> Enum.sort_by(& &1.name)
-  end
-
-  defp task_paths(section_dir) do
-    Path.wildcard(Path.join([Docs.root(), section_dir, "*", "*.md"]))
-    |> Enum.sort()
-  end
-
-  # Called with the paths `task_paths/1` wildcards inside the docs root, never
-  # with a path a caller chose.
-  # sobelow_skip ["Traversal.FileModule"]
-  defp load(path) do
-    case File.read(path) do
-      {:ok, text} -> [parse(path, text)]
-      {:error, _reason} -> []
+      {:error, _reason} ->
+        []
     end
   end
 
-  defp parse(path, text) do
-    {meta, body} = Markdown.frontmatter(text)
-    relative = Path.relative_to(path, Docs.root())
-    id = Path.basename(path, ".md")
+  # -- reading ---------------------------------------------------------------
+
+  defp all do
+    case http().get(url()) do
+      {:ok, %{status: 200, body: body}} -> decode(body)
+      {:ok, %{status: status}} -> failed({:http_status, status})
+      {:error, reason} -> failed(reason)
+    end
+  end
+
+  defp decode(body) do
+    case Jason.decode(body) do
+      {:ok, entries} when is_list(entries) ->
+        {:ok, entries |> Enum.filter(&task?/1) |> Enum.map(&parse/1)}
+
+      _not_a_task_list ->
+        failed(:unexpected_body)
+    end
+  end
+
+  # A record with no slug is not a task anyone can name, so it is not one.
+  defp task?(entry) when is_map(entry), do: is_binary(entry["slug"]) and entry["slug"] != ""
+  defp task?(_not_a_record), do: false
+
+  defp failed(reason) do
+    Logger.warning("the roadmap data could not be read: #{inspect(reason)}")
+
+    {:error,
+     "Monty's roadmap could not be read just now (the project's roadmap data did not answer). " <>
+       "Try again in a moment."}
+  end
+
+  defp parse(entry) do
+    text = entry["text"] || ""
 
     %{
-      id: id,
-      section: path |> Path.dirname() |> Path.basename(),
-      title: meta["title"] || Markdown.first_heading(body) || id,
-      description: meta["description"] || "",
-      status: meta["status"] || "open",
-      scope: meta["estimated-scope"] || "",
-      output: meta["output-type"] || "",
-      skills: meta["skills"] || "",
-      metric: meta["improved-metric"] || "",
-      rfc: meta["rfc"] || "",
-      path: relative,
-      online: Docs.base_url() <> id,
-      body: body
+      id: entry["slug"],
+      section: entry["path2"],
+      title: entry["title"] || entry["slug"],
+      description: description(entry, text),
+      status: entry["status"] || "open",
+      scope: entry["estimated-scope"] || "",
+      output: joined(entry["output-type"]),
+      skills: joined(entry["skills"]),
+      metric: joined(entry["improved-metric"]),
+      rfc: entry["rfc"] || "",
+      contributor: joined(entry["contributor"]),
+      path: entry["path"],
+      online: Docs.online(entry["slug"]),
+      body: text
     }
   end
+
+  # The data carries a one-line description for some tasks and none for others;
+  # when it is absent the page's own opening paragraph says the same thing.
+  defp description(%{"description" => description}, _text)
+       when is_binary(description) and description != "",
+       do: description
+
+  defp description(_entry, text) do
+    text
+    |> String.split("\n")
+    |> Enum.find("", &(String.trim(&1) != ""))
+    |> String.trim()
+  end
+
+  defp joined(values) when is_list(values), do: Enum.map_join(values, ", ", &to_string/1)
+  defp joined(value) when is_binary(value), do: value
+  defp joined(_none), do: ""
+
+  defp names(task), do: [task.id, task.path]
+
+  defp normalise(name) do
+    name
+    |> to_string()
+    |> String.trim()
+    |> String.trim_leading("docs/")
+    |> String.trim_trailing(".md")
+  end
+
+  defp http, do: Application.get_env(:ex_tbp_monty, :docs_http, ExTbpMonty.Mcp.Docs.Http.Req)
+
+  # -- filtering -------------------------------------------------------------
 
   defp matches?(task, opts) do
     matches_section?(task, opts[:section]) and
@@ -125,7 +201,7 @@ defmodule ExTbpMonty.Mcp.Roadmap do
   defp matches_section?(task, section), do: task.section == section
 
   defp matches_status?(_task, nil), do: true
-  defp matches_status?(task, status), do: task.status == status
+  defp matches_status?(task, status), do: String.downcase(task.status) == String.downcase(status)
 
   defp matches_skill?(_task, nil), do: true
 

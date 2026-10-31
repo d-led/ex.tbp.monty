@@ -264,10 +264,14 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironment do
     end)
   end
 
-  # The peer imports Monty, so it has to be told *which* Monty: a relative or
-  # inherited import path quietly picks a different checkout.
+  # The peer imports Monty, so it can be told *which* Monty: a relative or
+  # inherited import path quietly picks a different checkout. Only when the
+  # operator says so — a `:monty_peer` option, which is how a test or a dev
+  # pointing at `../monty-orig` asks for a specific one. A release has no
+  # checkout beside it: the peer's interpreter carries Monty, and inventing a
+  # path would put a directory that does not exist on its import path.
   defp monty_root(options) do
-    case Keyword.get_lazy(options, :monty_root, &Monty.Config.Source.root/0) do
+    case Keyword.get(options, :monty_root) do
       nil -> []
       root -> ["--monty-root", root]
     end

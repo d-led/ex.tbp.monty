@@ -63,11 +63,12 @@ defmodule ExTbpMonty.Mcp do
     This server connects the Thousand Brains Project's documentation to the Monty \
     port in this application.
 
-    Ground an answer before giving it. monty_search_docs finds the passage in \
-    Monty's own docs (theory, how Monty works, how to use it, future work) and \
-    returns the page it came from with a link to the published page; \
-    monty_read_doc reads a whole page. monty_roadmap lists future-work tasks with \
-    their status, scope and skills.
+    Ground an answer before giving it. The documentation tools read what the project \
+    publishes at https://docs.thousandbrains.org — the pages a reader sees, never a \
+    copy of them: monty_search_docs finds the passage, monty_read_doc reads a page \
+    whole, monty_docs_index lists what there is. monty_roadmap reads the roadmap data \
+    the project's own roadmap page renders, so a task's status and skills are the \
+    project's, not this server's reading of them.
 
     For code, monty_lookup_module says where a Python class or file lives here — \
     its Elixir module, and whether it is implemented, planned or excluded — and \

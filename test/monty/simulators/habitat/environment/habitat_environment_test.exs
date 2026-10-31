@@ -11,7 +11,6 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironmentTest do
 
   use ExUnit.Case, async: true
 
-  alias Monty.Config.Source
   alias Monty.Frameworks.Actions.MoveForward
   alias Monty.Frameworks.Models.MotorSystemState.AgentState
   alias Monty.Simulators.Habitat.Environment.HabitatEnvironment
@@ -103,19 +102,18 @@ defmodule Monty.Simulators.Habitat.Environment.HabitatEnvironmentTest do
            )
   end
 
-  test "the peer is told which Monty to run and which world to build" do
+  test "the peer is told which world to build, and nothing about a checkout it was not given" do
     world = world()
 
     assert [python, @peer, "--experiment", experiment | rest] = world.command
     assert python == System.find_executable("python3")
     assert experiment == "base_config_10distinctobj_dist_agent"
 
-    # The peer imports Monty, so the checkout is named rather than inherited and
-    # named absolutely: a relative one would pick whatever is under the peer's
-    # working directory.
-    assert ["--monty-root", root] = rest
-    assert root == Source.root()
-    assert Path.type(root) == :absolute
+    # The peer imports the Monty its own interpreter carries. A checkout is
+    # named only when an operator names one: a release has none beside it, and a
+    # path guessed at run time would put a directory that is not there on the
+    # peer's import path.
+    assert rest == []
   end
 
   test "a checkout the caller names is the one the peer is told about" do

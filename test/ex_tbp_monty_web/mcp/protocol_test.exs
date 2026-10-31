@@ -114,11 +114,12 @@ defmodule ExTbpMontyWeb.Mcp.ProtocolTest do
     end
 
     test "a tool that fails answers with isError, so the model can read why" do
-      response = call_tool("monty_read_doc", %{"path" => "../../../etc/passwd"})
+      # An argument the tool refuses, so nothing reaches a network.
+      response = call_tool("monty_read_doc", %{"slug" => "../../../etc/passwd"})
 
       assert response["result"]["isError"] == true
       assert [%{"type" => "text", "text" => text}] = response["result"]["content"]
-      assert text =~ "not a page path"
+      assert text =~ "not a page slug"
     end
 
     test "a tool that succeeds answers with its text and its structured form" do

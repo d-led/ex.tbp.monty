@@ -77,9 +77,9 @@ defmodule ExTbpMonty.Mcp.Tools do
       "name" => "monty_search_docs",
       "title" => "Search Monty's documentation",
       "description" =>
-        "Find the passage of Monty's documentation that answers a question — the theory, " <>
-          "how Monty works, how to use it, its roadmap. Returns the best sections with the " <>
-          "page they came from, a link to the published page, and a `path` for " <>
+        "Searches Monty's published documentation at docs.thousandbrains.org — the theory, " <>
+          "how Monty works, how to use it, the roadmap — and returns the pages it finds with " <>
+          "the matched passage, the address the page is published at, and a `slug` for " <>
           "`monty_read_doc`. Search on the words the project uses (`learning module`, " <>
           "`evidence`, `voting`, `heterarchy`, `CMP`), not on a whole sentence.",
       "inputSchema" => %{
@@ -89,8 +89,8 @@ defmodule ExTbpMonty.Mcp.Tools do
           "area" => %{
             "type" => "string",
             "description" =>
-              "Limit to one area of the docs: theory, overview, how-monty-works, " <>
-                "how-to-use-monty, future-work, contributing, community."
+              "Limit to one area of the site: overview, how-to-use-monty, how-monty-works, " <>
+                "neuroscience-theory, contributing, community, future-work."
           },
           "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 20, "default" => 6}
         },
@@ -107,13 +107,14 @@ defmodule ExTbpMonty.Mcp.Tools do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "path" => %{
+          "slug" => %{
             "type" => "string",
             "description" =>
-              "A page path from `monty_docs_index`, e.g. `theory/theory-overview.md`."
+              "A page slug from `monty_docs_index`, e.g. `learning-modules` — the last " <>
+                "part of the published address."
           }
         },
-        "required" => ["path"]
+        "required" => ["slug"]
       },
       "annotations" => @read_only
     },
@@ -132,11 +133,33 @@ defmodule ExTbpMonty.Mcp.Tools do
       "annotations" => @read_only
     },
     %{
+      "name" => "monty_docs_map",
+      "title" => "The documentation as the project indexes it",
+      "description" =>
+        "The documentation site's own machine index (`llms.txt`), verbatim: every page, " <>
+          "under the area it belongs to, in the order the project lists them, with the " <>
+          "one-line description it gives. Use it to see the whole map at once; " <>
+          "monty_docs_index gives the same pages as a list of slugs to choose from.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "area" => %{
+            "type" => "string",
+            "description" =>
+              "Only this area's block of the index: overview, how-to-use-monty, " <>
+                "how-monty-works, neuroscience-theory, contributing, community, future-work."
+          }
+        }
+      },
+      "annotations" => @read_only
+    },
+    %{
       "name" => "monty_roadmap",
       "title" => "Monty's roadmap",
       "description" =>
         ~s(The project's future-work tasks, one per page, with the status, scope, output type ) <>
-          ~s(and skills the project itself records. Filter by section, status, skill or words. ) <>
+          ~s(and skills the project itself records — the same data the project's own roadmap ) <>
+          ~s(page renders. Filter by section, status, skill or words. ) <>
           ~s(Use it to answer "what does the project plan", "what is still open" and ) <>
           ~s("what would this change touch".),
       "inputSchema" => %{
@@ -216,9 +239,9 @@ defmodule ExTbpMonty.Mcp.Tools do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "path" => %{"type" => "string", "description" => "A page path from `monty_docs_index`."}
+          "slug" => %{"type" => "string", "description" => "A page slug from `monty_docs_index`."}
         },
-        "required" => ["path"]
+        "required" => ["slug"]
       },
       "annotations" => @read_only
     },
@@ -504,6 +527,7 @@ defmodule ExTbpMonty.Mcp.Tools do
     "monty_search_docs" => {Docs, :search},
     "monty_read_doc" => {Docs, :read},
     "monty_docs_index" => {Docs, :index},
+    "monty_docs_map" => {Docs, :map},
     "monty_roadmap" => {Roadmap, :tasks},
     "monty_roadmap_task" => {Roadmap, :task},
     "monty_lookup_module" => {Port, :lookup},
@@ -529,7 +553,7 @@ defmodule ExTbpMonty.Mcp.Tools do
   # a failing test rather than a page that quietly lists the wrong thing.
   @families [
     {"The studio", ~w(monty_studio)},
-    {"Documentation", ~w(monty_search_docs monty_read_doc monty_docs_index)},
+    {"Documentation", ~w(monty_search_docs monty_read_doc monty_docs_index monty_docs_map)},
     {"Roadmap", ~w(monty_roadmap monty_roadmap_task)},
     {"The port", ~w(monty_lookup_module monty_port_status monty_code_in_doc)},
     {"Experiments", ~w(monty_list_experiments monty_describe_experiment monty_experiment_options

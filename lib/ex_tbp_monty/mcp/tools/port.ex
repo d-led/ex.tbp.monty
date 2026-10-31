@@ -32,23 +32,32 @@ defmodule ExTbpMonty.Mcp.Tools.Port do
 
   @doc "`monty_code_in_doc`: the modules a page refers to."
   def code_in_doc(args, _ctx) do
-    with {:ok, path} <- Args.required(args, "path"),
-         {:ok, page} <- page(path) do
+    with {:ok, slug} <- Args.required(args, "slug"),
+         {:ok, page} <- page(slug) do
       modules = Port.referenced(page.markdown)
 
       {:ok,
        %{
          text: references_text(page, modules),
-         structured: %{path: page.path, online: page.online, modules: modules}
+         structured: %{slug: page.slug, online: page.online, modules: modules}
        }}
     end
   end
 
-  defp page(path) do
-    case Docs.read(path) do
-      {:ok, page} -> {:ok, page}
-      {:error, :invalid_path} -> {:error, "`#{path}` is not a page path. See monty_docs_index."}
-      {:error, :not_found} -> {:error, "There is no page `#{path}`. See monty_docs_index."}
+  defp page(slug) do
+    case Docs.read(slug) do
+      {:ok, page} ->
+        {:ok, page}
+
+      {:error, :invalid_slug} ->
+        {:error, "`#{slug}` is not a page slug. See monty_docs_index."}
+
+      {:error, :not_found} ->
+        {:error, "There is no page `#{slug}`. See monty_docs_index."}
+
+      {:error, :unreachable} ->
+        {:error,
+         "Monty's documentation site could not be reached just now. Try again in a moment."}
     end
   end
 
@@ -88,7 +97,7 @@ defmodule ExTbpMonty.Mcp.Tools.Port do
 
   defp references_text(page, modules) do
     if modules == [] do
-      "`#{page.path}` does not refer to any module by path or dotted target."
+      "`#{page.slug}` does not refer to any module by path or dotted target."
     else
       "#{page.title}: #{length(modules)} module(s) referred to.\n\n" <>
         Enum.map_join(modules, "\n", fn module ->

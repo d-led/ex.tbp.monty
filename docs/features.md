@@ -84,12 +84,13 @@ not recalled — run it after anything lands that can move one.
 
 - `POST /mcp`: JSON-RPC 2.0 over Streamable HTTP, stateless — no session header, no
   SSE (`GET`/`DELETE` → 405), no batches. ([mcp.md](mcp.md))
-- **21 tools**, all `monty_*`: this deployment, docs, roadmap, the port,
+- **22 tools**, all `monty_*`: this deployment, docs, roadmap, the port,
   experiments and runs — [mcp.md](mcp.md) lists them, because a list here goes
   stale while the count does not.
-- Answers come from the sources, not a copy: the checkout's `docs/`, its `future-work`
-  front matter, the generated module map, `Monty.Studio` and `studio_runs`. Doc answers
-  carry the page's published URL; port status is the map's verdict.
+- Answers come from the sources, not a copy: `docs.thousandbrains.org` for the docs and
+  the project's roadmap data for the roadmap, the generated module map, `Monty.Studio`
+  and `studio_runs` — no Monty checkout is read at run time. Doc answers carry the
+  page's published URL; port status is the map's verdict.
 - Creating is preview-first, and a run is queued as the studio's own Oban job. `Origin`
   and `MCP-Protocol-Version` are checked; no auth.
 
@@ -151,7 +152,7 @@ what CI runs.
 - `docker compose -f docker-compose.dev.yml up -d` gives development Postgres 17
   and adminer; the root `docker-compose.yml` is the image itself.
   ([dev compose](../docker-compose.dev.yml))
-- 1,826 `test` declarations in the suite.
+- 1,928 `test` declarations in the suite.
 
 ## Not built — do not assume these
 

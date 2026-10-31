@@ -57,7 +57,10 @@ run steps, and which data and model bundles are present. The answer to "can we
 run experiments in parallel", and to every other question about *this* instance
 rather than about a config — an assistant does not need a shell to ask it.
 
-**Documentation** — `monty_search_docs`, `monty_read_doc`, `monty_docs_index`.
+**Documentation** — `monty_search_docs` (the site's own search), `monty_read_doc`
+(a page whole), `monty_docs_index` (the pages as slugs to choose from), and
+`monty_docs_map` (the site's `llms.txt` verbatim — the index the project
+publishes for machines, or one area's block of it).
 
 **Roadmap** — `monty_roadmap` (filter by section, status, skill, words),
 `monty_roadmap_task`.
