@@ -161,4 +161,37 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsTest do
       assert LoggingUtils.format_columns_for_wandb(stats) == stats
     end
   end
+
+  describe "an episode's learning modules as a table" do
+    test "is a column per statistic and a row per module, with the module last" do
+      stats = %{
+        0 => %{
+          "LM_0" => %{"primary_performance" => "correct", "num_steps" => 12},
+          "SM_0" => %{"on_object" => [1.0]},
+          "motor_system" => %{"action_sequence" => []}
+        }
+      }
+
+      assert LoggingUtils.lm_stats_to_dataframe(stats) == %{
+               columns: ["num_steps", "primary_performance", "lm_id"],
+               data: [[12, "correct", "LM_0"]]
+             }
+    end
+
+    test "is no rows when the episode named no learning module" do
+      assert LoggingUtils.lm_stats_to_dataframe(%{0 => %{"SM_0" => %{}}}) == %{
+               columns: ["lm_id"],
+               data: []
+             }
+    end
+
+    test "formats the columns a wandb table cannot take when asked" do
+      stats = %{0 => %{"LM_0" => %{"result" => ["mug", "bowl"]}}}
+
+      assert %{data: [["mug^bowl", "LM_0"]]} =
+               LoggingUtils.lm_stats_to_dataframe(stats, format_for_wandb: true)
+
+      assert %{data: [[["mug", "bowl"], "LM_0"]]} = LoggingUtils.lm_stats_to_dataframe(stats)
+    end
+  end
 end

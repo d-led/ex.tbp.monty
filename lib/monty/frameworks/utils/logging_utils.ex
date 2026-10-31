@@ -145,6 +145,50 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
   end
 
   @doc """
+  `lm_stats_to_dataframe`: an episode's learning modules as one table.
+
+  Monty builds a pandas frame: a row per learning module, a column per statistic,
+  and `lm_id` last saying which module the row is. A table is what wandb takes, so
+  that is what this answers — `%{columns: [...], data: [[...], ...]}` — with
+  `lm_id` appended as pandas appends it. The columns are in name order: pandas
+  keeps dict insertion order, and an Elixir map has none to keep, so a table whose
+  columns depended on how a map happened to be built would be a table that changed
+  for reasons a reader cannot see.
+
+  Sensor modules and the motor system are in the same dictionary and are not rows:
+  a table a reader compares is made of the things that are comparable. An episode
+  with no learning module in it is no rows rather than an error.
+
+  Options: `:format_for_wandb`, which runs each module's statistics through
+  `format_columns_for_wandb/1` first.
+  """
+  @spec lm_stats_to_dataframe(%{optional(term()) => map()}, keyword()) :: %{
+          columns: [String.t()],
+          data: [[term()]]
+        }
+  def lm_stats_to_dataframe(stats, opts \\ []) do
+    format? = Keyword.get(opts, :format_for_wandb, false)
+
+    rows =
+      for {_episode, components} <- stats,
+          {id, lm_stats} <- components,
+          is_binary(id) and String.starts_with?(id, "LM_"),
+          do: {id, if(format?, do: format_columns_for_wandb(lm_stats), else: lm_stats)}
+
+    columns =
+      rows
+      |> Enum.flat_map(fn {_id, lm_stats} -> Map.keys(lm_stats) end)
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    %{
+      columns: columns ++ ["lm_id"],
+      data:
+        Enum.map(rows, fn {id, lm_stats} -> Enum.map(columns, &Map.get(lm_stats, &1)) ++ [id] end)
+    }
+  end
+
+  @doc """
   `get_stats_per_lm`: every learning module's stats for one episode.
 
   Keyed `LM_0`, `LM_1` … by the module's position, which is the key Monty's CSV
