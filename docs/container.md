@@ -37,7 +37,7 @@ shape this page describes, and can publish both architectures.
 scripts/image.sh build              # ghcr.io/d-led/ex.tbp.monty:local, from this tree
 scripts/image.sh smoke              # build, migrate, serve, wait for /health, report, stop
 scripts/image.sh run                # serve in the foreground (reads DATABASE_URL)
-scripts/image.sh run --data ~/tbp   # …with a Monty tree mounted read-only
+scripts/image.sh run --data /path/to/tbp   # …with a Monty tree mounted read-only
 scripts/image.sh run --pull --tag main  # the published image instead
 scripts/image.sh publish --tag main # buildx amd64 + arm64, pushed to GHCR
 scripts/image.sh logs               # follow it
@@ -144,7 +144,7 @@ setup page says so.
 | --- | --- | --- |
 | `WANDB_MODE` | `disabled` | No wandb from a container. `online` plus `WANDB_API_KEY` (and any other `WANDB_*`) turns it back on; the client forwards them into the interpreter. |
 | `WANDB_DIR` | `/app/priv/wandb` | Where a wandb run would write. It has to exist — wandb silently uses the system temp directory otherwise — so `bin/server` creates it at boot. |
-| `HOME` | `/app/priv` | `~/tbp` is where a run's downloads and pretrained models go; the image gives the unprivileged user a writable home on the volume. |
+| `HOME` | `/app/priv` | A run's downloads and pretrained models go under `$HOME/tbp`, i.e. `/app/priv/tbp`; the image gives the unprivileged user a writable home on the volume. |
 | `LANG`, `LC_ALL` | `en_US.UTF-8` | Experiment names sort and log as written. |
 | `MONTY_PYTHON` | `/opt/monty/bin/python` | The world's interpreter travels with the image, so a run can step Monty's own simulator without the operator installing anything. See [the interpreter](#the-worlds-interpreter-is-in-the-image). |
 | `MIX_ENV` | `prod` | The release is a prod build; this is only informational at run time. |
@@ -155,6 +155,12 @@ regenerate from upstream read a checkout), `PYTHON` (one Mix task),
 studio reads are **inside** the image — `/app/lib/ex_tbp_monty-*/priv/monty` for
 the release's own copy and `/app/priv/monty` for the one `HOME` and the `bin/priv`
 symlink point at; they need no checkout and take no volume.
+
+The MCP server's documentation and roadmap tools read no filesystem at all:
+they ask `docs.thousandbrains.org` and the project's roadmap data, so they answer
+the same here as on a laptop. They are the one part of the server that needs
+outbound HTTPS; every other tool answers from the image or the database, and a
+site that cannot be reached is reported in words rather than failing a call.
 
 ## Data and models: the prerequisites
 
@@ -170,7 +176,7 @@ Three ways to have them:
 | Where they come from | How |
 | --- | --- |
 | downloaded by the running app | open `/prerequisites` and press download. Each file streams to a `.part` name on the volume and is moved into place only when its size and checksum match |
-| a Monty tree you already have | `-v ~/tbp:/app/priv/tbp:ro` — the defaults hang off `HOME`, which is `/app/priv`, so `~/tbp` inside the container is exactly where this machine's `~/tbp` lands. `scripts/image.sh run --data ~/tbp` is this row with the flag spelled out |
+| a Monty tree you already have | `-v /path/to/tbp:/app/priv/tbp:ro` — the defaults hang off `HOME`, which is `/app/priv`, so the directory you mount is the one those defaults already point at. `scripts/image.sh run --data /path/to/tbp` is this row with the flag spelled out |
 | anywhere else | `-e MONTY_DATA=… -e MONTY_MODELS=… -e MONTY_LOGS=…` — the variables Monty's own documentation uses — each pointing at a mounted path |
 
 The volume to mount for downloads is `/app/priv/tbp`, and that is what the
@@ -245,7 +251,7 @@ before a run.
 `/app/priv` is the only writable directory, and everything that writes is
 pointed at it — the studio's drafts, a run's files (`/app/bin/priv` is a symlink
 into it, because a release resolves those paths relative to its own `bin/`),
-Monty's downloads under `~/tbp`, wandb's runs.
+Monty's downloads under `$HOME/tbp`, wandb's runs.
 
 That directory must belong to uid **10001**. The image cannot arrange it —
 giving ownership away needs the root it deliberately does not have:
