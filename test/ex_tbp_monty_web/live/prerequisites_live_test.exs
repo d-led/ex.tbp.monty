@@ -62,6 +62,15 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert view |> element("#embedded-python-wandb") |> render() =~ "wandb"
   end
 
+  # A download that fills the disk is the failure this page exists to make
+  # visible, so the room it writes into is answered before the click.
+  test "the page says how much room is left where the downloads land", %{conn: conn, tmp: tmp} do
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    assert view |> element("#free-space") |> render() =~
+             ~r/\d+(\.\d+)? (B|KiB|MiB|GiB|TiB) free of \d+(\.\d+)? (B|KiB|MiB|GiB|TiB) where they land \(#{Regex.escape(tmp)}/
+  end
+
   test "a click downloads and the row reports the result", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 

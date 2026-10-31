@@ -15,6 +15,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   alias ExTbpMonty.EmbeddedPython
   alias Monty.Prerequisites
   alias Monty.Prerequisites.Download
+  alias Monty.Studio.Storage
 
   @impl true
   def mount(_params, _session, socket) do
@@ -30,7 +31,8 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
        python: EmbeddedPython.version(),
        wandb: EmbeddedPython.wandb_mode(),
        world_python: Prerequisites.python(),
-       engines: Prerequisites.engines()
+       engines: Prerequisites.engines(),
+       storage: Storage.usage(Prerequisites.root_path("MONTY_DATA"))
      )}
   end
 
@@ -45,6 +47,9 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
             Datasets and models an experiment needs, written to the paths Monty's own
             environment variables point at. Downloads stream to <code>.part</code> files
             and move into place only when they are complete.
+          </p>
+          <p id="free-space" class="text-sm text-base-content/70">
+            {free_space(@storage)}
           </p>
         </header>
 
@@ -255,14 +260,18 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp max_bytes(%{total: total}), do: total
 
   defp bytes(nil), do: "—"
-  defp bytes(value) when value < 1024, do: "#{value} B"
-  defp bytes(value), do: format_unit(value / 1024, ~w(KB MB GB TB))
+  defp bytes(value), do: Humanizer.bytes(value, system: :binary)
 
-  defp format_unit(value, [unit | _rest]) when value < 1024,
-    do: "#{Float.round(value * 1.0, 1)} #{unit}"
+  # The room these downloads land in: a download that fills the disk is the
+  # failure this page exists to make visible, so "is there room for the next
+  # one" is answered before the click rather than by an error afterwards.
+  defp free_space(%{device: nil, path: path}),
+    do: "#{path} is where they land; the operating system did not say how much room is left."
 
-  defp format_unit(value, [_unit | rest]), do: format_unit(value / 1024, rest)
-  defp format_unit(value, []), do: "#{value} B"
+  defp free_space(%{device: device, path: path}) do
+    "#{bytes(device.free_bytes)} free of #{bytes(device.total_bytes)} where they land " <>
+      "(#{path}) — #{device.percent}% of #{device.mount} used."
+  end
 
   defp engine_label(:mujoco), do: "MuJoCo"
   defp engine_label(:habitat), do: "Habitat-Sim"
