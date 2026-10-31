@@ -53,10 +53,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     # if this port had it — said here as well as in the run's log, because a
     # config that logs nothing is worth knowing before the run, not after.
     logging = Logging.open(opened.setup)
+    runs = recent_runs(opened.name)
 
     socket
     |> assign(
       opened: opened,
+      # Runs this experiment already has, so a page opened where something is
+      # going shows it — one click away, instead of a second run started only to
+      # see anything.
+      runs: runs,
+      queue: Jobs.by_run(Enum.map(runs, & &1.id)),
       logging: logging.notes,
       error: nil,
       steps: steps,
@@ -86,6 +92,50 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     )
     |> stream_configure(:frames, dom_id: &"frame-#{&1.sensor_id}")
     |> stream(:frames, [])
+  end
+
+  @runs_shown 5
+
+  # The last few runs of one experiment, newest first. Five: this is a list to
+  # click through, not the runs page, and the detail belongs to the run.
+  defp recent_runs(name) do
+    RunHistory.search(state: "all", text: name, per_page: 25).runs
+    |> Enum.filter(&(&1.experiment == name))
+    |> Enum.take(@runs_shown)
+  end
+
+  # A run's record is written the moment it is queued, so `running` on the record
+  # before a worker exists means "queued": the queue knows better, and this is
+  # the same reading the runs page uses.
+  defp run_state(%{status: "running"}, %{state: state})
+       when state in ~w(available scheduled retryable),
+       do: "queued"
+
+  defp run_state(run, _job), do: run.status
+
+  defp run_state_class("running"), do: "badge-info"
+  defp run_state_class("queued"), do: "badge-info"
+  defp run_state_class("finished"), do: "badge-success"
+  defp run_state_class("failed"), do: "badge-error"
+  defp run_state_class(_other), do: "badge-ghost"
+
+  defp run_time(%{inserted_at: nil}), do: "unknown"
+  defp run_time(%{inserted_at: at}), do: Calendar.strftime(at, "%H:%M:%S")
+
+  # What a page can be set here, read off the run's own record: the rest is the
+  # run page's business.
+  defp input_of(%{inputs: %{} = inputs}, key), do: Map.get(inputs, key) |> to_string()
+  defp input_of(_run, _key), do: "—"
+
+  # The record keeps the atom a run stepped; the table says what that atom is,
+  # in the same words the selector above uses. Not `world_of/1`: that one reads
+  # the selector's value back into an atom.
+  defp world_label(run) do
+    case input_of(run, "world") do
+      "synthetic" -> "stand-in"
+      "habitat" -> "Monty's Python"
+      other -> other
+    end
   end
 
   # A run outlives its page, so a page that loads must find the run its
@@ -313,6 +363,71 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         <p :if={not config_runnable?(assigns)} id="run-blocked" class="text-sm text-error">
           Fix the errors above before running: this config would not start in Monty either.
         </p>
+
+        <%!-- The runs this experiment already has, newest first, between the
+        buttons that start one and the live results one gets by staying. Enough
+        to answer "is something going, and how did the last one end?" and to get
+        to the run itself; the parameters shown are the ones this page sets, and
+        everything else about a run is on its own page. --%>
+        <section id="experiment-runs" class="space-y-1">
+          <div class="flex items-baseline gap-2">
+            <h3 class="text-sm font-medium">Runs</h3>
+            <.link
+              :if={@runs != []}
+              id="all-runs"
+              navigate={~p"/runs?q=#{@opened.name}"}
+              class="link text-[11px] text-base-content/60"
+            >
+              all runs of this experiment
+            </.link>
+          </div>
+
+          <p :if={@runs == []} id="runs-empty" class="text-xs text-base-content/60">
+            No run of this experiment yet. The buttons above start one.
+          </p>
+
+          <table :if={@runs != []} class="w-full text-xs">
+            <thead class="text-left text-base-content/60">
+              <tr>
+                <th class="font-normal">when</th>
+                <th class="font-normal">state</th>
+                <th class="font-normal text-right">steps</th>
+                <th class="font-normal text-right">seed</th>
+                <th class="font-normal">world</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                :for={run <- @runs}
+                id={"experiment-run-#{run.id}"}
+                class="border-t border-base-300"
+              >
+                <td class="py-0.5 font-mono text-base-content/60">{run_time(run)}</td>
+                <td>
+                  <span class={[
+                    "badge badge-xs",
+                    run_state_class(run_state(run, @queue[run.id]))
+                  ]}>
+                    {run_state(run, @queue[run.id])}
+                  </span>
+                </td>
+                <td class="text-right font-mono">{run.steps}</td>
+                <td class="text-right font-mono">{input_of(run, "seed")}</td>
+                <td class="text-[11px]">{world_label(run)}</td>
+                <td class="text-right">
+                  <.link
+                    id={"open-run-#{run.id}"}
+                    navigate={~p"/runs/#{run.id}"}
+                    class="link link-hover"
+                  >
+                    open
+                  </.link>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
 
         <p :if={@run_id == nil and runable?(assigns)} class="text-sm text-base-content/60">
           A run keeps going if this page is closed, and its log and history are

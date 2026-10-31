@@ -110,6 +110,86 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     end
   end
 
+  # Arriving at an experiment where something is already going should be one
+  # click from watching it, not a second run started to have something to look
+  # at. The table is deliberately four columns: the parameters this page sets,
+  # and a way through to the run that knows the rest.
+  describe "the runs this experiment already has" do
+    setup do
+      Tmp.system_env("MONTY_PYTHON", interpreter())
+
+      {:ok, queued} =
+        RunHistory.start(%{
+          experiment: "base_config_10distinctobj_dist_agent",
+          source: "monty",
+          steps: 3,
+          seed: 42,
+          config: %{},
+          inputs: %{"seed" => 42, "world" => "synthetic"}
+        })
+
+      {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(queued)
+
+      {:ok, finished} =
+        RunHistory.start(%{
+          experiment: "base_config_10distinctobj_dist_agent",
+          source: "monty",
+          steps: 2,
+          config: %{},
+          inputs: %{"seed" => 7, "world" => "synthetic"}
+        })
+
+      {:ok, finished} = RunHistory.finish(finished, %{"steps" => 2})
+
+      {:ok, elsewhere} =
+        RunHistory.start(%{
+          experiment: "base_77obj_dist_agent",
+          source: "monty",
+          steps: 1,
+          config: %{}
+        })
+
+      {:ok, finished_elsewhere} = RunHistory.finish(elsewhere, %{})
+
+      {:ok, queued: queued, finished: finished, elsewhere: finished_elsewhere}
+    end
+
+    test "lists them with what this page can set, and links to each", %{
+      conn: conn,
+      queued: queued,
+      finished: finished
+    } do
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      assert has_element?(view, "#experiment-runs")
+
+      row = view |> element("#experiment-run-#{queued.id}") |> render()
+      assert row =~ "queued"
+      assert row =~ "42"
+      assert row =~ "stand-in"
+      assert row =~ ~s(href="#{~p"/runs/#{queued.id}"}")
+
+      done = view |> element("#experiment-run-#{finished.id}") |> render()
+      assert done =~ "finished"
+      assert done =~ "7"
+    end
+
+    test "leaves another experiment's runs out", %{conn: conn, elsewhere: elsewhere} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      refute has_element?(view, "#experiment-run-#{elsewhere.id}")
+    end
+
+    test "says so when there is nothing yet", %{conn: conn} do
+      # An experiment that exists and simply has no runs: the sandbox is empty,
+      # so this is the page's own empty state and not a missing experiment.
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment")
+
+      assert view |> element("#runs-empty") |> render() =~ "No run of this experiment yet"
+      refute has_element?(view, "#experiment-runs table")
+    end
+  end
+
   describe "the experiment as a file" do
     test "the page offers it, and the download is the YAML Monty ships", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
