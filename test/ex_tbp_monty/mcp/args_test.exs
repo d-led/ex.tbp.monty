@@ -68,6 +68,61 @@ defmodule ExTbpMonty.Mcp.ArgsTest do
     end
   end
 
+  describe "a flag" do
+    test "is false when the client did not send it" do
+      assert Args.boolean(%{}, "confirm") == {:ok, false}
+    end
+
+    test "is read as JSON sent it" do
+      assert Args.boolean(%{"confirm" => true}, "confirm") == {:ok, true}
+      assert Args.boolean(%{"confirm" => false}, "confirm") == {:ok, false}
+    end
+
+    test "reads a number as the flag it stands for, and nothing else" do
+      assert Args.boolean(%{"confirm" => 1}, "confirm") == {:ok, true}
+      assert Args.boolean(%{"confirm" => 0}, "confirm") == {:ok, false}
+
+      assert Args.boolean(%{"confirm" => 2}, "confirm") ==
+               {:error, "`confirm` must be true or false."}
+    end
+
+    test "reads the words for yes and no, whatever their case" do
+      assert Args.boolean(%{"confirm" => " YES "}, "confirm") == {:ok, true}
+      assert Args.boolean(%{"confirm" => "No"}, "confirm") == {:ok, false}
+    end
+
+    test "refuses a word it does not know, because this one deletes things" do
+      assert Args.boolean(%{"confirm" => "perhaps"}, "confirm") ==
+               {:error, "`confirm` must be true or false."}
+    end
+  end
+
+  describe "a list of strings" do
+    test "is empty when the client did not send it" do
+      assert Args.strings(%{}, "run_ids") == {:ok, []}
+    end
+
+    test "is one value, a list of them, or a comma-separated string" do
+      assert Args.strings(%{"run_ids" => "one"}, "run_ids") == {:ok, ["one"]}
+
+      assert Args.strings(%{"run_ids" => ["one", "two"]}, "run_ids") ==
+               {:ok, ["one", "two"]}
+
+      assert Args.strings(%{"run_ids" => "one, two ,three"}, "run_ids") ==
+               {:ok, ["one", "two", "three"]}
+    end
+
+    test "drops the blanks, which narrow nothing" do
+      assert Args.strings(%{"run_ids" => ", one,,"}, "run_ids") == {:ok, ["one"]}
+      assert Args.strings(%{"run_ids" => [" one ", ""]}, "run_ids") == {:ok, ["one"]}
+    end
+
+    test "refuses anything else" do
+      assert Args.strings(%{"run_ids" => %{"id" => 1}}, "run_ids") ==
+               {:error, "`run_ids` must be a string or a list of strings."}
+    end
+  end
+
   describe "an optional object" do
     test "passes a JSON object through" do
       assert Args.object(%{"environment" => %{"seed" => 1}}, "environment") ==
