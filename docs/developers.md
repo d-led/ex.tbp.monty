@@ -309,7 +309,11 @@ job, so it is what a release tag — or `gh workflow run ci --ref main --field
 image=true` — pays for, and only then does the tag carry both architectures.
 
 The publishing job waits for lint, test and types, scans the result with Trivy,
-and starts it as uid 10001 before pushing. The same two questions about a tag
+and starts it as uid 10001 before pushing. The scan fails on any *fixable* HIGH
+or CRITICAL finding; a finding this repository cannot fix — one vendored inside a
+third-party wheel, say — is written down in
+[`.trivyignore.yaml`](../.trivyignore.yaml) with the reason and the date the
+exception expires, so it comes back to be argued rather than silently forgiven. The same two questions about a tag
 you are about to make are answered at home:
 
 ```bash

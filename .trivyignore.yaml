@@ -1,0 +1,14 @@
+# Findings the image scan is told about in advance, each with a reason and a date
+# to look again. Everything else has to be clean — a vulnerability that nobody
+# upstream can fix yet is not the same kind of thing as one nobody has looked at.
+vulnerabilities:
+  - id: CVE-2026-111943
+    expired_at: 2027-01-31
+    statement: >-
+      `wandb-core` is a Go program vendored inside the `wandb` Python wheel.
+      The release that carries it (0.31.0) was built with go1.27.2 and this
+      crypto/x509 finding is fixed in go1.27.3, so it goes away when wandb
+      publishes a rebuilt wheel — nothing here compiles that binary. It is also
+      unreachable as this image runs: `WANDB_MODE=disabled` means the client
+      never opens a connection. Raise the pin when wandb rebuilds; the date
+      above is when this exception has to be argued again if it has not.

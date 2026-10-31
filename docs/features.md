@@ -135,7 +135,9 @@ what CI runs.
   for any branch, `:v1.2.3` for a release tag (amd64 **and** arm64; branches are amd64).
   No commit-hash tags — the commit is in `priv/build_info.json` and the page footer.
 - Trivy (CRITICAL/HIGH, fixable only) runs before the push, and CI asserts the image
-  runs as uid 10001. `/app/bin/migrate` once, then `/app/bin/server`.
+  runs as uid 10001. `/app/bin/migrate` once, then `/app/bin/server`. A finding
+  upstream has not fixed yet is recorded, with a reason and an expiry, in
+  [`.trivyignore.yaml`](../.trivyignore.yaml).
   ([`Dockerfile`](../Dockerfile))
 - CI: `lint` → `test` ×4 partitions (Postgres 17 service) → `report` (merged coverage
   ≥ 85, CRAP ranking, both parity oracles) → `types` → `image`. Prose-only pushes are
