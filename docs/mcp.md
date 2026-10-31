@@ -17,7 +17,8 @@ curl -s localhost:4001/mcp -H 'content-type: application/json' -d '{
 ```
 
 Point a client at the port your server prints (`4001` in this workspace,
-`4000` by default). VS Code reads `.vscode/mcp.json`; a client that takes a URL
+`4000` by default). VS Code reads [`.vscode/mcp.json`](../.vscode/mcp.json); a
+client that takes a URL
 takes `http://localhost:4001/mcp`.
 
 ## Where the answers come from
@@ -28,7 +29,7 @@ The server does not keep a copy of anything it talks about.
 | --- | --- |
 | What does the project say? | `docs/**` in the Monty checkout `MONTY_SOURCE` names (`../monty-orig` here) |
 | What does it plan? | `docs/future-work/<section>/<task>.md`, whose front matter is the project's own future-work table |
-| Where is that in code? | `lib/monty/module_map/data.ex`, the same map `mix monty.module_map.verify` checks |
+| Where is that in code? | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex), the same map `mix monty.module_map.verify` checks |
 | What is this experiment? | `Monty.Studio.open/2` — Monty's `conf/` tree, composed and read back |
 | Did the run work? | `studio_runs`, written by `Monty.Studio.Jobs.Run` as the run goes |
 
@@ -211,7 +212,7 @@ fails immediately looks like a run that worked.
 | `:monty_source` / `MONTY_SOURCE` | `../monty-orig` | the checkout the docs and configs are read from |
 | `:monty_docs_dir` | `<monty_source>/docs` | the documentation corpus |
 | `:monty_docs_url` | `https://docs.thousandbrains.org/docs/` | where pages are published |
-| `:experiments_dir` | `priv/experiments` | where drafts are written |
+| `:experiments_dir` | [`priv/experiments`](../priv/experiments) | where drafts are written |
 
 ## What it is not
 

@@ -33,6 +33,7 @@ keeps on purpose or suspects in Monty, that one records the agreements.
 | [1.12](#112-lab-goes-through-opencvs-8-bit-tables) | `cvtColor` on a `uint8` image answers 8-bit Lab, so it quantises | Confirmed by measurement over every 8-bit colour | Floats; agrees to 2.67 of 255 |
 | [1.13](#113-cv2s-area-resize-does-something-else-when-only-one-axis-enlarges) | `INTER_AREA` with one axis enlarging is neither area nor linear | Confirmed by measurement; unreachable from Monty's pyramids | Answers the area average |
 | [1.14](#114-a-pixel-with-no-depth-becomes-the-nearest-patch-in-the-view) | A depth of zero, mapped to log-depth zero, is *above* every real depth | Suspected; masked by the depth transforms real configs use | Reproduced on purpose, pinned by a test |
+| [1.15](#115-montys-two-gaussians-are-not-the-same-gaussian) | OpenCV's Gaussian and SciPy's are one function truncated two ways | Confirmed by measurement | Each where Monty uses it: OpenCV for salience, SciPy for the positioning procedure |
 | [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
 | [2.2](#22-motor_only_step-travels-in-the-result) | A policy sets a flag on the motor system | Decision | The flag travels in the result |
 | [2.3](#23-the-motor-system-answers-with-itself) | The motor system mutates itself | Decision | It answers with its next version |
@@ -59,10 +60,13 @@ Statuses mean:
 
 Monty's code is linked to
 [`thousandbrainsproject/tbp.monty` at `9130364`](https://github.com/thousandbrainsproject/tbp.monty/tree/91303642784ce176e2b8196c7bb990fef57688b6)
-— the revision `mix monty.config.snapshots` and `mix monty.module_map.verify`
-check against. Line numbers are pinned to it; the function names will outlive
-them. This port's code is linked relative to this file. Snippets are quoted
-verbatim, only dedented from Monty's nesting.
+— the revision these entries were read from, which is why line numbers are pinned
+to it; the function names will outlive them. The map and the shipped config copy
+have moved on since (`monty@760ad17`,
+[`priv/monty/inputs.json`](../priv/monty/inputs.json)), so a line number here is a
+line of `9130364` and not of today's checkout. This port's code is linked
+relative to this file. Snippets are quoted verbatim, only dedented from Monty's
+nesting.
 
 ---
 
@@ -623,13 +627,6 @@ before a salience module sees its depth — `MissingToMaxDepth` and
 zero, so the case is rare in a configured run and reachable mainly by a caller
 that hands a depth image straight to the strategy.
 
----
-
-# 2. Where this port deliberately differs
-
-Decisions, not suspected defects. Each is a place where two runs can differ
-without either being wrong.
-
 ## 1.15 Monty's two Gaussians are not the same Gaussian
 
 **What.** The salience code blurs with OpenCV — `cv2.GaussianBlur`, kernel size
@@ -652,6 +649,13 @@ has a flat maximum, and which pixel NumPy's `argmax` returns is then a fact abou
 summation order, not about Monty: two faithful implementations can disagree by a
 pixel. The fixture therefore uses a notched object, whose brightest pixel is
 clear of the runner-up by `0.02` of the mask's height.
+
+---
+
+# 2. Where this port deliberately differs
+
+Decisions, not suspected defects. Each is a place where two runs can differ
+without either being wrong.
 
 ## 2.1 Random streams: one stream per episode, NumPy's numbers
 
@@ -684,7 +688,8 @@ for the same reason, so a step's *numbers* are unaffected — a step's *wall clo
 is the sum of the sensor modules rather than the slowest.
 
 **Measured.** Against Monty's own world
-(`scripts/probe_world_episodes.exs`, `base_config_10distinctobj_dist_agent`), with
+([`scripts/probe_world_episodes.exs`](../scripts/probe_world_episodes.exs),
+`base_config_10distinctobj_dist_agent`), with
 `Monty.Frameworks.Experiments.Seed` giving the episode seed Monty's own
 `episode_seed` column: the first action of the first episode is
 `turn_left 16.782644145270698°` + `look_up 20.802956601860625°` in both. Before
@@ -765,7 +770,8 @@ and [`surface_policy.ex`](../lib/monty/frameworks/models/motor_policies/surface_
 than once in a step: `SurfacePolicy` samples a tangential direction and a
 distance, and the search draws a random angle. A stream keyed to the step alone
 would answer all of those draws with the same action, which is wrong rather than
-slow. `scripts/bench_samplers.exs` records that threading is also the cheaper
+slow. [`scripts/bench_samplers.exs`](../scripts/bench_samplers.exs) records that
+threading is also the cheaper
 option (1.0 µs against 1.4 µs per draw, in a ~39 ms step), but that is a
 tie-breaker, not the reason.
 
@@ -1061,7 +1067,8 @@ dispatched by `RecognitionPolicy.call/3`. Constructors answer `{:ok, policy}` or
 
 **Why.** The decision is what has to be compared with Monty's, and a decision
 that can reach into live processes is a decision that cannot be recorded and
-replayed. `scripts/record_monty_recognition_policy.py` asks Monty's real classes
+replayed. [`scripts/record_monty_recognition_policy.py`](../scripts/record_monty_recognition_policy.py)
+asks Monty's real classes
 448 questions over the same view; the port answers every one of them the same
 way.
 
@@ -1076,11 +1083,13 @@ its own concern.
 holding `GraphObjectModel`s; `MontyExperiment` loads it into the learning modules
 it has just built (`initialize_model` in `monty_experiment.py`).
 
-**What this port does.** `scripts/export_monty_pretrained.py` reads that pickle in
+**What this port does.** [`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py)
+reads that pickle in
 Monty's own environment and writes the graphs out as JSONL —
 `priv/monty/libraries/<model>.jsonl.gz`, one object per line, positions and the
 four matched features per node, every number at full precision (these files were
-once rounded to six decimals, and `docs/validation.md` records what that cost).
+once rounded to six decimals, and [`validation.md`](validation.md) records what
+that cost).
 `Monty.Studio.Memory` reads one
 back into a `GraphMemory`, and a run builds its learning module around it
 (`EvidenceGraphLM.from_config/2` takes an optional `:memory`). The library's

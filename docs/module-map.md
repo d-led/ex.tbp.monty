@@ -53,13 +53,15 @@ applies with its own namespace:
 teleop developer can find their module here without a translation table.
 
 How each part is meant to land in a browser is a separate decision, made in
-`docs/architecture.md`: the matplotlib figure becomes LiveView components, a
-`StepHook` stays a hook, and the mouse/keyboard controls become LiveView
-events. The module map records *where* the logic lives, not how it is drawn.
+[`architecture.md`](architecture.md): the matplotlib figure becomes LiveView
+components, a `StepHook` stays a hook, and the mouse/keyboard controls become
+LiveView events. The module map records *where* the logic lives, not how it is
+drawn.
 
 ## The map
 
-`lib/monty/module_map/data.ex` is generated from the checkouts:
+[`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex) is generated
+from the checkouts:
 
 ```bash
 mix monty.module_map.gen             # writes the module (both packages)
@@ -73,13 +75,21 @@ end of a path handed to a reader.
 
 Each entry carries the Python path, the Elixir module, a status
 (`implemented`, `planned`, `excluded`) and, for exclusions, a reason. The
-verifier fails when:
+verifier checks three things, for both packages:
 
-* an `excluded` entry has no reason.
+* every Python file in a checkout has an entry;
+* every entry marked `implemented` points at a module that exists;
+* every entry marked `excluded` says why.
+
+With no checkout it checks the last two only, and says which packages it could
+not check from source rather than pretending it did: the map names the commit it
+was generated from, and nothing a build or a test does needs the checkout. A
+checkout that has moved since is reported too — the map still describes the
+commits it names, which is a fact to read, not a failure.
 
 The current counts are what `mix monty.module_map.verify` prints. They live
-there and in `data.ex`, never here: a number copied into prose is wrong by the
-next commit.
+there and in [`data.ex`](../lib/monty/module_map/data.ex), never here: a number
+copied into prose is wrong by the next commit.
 
 The generated file's counts are the honest progress bar for the port: the UI
 will show per-experiment how much of the config it needs is already
@@ -87,11 +97,11 @@ implemented.
 
 ## Claiming a module
 
-1. Pick an entry from `lib/monty/module_map/data.ex`.
+1. Pick an entry from [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex).
 2. Create the module at its mapped name.
 3. Port the behaviour as pure functions, keeping Monty's vocabulary.
 4. Test it — against a Monty fixture when numbers are involved.
 5. `mix monty.module_map.gen && mix monty.module_map.verify`.
-6. `scripts/quality.sh`.
+6. [`scripts/quality.sh`](../scripts/quality.sh).
 
 Marking something `excluded` is allowed; leaving it unexplained is not.

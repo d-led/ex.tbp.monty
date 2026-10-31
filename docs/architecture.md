@@ -51,7 +51,11 @@ Facts worth keeping in mind, all inherited from Monty:
 * a learning module receives another learning module's `get_output` from the
   *previous* step, and only if at least one sensor percept passed that step;
 * a location-only step (no percept with `process_features_in_lm`) displaces
-  hypotheses without updating evidence.
+  hypotheses without updating evidence;
+* sensor modules are stepped **one at a time**, not as a barrier: a sensor may
+  draw from the episode's random stream (the salience module dithers its
+  scores), and a barrier would let the scheduler decide which drew first.
+  `Monty.Random.Stream`'s moduledoc says so at the code site.
 
 ## Why processes
 
@@ -61,29 +65,53 @@ one per learning module, and the step coordinator last. The strategy is
 (`{:learning_module, model_id, id}`), so a module that dies is replaced without
 the coordinator losing its step count.
 
-* **Isolation.** A learning module that crashes is restarted; the run continues
-  and is marked degraded. The Python runtime cannot offer that.
-* **Voting as messaging.** `:gen_server.multi_call` gathers votes with a
-  timeout. `:infinity` reproduces Python's synchronous round exactly; a finite
-  deadline is the experiment from
+* **Isolation.** A module that dies is replaced by the model's supervisor, and the
+  coordinator addresses it again by name. A module that is unavailable or late is
+  reported in that step's info (`sensor_timeouts`, the vote round's `timed_out`)
+  rather than taking the step with it. The Python runtime cannot offer that.
+* **Voting as messaging.** The round is `Monty.Runtime.Barrier`: one
+  `Task.async_stream` pass over the modules, `ordered: true` so the gather is
+  the listing order and not the arrival order, `on_timeout: :kill_task` so a
+  late module costs only its own reply. `:infinity` reproduces Python's
+  synchronous round exactly; a finite deadline is the experiment from
   [the neural-voting thread](https://forum.thousandbrains.org/t/software-architecture-for-neural-voting/129):
-  the round closes when time is up and reports how many votes it used.
+  the round closes when time is up, and the step reports what it used
+  (`votes_used`) and that it was short (`deadline_hit?`).
 * **No GIL.** Columns are independent; the scheduler already interleaves them.
 
 ## Determinism
 
-Python threads one mutable `RandomState` through every module. Here the
-coordinator owns an immutable RNG value and passes it through the same call
-order, so a seeded episode is reproducible. A `:per_module` stream mode is
-planned for parallel steps; it will be a mode, not the default.
+Python threads one mutable `RandomState` (`ctx.rng`) through every module, so
+what a module draws depends on how many draws the modules before it made. That
+object is shared and mutable, which is why it is a process here:
+`Monty.Random.Stream` is one child per model, holding a `Monty.Random.Numpy`
+state, reseeded when the episode's seed changes. A module draws through
+`Monty.Context.rng` in the order it is stepped — Monty's order — so a seeded
+episode produces NumPy's numbers, in the same sequence.
+
+`Monty.Context.rng_for/2` is the older arrangement, still used where a site has
+not moved onto the stream: the environment's noise transforms and a camera's
+message noise, which draw per module per step. It derives a stream from the seed,
+`phash2(module_id)` and the step, so it is independent of what ran before it —
+and therefore a *different set of numbers* by construction. §2.1 of
+[`monty-bugs.md`](monty-bugs.md) lists what is left, which is what a diff of two
+action logs eventually comes down to.
+
+Determinism is a feature, not a coincidence: the coordinator advances the step,
+never a module, and nothing in a step reads the wall clock.
 
 ## The functional core
 
-Every mapped module under `lib/monty/` is pure: data in, data out, no
-processes, no side effects. The actor layer is thin by design — routing,
-state holding, telemetry — and is the only place that knows about GenServers.
-This is what lets a contributor port a Python class and test it directly
-against Monty numbers, and what keeps the port reviewable by Monty's team.
+Every mapped module under [`lib/monty/`](../lib/monty) is a function of its
+inputs: plain data in, plain data out, no processes and no side effects of its
+own. The two
+standing exceptions are named rather than hidden — a draw from the episode's
+stream (`Monty.Context.rng`, a call to a process) and a world
+(`Monty.Simulators.Habitat.Environment.HabitatEnvironment` holds a port). The
+actor layer is thin by design — routing, state holding, telemetry — and is the
+only place that knows about GenServers. This is what lets a contributor port a
+Python class and test it directly against Monty numbers, and what keeps the port
+reviewable by Monty's team.
 
 ## Boundaries
 
@@ -111,11 +139,34 @@ contract and `Monty.Simulators.Port.Environment` owns the process, so the world
 can be MuJoCo, Habitat or a camera without touching the model. See
 [`simulator-port.md`](simulator-port.md).
 
+## What comes from Monty
+
+Four of these are *copied* or exported, one is *generated*, and one is only ever
+*started*. The distinction is the one to keep: a copy can be diffed against a
+checkout, a started process is Monty's own code doing its own work, and neither
+is a port.
+
+| What | Where it lives | How it gets here |
+| --- | --- | --- |
+| Monty's Hydra config tree — every experiment, group and module a config can name | [`priv/monty/conf`](../priv/monty/conf) | copied verbatim, `*.yaml` only, by `mix monty.inputs` (496 files at `monty@760ad174`) |
+| the trees Hydra composed for Monty's own snapshot tests | [`priv/monty/snapshots`](../priv/monty/snapshots) | the same task, the same commit (63 files); this is the oracle the composer is held to |
+| Monty's licence | [`priv/monty/LICENSE`](../priv/monty/LICENSE) | the same task, so it cannot drift from what it describes |
+| Monty's pretrained memories | [`priv/monty/libraries/`](../priv/monty/libraries), `<release>/<model>.jsonl.gz` | exported from Monty's published prerequisites by [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh); nothing here computes them |
+| the module contract | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex) | generated by `mix monty.module_map.gen` from both checkouts — a map of Monty's files, not a copy of their source |
+| the world | a Python process | started, never copied: [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) imports Monty's own `HabitatEnvironment` and eval interface out of `$MONTY_PYTHON`'s `tbp.monty` |
+
+What deliberately does not travel: Monty's Python source, its `tests/` and its
+`docs/`. The source is the thing being ported (the map says where each file
+went); the docs are read from a checkout by the MCP server, at request time,
+only when one is there. Monty's `conf/` also holds the Python that runs Hydra
+(`update_snapshots.py`) and a working tree's `__pycache__`; neither is copied.
+
 ## Where Python is, and is not
 
 Two interpreters are involved and they never meet. One is carried by the
 application, built into the release by uv, and reached only by the ported wandb
-logger (`config/pythonx.exs`, `Monty.Frameworks.Loggers.WandbHandlers.PythonxClient`).
+logger ([`config/pythonx.exs`](../config/pythonx.exs),
+`Monty.Frameworks.Loggers.WandbHandlers.PythonxClient`).
 The other is *yours*: `MONTY_PYTHON` (or `python3` on the PATH if it is unset), an
 interpreter with Monty installed, which runs the world on the other side of the
 port. A run with `MONTY_WORLD` unset steps neither of those worlds — the stand-in
@@ -139,9 +190,12 @@ say "prerequisites present" while a wandb run would fail.
 
 ### One step across the port
 
-The peer is `scripts/monty_simulator_peer.py`. It is started as an OS process
-(`Port.open` with `{:packet, 4}`) and speaks length-prefixed JSON; it knows
-nothing about Elixir except the framing.
+The peer is [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py). `Monty.Simulators.Habitat.Environment.HabitatEnvironment`
+is the handle a run holds — `new/1` starts nothing, because a run may never step
+— and the first step starts the peer as an OS process (`Port.open` with
+`{:packet, 4}`). It speaks length-prefixed JSON and knows nothing about Elixir
+except the framing. `MONTY_WORLD=monty` is what makes `Monty.Studio.Setup` build
+this world instead of the synthetic scene.
 
 ```mermaid
 ---
@@ -168,13 +222,21 @@ flowchart TD
 ```
 
 The action produced at step *t* reaches the world at step *t+1* because the
-experiment, not the port, decides when to step: the port only carries them.
+experiment, not the port, decides when to step: the port only carries them. A
+`reset` is answered with more than `ok`: the peer reports `primary_target` (which
+object the episode is about — its interface sampled it, so nothing else knows)
+and `semantic_id_to_label` (what a semantic image's id means). Without the first
+the model would be scoring itself against nothing; without the second a run could
+not name what it recognised.
 
 ### What the peer imports from a Monty checkout
 
-`--monty-root` (default `$MONTY_ROOT`, else whatever `tbp` is importable) is put
-on `sys.path` as `<root>/src`. Everything below is Monty's own code, imported
-from that checkout.
+`--monty-root` — default `$MONTY_ROOT`, and when neither is given, whatever `tbp`
+is already importable — is put on `sys.path` as `<root>/src`. A relative path is
+refused by being made absolute, because a relative one quietly picks another
+checkout. `HabitatEnvironment` never lets it default: `:monty_root` names it
+(`MONTY_SOURCE` when unset), so the world and the configs are the same Monty.
+Everything below is Monty's own code, imported from that checkout.
 
 ```mermaid
 ---
@@ -201,7 +263,8 @@ The model is not there: it is here, in Elixir.
 Monty's config tree is read by Hydra (in the peer) and by `Monty.Config.Source`
 (in the BEAM). They read different copies of the same files: the peer composes
 `tbp.monty.conf` out of the checkout on its `sys.path`, and the BEAM composes
-`priv/monty/conf`, which is a verbatim copy taken from a checkout.
+[`priv/monty/conf`](../priv/monty/conf), which is a verbatim copy taken from a
+checkout.
 
 ```mermaid
 ---
@@ -278,6 +341,9 @@ A run is a row, not a buffer: `Monty.Studio.RunHistory` writes every step to
 and streams. The log file the run writes (`run.log`, next to Monty's artifacts)
 is the same text the page shows.
 
-Vote rounds emit `:telemetry` events from the step coordinator
-(`lib/monty/runtime/step.ex`) with `sent`, `received`, `inputs_used`,
-`deadline_hit?` and a duration, which is what the latency experiments need.
+Vote rounds and steps are measured from the step coordinator: `Monty.Runtime.Step`
+emits one event, `[:monty, :step, :stop]`, with `duration` (microseconds) as the
+measurement and `step`, `votes_used`, `deadline_hit?` as metadata
+([`lib/monty/runtime/step.ex`](../lib/monty/runtime/step.ex)). That is what a
+latency experiment reads: a round that closed early says so, and how many votes
+it actually used is beside it.

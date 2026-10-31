@@ -11,7 +11,7 @@ not recalled — run it after anything lands that can move one.
   `Monty.Path.File.Class`; a repeated segment collapses, a class repeating the file
   name is dropped. ([rule](module-map.md))
 - **The map is the contract.** 131 Python files (124 `tbp.monty`, 7 `tbp.teleop`),
-  355 classes. Implemented: 48 files / 173 classes. Planned: 79 / 180. Excluded: 4 / 2.
+  360 classes. Implemented: 48 files / 175 classes. Planned: 79 / 183. Excluded: 4 / 2.
   ([`module_map/data.ex`](../lib/monty/module_map/data.ex))
 - `mix monty.module_map.gen` re-derives the map from the checkouts;
   `mix monty.module_map.verify` fails on an unmapped file, an `implemented` entry
@@ -19,7 +19,7 @@ not recalled — run it after anything lands that can move one.
 - **Monty's Hydra YAML is read unchanged**, with a documented subset of Hydra
   features. ([config-compatibility.md](config-compatibility.md))
 - **Snapshot gate:** composes each experiment Monty commits a snapshot for
-  (54 files at `monty@760ad174`) and diffs it path by path — an extra key is a
+  (63 files at `monty@760ad174`) and diffs it path by path — an extra key is a
   failure too. ([`snapshot_check.ex`](../lib/monty/config/snapshot_check.ex))
 - **Numbers checked against Monty**, strongest first: replayed (Monty's own code ran
   and its answers are committed fixtures), recorded (whole episodes), counted
@@ -35,13 +35,14 @@ not recalled — run it after anything lands that can move one.
 - Sensor modules, learning modules and the motor system are BEAM processes; the step
   coordinator fans out and gathers per phase (`Monty.Runtime.Barrier`), in Monty's
   order. ([architecture.md](architecture.md))
-- Voting is `:gen_server.multi_call`: `:infinity` reproduces Python's synchronous
-  round, a finite deadline closes the round and reports `inputs_used` /
+- Voting is a `Monty.Runtime.Barrier` pass — `Task.async_stream`, `ordered: true`,
+  `on_timeout: :kill_task`: `:infinity` reproduces Python's synchronous round, a
+  finite deadline closes the round, and the step reports `votes_used` /
   `deadline_hit?` as telemetry.
 - One process per module under `:one_for_one`: a crashed module restarts and the step
   count survives.
 - Runs are Oban jobs recorded in Postgres (`studio_runs`), so a run outlives the HTTP
-  request. ([`jobs_live.ex`](../lib/ex_tbp_monty_web/live/jobs_live.ex))
+  request; `/jobs` is [`run_history_live.ex`](../lib/ex_tbp_monty_web/live/run_history_live.ex).
 
 ## Worlds
 
@@ -67,7 +68,7 @@ not recalled — run it after anything lands that can move one.
 - `/experiments/*name` — wiring diagram, findings, the composed config, and a run that
   streams as it steps.
 - `/build` — an experiment from a blueprint, previewed by composing the config it
-  would write; drafts saved to `priv/experiments`.
+  would write; drafts saved to [`priv/experiments`](../priv/experiments).
 - `/runs`, `/runs/:id` — history and replay: per-step sensor frames, the object
   centred with the agent in frame, an evidence chart, hypothesis counts, and why the
   run stopped. Run files (`/runs/:id/files/:name`) are served as they are.
@@ -83,9 +84,9 @@ not recalled — run it after anything lands that can move one.
 
 - `POST /mcp`: JSON-RPC 2.0 over Streamable HTTP, stateless — no session header, no
   SSE (`GET`/`DELETE` → 405), no batches. ([mcp.md](mcp.md))
-- **17 tools**, all `monty_*`: docs search/read/index, roadmap list/task, module
-  lookup/port status/code-in-doc, experiment options/describe/list/preview/create/run/
-  report/list-runs.
+- **21 tools**, all `monty_*`: this deployment, docs, roadmap, the port,
+  experiments and runs — [mcp.md](mcp.md) lists them, because a list here goes
+  stale while the count does not.
 - Answers come from the sources, not a copy: the checkout's `docs/`, its `future-work`
   front matter, the generated module map, `Monty.Studio` and `studio_runs`. Doc answers
   carry the page's published URL; port status is the map's verdict.
@@ -107,7 +108,8 @@ mix build.info                 # commit + build metadata into the release
 
 `mix monty.run` records by default (the run shows up in `/runs`) and exits 1 when the
 config would not start, so CI can use it. `mix lint`, `mix cover`, `mix complexity`,
-`mix dialyzer`; `mix precommit` is `scripts/quality.sh`, what CI runs.
+`mix dialyzer`; `mix precommit` is [`scripts/quality.sh`](../scripts/quality.sh),
+what CI runs.
 
 
 ## Logging, including wandb
@@ -143,7 +145,7 @@ config would not start, so CI can use it. `mix lint`, `mix cover`, `mix complexi
   + daisyUI 5 + heroicons, `yaml_elixir` for Hydra YAML, `pythonx` for Python.
   ([`mix.exs`](../mix.exs))
 - `docker compose up -d` gives Postgres 17 and adminer. ([compose](../docker-compose.yml))
-- 1,683 `test` declarations in the suite.
+- 1,826 `test` declarations in the suite.
 
 ## Not built — do not assume these
 

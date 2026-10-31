@@ -377,7 +377,7 @@ Tristan closes desired effects in-thread, so the tree is not a wish list:
 | 11 W&B | `WandbWrapper` + `from_config/1`, and the `mark_obs` "exact image or our rendering" decision |
 | 21–37 learning | these change the learning module; they arrive here only after they land in `monty-orig` |
 
-The port's own ordering lives in `docs/roadmap.md`. This page only records what the
+The port's own ordering lives in [`roadmap.md`](roadmap.md). This page only records what the
 outside world is asking for.
 
 ## Read first — twelve threads

@@ -63,7 +63,8 @@ library is immutable data handed in (see the decision at the end of
 The last row is the one worth arguing. Monty's restriction exists because mutable
 state leaks between episodes. Here determinism is per episode by construction —
 `Context.rng_for/2` derives every module's stream from the episode seed, the
-module and the step (`docs/monty-bugs.md` §2.1) — so two episodes cannot
+module and the step ([`monty-bugs.md`](monty-bugs.md) §2.1) — so two episodes
+cannot
 influence each other even if they run in the same process. **`num_parallel` is
 therefore a performance knob and can never be a correctness one**, which is a
 statement Monty cannot make about its own pool without auditing every global.

@@ -41,15 +41,18 @@ mix monty.port_census                  # what the newly planned classes actually
    the checkout is on `main` with nothing uncommitted; anything else is reported
    and left alone, because a copy taken from a tree that is not what it claims to
    be is worse than a stale copy. The revision is recorded in
-   `priv/monty/inputs.json` (`monty`, `conf_files`, `snapshot_files`) — that file
-   is the answer to "which Monty is this?", and it moves with the copy.
+   [`priv/monty/inputs.json`](../priv/monty/inputs.json) (`monty`, `conf_files`,
+   `snapshot_files`) — that file is the answer to "which Monty is this?", and it
+   moves with the copy.
 2. **Configs.** `mix monty.config.snapshots` is the compatibility gate: it
-   composes each experiment from the YAML in `priv/monty/conf` and compares the
+   composes each experiment from the YAML in [`priv/monty/conf`](../priv/monty/conf)
+   and compares the
    result with Monty's own `tests/conf/snapshots`, path by path. A missing key is
    as much a difference as a wrong value, and "close enough" is how a config
    quietly means something else. Add `--source ../monty-orig` to check a
    checkout whose copy you have not refreshed yet.
-3. **Files.** `mix monty.module_map.gen` (re)writes `lib/monty/module_map/data.ex`
+3. **Files.** `mix monty.module_map.gen` (re)writes
+   [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex)
    from both packages: every Python file, the Elixir module its path maps to, its
    classes, and whether that module exists. An entry already marked `excluded`
    with a reason stays excluded; an entry whose module now exists becomes
@@ -71,23 +74,26 @@ mix monty.port_census                  # what the newly planned classes actually
    with a test that says what it decides — and where numbers matter, against a
    fixture recorded from Monty (`scripts/record_monty_*.py` run Monty in Monty's
    environment and write what it answered; the suite replays that JSON).
-7. **Gate.** `scripts/quality.sh`, and `mix dialyzer` for the types job.
+7. **Gate.** [`scripts/quality.sh`](../scripts/quality.sh), and `mix dialyzer`
+   for the types job.
 
 ### Where to look
 
 | Question | Look at |
 | --- | --- |
-| Where would Monty's `a/b.py::C` live here? | `lib/monty/module_map/data.ex`, rule in [`module-map.md`](module-map.md) |
+| Where would Monty's `a/b.py::C` live here? | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex), rule in [`module-map.md`](module-map.md) |
 | Is this ported, planned or excluded? | the same entry's `status`; `mix monty.port_census` for what planned means |
 | Does this config still mean what Monty means? | [`config-compatibility.md`](config-compatibility.md), then `mix monty.config.snapshots` |
-| How does a timestep run, and where is Python involved? | [`architecture.md`](architecture.md) |
+| How does a timestep run, and where is Python involved? | [`architecture.md`](architecture.md) — and [what is Python here](#what-is-python-here-and-what-it-does) below |
 | What does the world boundary allow? | [`simulator-port.md`](simulator-port.md) |
+| Which files are Monty's, copied, and which are ours? | [`architecture.md`](architecture.md#what-comes-from-monty), section "What comes from Monty"; [`priv/monty/README.md`](../priv/monty/README.md) |
+| How do I refresh Monty's YAML, snapshots or memories? | `mix monty.inputs`, [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) |
 | Why does this disagree with Python? | [`monty-bugs.md`](monty-bugs.md) |
-| What is actually proven? | [`validation.md`](validation.md) and `test/fixtures/` |
+| What is actually proven? | [`validation.md`](validation.md) and [`test/fixtures/`](../test/fixtures) |
 | What is not built yet? | [`roadmap.md`](roadmap.md), [`open-ends.md`](open-ends.md) |
-| Which Monty is this repo pinned to? | `priv/monty/inputs.json` |
-| Which build am I looking at? | `priv/build_info.json` (`mix build.info`), also in the footer of every page |
-| How does it run in a container? | [`container.md`](container.md), `Dockerfile` |
+| Which Monty is this repo pinned to? | [`priv/monty/inputs.json`](../priv/monty/inputs.json) |
+| Which build am I looking at? | `priv/build_info.json` (written by `mix build.info`), also in the footer of every page |
+| How does it run in a container? | [`container.md`](container.md), [`Dockerfile`](../Dockerfile) |
 
 ### What not to do
 
@@ -97,14 +103,20 @@ mix monty.port_census                  # what the newly planned classes actually
   If a value is missing, the finding is that the copy is stale, not that the
   resolver should be generous.
 - **Do not regenerate the copy from a dirty or non-`main` checkout**, and do not
-  edit `priv/monty` by hand. There is exactly one writer: `mix monty.inputs`.
+  edit [`priv/monty`](../priv/monty) by hand. The YAML has exactly one writer,
+  `mix monty.inputs`; the memories have one,
+  [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh); the two
+  census files are written by the tasks that produce them (`mix monty.port_census`,
+  `mix monty.target_census`) and are otherwise read-only.
 - **Do not paper over a disagreement.** A run that "works" with a stand-in module
   is worse than a run that refuses: an unimplemented class is an error, never a
-  substitute. A deliberate difference goes in `monty-bugs.md` with a reason.
+  substitute. A deliberate difference goes in [`monty-bugs.md`](monty-bugs.md)
+  with a reason.
 - **Do not let a number live in prose.** Counts belong to the command that
   prints them (`mix monty.port_census`, `mix monty.module_map.verify`, and
-  `scripts/refresh_features.py` for `features.md`), because a number copied into
-  a sentence is wrong by the next commit.
+  [`scripts/refresh_features.py`](../scripts/refresh_features.py) for
+  [`features.md`](features.md)), because a number copied into a sentence is
+  wrong by the next commit.
 
 ## Local setup
 
@@ -113,12 +125,13 @@ scripts/init-dev.sh    # Postgres in Docker, dependencies, database, assets
 scripts/run-dev.sh     # http://localhost:4000
 ```
 
-`init-dev.sh` needs Elixir 1.20 with the OTP it runs on, node/npm for the asset
-bundle, and Docker for the Postgres `config/dev.exs` expects on port 6432; it
-runs `docker compose up -d` and `mix setup`, and is worth running again after a
-pull that moves a dependency or a migration. `run-dev.sh` is `mix phx.server`
-with the code reloader — `PORT=4001 scripts/run-dev.sh` moves it, and
-`MONTY_WORLD=monty MONTY_PYTHON=… scripts/run-dev.sh` steps Monty's own
+[`scripts/init-dev.sh`](../scripts/init-dev.sh) needs Elixir 1.20 with the OTP it
+runs on, node/npm for the asset bundle, and Docker for the Postgres
+[`config/dev.exs`](../config/dev.exs) expects on port 6432; it runs
+`docker compose up -d` and `mix setup`, and is worth running again after a pull
+that moves a dependency or a migration. [`scripts/run-dev.sh`](../scripts/run-dev.sh)
+is `mix phx.server` with the code reloader — `PORT=4001 scripts/run-dev.sh` moves
+it, and `MONTY_WORLD=monty MONTY_PYTHON=… scripts/run-dev.sh` steps Monty's own
 simulator instead of the synthetic scene.
 
 Tests need the same database; `mix test` creates and migrates it.
@@ -126,35 +139,67 @@ Tests need the same database; `mix test` creates and migrates it.
 ## Where the code is
 
 ```
-lib/monty/               the port: CMP, config, geometry, models, runtime, studio
+lib/monty/               the port, one module per Monty file: cmp, config, geometry,
+                         frameworks/, experiment/, sensor_modules/, random/
 lib/monty/runtime/       processes only — step barriers, vote rounds, routing
 lib/monty/studio/        experiments, setups, run history (the app's domain)
-lib/monty/simulators/    the world: synthetic, port protocol, recordings
+lib/monty/simulators/    the world: synthetic, port protocol, recordings, the Habitat handle
 lib/ex_tbp_monty/        the OTP application: repo, MCP server, release plumbing
 lib/ex_tbp_monty_web/    Phoenix endpoint, LiveViews, components
-priv/monty/              Monty's config tree and snapshots, verbatim; exported pretrained libraries
+priv/monty/              Monty's config tree, snapshots and licence, verbatim; exported memories
+priv/experiments/        experiment files the studio writes (a draft is a config, not a row)
+priv/studio_runs/        what each run wrote: run.log, frames, logs (ignored by git)
 priv/prerequisites.yaml  what a run downloads, checksummed
+scripts/                 the gates, the dev scripts, and every Python file this project has
+mix_tasks/               Mix tasks compiled outside `:test` (assets, build info)
 THIRD-PARTY.md           what this project did not write, and under which terms
 docs/                    architecture, config compatibility, module map, MCP, validation
 ```
 
+The one directory that is not code is [`priv/monty`](../priv/monty): it is
+Monty's data, copied rather than written — `mix monty.inputs` for the YAML,
+[`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) for the
+pretrained memories. [`architecture.md`](architecture.md#what-comes-from-monty)
+lists it beside the things that are *not* copied.
+
+## What is Python here, and what it does
+
+Only the world and the recorders. Nothing of Monty's own source is vendored:
+
+| Python | What it is | Needs |
+| --- | --- | --- |
+| [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) | Monty's `HabitatEnvironment` and eval interface, behind the port's protocol — the world a run steps when `MONTY_WORLD=monty` | `$MONTY_PYTHON` with `tbp.monty` and its simulator installed |
+| [`scripts/record_monty_*.py`](../scripts) | produce the fixtures the parity tests replay; run Monty once, offline, and write what it answered | `$MONTY_PYTHON` with the modules each recorder touches |
+| [`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py), [`scripts/classify_monty_classes.py`](../scripts/classify_monty_classes.py) | behind [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) and `mix monty.port_census` | `torch` for the export; plain `ast` for the census |
+
+None of this runs during a test unless the test asks for it. The boundary tests
+start [`test/support/probe_world.py`](../test/support/probe_world.py) with the
+`python3` on your PATH — it answers from what it was sent, so it needs no numpy,
+no Monty and no simulator — and the rest of the suite is green with
+`MONTY_SOURCE=/nonexistent` and no Monty installed anywhere. Stepping Monty's own
+world is the one thing that cannot be faked, and the setup page says so when the
+peer is not available.
+
 ## Monty's configs, in the repository
 
-What the application reads from Monty — its config tree, `priv/monty/conf`, and
-the snapshots the composer is held to, `priv/monty/snapshots` — is checked in
-verbatim, so **no Monty checkout is needed** to compile, test or run this.
+What the application reads from Monty — its config tree,
+[`priv/monty/conf`](../priv/monty/conf), and the snapshots the composer is held
+to, [`priv/monty/snapshots`](../priv/monty/snapshots) — is checked in verbatim, so
+**no Monty checkout is needed** to compile, test or run this. Monty's
+[`LICENSE`](../priv/monty/LICENSE) travels with them, copied by the same task.
 
 Refreshing the copy does need one:
 
 ```bash
 export MONTY_SOURCE=../monty-orig   # the default: monty-orig next to the project
-mix monty.inputs                    # fast-forward it, then copy conf + snapshots
+mix monty.inputs                    # fast-forward it, then copy conf + snapshots + LICENSE
 mix monty.inputs --check            # is the copy what that checkout would give?
 ```
 
-The revision it was copied from is in `priv/monty/inputs.json`, and
-`priv/monty/README.md` says what is in the copy, what deliberately is not, and
-whose licence it is under.
+The revision it was copied from is in
+[`priv/monty/inputs.json`](../priv/monty/inputs.json), and
+[`priv/monty/README.md`](../priv/monty/README.md) says what is in the copy, what
+deliberately is not, and whose licence it is under.
 
 A checkout is needed to regenerate too: `mix monty.module_map.gen` reads the
 Python of both packages (`MONTY_SOURCE`, `TELEOP_SOURCE`, default `../monty-orig`
@@ -164,14 +209,16 @@ and `../tbp.teleop`), and `mix monty.port_census` reads it as well.
 
 * **Module for module.** Python `path/file.py::Class` becomes
   `Monty.Path.File.Class`, with a repeated segment collapsed and the class
-  dropped when it repeats the file. `lib/monty/module_map/data.ex` records the
+  dropped when it repeats the file.
+  [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex) records the
   mapping and `mix monty.module_map.verify` fails when a Monty file has no
   entry or an `implemented` entry has no module. Do not "improve" a name to
   fit Elixir style; recognisability is the point.
 * **Functional core, actor shell.** Ported algorithms are pure functions over
   plain data, one-to-one with Python, tested directly. `Monty.Runtime.*` owns
   processes, routing and telemetry, and contains no algorithm. A GenServer
-  callback that computes is a bug.
+  callback that computes is a bug. Two exceptions are named rather than
+  tolerated: a draw from the episode's stream, and a world, which holds a port.
 * **Processes have a typed client API.** Call sites use
   `SensorModuleServer.step(server, ...)` or
   `LearningModuleServer.send_out_vote(server)`, never raw `GenServer.call/3`.
@@ -187,9 +234,13 @@ and `../tbp.teleop`), and `mix monty.port_census` reads it as well.
 * **Interpolations never survive into runtime.** Composition keeps `${...}`
   (as Monty's snapshots do); `Monty.Config.Resolvers` resolves them and reports
   unknown references instead of passing a `${...}` string along.
-* **One RNG stream per episode.** Determinism is a feature: the coordinator
-  threads the random state in Python's order. Parallel-friendly per-module
-  streams are a future mode, not the default.
+* **One RNG stream per episode.** Determinism is a feature: `Monty.Random.Stream`
+  is the episode's one NumPy stream, a child of the model, and a module draws
+  from it through `Monty.Context.rng` in the order it is stepped. That is why
+  sensor modules are stepped one at a time. `Monty.Context.rng_for/2` derives a
+  stream per module per step for the sites not yet moved onto the stream (noise
+  transforms, a camera's message noise); it is a different set of numbers by
+  construction, and [`monty-bugs.md`](monty-bugs.md) §2.1 lists what is left.
 * **CMP payloads are validated at construction.** `Message.new/1` and
   `Goal.new/1` return `{:ok, struct} | {:error, reason}`; a process building a
   bad message gets an error, not a crash.
@@ -200,10 +251,13 @@ and `../tbp.teleop`), and `mix monty.port_census` reads it as well.
 
 | Level | Where | Question |
 | --- | --- | --- |
-| Unit | `test/monty/**` | what does a pure module decide? |
-| Parity | `test/monty/config/**` | does Monty's config mean the same here? |
-| Contract | `test/monty/module_map_test.exs` | is the port still module for module? |
-| Component / web | `test/ex_tbp_monty_web/**` | what does a page or component render? |
+| Unit | [`test/monty/`](../test/monty) | what does a pure module decide? |
+| Parity | `test/monty/**/*_parity_test.exs` | are these Monty's numbers? |
+| Config | [`test/monty/config/`](../test/monty/config) | does Monty's config mean the same here? |
+| Contract | [`test/monty/module_map_test.exs`](../test/monty/module_map_test.exs) | is the port still module for module? |
+| Tasks | [`test/mix/`](../test/mix) | what does a Mix task do when a checkout is missing, stale or dirty? |
+| Application | [`test/ex_tbp_monty/`](../test/ex_tbp_monty) | the non-web parts of the app: MCP, prerequisites, release plumbing |
+| Component / web | [`test/ex_tbp_monty_web/`](../test/ex_tbp_monty_web) | what does a page or component render? |
 
 Conventions: `start_supervised!/1` for processes, `Process.monitor/1` or
 `_ = :sys.get_state/1` instead of `Process.sleep/1`, assertions about
@@ -247,8 +301,8 @@ CI publishes an image per ref to `ghcr.io/d-led/ex.tbp.monty`: `:main` and
 release tag. The tag is the ref name, lower-cased, with anything but
 `[a-z0-9._-]` turned into a dash. There are no commit-hash tags to wade
 through: the commit is inside the image — `mix build.info` burns it into
-`priv/build_info.json` — and the footer of every page shows it, with the
-pipeline run that produced it linked beside it.
+`priv/build_info.json` — and the footer of every page shows it, with the pipeline
+run that produced it linked beside it.
 
 A branch publishes amd64 only. arm64 is compiled under QEMU and is most of the
 job, so it is what a release tag — or `gh workflow run ci --ref main --field
@@ -277,10 +331,10 @@ the test *files*, which asks nothing of the tests themselves — no tags to
 maintain, no list to keep in step. A partition sees a quarter of the lines the
 suite can reach, so it runs with the threshold off (`COVERAGE_THRESHOLD=0`) and
 exports what it covered; the `report` job merges the four exports, holds the
-**total** to the 85% in `mix.exs` (`mix test.coverage`), and hands that same
-total to the CRAP ranking (`mix cover.merge` writes the one file `mix crap`
-reads). The parity oracles run there too, once, because a total of four
-quarters is not one of the quarters.
+**total** to the 85% in [`mix.exs`](../mix.exs) (`mix test.coverage`), and hands
+that same total to the CRAP ranking (`mix cover.merge` writes the one file
+`mix crap` reads). The parity oracles run there too, once, because a total of
+four quarters is not one of the quarters.
 
 The same three steps run at home:
 
@@ -305,13 +359,14 @@ loses its minutes but not the answer: the newer run is the one that counts.
 
 ## Adding a module
 
-1. Find the Python file and class in `lib/monty/module_map/data.ex`.
+1. Find the Python file and class in
+   [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex).
 2. Create the Elixir module at the mapped name.
 3. Port the algorithm as pure functions; keep Python's names for structs and
    keys where they carry meaning (`pose_vectors`, `pose_fully_defined`).
 4. Test behaviour first, against a Monty fixture where numbers are involved.
 5. `mix monty.module_map.gen` to flip the entry to `implemented`, then
-   `mix monty.module_map.verify` and `scripts/quality.sh`.
+   `mix monty.module_map.verify` and [`scripts/quality.sh`](../scripts/quality.sh).
 
 If a module genuinely cannot exist here (Hydra's own tooling), mark it
 `excluded` with a reason in the generated file; the verifier requires one.

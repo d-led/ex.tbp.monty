@@ -29,9 +29,9 @@ start from any of them.
 
 ## The script, if you have the checkout
 
-`scripts/image.sh` is the same thing under the same image name, for a local
-tree: it builds with the build arguments CI passes, runs the shape this page
-describes, and can publish both architectures.
+[`scripts/image.sh`](../scripts/image.sh) is the same thing under the same image
+name, for a local tree: it builds with the build arguments CI passes, runs the
+shape this page describes, and can publish both architectures.
 
 ```bash
 scripts/image.sh build              # ghcr.io/d-led/ex.tbp.monty:local, from this tree
@@ -128,14 +128,15 @@ explicit, local.
 
 ### World
 
-Monty's own simulator runs out of process, in the embedded interpreter; without
-these a run steps this port's synthetic scene, and the setup page says so.
+Monty's own simulator runs out of process, in an interpreter of its own
+(`MONTY_PYTHON`); without these a run steps this port's synthetic scene, and the
+setup page says so.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `MONTY_WORLD` | unset (synthetic) | `synthetic` steps the built-in scene; `monty` or `habitat` step Monty's own environment through the peer. Any other value fails the boot rather than the run. |
-| `MONTY_PYTHON` | unset | The interpreter the peer runs on. It is *not* the embedded one: Monty's simulator brings its own dependencies. |
-| `MONTY_OVERRIDES` | unset | Hydra overrides passed to the peer, e.g. `experiment.config.environment.env_init_args.data_path=/data/ycb`. |
+| `MONTY_PYTHON` | `python3` on the PATH | The interpreter the peer runs on. It is *not* the embedded one: Monty's simulator brings its own dependencies. |
+| `MONTY_OVERRIDES` | unset | Hydra overrides for the peer, space separated as on Monty's own command line, e.g. `constants.pretrained_dir=/data/models`. How a config that names a world this machine cannot run is pointed at one it can (`environment=habitat_dist_agent`). |
 
 ### This image's own choices
 
@@ -178,7 +179,8 @@ are in place, and `/prerequisites` is what says which ones are missing.
 
 ### The embedded Python is not one of them
 
-pythonx's environment — CPython and the packages named in `config/pythonx.exs` —
+pythonx's environment — CPython and the packages named in
+[`config/pythonx.exs`](../config/pythonx.exs) —
 is built when the release is *compiled*: uv downloads and installs it then, which
 is most of the image's size. At run time nothing is downloaded and nothing is
 written; `pythonx` starts the interpreter from the release's `priv` on the boot
@@ -235,7 +237,7 @@ needs nothing.
 * The release, at `/app`, owned by uid 10001, with `bin/migrate`, `bin/server`
   and the OTP tools above.
 * The embedded Python: `/app/lib/pythonx-*/priv` holds `libpythonx.so` and a uv
-  environment built from `config/pythonx.exs`. Most of the image is that
+  environment built from [`config/pythonx.exs`](../config/pythonx.exs). Most of the image is that
   environment — and it is why nothing has to be installed on the host for
   Monty's loggers to work.
 * No compiler, no Node, no git, no Hex cache: those live in the builder stage

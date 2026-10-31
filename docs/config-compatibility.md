@@ -6,8 +6,8 @@ document says exactly how far that goes, so nobody has to guess.
 ## What is read
 
 `Monty.Config.Source` reads the copy of Monty's config tree that ships with this
-application — `priv/monty/conf`, copied verbatim from `src/tbp/monty/conf` by
-`mix monty.inputs` — and finds:
+application — [`priv/monty/conf`](../priv/monty/conf), copied verbatim from
+`src/tbp/monty/conf` by `mix monty.inputs` — and finds:
 
 * `src/tbp/monty/conf/experiment.yaml` — the root config;
 * the `defaults:` groups it pulls in (`monty`, `monty/learning_module`,
@@ -66,8 +66,9 @@ composes every experiment and compares it, path by path, with
 differences, so a green run means every snapshot matches; the task prints how
 many it compared.
 
-The same check runs as a test (`test/monty/config/composer_test.exs`) and in CI
-against a pinned Monty revision.
+The same check runs as a test
+([`test/monty/config/composer_test.exs`](../test/monty/config/composer_test.exs))
+and in CI against a pinned Monty revision.
 
 ## Deliberate differences
 
@@ -83,7 +84,17 @@ against a pinned Monty revision.
 
 ## Editing from the UI
 
-The editor (planned) writes the *same* YAML file in the Monty checkout, then
-recomposes and diffs against the snapshot before saving. A config Monty would
-reject cannot be saved here either — the UI is a nicer editor for the existing
-files, not a second config format.
+Nothing here writes into a Monty checkout, and nothing invents a second config
+format. What exists is a round trip through files:
+
+* **A draft is a config file.** `/build` composes the config a blueprint would
+  write, shows the findings, and saves the YAML to
+  [`priv/experiments`](../priv/experiments) — an experiment file that could be
+  copied into Monty's `conf/experiment/` unchanged.
+* **An experiment exports as the file Monty ships** — its short `defaults:` list,
+  not the composed tree — at `/export/experiments/<name>`; an edited file comes
+  back through `monty_import_experiment`, which composes it before writing it and
+  refuses one that does not compose.
+* **A config Monty would reject cannot be saved here either.** Composition is the
+  gate, and the findings say what is wrong with a file that composes but would
+  not run.

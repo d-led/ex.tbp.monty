@@ -12,12 +12,24 @@ Elixir side, both written and tested:
 | `Monty.Simulators.Port.Protocol` | the contract, in both directions |
 | `Monty.Simulators.Port.Environment` | the process that owns the port: one request in flight, a timeout that is an error |
 
-Not done: the Python side. `test/support/probe_world.py` speaks the contract but
-is a probe, not a world — it answers with what it was sent.
+The Python side is [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py):
+Monty's own `HabitatEnvironment` and the experiment's eval interface, on the far
+side of the port, driven by Hydra out of a checkout. `Monty.Simulators.Habitat.Environment.HabitatEnvironment`
+is the handle a run holds and the name in the module map, and
+`MONTY_WORLD=monty` is what makes `Monty.Studio.Setup` build it. Under test the
+peer is [`test/support/probe_world.py`](../test/support/probe_world.py) — a probe,
+not a world: it answers from what it was sent, which is exactly what a test of
+the framing wants — and
+[`test/support/broken_world.py`](../test/support/broken_world.py), which refuses
+to start the way a simulator with a missing dependency does.
+
+Not done: **MuJoCo**, the same bridge with a heavier far side
+([`roadmap.md`](roadmap.md) phase 2). And a camera, which is the live-episode
+case in [`parallel-and-live.md`](parallel-and-live.md), not this one.
 
 ## The world the runtime develops against
 
-Until the peer exists, runs are stepped against
+Without a world of Monty's — `MONTY_WORLD` unset — runs are stepped against
 `Monty.Simulators.Synthetic.Environment`, which implements the same idea as a
 value (`Monty.Simulators.Environment`): `new/1`, `step/2`, `reset/1`, answering
 `{observations, proprioceptive_state, world}`. It moves the agent by the actions
@@ -92,7 +104,9 @@ is recognisable instead of being read as this one.
 
 ```json
 → {"id": 1, "command": "reset", "sensor_ids": ["patch"]}
-← {"id": 1, "ok": true}
+← {"id": 1, "ok": true,
+   "primary_target": {"object": "mug", "rotation": {...}, "position": [...]},
+   "semantic_id_to_label": {"1": "mug", "2": "bowl"}}
 
 → {"id": 2, "command": "step",
    "actions": [{"action": "move_forward", "agent_id": "agent_id_0", "distance": 0.004}]}
@@ -105,6 +119,13 @@ is recognisable instead of being read as this one.
 
 ← {"id": 2, "error": "the sensor id is not known"}
 ```
+
+The two extra keys on a `reset` answer are the episode's own facts, and only a
+reset has them: which object the episode is about — the interface sampled it, so
+nothing else knows — and what the scene's semantic ids mean. Without the first the
+model scores itself against nothing; without the second a run cannot name what it
+recognised, and a world without ground truth (MuJoCo) contributes an empty map
+rather than an error.
 
 The action maps are Monty's own `dict(action)` — `ActionJSONEncoder` on this side,
 so the peer parses what Monty's simulator already parses. Units are Monty's:
@@ -127,13 +148,19 @@ interrupted, and takes the VM down when it segfaults. MuJoCo does all three. The
 port costs one copy per step and buys isolation, a timeout that works, and the
 ability to run the simulator on another machine later.
 
-## The next step
+## What is left
 
-Whoever installs MuJoCo or Habitat writes the peer against the contract above and
-points `Monty.Simulators.Port.Environment` at it — as a function for
-`Monty.Runtime.Episode`, or behind the same value-shaped interface the stand-in
-world implements. Its `proprioceptive_state` is parsed into
-`AgentState`/`SensorState` there, because that is the shape the body reads.
-
-Then the sphere goes away, and `base_10simobj_surf_agent` becomes comparable with
-Monty's own numbers.
+1. **A second far side.** MuJoCo is the same contract with a heavier peer: the
+   `mujoco` wheel and its off-screen rendering, the MJCF scenes, the YCB models
+   under `MONTY_DATA`. The Elixir half changes in one place (which world
+   `Monty.Studio.Setup` builds).
+2. **A live source.** A camera or a robot needs a clock the model does not own,
+   and a process per device publishing its latest frame and pose — the shape
+   [`parallel-and-live.md`](parallel-and-live.md) §4 describes.
+3. **The comparison the peer makes possible.**
+   [`scripts/probe_world_episodes.exs`](../scripts/probe_world_episodes.exs)
+   already runs a config's own model against Monty's world; what that shows —
+   objects agree, step counts part in the middle of an episode because of the
+   random-stream difference in §2.1 of [`monty-bugs.md`](monty-bugs.md) — is in
+   [`validation.md`](validation.md). Closing that gap is a diff of two action
+   logs, not a design.

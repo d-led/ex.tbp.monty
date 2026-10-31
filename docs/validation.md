@@ -28,9 +28,16 @@ only place a tolerance is allowed to be loose, and each says why it is.
 
 | | |
 |---|---|
-| Monty | `../monty-orig` at `9130364` — the revision `mix monty.config.snapshots` and `mix monty.module_map.verify` pin |
+| Monty | `../monty-orig` at `9130364` — the revision these recordings were taken from |
 | Interpreter | Python 3.13 with numpy 2.4.1 and OpenCV 4.10.0 |
 | Why that interpreter | the repo's default `python3` is 3.12 and has no OpenCV; only the recorders that touch OpenCV need 3.13 |
+
+A recording is a fact about the commit it was taken from. The map and the shipped
+copy have moved on since — they name `monty@760ad17`
+([`priv/monty/inputs.json`](../priv/monty/inputs.json),
+[`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex) `@sources`) —
+so refreshing a fixture against a newer checkout is a commit of its own, and this
+table's revision changes with it.
 
 Monty's pure-numpy modules import and run here — 43 of them. The rest need
 `pandas`, `quaternion` or a simulator, which is why the checks below stop where
@@ -40,30 +47,30 @@ they do.
 
 | What | Against | Agreement | Test |
 |---|---|---|---|
-| `ReturnInhibitor` (and `DecayField`, `DecayKernel`, `DecayKernelFactory`) | three trajectories: kernel ageing, the spatial cutoff, the maximum over overlapping visits, kernels expiring below `w_t_min` | `1e-9` | `test/monty/frameworks/models/salience/salience_parity_test.exs` |
+| `ReturnInhibitor` (and `DecayField`, `DecayKernel`, `DecayKernelFactory`) | three trajectories: kernel ageing, the spatial cutoff, the maximum over overlapping visits, kernels expiring below `w_t_min` | `1e-9` | [`test/monty/frameworks/models/salience/salience_parity_test.exs`](../test/monty/frameworks/models/salience/salience_parity_test.exs) |
 | `OnObjectObservation` | two 3×4 views — deliberately not square, so a transposed grid shows — one with the middle pixel on the object and one off it | exact | same file |
-| `EvidenceSlopeTracker` and its `HypothesesSelection` | three histories: per-channel normalisation, a hypothesis with no usable evidence (Monty's NaN is the port's `nil`), removal renumbering | `1e-12` | `test/monty/frameworks/models/evidence_matching/evidence_slope_tracker_parity_test.exs` |
-| `DefaultFeatureEvidenceCalculator` | three graphs: numeric, circular (hue the short way round) and categorical comparison, per-feature weights, and a node with a stored value missing | `1e-12` | `test/monty/frameworks/models/evidence_matching/feature_evidence/default_feature_evidence_calculator_parity_test.exs` |
-| `vocus2.images`: `rgb_to_opponent`, `rgb_to_opponent_codi` | nine colours covering black, white, grey, the primaries and a saturated off-grey | `1e-4`, which is float32 — OpenCV carries the same arithmetic in float32 | `test/monty/frameworks/models/salience/strategies/vocus2/images_parity_test.exs` |
+| `EvidenceSlopeTracker` and its `HypothesesSelection` | three histories: per-channel normalisation, a hypothesis with no usable evidence (Monty's NaN is the port's `nil`), removal renumbering | `1e-12` | [`test/monty/frameworks/models/evidence_matching/evidence_slope_tracker_parity_test.exs`](../test/monty/frameworks/models/evidence_matching/evidence_slope_tracker_parity_test.exs) |
+| `DefaultFeatureEvidenceCalculator` | three graphs: numeric, circular (hue the short way round) and categorical comparison, per-feature weights, and a node with a stored value missing | `1e-12` | [`test/monty/frameworks/models/evidence_matching/feature_evidence/default_feature_evidence_calculator_parity_test.exs`](../test/monty/frameworks/models/evidence_matching/feature_evidence/default_feature_evidence_calculator_parity_test.exs) |
+| `vocus2.images`: `rgb_to_opponent`, `rgb_to_opponent_codi` | nine colours covering black, white, grey, the primaries and a saturated off-grey | `1e-4`, which is float32 — OpenCV carries the same arithmetic in float32 | [`test/monty/frameworks/models/salience/strategies/vocus2/images_parity_test.exs`](../test/monty/frameworks/models/salience/strategies/vocus2/images_parity_test.exs) |
 | `vocus2.images`: `rgb_to_lab` | nine colours in the fixture; separately measured over **all 16,777,216** 8-bit colours | worst `2.67` of 255 — OpenCV's 8-bit tables quantise (§1.12 of `monty-bugs.md`) | same file |
 | `vocus2.images`: `gaussian_blur` | four sigma/truncation pairs on a 5×5 plane | `1e-4` | same file |
 | `vocus2.images`: `resize` | five cases: an octave halving by `:area`, an 8→3 shrink, and three `:cubic` enlargements | `1e-4` | same file |
-| `pyramids`: octave resolutions, Gaussian pyramid, centre/surround, Laplacian, combine by maximum, combine by mean, collapse by sum | an 8×8 image with structure at two sizes: 4 octaves × 3 scales, every plane of every octave | `1e-4` | `test/monty/frameworks/models/salience/strategies/vocus2/pyramids_parity_test.exs` |
-| `vocus2`: the colour channel's map **and** its centre pyramid, the depth channel's map, all four Gabor kernels, the orientation map, and the whole strategy's normalised map | a 32×32 view (bright blob, dark corner, hard edge) and a depth map with a near step and an empty pixel | `1e-4`; `1e-3` for the normalised strategy map | `test/monty/frameworks/models/salience/strategies/vocus2/vocus2_parity_test.exs` |
+| `pyramids`: octave resolutions, Gaussian pyramid, centre/surround, Laplacian, combine by maximum, combine by mean, collapse by sum | an 8×8 image with structure at two sizes: 4 octaves × 3 scales, every plane of every octave | `1e-4` | [`test/monty/frameworks/models/salience/strategies/vocus2/pyramids_parity_test.exs`](../test/monty/frameworks/models/salience/strategies/vocus2/pyramids_parity_test.exs) |
+| `vocus2`: the colour channel's map **and** its centre pyramid, the depth channel's map, all four Gabor kernels, the orientation map, and the whole strategy's normalised map | a 32×32 view (bright blob, dark corner, hard edge) and a depth map with a near step and an empty pixel | `1e-4`; `1e-3` for the normalised strategy map | [`test/monty/frameworks/models/salience/strategies/vocus2/vocus2_parity_test.exs`](../test/monty/frameworks/models/salience/strategies/vocus2/vocus2_parity_test.exs) |
 | `SafeOperatingLimits` | six size/sigma triples, including each of the three rejections | the verdict, and which rejection fired | same file |
-| `SalienceSM` **end to end** — strategy, on-object reshape, inhibitor, weights, goals | three views of a moving sensor: 144 on-object pixels each, blob and point cloud shifted between steps so the inhibitor has somewhere new to suppress | goal locations and their order **exact**; salience and inhibitor weights `1e-6`; confidences within `0.5` of Monty's, because the dither is Monty's random stream and not the port's (§2.1) — measured worst `0.36` | `test/monty/frameworks/models/salience/sensor_module/salience_sm_parity_test.exs` |
-| `LookAtGoal` — the turn and the pitch | 4 agent poses (turned 0°, 30°, 120° with the sensor pitched, and tilted forward) × 5 goal locations, including one behind the agent and one across the body | `1e-9` degrees on both actions | `test/monty/frameworks/models/motor_policies/motor_policy_parity_test.exs` |
+| `SalienceSM` **end to end** — strategy, on-object reshape, inhibitor, weights, goals | three views of a moving sensor: 144 on-object pixels each, blob and point cloud shifted between steps so the inhibitor has somewhere new to suppress | goal locations and their order **exact**; salience and inhibitor weights `1e-6`; confidences within `0.5` of Monty's, because the dither is Monty's random stream and not the port's (§2.1) — measured worst `0.36` | [`test/monty/frameworks/models/salience/sensor_module/salience_sm_parity_test.exs`](../test/monty/frameworks/models/salience/sensor_module/salience_sm_parity_test.exs) |
+| `LookAtGoal` — the turn and the pitch | 4 agent poses (turned 0°, 30°, 120° with the sensor pitched, and tilted forward) × 5 goal locations, including one behind the agent and one across the body | `1e-9` degrees on both actions | [`test/monty/frameworks/models/motor_policies/motor_policy_parity_test.exs`](../test/monty/frameworks/models/motor_policies/motor_policy_parity_test.exs) |
 | `LookAtGoal`'s refusal | a goal sitting on the sensor | the same `GoalCollocatedWithSensor` | same file |
 | `undo_last_action` (Monty's `fixme_undo_last_action`) | the six actions an informed policy samples — with constraint degrees on the looks and a direction on the tangential move — and one it cannot sample | the inverse's class and every field **exact**; a refusal where Monty raises `TypeError` (§2.8 of `monty-bugs.md`) | same file |
 | `InformedPolicyRandomWalk` | five steps of one walk with a constant sampler: off the object with nothing to undo, twice on it, twice off it | the action each step emits and the action it remembers, **exact** — the remembered action is inverted each time it is used, so a sensor that keeps leaving the object walks back and forth across the edge | same file |
 | `InformedPolicy`'s jump | a hypothesis jump from a recorded pose with a gaze-direction goal, the step where nothing is visible at the landing point, and the step after the undo | the `SetAgentPose` the goal derives — location and `wxyz` quaternion, `1e-9` — the `SetSensorRotation` that resets the sensor, the same two actions carrying the *pre-jump* pose back, and the walk resuming with a `MoveForward` | same file |
-| `GetGoodView`: the fraction of the view on an object, the turn and the pitch | a 16×16 view with two objects, four poses, and four relative locations | `1e-12` on the fractions; `1e-9` degrees on both rotations | `test/monty/frameworks/environments/positioning_procedures/get_good_view_parity_test.exs` |
+| `GetGoodView`: the fraction of the view on an object, the turn and the pitch | a 16×16 view with two objects, four poses, and four relative locations | `1e-12` on the fractions; `1e-9` degrees on both rotations | [`test/monty/frameworks/environments/positioning_procedures/get_good_view_parity_test.exs`](../test/monty/frameworks/environments/positioning_procedures/get_good_view_parity_test.exs) |
 | `GetGoodView`: the pixel it aims at | a notched 16×16 object, smoothed with `scipy.ndimage.gaussian_filter` — a different Gaussian from OpenCV's (§1.15 of `monty-bugs.md`) | the location, `1e-12` metres | same file |
 | `GetGoodView`: whether the centre pixel is on the object, and whether to move | four views: close enough by percentage, close enough by distance, still far, and a target absent from a two-object scene, plus a one-object scene with nothing in it | the same verdicts, the same `MoveForward`, and the same `ObjectNotVisibleError` | same file |
 | `GetGoodView`: the state machine, replayed whole | two episodes — move, move, turn, done, and the extra turn a two-object scene takes first — with the procedure carried from step to step | every action in every step, and each step's `success`/`terminated`/`truncated` | same file |
-| `Interface` — the environment interface | a stub world that counts its steps and two transforms that report what they are handed | the *order*: each transform runs in the configured sequence, each sees the previous one's answer, each gets a pose and a stream, the world's pose comes back untouched, and a second step stays on the same world | `test/monty/experiment/environment/interface_test.exs` |
-| `OneObjectPerEpisodeInterface` — the semantic mapping, both directions, and which object an episode is about | three shapes of `object_names`: a plain list, a list with a repeated name, and a mapping with `targets_list`, `source_object_list` and `num_distractors`; then the object at index 1, the cycle past the end, and both out-of-range indices | the mapping **exact** (including the deduplication that leaves `object_names` with four entries and the source list with three); the parameters the scene is asked to add, attribute for attribute; the wrap to index 0; Monty's IndexError message | `test/monty/experiment/environment/one_object_per_episode_interface_test.exs` |
-| `RecognitionPolicy` and its policies — when an episode is over | 448 decisions from Monty's own policies: fourteen configurations (a matching limit per mode, a total ceiling, the exploring limit, how many matching steps before exploring starts, `NaiveScan`'s spiral, the minimum-eval wrapper, and `AnyPolicy` over the others), asked at each policy's step and count boundaries in both modes — including the same state in `train` and `eval` | all three booleans — `is_done`, `time_out_lms`, `start_exploring` — **exact**, for every state; and the twelve `ValueError` messages a bad configuration raises, in Monty's words | `test/monty/experiment/recognition_policy_parity_test.exs` |
+| `Interface` — the environment interface | a stub world that counts its steps and two transforms that report what they are handed | the *order*: each transform runs in the configured sequence, each sees the previous one's answer, each gets a pose and a stream, the world's pose comes back untouched, and a second step stays on the same world | [`test/monty/experiment/environment/interface_test.exs`](../test/monty/experiment/environment/interface_test.exs) |
+| `OneObjectPerEpisodeInterface` — the semantic mapping, both directions, and which object an episode is about | three shapes of `object_names`: a plain list, a list with a repeated name, and a mapping with `targets_list`, `source_object_list` and `num_distractors`; then the object at index 1, the cycle past the end, and both out-of-range indices | the mapping **exact** (including the deduplication that leaves `object_names` with four entries and the source list with three); the parameters the scene is asked to add, attribute for attribute; the wrap to index 0; Monty's IndexError message | [`test/monty/experiment/environment/one_object_per_episode_interface_test.exs`](../test/monty/experiment/environment/one_object_per_episode_interface_test.exs) |
+| `RecognitionPolicy` and its policies — when an episode is over | 448 decisions from Monty's own policies: fourteen configurations (a matching limit per mode, a total ceiling, the exploring limit, how many matching steps before exploring starts, `NaiveScan`'s spiral, the minimum-eval wrapper, and `AnyPolicy` over the others), asked at each policy's step and count boundaries in both modes — including the same state in `train` and `eval` | all three booleans — `is_done`, `time_out_lms`, `start_exploring` — **exact**, for every state; and the twelve `ValueError` messages a bad configuration raises, in Monty's words | [`test/monty/experiment/recognition_policy_parity_test.exs`](../test/monty/experiment/recognition_policy_parity_test.exs) |
 | `highest_confidence_goal` | distinct confidences, a tie (Monty's docstring promises the first), and one goal | which goal, **exact** | same file |
 | `SinglePolicySelector` and `DistantPolicySelector` | an LM goal outranking two SM goals through the single selector; two SM goals through the distant agent's routing; no goals at all | the actions Monty produced, `1e-9` degrees, and the policy that produced them | same file |
 
@@ -83,20 +90,20 @@ and corrected — which is the point of measuring rather than recalling:
 - `cv2.filter2D` is correlation (no kernel flip) with
   `BORDER_REFLECT_101`; measured to `4e-6` on random images.
 - `GaussianBlurRGB`'s kernel is what `cv2.GaussianBlur` answers for the same
-  sigma, to `1e-7` (`test/monty/frameworks/environment_utils/transforms/image_transforms_test.exs`).
+  sigma, to `1e-7` ([`test/monty/frameworks/environment_utils/transforms/image_transforms_test.exs`](../test/monty/frameworks/environment_utils/transforms/image_transforms_test.exs)).
 
 ## Recorded: Monty's episodes, conclusion for conclusion
 
 These use fixtures recorded while Monty ran, and Monty's own pretrained memory
-exported from its torch pickle (`scripts/record_monty_episode.py`,
-`scripts/export_monty_pretrained.py`).
+exported from its torch pickle ([`scripts/record_monty_episode.py`](../scripts/record_monty_episode.py),
+[`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py)).
 
 | What | Compared | Agreement | Test |
 |---|---|---|---|
-| The pretrained library of `surf_agent_1lm_10distinctobj` | ten YCB objects and every node Monty stored, about sixteen thousand; each node's features and position, and the evidence Monty held after every step | every object and node present; positions to the last exported digit; the features the learning module matches on, and no others | `test/monty/pretrained_memory_test.exs` |
-| Evidence, hypothesis by hypothesis, over one 100-step episode of `surf_agent_1lm_10distinctobj` | the port's learning module fed Monty's own percepts | first observation `5e-7` on every object; hypothesis counts within a couple once pruning starts; evidence to about `1e-3` over a hundred steps; Monty's conclusion | `test/monty/pretrained_replay_test.exs` |
-| The whole runtime — supervision, step barriers, the vote round, the coordinator, the episode loop — replaying Monty's percepts | the same episode, with the runtime deciding for itself what to do each step | Monty's conclusion | `test/monty/recording_episode_test.exs` |
-| One episode of `base_config_10distinctobj_surf_agent` against an empty memory | Monty answered `no_match` and a new object; the port must answer the same, without tripping over a feature it did not expect | same answer | `test/monty/replay_test.exs` |
+| The pretrained library of `surf_agent_1lm_10distinctobj` | ten YCB objects and every node Monty stored, about sixteen thousand; each node's features and position, and the evidence Monty held after every step | every object and node present; positions to the last exported digit; the features the learning module matches on, and no others | [`test/monty/pretrained_memory_test.exs`](../test/monty/pretrained_memory_test.exs) |
+| Evidence, hypothesis by hypothesis, over one 100-step episode of `surf_agent_1lm_10distinctobj` | the port's learning module fed Monty's own percepts | first observation `5e-7` on every object; hypothesis counts within a couple once pruning starts; evidence to about `1e-3` over a hundred steps; Monty's conclusion | [`test/monty/pretrained_replay_test.exs`](../test/monty/pretrained_replay_test.exs) |
+| The whole runtime — supervision, step barriers, the vote round, the coordinator, the episode loop — replaying Monty's percepts | the same episode, with the runtime deciding for itself what to do each step | Monty's conclusion | [`test/monty/recording_episode_test.exs`](../test/monty/recording_episode_test.exs) |
+| One episode of `base_config_10distinctobj_surf_agent` against an empty memory | Monty answered `no_match` and a new object; the port must answer the same, without tripping over a feature it did not expect | same answer | [`test/monty/replay_test.exs`](../test/monty/replay_test.exs) |
 
 The evidence figure is worth reading carefully: a slope is a difference of two
 nearly equal numbers, so the last digits of the evidence decide which hypotheses
@@ -148,7 +155,7 @@ where a config names none, which is Monty's fallback too.
 A run also starts with Monty's own pretrained memory when its config names a
 model this machine has exported: `priv/monty/libraries/<model>.jsonl.gz`, loaded
 by `Monty.Studio.Memory` into the learning module the config describes
-(`priv/monty/libraries/README.md` records where the library came from and the
+([`priv/monty/libraries/README.md`](../priv/monty/libraries/README.md) records where the library came from and the
 command that produced it). A config that names a model with no library is not an
 error: the run starts empty and says so as a warning before it takes a step,
 because a run with nothing to recognise with cannot recognise anything, however
@@ -172,7 +179,8 @@ Saying this plainly matters more than the table above:
 
 - **The world.** A studio run happens in a synthetic stand-in world, and its
   numbers are that world's numbers. A config's *own* model can also be run
-  against Monty's own world — `scripts/probe_world_episodes.exs`, below — and
+  against Monty's own world —
+  [`scripts/probe_world_episodes.exs`](../scripts/probe_world_episodes.exs), below — and
   there every episode so far ends on the object Monty names, in a number of
   steps that is Monty's only up to the random-stream difference below.
 - **The path of a run, past its first steps.** The model's draws are Monty's now
@@ -192,23 +200,23 @@ Saying this plainly matters more than the table above:
   fallback's own numbers; those are tested where they live, without Monty.
 - **An episode, end to end — and the first honest measurement of one.** Ten
   episodes of `base_config_10distinctobj_dist_agent` are recorded
-  (`test/fixtures/monty_dist_agent_10episodes.jsonl`: 43, 27, 28, 27, 36, 28, 40,
+  ([`test/fixtures/monty_dist_agent_10episodes.jsonl`](../test/fixtures/monty_dist_agent_10episodes.jsonl): 43, 27, 28, 27, 36, 28, 40,
   43, 35 and 31 steps, all `match`, on the ten YCB objects), and two probes
   replay them through the port's own composition — the config's learning module
-  with the library in `priv/monty/libraries/`, the config's recognition policy,
+  with the library in [`priv/monty/libraries/`](../priv/monty/libraries), the config's recognition policy,
   the real step coordinator — with the recording standing in for the world.
 
   What they measure, so far: the learning module the config builds reproduces
   Monty's evidence to the printed digit on every step (step 0 `mug=0.879
   bowl=0.822 mustard_bottle=0.806` on both sides; step 4 differs in the third
   decimal, which is float ordering), **both on its own and through the
-  coordinator's routing** — `scripts/probe_dist_agent_evidence.exs` and
-  `scripts/probe_dist_agent_routing.exs` — and it holds the same hypothesis space:
+  coordinator's routing** — [`scripts/probe_dist_agent_evidence.exs`](../scripts/probe_dist_agent_evidence.exs) and
+  [`scripts/probe_dist_agent_routing.exs`](../scripts/probe_dist_agent_routing.exs) — and it holds the same hypothesis space:
   the number of hypotheses per object matches Monty's at every step (888, 1776,
-  2664, … for the mug; `scripts/probe_episode_conclusion.exs`).
+  2664, … for the mug; [`scripts/probe_episode_conclusion.exs`](../scripts/probe_episode_conclusion.exs)).
 
   **Nine of the ten episodes now replay to Monty's conclusion, on Monty's own
-  step** (`scripts/probe_dist_agent_episodes.exs`): mug 43, bowl 27,
+  step** ([`scripts/probe_dist_agent_episodes.exs`](../scripts/probe_dist_agent_episodes.exs)): mug 43, bowl 27,
   potted_meat_can 28, spoon 27, strawberry 36, mustard_bottle 28, golf_ball 43,
   c_lego_duplo 35 and banana 31 — every one of them the object Monty recognised
   and the step it recognised it on. The dice is the exception: Monty concluded
@@ -232,9 +240,10 @@ Saying this plainly matters more than the table above:
   The numbers the terminal condition turns on are now recorded too —
   `record_monty_episode.py` wraps Monty's `_check_for_unique_poses` to keep the
   symmetry count, the pose-count, the two maxima it compares and, when they are
-  few enough, the pose ids — and `scripts/probe_episode_conclusion.exs` prints
+  few enough, the pose ids — and [`scripts/probe_episode_conclusion.exs`](../scripts/probe_episode_conclusion.exs)
+  prints
   both sides of them step by step. That is how the dice was placed, and the
-  numbers are exact (`scripts/probe_pose_sets.exs`): on its last step both sides
+  numbers are exact ([`scripts/probe_pose_sets.exs`](../scripts/probe_pose_sets.exs)): on its last step both sides
   keep the same 24 poses out of their previous step's, but the port holds 28 in
   total and Monty 26 — so the 90%-overlap rule reads 24/28 = 0.86 for the port
   and 24/26 = 0.92 for Monty, and where Monty's symmetry count reaches five the
@@ -244,7 +253,7 @@ Saying this plainly matters more than the table above:
   boundary case, not a different rule — and the boundary is the *memory's*,
   not the arithmetic's: on every step of that episode both sides pick the same
   hypothesis id, and its rotation is `2.7e-7` rad apart
-  (`scripts/probe_pose_drift.exs`), which is the six-decimal rounding the export
+  ([`scripts/probe_pose_drift.exs`](../scripts/probe_pose_drift.exs)), which is the six-decimal rounding the export
   writes node positions and features with. A hypothesis whose feature sits within
   that of its tolerance is scored differently in the two, and its evidence then
   runs a fraction apart for the rest of the episode. Matching Monty's arithmetic
@@ -252,7 +261,8 @@ Saying this plainly matters more than the table above:
 
   The claim itself is a test now: "an episode of Monty's ten-episode evaluation
   ends on the object Monty named, after the steps Monty took"
-  (`test/monty/recording_episode_test.exs`) replays the bowl — the shortest of
+  [`test/monty/recording_episode_test.exs`](../test/monty/recording_episode_test.exs)
+  replays the bowl — the shortest of
   the nine that agree — through the config's own composition with the recorded
   release's memory, and takes 27 steps to the bowl. It fails if a run is not
   given the experiment's `min_eval_steps` (21 steps instead of 27).
@@ -262,7 +272,7 @@ Saying this plainly matters more than the table above:
   a step that reads the model's four policy fields used to copy the 43 MB of
   pretrained graphs out of the coordinator to answer with them (0.24 s a step,
   and 43 MB of garbage), and that is now a four-field reply costing 4–9 µs
-  (`scripts/probe_state_cost.exs`). So the ten-episode sweep stays a probe until a
+  ([`scripts/probe_state_cost.exs`](../scripts/probe_state_cost.exs)). So the ten-episode sweep stays a probe until a
   step gets cheaper.
 - **The environment the recordings came from.** `frameworks/models/object_model.py`
   pulls in `torch` and `torch_geometric`, so a recorded Monty episode needs a
@@ -272,9 +282,9 @@ Saying this plainly matters more than the table above:
   with YCB object meshes under `$MONTY_DATA` and pretrained models under
   `$MONTY_MODELS`. Recordings must name their `PYTHONPATH` entries absolutely,
   or they import a different Monty checkout.
-  `scripts/setup_monty_oracle.sh`
-  builds a pip-only stand-in where Monty's environment is absent, with newer
-  versions (§2.15 of `monty-bugs.md`).
+  [`scripts/setup_monty_oracle.sh`](../scripts/setup_monty_oracle.sh) builds a
+  pip-only stand-in where Monty's environment is absent, with newer versions
+  (§2.15 of [`monty-bugs.md`](monty-bugs.md)).
 - **Distractors.** `OneObjectPerEpisodeInterface` computes which objects a
   distractor may be drawn from and refuses to place any (§2.16), because the
   stand-in world holds one object. A config that asks for distractors therefore
@@ -290,7 +300,8 @@ Saying this plainly matters more than the table above:
 The world a run needs is Python — `HabitatEnvironment` and the experiment's own
 environment interface — and `Monty.Simulators.Port` is the boundary to it:
 length-prefixed JSON over a pipe, one request at a time.
-`scripts/monty_simulator_peer.py` is the other side, running **Monty's own**
+[`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) is the
+other side, running **Monty's own**
 environment: it composes the experiment's config, builds the environment and the
 eval interface exactly as `MontyExperiment.load_environment_interfaces` does, and
 starts each episode the way Monty's epoch loop does — `pre_epoch` once, then
@@ -306,7 +317,8 @@ step and closes it when the run stops, so a step is one round trip and the world
 the run sees is Monty's own. Until it is configured, a run steps this port's
 synthetic scene, and the setup page warns that its numbers are not Monty's.
 
-`scripts/probe_world_studio_run.exs` is that path, taken. The first time it was
+[`scripts/probe_world_studio_run.exs`](../scripts/probe_world_studio_run.exs) is
+that path, taken. The first time it was
 taken it found a bug worth more than the smoke: the agent was positioned **twice**.
 The peer runs Monty's `pre_episode` when an episode starts — the experiment's own
 positioning procedures, on Monty's random stream — and `Monty.Studio.Run` then
@@ -333,7 +345,7 @@ travels the other way because `ActionJSONEncoder` carries a
 
 Measured on this machine — `base_config_10distinctobj_dist_agent`, its own
 `surf_agent_1lm_10distinctobj` memory, a Habitat scene built in about half a
-minute, `scripts/probe_world_episodes.exs`:
+minute, [`scripts/probe_world_episodes.exs`](../scripts/probe_world_episodes.exs):
 
 | episode | object | Monty's steps | the port's steps |
 |---|---|---|---|
@@ -349,7 +361,8 @@ minute, `scripts/probe_world_episodes.exs`:
 | 10 | banana | 29 | 36 |
 
 Monty's column is its `monty_steps` in `eval_stats.csv`, reproduced episode for
-episode by `scripts/record_monty_episode.py`; the port's is `Episode.run/3`'s
+episode by [`scripts/record_monty_episode.py`](../scripts/record_monty_episode.py);
+the port's is `Episode.run/3`'s
 `steps`, and both runs use the same `episode_seed` per episode (the peer prints
 it). So: **nine of ten episodes end on the object Monty names — the tenth, the
 strawberry, ran its 60 steps without concluding — and two of the ten take exactly
@@ -358,7 +371,8 @@ Monty's number of steps.**
 ## The pose: a stored frame is a measurement, not a rotation
 
 A live run compares two pipelines, so a difference in evidence can always be
-blamed on the sensor side. `scripts/probe_replay_hypotheses.exs` removes that
+blamed on the sensor side. [`scripts/probe_replay_hypotheses.exs`](../scripts/probe_replay_hypotheses.exs)
+removes that
 excuse: it steps the port through Monty's own percepts — the recording is the
 world — and compares every hypothesis of one graph, its location, its pose and
 its evidence, against what Monty held after the same observation. With
@@ -384,7 +398,8 @@ turned "where this hypothesis sits" into numbers:
    rows of length `0.995`–`1.004` that is not the same angle, and `arccos` near
    zero is where a thousandth of a cosine is a hundredth of a radian.
 After both, the port and Monty were still `1e-5` apart, and the rest of that was
-the memory: `scripts/export_monty_pretrained.py` wrote positions and features
+the memory: [`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py)
+wrote positions and features
 rounded to six decimals, "far below anything a voxel or a tolerance can tell
 apart". The replay says otherwise — a node frame a millionth short is a pose a
 millionth wrong on every step, and a millionth is the size of the difference
@@ -425,8 +440,10 @@ module drew first by which call arrived first.
 
 The first action says the stream is right. Monty asks the world for
 `turn_left 16.782644145270698°` + `look_up 20.802956601860625°`; so does the port,
-to the last digit (`scripts/probe_world_episodes.exs` writes the port's actions,
-`scripts/record_monty_episode.py` records Monty's). Before the stream it asked for
+to the last digit ([`scripts/probe_world_episodes.exs`](../scripts/probe_world_episodes.exs)
+writes the port's actions,
+[`scripts/record_monty_episode.py`](../scripts/record_monty_episode.py) records
+Monty's). Before the stream it asked for
 `turn_left -33.06°` + `look_up 11.29°`, and the episode it walked was a different
 one.
 
@@ -523,28 +540,29 @@ Monty revision moves:
 
 | Fixture | Script |
 |---|---|
-| `test/fixtures/monty_salience_inhibitor.json`, `monty_on_object_observation.json` | `scripts/record_monty_salience.py` |
-| `test/fixtures/monty_evidence_slope_tracker.json` | `scripts/record_monty_evidence_matching.py` |
-| `test/fixtures/monty_feature_evidence.json` | `scripts/record_monty_feature_evidence.py` |
-| `test/fixtures/monty_salience_sm.json` | `scripts/record_monty_salience_sm.py` (needs `numpy-quaternion`, which the other recorders do not) |
-| `test/fixtures/monty_motor_policy.json` | `scripts/record_monty_motor_policy.py` |
-| `test/fixtures/monty_positioning.json` | `scripts/record_monty_positioning.py` (needs `scipy`) |
-| `test/fixtures/monty_interface.json` | `scripts/record_monty_interface.py` (needs `omegaconf`) |
-| `test/fixtures/monty_interface_objects.json` | `scripts/record_monty_interface_objects.py` (needs `omegaconf`) |
-| `test/fixtures/monty_dist_agent_10episodes.jsonl` | `scripts/record_monty_episode.py` — ten episodes of `base_config_10distinctobj_dist_agent`, recorded in Monty's own environment (the invocation is in that script's docstring): each step's percepts, the module's conclusion, and the numbers its pose test compared |
-| `test/fixtures/monty_recognition_policy.json` | `scripts/record_monty_recognition_policy.py` (imports Monty's policy module, so it needs Monty's own environment) |
-| `test/fixtures/monty_vocus2_images.json` | `scripts/record_monty_vocus2_images.py` |
-| `test/fixtures/monty_pyramids.json` | `scripts/record_monty_pyramids.py` |
-| `test/fixtures/monty_vocus2.json` | `scripts/record_monty_vocus2.py` |
-| `priv/monty/libraries/<release>/surf_agent_1lm_10distinctobj.jsonl.gz`, `…10similarobj…` | `scripts/sync_monty_libraries.sh`, which wraps `scripts/export_monty_pretrained.py` — one library per (release, model), because the same name in two releases is two memories (`priv/monty/libraries/README.md`) |
-| `test/fixtures/monty_*_episode.jsonl` | `scripts/record_monty_episode.py` (needs Monty's own environment and a simulator) |
+| [`test/fixtures/monty_salience_inhibitor.json`](../test/fixtures/monty_salience_inhibitor.json), [`monty_on_object_observation.json`](../test/fixtures/monty_on_object_observation.json) | [`scripts/record_monty_salience.py`](../scripts/record_monty_salience.py) |
+| [`test/fixtures/monty_evidence_slope_tracker.json`](../test/fixtures/monty_evidence_slope_tracker.json) | [`scripts/record_monty_evidence_matching.py`](../scripts/record_monty_evidence_matching.py) |
+| [`test/fixtures/monty_feature_evidence.json`](../test/fixtures/monty_feature_evidence.json) | [`scripts/record_monty_feature_evidence.py`](../scripts/record_monty_feature_evidence.py) |
+| [`test/fixtures/monty_salience_sm.json`](../test/fixtures/monty_salience_sm.json) | [`scripts/record_monty_salience_sm.py`](../scripts/record_monty_salience_sm.py) (needs `numpy-quaternion`, which the other recorders do not) |
+| [`test/fixtures/monty_motor_policy.json`](../test/fixtures/monty_motor_policy.json) | [`scripts/record_monty_motor_policy.py`](../scripts/record_monty_motor_policy.py) |
+| [`test/fixtures/monty_positioning.json`](../test/fixtures/monty_positioning.json) | [`scripts/record_monty_positioning.py`](../scripts/record_monty_positioning.py) (needs `scipy`) |
+| [`test/fixtures/monty_interface.json`](../test/fixtures/monty_interface.json) | [`scripts/record_monty_interface.py`](../scripts/record_monty_interface.py) (needs `omegaconf`) |
+| [`test/fixtures/monty_interface_objects.json`](../test/fixtures/monty_interface_objects.json) | [`scripts/record_monty_interface_objects.py`](../scripts/record_monty_interface_objects.py) (needs `omegaconf`) |
+| [`test/fixtures/monty_dist_agent_10episodes.jsonl`](../test/fixtures/monty_dist_agent_10episodes.jsonl) | [`scripts/record_monty_episode.py`](../scripts/record_monty_episode.py) — ten episodes of `base_config_10distinctobj_dist_agent`, recorded in Monty's own environment (the invocation is in that script's docstring): each step's percepts, the module's conclusion, and the numbers its pose test compared |
+| [`test/fixtures/monty_recognition_policy.json`](../test/fixtures/monty_recognition_policy.json) | [`scripts/record_monty_recognition_policy.py`](../scripts/record_monty_recognition_policy.py) (imports Monty's policy module, so it needs Monty's own environment) |
+| [`test/fixtures/monty_vocus2_images.json`](../test/fixtures/monty_vocus2_images.json) | [`scripts/record_monty_vocus2_images.py`](../scripts/record_monty_vocus2_images.py) |
+| [`test/fixtures/monty_pyramids.json`](../test/fixtures/monty_pyramids.json) | [`scripts/record_monty_pyramids.py`](../scripts/record_monty_pyramids.py) |
+| [`test/fixtures/monty_vocus2.json`](../test/fixtures/monty_vocus2.json) | [`scripts/record_monty_vocus2.py`](../scripts/record_monty_vocus2.py) |
+| [`priv/monty/libraries/`](../priv/monty/libraries) `<release>/surf_agent_1lm_10distinctobj.jsonl.gz`, `…10similarobj…` | [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh), which wraps [`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py) — one library per (release, model), because the same name in two releases is two memories ([`priv/monty/libraries/README.md`](../priv/monty/libraries/README.md)) |
+| `test/fixtures/monty_*_episode.jsonl` | [`scripts/record_monty_episode.py`](../scripts/record_monty_episode.py) (needs Monty's own environment and a simulator) |
 
 Two rules, learned the hard way:
 
 - Run the recorders with an interpreter that has what they import. Those needing
   OpenCV must use a Python 3.13 environment; the others are happy with the
-  repo's default. `scripts/setup_monty_oracle.sh` builds the one the full-Monty
-  recorders need where Monty's pinned conda environment is absent
+  repo's default. [`scripts/setup_monty_oracle.sh`](../scripts/setup_monty_oracle.sh)
+  builds the one the full-Monty recorders need where Monty's pinned conda
+  environment is absent
   (`VENV=.monty-oracle WITH_TORCH=1 ./scripts/setup_monty_oracle.sh`), and prints
   the versions it installed, because they are newer than Monty's (§2.15 of
   `monty-bugs.md`).

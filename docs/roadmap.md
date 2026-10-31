@@ -100,7 +100,8 @@ Accuracy cannot be compared before the world is real, so this comes before
 benchmarks rather than after.
 
 - **Done, for Habitat.** `Monty.Simulators.Port` is the boundary and
-  `scripts/monty_simulator_peer.py` is Monty's own `HabitatEnvironment` and eval
+  [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) is
+Monty's own `HabitatEnvironment` and eval
   interface on the far side of it, running in Monty's pinned conda environment.
   `Monty.Simulators.Habitat.Environment.HabitatEnvironment` is that world under
   Monty's own name — it owns no scene and starts the peer on its first step — and
@@ -108,10 +109,11 @@ benchmarks rather than after.
   it a run steps this port's synthetic scene, and the setup page says so.
   Units and quirks are preserved on the way across: metres, `wxyz` quaternions
   decoded into `Monty.Geometry.Rotation`, sensor positions relative to the agent.
-  A config's own model runs against it (`scripts/probe_world_episodes.exs`), and
+  A config's own model runs against it
+  ([`scripts/probe_world_episodes.exs`](../scripts/probe_world_episodes.exs)), and
   what that comparison shows — objects agree, step counts do not, because of the
-  random-stream deviation of §2.1 in `monty-bugs.md` — is in
-  `docs/validation.md`.
+  random-stream deviation of §2.1 in [`monty-bugs.md`](monty-bugs.md) — is in
+  [`validation.md`](validation.md).
 - **Next: MuJoCo — the same bridge, with a heavier far side.** All 17 classes of
   `simulators/mujoco/` are `:planned`: `agents.py` (`Axis`, `Embodiment`, `Agent`,
   `NoopAgent`, `DistantAgent`, `SurfaceAgent`), `objects.py` (`ObjectMetadata`,
@@ -126,20 +128,31 @@ benchmarks rather than after.
   object models under `MONTY_DATA`, `MuJoCoAgentFactory`'s choice of body per
   `embodiment`, and depth and colour a sensor can be checked against. Habitat has
   already shown where the difficulty is not: the wiring, which is shared, but the
-  random stream in the middle of an episode (`monty-bugs.md` §2.1). MuJoCo puts
+  random stream in the middle of an episode ([`monty-bugs.md`](monty-bugs.md) §2.1).
+  MuJoCo puts
   physics on top of that, so the comparison is the work, not the bridge.
   **Done when**: `world_simulator: :mujoco` steps Monty's own physics world through
   the studio, and the setup page stops calling the scene synthetic.
-- Observation transforms (`DepthTo3DLocations`, `MissingToMaxDepth`, noise,
-  blur) in Elixir: pure math, testable, and the reason frames can still be drawn.
-- Recorded transcripts replayed in tests; a live MuJoCo test tagged
-  `:simulator` and excluded by default.
-- `Monty.Simulators.Synthetic.Camera` is the boundary that changes last: it
-  returns PNG bytes instead of SVG, and no page changes.
+- **Done: the observation transforms**, in Elixir — `DepthTo3DLocations`,
+  `MissingToMaxDepth`, `AddNoiseToRawDepthImage`, `GaussianBlurRGB`,
+  `GaussianSmoothing`, `NoDepthSensorPresent` under
+  [`lib/monty/frameworks/environment_utils/transforms/`](../lib/monty/frameworks/environment_utils/transforms).
+  They are pure math and tested on their own; their numbers are the ones in
+  [`validation.md`](validation.md)'s table where a fixture exists, and they are
+  what makes a frame drawable from a replay.
+- **Done: recorded transcripts**, replayed through the real runtime
+  (`Monty.Simulators.Recording.SensorModule`,
+  [`test/monty/recording_episode_test.exs`](../test/monty/recording_episode_test.exs)).
+  A live MuJoCo test — tagged and excluded by default — is not written; it cannot
+  be until MuJoCo's peer exists.
+- **Done: the picture boundary.** `Monty.Simulators.Synthetic.Camera` already
+  answers base64 PNGs rather than SVG, so the page that draws a run's frames did
+  not have to change to hold a camera's.
 
 The random stream is Monty's too: `Monty.Random.Numpy` is NumPy's generator and
 `Monty.Random.Stream` is the one stream an episode draws from, so an episode's
-first action is Monty's to the last digit (`docs/validation.md`). What is left is
+first action is Monty's to the last digit ([`validation.md`](validation.md)). What
+is left is
 the middle of an episode: two of ten episodes of the comparison end on Monty's
 step, and the rest walk a path that parts from it later on. That is a diff of two
 action logs, not a design.
@@ -194,8 +207,8 @@ from the page and from `mix monty.run`.
 
 ## Phase 6 — upstream
 
-- `docs/contributing-a-module.md`: port a Python file in one afternoon, with the
-  naming rule, the fixture recipe and the gates it must pass.
+- `docs/contributing-a-module.md` (to write): port a Python file in one
+  afternoon, with the naming rule, the fixture recipe and the gates it must pass.
 - A draft TBP RFC describing the actor split, the vote deadline experiment, and
   what the studio is for — written for Monty's maintainers, in Monty's terms.
 
