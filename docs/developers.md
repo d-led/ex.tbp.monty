@@ -96,6 +96,29 @@ annotation's line — Sobelow rewrites that comment into an attribute, and trail
 prose turns the rewrite into a syntax error, which silently stops the file from
 being scanned.
 
+## Releases and images
+
+CI publishes an image per ref to `ghcr.io/d-led/ex.tbp.monty`: `:main` and
+`:latest` for a push to main, `:<branch>` for any other branch, `:v1.2.3` for a
+release tag. The tag is the ref name, lower-cased, with anything but
+`[a-z0-9._-]` turned into a dash. There are no commit-hash tags to wade
+through: the commit is inside the image — `mix build.info` burns it into
+`priv/build_info.json` — and the footer of every page shows it, with the
+pipeline run that produced it linked beside it.
+
+A branch publishes amd64 only. arm64 is compiled under QEMU and is most of the
+job, so it is what a release tag — or `gh workflow run ci --ref main --field
+image=true` — pays for, and only then does the tag carry both architectures.
+
+The publishing job waits for lint, test and types, scans the result with Trivy,
+and starts it as uid 10001 before pushing. The same two questions about a tag
+you are about to make are answered at home:
+
+```bash
+docker build .             # does it build at all
+scripts/quality.sh --image # builds it, checks the uid it runs as
+```
+
 ## Adding a module
 
 1. Find the Python file and class in `lib/monty/module_map/data.ex`.

@@ -11,6 +11,10 @@ config :ex_tbp_monty,
   ecto_repos: [ExTbpMonty.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+# Where this software lives: the footer links to it with the octocat. A fork
+# that does not want the upstream link drops the key, and the link goes with it.
+config :ex_tbp_monty, :source, repo: "https://github.com/d-led/ex.tbp.monty"
+
 # Configure the endpoint
 config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
   url: [host: "localhost"],

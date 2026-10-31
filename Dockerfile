@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# The mirror as one OTP release, built once and shipped as an image:
+# The studio as one OTP release, built once and shipped as an image:
 #
 #   docker build -t ex-tbp-monty \
 #     --build-arg VERSION="$(git describe --tags --always)" .
@@ -11,9 +11,10 @@
 #                                # /app/bin/server, PHX_SERVER=true
 #
 # Three stages, because each needs a different toolchain and only the last one
-# ships: Node installs the browser dependencies, the Elixir image compiles the
-# release, and a Debian runtime carries the release plus the shared libraries
-# BEAM needs — no compiler, no Node, no git, no Hex cache in the result.
+# ships: a Node image supplies the npm that `mix assets.deploy` calls, the Elixir
+# image compiles the release, and a Debian runtime carries the release plus the
+# shared libraries BEAM needs — no compiler, no Node, no git, no Hex cache in
+# the result.
 #
 # Base images are pinned to dated tags rather than to `latest`, so a rebuild of
 # an old commit builds the same toolchain. Dependabot (.github/dependabot.yml)
@@ -27,16 +28,14 @@ ARG NODE_VERSION=24.22.1-trixie-slim
 ARG BUILDER_IMAGE="docker.io/hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"
 
-# --- browser dependencies ----------------------------------------------------
-# `assets.deploy` bundles assets/js/app.js with esbuild, which reads its
-# packages from assets/node_modules. Node is only needed to install them, and
-# the nodes are copied from here into the build (see below) rather than added
-# to the Elixir image: a builder does not decide which Node is current.
-FROM docker.io/node:${NODE_VERSION} AS assets
-
-WORKDIR /assets
-COPY assets/package.json assets/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# --- the Node distribution ---------------------------------------------------
+# `mix assets.deploy` runs `npm ci` in assets/ before it bundles. There are no
+# npm packages here — esbuild and tailwind come from Mix, daisyUI and heroicons
+# from deps — so npm only has to exist and find nothing to do. It still has to
+# exist: the builder image does not ship it, and `npm ci` with an empty
+# package.json creates no `node_modules` at all, so there is nothing to copy
+# from this stage but the interpreter itself.
+FROM docker.io/node:${NODE_VERSION} AS node
 
 # --- the release -------------------------------------------------------------
 FROM ${BUILDER_IMAGE} AS builder
@@ -53,12 +52,11 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Node and npm from the stage above — the same distribution family (trixie),
-# so the binaries link against the libc that is here. `mix assets.deploy` calls
-# `npm ci` itself; with node_modules already in place it only verifies them.
-# The npm and npx entry points are symlinks in the Node image, so they are
-# recreated here rather than copied as files.
-COPY --from=assets /usr/local/bin/node /usr/local/bin/node
-COPY --from=assets /usr/local/lib/node_modules /usr/local/lib/node_modules
+# so the binaries link against the libc that is here. The npm and npx entry
+# points are symlinks in the Node image, so they are recreated here rather than
+# copied as files.
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
   && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
@@ -89,17 +87,23 @@ COPY mix.exs mix.lock ./
 RUN mix deps.get --only prod
 
 # Compile-time configuration decides how dependencies are compiled, so it has
-# to be in place before deps.compile. runtime.exs deliberately is not copied
-# yet: it is read when the release boots, not when it is built.
+# to be in place before deps.compile: config.exs, the file it imports and asks
+# nothing of the environment (`pythonx.exs`), and prod.exs. runtime.exs
+# deliberately is not copied yet — it is read when the release boots, not when
+# it is built, so a deploy-time change does not recompile the dependencies.
+# A new compile-time config file belongs in this list; `mix deps.compile` says
+# so loudly, by name, when it is missing.
 RUN mkdir config
-COPY config/config.exs config/prod.exs config/
+COPY config/config.exs config/pythonx.exs config/prod.exs config/
 RUN mix deps.compile
 
 COPY priv priv
 COPY lib lib
+# The project's own Mix tasks (`assets.install`, `build.info`): `elixirc_paths`
+# compiles them outside `lib/`, and both are called later in this build.
+COPY mix_tasks mix_tasks
 COPY rel rel
 COPY assets assets
-COPY --from=assets /assets/node_modules assets/node_modules
 
 # `assets.setup` fetches the standalone esbuild and tailwind binaries, so the
 # image bundles with the same versions a developer has locally. esbuild's comes
@@ -108,8 +112,12 @@ COPY --from=assets /assets/node_modules assets/node_modules
 # fail on a URL that was perfectly good. `mix assets.install` fetches that one
 # with Req, which follows the redirect and retries a transient failure itself,
 # so the build has no loop of its own to get stuck in.
-RUN mix assets.setup \
-  && mix compile \
+#
+# `mix compile` comes first because `assets.setup` is this project's own task
+# (`mix_tasks/assets.install.ex`): before the project is compiled, Mix has never
+# heard of it.
+RUN mix compile \
+  && mix assets.setup \
   && mix assets.deploy
 
 COPY config/runtime.exs config/
@@ -130,8 +138,8 @@ LABEL org.opencontainers.image.title="Elixir TBP Monty" \
       org.opencontainers.image.revision="${REVISION}"
 
 # Runtime libraries the release needs: openssl for crypto, libstdc++ for NIFs,
-# ncurses for the shell, libsctp for distribution, locales so UTF-8 titles sort
-# and log correctly, tzdata for the digest hour and "recent" timestamps.
+# ncurses for the shell, libsctp for distribution, locales so UTF-8 experiment
+# names sort and log correctly, tzdata for how long ago a run finished.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        ca-certificates libstdc++6 openssl libncurses6 libsctp1 locales tzdata \
@@ -151,12 +159,13 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 COPY --from=builder --chown=10001:10001 /app/_build/prod/rel/ex_tbp_monty ./
 
-# Attachments live in a path-based blob store, outside the release. /app/var is
-# the one directory the app writes to; mount a volume there (a Fly volume, a
-# Kubernetes PVC) to keep the bytes across restarts.
-RUN mkdir -p /app/var/mirror \
-  && chown -R 10001:10001 /app/var
-ENV MIRROR_BLOB_ROOT=/app/var/mirror
+# The studio writes drafts and the files a run leaves behind under `priv/`,
+# relative to the working directory — a path a release does not otherwise have.
+# This is the one directory the application writes to; mount a volume there (a
+# Fly volume, a Kubernetes PVC) to keep drafts and run artifacts across
+# restarts.
+RUN mkdir -p /app/priv \
+  && chown -R 10001:10001 /app/priv
 
 USER 10001:10001
 

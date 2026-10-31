@@ -204,7 +204,7 @@ if [[ $image -eq 1 ]]; then
   if ! command -v docker >/dev/null 2>&1; then
     record image 1 "docker is not on PATH"
   else
-    tag="confluence-mirror-quality:$$"
+    tag="ex-tbp-monty-quality:$$"
 
     if docker build -q -t "$tag" . >"$report" 2>&1; then
       uid=$(docker run --rm --entrypoint /usr/bin/id "$tag" -u 2>>"$report") || uid=unknown

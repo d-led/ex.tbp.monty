@@ -160,6 +160,35 @@ entry to `implemented` by loading the Elixir module; only human decisions
 module is missing, or an `excluded` entry with no reason. It does **not** diff
 the committed file against a fresh `gen`, so run `gen` after writing a module.
 
+## Container image
+
+Each commit that passes the gates above is published to
+`ghcr.io/d-led/ex.tbp.monty`, under the name of the ref it was built from:
+
+| Built from | Tags |
+| --- | --- |
+| a push to `main` | `:main` and `:latest` |
+| a push to any other branch | `:<branch>` — `feature/x` becomes `:feature-x` |
+| a tag `v1.2.3` | `:v1.2.3`, amd64 **and** arm64; a branch is amd64 only |
+
+There are no commit-hash tags: the image carries its commit instead.
+`mix build.info` writes it into the release, and the footer of every page shows
+it — `main+3f2a1c9` — with the whole build (commit, time, the pipeline run that
+produced it) in its tooltip, and the octocat beside it linking here.
+
+```bash
+docker pull ghcr.io/d-led/ex.tbp.monty:latest
+
+# Once per deploy: the release expects its tables to exist.
+docker run --rm -e DATABASE_URL=... -e SECRET_KEY_BASE=... \
+  ghcr.io/d-led/ex.tbp.monty:latest /app/bin/migrate
+
+docker run --rm -p 4000:4000 -e DATABASE_URL=... -e SECRET_KEY_BASE=... \
+  ghcr.io/d-led/ex.tbp.monty:latest   # /app/bin/server
+```
+
+The image runs as uid 10001, and CI scans it with Trivy before it pushes.
+
 ## Layout
 
 ```

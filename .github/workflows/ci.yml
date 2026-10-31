@@ -1,11 +1,43 @@
 name: ci
 
+# The gates a change has to pass before it lands, and the image that comes out
+# of the ones that passed:
+#
+#   lint   compile --warnings-as-errors, formatting, credo --strict, sobelow.
+#          Fails fastest.
+#   test   Postgres, the suite with coverage, the CRAP ranking, and the two
+#          parity oracles (Monty's config snapshots and the module map) against
+#          a real Monty checkout.
+#   types  dialyzer, against a PLT the cache carries between runs.
+#   image  `docker build`, Trivy on the result, a run as uid 10001, then the
+#          image is published to GHCR under the name of the ref it was built
+#          from: `:main` (and `:latest`) for main, `:<branch>` for any other
+#          branch, `:v1.2.3` for a release tag. Never a commit hash — the image
+#          already carries its commit in `priv/build_info.json`, which the
+#          footer shows. It waits for the three gates above (`needs`), so
+#          nothing is published from a commit that failed them.
+#
+# The arm64 half is by far the expensive part — compiled under QEMU — so a
+# branch publishes amd64 only, and the amd64 + arm64 index is what a release
+# tag, or a dispatch that asks for it, pays for:
+#
+#   gh workflow run ci --ref main --field image=true
+
 on:
+  # Every branch gets the gates *and* an image named after itself, so a preview
+  # deployment can pull `:feature-x` and `:main` (plus `:latest`) follows main.
+  # A pull request from a branch in this repository therefore runs twice — once
+  # for the push, once for the PR — which is the price of a per-branch image.
   push:
-    branches: [main]
+    branches: ["**"]
     tags: ["v*.*.*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      image:
+        description: "Also build and publish the arm64 half of the index (the expensive half)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -153,3 +185,131 @@ jobs:
 
       - run: mix deps.get
       - run: mix dialyzer
+
+  image:
+    name: image, scan, non-root, publish
+    # The point of a gate is that the thing behind it cannot be reached before
+    # it opens: the image is built, scanned and pushed only for a commit that
+    # passed static analysis, the suite and the types. A pull request is not a
+    # push, so it publishes nothing.
+    needs: [lint, test, types]
+    runs-on: ubuntu-24.04
+    # The arm64 half is built under QEMU, which is the slow part.
+    timeout-minutes: 45
+    if: github.event_name == 'push' || inputs.image
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: image
+        name: Work out the tag
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+
+          # Branch or tag name, and nothing else: `:main` moves with the
+          # branch, `:v1.2.3` is the release. A commit tag would leave a new
+          # image behind on every push and still not say which branch it came
+          # from, so there are none — the commit is in the footer instead.
+          tag=$(printf '%s' "${GITHUB_REF_NAME}" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed 's/[^a-z0-9._-]/-/g')
+
+          echo "ref=${image}:${tag}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<TAGS"
+            echo "${image}:${tag}"
+            # main also answers to `latest`, so a deployment can follow either
+            # the branch's name or the usual one.
+            if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+              echo "${image}:latest"
+            fi
+            echo "TAGS"
+          } >> "$GITHUB_OUTPUT"
+
+          # The index is what an arm64 machine pulls natively, and building its
+          # half means compiling the release under QEMU — most of the job. A
+          # branch says nothing about wanting that, so it publishes the amd64
+          # image the checks built; a release tag or a dispatch asks for both.
+          if [ "${{ inputs.image || startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
+            echo "platforms=linux/amd64,linux/arm64" >> "$GITHUB_OUTPUT"
+          else
+            echo "platforms=linux/amd64" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Built for the runner's own architecture so Trivy and the uid check read
+      # a real image rather than a manifest list — and so those two checks stay
+      # fast. This is the amd64 half of what is published below.
+      - name: Build linux/amd64 for the checks
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ steps.image.outputs.ref }}
+          build-args: |
+            # The ref, which is also the image tag: `main`, `feature-x`, `v1.2.3`.
+            VERSION=${{ github.ref_name }}
+            REVISION=${{ github.sha }}
+            CI_PROVIDER=github
+            CI_WORKFLOW=${{ github.workflow }}
+            CI_RUN_NUMBER=${{ github.run_number }}
+            CI_RUN_URL=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,mode=max,scope=image
+
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.ref }}
+          format: table
+          # Only what this project can act on: a fixable OS package or library.
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
+      - name: Run as an unprivileged user
+        run: |
+          set -euo pipefail
+          uid=$(docker run --rm --entrypoint /usr/bin/id "${{ steps.image.outputs.ref }}" -u)
+          echo "image runs as uid ${uid}"
+          test "${uid}" -ne 0
+          test "${uid}" = "10001"
+
+      # One image per published tag. For a release (or a dispatch) it carries
+      # both architectures: an Apple Silicon laptop or an arm64 VM pulls a
+      # native build, x86 servers pull theirs. arm64 is compiled here, under
+      # QEMU, which is why only that path pays for it.
+      - name: Set up QEMU for the arm64 build
+        if: steps.image.outputs.platforms != 'linux/amd64'
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+
+      - name: Publish ${{ steps.image.outputs.platforms }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: ${{ steps.image.outputs.platforms }}
+          push: true
+          tags: ${{ steps.image.outputs.tags }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            REVISION=${{ github.sha }}
+            CI_PROVIDER=github
+            CI_WORKFLOW=${{ github.workflow }}
+            CI_RUN_NUMBER=${{ github.run_number }}
+            CI_RUN_URL=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,scope=image

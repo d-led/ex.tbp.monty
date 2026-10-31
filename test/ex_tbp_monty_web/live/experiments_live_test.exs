@@ -28,6 +28,13 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
       assert has_element?(view, "#result-count")
       assert render(view) =~ "experiments"
     end
+
+    test "the footer says which build is running, and where the source is", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      assert has_element?(view, "#build-info")
+      assert has_element?(view, "#source-repo")
+    end
   end
 
   describe "narrowing the list" do
