@@ -3,6 +3,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Monty.Prerequisites
+  alias Monty.Studio
   alias Monty.Studio.RunHistory
   alias Monty.Test.Tmp
 
@@ -21,8 +23,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
   describe "which world a run would step" do
     test "the page says so before anything runs", %{conn: conn} do
-      # Without MONTY_WORLD a run steps the stand-in, and a stand-in is not the
-      # experiment: the header says which one it is, not a footnote.
+      # Tests step the stand-in (config/test.exs says so), and a stand-in is not
+      # the experiment: the header says which one it is, not a footnote.
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
 
       assert view |> element("#world") |> render() =~ "stand-in scene"
@@ -48,11 +50,52 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # mystery: the engine comes from the experiment's own config.
       select = view |> element("#world-select") |> render()
       assert select =~ "stand-in scene (Elixir, one sphere)"
-      assert select =~ "MuJoCo (Monty&#39;s, out of process)"
+      assert select =~ "MuJoCo via Monty&#39;s Python"
       assert select =~ ~s(selected)
     end
 
+    # Poka-yoke: Monty's world reads a downloaded interpreter, object set and
+    # memory. Queuing a run without them answers with a run that dies at its
+    # first step, so the page says so first — and says where to get them.
+    test "a run whose files are not here yet cannot be started, and says why", %{conn: conn} do
+      Tmp.without_env("MONTY_PYTHON")
+      Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
+      Tmp.system_env("MONTY_MODELS", Tmp.dir("monty-models"))
+
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      # The stand-in reads nothing, so nothing stands in its way.
+      refute has_element?(view, "#needs-prerequisites")
+      assert has_element?(view, "#run:not([disabled])")
+
+      view |> element("#world-choice") |> render_change(%{"world" => "habitat"})
+
+      assert has_element?(view, "#needs-prerequisites")
+      assert has_element?(view, "#run[disabled]")
+
+      box = view |> element("#needs-prerequisites") |> render()
+      assert box =~ "MONTY_PYTHON"
+      assert box =~ "objects this environment loads"
+      assert box =~ "pretrained memory"
+
+      assert view
+             |> element("#needs-prerequisites #download-prerequisites")
+             |> render() =~ ~s(href="/prerequisites")
+
+      # The ways out are both named: download them, or step the scene that
+      # reads nothing.
+      assert box =~ "stand-in scene"
+
+      # Clicking anyway queues nothing.
+      assert view |> element("#run[disabled]") |> render() =~ "disabled"
+
+      assert RunHistory.search(state: "all", text: "base_config_10distinctobj_dist_agent").runs ==
+               []
+    end
+
     test "the run is recorded with the world it was given", %{conn: conn} do
+      download_prerequisites("base_config_10distinctobj_dist_agent")
+
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
 
       view |> element("#world-choice") |> render_change(%{"world" => "habitat"})
@@ -561,5 +604,33 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
         logging:
           run_name: "broken"
     """
+  end
+
+  # Puts every file a run of this experiment reads where the page looks for it,
+  # so that a test which clicks Run is testing the click and not the gate. The
+  # paths come out of the composed setup, the same ones the page reads.
+  defp download_prerequisites(experiment) do
+    Tmp.system_env("MONTY_PYTHON", interpreter())
+    Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
+    Tmp.system_env("MONTY_MODELS", Tmp.dir("monty-models"))
+
+    {:ok, opened} = Studio.open(experiment, world_simulator: :habitat)
+
+    # Only the downloads are directories to create: the interpreter and the
+    # engine are packages inside it, and their path is the interpreter itself.
+    for %{kind: kind, path: path} <- Prerequisites.for_setup(opened.setup),
+        kind in [:data, :models] do
+      File.mkdir_p!(path)
+    end
+  end
+
+  # An interpreter that answers every import with success. These tests are about
+  # which world a run records and which files it reads, not about whether MuJoCo
+  # is installed on the machine running them.
+  defp interpreter do
+    path = Tmp.file("python")
+    File.write!(path, "#!/bin/sh\nexit 0\n")
+    File.chmod!(path, 0o755)
+    path
   end
 end

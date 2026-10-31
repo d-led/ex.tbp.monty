@@ -39,6 +39,19 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert render(view) =~ "not downloaded"
   end
 
+  # "What is available here?" is the question the page is open for, so the
+  # answer comes before the list of what has to be downloaded — and it names the
+  # engine each world would step, not just "Python is installed".
+  test "the page says which interpreter steps the world, and which engines it has", %{conn: conn} do
+    Tmp.system_env("MONTY_PYTHON", "/usr/bin/false")
+
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    assert view |> element("#world-python") |> render() =~ "/usr/bin/false"
+    assert view |> element("#engine-mujoco") |> render() =~ "MuJoCo: not available here"
+    assert view |> element("#engine-habitat") |> render() =~ "Habitat-Sim: not available here"
+  end
+
   test "the page says which Python it carries, and where a run would report", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 

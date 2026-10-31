@@ -14,6 +14,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
   """
 
   alias Monty.Config.Source
+  alias Monty.Prerequisites
   alias Monty.Studio
   alias Monty.Studio.{Blueprint, Catalog, Drafts, Finding, Index, Jobs, RunHistory, RunLog, Setup}
 
@@ -178,10 +179,10 @@ defmodule ExTbpMonty.Mcp.Experiments do
   here too, before anything is queued, because a failed run looks like a run.
 
   `:world` decides which world the run steps — `:synthetic` for this port's
-  scene, `:habitat` for Monty's own through the peer — and the record carries
-  the choice, so the queue steps what was asked for rather than whatever the
-  worker's environment happens to say. Absent, the deployment's default
-  (`MONTY_WORLD`) applies.
+  scene, `:habitat` for the simulator in an external process — and the record
+  carries the choice, so the queue steps what was asked for rather than whatever
+  the worker's environment happens to say. Absent, the run steps the
+  experiment's own engine in an external process.
   """
   @spec run(String.t(), pos_integer(), keyword()) :: {:ok, map()} | {:error, String.t()}
   def run(name, steps, opts \\ [])
@@ -366,6 +367,12 @@ defmodule ExTbpMonty.Mcp.Experiments do
       supervised_lm_ids: opened.setup.supervised_lm_ids,
       groups: opened.groups,
       ported: Setup.ported(opened.setup),
+      # What a run of it reads off the disk, and whether each is there. Not a
+      # property of the config alone: the stand-in world reads no files, and the
+      # same setup in Monty's own world reads its data and its memory — which is
+      # why the world is answered beside the needs rather than apart from them.
+      world: to_string(opened.setup.world),
+      needs: Prerequisites.for_setup(opened.setup),
       findings: findings(opened.setup.findings)
     }
   end
@@ -543,16 +550,32 @@ defmodule ExTbpMonty.Mcp.Experiments do
 
   # -- a run -----------------------------------------------------------------
 
+  # Two refusals, because they have two fixes: a config that would not run, and
+  # files a run reads that nobody has downloaded. Queuing the second one would
+  # answer with a run id for a run that dies at its first step — the page says so
+  # before the button, and so does this.
   defp runnable(opened) do
-    if Setup.valid?(opened.setup) do
-      :ok
-    else
-      errors =
-        opened.setup.findings
-        |> Finding.at(:error)
-        |> Enum.map_join("; ", & &1.message)
+    missing = Enum.reject(Prerequisites.for_setup(opened.setup), & &1.present?)
 
-      {:error, "`#{opened.name}` would not run: #{errors}"}
+    cond do
+      not Setup.valid?(opened.setup) ->
+        errors =
+          opened.setup.findings
+          |> Finding.at(:error)
+          |> Enum.map_join("; ", & &1.message)
+
+        {:error, "`#{opened.name}` would not run: #{errors}"}
+
+      missing != [] ->
+        listed = Enum.map_join(missing, "; ", &"#{&1.what} at #{&1.path}")
+
+        {:error,
+         "`#{opened.name}` needs files that are not here yet: #{listed}. " <>
+           "Download them at /prerequisites — or run with `world: \"synthetic\"`, " <>
+           "which reads nothing from disk."}
+
+      true ->
+        :ok
     end
   end
 
@@ -577,6 +600,10 @@ defmodule ExTbpMonty.Mcp.Experiments do
 
   defp error_message(%Ecto.Changeset{} = changeset, name),
     do: "`#{name}` cannot be recorded as a run: #{inspect(changeset.errors)}"
+
+  # A refusal this layer already wrote is a sentence, not a term: inspecting it
+  # would hand a reader `\"…\"` with the quotes escaped inside.
+  defp error_message(reason, _name) when is_binary(reason), do: reason
 
   defp error_message(reason, _name), do: inspect(reason)
 

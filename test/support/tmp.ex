@@ -62,6 +62,21 @@ defmodule Monty.Test.Tmp do
   end
 
   @doc """
+  A shell environment variable unset for this test, and put back as it was.
+
+  "Unset" is not "set to an empty string": code that asks whether a variable is
+  there gets `nil` from one and `""` from the other, and the difference is the
+  whole point of a test that says *nothing is configured*.
+  """
+  @spec without_env(String.t()) :: :ok
+  def without_env(name) do
+    previous = System.get_env(name)
+    System.delete_env(name)
+
+    ExUnit.Callbacks.on_exit(fn -> restore_system_env(name, previous) end)
+  end
+
+  @doc """
   A shell environment variable set for this test, and put back as it was.
   """
   @spec system_env(String.t(), String.t()) :: :ok

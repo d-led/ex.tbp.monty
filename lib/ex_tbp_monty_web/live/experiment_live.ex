@@ -19,6 +19,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   use ExTbpMontyWeb, :live_view
 
+  alias Monty.Prerequisites
   alias Monty.Studio
   alias Monty.Studio.{Chart, Jobs, LogFilter, Logging, Replay, RunHistory, RunLog, Setup}
   alias Monty.Studio.Jobs.Reaper
@@ -59,6 +60,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       logging: logging.notes,
       error: nil,
       steps: steps,
+      # What a run of this experiment reads off the disk, and which of those is
+      # not there yet: the run buttons stay disabled while anything is missing,
+      # and the box under the header names it.
+      needs: needs(opened),
+      missing: missing(opened),
       # One run until somebody asks for more: parallelism is a choice made on
       # this page, not something a link should be able to set for them.
       parallelism: 1,
@@ -237,9 +243,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               </option>
             </select>
           </form>
-          <%!-- Which world the run steps. The deployment's default comes from
-          MONTY_WORLD, but the world a run records is the one chosen here: a
-          stand-in scene and Monty's simulator answer different questions. --%>
+          <%!-- Which world the run steps. A run that chooses nothing steps the
+          simulator in an external process — the experiment's own engine — and
+          the stand-in is the deliberate other way: they answer different
+          questions, so the choice is on the run. --%>
           <form id="world-choice" phx-change="world" class="flex items-center gap-1">
             <label for="world-select" class="text-[11px] text-base-content/60">world</label>
             <select
@@ -250,14 +257,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               aria-label="Which world the run steps"
             >
               <%!-- Both are named for what they are: this port's stand-in, or
-              Monty's own world named by the engine the experiment's config
+              the simulator in an external process, named by the engine the experiment's config
               picks (MuJoCo, or Habitat-Sim for the habitat_* ones). --%>
               <option
                 :for={world <- [:synthetic, :habitat]}
                 value={world}
                 selected={world == @opened.setup.world}
               >
-                {Setup.world_name(@opened.setup, world)}
+                {Setup.world_name(@opened.setup, world)}{unavailable(@opened.setup, world)}
               </option>
             </select>
           </form>
@@ -275,7 +282,35 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           </.link>
         </header>
 
-        <p :if={not runable?(assigns)} id="run-blocked" class="text-sm text-error">
+        <%!-- Poka-yoke: a run that reads files nobody has downloaded cannot
+        start, so the page says which files before the button is pressed and
+        names the page that fetches them — the button is disabled, the reason is
+        here. A stand-in run reads nothing and never sees this. --%>
+        <div
+          :if={@missing != []}
+          id="needs-prerequisites"
+          class="alert alert-warning alert-soft items-start gap-3"
+          role="status"
+        >
+          <.icon name="hero-exclamation-triangle-mini" class="size-4 mt-0.5" />
+          <div class="space-y-1 text-sm">
+            <p class="font-medium">This run would not start: it reads files that are not here yet.</p>
+            <ul class="list-disc space-y-0.5 pl-4">
+              <li :for={need <- @missing}>
+                {need.what} — <code class="font-mono text-xs">{need.path}</code>
+              </li>
+            </ul>
+            <p>
+              <.link id="download-prerequisites" navigate={~p"/prerequisites"} class="link">
+                Download them on the Prerequisites page
+              </.link>
+              — or step this port's stand-in scene instead, which reads nothing
+              from disk.
+            </p>
+          </div>
+        </div>
+
+        <p :if={not config_runnable?(assigns)} id="run-blocked" class="text-sm text-error">
           Fix the errors above before running: this config would not start in Monty either.
         </p>
 
@@ -794,15 +829,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp world_badge(_setup), do: "badge-warning"
 
   defp world_note(%{world: :habitat} = setup) do
-    "Monty's own world, stepped in a Python process behind Monty.Simulators.Port: " <>
+    "A simulator stepped in an external process behind Monty.Simulators.Port: " <>
       "the experiment's `environment` names the engine — #{engine_of(setup)} — and " <>
       "this port carries it out."
   end
 
   defp world_note(_setup) do
     "This port's own scene: one sphere, stepped in the BEAM. A run here exercises " <>
-      "the port, not the experiment — choose Monty's own world above, and set " <>
-      "MONTY_PYTHON to the interpreter Monty lives in."
+      "the port, not the experiment — choose the external process above, and set " <>
+      "MONTY_PYTHON to an interpreter with `tbp.monty` in it."
   end
 
   defp engine_of(%{environment: %{module: %{class: class}}}), do: class
@@ -822,7 +857,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     case Studio.open(socket.assigns.opened.name, world_simulator: world) do
       {:ok, opened} ->
         socket
-        |> assign(opened: opened, logging: Logging.open(opened.setup).notes, error: nil)
+        |> assign(
+          opened: opened,
+          logging: Logging.open(opened.setup).notes,
+          error: nil,
+          needs: needs(opened),
+          missing: missing(opened)
+        )
 
       {:error, reason} ->
         assign(socket, error: reason)
@@ -841,12 +882,38 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
-  defp runable?(assigns) do
+  # A run starts only when the config composes *and* the files it reads are
+  # there. The two refusals are different — a composition error is the config's,
+  # a missing download is this machine's — so the page says which one it is.
+  # A run starts when the config composes and the files it reads are here: two
+  # conditions, and the page says which one is in the way.
+  defp runable?(assigns), do: config_runnable?(assigns) and missing(assigns[:opened]) == []
+
+  defp config_runnable?(assigns) do
     case assigns[:opened] do
       nil -> false
       opened -> Setup.valid?(opened.setup)
     end
   end
+
+  # An option nobody can pick should say so where it is picked: the engine is
+  # the experiment's, and whether this deployment has it is a fact about the
+  # deployment, not about the config.
+  defp unavailable(setup, :habitat) do
+    case Prerequisites.engine(setup) do
+      nil -> ""
+      engine -> if Prerequisites.engine_installed?(engine), do: "", else: " — not installed here"
+    end
+  end
+
+  defp unavailable(_setup, _world), do: ""
+
+  # Which files a run of this experiment reads before it steps, and which of
+  # them are not here. A stand-in run reads nothing, so this is empty for one.
+  defp needs(opened), do: Prerequisites.for_setup(opened.setup)
+
+  defp missing(nil), do: []
+  defp missing(opened), do: needs(opened) |> Enum.reject(& &1.present?)
 
   defp sensor_summary(setup), do: Enum.map_join(setup.sensors, ", ", & &1.id)
 

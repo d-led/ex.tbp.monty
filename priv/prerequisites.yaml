@@ -11,21 +11,30 @@
 # Entries are downloaded by /prerequisites in the UI, streamed to
 # `<target>.part` and moved into place only when the bytes and checksum match.
 prerequisites:
-  - id: pretrained_ycb_v13
-    title: Pretrained YCB models (v13)
+
+
+  # The object meshes a MuJoCo run renders. Monty's getting-started guide names
+  # this archive and this place; the tag goes in `ycb/` itself, which is where
+  # `${MONTY_DATA}/mujoco/objects/ycb` (the data_path every MuJoCo environment
+  # config names) looks.
+  - id: ycb_objects_1_0
+    title: YCB object meshes
     description: >
-      Monty's pretrained models for inference experiments, unpacked into
-      ~/tbp/results/monty/pretrained_models/pretrained_ycb_v13.
-    url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v13.tgz
-    root: MONTY_MODELS
-    target: pretrained_ycb_v13.tgz
-    # Unpacked next to itself into ~/tbp/results/monty/pretrained_models/pretrained_ycb_v13.
+      The 77 YCB objects Monty renders in MuJoCo, unpacked into
+      ~/tbp/data/mujoco/objects/ycb.
+    url: https://tbp-data-public-5e789bd48e75350c.s3.us-east-2.amazonaws.com/tbp.monty/ycb_objects_1.0.tgz
+    root: MONTY_DATA
+    target: mujoco/objects/ycb/ycb_objects_1.0.tgz
     extract: true
 
-  - id: pretrained_ycb_v13_zip
-    title: Pretrained YCB models (v13, zip)
-    description: The same archive as a zip, for tools that prefer it.
-    url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v13.zip
+  # The release Monty's current configs name (`constants.pretrained_dir`), which
+  # is the one a run of `base_10simobj_surf_agent` and its siblings loads.
+  - id: pretrained_ycb_v14
+    title: Pretrained YCB models (v14)
+    description: >
+      The pretrained models Monty's current configs name, unpacked into
+      ~/tbp/results/monty/pretrained_models/pretrained_ycb_v14.
+    url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v14.tgz
     root: MONTY_MODELS
-    target: pretrained_ycb_v13.zip
+    target: pretrained_ycb_v14.tgz
     extract: true

@@ -12,6 +12,8 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
   use ExTbpMonty.DataCase, async: false
 
   alias ExTbpMonty.Mcp.Tools
+  alias Monty.Prerequisites
+  alias Monty.Studio
   alias Monty.Studio.Drafts
   alias Monty.Studio.RunHistory
   alias Monty.Test.Tmp
@@ -76,6 +78,45 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                Tools.call("monty_describe_experiment", %{"name" => "no/such/experiment"}, @ctx)
 
       assert message =~ "not an experiment that opens"
+    end
+
+    test "says which world it steps, and that this one reads no files" do
+      assert {:ok, %{text: text, structured: summary}} =
+               Tools.call("monty_describe_experiment", %{"name" => @experiment}, @ctx)
+
+      # The suite's world is this port's stand-in, which builds its own scene,
+      # so a run of it has nothing to download first.
+      assert summary.world == "synthetic"
+      assert summary.needs == []
+      assert text =~ "on disk: nothing"
+    end
+
+    # The answer `monty_run_experiment` gives as a refusal is an answer here too,
+    # before anything is queued: what a run of this setup would have to read.
+    test "says what a run of it would read off the disk, and what is missing" do
+      Tmp.app_env(:world_simulator, :habitat)
+      Tmp.system_env("MONTY_PYTHON", interpreter())
+      Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
+      Tmp.system_env("MONTY_MODELS", Tmp.dir("monty-models"))
+
+      assert {:ok, %{text: text, structured: summary}} =
+               Tools.call("monty_describe_experiment", %{"name" => @experiment}, @ctx)
+
+      assert summary.world == "habitat"
+      assert summary.needs != []
+      assert text =~ ~r/on disk \(\d+\/#{length(summary.needs)} here\):/
+
+      for need <- summary.needs do
+        assert %{kind: kind, what: what, path: path, present?: present?} = need
+        assert kind in [:interpreter, :engine, :data, :models]
+        assert is_binary(what) and is_binary(path)
+        assert is_boolean(present?)
+      end
+
+      # The interpreter and the engine are the ones this test named; the objects
+      # are not here, and saying so is the point of the line.
+      assert Enum.any?(summary.needs, &(&1.kind == :data and not &1.present?))
+      assert text =~ "missing: the objects this environment loads"
     end
 
     test "the groups a config is built from are listed, and read one at a time" do
@@ -249,6 +290,8 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
     end
 
     test "the world is the caller's choice, and the record keeps it" do
+      download_prerequisites()
+
       assert {:ok, %{text: text, structured: run}} =
                Tools.call(
                  "monty_run_experiment",
@@ -262,6 +305,28 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       # What the queue will step is the record, not the worker's environment.
       record = RunHistory.get(run.run_id)
       assert record.inputs["world"] == "habitat"
+    end
+
+    # The same rule the page holds, at the door an assistant comes in by: a
+    # run id for a run that dies at its first step helps nobody. The answer is
+    # the two things a caller can actually do about it.
+    test "refuses a run whose files are not here yet, and says where to get them" do
+      Tmp.without_env("MONTY_PYTHON")
+      Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
+      Tmp.system_env("MONTY_MODELS", Tmp.dir("monty-models"))
+
+      assert {:error, message} =
+               Tools.call(
+                 "monty_run_experiment",
+                 %{"name" => @experiment, "steps" => 1, "world" => "monty"},
+                 @ctx
+               )
+
+      assert message =~ "files that are not here yet"
+      assert message =~ "/prerequisites"
+      assert message =~ "world: \"synthetic\""
+
+      assert RunHistory.search(state: "all", text: @experiment).runs == []
     end
 
     test "refuses a world no port here has" do
@@ -355,5 +420,33 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
     {:ok, run} = RunHistory.start(run_attributes())
     {:ok, run} = RunHistory.finish(run, %{}, status)
     run
+  end
+
+  # Every file a run of the test experiment reads, created where this port looks
+  # for it: the refusal above is about files, so a test about the world must not
+  # be a test about files.
+  defp download_prerequisites do
+    Tmp.system_env("MONTY_PYTHON", interpreter())
+    Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
+    Tmp.system_env("MONTY_MODELS", Tmp.dir("monty-models"))
+
+    {:ok, opened} = Studio.open(@experiment, world_simulator: :habitat)
+
+    # Only the downloads are directories to create: the interpreter and the
+    # engine are packages inside it, and their path is the interpreter itself.
+    for %{kind: kind, path: path} <- Prerequisites.for_setup(opened.setup),
+        kind in [:data, :models] do
+      File.mkdir_p!(path)
+    end
+  end
+
+  # An interpreter that answers every import with success. These tests are about
+  # which world a run records and which files it reads, not about whether MuJoCo
+  # is installed on the machine running them.
+  defp interpreter do
+    path = Tmp.file("python")
+    File.write!(path, "#!/bin/sh\nexit 0\n")
+    File.chmod!(path, 0o755)
+    path
   end
 end

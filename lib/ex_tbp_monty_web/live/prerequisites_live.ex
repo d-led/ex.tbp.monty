@@ -28,7 +28,9 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
        statuses: Map.new(prerequisites, &{&1.id, nil}),
        present: Map.new(prerequisites, &{&1.id, Prerequisites.present?(&1)}),
        python: EmbeddedPython.version(),
-       wandb: EmbeddedPython.wandb_mode()
+       wandb: EmbeddedPython.wandb_mode(),
+       world_python: Prerequisites.python(),
+       engines: Prerequisites.engines()
      )}
   end
 
@@ -45,6 +47,47 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
             and move into place only when they are complete.
           </p>
         </header>
+
+        <%!--
+          What a run can step *here*, before the list of what has to be
+          downloaded: the interpreter travels in the image, and whether an
+          engine's own package is in it is a fact this deployment can answer.
+        --%>
+        <article
+          id="world"
+          class="rounded-box border border-base-300 bg-base-100 p-4"
+        >
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="space-y-1">
+              <h2 class="font-semibold">The world</h2>
+              <p class="text-sm text-base-content/70">
+                A run outside the stand-in world imports its simulator here: the connector
+                this project ships runs it in an external process.
+                Nothing here is downloaded.
+              </p>
+              <p id="world-python" class="font-mono text-xs break-all text-base-content/60">
+                {@world_python || "no interpreter: set MONTY_PYTHON"}
+              </p>
+            </div>
+
+            <div id="world-engines" class="flex flex-wrap items-center gap-2">
+              <span
+                :for={{engine, installed?} <- @engines}
+                id={"engine-#{engine}"}
+                class={["badge", (installed? && "badge-success") || "badge-ghost"]}
+              >
+                {engine_label(engine)}: {installed_label(installed?)}
+              </span>
+            </div>
+          </div>
+
+          <p class="mt-2 text-xs text-base-content/60">
+            Habitat-Sim is not in this image: it exists only as a conda package for
+            Python 3.9, and MuJoCo needs 3.10 or newer, so one interpreter cannot
+            hold both. Run habitat experiments against a dev machine's interpreter
+            (<code>docs/container.md</code>).
+          </p>
+        </article>
 
         <div class="space-y-3">
           <article
@@ -220,6 +263,12 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   defp format_unit(value, [_unit | rest]), do: format_unit(value / 1024, rest)
   defp format_unit(value, []), do: "#{value} B"
+
+  defp engine_label(:mujoco), do: "MuJoCo"
+  defp engine_label(:habitat), do: "Habitat-Sim"
+
+  defp installed_label(true), do: "installed"
+  defp installed_label(false), do: "not available here"
 
   defp version_label({:ok, version}), do: "Python #{version} · answered"
 

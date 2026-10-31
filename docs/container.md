@@ -135,8 +135,7 @@ setup page says so.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `MONTY_WORLD` | unset (synthetic) | The **default** world for a run that does not choose one. A run's own choice — the run page's world selector, or `world` on `monty_run_experiment` — is recorded on the run and wins, so this variable decides what a person gets when they do not say. `synthetic` steps the built-in scene; `monty` or `habitat` step Monty's own environment through the peer. Any other value fails the boot rather than the run. |
-| `MONTY_PYTHON` | `python3` on the PATH | The interpreter the peer runs on. It is *not* the embedded one: Monty's simulator brings its own dependencies. |
+| `MONTY_PYTHON` | `/opt/monty/bin/python` | The interpreter the peer runs on. It is *not* the embedded one: Monty's simulator brings its own dependencies, and this image ships them. |
 | `MONTY_OVERRIDES` | unset | Hydra overrides for the peer, space separated as on Monty's own command line, e.g. `constants.pretrained_dir=/data/models`. How a config that names a world this machine cannot run is pointed at one it can (`environment=habitat_dist_agent`). |
 
 ### This image's own choices
@@ -147,6 +146,7 @@ setup page says so.
 | `WANDB_DIR` | `/app/priv/wandb` | Where a wandb run would write. It has to exist — wandb silently uses the system temp directory otherwise — so `bin/server` creates it at boot. |
 | `HOME` | `/app/priv` | `~/tbp` is where a run's downloads and pretrained models go; the image gives the unprivileged user a writable home on the volume. |
 | `LANG`, `LC_ALL` | `en_US.UTF-8` | Experiment names sort and log as written. |
+| `MONTY_PYTHON` | `/opt/monty/bin/python` | The world's interpreter travels with the image, so a run can step Monty's own simulator without the operator installing anything. See [the interpreter](#the-worlds-interpreter-is-in-the-image). |
 | `MIX_ENV` | `prod` | The release is a prod build; this is only informational at run time. |
 
 Not used by the image: `MONTY_SOURCE` and `TELEOP_SOURCE` (only the tasks that
@@ -187,6 +187,41 @@ restart.
 
 Nothing is fetched at boot: an offline container runs any experiment whose files
 are in place, and `/prerequisites` is what says which ones are missing.
+
+### The world's interpreter is in the image
+
+A run that steps Monty's own world needs Monty's Python, and the image carries
+it at `/opt/monty` — `MONTY_PYTHON` already points there:
+
+* Monty's Python package, installed with `--no-deps`, plus the packages its
+  simulator and environment modules import (`mujoco`, `numpy`, `scipy`,
+  `pydantic`, `attrs`, `numpy-quaternion`, …). Monty's *model* brings `torch`,
+  `torch-geometric`, `torch-scatter` and `torch-sparse`; the model half of a run
+  is this port's Elixir, so none of those are in the image. The build imports
+  the modules to prove the list is complete.
+* The GL libraries MuJoCo's offscreen camera rendering needs (`libegl1`,
+  `libgl1`, `libosmesa6`).
+
+What that does **not** buy you: the datasets and the pretrained memory, which
+are the downloads above — with the interpreter in place they are the only thing
+between the image and a real MuJoCo run, and `/prerequisites` names each one by
+path.
+
+**Habitat-Sim is not in the image, on either architecture.** It exists only as a
+conda package for `linux-64` and `osx-64`, built against **Python 3.9**, and
+MuJoCo needs 3.10 or newer — so one interpreter cannot hold both, and a second
+3.9 environment for one engine is not worth what it costs a pull. Habitat
+configs are a dev-machine concern:
+
+```sh
+micromamba create -n monty-habitat -c conda-forge -c aihabitat \
+  python=3.9 habitat-sim=0.2.4
+MONTY_PYTHON="$HOME/micromamba/envs/monty-habitat/bin/python" mix phx.server
+```
+
+`/prerequisites` reports each engine as installed or not, so a habitat config on
+a deployed image says why it will not start instead of failing at its first
+step.
 
 ### The embedded Python is not one of them
 
