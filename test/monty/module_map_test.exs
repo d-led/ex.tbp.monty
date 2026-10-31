@@ -72,8 +72,15 @@ defmodule Monty.ModuleMapTest do
       # No checkout here is not a failure and not a silent pass: the map is
       # verified against the Elixir side and against the checked-in censuses,
       # and the walk over Monty's own files happens only where there is one.
-      assert summary.unchecked == [] or
-               Enum.sort(summary.unchecked) == ["monty", "teleop"]
+      # Which packages can be walked depends on the machine — CI has neither,
+      # a workspace may have one — so what is held is that the summary names
+      # exactly the packages it could not look at.
+      absent =
+        for package <- ModuleMap.packages(),
+            not File.dir?(Path.join(package.root.(), package.relative)),
+            do: package.name
+
+      assert Enum.sort(summary.unchecked) == Enum.sort(absent)
     end
 
     test "only claims implemented for modules that exist" do
