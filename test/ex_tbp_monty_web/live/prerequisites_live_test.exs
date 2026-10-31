@@ -42,14 +42,24 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
   # "What is available here?" is the question the page is open for, so the
   # answer comes before the list of what has to be downloaded — and it names the
   # engine each world would step, not just "Python is installed".
-  test "the page says which interpreter steps the world, and which engines it has", %{conn: conn} do
+  # The world card names the interpreter a run would use and nothing else: two
+  # answers to "is MuJoCo here" is how a machine with MuJoCo came to read
+  # "not available" first.
+  test "the page names the interpreter the world runs in", %{conn: conn} do
     Tmp.system_env("MONTY_PYTHON", "/usr/bin/false")
 
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 
     assert view |> element("#world-python") |> render() =~ "/usr/bin/false"
-    assert view |> element("#engine-mujoco") |> render() =~ "MuJoCo: not available here"
-    assert view |> element("#engine-habitat") |> render() =~ "Habitat-Sim: not available here"
+    refute has_element?(view, "#world-engines")
+  end
+
+  test "says a run cannot step its own world when no interpreter is configured", %{conn: conn} do
+    Tmp.without_env("MONTY_PYTHON")
+
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    assert view |> element("#world-python-warning") |> render() =~ "MONTY_PYTHON"
   end
 
   test "the page says which Python it carries, and where a run would report", %{conn: conn} do

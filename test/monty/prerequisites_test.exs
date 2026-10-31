@@ -160,26 +160,32 @@ defmodule Monty.PrerequisitesTest do
   end
 
   describe "engine_installed?/1" do
-    # The interpreter is asked, and its exit status is the answer: a page that
-    # guessed from a directory name would say "installed" for a package that
-    # fails to import.
-    test "is true when the interpreter imports the engine's package" do
-      Tmp.system_env("MONTY_PYTHON", "/usr/bin/true")
+    # The answer is a property of the build, not of the machine: `mujoco` is
+    # installed into the interpreter this application carries, so a PATH with no
+    # interpreter on it does not turn MuJoCo into a missing package. That is the
+    # bug this replaces — a deployment with MuJoCo in it told its reader "not
+    # available" because the page asked a `python3` nobody had chosen.
+    test "asks the interpreter this application carries, not the PATH" do
+      Tmp.without_env("MONTY_PYTHON")
+      Tmp.system_env("PATH", "/nonexistent-bin")
+      Prerequisites.forget_engines()
+      on_exit(&Prerequisites.forget_engines/0)
 
       assert Prerequisites.engine_installed?(:mujoco)
-    end
-
-    test "is false when it cannot" do
-      Tmp.system_env("MONTY_PYTHON", "/usr/bin/false")
-
       refute Prerequisites.engine_installed?(:habitat)
     end
 
-    test "is false when there is no interpreter at all" do
-      Tmp.without_env("MONTY_PYTHON")
-      Tmp.system_env("PATH", "/nonexistent-bin")
+    # A script or a test may have no interpreter of its own to point at; the
+    # fallback asks the one a run would use, and its exit status is the answer —
+    # a page that guessed from a directory name would say "installed" for a
+    # package that fails to import.
+    test "falls back to an operator's interpreter when nothing answers in-process" do
+      Tmp.app_env(:python_imports?, {Prerequisites, :importable_in_environment})
+      Tmp.system_env("MONTY_PYTHON", interpreter())
+      Prerequisites.forget_engines()
+      on_exit(&Prerequisites.forget_engines/0)
 
-      refute Prerequisites.engine_installed?(:mujoco)
+      assert Prerequisites.engine_installed?(:habitat)
     end
   end
 

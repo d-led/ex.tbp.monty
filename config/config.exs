@@ -15,6 +15,13 @@ config :ex_tbp_monty,
 # that does not want the upstream link drops the key, and the link goes with it.
 config :ex_tbp_monty, :source, repo: "https://github.com/d-led/ex.tbp.monty"
 
+# "Is MuJoCo here?" is answered by the interpreter this application carries, not
+# by whatever `python3` the PATH offers: `config/pythonx.exs` is where the build
+# installs packages into it, so the answer is a property of the deployment. A
+# test or a script that has no such interpreter drops the key and gets the
+# subprocess check (`Monty.Prerequisites.importable_in_environment/1`).
+config :ex_tbp_monty, python_imports?: {ExTbpMonty.EmbeddedPython, :imports?}
+
 # Configure the endpoint
 config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
   url: [host: "localhost"],

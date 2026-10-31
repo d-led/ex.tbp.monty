@@ -145,11 +145,11 @@ defmodule Monty.Prerequisites do
   """
   @spec engine_installed?(:mujoco | :habitat) :: boolean()
   def engine_installed?(engine) when engine in [:mujoco, :habitat] do
-    key = {@engine_memo, python(), package(engine)}
+    key = {@engine_memo, imports_asker(), package(engine)}
 
     case :persistent_term.get(key, :unknown) do
       :unknown ->
-        answer = importable?(package(engine))
+        answer = imports?(package(engine))
         :persistent_term.put(key, answer)
 
         answer
@@ -168,9 +168,35 @@ defmodule Monty.Prerequisites do
   @spec engines() :: [{:mujoco | :habitat, boolean()}]
   def engines, do: Enum.map([:mujoco, :habitat], &{&1, engine_installed?(&1)})
 
+  @doc """
+  Drops the memoised engine answers. The suite calls this: `:persistent_term` is
+  not rolled back between tests, and one test's answer would be the next one's.
+  """
+  @spec forget_engines() :: :ok
+  def forget_engines do
+    for engine <- [:mujoco, :habitat] do
+      :persistent_term.erase({@engine_memo, imports_asker(), package(engine)})
+    end
+
+    :ok
+  end
+
   @doc "The interpreter the peer runs on: `MONTY_PYTHON`, or `python3` on the PATH."
   @spec python() :: String.t() | nil
   def python, do: System.get_env("MONTY_PYTHON") || System.find_executable("python3")
+
+  @doc """
+  What a reader can do about a missing need.
+
+  Two kinds, and only one of them is a download. A dataset or a pretrained
+  memory is fetched on `/prerequisites`; an interpreter is configuration
+  (`MONTY_PYTHON`) and an engine is a package inside that interpreter. A page
+  that offers a download button for either is offering something that does not
+  exist, so the kinds are named here instead of guessed at in a template.
+  """
+  @spec remedy(need()) :: :download | :configure
+  def remedy(%{kind: kind}) when kind in [:data, :models], do: :download
+  def remedy(_need), do: :configure
 
   @doc """
   Whether an operator named the interpreter, rather than the page falling back
@@ -193,6 +219,40 @@ defmodule Monty.Prerequisites do
   @spec package(:mujoco | :habitat) :: String.t()
   def package(:mujoco), do: "mujoco"
   def package(:habitat), do: "habitat_sim"
+
+  # Which interpreter answers "can this import?".
+  #
+  # It is the one this application *carries*: `config/pythonx.exs` is where the
+  # build installs packages, so MuJoCo is in it by construction and the answer
+  # travels with the release. The fallback asks an interpreter an operator named,
+  # which is the right question for a script and the wrong one for a page — a
+  # machine with MuJoCo installed came to be told it had none because the page
+  # asked `python3` on the PATH.
+  defp imports_asker do
+    Application.get_env(
+      :ex_tbp_monty,
+      :python_imports?,
+      {__MODULE__, :importable_in_environment}
+    )
+  end
+
+  defp imports?(module) do
+    case imports_asker() do
+      {module_name, function} -> apply(module_name, function, [module])
+      function when is_function(function, 1) -> function.(module)
+    end
+  end
+
+  @doc """
+  Whether the interpreter an operator named can import a module.
+
+  What the engine check asks when a deployment has no interpreter of its own to
+  point at. It needs `MONTY_PYTHON` (or a `python3` on the PATH) to exist and be
+  executable, and answers `false` for both failures rather than raising in a
+  render.
+  """
+  @spec importable_in_environment(String.t()) :: boolean()
+  def importable_in_environment(module) when is_binary(module), do: importable?(module)
 
   # sobelow_skip ["CI.System"]
   # The command is the interpreter an operator named in `MONTY_PYTHON` — an
@@ -225,18 +285,26 @@ defmodule Monty.Prerequisites do
 
   defp engine_need(setup) do
     case engine(setup) do
+      # An engine is a package inside the interpreter the world runs in, and that
+      # interpreter is the one `MONTY_PYTHON` names. Without it there is nothing
+      # to answer for: "MuJoCo is missing" about a `python3` nobody chose is how a
+      # machine with MuJoCo installed came to be told it had none.
+      engine when not is_nil(engine) ->
+        if python_configured?() do
+          [
+            %{
+              kind: :engine,
+              what: "#{engine_name(engine)} in the interpreter the world runs in",
+              path: python(),
+              present?: engine_installed?(engine)
+            }
+          ]
+        else
+          []
+        end
+
       nil ->
         []
-
-      engine ->
-        [
-          %{
-            kind: :engine,
-            what: "#{engine_name(engine)} itself (the `#{package(engine)}` package)",
-            path: python(),
-            present?: engine_installed?(engine)
-          }
-        ]
     end
   end
 
@@ -253,7 +321,9 @@ defmodule Monty.Prerequisites do
         %{
           kind: :interpreter,
           what: "an interpreter with tbp.monty installed (MONTY_PYTHON is not set)",
-          path: System.find_executable("python3"),
+          # No path: `python3` on the PATH is not the interpreter a run uses, and
+          # naming it reads as "here is the one it uses, and it is wrong".
+          path: nil,
           present?: false
         }
 

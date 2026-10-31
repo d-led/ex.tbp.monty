@@ -33,7 +33,6 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
        world_python: Prerequisites.python(),
        python_configured: Prerequisites.python_configured?(),
        engines: Prerequisites.engines(),
-       embedded_engines: embedded_engines(),
        storage: Storage.usage(Prerequisites.root_path("MONTY_DATA"))
      )}
   end
@@ -68,44 +67,32 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
             <div class="space-y-1">
               <h2 class="font-semibold">The world</h2>
               <p class="text-sm text-base-content/70">
-                A run outside the stand-in world imports its simulator here: the connector
-                this project ships runs it in an external process.
-                Nothing here is downloaded.
+                A run steps one of two worlds. The <strong>built-in scene</strong>
+                needs nothing installed — it is part of this application.
+                <strong>Monty's simulator</strong>
+                runs in Python, in the interpreter named below.
               </p>
               <p id="world-python" class="font-mono text-xs break-all text-base-content/60">
                 {@world_python || "no interpreter: set MONTY_PYTHON"}
               </p>
             </div>
-
-            <div id="world-engines" class="flex flex-wrap items-center gap-2">
-              <span
-                :for={{engine, installed?} <- @engines}
-                id={"engine-#{engine}"}
-                class={["badge", (installed? && "badge-success") || "badge-ghost"]}
-              >
-                {engine_label(engine)}: {installed_label(installed?)}
-              </span>
-            </div>
           </div>
 
-          <p class="mt-2 text-xs text-base-content/60">
-            These are about the interpreter the <em>world</em>
-            runs in — the one <code>MONTY_PYTHON</code>
-            names. MuJoCo is also installed into this
-            application's own interpreter (below), because <code>config/pythonx.exs</code>
-            is where the build puts packages, so a
-            MuJoCo experiment does not depend on whichever <code>python3</code>
-            the
-            PATH happens to offer. Habitat-Sim has no PyPI release at all: Monty's own
-            <code>environment.yml</code>
-            takes it from conda.
-          </p>
-          <p :if={not @python_configured} class="mt-1 text-xs text-warning">
+          <%!--
+            Which engines this deployment has is answered once, below, by the
+            interpreter the build installs them into. Asking the world's
+            interpreter as well meant two answers to one question, and the one a
+            person read first said "not available" on a machine that had it.
+          --%>
+          <p
+            :if={not @python_configured}
+            id="world-python-warning"
+            class="mt-2 text-xs text-base-content/60"
+          >
+            Nothing is broken: with no interpreter set, runs use the built-in scene. Set
             <code>MONTY_PYTHON</code>
-            is not set, so these answers are about <code>python3</code>
-            on the PATH, which need not be the interpreter Monty runs
-            in. Point <code>MONTY_PYTHON</code>
-            at that one and the badges are about it.
+            to a Python with <code>tbp.monty</code>
+            in it to step Monty's simulator instead.
           </p>
         </article>
 
@@ -194,7 +181,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
               <div id="embedded-engines" class="flex flex-wrap items-center gap-2">
                 <span
-                  :for={{engine, installed?} <- @embedded_engines}
+                  :for={{engine, installed?} <- @engines}
                   id={"embedded-engine-#{engine}"}
                   class={["badge", (installed? && "badge-success") || "badge-ghost"]}
                 >
@@ -300,13 +287,6 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   defp engine_label(:mujoco), do: "MuJoCo"
   defp engine_label(:habitat), do: "Habitat-Sim"
-
-  # What the interpreter this application carries can import: the packages the
-  # build installed into it (`config/pythonx.exs`), asked of the interpreter
-  # itself — the dependency list says what was asked for, not what landed.
-  defp embedded_engines do
-    Enum.map([:mujoco, :habitat], &{&1, EmbeddedPython.imports?(Prerequisites.package(&1))})
-  end
 
   defp installed_label(true), do: "installed"
   defp installed_label(false), do: "not available here"
