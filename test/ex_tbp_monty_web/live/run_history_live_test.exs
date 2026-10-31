@@ -93,6 +93,31 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert html =~ "gone"
     end
+
+    test "offers the files the run wrote, with their sizes", %{conn: conn, run: run} do
+      Monty.Test.Tmp.env_dir("studio-runs", :studio_artifacts_dir)
+      :ok = Monty.Studio.Artifacts.start(run.id)
+
+      File.write!(
+        Path.join(Monty.Studio.Artifacts.dir(run.id), "eval_stats.csv"),
+        "episode,performance\n"
+      )
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert has_element?(view, "#run-file-eval_stats-csv")
+      assert has_element?(view, "a[href='/runs/#{run.id}/files/eval_stats.csv']")
+    end
+
+    test "says so when a run wrote nothing", %{conn: conn, run: run} do
+      # A run whose config asks for a logger this port does not have writes no
+      # files at all, and the page says where to look rather than staying silent.
+      Monty.Test.Tmp.env_dir("studio-runs", :studio_artifacts_dir)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert has_element?(view, "#run-files-empty")
+    end
   end
 
   describe "replaying a run" do

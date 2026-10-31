@@ -55,6 +55,9 @@ defmodule ExTbpMontyWeb.Router do
     live "/runs/demo", RunsLive, :demo
     live "/runs", RunHistoryLive, :index
     live "/runs/:id", RunHistoryLive, :show
+    # A file the run wrote — its log, its CSV, its detailed JSON — as it is, so
+    # it can be read, diffed or plotted outside this page.
+    get "/runs/:id/files/:name", RunFileController, :show
     # The queue a run waits in before it has anything to report.
     live "/jobs", JobsLive, :index
     live "/prerequisites", PrerequisitesLive, :index

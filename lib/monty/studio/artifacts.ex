@@ -70,4 +70,51 @@ defmodule Monty.Studio.Artifacts do
     _ignored = File.rm_rf(dir(run_id))
     :ok
   end
+
+  @typedoc "A file a run wrote, as a page offers it."
+  @type file :: %{name: String.t(), bytes: non_neg_integer()}
+
+  @doc """
+  The files this run has written, by name, with their sizes.
+
+  The run's own directory is read rather than a list of names being guessed at:
+  the handlers write whatever the config asked them for — a CSV per mode, one
+  detailed JSON or a directory of episode files — and a page that listed a fixed
+  set would be wrong the moment a run asked for something else.
+
+  Only regular files directly in that directory are offered. A subdirectory is
+  part of what a run wrote, not a thing to hand out.
+  """
+  # The directory of a run whose id `dir/1` has already refused unless it is a
+  # UUID; nothing here is given a path from outside.
+  # sobelow_skip ["Traversal.FileModule"]
+  @spec files(binary()) :: [file()]
+  def files(run_id) do
+    case File.ls(dir(run_id)) do
+      {:ok, names} -> names |> Enum.sort() |> Enum.flat_map(&file_entry(run_id, &1))
+      {:error, :enoent} -> []
+      {:error, _reason} -> []
+    end
+  end
+
+  defp file_entry(run_id, name) do
+    case File.stat(Path.join(dir(run_id), name)) do
+      {:ok, %File.Stat{type: :regular, size: size}} -> [%{name: name, bytes: size}]
+      _not_a_regular_file -> []
+    end
+  end
+
+  @doc """
+  The path of one of this run's files, or `:error`.
+
+  The name is matched against the files the directory actually holds, so what a
+  caller asked for never becomes part of a path: `..%2f..%2fetc%2fpasswd` is not
+  one of the run's files and there is nothing to escape to.
+  """
+  @spec file_path(binary(), String.t()) :: {:ok, Path.t()} | :error
+  def file_path(run_id, name) do
+    if Enum.any?(files(run_id), &(&1.name == name)),
+      do: {:ok, Path.join(dir(run_id), name)},
+      else: :error
+  end
 end

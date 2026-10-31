@@ -13,7 +13,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   use ExTbpMontyWeb, :live_view
 
-  alias Monty.Studio.{Replay, RunHistory}
+  alias Monty.Studio.{Artifacts, Replay, RunHistory}
   alias Monty.Studio.Replay.Chart
 
   @impl true
@@ -45,6 +45,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         {:noreply,
          socket
          |> assign(run: run)
+         |> assign(files: Artifacts.files(run.id))
          |> stream(:log, run.log, reset: true)
          |> assign_replay(run, Replay.last_step(run))}
     end
@@ -210,6 +211,33 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         >
           <li id="run-log-empty" class="hidden only:block text-base-content/50">no steps recorded</li>
           <li :for={{dom_id, entry} <- @streams.log} id={dom_id}>{log_line(entry)}</li>
+        </ul>
+      </section>
+
+      <section :if={@run} class="space-y-1">
+        <h2 class="text-sm font-medium">Artefacts</h2>
+        <p :if={@files == []} id="run-files-empty" class="text-xs text-base-content/60">
+          This run wrote no files. Its log says which classes its config asked for and
+          which of them this port does not have.
+        </p>
+        <ul
+          :if={@files != []}
+          id="run-files"
+          class="overflow-hidden rounded-box border border-base-300 bg-base-100 text-xs"
+        >
+          <li
+            :for={file <- @files}
+            id={"run-file-" <> String.replace(file.name, ".", "-")}
+            class="flex items-center gap-3 border-b border-base-300 px-2.5 py-1 last:border-0"
+          >
+            <.link
+              href={~p"/runs/#{@run.id}/files/#{file.name}"}
+              class="link link-hover font-mono text-primary"
+            >
+              {file.name}
+            </.link>
+            <span class="ms-auto font-mono text-base-content/50">{bytes(file.bytes)}</span>
+          </li>
         </ul>
       </section>
 
@@ -423,6 +451,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     do: "#{Float.round(microseconds / 1_000, 1)} ms"
 
   defp duration(microseconds), do: "#{microseconds || 0} µs"
+
+  # A file's size, in the unit a person reading a list of three files thinks in.
+  defp bytes(size) when size >= 1_048_576, do: "#{Float.round(size / 1_048_576, 1)} MB"
+  defp bytes(size) when size >= 1_024, do: "#{Float.round(size / 1_024, 1)} kB"
+  defp bytes(size), do: "#{size} B"
 
   defp when_ran(%{inserted_at: nil}), do: "unknown"
 
