@@ -62,6 +62,10 @@ defmodule ExTbpMontyWeb.Router do
     # the list a colleague was sent.
     live "/jobs", RunHistoryLive, :index
     live "/prerequisites", PrerequisitesLive, :index
+    # Not `/mcp`: that address is the server itself (POST is a JSON-RPC message,
+    # GET is declined with 405). This is the page that says how to point a client
+    # at it, with the port this instance actually answers on.
+    live "/mcp/config", McpLive, :index
   end
 
   # Other scopes may use custom stacks.

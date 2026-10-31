@@ -16,6 +16,16 @@ defmodule ExTbpMontyWeb.Tour do
 
   @steps [
     %{
+      element: "#app-sidebar",
+      popover: %{
+        title: "Everything is here",
+        description:
+          "Five places: the experiments Monty ships, the builder, the data and models, " <>
+            "what ran, and the same studio answered over MCP. The toggle beside the title " <>
+            "collapses this column to icons."
+      }
+    },
+    %{
       element: "#intro",
       popover: %{
         title: "Monty, every experiment",
@@ -66,6 +76,15 @@ defmodule ExTbpMontyWeb.Tour do
         description:
           "The training data and model bundles are not in the container. That page " <>
             "downloads them into the running instance, or explains mounting your own."
+      }
+    },
+    %{
+      element: "#nav-mcp",
+      popover: %{
+        title: "Ask from an editor",
+        description:
+          "The same application answers an assistant over MCP. That page has the " <>
+            "endpoint and the configuration to paste into an editor."
       }
     },
     %{

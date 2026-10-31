@@ -25,6 +25,10 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/ex_tbp_monty"
 import topbar from "../vendor/topbar"
 import {StudioTour} from "./tour"
+// Behaviour for the sidebar the layout renders: collapse preference, the drawer
+// on a phone, and the current page marked in the list. Imported for its side
+// effects, because it answers events from the whole document.
+import "./sidebar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {

@@ -37,72 +37,201 @@ defmodule ExTbpMontyWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <div class="flex min-h-screen flex-col">
-      <header class="border-b border-base-300 bg-base-100/80 backdrop-blur">
-        <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 py-2 sm:px-6 lg:px-8">
-          <.link navigate={~p"/"} class="flex items-center gap-2 rounded-field px-1 py-1">
-            <span class="grid size-8 place-items-center rounded-field bg-primary/15 text-primary">
-              <.icon name="hero-cpu-chip-mini" class="size-5" />
-            </span>
-            <span class="text-sm font-semibold tracking-tight">Monty on the BEAM</span>
-          </.link>
+    <div class="flex min-h-screen">
+      <div
+        data-sidebar-backdrop
+        hidden
+        aria-hidden="true"
+        class="fixed inset-0 z-40 bg-base-content/40 backdrop-blur-sm lg:hidden"
+      >
+      </div>
 
-          <nav class="ms-auto flex flex-wrap items-center gap-1">
-            <.nav_link
-              id="nav-experiments"
-              navigate={~p"/"}
-              label="Experiments"
-              icon="hero-beaker-mini"
-            />
-            <.nav_link
-              id="nav-build"
-              navigate={~p"/build"}
-              label="Build"
-              icon="hero-wrench-screwdriver-mini"
-            />
-            <.nav_link
-              id="nav-prerequisites"
-              navigate={~p"/prerequisites"}
-              label="Prerequisites"
-              icon="hero-arrow-down-tray-mini"
-            />
-            <%!-- One entry for "what happened": the runs page says what a run
-            decided and, while a run is unfinished, where it is in the queue.
-            The queue's own page is one click from there, for the operator who
-            needs to stop something. --%>
-            <.nav_link id="nav-runs" navigate={~p"/runs"} label="Runs" icon="hero-play-mini" />
+      <.sidebar />
 
-            <%!-- The walkthrough, on every page rather than on the one it
-            describes: a help button nobody can find is not help. driver.js
-            skips the steps whose target this page does not have, so the tour
-            is the full one on the index and the shell elsewhere. --%>
+      <div class="flex min-w-0 flex-1 flex-col">
+        <header class="sticky top-0 z-30 border-b border-base-300 bg-base-100/85 backdrop-blur">
+          <div class="flex items-center gap-2 px-3 py-2 sm:px-5">
             <button
-              id="tour-start"
+              id="sidebar-toggle"
               type="button"
-              phx-hook="StudioTour"
-              phx-update="ignore"
-              data-steps={ExTbpMontyWeb.Tour.payload()}
-              data-seen-key={ExTbpMontyWeb.Tour.seen_key()}
-              class="btn btn-ghost btn-sm gap-1.5 font-normal"
-              title="Show the walkthrough"
-              aria-label="Show the walkthrough"
+              data-sidebar-toggle
+              aria-controls="app-sidebar"
+              aria-expanded="true"
+              aria-label="Collapse the sidebar"
+              title="Collapse the sidebar"
+              class="group grid size-9 shrink-0 place-items-center rounded-field text-base-content/70 transition hover:bg-base-200 hover:text-base-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
-              <.icon name="hero-question-mark-circle-mini" class="size-4 opacity-70" /> help
+              <%!-- A panel with a divider, and a chevron pointing the way it is
+              about to move: right when the sidebar is closed, left when it is
+              open. `sidebar.js` keeps `aria-expanded` in step, and these two
+              variants follow it, so the button never states the wrong action. --%>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="size-5 group-aria-expanded:hidden"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 3v18" />
+                <path d="m14 9 3 3-3 3" />
+              </svg>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="hidden size-5 group-aria-expanded:block"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 3v18" />
+                <path d="m14 15-3-3 3-3" />
+              </svg>
             </button>
-          </nav>
-        </div>
-      </header>
 
-      <main class="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-        <div class="mx-auto max-w-6xl space-y-6">
-          {render_slot(@inner_block)}
-        </div>
-      </main>
+            <.link navigate={~p"/"} class="flex items-center gap-2 rounded-field px-1 py-1 lg:hidden">
+              <span class="text-sm font-semibold tracking-tight">Monty on the BEAM</span>
+            </.link>
+          </div>
+        </header>
 
-      <.footer build={BuildInfo.info()} repo={source_repo()} />
+        <main class="flex-1 px-3 py-5 sm:px-5 lg:px-6">
+          <div class="mx-auto max-w-6xl space-y-6">
+            {render_slot(@inner_block)}
+          </div>
+        </main>
+
+        <.footer build={BuildInfo.info()} repo={source_repo()} />
+      </div>
 
       <.flash_group flash={@flash} />
     </div>
+    """
+  end
+
+  @doc """
+  The way around the application, as a column beside the content.
+
+  A column rather than a row of tabs because these are places, not modes: a
+  reader who is on the fourth page of a run should still see where else they can
+  go, and five entries with icons fit in a rail when the column is collapsed.
+
+  Server-rendered and usable without JavaScript — a column on a laptop, a drawer
+  on a phone — and `assets/js/sidebar.js` adds the toggle, the remembered
+  preference and the drawer's focus handling.
+  """
+  def sidebar(assigns) do
+    ~H"""
+    <aside
+      id="app-sidebar"
+      tabindex="-1"
+      aria-label="Main"
+      class="group fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] -translate-x-full flex-col border-r border-base-300 bg-base-100 shadow-lg transition-transform duration-200 focus:outline-none motion-reduce:transition-none data-[open]:translate-x-0 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:translate-x-0 lg:self-start lg:overflow-y-auto lg:shadow-none lg:transition-[width] lg:data-[collapsed]:w-16"
+    >
+      <div class="flex h-full flex-col gap-1 p-2">
+        <div class="flex items-center gap-2">
+          <.link
+            navigate={~p"/"}
+            class="flex min-w-0 flex-1 items-center gap-2 rounded-field px-2 py-2 hover:bg-base-200"
+          >
+            <span class="grid size-8 shrink-0 place-items-center rounded-field bg-primary/15 text-primary">
+              <.icon name="hero-cpu-chip-mini" class="size-5" />
+            </span>
+            <span class="truncate text-sm font-semibold tracking-tight group-data-[collapsed]:hidden">
+              Monty on the BEAM
+            </span>
+          </.link>
+
+          <%!-- On a phone the drawer slides over the toggle, so it carries its own
+          way out; on a laptop the toggle is always visible. --%>
+          <button
+            id="sidebar-close"
+            type="button"
+            data-sidebar-toggle
+            aria-label="Close the sidebar"
+            title="Close the sidebar"
+            class="grid size-9 shrink-0 place-items-center rounded-field text-base-content/60 hover:bg-base-200 hover:text-base-content lg:hidden"
+          >
+            <.icon name="hero-x-mark-mini" class="size-5" />
+          </button>
+        </div>
+
+        <nav class="mt-2 flex flex-col gap-0.5" aria-label="Sections">
+          <.sidebar_link
+            id="nav-experiments"
+            navigate={~p"/"}
+            label="Experiments"
+            icon="hero-beaker-mini"
+          />
+          <.sidebar_link
+            id="nav-build"
+            navigate={~p"/build"}
+            label="Build"
+            icon="hero-wrench-screwdriver-mini"
+          />
+          <.sidebar_link
+            id="nav-prerequisites"
+            navigate={~p"/prerequisites"}
+            label="Prerequisites"
+            icon="hero-arrow-down-tray-mini"
+          />
+          <.sidebar_link id="nav-runs" navigate={~p"/runs"} label="Runs" icon="hero-play-mini" />
+          <%!-- An editor is the other way in: the same application answering an
+          assistant over MCP, with the configuration to hand. --%>
+          <.sidebar_link
+            id="nav-mcp"
+            navigate={~p"/mcp/config"}
+            label="MCP"
+            icon="hero-code-bracket-mini"
+          />
+        </nav>
+
+        <div class="mt-auto flex flex-col gap-0.5 border-t border-base-300 pt-2">
+          <%!-- The walkthrough, on every page rather than on the one it describes:
+          a help button nobody can find is not help. driver.js skips the steps
+          whose target a page does not have. --%>
+          <button
+            id="tour-start"
+            type="button"
+            phx-hook="StudioTour"
+            phx-update="ignore"
+            data-steps={ExTbpMontyWeb.Tour.payload()}
+            data-seen-key={ExTbpMontyWeb.Tour.seen_key()}
+            class="flex w-full items-center gap-2.5 rounded-field px-2 py-2 text-sm font-normal text-base-content/70 transition hover:bg-base-200 hover:text-base-content"
+            title="Show the walkthrough"
+          >
+            <.icon name="hero-question-mark-circle-mini" class="size-4 shrink-0 opacity-70" />
+            <span class="truncate group-data-[collapsed]:hidden">help</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+    """
+  end
+
+  attr :navigate, :string, required: true
+  attr :label, :string, required: true
+  attr :icon, :string, required: true
+  attr :id, :string, default: nil
+
+  defp sidebar_link(assigns) do
+    ~H"""
+    <.link
+      id={@id}
+      navigate={@navigate}
+      data-nav
+      title={@label}
+      class="flex items-center gap-2.5 rounded-field px-2 py-2 text-sm text-base-content/75 transition hover:bg-base-200 hover:text-base-content data-[active]:bg-primary/10 data-[active]:font-medium data-[active]:text-primary"
+    >
+      <.icon name={@icon} class="size-4 shrink-0 opacity-70" />
+      <span class="truncate group-data-[collapsed]:hidden">{@label}</span>
+    </.link>
     """
   end
 
@@ -235,23 +364,6 @@ defmodule ExTbpMontyWeb.Layouts do
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
     </div>
-    """
-  end
-
-  @doc """
-  One item in the application bar.
-  """
-  attr :navigate, :string, required: true
-  attr :label, :string, required: true
-  attr :icon, :string, required: true
-  attr :id, :string, default: nil
-
-  def nav_link(assigns) do
-    ~H"""
-    <.link id={@id} navigate={@navigate} class="btn btn-ghost btn-sm gap-1.5 font-normal">
-      <.icon name={@icon} class="size-4 opacity-70" />
-      {@label}
-    </.link>
     """
   end
 end
