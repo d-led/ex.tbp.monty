@@ -255,8 +255,8 @@ This is where the community is furthest ahead of the code.
       page, not code. 🍪
 - [ ] **44 · Outline how to apply attention.**
       [outline-how-to-apply-attention](https://docs.thousandbrains.org/docs/outline-how-to-apply-attention) ·
-      🍪 *scoping*, but the forum has the mechanism already: Niels' "attention
-      spreads from broad to narrow", quoted approvingly by Daniel in 1204.
+      🍪 *scoping*, but the thread already holds the mechanism: Daniel reads Niels'
+      2026 note on attention as "attention spreads from broad to narrow" (1204).
 - [ ] **45 · Multi-agent infrastructure.** One agent could be a hand whose fingers move
       semi-independently while a distant agent saccades over the same object — and
       sometimes both look at one place, which is what voting still needs while its
@@ -273,7 +273,8 @@ duplicate the work.
       [1154](https://forum.thousandbrains.org/t/we-need-better-tools-to-see-the-cortex-a-measurement-first-path/1154):
       what would we measure to know a column is doing its job? 🍪
 - [ ] **47 · AATM — can identity emerge from coalitions of partial
-      representations?** The most-argued thread of 2026 (30 posts):
+      representations?** Thirty posts, the third-longest thread of 2026, and the one
+      where the vocabulary gets argued over most carefully:
       [1146](https://forum.thousandbrains.org/t/aatm-can-object-identity-emerge-from-continuous-coalitions-of-partial-sensorimotor-representations/1146). 🎂
 - [ ] **48 · Voting on real data — what makes a good witness?**
       [1160](https://forum.thousandbrains.org/t/voting-on-real-data-1-why-my-naive-committee-failed-and-what-i-think-a-good-witness-needs/1160).
