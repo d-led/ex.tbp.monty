@@ -194,4 +194,21 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsTest do
       assert %{data: [[["mug", "bowl"], "LM_0"]]} = LoggingUtils.lm_stats_to_dataframe(stats)
     end
   end
+
+  describe "a run of frames" do
+    test "is handed over channels first, which is the order wandb.Video reads" do
+      # Two pixels across, one down, four channels: (height, width, channels) in,
+      # (channels, height, width) out.
+      frame = %{"rgba" => [[[1, 2, 3, 4], [5, 6, 7, 8]]]}
+
+      assert LoggingUtils.get_rgba_frames_single_sm([frame, frame]) == [
+               [[[1, 5]], [[2, 6]], [[3, 7]], [[4, 8]]],
+               [[[1, 5]], [[2, 6]], [[3, 7]], [[4, 8]]]
+             ]
+    end
+
+    test "passes an empty frame through, because it has no channels to move" do
+      assert LoggingUtils.get_rgba_frames_single_sm([%{"rgba" => []}]) == [[]]
+    end
+  end
 end

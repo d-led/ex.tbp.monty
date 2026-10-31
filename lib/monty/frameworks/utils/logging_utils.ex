@@ -189,6 +189,31 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
   end
 
   @doc """
+  `get_rgba_frames_single_sm`: a run of frames as wandb.Video wants them.
+
+  A frame is rows of pixels — `(height, width, channels)` — and wandb takes
+  `(channels, height, width)` per timestep, which is Monty's `np.moveaxis`. A
+  frame with no pixels has no channels to move, and is passed through as the empty
+  frame it is.
+  """
+  @spec get_rgba_frames_single_sm([map()]) :: [[[[number()]]]]
+  def get_rgba_frames_single_sm(observations) do
+    Enum.map(observations, fn observation ->
+      observation |> Map.fetch!("rgba") |> channels_first()
+    end)
+  end
+
+  defp channels_first([]), do: []
+
+  defp channels_first(rows) do
+    channels = rows |> List.first() |> List.first() |> length()
+
+    for channel <- 0..(channels - 1)//1 do
+      Enum.map(rows, fn row -> Enum.map(row, &Enum.at(&1, channel)) end)
+    end
+  end
+
+  @doc """
   `get_stats_per_lm`: every learning module's stats for one episode.
 
   Keyed `LM_0`, `LM_1` … by the module's position, which is the key Monty's CSV
