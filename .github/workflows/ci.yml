@@ -26,12 +26,22 @@ name: ci
 on:
   # Every branch gets the gates *and* an image named after itself, so a preview
   # deployment can pull `:feature-x` and `:main` (plus `:latest`) follows main.
-  # A pull request from a branch in this repository therefore runs twice — once
-  # for the push, once for the PR — which is the price of a per-branch image.
+  #
+  # What does *not* run: a commit that only touched prose. Nothing it changes is
+  # compiled, tested or shipped, and the suite is eight minutes — four of the
+  # last forty commits were of that kind. `:main` then keeps pointing at the
+  # newest commit that changed something else: the same image, a footer that
+  # names an older commit. `gh workflow run ci` publishes on demand.
   push:
     branches: ["**"]
     tags: ["v*.*.*"]
+    paths-ignore: ["**/*.md", "LICENSE"]
+  # A pull request from a branch in *this* repository is already covered by the
+  # push run for that branch, and those are the checks the pull request shows.
+  # Only a fork has no push run here — so only a fork is checked through its
+  # pull request. One run per commit, whichever door it came in by.
   pull_request:
+    paths-ignore: ["**/*.md", "LICENSE"]
   workflow_dispatch:
     inputs:
       image:
@@ -59,8 +69,11 @@ env:
   TELEOP_SOURCE: ${{ github.workspace }}/teleop
 
 jobs:
+  # Fork pull requests only: a same-repository branch has a push run already,
+  # and that run is what its pull request shows. See the trigger above.
   lint:
     name: lint
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -86,6 +99,7 @@ jobs:
 
   test:
     name: test
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
@@ -162,6 +176,7 @@ jobs:
 
   types:
     name: types
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

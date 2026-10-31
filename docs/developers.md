@@ -119,6 +119,26 @@ docker build .             # does it build at all
 scripts/quality.sh --image # builds it, checks the uid it runs as
 ```
 
+## What a run costs
+
+Measured on a warm cache (run `41189216324`): a push takes **8 m 30 s**, and
+`mix cover` inside the `test` job is **7 m 49 s** of it. `lint` and `types`
+finish in **25 seconds each** — the deps and `_build` caches carry the compile,
+so they are formatting, credo, sobelow and dialyzer over already-built beams.
+The suite is therefore the only thing worth optimising; anything else is noise
+by comparison.
+
+Two things are skipped on purpose, because they were pure cost:
+
+* a push that only changes prose (`**/*.md`, `LICENSE`) — nothing it touches is
+  compiled or shipped;
+* a pull request from a branch in this repository, whose push run has already
+  checked it and is what the pull request shows. A fork has no push run here,
+  so a fork's PR is checked through the PR.
+
+A run superseded by the next push is cancelled (`cancel-in-progress`), which
+loses its minutes but not the answer: the newer run is the one that counts.
+
 ## Adding a module
 
 1. Find the Python file and class in `lib/monty/module_map/data.ex`.
