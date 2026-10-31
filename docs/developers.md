@@ -121,12 +121,32 @@ scripts/quality.sh --image # builds it, checks the uid it runs as
 
 ## What a run costs
 
-Measured on a warm cache (run `41189216324`): a push takes **8 m 30 s**, and
-`mix cover` inside the `test` job is **7 m 49 s** of it. `lint` and `types`
-finish in **25 seconds each** — the deps and `_build` caches carry the compile,
-so they are formatting, credo, sobelow and dialyzer over already-built beams.
-The suite is therefore the only thing worth optimising; anything else is noise
-by comparison.
+Measured on a warm cache (run `41189216324`, before the suite was split): a push
+took **8 m 30 s**, and `mix cover` inside the `test` job was **7 m 49 s** of it.
+`lint` and `types` finished in **25 seconds each** — the deps and `_build`
+caches carry the compile, so they are formatting, credo, sobelow and dialyzer
+over already-built beams. The suite is therefore the only thing worth splitting,
+and anything else is noise by comparison.
+
+It is split four ways. `mix test --partitions 4` hands each runner a slice of
+the test *files*, which asks nothing of the tests themselves — no tags to
+maintain, no list to keep in step. A partition sees a quarter of the lines the
+suite can reach, so it runs with the threshold off (`COVERAGE_THRESHOLD=0`) and
+exports what it covered; the `report` job merges the four exports, holds the
+**total** to the 85% in `mix.exs` (`mix test.coverage`), and hands that same
+total to the CRAP ranking (`mix cover.merge` writes the one file `mix crap`
+reads). The parity oracles run there too, once, because a total of four
+quarters is not one of the quarters.
+
+The same three steps run at home:
+
+```bash
+for p in 1 2 3 4; do
+  MIX_TEST_PARTITION=$p COVERAGE_THRESHOLD=0 mix test --partitions 4 --cover
+done
+mix test.coverage                  # the merged total, held to the threshold
+mix cover.merge && mix complexity  # the same total, ranked
+```
 
 Two things are skipped on purpose, because they were pure cost:
 

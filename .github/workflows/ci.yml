@@ -5,9 +5,13 @@ name: ci
 #
 #   lint   compile --warnings-as-errors, formatting, credo --strict, sobelow.
 #          Fails fastest.
-#   test   Postgres, the suite with coverage, the CRAP ranking, and the two
-#          parity oracles (Monty's config snapshots and the module map) against
-#          a real Monty checkout.
+#   test   Postgres, the suite with coverage — split four ways, because it is
+#          seven minutes fifty of an eight-minute run — and the two parity
+#          oracles (Monty's config snapshots and the module map) against a real
+#          Monty checkout.
+#   report what the partitions cannot answer alone: their coverage merged and
+#          held to the 85% threshold, the CRAP ranking over that total, and the
+#          parity oracles.
 #   types  dialyzer, against a PLT the cache carries between runs.
 #   image  `docker build`, Trivy on the result, a run as uid 10001, then the
 #          image is published to GHCR under the name of the ref it was built
@@ -97,11 +101,26 @@ jobs:
       - run: mix deps.get
       - run: mix lint
 
+  # `mix test --partitions 4` hands each runner a slice of the test *files*, the
+  # only split that asks nothing of the tests themselves. A partition sees a
+  # quarter of the lines the suite can reach, so it runs with the threshold off
+  # (`COVERAGE_THRESHOLD=0`) and exports what it covered; `report` below merges
+  # the four exports and holds the total to 85.
   test:
-    name: test
+    name: test ${{ matrix.partition }}/4
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # A quarter of the suite, plus the compile and the setup.
+    timeout-minutes: 20
+    # One broken quarter still reports the other three: which quarter is the
+    # question, and cancelling them is not an answer to it.
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2, 3, 4]
+    env:
+      MIX_TEST_PARTITION: ${{ matrix.partition }}
+      COVERAGE_THRESHOLD: "0"
     services:
       postgres:
         image: postgres:17
@@ -155,9 +174,87 @@ jobs:
       - name: Prepare the database
         run: mix ecto.create --quiet && mix ecto.migrate
 
-      - run: mix cover
+      # This partition's share of the files, and the coverage it collected on
+      # the way: `--partitions` exports it to cover/<partition>.coverdata.
+      - run: mix test --partitions 4 --cover
+
+      - name: Keep this partition's coverage
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-partial-${{ matrix.partition }}
+          # The export alone: the HTML for a quarter is not worth the bytes, and
+          # the merged report generates its own.
+          path: cover/${{ matrix.partition }}.coverdata
+          # A partition that covered nothing is a broken split, not a green run.
+          if-no-files-found: error
+          retention-days: 1
+
+  # What no single partition can answer: the coverage of the whole suite, the
+  # CRAP ranking over it, and the parity oracles. Each is a total, and a total
+  # of four quarters is not one of the quarters.
+  report:
+    name: coverage, CRAP and parity
+    needs: [test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The parity oracles read Monty's own config and module tree.
+      - name: Check out Monty
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: thousandbrainsproject/tbp.monty
+          ref: ${{ env.MONTY_REVISION }}
+          path: monty-orig
+
+      - name: Check out teleop
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: thousandbrainsproject/tbp.teleop
+          ref: ${{ env.TELEOP_REVISION }}
+          path: teleop
+
+      - name: Install Erlang/Elixir
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Cache deps and build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - run: mix deps.get
+
+      # The four exports, side by side in cover/ under the names the partitions
+      # wrote — which is what both steps below expect to find there.
+      - name: Collect the partitions' coverage
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: coverage-partial-*
+          merge-multiple: true
+          path: cover
+
+      # The total, held to the threshold in mix.exs: the number one local run
+      # would report, because coverage does not care how it was gathered.
+      - name: Coverage of the whole suite
+        run: mix test.coverage
+
+      # …and that same total as the one file `mix crap` reads.
+      - name: Merge it for the CRAP ranking
+        run: mix cover.merge
+
       - run: mix complexity
 
+      # The parity oracles, once: they cost two seconds and do not depend on
+      # which partition would have run them.
       - name: Monty config parity
         run: mix monty.config.snapshots
 
@@ -172,6 +269,7 @@ jobs:
           path: |
             cover/
             default.coverdata
+          if-no-files-found: ignore
           retention-days: 14
 
   types:
@@ -205,9 +303,10 @@ jobs:
     name: image, scan, non-root, publish
     # The point of a gate is that the thing behind it cannot be reached before
     # it opens: the image is built, scanned and pushed only for a commit that
-    # passed static analysis, the suite and the types. A pull request is not a
-    # push, so it publishes nothing.
-    needs: [lint, test, types]
+    # passed static analysis, every partition of the suite, the types, and the
+    # report that merges them. A pull request is not a push, so it publishes
+    # nothing.
+    needs: [lint, test, types, report]
     runs-on: ubuntu-24.04
     # The arm64 half is built under QEMU, which is the slow part.
     timeout-minutes: 45

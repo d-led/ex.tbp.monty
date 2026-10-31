@@ -13,7 +13,7 @@ defmodule ExTbpMonty.MixProject do
       aliases: aliases(),
       deps: deps(),
       dialyzer: dialyzer(),
-      test_coverage: [summary: [threshold: 85]],
+      test_coverage: [summary: [threshold: coverage_threshold()]],
       package: package(),
       docs: docs(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
@@ -44,6 +44,17 @@ defmodule ExTbpMonty.MixProject do
   # present when an image is being built.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib", "mix_tasks"]
+
+  # One run of the whole suite sees every line the suite can reach, so 85 is a
+  # total. CI splits the suite across partitions and each sees a slice of it —
+  # `COVERAGE_THRESHOLD=0` there — and the merged report (`mix test.coverage`)
+  # holds the total to this number, exactly as one local run does.
+  defp coverage_threshold do
+    case System.get_env("COVERAGE_THRESHOLD") do
+      value when value in [nil, ""] -> 85
+      value -> String.to_integer(value)
+    end
+  end
 
   defp package do
     [
