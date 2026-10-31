@@ -42,6 +42,20 @@ REPO = Path(__file__).resolve().parents[1]
 DEFAULT_PAGE = REPO / "docs" / "features.md"
 
 
+def _classes(block: str) -> str:
+    """One entry's `classes:` list, however the generator laid it out.
+
+    A class is written over four lines when it was generated, and on one line
+    when a person added an exclusion by hand; both are classes, and both have
+    exactly one `status:` inside the list.
+    """
+    wrapped = re.search(r"\n      classes: \[(.*?)\]", block, re.S)
+    if wrapped is not None:
+        return wrapped.group(1)
+    inline = re.search(r"classes: \[(.*?)\]", block, re.S)
+    return inline.group(1) if inline else ""
+
+
 class Counters:
     """The numbers, measured once and read by every pattern below."""
 
@@ -69,7 +83,7 @@ class Counters:
             package = re.search(r'\n      package: "(\w+)"', block)
             if package:
                 packages[package.group(1)] += 1
-            classes.update(re.findall(r"\n          status: :(\w+)", block))
+            classes.update(re.findall(r"status: :(\w+)", _classes(block)))
         return {"files": files, "packages": packages, "classes": classes}
 
     @staticmethod
@@ -83,7 +97,9 @@ class Counters:
 
     def _snapshots(self) -> int:
         source = Path(os.environ.get("MONTY_SOURCE", REPO.parent / "monty-orig"))
-        # SnapshotCheck collects `Path.join(dir, "*.yaml")`: one level, not a walk.
+        # SnapshotCheck walks the tree (`**/*.yaml`), because nine of Monty's
+        # snapshots are the tour's, under `tutorial/`. A one-level glob counted
+        # 54 of the 63's the gate actually composes.
         snapshot_dir = source / "tests" / "conf" / "snapshots"
         if not snapshot_dir.is_dir():
             raise SystemExit(
@@ -91,7 +107,7 @@ class Counters:
                 "point MONTY_SOURCE at a tbp.monty checkout (default ../monty-orig)"
             )
         self._warn_on_moved_checkout(source)
-        return len(list(Path(snapshot_dir).glob("*.yaml")))
+        return len(list(Path(snapshot_dir).rglob("*.yaml")))
 
     def _warn_on_moved_checkout(self, source: Path) -> None:
         try:
