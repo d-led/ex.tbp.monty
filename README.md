@@ -31,8 +31,10 @@ Docker is all it needs. `scripts/quickstart.sh --stop` stops it and keeps the
 database and the app's files; `--purge` deletes them as well.
 
 The page you land on lists every experiment Monty ships. Open one, press run,
-and the steps stream as they happen: what the sensor saw, the evidence each
-learning module built, and the votes.
+and the run streams as it steps: the step log, the evidence each learning module
+built, and the votes. A finished run stays in the history, where it can be
+replayed step by step — what the sensor saw, the hypotheses counted, and why it
+stopped.
 
 Nothing large is in the image. Data and pretrained models are downloaded at
 `/prerequisites`, into the same paths Monty uses, and a run says what it is
