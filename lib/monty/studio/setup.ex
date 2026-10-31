@@ -318,15 +318,24 @@ defmodule Monty.Studio.Setup do
   `monty_args` come with it: how many steps each step type must last before
   anything may conclude is a property of the run, and a model given none of
   them would check the terminal condition on its first step.
+
+  Options: `:has_detailed_logger` — whether this run's logging wants the whole
+  hypothesis space per step. It is the experiment's answer, not the config's,
+  because it follows from which handlers the logging section names.
   """
-  @spec model_spec(t(), atom() | String.t()) :: map()
-  def model_spec(%__MODULE__{} = setup, model_id) do
+  @spec model_spec(t(), atom() | String.t(), keyword()) :: map()
+  def model_spec(%__MODULE__{} = setup, model_id, opts \\ []) do
+    detailed? = Keyword.get(opts, :has_detailed_logger, false)
+
     Map.merge(
       %{
         model_id: model_id,
         sensor_modules: Enum.map(setup.sensors, &sensor_module_spec/1),
         learning_modules:
-          Enum.map(setup.learning_modules, &learning_module_spec(&1, memory_for(setup))),
+          Enum.map(
+            setup.learning_modules,
+            &learning_module_spec(&1, memory_for(setup), detailed?)
+          ),
         sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
         lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
         lm_to_lm_vote: inputs_by_learning_module(setup, :vote),
@@ -482,11 +491,16 @@ defmodule Monty.Studio.Setup do
   # experiment rather than of a topology that merely looks like it.
   # A module with no pretrained memory is built the way Monty builds one before
   # loading a state dict into it: with the empty memory the module makes itself.
-  defp learning_module_spec(lm, :none),
-    do: build_learning_module(lm, &EvidenceGraphLM.from_config/1)
+  defp learning_module_spec(lm, :none, detailed?),
+    do:
+      build_learning_module(lm, &EvidenceGraphLM.from_config(&1, has_detailed_logger: detailed?))
 
-  defp learning_module_spec(lm, memory),
-    do: build_learning_module(lm, &EvidenceGraphLM.from_config(&1, memory: memory))
+  defp learning_module_spec(lm, memory, detailed?) do
+    build_learning_module(
+      lm,
+      &EvidenceGraphLM.from_config(&1, memory: memory, has_detailed_logger: detailed?)
+    )
+  end
 
   defp build_learning_module(lm, build) do
     case build.(lm.config) do

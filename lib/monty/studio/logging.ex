@@ -31,7 +31,7 @@ defmodule Monty.Studio.Logging do
   `nil` when the config names a logger this port does not have. `notes` are for a
   person: one line per class that was skipped, in the order the config named them.
   """
-  @type plan :: %{logger: struct() | nil, notes: [String.t()]}
+  @type plan :: %{logger: struct() | nil, notes: [String.t()], detailed?: boolean()}
 
   @doc """
   Builds the logger an experiment's config asks for.
@@ -45,12 +45,25 @@ defmodule Monty.Studio.Logging do
     case logger_module(logging.logger) do
       {:ok, module} ->
         {handlers, notes} = handlers(logging.handlers)
-        %{logger: module.new(handlers), notes: notes}
+        %{logger: module.new(handlers), notes: notes, detailed?: wants_detail?(handlers)}
 
       {:error, note} ->
-        %{logger: nil, notes: [note]}
+        %{logger: nil, notes: [note], detailed?: false}
     end
   end
+
+  @doc """
+  Whether a run should ask its modules for the whole hypothesis space.
+
+  Monty's rule, from `init_monty_data_loggers`: the flag the experiment sets on
+  every learning module follows from a handler's own `log_level()`, so the
+  configured handlers decide it and not a separate switch. A run whose handlers
+  want only the BASIC stats keeps none of it, because collecting it is not free.
+  """
+  @spec detailed?(plan()) :: boolean()
+  def detailed?(%{detailed?: detailed?}), do: detailed?
+
+  defp wants_detail?(handlers), do: Enum.any?(handlers, &(&1.__struct__.log_level() == :detailed))
 
   @doc """
   What this plan writes, in one line for a run's log.

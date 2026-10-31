@@ -274,7 +274,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         max_nneighbors:
           get_in(config, ["hypotheses_updater_args", "max_nneighbors"]) || @default_max_nneighbors,
         hypotheses_updater: updater,
-        gsg: goal_generator(config)
+        gsg: goal_generator(config),
+        # The experiment's, not the config's: a run that logs detail asks its
+        # modules for it, which is Monty's `lm.has_detailed_logger` set by
+        # `init_monty_data_loggers`.
+        has_detailed_logger: Keyword.get(options, :has_detailed_logger, false)
       )
     end
   end

@@ -147,6 +147,13 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert is_list(lm["locations"])
       assert is_list(lm["stepwise_targets_list"])
       assert is_list(entry["motor_system"]["action_sequence"])
+
+      # A handler that wants the DETAILED level is what makes the modules keep the
+      # hypothesis space, so the evidence trace is in the file and not only the
+      # buffer's pose — Monty's `init_monty_data_loggers`, end to end.
+      assert is_list(lm["evidences"])
+      assert is_list(lm["possible_matches"])
+      assert [%{} | _] = lm["possible_locations"]
     end
   end
 

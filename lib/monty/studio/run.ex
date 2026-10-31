@@ -56,7 +56,8 @@ defmodule Monty.Studio.Run do
 
   Options: `:steps` (how many timesteps this run is for, used for the
   controller's progress), `:model_id`, `:episode` (which episode of the epoch it
-  is, counted from zero).
+  is, counted from zero), and `:has_detailed_logger` (whether this run's logging
+  wants the whole hypothesis space per step).
 
   The episode number is not bookkeeping: a run's random draws come from the
   seed its episode derives from the experiment's, so the same experiment and a
@@ -70,7 +71,11 @@ defmodule Monty.Studio.Run do
 
     episode = Keyword.get(opts, :episode, 0)
 
-    spec = Setup.model_spec(setup, model_id)
+    spec =
+      Setup.model_spec(setup, model_id,
+        has_detailed_logger: Keyword.get(opts, :has_detailed_logger, false)
+      )
+
     model = Setup.model_class(setup)
 
     with {:ok, factories} <- Setup.positioning_procedures(setup),

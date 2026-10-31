@@ -80,7 +80,15 @@ defmodule Monty.Studio.Jobs.Run do
     record = attach_log(record, run_id, log_ready)
     sensor_ids = Setup.sensor_ids(opened.setup)
 
-    case Run.start(opened.setup, steps: record.steps) do
+    # What this run will leave behind is the config's answer, not the page's: the
+    # handlers it names are also what decides whether the modules keep the whole
+    # hypothesis space, which is Monty's `init_monty_data_loggers`.
+    logging = Logging.open(opened.setup)
+
+    case Run.start(opened.setup,
+           steps: record.steps,
+           has_detailed_logger: Logging.detailed?(logging)
+         ) do
       {:ok, run} ->
         Registry.register(Monty.Runtime.Registry, key(run_id), run.model_id)
 
@@ -91,11 +99,8 @@ defmodule Monty.Studio.Jobs.Run do
 
         broadcast(run_id, {:started, record.steps})
 
-        # What this run will leave behind is the config's answer, not the page's:
-        # a class the config names that this port does not have is said out loud
+        # A class the config names that this port does not have is said out loud
         # once, at the start, and the run goes on without it.
-        logging = Logging.open(opened.setup)
-
         Enum.each(
           logging.notes ++ Logging.describe(logging, Artifacts.dir(run_id)),
           &say(run_id, &1)

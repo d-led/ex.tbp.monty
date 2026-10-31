@@ -111,6 +111,16 @@ defmodule Monty.Studio.LoggingTest do
     assert note =~ "names no data logger"
   end
 
+  test "asks the modules for detail only when a handler wants it" do
+    # Monty's `init_monty_data_loggers`: the flag on every learning module follows
+    # from a handler's own `log_level()`. The CSV handler wants the BASIC stats;
+    # the JSON handler wants the DETAILED pool.
+    assert Logging.detailed?(plan(@csv_and_json))
+    refute Logging.detailed?(plan(@csv_and_wandb))
+    refute Logging.detailed?(plan(@silent))
+    refute Logging.detailed?(plan(@nothing_named))
+  end
+
   test "reporting into a plan with no logger is skipped rather than an error" do
     assert {:skipped, %{logger: nil}} =
              Logging.report(%{logger: nil, notes: []}, run(), "/tmp/runs")
