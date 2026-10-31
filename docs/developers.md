@@ -6,20 +6,56 @@ Deployment and operations live in the Dockerfile and `rel/`.
 ## Local setup
 
 ```bash
-docker compose up -d     # Postgres on :6432
-mix setup
-mix phx.server
+scripts/init-dev.sh    # Postgres in Docker, dependencies, database, assets
+scripts/run-dev.sh     # http://localhost:4000
 ```
 
-Tests need the same database; `mix test` creates and migrates it. **No Monty
-checkout is needed** to compile, test or build: what the application reads from
-Monty — its config tree and the snapshots the composer is held to — is checked
-in under `priv/monty`, copied by `mix monty.inputs` and refreshed
-deliberately (its revision is in `priv/monty/inputs.json`).
+`init-dev.sh` needs Elixir 1.20 with the OTP it runs on, node/npm for the asset
+bundle, and Docker for the Postgres `config/dev.exs` expects on port 6432; it
+runs `docker compose up -d` and `mix setup`, and is worth running again after a
+pull that moves a dependency or a migration. `run-dev.sh` is `mix phx.server`
+with the code reloader — `PORT=4001 scripts/run-dev.sh` moves it, and
+`MONTY_WORLD=monty MONTY_PYTHON=… scripts/run-dev.sh` steps Monty's own
+simulator instead of the synthetic scene.
 
-A checkout is needed only to regenerate: `mix monty.module_map.gen` reads the
+Tests need the same database; `mix test` creates and migrates it.
+
+## Where the code is
+
+```
+lib/monty/               the port: CMP, config, geometry, models, runtime, studio
+lib/monty/runtime/       processes only — step barriers, vote rounds, routing
+lib/monty/studio/        experiments, setups, run history (the app's domain)
+lib/monty/simulators/    the world: synthetic, port protocol, recordings
+lib/ex_tbp_monty/        the OTP application: repo, MCP server, release plumbing
+lib/ex_tbp_monty_web/    Phoenix endpoint, LiveViews, components
+priv/monty/              Monty's config tree and snapshots, verbatim; exported pretrained libraries
+priv/prerequisites.yaml  what a run downloads, checksummed
+THIRD-PARTY.md           what this project did not write, and under which terms
+docs/                    architecture, config compatibility, module map, MCP, validation
+```
+
+## Monty's configs, in the repository
+
+What the application reads from Monty — its config tree, `priv/monty/conf`, and
+the snapshots the composer is held to, `priv/monty/snapshots` — is checked in
+verbatim, so **no Monty checkout is needed** to compile, test or run this.
+
+Refreshing the copy does need one:
+
+```bash
+export MONTY_SOURCE=../monty-orig   # the default: monty-orig next to the project
+mix monty.inputs                    # fast-forward it, then copy conf + snapshots
+mix monty.inputs --check            # is the copy what that checkout would give?
+```
+
+The revision it was copied from is in `priv/monty/inputs.json`, and
+`priv/monty/README.md` says what is in the copy, what deliberately is not, and
+whose licence it is under.
+
+A checkout is needed to regenerate too: `mix monty.module_map.gen` reads the
 Python of both packages (`MONTY_SOURCE`, `TELEOP_SOURCE`, default `../monty-orig`
-and `../tbp.teleop`), and `mix monty.port_census` reads it too.
+and `../tbp.teleop`), and `mix monty.port_census` reads it as well.
 
 ## Invariants
 
