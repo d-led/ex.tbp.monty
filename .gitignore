@@ -253,3 +253,4 @@ wandb/
 
 # Whatever a run downloads or generates into Monty's own paths.
 /data/
+MUJOCO_LOG.TXT
