@@ -29,7 +29,6 @@ config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
 # there is no deployment-wide override, because a world chosen per run is
 # recorded on the run and that is the only place the answer belongs.
 
-
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,

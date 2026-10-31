@@ -227,7 +227,7 @@ defmodule ExTbpMontyWeb.Layouts do
       navigate={@navigate}
       data-nav
       title={@label}
-      class="flex items-center gap-2.5 rounded-field px-2 py-2 text-sm text-base-content/75 transition hover:bg-base-200 hover:text-base-content data-[active]:bg-primary/10 data-[active]:font-medium data-[active]:text-primary"
+      class="flex items-center gap-2.5 rounded-field px-2 py-2 text-sm text-base-content/75 transition hover:bg-base-200 hover:text-base-content data-[active]:bg-primary/10 data-[active]:font-semibold data-[active]:text-base-content data-[active]:shadow-[inset_2px_0_0_var(--color-primary)]"
     >
       <.icon name={@icon} class="size-4 shrink-0 opacity-70" />
       <span class="truncate group-data-[collapsed]:hidden">{@label}</span>
@@ -271,7 +271,7 @@ defmodule ExTbpMontyWeb.Layouts do
             <a
               :if={ci_run_url(@build)}
               href={ci_run_url(@build)}
-              class="font-mono text-primary hover:underline"
+              class="font-mono underline decoration-primary decoration-2 underline-offset-2 hover:decoration-base-content"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -284,7 +284,7 @@ defmodule ExTbpMontyWeb.Layouts do
             id="source-repo"
             href={@repo}
             aria-label="Source code on GitHub"
-            class="inline-flex items-center gap-1 hover:text-primary"
+            class="inline-flex items-center gap-1 hover:opacity-70"
             target="_blank"
             rel="noopener noreferrer"
           >
