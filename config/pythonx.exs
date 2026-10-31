@@ -17,6 +17,14 @@ config :pythonx, :uv_init,
   requires-python = "==3.13.*"
   dependencies = [
     "wandb==0.31.0",
+    # MuJoCo is the physics engine a MuJoCo experiment's world steps, and this is
+    # the interpreter this application owns: without it here, "is MuJoCo
+    # available?" is a question about whatever `python3` happens to be on the
+    # PATH rather than about the deployment. It is an ordinary wheel on every
+    # platform this project runs on, so it costs a dependency line and nothing
+    # else. Habitat-Sim has no wheel at all — it comes from conda, which is what
+    # `environment.yml` in a Monty checkout is for.
+    "mujoco",
     # Floors, not pins: these arrive as wandb's own dependencies, and the version
     # that lands is the one a scanner reads. `wandb==0.31.0` pulls urllib3 2.7.0
     # and msgpack 1.1.2, each with a fix above it — a TLS-interception and a

@@ -24,6 +24,22 @@ defmodule ExTbpMonty.EmbeddedPythonTest do
     end
   end
 
+  describe "imports?/1" do
+    test "the engine the build installs into it is importable" do
+      assert EmbeddedPython.imports?("mujoco")
+    end
+
+    test "a package that is not in it is a no, not a crash" do
+      refute EmbeddedPython.imports?("a_module_nobody_installed")
+    end
+
+    test "a name is a module, never a line of code" do
+      assert_raise ArgumentError, fn ->
+        EmbeddedPython.imports?("os; os.system('true')")
+      end
+    end
+  end
+
   describe "wandb_mode/0" do
     test "wandb's own default applies when nothing says otherwise" do
       set_wandb_mode(nil)

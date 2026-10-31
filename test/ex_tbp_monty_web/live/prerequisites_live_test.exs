@@ -62,6 +62,19 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert view |> element("#embedded-python-wandb") |> render() =~ "wandb"
   end
 
+  # The interpreter this build carries is where MuJoCo is installed
+  # (`config/pythonx.exs`), so "is MuJoCo here?" must be asked of *it* — a page
+  # that asks whatever `python3` the PATH offers reported a machine with MuJoCo
+  # on it as one without.
+  test "the embedded interpreter says which engines it can import", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    assert view |> element("#embedded-engine-mujoco") |> render() =~ "MuJoCo: installed"
+
+    assert view |> element("#embedded-engine-habitat") |> render() =~
+             "Habitat-Sim: not available here"
+  end
+
   # A download that fills the disk is the failure this page exists to make
   # visible, so the room it writes into is answered before the click.
   test "the page says how much room is left where the downloads land", %{conn: conn, tmp: tmp} do

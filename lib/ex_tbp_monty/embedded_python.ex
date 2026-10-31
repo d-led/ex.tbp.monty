@@ -22,6 +22,7 @@ defmodule ExTbpMonty.EmbeddedPython do
   """
 
   @term {__MODULE__, :version}
+  @imports {__MODULE__, :imports}
 
   @doc """
   The interpreter's version, or why it could not be asked.
@@ -53,6 +54,43 @@ defmodule ExTbpMonty.EmbeddedPython do
   end
 
   @doc """
+  Whether the interpreter this application carries can import a module.
+
+  "Is MuJoCo here?" is a question about *this* interpreter: `config/pythonx.exs`
+  is where the build installs packages into it, and the answer travels with the
+  release. Asking `python3` on the PATH instead answers a question about the
+  operator's machine — which is how a deployment with MuJoCo in it came to report
+  that MuJoCo was missing.
+
+  Asked once and kept, like the version: the environment cannot change while the
+  node runs.
+  """
+  @spec imports?(String.t()) :: boolean()
+  def imports?(module) when is_binary(module) do
+    # Before the lookup, so a name that is not a module can never be cached and
+    # can never reach the interpreter as anything but a lookup.
+    unless Regex.match?(~r/\A[a-zA-Z_][a-zA-Z0-9_.]*\z/, module) do
+      raise ArgumentError, "not a module name: #{inspect(module)}"
+    end
+
+    key = {@imports, module}
+
+    case :persistent_term.get(key, :unloaded) do
+      :unloaded ->
+        answer = ask_import(module)
+
+        # A no is not cached for the same reason a failed version is not: an
+        # interpreter that could not answer at one moment is worth asking again.
+        if answer, do: :persistent_term.put(key, true)
+
+        answer
+
+      true ->
+        true
+    end
+  end
+
+  @doc """
   Drops the cached version. The suite calls this: `:persistent_term` is not
   rolled back between tests.
   """
@@ -67,6 +105,20 @@ defmodule ExTbpMonty.EmbeddedPython do
     {:ok, Pythonx.decode(code)}
   rescue
     exception -> {:error, Exception.message(exception)}
+  end
+
+  # The name is passed as a global rather than interpolated into the source, so
+  # this stays a lookup rather than a line of code.
+  defp ask_import(module) do
+    {code, _globals} =
+      Pythonx.eval(
+        "import importlib.util\nimportlib.util.find_spec(MODULE.decode()) is not None",
+        %{"MODULE" => module}
+      )
+
+    Pythonx.decode(code) == true
+  rescue
+    _cannot_ask -> false
   end
 
   # A failure is not cached: an interpreter that did not answer at one moment is

@@ -172,8 +172,27 @@ defmodule Monty.Prerequisites do
   @spec python() :: String.t() | nil
   def python, do: System.get_env("MONTY_PYTHON") || System.find_executable("python3")
 
-  defp package(:mujoco), do: "mujoco"
-  defp package(:habitat), do: "habitat_sim"
+  @doc """
+  Whether an operator named the interpreter, rather than the page falling back
+  to `python3` on the PATH.
+
+  The difference is the whole answer to "is MuJoCo here?": a machine can have an
+  interpreter with Monty and MuJoCo in it and still have a PATH `python3` that
+  has neither, and a page that cannot tell the two apart blames the engine for
+  the configuration.
+  """
+  @spec python_configured?() :: boolean()
+  def python_configured?, do: System.get_env("MONTY_PYTHON") not in [nil, ""]
+
+  @doc """
+  The package an engine's own code lives in.
+
+  Public because two different interpreters are asked about it: the one the
+  world runs in (`engine_installed?/1`) and the one this application carries.
+  """
+  @spec package(:mujoco | :habitat) :: String.t()
+  def package(:mujoco), do: "mujoco"
+  def package(:habitat), do: "habitat_sim"
 
   # sobelow_skip ["CI.System"]
   # The command is the interpreter an operator named in `MONTY_PYTHON` — an
