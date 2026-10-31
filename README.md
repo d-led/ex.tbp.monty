@@ -26,9 +26,9 @@ docker compose up
 
 Then <http://localhost:4001>: every experiment Monty ships, and a run you can
 start from any of them. The published image and a Postgres, the migration runs
-itself, Monty's config tree and pretrained libraries are in the image, and the
-data and model bundles `/prerequisites` downloads are kept in a volume — so an
-`up` after a `down` does not fetch them again.
+itself, Monty's config tree and pretrained libraries are in the image — and the
+database and the bundles `/prerequisites` downloads both sit in volumes, so a
+`down` and an `up` is a restart, not a re-fetch and a re-run.
 
 ## An MCP server
 

@@ -2,9 +2,11 @@
 #
 #   docker compose up
 #
-# Then http://localhost:4001. What a run writes lives in containers and goes
-# with `docker compose down`; what `/prerequisites` downloads survives it, in a
-# volume of its own, so the next `up` does not fetch it again.
+# Then http://localhost:4001. Two named volumes keep what costs something to
+# make — the run history in Postgres, and the data and model bundles
+# `/prerequisites` downloads — so `docker compose down` followed by `up` is a
+# restart, not a re-download and a re-run. `docker compose down -v` deletes both.
+# Postgres is on the compose network only: no port of its own on the host.
 #
 # `TAG=v1.2.3 docker compose up` runs a release instead of `:latest`; the tags
 # are in docs/container.md, which also has every variable the image reads.
@@ -18,6 +20,8 @@ services:
       POSTGRES_DB: monty
       POSTGRES_USER: monty
       POSTGRES_PASSWORD: monty
+    volumes:
+      - db:/var/lib/postgresql/data
     healthcheck:
       test: pg_isready -U monty -d monty
       interval: 2s
@@ -53,4 +57,5 @@ services:
         condition: service_completed_successfully
 
 volumes:
+  db:
   prerequisites:
