@@ -449,3 +449,15 @@ jobs:
             CI_RUN_URL=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           cache-from: type=gha,scope=image
           cache-to: type=gha,scope=image
+
+      # "Multi-arch" is checked rather than claimed: a release publishes an
+      # index, and the one thing worth proving about it is that both
+      # architectures are in it — a tag that quietly carried one platform
+      # would only surface on the machine that pulled it.
+      - name: The published index carries both architectures
+        if: steps.image.outputs.platforms != 'linux/amd64'
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "${{ steps.image.outputs.ref }}" | tee /tmp/index.txt
+          grep -q 'linux/amd64' /tmp/index.txt
+          grep -q 'linux/arm64' /tmp/index.txt

@@ -196,7 +196,9 @@ The image runs as **uid 10001** and needs no privilege of any kind — no root, 
 writable filesystem outside the volume. `CI` scans it with Trivy before pushing,
 and the publishing job starts it as that uid. [docs/container.md](docs/container.md)
 is the operator's page: every variable the release reads, what is on the volume,
-and what the app reports about itself.
+where the data and models come from, and what the app reports about itself.
+From a checkout, `scripts/image.sh build` → `run` → `smoke` → `publish` does the
+same work under the same image name.
 
 One directory is writable, `/app/priv`, and everything that writes is pointed
 at it, because a release resolves those paths somewhere else: the studio's

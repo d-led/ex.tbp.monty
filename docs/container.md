@@ -27,6 +27,28 @@ docker run --rm -p 4000:4000 \
 Then <http://localhost:4000> — every experiment Monty ships, and a run you can
 start from any of them.
 
+## The script, if you have the checkout
+
+`scripts/image.sh` is the same thing under the same image name, for a local
+tree: it builds with the build arguments CI passes, runs the shape this page
+describes, and can publish both architectures.
+
+```bash
+scripts/image.sh build              # ghcr.io/d-led/ex.tbp.monty:local, from this tree
+scripts/image.sh smoke              # build, migrate, serve, wait for /health, report, stop
+scripts/image.sh run                # serve in the foreground (reads DATABASE_URL)
+scripts/image.sh run --data ~/tbp   # …with a Monty tree mounted read-only
+scripts/image.sh run --pull --tag main  # the published image instead
+scripts/image.sh publish --tag main # buildx amd64 + arm64, pushed to GHCR
+scripts/image.sh logs               # follow it
+scripts/image.sh stop               # stop it and remove its volume
+```
+
+A single architecture is loaded into the local daemon; `--arch all` (and
+`publish`) builds amd64 and arm64 into one index and pushes it, which is what a
+release tag publishes. `--arch amd64|arm64` cross-builds one platform the same
+way.
+
 ## Tags
 
 | Built from | Tags |
@@ -128,6 +150,45 @@ these a run steps this port's synthetic scene, and the setup page says so.
 Not used by the image, though they exist in a checkout: `MONTY_SOURCE` and
 `TELEOP_SOURCE` (the parity checks read those checkouts), `PYTHON` (one Mix
 task), `MIX_TEST_PARTITION` and `COVERAGE_THRESHOLD` (CI).
+
+## Data and models: the prerequisites
+
+The image carries the software, not the data. Monty's datasets and pretrained
+models are large, they change on their own schedule, and a pull that shipped
+them would be a pull nobody wants. `/prerequisites` lists what an experiment
+needs, the path each file goes to, and which of them are already there.
+
+Three ways to have them:
+
+| Where they come from | How |
+| --- | --- |
+| downloaded by the running app | open `/prerequisites` and press download. Each file streams to a `.part` name on the volume and is moved into place only when its size and checksum match |
+| a Monty tree you already have | `-v ~/tbp:/app/priv/tbp:ro` — the defaults hang off `HOME`, which is `/app/priv`, so `~/tbp` inside the container is exactly where this machine's `~/tbp` lands. `scripts/image.sh run --data ~/tbp` is this row with the flag spelled out |
+| anywhere else | `-e MONTY_DATA=… -e MONTY_MODELS=… -e MONTY_LOGS=…` — the variables Monty's own documentation uses — each pointing at a mounted path |
+
+A read-only mount is enough to *run* against data you already have. Downloading
+into it needs write access, so leave the mount out (or make it writable) when the
+app should fetch them itself; either way they land on the volume and survive a
+restart.
+
+Nothing is fetched at boot: an offline container runs any experiment whose files
+are in place, and `/prerequisites` is what says which ones are missing.
+
+### The embedded Python is not one of them
+
+pythonx's environment — CPython and the packages named in `config/pythonx.exs` —
+is built when the release is *compiled*: uv downloads and installs it then, which
+is most of the image's size. At run time nothing is downloaded and nothing is
+written; `pythonx` starts the interpreter from the release's `priv` on the boot
+path, so a run pays no first-use penalty for having Python at all — starting it
+measures in the low hundreds of milliseconds of boot.
+
+The one thing that *is* lazy is `import wandb` inside that interpreter: about a
+second, once, on the first run that names a wandb logger. Paying it at boot for a
+process that may never log to wandb would be the worse trade, so it is left
+where it is. `/prerequisites` shows the interpreter's version and where a run
+would report — `wandb disabled` in this image — which is the pair worth knowing
+before a run.
 
 ## What is on the volume, and what owns it
 

@@ -39,6 +39,16 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert render(view) =~ "not downloaded"
   end
 
+  test "the page says which Python it carries, and where a run would report", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    # Not a download: part of the build, and the page says so rather than
+    # leaving a run's loggers to fail quietly.
+    assert has_element?(view, "#embedded-python")
+    assert view |> element("#embedded-python-version") |> render() =~ "Python"
+    assert view |> element("#embedded-python-wandb") |> render() =~ "wandb"
+  end
+
   test "a click downloads and the row reports the result", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 

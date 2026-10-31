@@ -12,6 +12,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   use ExTbpMontyWeb, :live_view
 
+  alias ExTbpMonty.EmbeddedPython
   alias Monty.Prerequisites
   alias Monty.Prerequisites.Download
 
@@ -25,7 +26,9 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
      assign(socket,
        prerequisites: prerequisites,
        statuses: Map.new(prerequisites, &{&1.id, nil}),
-       present: Map.new(prerequisites, &{&1.id, Prerequisites.present?(&1)})
+       present: Map.new(prerequisites, &{&1.id, Prerequisites.present?(&1)}),
+       python: EmbeddedPython.version(),
+       wandb: EmbeddedPython.wandb_mode()
      )}
   end
 
@@ -102,6 +105,36 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
             </div>
           </article>
         </div>
+
+        <%!--
+          The one dependency that is not a download. Monty's loggers call wandb
+          through a CPython this build carries, so a page answering "am I ready
+          to run?" has to say whether that interpreter answered and where a run
+          would send its numbers — an absent interpreter would only surface as a
+          logger that quietly did nothing.
+        --%>
+        <article
+          id="embedded-python"
+          class="rounded-box border border-base-300 bg-base-100 p-4"
+        >
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="space-y-1">
+              <h2 class="font-semibold">Embedded Python</h2>
+              <p class="text-sm text-base-content/70">
+                Part of this build, not a download: Monty's loggers call <code>wandb</code>
+                through a CPython that travels in the release
+                and starts with the application.
+              </p>
+              <p id="embedded-python-version" class="font-mono text-xs text-base-content/60">
+                {version_label(@python)}
+              </p>
+            </div>
+
+            <span id="embedded-python-wandb" class={["badge", wandb_badge(@wandb)]}>
+              {wandb_label(@wandb)}
+            </span>
+          </div>
+        </article>
       </section>
     </Layouts.app>
     """
@@ -187,4 +220,16 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   defp format_unit(value, [_unit | rest]), do: format_unit(value / 1024, rest)
   defp format_unit(value, []), do: "#{value} B"
+
+  defp version_label({:ok, version}), do: "Python #{version} · answered"
+
+  defp version_label({:error, reason}),
+    do: "the interpreter did not answer: #{reason}"
+
+  defp wandb_label("disabled"), do: "wandb disabled"
+  defp wandb_label("offline"), do: "wandb offline"
+  defp wandb_label(mode), do: "wandb #{mode}"
+
+  defp wandb_badge("disabled"), do: "badge-ghost"
+  defp wandb_badge(_mode), do: "badge-info"
 end
