@@ -62,7 +62,8 @@ mix monty.config.snapshots
 
 composes every experiment and compares it, path by path, with
 `<checkout>/tests/conf/snapshots/`. Both missing and extra keys are
-differences. The current state: **103 of 103 match**.
+differences, so a green run means every snapshot matches; the task prints how
+many it compared.
 
 The same check runs as a test (`test/monty/config/composer_test.exs`) and in CI
 against a pinned Monty revision.

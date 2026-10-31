@@ -77,9 +77,9 @@ verifier fails when:
 
 * an `excluded` entry has no reason.
 
-Current state: 131 modules — 3 implemented, 124 planned, 4 excluded (Hydra's own
-tooling, superseded by `Monty.Config`); 124 come from `tbp/monty` and 7 from
-`tbp/teleop`.
+The current counts are what `mix monty.module_map.verify` prints. They live
+there and in `data.ex`, never here: a number copied into prose is wrong by the
+next commit.
 
 The generated file's counts are the honest progress bar for the port: the UI
 will show per-experiment how much of the config it needs is already

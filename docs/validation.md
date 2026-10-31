@@ -108,8 +108,8 @@ arithmetic amplifying float32 from the export.
 
 | What | Command | Result |
 |---|---|---|
-| Monty's Hydra YAML composes to the same tree | `mix monty.config.snapshots` | 103 of Monty's committed snapshots match |
-| Every Monty file has an Elixir module by the one naming rule | `mix monty.module_map.verify` | 131 modules, 46 implemented, 81 planned, 4 excluded |
+| Monty's Hydra YAML composes to the same tree | `mix monty.config.snapshots` | every committed snapshot matches, and the task prints how many it compared |
+| Every Monty file has an Elixir module by the one naming rule | `mix monty.module_map.verify` | every file has an entry, and the task prints the implemented/planned/excluded split |
 
 ## Run: the prologue a studio run now has
 

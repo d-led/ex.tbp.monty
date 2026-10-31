@@ -21,8 +21,8 @@ a trade-off:
 | --- | --- |
 | Phoenix/OTP app, Postgres, quality gates, CI | done |
 | `Monty.Cmp`, `Monty.Geometry` | done |
-| `Monty.Config` — Hydra composition, resolvers, 103/103 snapshot parity | done |
-| `Monty.ModuleMap` — 131 modules mapped, target resolution, verification | done |
+| `Monty.Config` — Hydra composition, resolvers, snapshot parity (`mix monty.config.snapshots`) | done |
+| `Monty.ModuleMap` — every Monty file mapped, target resolution, verification | done |
 | `Monty.Runtime` — one process per module, step barriers, vote rounds with deadlines | done |
 | `Monty.Studio` — faceted index, setup + checks, builder, diagram, synthetic run, frames | done |
 | `Monty.Prerequisites` — streaming downloads into Monty's paths | done |

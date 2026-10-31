@@ -2,7 +2,8 @@
 
 What this repository does, checked in the tree on 2026-10-31. Every claim links to
 the thing that proves it. Anything not built is listed at the end, so nobody has to
-guess. Counts are the ones measured here, not from older prose.
+guess. The counts are measured by [`scripts/refresh_features.py`](../scripts/refresh_features.py),
+not recalled — run it after anything lands that can move one.
 
 ## Port
 
@@ -73,7 +74,7 @@ guess. Counts are the ones measured here, not from older prose.
 - `/jobs` — the Oban queue, with cancel (ends at the next step) and kill.
 - `/prerequisites` — data and pretrained models downloaded into Monty's own
   `MONTY_DATA` / `MONTY_MODELS` paths: streamed, written to `<target>.part`, renamed
-  only when the checksum matches. Two entries in
+  only when the checksum matches — 2 entries in
   [`priv/prerequisites.yaml`](../priv/prerequisites.yaml).
 - `/health` answers 200 and nothing else; a CSP header is set for the browser scope;
   there is no authentication. ([`router.ex`](../lib/ex_tbp_monty_web/router.ex))
@@ -141,7 +142,7 @@ config would not start, so CI can use it. `mix lint`, `mix cover`, `mix complexi
   + daisyUI 5 + heroicons, `yaml_elixir` for Hydra YAML, `pythonx` for Python.
   ([`mix.exs`](../mix.exs))
 - `docker compose up -d` gives Postgres 17 and adminer. ([compose](../docker-compose.yml))
-- 1,684 `test "` cases in the suite.
+- 1,683 `test` declarations in the suite.
 
 ## Not built — do not assume these
 
