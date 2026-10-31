@@ -496,6 +496,23 @@ defmodule Monty.Studio.Setup do
   def world(%__MODULE__{world: world} = setup), do: world(setup, world)
 
   @doc """
+  Which world this experiment would step, in the words a page can show.
+
+  The difference is not cosmetic: `:habitat` runs Monty's own `HabitatEnvironment`
+  in a Python process — MuJoCo, or Habitat for the experiments that still use it
+  — and its numbers are Monty's. `:synthetic` is this port's stand-in scene, one
+  sphere stepped in the BEAM, and nothing it produces is a result of the
+  experiment. A page deciding whether to trust a run has to be able to say which
+  one it is looking at, so it is said in the header rather than in a warning
+  somewhere below.
+  """
+  @spec world_name(t()) :: String.t()
+  def world_name(%__MODULE__{world: world}), do: world_name_of(world)
+
+  defp world_name_of(:habitat), do: "Monty's simulator (python process)"
+  defp world_name_of(:synthetic), do: "stand-in scene (Elixir)"
+
+  @doc """
   The world a run of this experiment steps: Monty's own, or the stand-in.
 
   `:habitat` is `Monty.Simulators.Habitat.Environment.HabitatEnvironment`, which

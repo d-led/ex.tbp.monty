@@ -16,7 +16,7 @@ defmodule Monty.Studio.SetupTest do
   # in the same order, and builds the config from Monty's groups so the fixture
   # is a real config rather than a map shaped like one.
 
-  defp setup_for(name), do: elem(Setup.from_experiment(name), 1)
+  defp setup_for(name, options \\ []), do: elem(Setup.from_experiment(name, options), 1)
 
   # `config:` with nothing under it would wipe the groups' `monty_config` on the
   # way through the composer, which is a fixture bug and not the thing under
@@ -348,6 +348,16 @@ defmodule Monty.Studio.SetupTest do
   describe "the world a run steps" do
     test "is this port's own scene unless a machine can run Monty's" do
       assert %Synthetic.Environment{} = Setup.world(setup_for("tutorial/first_experiment"))
+    end
+
+    test "and says which one it is, in words a page can show" do
+      # A stand-in scene and Monty's simulator are not the same claim about a
+      # run, so the page gets two different answers rather than one "world".
+      assert Setup.world_name(setup_for("tutorial/first_experiment")) ==
+               "stand-in scene (Elixir)"
+
+      assert Setup.world_name(setup_for("tutorial/first_experiment", world_simulator: :habitat)) ==
+               "Monty's simulator (python process)"
     end
 
     test "is Monty's HabitatEnvironment, named by the experiment, when it can be" do
