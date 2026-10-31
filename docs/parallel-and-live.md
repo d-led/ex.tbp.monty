@@ -50,15 +50,15 @@ An episode here is `Monty.Runtime.Episode.run/3`: a model, an environment
 library is immutable data handed in (see the decision at the end of
 [roadmap.md](roadmap.md)). That is the whole of what a parallel runner needs:
 
-| Monty | Here | Why it is cheaper |
-| --- | --- | --- |
-| One process per episode, `spawn`, re-unpickled memory | One `Task` per episode, library shared | An immutable graph is a reference; a thousand concurrent episodes cost one copy |
-| `num_parallel` workers | `Task.async_stream(episodes, &run/1, max_concurrency: n)` | No pool bookkeeping, no `maxtasksperchild`, back-pressure built in |
-| A crash kills a worker and the pool replaces it | A supervised task; the crash is reported, the other episodes continue | Failure isolation is the runtime's job, not the runner's |
-| Log dir per worker, concatenated at the end | Rows written as episodes finish; the aggregate is a query | The studio already stores run history |
-| Progress is a print, or nothing | `Phoenix.PubSub` per step, frames included | Watching a run is the same code as watching a live one |
-| Single machine | `:erpc`/`Node.spawn` when the day comes | Episodes share no state, so distribution needs no redesign |
-| One object per episode, asserted | Same, but as a *consequence* | Per-module derived streams mean an episode cannot see another's draws |
+| Monty                                                 | Here                                                                  | Why it is cheaper                                                               |
+| ----------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| One process per episode, `spawn`, re-unpickled memory | One `Task` per episode, library shared                                | An immutable graph is a reference; a thousand concurrent episodes cost one copy |
+| `num_parallel` workers                                | `Task.async_stream(episodes, &run/1, max_concurrency: n)`             | No pool bookkeeping, no `maxtasksperchild`, back-pressure built in              |
+| A crash kills a worker and the pool replaces it       | A supervised task; the crash is reported, the other episodes continue | Failure isolation is the runtime's job, not the runner's                        |
+| Log dir per worker, concatenated at the end           | Rows written as episodes finish; the aggregate is a query             | The studio already stores run history                                           |
+| Progress is a print, or nothing                       | `Phoenix.PubSub` per step, frames included                            | Watching a run is the same code as watching a live one                          |
+| Single machine                                        | `:erpc`/`Node.spawn` when the day comes                               | Episodes share no state, so distribution needs no redesign                      |
+| One object per episode, asserted                      | Same, but as a _consequence_                                          | Per-module derived streams mean an episode cannot see another's draws           |
 
 The last row is the one worth arguing. Monty's restriction exists because mutable
 state leaks between episodes. Here determinism is per episode by construction —
@@ -131,11 +131,11 @@ to copy rather than invent: [`tbp.teleop`](https://github.com/thousandbrainsproj
 Not yet: both depend on a world, and the world is the next phase. Recorded here so
 that the shape is a decision already made when it arrives.
 
-| Milestone | Needs | Done when |
-| --- | --- | --- |
-| Parallel episodes | a world; episode peak measured | `mix monty.run --parallel 8` over 64 episodes gives the same conclusions and the same evidence as serial, and the wall clock scales |
-| Live episode | a sensor source behind a port | the studio shows a live episode's hypotheses; a frame-per-tick recording replays to the same conclusions |
-| Distributed episodes | the two above | one experiment across two nodes, with the aggregate identical |
+| Milestone            | Needs                          | Done when                                                                                                                           |
+| -------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Parallel episodes    | a world; episode peak measured | `mix monty.run --parallel 8` over 64 episodes gives the same conclusions and the same evidence as serial, and the wall clock scales |
+| Live episode         | a sensor source behind a port  | the studio shows a live episode's hypotheses; a frame-per-tick recording replays to the same conclusions                            |
+| Distributed episodes | the two above                  | one experiment across two nodes, with the aggregate identical                                                                       |
 
 The check for both is the same one this port has used everywhere else: **the same
 numbers as serial, then the same numbers as Python.** Parallelism that changes a

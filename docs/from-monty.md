@@ -5,28 +5,28 @@ table: what it is, where it lands, the glob it arrives as, and the one command
 that writes it. Nothing here is edited by hand, so the last column is how a
 reader checks a row instead of trusting this page.
 
-| What | Lands in | Arrives as | Written by | Checked by |
-| --- | --- | --- | --- | --- |
-| Monty's Hydra config tree — every experiment, group and module a config can name | [`priv/monty/conf`](../priv/monty/conf) | `**/*.yaml` of `src/tbp/monty/conf/` | `mix monty.inputs` | `mix monty.inputs --check` |
-| the trees Hydra composed for Monty's snapshot tests — the composer's oracle | [`priv/monty/snapshots`](../priv/monty/snapshots) | `**/*.yaml` of `tests/conf/snapshots/` | `mix monty.inputs` | `mix monty.inputs --check` |
-| Monty's licence, for the two above | [`priv/monty/LICENSE`](../priv/monty/LICENSE) | one file | `mix monty.inputs` | `mix monty.inputs --check` |
-| which commit the copy is, and how many files it holds | [`priv/monty/inputs.json`](../priv/monty/inputs.json) | one file | `mix monty.inputs` | the file itself |
-| Monty's pretrained memories, in a format this port reads | [`priv/monty/libraries`](../priv/monty/libraries) | `<release>/<model>.jsonl.gz` | [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) | `git status priv/monty/libraries` |
-| what each Python class *is*, and which classes Monty's configs name | [`priv/monty/port_census.json`](../priv/monty/port_census.json), [`target_census.json`](../priv/monty/target_census.json) | one file each | `mix monty.port_census --json`, `mix monty.target_census --json` | run them again with `--json` |
-| what Monty *answered*, so the parity tests replay it rather than recompute it | [`test/fixtures/monty_*`](../test/fixtures) | `*.json`, `*.jsonl` | [`scripts/record_monty_*.py`](../scripts) (needs a `$MONTY_PYTHON` with Monty in it) | `git diff test/fixtures` |
-| the module contract — Monty's file to Elixir module, **generated** rather than copied | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex) | one generated module | `mix monty.module_map.gen` | `mix monty.module_map.verify` |
-| the world — Monty's own simulator, **started** and never vendored | a Python process, no file | — | `$MONTY_PYTHON` importing Monty's `HabitatEnvironment`, behind [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) | a run that needs it says so; see [`container.md`](container.md) |
+| What                                                                                  | Lands in                                                                                                                  | Arrives as                             | Written by                                                                                                                             | Checked by                                                      |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Monty's Hydra config tree — every experiment, group and module a config can name      | [`priv/monty/conf`](../priv/monty/conf)                                                                                   | `**/*.yaml` of `src/tbp/monty/conf/`   | `mix monty.inputs`                                                                                                                     | `mix monty.inputs --check`                                      |
+| the trees Hydra composed for Monty's snapshot tests — the composer's oracle           | [`priv/monty/snapshots`](../priv/monty/snapshots)                                                                         | `**/*.yaml` of `tests/conf/snapshots/` | `mix monty.inputs`                                                                                                                     | `mix monty.inputs --check`                                      |
+| Monty's licence, for the two above                                                    | [`priv/monty/LICENSE`](../priv/monty/LICENSE)                                                                             | one file                               | `mix monty.inputs`                                                                                                                     | `mix monty.inputs --check`                                      |
+| which commit the copy is, and how many files it holds                                 | [`priv/monty/inputs.json`](../priv/monty/inputs.json)                                                                     | one file                               | `mix monty.inputs`                                                                                                                     | the file itself                                                 |
+| Monty's pretrained memories, in a format this port reads                              | [`priv/monty/libraries`](../priv/monty/libraries)                                                                         | `<release>/<model>.jsonl.gz`           | [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh)                                                                | `git status priv/monty/libraries`                               |
+| what each Python class _is_, and which classes Monty's configs name                   | [`priv/monty/port_census.json`](../priv/monty/port_census.json), [`target_census.json`](../priv/monty/target_census.json) | one file each                          | `mix monty.port_census --json`, `mix monty.target_census --json`                                                                       | run them again with `--json`                                    |
+| what Monty _answered_, so the parity tests replay it rather than recompute it         | [`test/fixtures/monty_*`](../test/fixtures)                                                                               | `*.json`, `*.jsonl`                    | [`scripts/record_monty_*.py`](../scripts) (needs a `$MONTY_PYTHON` with Monty in it)                                                   | `git diff test/fixtures`                                        |
+| the module contract — Monty's file to Elixir module, **generated** rather than copied | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex)                                                         | one generated module                   | `mix monty.module_map.gen`                                                                                                             | `mix monty.module_map.verify`                                   |
+| the world — Monty's own simulator, **started** and never vendored                     | a Python process, no file                                                                                                 | —                                      | `$MONTY_PYTHON` importing Monty's `HabitatEnvironment`, behind [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) | a run that needs it says so; see [`container.md`](container.md) |
 
 Three kinds, and the distinction is the one to keep:
 
-* **copied** — verbatim bytes, diffable against a checkout: `conf/`, `snapshots/`,
+- **copied** — verbatim bytes, diffable against a checkout: `conf/`, `snapshots/`,
   `LICENSE`. Only `*.yaml` travels out of Monty's `conf/`: the Python that runs
   Hydra (`update_snapshots.py`, `compare_snapshots.py`) and a working tree's
   `__pycache__` are neither read nor copied. A file upstream deleted is deleted
   here too, because a config that no longer exists must not linger in the studio.
-* **generated** — a map or a classification *of* Monty, written from a checkout by
+- **generated** — a map or a classification _of_ Monty, written from a checkout by
   a task: `data.ex` and the two census files. Re-running the task is the review.
-* **started** — Monty's code running somewhere else, from an interpreter the
+- **started** — Monty's code running somewhere else, from an interpreter the
   operator supplies. Nothing of it is in this repository.
 
 ## What deliberately does not travel
@@ -46,9 +46,9 @@ those are not inputs to the port but to a run, and they live in
 Nowhere. Each of these pages says only what its own subject needs and links back
 here rather than restating the table:
 
-* [`architecture.md`](architecture.md#what-comes-from-monty) — the shape of a
+- [`architecture.md`](architecture.md#what-comes-from-monty) — the shape of a
   timestep, and why the boundary falls where it does.
-* [`priv/monty/README.md`](../priv/monty/README.md) — that directory's own change
+- [`priv/monty/README.md`](../priv/monty/README.md) — that directory's own change
   process, and whose licence it is under.
-* [`THIRD-PARTY.md`](../THIRD-PARTY.md) — the licences, for this and for
+- [`THIRD-PARTY.md`](../THIRD-PARTY.md) — the licences, for this and for
   everything else this project ships that it did not write.

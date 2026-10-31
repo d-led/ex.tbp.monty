@@ -3,7 +3,7 @@
 Two things make an Elixir run disagree with a Python one: a decision here, and
 something in Monty that looks wrong. Both are recorded here, in the same shape,
 because anyone comparing two sets of numbers needs them together. Where an entry
-suspects Monty, *suspected* is doing work: it says what the code does, what its
+suspects Monty, _suspected_ is doing work: it says what the code does, what its
 own comments say it means, and what evidence there is — a reader who knows the
 project better may well read the intent differently, and nothing here has been
 reported upstream by us.
@@ -17,36 +17,36 @@ keeps on purpose or suspects in Monty, that one records the agreements.
 
 ## At a glance
 
-| § | What | Status | What this port does |
-|---|------|--------|---------------------|
-| [1.1](#11-the-sanity-check-in-_compute_graph_mismatch-cannot-fail) | A sanity check that compares a value with itself | Confirmed | Ports the transform, drops the check |
-| [1.2](#12-npall-over-euler-angles-a-single-axis-rotation-is-never-a-pose-change) | `np.all` over the three Euler angles | Confirmed, `np.any` is what the comments describe | Reproduced on purpose, pinned by a test |
-| [1.3](#13-npall-on-the-top-two-ids-stricter-than-its-own-comment) | Same, over the top-two ids | Confirmed, and Monty's TODO names the fix | Reproduced on purpose, pinned by a test |
-| [1.4](#14-argsort-2-on-a-single-hypothesis) | `argsort(...)[-2]` on one hypothesis | Latent | Answers `{best, nil}` instead |
-| [1.5](#15-first_sensor-is-only-bound-inside-the-loop) | A name bound after its first read | Latent | Answers a value, not an unbound name |
-| [1.6](#16-jumptogo-saves-one-name-and-restores-another) | A checkpoint saves one attribute and restores a different one | Confirmed, only bites a resumed run | No checkpoint loading here |
-| [1.7](#17-a-depth-of-zero-is-read-as-an-object-a-metre-away) | A depth of 0 (nothing there) read as "object within a metre" | Suspected, masked by the configured transform | Ports the transform that masks it, and applies it before any module reads |
-| [1.8](#18-the-pixel-grid-is-not-a-cameras-pixel-grid) | Unprojection samples the image's edges, not its pixel centres | Suspected, sub-millimetre at Monty's scale | Reproduced, and the stand-in world renders the same grid |
-| [1.9](#19-the-mean-is-divided-by-the-count-twice-in-the-plane-fit) | A mean divided by the count twice inflates the plane fit's scatter matrix | Suspected, nil for a centred neighbourhood | Reproduced on purpose, recorded at the code site |
-| [1.10](#110-the-pose-not-defined-flag-is-written-where-nothing-reads-it) | A "pose not defined" flag written to the wrong features dict | Suspected, needs a percept to be visible | Reproduced on purpose, pinned by a test |
-| [1.11](#111-the-rgb-blur-comment-names-the-wrong-kernel-size) | A comment says OpenCV picks `6*sigma + 1`; measured, it picks `8*sigma + 1` | Confirmed by measurement | Follows the code (OpenCV), not the comment |
-| [1.12](#112-lab-goes-through-opencvs-8-bit-tables) | `cvtColor` on a `uint8` image answers 8-bit Lab, so it quantises | Confirmed by measurement over every 8-bit colour | Floats; agrees to 2.67 of 255 |
-| [1.13](#113-cv2s-area-resize-does-something-else-when-only-one-axis-enlarges) | `INTER_AREA` with one axis enlarging is neither area nor linear | Confirmed by measurement; unreachable from Monty's pyramids | Answers the area average |
-| [1.14](#114-a-pixel-with-no-depth-becomes-the-nearest-patch-in-the-view) | A depth of zero, mapped to log-depth zero, is *above* every real depth | Suspected; masked by the depth transforms real configs use | Reproduced on purpose, pinned by a test |
-| [1.15](#115-montys-two-gaussians-are-not-the-same-gaussian) | OpenCV's Gaussian and SciPy's are one function truncated two ways | Confirmed by measurement | Each where Monty uses it: OpenCV for salience, SciPy for the positioning procedure |
-| [2.1](#21-random-streams-the-one-that-changes-your-numbers) | One mutable RNG vs a stream per module | Decision | Per-module streams |
-| [2.2](#22-motor_only_step-travels-in-the-result) | A policy sets a flag on the motor system | Decision | The flag travels in the result |
-| [2.3](#23-the-motor-system-answers-with-itself) | The motor system mutates itself | Decision | It answers with its next version |
-| [2.4](#24-get_output1-answers-message-lm) | `get_output` answers a bare `Message` | Decision | `{message, module}`, like every step |
-| [2.5](#25-a-sampler-answers-the-stream-it-leaves-behind) | A sampler needs the stream it just used | Decision | Samplers answer `{action, rng}` |
-| [2.6](#26-get_top_two_pose_hypotheses_for_graph_id2-answers-best-nil) | The top-two lookup raises | Decision | Answers `{best, nil}` |
-| [2.7](#27-depth_at_center-lives-in-the-policy-namespace) | A 530-line module for one centre pixel | Decision | The read lives in the policy namespace |
-| [2.8](#28-small-vocabulary-differences) | Python's strings, objects, units | Decision | Atoms, tuples, Monty's units |
-| [2.9](#29-inheritance-becomes-public-functions-and-a-module-dispatched-hook) | Subclassing | Decision | Public function + module-dispatched hook |
-| [2.10](#210-missing-coverage-counts-as-zero) | `features["object_coverage"]` raises when it was not asked for | Decision | A missing coverage is zero |
-| [2.11](#211-a-sensor-with-no-surface-answers-nil) | A sensor's step always answers a percept | Decision | No surface to see is `nil`, not a made-up location |
-| [2.12](#212-the-sensors-pose-is-composed-once) | Two classes compose a sensor's world pose | Decision | One function, two callers |
-| [2.13](#213-two-protocols-and-a-mutable-transform-become-one-behaviour-and-a-threaded-value) | Protocols for `isinstance`, and transforms that mutate themselves | Decision | The port's one sensor behaviour; a transform answers itself |
+| §                                                                                            | What                                                                        | Status                                                      | What this port does                                                                |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [1.1](#11-the-sanity-check-in-_compute_graph_mismatch-cannot-fail)                           | A sanity check that compares a value with itself                            | Confirmed                                                   | Ports the transform, drops the check                                               |
+| [1.2](#12-npall-over-euler-angles-a-single-axis-rotation-is-never-a-pose-change)             | `np.all` over the three Euler angles                                        | Confirmed, `np.any` is what the comments describe           | Reproduced on purpose, pinned by a test                                            |
+| [1.3](#13-npall-on-the-top-two-ids-stricter-than-its-own-comment)                            | Same, over the top-two ids                                                  | Confirmed, and Monty's TODO names the fix                   | Reproduced on purpose, pinned by a test                                            |
+| [1.4](#14-argsort-2-on-a-single-hypothesis)                                                  | `argsort(...)[-2]` on one hypothesis                                        | Latent                                                      | Answers `{best, nil}` instead                                                      |
+| [1.5](#15-first_sensor-is-only-bound-inside-the-loop)                                        | A name bound after its first read                                           | Latent                                                      | Answers a value, not an unbound name                                               |
+| [1.6](#16-jumptogo-saves-one-name-and-restores-another)                                      | A checkpoint saves one attribute and restores a different one               | Confirmed, only bites a resumed run                         | No checkpoint loading here                                                         |
+| [1.7](#17-a-depth-of-zero-is-read-as-an-object-a-metre-away)                                 | A depth of 0 (nothing there) read as "object within a metre"                | Suspected, masked by the configured transform               | Ports the transform that masks it, and applies it before any module reads          |
+| [1.8](#18-the-pixel-grid-is-not-a-cameras-pixel-grid)                                        | Unprojection samples the image's edges, not its pixel centres               | Suspected, sub-millimetre at Monty's scale                  | Reproduced, and the stand-in world renders the same grid                           |
+| [1.9](#19-the-mean-is-divided-by-the-count-twice-in-the-plane-fit)                           | A mean divided by the count twice inflates the plane fit's scatter matrix   | Suspected, nil for a centred neighbourhood                  | Reproduced on purpose, recorded at the code site                                   |
+| [1.10](#110-the-pose-not-defined-flag-is-written-where-nothing-reads-it)                     | A "pose not defined" flag written to the wrong features dict                | Suspected, needs a percept to be visible                    | Reproduced on purpose, pinned by a test                                            |
+| [1.11](#111-the-rgb-blur-comment-names-the-wrong-kernel-size)                                | A comment says OpenCV picks `6*sigma + 1`; measured, it picks `8*sigma + 1` | Confirmed by measurement                                    | Follows the code (OpenCV), not the comment                                         |
+| [1.12](#112-lab-goes-through-opencvs-8-bit-tables)                                           | `cvtColor` on a `uint8` image answers 8-bit Lab, so it quantises            | Confirmed by measurement over every 8-bit colour            | Floats; agrees to 2.67 of 255                                                      |
+| [1.13](#113-cv2s-area-resize-does-something-else-when-only-one-axis-enlarges)                | `INTER_AREA` with one axis enlarging is neither area nor linear             | Confirmed by measurement; unreachable from Monty's pyramids | Answers the area average                                                           |
+| [1.14](#114-a-pixel-with-no-depth-becomes-the-nearest-patch-in-the-view)                     | A depth of zero, mapped to log-depth zero, is _above_ every real depth      | Suspected; masked by the depth transforms real configs use  | Reproduced on purpose, pinned by a test                                            |
+| [1.15](#115-montys-two-gaussians-are-not-the-same-gaussian)                                  | OpenCV's Gaussian and SciPy's are one function truncated two ways           | Confirmed by measurement                                    | Each where Monty uses it: OpenCV for salience, SciPy for the positioning procedure |
+| [2.1](#21-random-streams-the-one-that-changes-your-numbers)                                  | One mutable RNG vs a stream per module                                      | Decision                                                    | Per-module streams                                                                 |
+| [2.2](#22-motor_only_step-travels-in-the-result)                                             | A policy sets a flag on the motor system                                    | Decision                                                    | The flag travels in the result                                                     |
+| [2.3](#23-the-motor-system-answers-with-itself)                                              | The motor system mutates itself                                             | Decision                                                    | It answers with its next version                                                   |
+| [2.4](#24-get_output1-answers-message-lm)                                                    | `get_output` answers a bare `Message`                                       | Decision                                                    | `{message, module}`, like every step                                               |
+| [2.5](#25-a-sampler-answers-the-stream-it-leaves-behind)                                     | A sampler needs the stream it just used                                     | Decision                                                    | Samplers answer `{action, rng}`                                                    |
+| [2.6](#26-get_top_two_pose_hypotheses_for_graph_id2-answers-best-nil)                        | The top-two lookup raises                                                   | Decision                                                    | Answers `{best, nil}`                                                              |
+| [2.7](#27-depth_at_center-lives-in-the-policy-namespace)                                     | A 530-line module for one centre pixel                                      | Decision                                                    | The read lives in the policy namespace                                             |
+| [2.8](#28-small-vocabulary-differences)                                                      | Python's strings, objects, units                                            | Decision                                                    | Atoms, tuples, Monty's units                                                       |
+| [2.9](#29-inheritance-becomes-public-functions-and-a-module-dispatched-hook)                 | Subclassing                                                                 | Decision                                                    | Public function + module-dispatched hook                                           |
+| [2.10](#210-missing-coverage-counts-as-zero)                                                 | `features["object_coverage"]` raises when it was not asked for              | Decision                                                    | A missing coverage is zero                                                         |
+| [2.11](#211-a-sensor-with-no-surface-answers-nil)                                            | A sensor's step always answers a percept                                    | Decision                                                    | No surface to see is `nil`, not a made-up location                                 |
+| [2.12](#212-the-sensors-pose-is-composed-once)                                               | Two classes compose a sensor's world pose                                   | Decision                                                    | One function, two callers                                                          |
+| [2.13](#213-two-protocols-and-a-mutable-transform-become-one-behaviour-and-a-threaded-value) | Protocols for `isinstance`, and transforms that mutate themselves           | Decision                                                    | The port's one sensor behaviour; a transform answers itself                        |
 
 Statuses mean:
 
@@ -115,7 +115,7 @@ Nothing about the numbers changes.
 ## 1.2 `np.all` over Euler angles: a single-axis rotation is never a pose change
 
 **What's wrong.** `np.all` over three elementwise comparisons is true only when
-*all three* Euler angles differ, so a rotation about a single axis never counts
+_all three_ Euler angles differ, so a rotation about a single axis never counts
 as a pose change.
 
 **The code.**
@@ -134,12 +134,12 @@ if self.prev_top_mlhs is not None and np.all(
 **What it should be.** On the reading the comments support: `np.any`, so that any
 changed angle is a changed pose. The comment above the block names exactly that
 case — "we didn't find the mug handle following a previous jump, and have
-therefore eliminated a pose" — and the TODOs above ask for an angle *threshold*
+therefore eliminated a pose" — and the TODOs above ask for an angle _threshold_
 "rather than it needing to be identical", both of which say "a difference
 counts". If the intent was instead "only a change of all three angles counts",
 the comments are what is wrong.
 
-**Why it matters.** It decides *when* the agent spends a hypothesis-testing
+**Why it matters.** It decides _when_ the agent spends a hypothesis-testing
 jump. Some pose changes that should prompt one do not, so the number of jumps,
 and therefore the path, differs from the documented intent.
 
@@ -150,9 +150,9 @@ Pinned by the test "does not treat a turn about one axis as a new pose" in
 
 ## 1.3 `np.all` on the top-two ids, stricter than its own comment
 
-**What's wrong.** The condition fires only when *both* ids change. A new
+**What's wrong.** The condition fires only when _both_ ids change. A new
 runner-up under an unchanged leader is not a change as far as this code is
-concerned. The comment above says "if the identities or *order* … of the top two
+concerned. The comment above says "if the identities or _order_ … of the top two
 MLH changes", and the log line inside says "change or shuffle in top-two MLH
 IDs" — neither says that both must change.
 
@@ -323,7 +323,7 @@ checkpoint test first.
 
 **What's wrong.** A surface agent that cannot see the object is supposed to
 search for it. Before it searches, `_touch_object` reads the depth at the centre
-pixel and treats *anything* closer than a metre as the object to move onto. A
+pixel and treats _anything_ closer than a metre as the object to move onto. A
 depth image reports 0 where the camera saw nothing — Monty's own convention
 elsewhere: `sensor_processing` drops points whose depth is 0, and `CameraSM`
 reports `min_depth` and `mean_depth` over the ones that are not 0. So a view with
@@ -378,7 +378,7 @@ world whose miss is depth 0 backs away 13.5 cm per step.
 ## 1.8 The pixel grid is not a camera's pixel grid
 
 **What's wrong.** A depth image is unprojected with a grid that runs from −1 to
-+1 over the *pixels*, not over the pixel *centres*:
++1 over the _pixels_, not over the pixel _centres_:
 
 ```python
 x, y = np.meshgrid(
@@ -460,7 +460,7 @@ it at the code site.
 **What's wrong.** A sensor module computes whether the curvature directions are
 meaningful — two principal curvatures that differ by less than
 `pc1_is_pc2_threshold` leave the directions arbitrary — and reports that as the
-morphological feature `pose_fully_defined`. When it could *not* do the fit at all
+morphological feature `pose_fully_defined`. When it could _not_ do the fit at all
 (no curvature feature was requested, or no surface normal was found) it flags the
 percept anyway, but writes the flag into the **non-morphological** features:
 
@@ -534,6 +534,7 @@ divides by 255 to bring it into `[0, 1]`:
 ```python
     return cv2.cvtColor(image, cv2.COLOR_RGB2Lab).astype(np.float32) / 255.0
 ```
+
 ([`vocus2/images.py:22-28`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/salience/strategies/vocus2/images.py#L22-L28))
 
 Because the input is `uint8`, OpenCV answers `CV_8U` — L from 0 to 255 for 0 to
@@ -570,6 +571,7 @@ def resize(
 ) -> npt.NDArray[np.float32]:
     return cv2.resize(image, (shape[1], shape[0]), interpolation=interpolation)
 ```
+
 ([`vocus2/images.py:64-69`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/salience/strategies/vocus2/images.py#L64-L69))
 
 Measured, `INTER_AREA` is the area average whenever the destination is no larger
@@ -600,13 +602,14 @@ only — none does today.
         image = -np.log(image).astype(np.float32)
         image = np.nan_to_num(image, posinf=0.0)
 ```
+
 ([`vocus2/vocus2.py:316-317`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/salience/strategies/vocus2/vocus2.py#L316-L317))
 
 A depth of zero — nothing there — is exactly what produces the `+inf`, so this
 line decides what an empty pixel means to the depth channel. Mapping it to zero
 puts it at the **top** of the log-depth scale: a real depth of 2 m is about
--0.69 here, so an empty pixel arrives 0.69 *nearer than everything else in the
-view*, and the centre/surround difference that follows is a strong positive
+-0.69 here, so an empty pixel arrives 0.69 _nearer than everything else in the
+view_, and the centre/surround difference that follows is a strong positive
 response. The pixel is then one of the most salient in the map.
 
 **Why it is probably not what was meant.** The line is removing infinities, not
@@ -644,7 +647,7 @@ over σ = 1, 2, 3 — before it was written down, and the recorded answers of
 `GetGoodView` check the whole of it, because the pixel the procedure aims at is
 the maximum of the smoothed mask.
 
-**A plateau is not a specification.** On a *symmetric* object the smoothed mask
+**A plateau is not a specification.** On a _symmetric_ object the smoothed mask
 has a flat maximum, and which pixel NumPy's `argmax` returns is then a fact about
 summation order, not about Monty: two faithful implementations can disagree by a
 pixel. The fixture therefore uses a notched object, whose brightest pixel is
@@ -684,7 +687,7 @@ process keeps the modules pure and the ordering property exact.
 come in the order the modules are stepped. That is why the coordinator now steps
 sensor modules one at a time: with a barrier, which module drew first would be
 decided by which call arrived first. Monty's own loop is one call after another
-for the same reason, so a step's *numbers* are unaffected — a step's *wall clock*
+for the same reason, so a step's _numbers_ are unaffected — a step's _wall clock_
 is the sum of the sensor modules rather than the slowest.
 
 **Measured.** Against Monty's own world
@@ -961,7 +964,7 @@ the port follows:
   `Monty.Frameworks.Models.AbstractMontyClasses.SensorModule`. So
   `RuntimeSensorModule` and `ResettableSensorModule` do not become modules at all
   (they are the only two classes marked `:excluded` in the module map for this
-  reason); a sensor module *is* something with `update_state/2`, `step/4` and
+  reason); a sensor module _is_ something with `update_state/2`, `step/4` and
   `reset/1`;
 - `Transform` is a behaviour, `Monty.SensorModules.SensorModule.Transform`, and a
   transform that can also be reset declares the second one,
@@ -1060,7 +1063,7 @@ telemeters every terminal decision through `logger.info` and `telemeter.info`.
 
 **What this port does.**
 [`Monty.Experiment.RecognitionPolicy`](../lib/monty/experiment/recognition_policy.ex)
-declares a model *view* — a map with exactly those four readings, the modules'
+declares a model _view_ — a map with exactly those four readings, the modules'
 conclusions flattened to a list — and each policy is a `{module, state}` pair
 dispatched by `RecognitionPolicy.call/3`. Constructors answer `{:ok, policy}` or
 `{:error, message}`, carrying Monty's `ValueError` sentences.
@@ -1096,13 +1099,13 @@ back into a `GraphMemory`, and a run builds its learning module around it
 README records which release and which command produced each file.
 
 **Why.** The port cannot read a torch pickle and should not learn how: what a
-model *is*, for matching, is a position per node and a row of features per node,
+model _is_, for matching, is a position per node and a row of features per node,
 and both are plain numbers. Exporting them once keeps `torch` out of the Elixir
 runtime entirely.
 
 **The consequence worth stating.** Decoding is about six seconds and the result
 is about four megabytes, so the decoded memory is cached per library path in
-`:persistent_term` and every run is handed a *copy* (about twenty milliseconds).
+`:persistent_term` and every run is handed a _copy_ (about twenty milliseconds).
 The copy is not an optimisation detail: a run learns, so two runs sharing one
 memory would learn into each other's, which Monty never does — it loads the
 pickle afresh for each experiment.
@@ -1112,8 +1115,6 @@ pickle afresh for each experiment.
 ([`ExperimentMode`](../lib/monty/frameworks/experiments/mode/experiment_mode.ex))
 with `to_string/1` and `from_string/1` for the places a config or a log needs the
 string.
-
-
 
 ---
 

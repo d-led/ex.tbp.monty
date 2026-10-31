@@ -11,24 +11,24 @@ Monty.<CamelCase dirs>.<CamelCase file>.<Class>
 
 with two collapses:
 
-* an immediately repeated segment collapses (`frameworks/actions/actions.py`
+- an immediately repeated segment collapses (`frameworks/actions/actions.py`
   → `Monty.Frameworks.Actions`, not `...Actions.Actions`);
-* the class is dropped when it repeats the file name
+- the class is dropped when it repeats the file name
   (`cmp.py::Message` → `Monty.Cmp.Message`, `hypotheses.py::Hypotheses`
   → `Monty.Frameworks.Models.EvidenceMatching.Hypotheses`).
 
-| Python | Elixir |
-| --- | --- |
-| `cmp.py::Message` | `Monty.Cmp.Message` |
-| `geometry.py::SurfacePoseVectors` | `Monty.Geometry.SurfacePoseVectors` |
-| `frameworks/models/buffer.py::FeatureAtLocationBuffer` | `Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer` |
-| `frameworks/models/abstract_monty_classes.py::Monty` | `Monty.Frameworks.Models.AbstractMontyClasses.Monty` |
+| Python                                                                    | Elixir                                                                    |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `cmp.py::Message`                                                         | `Monty.Cmp.Message`                                                       |
+| `geometry.py::SurfacePoseVectors`                                         | `Monty.Geometry.SurfacePoseVectors`                                       |
+| `frameworks/models/buffer.py::FeatureAtLocationBuffer`                    | `Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer`                  |
+| `frameworks/models/abstract_monty_classes.py::Monty`                      | `Monty.Frameworks.Models.AbstractMontyClasses.Monty`                      |
 | `frameworks/models/evidence_matching/learning_module.py::EvidenceGraphLM` | `Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM` |
-| `frameworks/models/motor_policies.py::SurfacePolicy` | `Monty.Frameworks.Models.MotorPolicies.SurfacePolicy` |
-| `frameworks/experiments/monty_experiment.py::MontyExperiment` | `Monty.Frameworks.Experiments.MontyExperiment` |
-| `frameworks/actions/actions.py::MoveForward` | `Monty.Frameworks.Actions.MoveForward` |
-| `sensor_modules/sensor_module.py::SensorModule` | `Monty.SensorModules.SensorModule` |
-| `simulators/mujoco/simulator.py::MuJoCoSimulator` | `Monty.Simulators.MuJoCo.Simulator.MuJoCoSimulator` |
+| `frameworks/models/motor_policies.py::SurfacePolicy`                      | `Monty.Frameworks.Models.MotorPolicies.SurfacePolicy`                     |
+| `frameworks/experiments/monty_experiment.py::MontyExperiment`             | `Monty.Frameworks.Experiments.MontyExperiment`                            |
+| `frameworks/actions/actions.py::MoveForward`                              | `Monty.Frameworks.Actions.MoveForward`                                    |
+| `sensor_modules/sensor_module.py::SensorModule`                           | `Monty.SensorModules.SensorModule`                                        |
+| `simulators/mujoco/simulator.py::MuJoCoSimulator`                         | `Monty.Simulators.MuJoCo.Simulator.MuJoCoSimulator`                       |
 
 The actor layer is the one addition: `Monty.Runtime.*` has no Python
 counterpart, because in Python the loop itself is the runtime.
@@ -39,15 +39,15 @@ Teleop is the real-time GUI and teleoperation tool for Monty (matplotlib
 panels, buttons, sliders, a live plotter). The same recognisability rule
 applies with its own namespace:
 
-| Python | Elixir |
-| --- | --- |
-| `src/tbp/teleop/controls.py::Controls` | `Teleop.Controls.Controls` |
-| `src/tbp/teleop/panels.py::Panel` | `Teleop.Panels.Panel` |
-| `src/tbp/teleop/plotter.py::Plotter` | `Teleop.Plotter.Plotter` |
+| Python                                        | Elixir                           |
+| --------------------------------------------- | -------------------------------- |
+| `src/tbp/teleop/controls.py::Controls`        | `Teleop.Controls.Controls`       |
+| `src/tbp/teleop/panels.py::Panel`             | `Teleop.Panels.Panel`            |
+| `src/tbp/teleop/plotter.py::Plotter`          | `Teleop.Plotter.Plotter`         |
 | `src/tbp/teleop/live_plotter.py::LivePlotter` | `Teleop.LivePlotter.LivePlotter` |
-| `src/tbp/teleop/policies.py::...` | `Teleop.Policies....` |
-| `src/tbp/teleop/helpers.py::...` | `Teleop.Helpers....` |
-| `src/tbp/teleop/default.py::...` | `Teleop.Default....` |
+| `src/tbp/teleop/policies.py::...`             | `Teleop.Policies....`            |
+| `src/tbp/teleop/helpers.py::...`              | `Teleop.Helpers....`             |
+| `src/tbp/teleop/default.py::...`              | `Teleop.Default....`             |
 
 `tbp.teleop` is MIT-licensed like Monty; the point of the namespace is that a
 teleop developer can find their module here without a translation table.
@@ -55,7 +55,7 @@ teleop developer can find their module here without a translation table.
 How each part is meant to land in a browser is a separate decision, made in
 [`architecture.md`](architecture.md): the matplotlib figure becomes LiveView
 components, a `StepHook` stays a hook, and the mouse/keyboard controls become
-LiveView events. The module map records *where* the logic lives, not how it is
+LiveView events. The module map records _where_ the logic lives, not how it is
 drawn.
 
 ## The map
@@ -77,9 +77,9 @@ Each entry carries the Python path, the Elixir module, a status
 (`implemented`, `planned`, `excluded`) and, for exclusions, a reason. The
 verifier checks three things, for both packages:
 
-* every Python file in a checkout has an entry;
-* every entry marked `implemented` points at a module that exists;
-* every entry marked `excluded` says why.
+- every Python file in a checkout has an entry;
+- every entry marked `implemented` points at a module that exists;
+- every entry marked `excluded` says why.
 
 With no checkout it checks the last two only, and says which packages it could
 not check from source rather than pretending it did: the map names the commit it

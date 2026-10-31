@@ -1,7 +1,7 @@
 # Architecture
 
 Monty's Python runtime is one loop over modules. Here, each module is a
-process, but the *order* and the *payloads* stay Monty's, because that is what
+process, but the _order_ and the _payloads_ stay Monty's, because that is what
 makes results comparable.
 
 ## A timestep
@@ -46,13 +46,13 @@ sequenceDiagram
 
 Facts worth keeping in mind, all inherited from Monty:
 
-* the action produced at step *t* is executed by the environment at the start of
-  step *t+1*;
-* a learning module receives another learning module's `get_output` from the
-  *previous* step, and only if at least one sensor percept passed that step;
-* a location-only step (no percept with `process_features_in_lm`) displaces
+- the action produced at step _t_ is executed by the environment at the start of
+  step _t+1_;
+- a learning module receives another learning module's `get_output` from the
+  _previous_ step, and only if at least one sensor percept passed that step;
+- a location-only step (no percept with `process_features_in_lm`) displaces
   hypotheses without updating evidence;
-* sensor modules are stepped **one at a time**, not as a barrier: a sensor may
+- sensor modules are stepped **one at a time**, not as a barrier: a sensor may
   draw from the episode's random stream (the salience module dithers its
   scores), and a barrier would let the scheduler decide which drew first.
   `Monty.Random.Stream`'s moduledoc says so at the code site.
@@ -65,11 +65,11 @@ one per learning module, and the step coordinator last. The strategy is
 (`{:learning_module, model_id, id}`), so a module that dies is replaced without
 the coordinator losing its step count.
 
-* **Isolation.** A module that dies is replaced by the model's supervisor, and the
+- **Isolation.** A module that dies is replaced by the model's supervisor, and the
   coordinator addresses it again by name. A module that is unavailable or late is
   reported in that step's info (`sensor_timeouts`, the vote round's `timed_out`)
   rather than taking the step with it. The Python runtime cannot offer that.
-* **Voting as messaging.** The round is `Monty.Runtime.Barrier`: one
+- **Voting as messaging.** The round is `Monty.Runtime.Barrier`: one
   `Task.async_stream` pass over the modules, `ordered: true` so the gather is
   the listing order and not the arrival order, `on_timeout: :kill_task` so a
   late module costs only its own reply. `:infinity` reproduces Python's
@@ -77,7 +77,7 @@ the coordinator losing its step count.
   [the neural-voting thread](https://forum.thousandbrains.org/t/software-architecture-for-neural-voting/129):
   the round closes when time is up, and the step reports what it used
   (`votes_used`) and that it was short (`deadline_hit?`).
-* **No GIL.** Columns are independent; the scheduler already interleaves them.
+- **No GIL.** Columns are independent; the scheduler already interleaves them.
 
 ## Determinism
 
@@ -93,7 +93,7 @@ episode produces NumPy's numbers, in the same sequence.
 not moved onto the stream: the environment's noise transforms and a camera's
 message noise, which draw per module per step. It derives a stream from the seed,
 `phash2(module_id)` and the step, so it is independent of what ran before it —
-and therefore a *different set of numbers* by construction. §2.1 of
+and therefore a _different set of numbers_ by construction. §2.1 of
 [`monty-differences.md`](monty-differences.md) lists what is left, which is what a diff of two
 action logs eventually comes down to.
 
@@ -115,14 +115,14 @@ reviewable by Monty's team.
 
 ## Boundaries
 
-| Boundary | Payload |
-| --- | --- |
-| environment → Monty | `(observations, proprioceptive_state)` |
-| sensor module → learning module | `Monty.Cmp.Message` (location, pose vectors, features, `process_features_in_lm`) |
-| learning module → learning module (top-down) | `Message` with `sender_type: :lm` |
-| learning module ↔ learning module (vote) | per-object pose hypotheses plus the sender's `sensed_pose_rel_body` |
-| learning module → motor system | `Monty.Cmp.Goal` |
-| motor system → environment | a list of `Monty.Frameworks.Actions` structs |
+| Boundary                                     | Payload                                                                          |
+| -------------------------------------------- | -------------------------------------------------------------------------------- |
+| environment → Monty                          | `(observations, proprioceptive_state)`                                           |
+| sensor module → learning module              | `Monty.Cmp.Message` (location, pose vectors, features, `process_features_in_lm`) |
+| learning module → learning module (top-down) | `Message` with `sender_type: :lm`                                                |
+| learning module ↔ learning module (vote)     | per-object pose hypotheses plus the sender's `sensed_pose_rel_body`              |
+| learning module → motor system               | `Monty.Cmp.Goal`                                                                 |
+| motor system → environment                   | a list of `Monty.Frameworks.Actions` structs                                     |
 
 Units and conventions are Monty's: metres, degrees in actions, quaternions
 scalar-first (`wxyz`), semantic id `0` for background, sensor poses relative to
@@ -141,18 +141,18 @@ can be MuJoCo, Habitat or a camera without touching the model. See
 
 ## What comes from Monty
 
-Four things are *copied*, the module contract and the census are *generated*, and
-the world is only ever *started*. The distinction is the one to keep: a copy can
-be diffed against a checkout, a generated file is a map *of* Monty rather than a
+Four things are _copied_, the module contract and the census are _generated_, and
+the world is only ever _started_. The distinction is the one to keep: a copy can
+be diffed against a checkout, a generated file is a map _of_ Monty rather than a
 copy of it, a started process is Monty's own code doing its own work — and none
 of the three is a port.
 
-| Kind | What | Handles it |
-| --- | --- | --- |
-| copied | Monty's config tree, the snapshots it was composed into, and its licence | `mix monty.inputs` |
-| copied | Monty's pretrained memories, exported to a format this port reads | [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) |
-| generated | the module contract (`lib/monty/module_map/data.ex`) and the two census files | `mix monty.module_map.gen`, `mix monty.port_census`, `mix monty.target_census` |
-| started | the world — Monty's `HabitatEnvironment` and eval interface, out of `$MONTY_PYTHON` | [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) |
+| Kind      | What                                                                                | Handles it                                                                     |
+| --------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| copied    | Monty's config tree, the snapshots it was composed into, and its licence            | `mix monty.inputs`                                                             |
+| copied    | Monty's pretrained memories, exported to a format this port reads                   | [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh)        |
+| generated | the module contract (`lib/monty/module_map/data.ex`) and the two census files       | `mix monty.module_map.gen`, `mix monty.port_census`, `mix monty.target_census` |
+| started   | the world — Monty's `HabitatEnvironment` and eval interface, out of `$MONTY_PYTHON` | [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py)        |
 
 Every path, glob, writer and the command that checks it is in
 [`from-monty.md`](from-monty.md) — one list, kept there so it cannot drift from
@@ -165,7 +165,7 @@ Two interpreters are involved and they never meet. One is carried by the
 application, built into the release by uv, and reached only by the ported wandb
 logger ([`config/pythonx.exs`](../config/pythonx.exs),
 `Monty.Frameworks.Loggers.WandbHandlers.PythonxClient`).
-The other is *yours*: `MONTY_PYTHON` (or `python3` on the PATH if it is unset), an
+The other is _yours_: `MONTY_PYTHON` (or `python3` on the PATH if it is unset), an
 interpreter with Monty installed, which runs the world on the other side of the
 port. A run that chooses nothing steps that world — MuJoCo or Habitat-Sim, named
 by the experiment's own config. The third is chosen deliberately: the stand-in
@@ -221,7 +221,7 @@ flowchart TD
     port -->|"timeout or exit status,<br/>as {:error, reason}"| step
 ```
 
-The action produced at step *t* reaches the world at step *t+1* because the
+The action produced at step _t_ reaches the world at step _t+1_ because the
 experiment, not the port, decides when to step: the port only carries them. A
 `reset` is answered with more than `ok`: the peer reports `primary_target` (which
 object the episode is about — its interface sampled it, so nothing else knows)

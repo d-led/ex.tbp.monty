@@ -112,7 +112,6 @@ config would not start, so CI can use it. `mix lint`, `mix cover`, `mix complexi
 `mix dialyzer`; `mix precommit` is [`scripts/quality.sh`](../scripts/quality.sh),
 what CI runs.
 
-
 ## Logging, including wandb
 
 - Monty's `logging` group resolves through the module map; a class not ported is named
@@ -147,7 +146,7 @@ what CI runs.
   skipped. Elixir 1.20.4 / OTP 29.1.2.
   ([`ci.yml`](../.github/workflows/ci.yml))
 - Stack: Phoenix 1.8, LiveView 1.2, Ecto/Postgres, Oban 2.20, Bandit, Req, Tailwind 4
-  + daisyUI 5 + heroicons, `yaml_elixir` for Hydra YAML, `pythonx` for Python.
+  with daisyUI 5 and heroicons, `yaml_elixir` for Hydra YAML, `pythonx` for Python.
   ([`mix.exs`](../mix.exs))
 - `docker compose -f docker-compose.dev.yml up -d` gives development Postgres 17
   and adminer; the root `docker-compose.yml` is the image itself.

@@ -9,24 +9,24 @@ document says exactly how far that goes, so nobody has to guess.
 application — [`priv/monty/conf`](../priv/monty/conf), copied verbatim from
 `src/tbp/monty/conf` by `mix monty.inputs` — and finds:
 
-* `src/tbp/monty/conf/experiment.yaml` — the root config;
-* the `defaults:` groups it pulls in (`monty`, `monty/learning_module`,
+- `src/tbp/monty/conf/experiment.yaml` — the root config;
+- the `defaults:` groups it pulls in (`monty`, `monty/learning_module`,
   `environment`, `env_interface`, `termination`, `logging`, `telemetry`, …);
-* every `conf/experiment/**/*.yaml`, including `test/` and `tutorial/`.
+- every `conf/experiment/**/*.yaml`, including `test/` and `tutorial/`.
 
 ## The Hydra subset implemented
 
 Exactly the syntax Monty's tree uses — checked, not assumed:
 
-| Feature | Example |
-| --- | --- |
-| defaults list | `- /monty: evidencegraph_exp1000_emin_t3` |
+| Feature           | Example                                                     |
+| ----------------- | ----------------------------------------------------------- |
+| defaults list     | `- /monty: evidencegraph_exp1000_emin_t3`                   |
 | shorthand default | `- hypotheses_updater/burst_sampling_5nn@learning_module_0` |
-| package header | `# @package experiment.config.monty_config` |
-| package override | `@learning_module_0` (relative to the including config) |
-| special packages | `_global_`, `_here_` |
-| self placement | `- _self_` |
-| required group | `- experiment: ??` (filled from the command line / UI) |
+| package header    | `# @package experiment.config.monty_config`                 |
+| package override  | `@learning_module_0` (relative to the including config)     |
+| special packages  | `_global_`, `_here_`                                        |
+| self placement    | `- _self_`                                                  |
+| required group    | `- experiment: ??` (filled from the command line / UI)      |
 
 Not implemented, because Monty does not use them: `override` entries,
 `optional:` markers, CLI package overrides, Hydra sweeps.
@@ -40,16 +40,16 @@ Composition and interpolation are two steps on purpose.
    `${...}` strings included.
 2. `Monty.Config.Resolvers.resolve/2` turns those strings into values:
 
-| Resolver | Result here |
-| --- | --- |
-| `${constants.min_eval_steps}` | the referenced value, type preserved |
+| Resolver                                  | Result here                                                     |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| `${constants.min_eval_steps}`             | the referenced value, type preserved                            |
 | `${oc.env:VAR}` / `${oc.env:VAR,default}` | the environment variable, or its default, or an error naming it |
-| `${monty.class:a.b.C}` | the dotted path as a string, for `Monty.Config.Registry` |
-| `${np.array:[2, 0.5, 0.5]}` | `[2.0, 0.5, 0.5]` |
-| `${np.ones:3}` | `[1.0, 1.0, 1.0]` |
-| `${np.list_eval:[np.pi / 8, np.pi * 2]}` | arithmetic via `Monty.Config.Expression` |
-| `${path.expanduser:~/x}` | `Path.expand("~/x")` |
-| `${path.tests:conf/x.yaml}` | `<checkout>/tests/conf/x.yaml` |
+| `${monty.class:a.b.C}`                    | the dotted path as a string, for `Monty.Config.Registry`        |
+| `${np.array:[2, 0.5, 0.5]}`               | `[2.0, 0.5, 0.5]`                                               |
+| `${np.ones:3}`                            | `[1.0, 1.0, 1.0]`                                               |
+| `${np.list_eval:[np.pi / 8, np.pi * 2]}`  | arithmetic via `Monty.Config.Expression`                        |
+| `${path.expanduser:~/x}`                  | `Path.expand("~/x")`                                            |
+| `${path.tests:conf/x.yaml}`               | `<checkout>/tests/conf/x.yaml`                                  |
 
 An unresolvable reference is an error. A tree that still contains `${` after
 resolution is an error. Nothing is passed through as a string that looks like a
@@ -72,14 +72,14 @@ and in CI against a pinned Monty revision.
 
 ## Deliberate differences
 
-* `monty.class` yields the class path, not a class object: an Elixir process
+- `monty.class` yields the class path, not a class object: an Elixir process
   cannot hold a Python class. `Monty.Config.Registry` maps the path to a module
   and reports paths it does not know yet.
-* `np.array`/`np.ones` yield lists, not tensors. Nx tensors appear at the
+- `np.array`/`np.ones` yield lists, not tensors. Nx tensors appear at the
   numeric core's boundary, not in the config.
-* The top-level `hydra` group is dropped: it configures Hydra's run directory,
+- The top-level `hydra` group is dropped: it configures Hydra's run directory,
   which this application does not have. Monty's snapshots omit it too.
-* `# @package` is honoured only in a file's leading comment block, so a comment
+- `# @package` is honoured only in a file's leading comment block, so a comment
   further down cannot reroute a config by accident.
 
 ## Editing from the UI
@@ -87,14 +87,14 @@ and in CI against a pinned Monty revision.
 Nothing here writes into a Monty checkout, and nothing invents a second config
 format. What exists is a round trip through files:
 
-* **A draft is a config file.** `/build` composes the config a blueprint would
+- **A draft is a config file.** `/build` composes the config a blueprint would
   write, shows the findings, and saves the YAML to
   [`priv/experiments`](../priv/experiments) — an experiment file that could be
   copied into Monty's `conf/experiment/` unchanged.
-* **An experiment exports as the file Monty ships** — its short `defaults:` list,
+- **An experiment exports as the file Monty ships** — its short `defaults:` list,
   not the composed tree — at `/export/experiments/<name>`; an edited file comes
   back through `monty_import_experiment`, which composes it before writing it and
   refuses one that does not compose.
-* **A config Monty would reject cannot be saved here either.** Composition is the
+- **A config Monty would reject cannot be saved here either.** Composition is the
   gate, and the findings say what is wrong with a file that composes but would
   not run.

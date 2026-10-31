@@ -12,7 +12,7 @@ const STORAGE_KEY = "ex_tbp_monty:sidebar";
 const DESKTOP_QUERY = "(min-width: 1024px)";
 const BREAKPOINTS = window.matchMedia(DESKTOP_QUERY);
 
-const state = {open: false, collapsed: readCollapsed()};
+const state = { open: false, collapsed: readCollapsed() };
 
 // Opening the column for somebody else — the walkthrough points at items in it,
 // and a step aimed at a collapsed rail or a closed drawer is a step aimed at
@@ -41,7 +41,10 @@ function readCollapsed() {
 
 function rememberCollapsed() {
   try {
-    window.localStorage.setItem(STORAGE_KEY, state.collapsed ? "collapsed" : "expanded");
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      state.collapsed ? "collapsed" : "expanded",
+    );
   } catch (_error) {
     // Private browsing: the preference simply does not persist.
   }
@@ -50,7 +53,7 @@ function rememberCollapsed() {
 const onDesktop = () => BREAKPOINTS.matches;
 
 function render() {
-  const {aside, backdrop, toggle} = elements();
+  const { aside, backdrop, toggle } = elements();
   if (!aside) return;
 
   const desktop = onDesktop();
@@ -76,7 +79,10 @@ function mark() {
     const href = link.getAttribute("href") || "";
     // `/` is only itself; everything else also owns what hangs below it, so a
     // run's page still lights up Runs.
-    const current = href === "/" ? path === "/" : path === href || path.startsWith(href + "/");
+    const current =
+      href === "/"
+        ? path === "/"
+        : path === href || path.startsWith(href + "/");
     link.toggleAttribute("data-active", current);
     if (current) {
       link.setAttribute("aria-current", "page");
@@ -86,7 +92,7 @@ function mark() {
   }
 }
 
-document.addEventListener("click", event => {
+document.addEventListener("click", (event) => {
   const toggle = event.target.closest("[data-sidebar-toggle]");
   if (toggle) {
     if (onDesktop()) {
@@ -113,7 +119,7 @@ document.addEventListener("click", event => {
   }
 });
 
-document.addEventListener("keydown", event => {
+document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && state.open && !onDesktop()) {
     state.open = false;
     render();

@@ -25,13 +25,13 @@ takes `http://localhost:4001/mcp`.
 
 The server does not keep a copy of anything it talks about.
 
-| Question | Read from |
-| --- | --- |
-| What does the project say? | `docs.thousandbrains.org` — its own search API, `/docs/<slug>.md`, and `llms.txt` |
-| What does it plan? | `futureworkwidget.thousandbrains.ai/data.json`, the data the project's own roadmap page renders |
-| Where is that in code? | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex), the same map `mix monty.module_map.verify` checks |
-| What is this experiment? | `Monty.Studio.open/2` — Monty's `conf/` tree, composed and read back |
-| Did the run work? | `studio_runs`, written by `Monty.Studio.Jobs.Run` as the run goes |
+| Question                   | Read from                                                                                                            |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| What does the project say? | `docs.thousandbrains.org` — its own search API, `/docs/<slug>.md`, and `llms.txt`                                    |
+| What does it plan?         | `futureworkwidget.thousandbrains.ai/data.json`, the data the project's own roadmap page renders                      |
+| Where is that in code?     | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex), the same map `mix monty.module_map.verify` checks |
+| What is this experiment?   | `Monty.Studio.open/2` — Monty's `conf/` tree, composed and read back                                                 |
+| Did the run work?          | `studio_runs`, written by `Monty.Studio.Jobs.Run` as the run goes                                                    |
 
 Documentation answers carry the page's `slug` and a link to its published
 address (`https://docs.thousandbrains.org/docs/<slug>`), so a claim can be
@@ -39,7 +39,7 @@ checked instead of believed. A page is named by its slug because that is how the
 site addresses it — `learning-modules`, not a path in a repository — and the
 same slug is what `monty_read_doc` and `monty_code_in_doc` take.
 
-Nothing here reads a Monty checkout: a neighbouring checkout is a *development*
+Nothing here reads a Monty checkout: a neighbouring checkout is a _development_
 input (`mix monty.inputs` copies its configs in), and the image has none. A site
 that cannot be reached is reported in words with what to try next, because a
 tool that cannot answer still answers.
@@ -54,7 +54,7 @@ guessed at.
 **The deployment** — `monty_studio`: how many experiments are preconfigured, how
 many runs there are of each state, how many episodes run at once, which world a
 run steps, and which data and model bundles are present. The answer to "can we
-run experiments in parallel", and to every other question about *this* instance
+run experiments in parallel", and to every other question about _this_ instance
 rather than about a config — an assistant does not need a shell to ask it.
 
 **Documentation** — `monty_search_docs` (the site's own search), `monty_read_doc`
@@ -113,7 +113,7 @@ changes it while the queue drains, so the config value is where it started.
 A process with no queue up (a Mix task, a test run) says so and reports the
 configured limit, rather than claiming a number it cannot see.
 
-Storage is the *device's* own answer — `df -kP` for the filesystem behind each
+Storage is the _device's_ own answer — `df -kP` for the filesystem behind each
 place a run writes to, not this application's share of it — reported per place
 because a checkout keeps `priv/` and Monty's data roots on disks that need not be
 one. A machine the operating system will not answer for says so (`device: null`)
@@ -127,7 +127,10 @@ the matching experiments. The counts respect the other filters, so one call
 answers "how many surface-agent experiments start from a pretrained model":
 
 ```json
-{"name": "monty_list_experiments", "arguments": {"agent": "surf", "model": "pretrained"}}
+{
+  "name": "monty_list_experiments",
+  "arguments": { "agent": "surf", "model": "pretrained" }
+}
 ```
 
 ```
@@ -232,13 +235,13 @@ fails immediately looks like a run that worked.
 
 ## Configuration
 
-| Setting | Default | What it is |
-| --- | --- | --- |
-| `:docs_site` | `https://docs.thousandbrains.org` | the documentation site every docs tool reads |
-| `:docs_version` | unset — the current release | pins the site's search and page list to one release, e.g. `"0.56"` |
-| `:docs_http` | `ExTbpMonty.Mcp.Docs.Http.Req` | the one place a request is made, so a test serves bodies from a map |
-| `:monty_roadmap_url` | `https://futureworkwidget.thousandbrains.ai/data.json` | the project's roadmap data |
-| `:experiments_dir` | [`priv/experiments`](../priv/experiments) | where drafts are written |
+| Setting              | Default                                                | What it is                                                          |
+| -------------------- | ------------------------------------------------------ | ------------------------------------------------------------------- |
+| `:docs_site`         | `https://docs.thousandbrains.org`                      | the documentation site every docs tool reads                        |
+| `:docs_version`      | unset — the current release                            | pins the site's search and page list to one release, e.g. `"0.56"`  |
+| `:docs_http`         | `ExTbpMonty.Mcp.Docs.Http.Req`                         | the one place a request is made, so a test serves bodies from a map |
+| `:monty_roadmap_url` | `https://futureworkwidget.thousandbrains.ai/data.json` | the project's roadmap data                                          |
+| `:experiments_dir`   | [`priv/experiments`](../priv/experiments)              | where drafts are written                                            |
 
 None of these is a path to a Monty checkout, and none needs one: the configs
 and snapshots the studio composes are already inside the image.

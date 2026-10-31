@@ -17,17 +17,17 @@ a trade-off:
 
 ## Done — v0.1, the studio
 
-| Piece | State |
-| --- | --- |
-| Phoenix/OTP app, Postgres, quality gates, CI | done |
-| `Monty.Cmp`, `Monty.Geometry` | done |
-| `Monty.Config` — Hydra composition, resolvers, snapshot parity (`mix monty.config.snapshots`) | done |
-| `Monty.ModuleMap` — every Monty file mapped, target resolution, verification | done |
-| `Monty.Runtime` — one process per module, step barriers, vote rounds with deadlines | done |
-| `Monty.Studio` — faceted index, setup + checks, builder, diagram, synthetic run, frames | done |
-| `Monty.Prerequisites` — streaming downloads into Monty's paths | done |
-| Run history in Postgres, delete with confirmation | done |
-| Headless `mix monty.run`, `mix monty.bench` | done |
+| Piece                                                                                         | State |
+| --------------------------------------------------------------------------------------------- | ----- |
+| Phoenix/OTP app, Postgres, quality gates, CI                                                  | done  |
+| `Monty.Cmp`, `Monty.Geometry`                                                                 | done  |
+| `Monty.Config` — Hydra composition, resolvers, snapshot parity (`mix monty.config.snapshots`) | done  |
+| `Monty.ModuleMap` — every Monty file mapped, target resolution, verification                  | done  |
+| `Monty.Runtime` — one process per module, step barriers, vote rounds with deadlines           | done  |
+| `Monty.Studio` — faceted index, setup + checks, builder, diagram, synthetic run, frames       | done  |
+| `Monty.Prerequisites` — streaming downloads into Monty's paths                                | done  |
+| Run history in Postgres, delete with confirmation                                             | done  |
+| Headless `mix monty.run`, `mix monty.bench`                                                   | done  |
 
 What the studio can say about an experiment today: its wiring, its checks
 (Monty's own connectivity rules), how much of it is ported, and — for the ported
@@ -101,7 +101,7 @@ benchmarks rather than after.
 
 - **Done, for Habitat.** `Monty.Simulators.Port` is the boundary and
   [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) is
-Monty's own `HabitatEnvironment` and eval
+  Monty's own `HabitatEnvironment` and eval
   interface on the far side of it, running in Monty's pinned conda environment.
   `Monty.Simulators.Habitat.Environment.HabitatEnvironment` is that world under
   Monty's own name — it owns no scene and starts the peer on its first step — and
@@ -221,7 +221,7 @@ Phase 2 holds their order: Habitat's is done, MuJoCo's is next. wandb is in the
 same position — `WandbWrapper` and the Python client behind it exist and are
 tested offline; what a deployment adds is credentials, not code.
 
-Two things that are not scope decisions but *later milestones* — Monty's
+Two things that are not scope decisions but _later milestones_ — Monty's
 parallel episodes and an episode against a live world — are worked out in
 [parallel-and-live.md](parallel-and-live.md): what is free here, what is not, and
 what each one is done when.

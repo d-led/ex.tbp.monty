@@ -50,11 +50,11 @@ CI publishes. `--arch amd64|arm64` cross-builds one platform the same way.
 
 ## Tags
 
-| Built from | Tags |
-| --- | --- |
-| a push to `main` | `:main` and `:latest` |
+| Built from                 | Tags                                           |
+| -------------------------- | ---------------------------------------------- |
+| a push to `main`           | `:main` and `:latest`                          |
 | a push to any other branch | `:<branch>` — `feature/x` becomes `:feature-x` |
-| a tag `v1.2.3` | `:v1.2.3` |
+| a tag `v1.2.3`             | `:v1.2.3`                                      |
 
 Every published tag carries amd64 **and** arm64. The arm64 half is compiled
 under QEMU and is the expensive part, and it is not optional either: the amd64
@@ -70,14 +70,14 @@ in `priv/build_info.json`, and the footer of every page shows it.
 config that names wandb loggers still runs and nothing is uploaded, written or
 awaited. What a deployment can look at instead:
 
-| Where | What |
-| --- | --- |
-| `GET /health` | 200 when the database answers, 503 when it does not — `select 1`, nothing else |
-| stdout | each HTTP request (`GET / 200 in 5.4ms`), the build line at boot, Oban and Ecto notices |
-| `/runs`, `/runs/:id` | every run's record, summary, step log and the files it wrote, from Postgres |
-| `/jobs` | the Oban queue — where a run is before it has anything to show |
-| `/app/priv/studio_runs/<uuid>/` | the same run's files as text a `grep` or `tail -f` can read |
-| the footer | the build the page came from: `main+3f2a1c9`, with the whole build in its tooltip |
+| Where                           | What                                                                                    |
+| ------------------------------- | --------------------------------------------------------------------------------------- |
+| `GET /health`                   | 200 when the database answers, 503 when it does not — `select 1`, nothing else          |
+| stdout                          | each HTTP request (`GET / 200 in 5.4ms`), the build line at boot, Oban and Ecto notices |
+| `/runs`, `/runs/:id`            | every run's record, summary, step log and the files it wrote, from Postgres             |
+| `/jobs`                         | the Oban queue — where a run is before it has anything to show                          |
+| `/app/priv/studio_runs/<uuid>/` | the same run's files as text a `grep` or `tail -f` can read                             |
+| the footer                      | the build the page came from: `main+3f2a1c9`, with the whole build in its tooltip       |
 
 To send runs to wandb anyway, `-e WANDB_MODE=online -e WANDB_API_KEY=...`: the
 client forwards every `WANDB_*` variable into the interpreter on each init, and
@@ -91,25 +91,25 @@ variable, not a config file.
 
 ### Required
 
-| Variable | Meaning |
-| --- | --- |
-| `DATABASE_URL` | Postgres, `ecto://user:pass@host:5432/database`. The release refuses to start without it. |
-| `SECRET_KEY_BASE` | Signs cookies and sessions (`mix phx.gen.secret`). Refuses to start without it. |
+| Variable          | Meaning                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------- |
+| `DATABASE_URL`    | Postgres, `ecto://user:pass@host:5432/database`. The release refuses to start without it. |
+| `SECRET_KEY_BASE` | Signs cookies and sessions (`mix phx.gen.secret`). Refuses to start without it.           |
 
 ### HTTP
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `PORT` | `4000` | The port Bandit listens on, on all interfaces. |
-| `PHX_HOST` | `example.com` | The host absolute URLs are built from (links, redirects). Set it to the name users reach, or the pages will link to `example.com`. URLs are generated as `https://<PHX_HOST>/…`, so terminate TLS in front. |
-| `PHX_SERVER` | set by `bin/server` | What makes the release start the endpoint. Only matters if you run `bin/ex_tbp_monty start` yourself. |
+| Variable     | Default             | Meaning                                                                                                                                                                                                     |
+| ------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`       | `4000`              | The port Bandit listens on, on all interfaces.                                                                                                                                                              |
+| `PHX_HOST`   | `example.com`       | The host absolute URLs are built from (links, redirects). Set it to the name users reach, or the pages will link to `example.com`. URLs are generated as `https://<PHX_HOST>/…`, so terminate TLS in front. |
+| `PHX_SERVER` | set by `bin/server` | What makes the release start the endpoint. Only matters if you run `bin/ex_tbp_monty start` yourself.                                                                                                       |
 
 ### Database
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `POOL_SIZE` | `10` | Connections per node. Runs are Oban jobs that write as they step, so size it to the concurrent runs you expect rather than to the number of readers. |
-| `ECTO_IPV6` | unset | `true`/`1` resolves and connects over IPv6 — needed on a Fly private network, wrong for a managed Postgres without an AAAA record. |
+| Variable    | Default | Meaning                                                                                                                                              |
+| ----------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POOL_SIZE` | `10`    | Connections per node. Runs are Oban jobs that write as they step, so size it to the concurrent runs you expect rather than to the number of readers. |
+| `ECTO_IPV6` | unset   | `true`/`1` resolves and connects over IPv6 — needed on a Fly private network, wrong for a managed Postgres without an AAAA record.                   |
 
 ### Clustering
 
@@ -117,15 +117,15 @@ One node is a supported deployment; these are for more than one. The release
 names the node from whichever of these it finds, in this order: Fly, Kubernetes,
 explicit, local.
 
-| Variable | Meaning |
-| --- | --- |
+| Variable                                          | Meaning                                                                                                                                                                                   |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FLY_APP_NAME`, `FLY_IMAGE_REF`, `FLY_PRIVATE_IP` | On Fly the node names itself `<app>-<tag>@<private IPv6>`, binds distribution over IPv6 and sets `DNS_CLUSTER_QUERY` to `<app>.internal` (and `ECTO_IPV6=true` unless you say otherwise). |
-| `POD_NAME`, `POD_IP` | On Kubernetes the node names itself `<pod>@<pod IP>` (from the downward API), which a StatefulSet keeps stable. |
-| `RELEASE_NODE` | An explicit `<name>@<host>` for anywhere else. |
-| `RELEASE_DISTRIBUTION` | `name` or `sname`; implied by the two above, `sname` otherwise. |
-| `RELEASE_COOKIE` | Set it, and every node that should join the same cluster must agree. |
-| `DNS_CLUSTER_QUERY` | A DNS name whose answers are the peers to join. Without it the app is a cluster of one. |
-| `ERL_AFLAGS` | Extra emulator flags; the Fly branch adds `-proto_dist inet6_tcp`. |
+| `POD_NAME`, `POD_IP`                              | On Kubernetes the node names itself `<pod>@<pod IP>` (from the downward API), which a StatefulSet keeps stable.                                                                           |
+| `RELEASE_NODE`                                    | An explicit `<name>@<host>` for anywhere else.                                                                                                                                            |
+| `RELEASE_DISTRIBUTION`                            | `name` or `sname`; implied by the two above, `sname` otherwise.                                                                                                                           |
+| `RELEASE_COOKIE`                                  | Set it, and every node that should join the same cluster must agree.                                                                                                                      |
+| `DNS_CLUSTER_QUERY`                               | A DNS name whose answers are the peers to join. Without it the app is a cluster of one.                                                                                                   |
+| `ERL_AFLAGS`                                      | Extra emulator flags; the Fly branch adds `-proto_dist inet6_tcp`.                                                                                                                        |
 
 ### World
 
@@ -133,21 +133,21 @@ Monty's own simulator runs out of process, in an interpreter of its own
 (`MONTY_PYTHON`); without these a run steps this port's synthetic scene, and the
 setup page says so.
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `MONTY_PYTHON` | `/opt/monty/bin/python` | The interpreter the peer runs on. It is *not* the embedded one: Monty's simulator brings its own dependencies, and this image ships them. |
-| `MONTY_OVERRIDES` | unset | Hydra overrides for the peer, space separated as on Monty's own command line, e.g. `constants.pretrained_dir=/data/models`. How a config that names a world this machine cannot run is pointed at one it can (`environment=habitat_dist_agent`). |
+| Variable          | Default                 | Meaning                                                                                                                                                                                                                                          |
+| ----------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `MONTY_PYTHON`    | `/opt/monty/bin/python` | The interpreter the peer runs on. It is _not_ the embedded one: Monty's simulator brings its own dependencies, and this image ships them.                                                                                                        |
+| `MONTY_OVERRIDES` | unset                   | Hydra overrides for the peer, space separated as on Monty's own command line, e.g. `constants.pretrained_dir=/data/models`. How a config that names a world this machine cannot run is pointed at one it can (`environment=habitat_dist_agent`). |
 
 ### This image's own choices
 
-| Variable | Image value | Why |
-| --- | --- | --- |
-| `WANDB_MODE` | `disabled` | No wandb from a container. `online` plus `WANDB_API_KEY` (and any other `WANDB_*`) turns it back on; the client forwards them into the interpreter. |
-| `WANDB_DIR` | `/app/priv/wandb` | Where a wandb run would write. It has to exist — wandb silently uses the system temp directory otherwise — so `bin/server` creates it at boot. |
-| `HOME` | `/app/priv` | A run's downloads and pretrained models go under `$HOME/tbp`, i.e. `/app/priv/tbp`; the image gives the unprivileged user a writable home on the volume. |
-| `LANG`, `LC_ALL` | `en_US.UTF-8` | Experiment names sort and log as written. |
-| `MONTY_PYTHON` | `/opt/monty/bin/python` | The world's interpreter travels with the image, so a run can step Monty's own simulator without the operator installing anything. See [the interpreter](#the-worlds-interpreter-is-in-the-image). |
-| `MIX_ENV` | `prod` | The release is a prod build; this is only informational at run time. |
+| Variable         | Image value             | Why                                                                                                                                                                                               |
+| ---------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WANDB_MODE`     | `disabled`              | No wandb from a container. `online` plus `WANDB_API_KEY` (and any other `WANDB_*`) turns it back on; the client forwards them into the interpreter.                                               |
+| `WANDB_DIR`      | `/app/priv/wandb`       | Where a wandb run would write. It has to exist — wandb silently uses the system temp directory otherwise — so `bin/server` creates it at boot.                                                    |
+| `HOME`           | `/app/priv`             | A run's downloads and pretrained models go under `$HOME/tbp`, i.e. `/app/priv/tbp`; the image gives the unprivileged user a writable home on the volume.                                          |
+| `LANG`, `LC_ALL` | `en_US.UTF-8`           | Experiment names sort and log as written.                                                                                                                                                         |
+| `MONTY_PYTHON`   | `/opt/monty/bin/python` | The world's interpreter travels with the image, so a run can step Monty's own simulator without the operator installing anything. See [the interpreter](#the-worlds-interpreter-is-in-the-image). |
+| `MIX_ENV`        | `prod`                  | The release is a prod build; this is only informational at run time.                                                                                                                              |
 
 Not used by the image: `MONTY_SOURCE` and `TELEOP_SOURCE` (only the tasks that
 regenerate from upstream read a checkout), `PYTHON` (one Mix task),
@@ -173,11 +173,11 @@ needs, the path each file goes to, and which of them are already there.
 
 Three ways to have them:
 
-| Where they come from | How |
-| --- | --- |
-| downloaded by the running app | open `/prerequisites` and press download. Each file streams to a `.part` name on the volume and is moved into place only when its size and checksum match |
+| Where they come from          | How                                                                                                                                                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| downloaded by the running app | open `/prerequisites` and press download. Each file streams to a `.part` name on the volume and is moved into place only when its size and checksum match                                                                                        |
 | a Monty tree you already have | `-v /path/to/tbp:/app/priv/tbp:ro` — the defaults hang off `HOME`, which is `/app/priv`, so the directory you mount is the one those defaults already point at. `scripts/image.sh run --data /path/to/tbp` is this row with the flag spelled out |
-| anywhere else | `-e MONTY_DATA=… -e MONTY_MODELS=… -e MONTY_LOGS=…` — the variables Monty's own documentation uses — each pointing at a mounted path |
+| anywhere else                 | `-e MONTY_DATA=… -e MONTY_MODELS=… -e MONTY_LOGS=…` — the variables Monty's own documentation uses — each pointing at a mounted path                                                                                                             |
 
 The volume to mount for downloads is `/app/priv/tbp`, and that is what the
 `docker-compose.yml` at the root of the repository names — beside a second one
@@ -186,7 +186,7 @@ downloaded bundles (`down -v` deletes them). Mounting `/app/priv` itself also
 works but hides the prerequisites the image carries; mounting `/app/priv/tbp`
 leaves them alone.
 
-A read-only mount is enough to *run* against data you already have. Downloading
+A read-only mount is enough to _run_ against data you already have. Downloading
 into it needs write access, so leave the mount out (or make it writable) when the
 app should fetch them itself; either way they land on the volume and survive a
 restart.
@@ -199,13 +199,13 @@ are in place, and `/prerequisites` is what says which ones are missing.
 A run that steps Monty's own world needs Monty's Python, and the image carries
 it at `/opt/monty` — `MONTY_PYTHON` already points there:
 
-* Monty's Python package, installed with `--no-deps`, plus the packages its
+- Monty's Python package, installed with `--no-deps`, plus the packages its
   simulator and environment modules import (`mujoco`, `numpy`, `scipy`,
-  `pydantic`, `attrs`, `numpy-quaternion`, …). Monty's *model* brings `torch`,
+  `pydantic`, `attrs`, `numpy-quaternion`, …). Monty's _model_ brings `torch`,
   `torch-geometric`, `torch-scatter` and `torch-sparse`; the model half of a run
   is this port's Elixir, so none of those are in the image. The build imports
   the modules to prove the list is complete.
-* The GL libraries MuJoCo's offscreen camera rendering needs (`libegl1`,
+- The GL libraries MuJoCo's offscreen camera rendering needs (`libegl1`,
   `libgl1`, `libosmesa6`).
 
 What that does **not** buy you: the datasets and the pretrained memory, which
@@ -233,13 +233,13 @@ step.
 
 pythonx's environment — CPython and the packages named in
 [`config/pythonx.exs`](../config/pythonx.exs) —
-is built when the release is *compiled*: uv downloads and installs it then, which
+is built when the release is _compiled_: uv downloads and installs it then, which
 is most of the image's size. At run time nothing is downloaded and nothing is
 written; `pythonx` starts the interpreter from the release's `priv` on the boot
 path, so a run pays no first-use penalty for having Python at all — starting it
 measures in the low hundreds of milliseconds of boot.
 
-The one thing that *is* lazy is `import wandb` inside that interpreter: about a
+The one thing that _is_ lazy is `import wandb` inside that interpreter: about a
 second, once, on the first run that names a wandb logger. Paying it at boot for a
 process that may never log to wandb would be the worse trade, so it is left
 where it is. `/prerequisites` shows the interpreter's version and where a run
@@ -256,11 +256,11 @@ Monty's downloads under `$HOME/tbp`, wandb's runs.
 That directory must belong to uid **10001**. The image cannot arrange it —
 giving ownership away needs the root it deliberately does not have:
 
-| Volume | What to do |
-| --- | --- |
+| Volume                                          | What to do                                                        |
+| ----------------------------------------------- | ----------------------------------------------------------------- |
 | Docker named volume (`-v monty-priv:/app/priv`) | Nothing: Docker copies the image's directory, ownership included. |
-| Kubernetes PVC | `securityContext: { fsGroup: 10001 }` on the pod. |
-| Bind mount, tmpfs, Fly volume | `chown 10001:10001` the mount point once. |
+| Kubernetes PVC                                  | `securityContext: { fsGroup: 10001 }` on the pod.                 |
+| Bind mount, tmpfs, Fly volume                   | `chown 10001:10001` the mount point once.                         |
 
 When it is wrong, the release says so at boot — `the release cannot write
 /app/priv/wandb (uid 10001); wandb will use the system temp directory` — and
@@ -286,13 +286,13 @@ needs nothing.
 
 ## What is inside
 
-* The release, at `/app`, owned by uid 10001, with `bin/migrate`, `bin/server`
+- The release, at `/app`, owned by uid 10001, with `bin/migrate`, `bin/server`
   and the OTP tools above.
-* The embedded Python: `/app/lib/pythonx-*/priv` holds `libpythonx.so` and a uv
+- The embedded Python: `/app/lib/pythonx-*/priv` holds `libpythonx.so` and a uv
   environment built from [`config/pythonx.exs`](../config/pythonx.exs). Most of the image is that
   environment — and it is why nothing has to be installed on the host for
   Monty's loggers to work.
-* No compiler, no Node, no git, no Hex cache: those live in the builder stage
+- No compiler, no Node, no git, no Hex cache: those live in the builder stage
   only.
-* Nothing writable but `/app/priv`, which is why `--read-only` works — and why
+- Nothing writable but `/app/priv`, which is why `--read-only` works — and why
   CI checks that it does, on every image it builds.

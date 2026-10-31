@@ -7,7 +7,7 @@ Deployment and operations live in the Dockerfile and `rel/`.
 
 This is a reimplementation, not a fork. Monty's Python is the reference for
 behaviour, names, units and config shape; the BEAM is where it runs. Nothing
-here is allowed to *drift* from that, and nothing keeps it in step by memory:
+here is allowed to _drift_ from that, and nothing keeps it in step by memory:
 each kind of drift has a command that fails when it happens. Starting cold,
 trust those commands rather than any prose, including this page.
 
@@ -17,10 +17,19 @@ The loop is the same for every change:
 mix test                      # the suite alone; creates and migrates the test database
 scripts/quality.sh --fast     # lint only: compile, format, credo, sobelow — seconds
 scripts/quality.sh            # lint, cover, CRAP — what CI runs
+scripts/reformat.sh           # mix format, then prettier over md and js
 ```
 
 Behaviour first: a test that says what the port decides, then the port, then the
 gate. A test that asserts the implementation is what it is has bought nothing.
+
+[`scripts/reformat.sh`](../scripts/reformat.sh) is the only formatter that is not
+`mix format`: it hands the markdown and the JavaScript to prettier, which lines
+the tables up and leaves paragraphs wrapped as written. Prettier comes from
+`npx` and is optional — with no node on the machine the step says so and skips,
+and CI never asks: [`scripts/quality.sh`](../scripts/quality.sh) is read-only on
+purpose. `priv/monty/` (Monty's own tree, copied file for file) and
+`assets/vendor/` (code we did not write) are left alone.
 
 ### When Monty moves
 
@@ -66,7 +75,7 @@ Monty's documentation and roadmap from the project's published site instead.
    without a reason, and reports a checkout that has moved since the map was
    generated.
 4. **Scope.** Before writing anything, `mix monty.port_census` says what each
-   still-planned class *is* in Monty — a `Protocol`, an `ABC` whose methods raise,
+   still-planned class _is_ in Monty — a `Protocol`, an `ABC` whose methods raise,
    a `TypedDict`, or a dataclass that does arithmetic. Only the last is a module
    to port; the counts it prints are the honest backlog, not a "classes remaining"
    number.
@@ -84,21 +93,21 @@ Monty's documentation and roadmap from the project's published site instead.
 
 ### Where to look
 
-| Question | Look at |
-| --- | --- |
-| Where would Monty's `a/b.py::C` live here? | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex), rule in [`module-map.md`](module-map.md) |
-| Is this ported, planned or excluded? | the same entry's `status`; `mix monty.port_census` for what planned means |
-| Does this config still mean what Monty means? | [`config-compatibility.md`](config-compatibility.md), then `mix monty.config.snapshots` |
-| How does a timestep run, and where is Python involved? | [`architecture.md`](architecture.md) — and [what is Python here](#what-is-python-here-and-what-it-does) below |
-| What does the world boundary allow? | [`simulator-port.md`](simulator-port.md) |
-| Which files are Monty's, copied, and which are ours? | [`from-monty.md`](from-monty.md) — every path, glob and the task that writes it; [`architecture.md`](architecture.md#what-comes-from-monty) for why the boundary is there |
-| How do I refresh Monty's YAML, snapshots or memories? | `mix monty.inputs`, [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) |
-| Why does this disagree with Python? | [`monty-differences.md`](monty-differences.md) |
-| What is actually proven? | [`validation.md`](validation.md) and [`test/fixtures/`](../test/fixtures) |
-| What is not built yet? | [`roadmap.md`](roadmap.md), [`open-ends.md`](open-ends.md) |
-| Which Monty is this repo pinned to? | [`priv/monty/inputs.json`](../priv/monty/inputs.json) |
-| Which build am I looking at? | `priv/build_info.json` (written by `mix build.info`), also in the footer of every page |
-| How does it run in a container? | [`container.md`](container.md), [`Dockerfile`](../Dockerfile) |
+| Question                                               | Look at                                                                                                                                                                   |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Where would Monty's `a/b.py::C` live here?             | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex), rule in [`module-map.md`](module-map.md)                                                               |
+| Is this ported, planned or excluded?                   | the same entry's `status`; `mix monty.port_census` for what planned means                                                                                                 |
+| Does this config still mean what Monty means?          | [`config-compatibility.md`](config-compatibility.md), then `mix monty.config.snapshots`                                                                                   |
+| How does a timestep run, and where is Python involved? | [`architecture.md`](architecture.md) — and [what is Python here](#what-is-python-here-and-what-it-does) below                                                             |
+| What does the world boundary allow?                    | [`simulator-port.md`](simulator-port.md)                                                                                                                                  |
+| Which files are Monty's, copied, and which are ours?   | [`from-monty.md`](from-monty.md) — every path, glob and the task that writes it; [`architecture.md`](architecture.md#what-comes-from-monty) for why the boundary is there |
+| How do I refresh Monty's YAML, snapshots or memories?  | `mix monty.inputs`, [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh)                                                                               |
+| Why does this disagree with Python?                    | [`monty-differences.md`](monty-differences.md)                                                                                                                            |
+| What is actually proven?                               | [`validation.md`](validation.md) and [`test/fixtures/`](../test/fixtures)                                                                                                 |
+| What is not built yet?                                 | [`roadmap.md`](roadmap.md), [`open-ends.md`](open-ends.md)                                                                                                                |
+| Which Monty is this repo pinned to?                    | [`priv/monty/inputs.json`](../priv/monty/inputs.json)                                                                                                                     |
+| Which build am I looking at?                           | `priv/build_info.json` (written by `mix build.info`), also in the footer of every page                                                                                    |
+| How does it run in a container?                        | [`container.md`](container.md), [`Dockerfile`](../Dockerfile)                                                                                                             |
 
 ### What not to do
 
@@ -185,11 +194,11 @@ that comes from Monty, including what is generated or started rather than copied
 
 Only the world and the recorders. Nothing of Monty's own source is vendored:
 
-| Python | What it is | Needs |
-| --- | --- | --- |
-| [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) | the simulator and eval interface of the experiment's own config, behind the port's protocol — the world a run steps unless it chooses the stand-in | `$MONTY_PYTHON` with `tbp.monty` and its simulator installed |
-| [`scripts/record_monty_*.py`](../scripts) | produce the fixtures the parity tests replay; run Monty once, offline, and write what it answered | `$MONTY_PYTHON` with the modules each recorder touches |
-| [`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py), [`scripts/classify_monty_classes.py`](../scripts/classify_monty_classes.py) | behind [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) and `mix monty.port_census` | `torch` for the export; plain `ast` for the census |
+| Python                                                                                                                                                     | What it is                                                                                                                                         | Needs                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py)                                                                                    | the simulator and eval interface of the experiment's own config, behind the port's protocol — the world a run steps unless it chooses the stand-in | `$MONTY_PYTHON` with `tbp.monty` and its simulator installed |
+| [`scripts/record_monty_*.py`](../scripts)                                                                                                                  | produce the fixtures the parity tests replay; run Monty once, offline, and write what it answered                                                  | `$MONTY_PYTHON` with the modules each recorder touches       |
+| [`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py), [`scripts/classify_monty_classes.py`](../scripts/classify_monty_classes.py) | behind [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) and `mix monty.port_census`                                         | `torch` for the export; plain `ast` for the census           |
 
 None of this runs during a test unless the test asks for it. The boundary tests
 start [`test/support/probe_world.py`](../test/support/probe_world.py) with the
@@ -226,57 +235,57 @@ and `../tbp.teleop`), and `mix monty.port_census` reads it as well.
 
 ## Invariants
 
-* **Module for module.** Python `path/file.py::Class` becomes
+- **Module for module.** Python `path/file.py::Class` becomes
   `Monty.Path.File.Class`, with a repeated segment collapsed and the class
   dropped when it repeats the file.
   [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex) records the
   mapping and `mix monty.module_map.verify` fails when a Monty file has no
   entry or an `implemented` entry has no module. Do not "improve" a name to
   fit Elixir style; recognisability is the point.
-* **Functional core, actor shell.** Ported algorithms are pure functions over
+- **Functional core, actor shell.** Ported algorithms are pure functions over
   plain data, one-to-one with Python, tested directly. `Monty.Runtime.*` owns
   processes, routing and telemetry, and contains no algorithm. A GenServer
   callback that computes is a bug. Two exceptions are named rather than
   tolerated: a draw from the episode's stream, and a world, which holds a port.
-* **Processes have a typed client API.** Call sites use
+- **Processes have a typed client API.** Call sites use
   `SensorModuleServer.step(server, ...)` or
   `LearningModuleServer.send_out_vote(server)`, never raw `GenServer.call/3`.
   The client functions and the callbacks are separate sections of the module,
   and every entry point carries a typespec.
-* **Configs are read, never invented.** The Hydra subset implemented in
+- **Configs are read, never invented.** The Hydra subset implemented in
   `Monty.Config` is exactly what Monty's tree uses. Adding a resolver or a
   default means finding the corresponding use in Monty's `conf/`, not
   guessing.
-* **The snapshots are the oracle.** `tests/conf/snapshots/*.yaml` in a Monty
+- **The snapshots are the oracle.** `tests/conf/snapshots/*.yaml` in a Monty
   checkout is what Hydra composed. `mix monty.config.snapshots` compares path
   by path; a missing key is as much a difference as a wrong value.
-* **Interpolations never survive into runtime.** Composition keeps `${...}`
+- **Interpolations never survive into runtime.** Composition keeps `${...}`
   (as Monty's snapshots do); `Monty.Config.Resolvers` resolves them and reports
   unknown references instead of passing a `${...}` string along.
-* **One RNG stream per episode.** Determinism is a feature: `Monty.Random.Stream`
+- **One RNG stream per episode.** Determinism is a feature: `Monty.Random.Stream`
   is the episode's one NumPy stream, a child of the model, and a module draws
   from it through `Monty.Context.rng` in the order it is stepped. That is why
   sensor modules are stepped one at a time. `Monty.Context.rng_for/2` derives a
   stream per module per step for the sites not yet moved onto the stream (noise
   transforms, a camera's message noise); it is a different set of numbers by
   construction, and [`monty-differences.md`](monty-differences.md) §2.1 lists what is left.
-* **CMP payloads are validated at construction.** `Message.new/1` and
+- **CMP payloads are validated at construction.** `Message.new/1` and
   `Goal.new/1` return `{:ok, struct} | {:error, reason}`; a process building a
   bad message gets an error, not a crash.
-* **Config is read at boot** (`config/*.exs`); the dev reloader does not
+- **Config is read at boot** (`config/*.exs`); the dev reloader does not
   reload it.
 
 ## Tests
 
-| Level | Where | Question |
-| --- | --- | --- |
-| Unit | [`test/monty/`](../test/monty) | what does a pure module decide? |
-| Parity | `test/monty/**/*_parity_test.exs` | are these Monty's numbers? |
-| Config | [`test/monty/config/`](../test/monty/config) | does Monty's config mean the same here? |
-| Contract | [`test/monty/module_map_test.exs`](../test/monty/module_map_test.exs) | is the port still module for module? |
-| Tasks | [`test/mix/`](../test/mix) | what does a Mix task do when a checkout is missing, stale or dirty? |
-| Application | [`test/ex_tbp_monty/`](../test/ex_tbp_monty) | the non-web parts of the app: MCP, prerequisites, release plumbing |
-| Component / web | [`test/ex_tbp_monty_web/`](../test/ex_tbp_monty_web) | what does a page or component render? |
+| Level           | Where                                                                 | Question                                                            |
+| --------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Unit            | [`test/monty/`](../test/monty)                                        | what does a pure module decide?                                     |
+| Parity          | `test/monty/**/*_parity_test.exs`                                     | are these Monty's numbers?                                          |
+| Config          | [`test/monty/config/`](../test/monty/config)                          | does Monty's config mean the same here?                             |
+| Contract        | [`test/monty/module_map_test.exs`](../test/monty/module_map_test.exs) | is the port still module for module?                                |
+| Tasks           | [`test/mix/`](../test/mix)                                            | what does a Mix task do when a checkout is missing, stale or dirty? |
+| Application     | [`test/ex_tbp_monty/`](../test/ex_tbp_monty)                          | the non-web parts of the app: MCP, prerequisites, release plumbing  |
+| Component / web | [`test/ex_tbp_monty_web/`](../test/ex_tbp_monty_web)                  | what does a page or component render?                               |
 
 Conventions: `start_supervised!/1` for processes, `Process.monitor/1` or
 `_ = :sys.get_state/1` instead of `Process.sleep/1`, assertions about
@@ -302,7 +311,7 @@ mix dialyzer                  # separate CI job; PLT cached
 Sobelow's findings are reviewed where they are raised, not in a list. A call that
 is not a traversal — a path this application built from a name it checked, a file
 of its own — carries `# sobelow_skip ["Traversal.FileModule"]` immediately above
-the function, with the reason on the line above *that*. There is no
+the function, with the reason on the line above _that_. There is no
 `.sobelow-skips`: a file that says "we ignore directory traversal, XSS and code
 execution" is a file nobody reviews, and it hides which of the findings were
 looked at.
@@ -328,7 +337,7 @@ job, so it is what a release tag — or `gh workflow run ci --ref main --field
 image=true` — pays for, and only then does the tag carry both architectures.
 
 The publishing job waits for lint, test and types, scans the result with Trivy,
-and starts it as uid 10001 before pushing. The scan fails on any *fixable* HIGH
+and starts it as uid 10001 before pushing. The scan fails on any _fixable_ HIGH
 or CRITICAL finding; a finding this repository cannot fix — one vendored inside a
 third-party wheel, say — is written down in
 [`.trivyignore.yaml`](../.trivyignore.yaml) with the reason and the date the
@@ -350,7 +359,7 @@ over already-built beams. The suite is therefore the only thing worth splitting,
 and anything else is noise by comparison.
 
 It is split four ways. `mix test --partitions 4` hands each runner a slice of
-the test *files*, which asks nothing of the tests themselves — no tags to
+the test _files_, which asks nothing of the tests themselves — no tags to
 maintain, no list to keep in step. A partition sees a quarter of the lines the
 suite can reach, so it runs with the threshold off (`COVERAGE_THRESHOLD=0`) and
 exports what it covered; the `report` job merges the four exports, holds the
@@ -379,9 +388,9 @@ mix cover.merge && mix complexity  # the same total, ranked
 
 Two things are skipped on purpose, because they were pure cost:
 
-* a push that only changes prose (`**/*.md`, `LICENSE`) — nothing it touches is
+- a push that only changes prose (`**/*.md`, `LICENSE`) — nothing it touches is
   compiled or shipped;
-* a pull request from a branch in this repository, whose push run has already
+- a pull request from a branch in this repository, whose push run has already
   checked it and is what the pull request shows. A fork has no push run here,
   so a fork's PR is checked through the PR.
 

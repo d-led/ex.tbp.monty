@@ -2,14 +2,14 @@
 
 Monty's world is a Python process (MuJoCo, Habitat, later a camera). It cannot
 run in the BEAM, so it sits on the other side of a port, and everything that is
-*not* the world — the model, the body, the policies, the learning modules — stays
+_not_ the world — the model, the body, the policies, the learning modules — stays
 here.
 
 Elixir side, both written and tested:
 
-| Module | What it is |
-| --- | --- |
-| `Monty.Simulators.Port.Protocol` | the contract, in both directions |
+| Module                              | What it is                                                                        |
+| ----------------------------------- | --------------------------------------------------------------------------------- |
+| `Monty.Simulators.Port.Protocol`    | the contract, in both directions                                                  |
 | `Monty.Simulators.Port.Environment` | the process that owns the port: one request in flight, a timeout that is an error |
 
 The Python side is [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py):
