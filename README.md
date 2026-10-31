@@ -14,6 +14,10 @@ The port follows Monty module for module, so the two can be read side by side,
 and it is checked against Monty rather than against a description of it. Where
 it deliberately differs, it says so.
 
+It speaks the Model Context Protocol as well, so an assistant can ask it about
+Monty — its theory, its roadmap, its code — and define and run an experiment
+without leaving the conversation.
+
 ## Quickstart
 
 ```bash
@@ -39,6 +43,19 @@ stopped.
 Nothing large is in the image. Data and pretrained models are downloaded at
 `/prerequisites`, into the same paths Monty uses, and a run says what it is
 missing.
+
+## An MCP server
+
+The studio also speaks the Model Context Protocol at `/mcp`, so an assistant can
+ask it about Monty's theory, its roadmap and its code, and about this port — and
+preview, save and run an experiment from the conversation. Each request is one
+JSON-RPC message in and one answer out, and the answers are read from the
+sources: Monty's `docs/` in a checkout, the module map, `Monty.Studio` and the
+run table.
+
+`http://localhost:4001/mcp` is the quickstart's port, and VS Code is already
+pointed at it in `.vscode/mcp.json`. [docs/mcp.md](docs/mcp.md) lists the tools
+and a first request.
 
 ## From source
 
@@ -83,19 +100,6 @@ mix monty.run tutorial/first_experiment --steps 20
 ```
 
 [docs/features.md](docs/features.md) has the flags and `mix monty.bench`.
-
-## An MCP server
-
-The studio also speaks the Model Context Protocol at `/mcp`, so an assistant can
-ask it about Monty's theory, its roadmap and its code, and about this port — and
-preview, save and run an experiment from the conversation. Each request is one
-JSON-RPC message in and one answer out, and the answers are read from the
-sources: Monty's `docs/` in a checkout, the module map, `Monty.Studio` and the
-run table.
-
-`http://localhost:4001/mcp` is the quickstart's port, and VS Code is already
-pointed at it in `.vscode/mcp.json`. [docs/mcp.md](docs/mcp.md) lists the tools
-and a first request.
 
 ## Documentation
 
