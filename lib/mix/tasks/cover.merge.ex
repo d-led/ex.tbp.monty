@@ -20,6 +20,11 @@ defmodule Mix.Tasks.Cover.Merge do
 
   use Mix.Task
 
+  # `:cover` is Erlang's, from the `tools` application: present whenever this
+  # task can be useful (`mix test --cover` starts it), but not compiled as part
+  # of this project, so the compiler would warn about every call below.
+  @compile {:no_warn_undefined, :cover}
+
   @glob "cover/*.coverdata"
   @output "cover/default.coverdata"
   @merged Path.basename(@output)
