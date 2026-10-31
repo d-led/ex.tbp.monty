@@ -48,9 +48,20 @@ defmodule ExTbpMontyWeb.Layouts do
           </.link>
 
           <nav class="ms-auto flex flex-wrap items-center gap-1">
-            <.nav_link navigate={~p"/"} label="Experiments" icon="hero-beaker-mini" />
-            <.nav_link navigate={~p"/build"} label="Build" icon="hero-wrench-screwdriver-mini" />
             <.nav_link
+              id="nav-experiments"
+              navigate={~p"/"}
+              label="Experiments"
+              icon="hero-beaker-mini"
+            />
+            <.nav_link
+              id="nav-build"
+              navigate={~p"/build"}
+              label="Build"
+              icon="hero-wrench-screwdriver-mini"
+            />
+            <.nav_link
+              id="nav-prerequisites"
               navigate={~p"/prerequisites"}
               label="Prerequisites"
               icon="hero-arrow-down-tray-mini"
@@ -59,7 +70,7 @@ defmodule ExTbpMontyWeb.Layouts do
             decided and, while a run is unfinished, where it is in the queue.
             The queue's own page is one click from there, for the operator who
             needs to stop something. --%>
-            <.nav_link navigate={~p"/runs"} label="Runs" icon="hero-play-mini" />
+            <.nav_link id="nav-runs" navigate={~p"/runs"} label="Runs" icon="hero-play-mini" />
           </nav>
         </div>
       </header>
@@ -215,10 +226,11 @@ defmodule ExTbpMontyWeb.Layouts do
   attr :navigate, :string, required: true
   attr :label, :string, required: true
   attr :icon, :string, required: true
+  attr :id, :string, default: nil
 
   def nav_link(assigns) do
     ~H"""
-    <.link navigate={@navigate} class="btn btn-ghost btn-sm gap-1.5 font-normal">
+    <.link id={@id} navigate={@navigate} class="btn btn-ghost btn-sm gap-1.5 font-normal">
       <.icon name={@icon} class="size-4 opacity-70" />
       {@label}
     </.link>

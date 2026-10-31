@@ -3,6 +3,9 @@
 
 @import "tailwindcss" source(none);
 @import "phoenix-colocated/ex_tbp_monty/colocated.css";
+/* The first-time walkthrough's own chrome. driver.js ships plain CSS with class
+   names of its own, so no Tailwind scan is needed for it. */
+@import "driver.js/dist/driver.css";
 @source "../css";
 @source "../js";
 @source "../../lib/ex_tbp_monty_web";

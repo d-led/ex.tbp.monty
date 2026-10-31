@@ -37,6 +37,37 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
     end
   end
 
+  describe "the walkthrough a first-time visitor is offered" do
+    test "every step points at something this page actually shows", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      for %{element: selector} <- ExTbpMontyWeb.Tour.steps() do
+        assert has_element?(view, selector), "the tour points at #{selector}, which is not here"
+      end
+    end
+
+    test "the page offers a button that starts it, carrying the steps", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      assert has_element?(view, "button#tour-start[phx-hook=StudioTour]")
+
+      [payload] =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#tour-start")
+        |> LazyHTML.attribute("data-steps")
+
+      assert [%{"element" => _} | _] = Jason.decode!(payload)
+    end
+
+    test "the button is outside LiveView's patching, so the hook keeps its element", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      assert has_element?(view, "#tour-start[phx-update=ignore]")
+    end
+  end
+
   describe "narrowing the list" do
     test "a facet pill narrows the list and shows up as a chip", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")

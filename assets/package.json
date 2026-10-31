@@ -3,5 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Browser dependencies for the Monty-on-the-BEAM dashboard",
-  "dependencies": {}
+  "dependencies": {
+    "driver.js": "^1.10.2"
+  }
 }

@@ -17,6 +17,8 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
 
   alias Monty.Studio.{Catalog, Drafts, Index}
 
+  alias ExTbpMontyWeb.Tour
+
   @page_size 30
 
   @impl true
@@ -26,7 +28,8 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
      |> assign(
        index: Index.build(Catalog.experiments()),
        templates: Catalog.templates(),
-       drafts: Drafts.names()
+       drafts: Drafts.names(),
+       tour: %{steps: Tour.payload(), seen_key: Tour.seen_key()}
      )
      |> stream_configure(:experiments, dom_id: &"experiment-#{dom_id_of(&1.name)}")
      |> stream(:experiments, [])}
@@ -54,28 +57,46 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <header class="space-y-2">
-        <h1 class="text-3xl font-semibold tracking-tight">Monty experiments</h1>
-        <p class="max-w-3xl text-base-content/70">
-          {@result.total} experiments, each one of Monty's own configs. Narrow the list by
-          agent, module count, learning module or starting point — or open one to see how it
-          is wired before it runs.
-        </p>
+      <header id="intro" class="flex flex-wrap items-start justify-between gap-3">
+        <div class="space-y-2">
+          <h1 class="text-3xl font-semibold tracking-tight">Monty experiments</h1>
+          <p class="max-w-3xl text-base-content/70">
+            {@result.total} experiments, each one of Monty's own configs. Narrow the list by
+            agent, module count, learning module or starting point — or open one to see how it
+            is wired before it runs.
+          </p>
+        </div>
 
-        <form id="experiment-search" phx-change="search" class="flex flex-wrap items-center gap-2">
-          <input
-            type="search"
-            name="q"
-            value={@params["q"]}
-            placeholder="Search names and components…"
-            phx-debounce="200"
-            class="input input-bordered input-sm w-full sm:w-80"
-          />
-          <.link navigate={~p"/build"} class="btn btn-primary btn-sm">
-            <.icon name="hero-wrench-screwdriver-mini" class="size-4" /> Build
-          </.link>
-        </form>
+        <%!-- The tour is offered once per browser and started from here after
+        that. driver.js reads the steps off this button and appends its popovers
+        to <body>, outside the LiveView tree. --%>
+        <button
+          id="tour-start"
+          type="button"
+          phx-hook="StudioTour"
+          phx-update="ignore"
+          data-steps={@tour.steps}
+          data-seen-key={@tour.seen_key}
+          class="btn btn-ghost btn-sm gap-1.5 font-normal"
+          title="Show the tour"
+        >
+          <.icon name="hero-question-mark-circle-mini" class="size-4 opacity-70" /> tour
+        </button>
       </header>
+
+      <form id="experiment-search" phx-change="search" class="flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          name="q"
+          value={@params["q"]}
+          placeholder="Search names and components…"
+          phx-debounce="200"
+          class="input input-bordered input-sm w-full sm:w-80"
+        />
+        <.link navigate={~p"/build"} class="btn btn-primary btn-sm">
+          <.icon name="hero-wrench-screwdriver-mini" class="size-4" /> Build
+        </.link>
+      </form>
 
       <section id="facets" class="space-y-2">
         <div
