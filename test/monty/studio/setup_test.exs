@@ -352,13 +352,27 @@ defmodule Monty.Studio.SetupTest do
     end
 
     test "and says which one it is, in words a page can show" do
-      # A stand-in scene and Monty's simulator are not the same claim about a
+      # A stand-in scene and Monty's own world are not the same claim about a
       # run, so the page gets two different answers rather than one "world".
       assert Setup.world_name(setup_for("tutorial/first_experiment")) ==
-               "stand-in scene (Elixir)"
+               "stand-in scene (Elixir, one sphere)"
 
+      # And Monty's own world is named by the engine its config picks: this
+      # experiment names `MuJoCoSimulator`, not Habitat.
       assert Setup.world_name(setup_for("tutorial/first_experiment", world_simulator: :habitat)) ==
-               "Monty's simulator (python process)"
+               "MuJoCo (Monty's, out of process)"
+    end
+
+    test "names Habitat-Sim when the experiment's config is a habitat one" do
+      setup = setup_for("tutorial/first_experiment", world_simulator: :habitat)
+
+      # The same world choice, a different engine, because the config says so.
+      habitat = %{
+        setup
+        | environment: %{setup.environment | module: %{class: "HabitatEnvironment"}}
+      }
+
+      assert Setup.world_name(habitat) == "Habitat-Sim (Monty's, out of process)"
     end
 
     test "is Monty's HabitatEnvironment, named by the experiment, when it can be" do

@@ -13,8 +13,13 @@ Elixir side, both written and tested:
 | `Monty.Simulators.Port.Environment` | the process that owns the port: one request in flight, a timeout that is an error |
 
 The Python side is [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py):
-Monty's own `HabitatEnvironment` and the experiment's eval interface, on the far
-side of the port, driven by Hydra out of a checkout. `Monty.Simulators.Habitat.Environment.HabitatEnvironment`
+the experiment's own eval interface and its own environment class, on the far
+side of the port, driven by Hydra out of a checkout. Which class that is comes
+from the composed config rather than from this port: the `mujoco_*` environments
+name `MuJoCoSimulator` (nineteen of the shipped ones, `tutorial/first_experiment`
+and `base_config_10distinctobj_dist_agent` among them) and the `habitat_*` ones
+name `HabitatEnvironment`, Habitat-Sim. The page's world selector names the
+engine it finds there, so "Monty's own world" is never a guess. `Monty.Simulators.Habitat.Environment.HabitatEnvironment`
 is the handle a run holds and the name in the module map, and a run that
 chooses Monty's world makes `Monty.Studio.Setup` build it — per run, from the
 page's world selector or `world` on `monty_run_experiment`. `MONTY_WORLD=monty`

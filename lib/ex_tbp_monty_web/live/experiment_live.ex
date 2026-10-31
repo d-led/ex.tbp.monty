@@ -246,15 +246,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               :if={@opened}
               id="world-select"
               name="world"
-              class="select select-xs w-56"
+              class="select select-xs w-72"
               aria-label="Which world the run steps"
             >
+              <%!-- Both are named for what they are: this port's stand-in, or
+              Monty's own world named by the engine the experiment's config
+              picks (MuJoCo, or Habitat-Sim for the habitat_* ones). --%>
               <option
                 :for={world <- [:synthetic, :habitat]}
                 value={world}
                 selected={world == @opened.setup.world}
               >
-                {Setup.world_name(world)}
+                {Setup.world_name(@opened.setup, world)}
               </option>
             </select>
           </form>
@@ -790,16 +793,20 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp world_badge(%{world: :habitat}), do: "badge-ghost"
   defp world_badge(_setup), do: "badge-warning"
 
-  defp world_note(%{world: :habitat}) do
-    "MuJoCo or Habitat, whichever this experiment names, stepped in a Python " <>
-      "process behind Monty.Simulators.Port"
+  defp world_note(%{world: :habitat} = setup) do
+    "Monty's own world, stepped in a Python process behind Monty.Simulators.Port: " <>
+      "the experiment's `environment` names the engine — #{engine_of(setup)} — and " <>
+      "this port carries it out."
   end
 
   defp world_note(_setup) do
     "This port's own scene: one sphere, stepped in the BEAM. A run here exercises " <>
-      "the port, not the experiment — choose Monty's simulator above, and set " <>
+      "the port, not the experiment — choose Monty's own world above, and set " <>
       "MONTY_PYTHON to the interpreter Monty lives in."
   end
+
+  defp engine_of(%{environment: %{module: %{class: class}}}), do: class
+  defp engine_of(_setup), do: "the config's simulator"
 
   # What the selector sends back, as the atom a setup carries. A value that is
   # neither is nothing to do, because a page cannot ask for a world no port here

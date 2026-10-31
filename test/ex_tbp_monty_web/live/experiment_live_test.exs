@@ -38,12 +38,18 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # queue: the stand-in warning is gone because the run is no longer one.
       view |> element("#world-choice") |> render_change(%{"world" => "habitat"})
 
-      # The badge reads "(python process)" for Monty's world and "stand-in
-      # scene" for this port's — the two answers a reader has to tell apart.
-      assert view |> element("#world") |> render() =~ "simulator (python process)"
+      # The badge names the engine for Monty's world — MuJoCo for this
+      # experiment — and "stand-in scene" for this port's: the two answers a
+      # reader has to tell apart.
+      assert view |> element("#world") |> render() =~ "MuJoCo"
       refute render(view) =~ "world_is_a_stand_in"
 
-      assert view |> element("#world-select") |> render() =~ ~s(selected)
+      # Both options are named for what they are, so "Monty's world" is never a
+      # mystery: the engine comes from the experiment's own config.
+      select = view |> element("#world-select") |> render()
+      assert select =~ "stand-in scene (Elixir, one sphere)"
+      assert select =~ "MuJoCo (Monty&#39;s, out of process)"
+      assert select =~ ~s(selected)
     end
 
     test "the run is recorded with the world it was given", %{conn: conn} do

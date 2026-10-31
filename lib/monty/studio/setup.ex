@@ -498,20 +498,45 @@ defmodule Monty.Studio.Setup do
   @doc """
   Which world this experiment would step, in the words a page can show.
 
-  The difference is not cosmetic: `:habitat` runs Monty's own `HabitatEnvironment`
-  in a Python process — MuJoCo, or Habitat for the experiments that still use it
-  — and its numbers are Monty's. `:synthetic` is this port's stand-in scene, one
-  sphere stepped in the BEAM, and nothing it produces is a result of the
-  experiment. A page deciding whether to trust a run has to be able to say which
-  one it is looking at, so it is said in the header rather than in a warning
-  somewhere below.
-  """
-  @spec world_name(t() | :synthetic | :habitat) :: String.t()
-  def world_name(%__MODULE__{world: world}), do: world_name_of(world)
-  def world_name(world) when world in [:synthetic, :habitat], do: world_name_of(world)
+  The two are not two simulators of ours: one is *Monty's own world*, run out of
+  process, and the other is this port's stand-in. Monty's world is whatever the
+  experiment's config names — `MuJoCoSimulator` for every experiment that names a
+  `mujoco_*` environment, Monty's `HabitatEnvironment` (Habitat-Sim) for the
+  `habitat_*` ones — so the name says which engine that is rather than repeating
+  "python".
 
-  defp world_name_of(:habitat), do: "Monty's simulator (python process)"
-  defp world_name_of(:synthetic), do: "stand-in scene (Elixir)"
+  `:synthetic` is this port's scene: one sphere stepped in the BEAM, which exists
+  so a run works where Monty's environment is not installed. Nothing it produces
+  is a result of the experiment, and a page deciding whether to trust a run has to
+  be able to say so in the header rather than in a warning somewhere below.
+
+  (`:habitat` is the historical name for "Monty's own world", from when
+  Habitat-Sim was the only one Monty had. It is still the atom a run records, so
+  old runs keep meaning what they meant.)
+  """
+  @spec world_name(t()) :: String.t()
+  def world_name(%__MODULE__{world: world} = setup), do: world_name(setup, world)
+
+  @doc """
+  One of the two worlds, named in the context of this setup — which is what the
+  selector offers, because the engine behind "Monty's own world" is the config's.
+  """
+  @spec world_name(t(), :synthetic | :habitat) :: String.t()
+  def world_name(_setup, :synthetic), do: "stand-in scene (Elixir, one sphere)"
+  def world_name(setup, :habitat), do: monty_world_name(setup)
+
+  # The class the experiment's `environment` block names, read out of the composed
+  # tree rather than guessed from the experiment's name.
+  defp monty_world_name(%__MODULE__{environment: %{module: %{class: class}}}) do
+    case class do
+      "MuJoCoSimulator" -> "MuJoCo (Monty's, out of process)"
+      "HabitatEnvironment" -> "Habitat-Sim (Monty's, out of process)"
+      "HabitatSim" -> "Habitat-Sim (Monty's, out of process)"
+      other -> "#{other} (Monty's, out of process)"
+    end
+  end
+
+  defp monty_world_name(%__MODULE__{}), do: "Monty's own world (out of process)"
 
   @doc """
   The world a run of this experiment steps: Monty's own, or the stand-in.
