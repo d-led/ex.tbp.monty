@@ -366,6 +366,6 @@ defmodule Monty.Studio.Run do
     if decision.time_out_lms, do: :ok = model.time_out(model_id)
   end
 
-  # The four things a policy may read off the model (`docs/monty-bugs.md` §2.17).
+  # The four things a policy may read off the model (`docs/monty-differences.md` §2.17).
   defp model_view(%__MODULE__{model: model, model_id: model_id}), do: model.status(model_id)
 end

@@ -7,7 +7,7 @@ Elixir — one process per module, every experiment Monty ships on a page in a
 browser, and an MCP endpoint for an assistant.
 
 The port is module for module and checked against Monty's own numbers;
-differences are listed in [docs/monty-bugs.md](docs/monty-bugs.md).
+differences are listed in [docs/monty-differences.md](docs/monty-differences.md).
 
 ## Run it
 
@@ -85,7 +85,7 @@ a module is added.
 ## Where it differs
 
 Monty steps one object graph in one loop; here every module is a process. What
-follows from that is argued in [docs/monty-bugs.md](docs/monty-bugs.md) §2.
+follows from that is argued in [docs/monty-differences.md](docs/monty-differences.md) §2.
 
 * **Voting is a message round.** With no deadline it is Monty's synchronous
   round; with one, the round closes when time is up and the step says how many
@@ -108,7 +108,7 @@ follows from that is argued in [docs/monty-bugs.md](docs/monty-bugs.md) §2.
 | [docs/module-map.md](docs/module-map.md) | where is that Python file here? |
 | [docs/config-compatibility.md](docs/config-compatibility.md) | which Hydra features are implemented, and how far parity goes |
 | [docs/validation.md](docs/validation.md) | what has been compared with Monty, and how closely |
-| [docs/monty-bugs.md](docs/monty-bugs.md) | every deliberate difference, and what looks wrong upstream |
+| [docs/monty-differences.md](docs/monty-differences.md) | every deliberate difference, and what looks wrong upstream |
 | [docs/simulator-port.md](docs/simulator-port.md) | where the world lives, and what is still Python |
 | [docs/developers.md](docs/developers.md) | how do I work on this? |
 | [docs/container.md](docs/container.md) | how do I run the image? every variable, the volumes, what it reports |

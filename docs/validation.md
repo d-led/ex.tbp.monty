@@ -52,7 +52,7 @@ they do.
 | `EvidenceSlopeTracker` and its `HypothesesSelection` | three histories: per-channel normalisation, a hypothesis with no usable evidence (Monty's NaN is the port's `nil`), removal renumbering | `1e-12` | [`test/monty/frameworks/models/evidence_matching/evidence_slope_tracker_parity_test.exs`](../test/monty/frameworks/models/evidence_matching/evidence_slope_tracker_parity_test.exs) |
 | `DefaultFeatureEvidenceCalculator` | three graphs: numeric, circular (hue the short way round) and categorical comparison, per-feature weights, and a node with a stored value missing | `1e-12` | [`test/monty/frameworks/models/evidence_matching/feature_evidence/default_feature_evidence_calculator_parity_test.exs`](../test/monty/frameworks/models/evidence_matching/feature_evidence/default_feature_evidence_calculator_parity_test.exs) |
 | `vocus2.images`: `rgb_to_opponent`, `rgb_to_opponent_codi` | nine colours covering black, white, grey, the primaries and a saturated off-grey | `1e-4`, which is float32 — OpenCV carries the same arithmetic in float32 | [`test/monty/frameworks/models/salience/strategies/vocus2/images_parity_test.exs`](../test/monty/frameworks/models/salience/strategies/vocus2/images_parity_test.exs) |
-| `vocus2.images`: `rgb_to_lab` | nine colours in the fixture; separately measured over **all 16,777,216** 8-bit colours | worst `2.67` of 255 — OpenCV's 8-bit tables quantise (§1.12 of `monty-bugs.md`) | same file |
+| `vocus2.images`: `rgb_to_lab` | nine colours in the fixture; separately measured over **all 16,777,216** 8-bit colours | worst `2.67` of 255 — OpenCV's 8-bit tables quantise (§1.12 of `monty-differences.md`) | same file |
 | `vocus2.images`: `gaussian_blur` | four sigma/truncation pairs on a 5×5 plane | `1e-4` | same file |
 | `vocus2.images`: `resize` | five cases: an octave halving by `:area`, an 8→3 shrink, and three `:cubic` enlargements | `1e-4` | same file |
 | `pyramids`: octave resolutions, Gaussian pyramid, centre/surround, Laplacian, combine by maximum, combine by mean, collapse by sum | an 8×8 image with structure at two sizes: 4 octaves × 3 scales, every plane of every octave | `1e-4` | [`test/monty/frameworks/models/salience/strategies/vocus2/pyramids_parity_test.exs`](../test/monty/frameworks/models/salience/strategies/vocus2/pyramids_parity_test.exs) |
@@ -61,11 +61,11 @@ they do.
 | `SalienceSM` **end to end** — strategy, on-object reshape, inhibitor, weights, goals | three views of a moving sensor: 144 on-object pixels each, blob and point cloud shifted between steps so the inhibitor has somewhere new to suppress | goal locations and their order **exact**; salience and inhibitor weights `1e-6`; confidences within `0.5` of Monty's, because the dither is Monty's random stream and not the port's (§2.1) — measured worst `0.36` | [`test/monty/frameworks/models/salience/sensor_module/salience_sm_parity_test.exs`](../test/monty/frameworks/models/salience/sensor_module/salience_sm_parity_test.exs) |
 | `LookAtGoal` — the turn and the pitch | 4 agent poses (turned 0°, 30°, 120° with the sensor pitched, and tilted forward) × 5 goal locations, including one behind the agent and one across the body | `1e-9` degrees on both actions | [`test/monty/frameworks/models/motor_policies/motor_policy_parity_test.exs`](../test/monty/frameworks/models/motor_policies/motor_policy_parity_test.exs) |
 | `LookAtGoal`'s refusal | a goal sitting on the sensor | the same `GoalCollocatedWithSensor` | same file |
-| `undo_last_action` (Monty's `fixme_undo_last_action`) | the six actions an informed policy samples — with constraint degrees on the looks and a direction on the tangential move — and one it cannot sample | the inverse's class and every field **exact**; a refusal where Monty raises `TypeError` (§2.8 of `monty-bugs.md`) | same file |
+| `undo_last_action` (Monty's `fixme_undo_last_action`) | the six actions an informed policy samples — with constraint degrees on the looks and a direction on the tangential move — and one it cannot sample | the inverse's class and every field **exact**; a refusal where Monty raises `TypeError` (§2.8 of `monty-differences.md`) | same file |
 | `InformedPolicyRandomWalk` | five steps of one walk with a constant sampler: off the object with nothing to undo, twice on it, twice off it | the action each step emits and the action it remembers, **exact** — the remembered action is inverted each time it is used, so a sensor that keeps leaving the object walks back and forth across the edge | same file |
 | `InformedPolicy`'s jump | a hypothesis jump from a recorded pose with a gaze-direction goal, the step where nothing is visible at the landing point, and the step after the undo | the `SetAgentPose` the goal derives — location and `wxyz` quaternion, `1e-9` — the `SetSensorRotation` that resets the sensor, the same two actions carrying the *pre-jump* pose back, and the walk resuming with a `MoveForward` | same file |
 | `GetGoodView`: the fraction of the view on an object, the turn and the pitch | a 16×16 view with two objects, four poses, and four relative locations | `1e-12` on the fractions; `1e-9` degrees on both rotations | [`test/monty/frameworks/environments/positioning_procedures/get_good_view_parity_test.exs`](../test/monty/frameworks/environments/positioning_procedures/get_good_view_parity_test.exs) |
-| `GetGoodView`: the pixel it aims at | a notched 16×16 object, smoothed with `scipy.ndimage.gaussian_filter` — a different Gaussian from OpenCV's (§1.15 of `monty-bugs.md`) | the location, `1e-12` metres | same file |
+| `GetGoodView`: the pixel it aims at | a notched 16×16 object, smoothed with `scipy.ndimage.gaussian_filter` — a different Gaussian from OpenCV's (§1.15 of `monty-differences.md`) | the location, `1e-12` metres | same file |
 | `GetGoodView`: whether the centre pixel is on the object, and whether to move | four views: close enough by percentage, close enough by distance, still far, and a target absent from a two-object scene, plus a one-object scene with nothing in it | the same verdicts, the same `MoveForward`, and the same `ObjectNotVisibleError` | same file |
 | `GetGoodView`: the state machine, replayed whole | two episodes — move, move, turn, done, and the extra turn a two-object scene takes first — with the procedure carried from step to step | every action in every step, and each step's `success`/`terminated`/`truncated` | same file |
 | `Interface` — the environment interface | a stub world that counts its steps and two transforms that report what they are handed | the *order*: each transform runs in the configured sequence, each sees the previous one's answer, each gets a pose and a stream, the world's pose comes back untouched, and a second step stays on the same world | [`test/monty/experiment/environment/interface_test.exs`](../test/monty/experiment/environment/interface_test.exs) |
@@ -161,7 +161,7 @@ error: the run starts empty and says so as a warning before it takes a step,
 because a run with nothing to recognise with cannot recognise anything, however
 long it runs. Loading is six seconds of gunzip and graph building, so the decoded
 memory is kept per library and each run is handed a copy — learning writes to it,
-and two runs must not share one (§2.18 of `monty-bugs.md`).
+and two runs must not share one (§2.18 of `monty-differences.md`).
 
 What a run reports therefore changed: it says what its learning modules
 concluded, or that they were timed out. `tutorial/first_experiment` now ends
@@ -184,7 +184,7 @@ Saying this plainly matters more than the table above:
   there every episode so far ends on the object Monty names, in a number of
   steps that is Monty's only up to the random-stream difference below.
 - **The path of a run, past its first steps.** The model's draws are Monty's now
-  (§2.1 of `monty-bugs.md`), and the first action of an episode is Monty's to the
+  (§2.1 of `monty-differences.md`), and the first action of an episode is Monty's to the
   last digit — but from some later step the two runs part, and two of ten episodes
   of the comparison above agree on their step count. Two draw sites are still on
   their own stream (`DepthTo3DLocations` noise and a camera's message noise), and
@@ -284,7 +284,7 @@ Saying this plainly matters more than the table above:
   or they import a different Monty checkout.
   [`scripts/setup_monty_oracle.sh`](../scripts/setup_monty_oracle.sh) builds a
   pip-only stand-in where Monty's environment is absent, with newer versions
-  (§2.15 of [`monty-bugs.md`](monty-bugs.md)).
+  (§2.15 of [`monty-differences.md`](monty-differences.md)).
 - **Distractors.** `OneObjectPerEpisodeInterface` computes which objects a
   distractor may be drawn from and refuses to place any (§2.16), because the
   stand-in world holds one object. A config that asks for distractors therefore
@@ -565,7 +565,7 @@ Two rules, learned the hard way:
   environment is absent
   (`VENV=.monty-oracle WITH_TORCH=1 ./scripts/setup_monty_oracle.sh`), and prints
   the versions it installed, because they are newer than Monty's (§2.15 of
-  `monty-bugs.md`).
+  `monty-differences.md`).
 - Never tighten a tolerance to make a fixture pass, and never loosen one without
   saying in the test *why* the difference is not the port's. A too-generous
   tolerance hides a port bug; a too-tight one hides float32.

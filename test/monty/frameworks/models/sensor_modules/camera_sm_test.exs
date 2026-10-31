@@ -167,7 +167,7 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
 
       # The one exception is Monty's own: a sensor that asks for no curvature is
       # flagged with a `pose_fully_defined` of false, in the features rather than
-      # among the morphological ones (`docs/monty-bugs.md` §1.10).
+      # among the morphological ones (`docs/monty-differences.md` §1.10).
       assert percept.non_morphological_features == %{"pose_fully_defined" => false}
       assert percept.morphological_features["on_object"] == 1.0
     end

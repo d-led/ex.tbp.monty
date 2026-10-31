@@ -18,7 +18,7 @@ defmodule Monty.SensorModules.SensorModule.Transform do
   the frames it has seen, a background model remembers the background. In Elixir
   a struct cannot be mutated, so a transform answers the transform it leaves
   behind — `{payload, transform}` — and the sensor module keeps that one for the
-  next step. Same reason samplers answer their stream (`docs/monty-bugs.md`
+  next step. Same reason samplers answer their stream (`docs/monty-differences.md`
   §2.5), and the reason a reset has something to reset (§2.13).
   """
 

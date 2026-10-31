@@ -17,7 +17,7 @@ defmodule Monty.SensorModules.SensorModule do
   (`Monty.Frameworks.Models.AbstractMontyClasses.SensorModule`) — a sensor module
   *is* something with `update_state/2`, `step/4`, `reset/1` and the two proposal
   answers — so neither protocol becomes a module here
-  (`docs/monty-bugs.md` §2.13).
+  (`docs/monty-differences.md` §2.13).
 
   ## What it does not have
 

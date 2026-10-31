@@ -29,7 +29,7 @@ defmodule Monty.Experiment.Environment.OneObjectPerEpisodeInterface do
   ## The stream
 
   Distractor names are drawn from the source list, as Monty draws them, but from
-  this port's stream rather than his (`docs/monty-bugs.md` §2.1), so which
+  this port's stream rather than his (`docs/monty-differences.md` §2.1), so which
   distractors appear is not comparable — the *candidates* are, and they are what
   the test checks.
   """
@@ -219,7 +219,7 @@ defmodule Monty.Experiment.Environment.OneObjectPerEpisodeInterface do
   # Monty draws distractors from the source list and adds them around the target.
   # The stand-in world holds one object, so rather than pretend it placed them —
   # and let an evaluation believe it was measuring against distractors it never
-  # had — the interface says it cannot (`docs/monty-bugs.md` §2.16).
+  # had — the interface says it cannot (`docs/monty-differences.md` §2.16).
   defp place_distractors(%__MODULE__{num_distractors: 0} = interface, _object_id),
     do: {:ok, interface}
 

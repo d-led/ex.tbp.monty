@@ -15,7 +15,7 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ImagesParityTest do
     * the blur agrees to float32 precision for the same reason;
     * Lab goes through OpenCV's 8-bit lookup tables, which quantise, so the
       port's floating-point chain agrees to three units of 255 — measured over
-      all 16,777,216 colours, and recorded as §1.12 in `docs/monty-bugs.md`.
+      all 16,777,216 colours, and recorded as §1.12 in `docs/monty-differences.md`.
   """
 
   use ExUnit.Case, async: true

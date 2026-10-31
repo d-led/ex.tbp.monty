@@ -91,7 +91,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyRandomWalk do
   defp on_object?(nil), do: true
   defp on_object?(%Cmp.Message{} = percept), do: Cmp.Message.on_object?(percept)
 
-  # The stream is threaded through the policy (`docs/monty-bugs.md` §2.5).
+  # The stream is threaded through the policy (`docs/monty-differences.md` §2.5).
   defp sample(%__MODULE__{} = policy, ctx) do
     rng = ActionSampler.stream(policy.action_sampler, policy.rng, ctx)
     {action, rng} = ActionSampler.sample(policy.action_sampler, policy.agent_id, rng)

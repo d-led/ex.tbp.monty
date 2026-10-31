@@ -36,7 +36,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicy do
 
   Monty's `_handle_successful_jump`, which `SurfacePolicy` overrides; a policy
   that does not care answers itself unchanged. The policy's own module is asked
-  for it (`docs/monty-bugs.md` §2.9).
+  for it (`docs/monty-differences.md` §2.9).
   """
   @callback handle_successful_jump(t()) :: t()
 

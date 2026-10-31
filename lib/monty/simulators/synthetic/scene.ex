@@ -107,7 +107,7 @@ defmodule Monty.Simulators.Synthetic.Scene do
   Monty's worlds rather than a simplification — theirs are enclosed, so a camera
   pointed anywhere sees a floor, a wall or a ceiling at some distance, and a
   surface agent's search for a lost object relies on that
-  (`docs/monty-bugs.md` §1.7). Here there is nothing behind the object.
+  (`docs/monty-differences.md` §1.7). Here there is nothing behind the object.
   """
   @spec render(t(), %{position: Rotation.vector(), rotation: Rotation.t()}, keyword()) :: %{
           depth: [[float()]],

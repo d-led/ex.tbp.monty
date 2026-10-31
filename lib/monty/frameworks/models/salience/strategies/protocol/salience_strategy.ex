@@ -10,7 +10,7 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Protocol.SalienceStrategy 
 
   The `Monty.Context` comes with the images because a strategy may sample — a
   random walk over candidate locations does — and anything that samples has to be
-  reproducible from the episode seed (`docs/monty-bugs.md` §2.1).
+  reproducible from the episode seed (`docs/monty-differences.md` §2.1).
   """
 
   @type t :: struct()

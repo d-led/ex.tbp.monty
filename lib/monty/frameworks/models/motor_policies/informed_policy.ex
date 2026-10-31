@@ -23,7 +23,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   here and overridden by `SurfacePolicy`. The jump step itself,
   `goal_driven_actions/4`, is public for the same reason: `SurfacePolicy` is a
   subclass in Monty and a second struct here, so it calls the shared step rather
-  than inheriting it (`docs/monty-bugs.md` §2.9).
+  than inheriting it (`docs/monty-differences.md` §2.9).
 
   ## What "empty space" means
 
@@ -31,7 +31,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   takes its centre pixel, as Monty's positioning procedure does. That is the
   shape Monty's habitats report and the shape this reads; when an environment is
   ported, the reader moves to `PositioningProcedures` where Monty keeps it
-  (`docs/monty-bugs.md` §2.7).
+  (`docs/monty-differences.md` §2.7).
   """
 
   @behaviour Monty.Frameworks.Models.MotorPolicies.MotorPolicy
@@ -81,7 +81,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
 
   Both policies have them, because Monty gives every subclass the jump state
   through inheritance; here they are matched as a map instead
-  (`docs/monty-bugs.md` §2.9).
+  (`docs/monty-differences.md` §2.9).
   """
   @type jump_state :: %{
           required(:agent_id) => atom() | String.t(),
@@ -159,7 +159,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   defp on_object?(%Cmp.Message{} = percept), do: Cmp.Message.on_object?(percept)
 
   # The stream is threaded through the policy, as Monty threads it through the
-  # context (`docs/monty-bugs.md` §2.5).
+  # context (`docs/monty-differences.md` §2.5).
   defp sample(%__MODULE__{} = policy, ctx) do
     rng = ActionSampler.stream(policy.action_sampler, policy.rng, ctx)
     {action, rng} = ActionSampler.sample(policy.action_sampler, policy.agent_id, rng)
@@ -173,7 +173,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   # `InformedPolicy` and calls `self._goal_driven_actions`. A struct cannot be
   # a subclass of another, so the same step is a public function that takes any
   # policy carrying the jump fields — both policies do, because Monty gives them
-  # both to every subclass (`docs/monty-bugs.md` §2.9).
+  # both to every subclass (`docs/monty-differences.md` §2.9).
   @doc """
   One step's worth of goal-driven work: judge a jump in flight, or start one.
 
@@ -227,7 +227,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
 
   Monty's `_handle_successful_jump`, a no-op here and overridden by
   `SurfacePolicy`; the policy's own module is asked, because a struct cannot
-  override a private function (`docs/monty-bugs.md` §2.9).
+  override a private function (`docs/monty-differences.md` §2.9).
   """
   @impl true
   @spec handle_successful_jump(t()) :: t()
@@ -274,7 +274,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   Every sensor an action moves is moved at once, so they all keep the
   orientation the jump was planned in. Monty asserts it rather than assuming it,
   and so does this — with the empty case spelled out, which Monty's loop does not
-  (`docs/monty-bugs.md` §1.5). Public because `JumpToGoal` needs the same check
+  (`docs/monty-differences.md` §1.5). Public because `JumpToGoal` needs the same check
   and Monty writes it out twice (§2.9).
   """
   @spec shared_sensor_rotation(%{required(:sensors) => map()}) :: Rotation.t()

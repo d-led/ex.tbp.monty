@@ -11,7 +11,7 @@ defmodule Monty.Context do
   `rng_for/2` is the older arrangement, kept for the sites that have not been
   moved onto the stream yet (the environment's noise transforms and the message
   noise of a camera, which draw per module per step). It is a different set of
-  numbers by construction, and `docs/monty-bugs.md` §2.1 lists what is left.
+  numbers by construction, and `docs/monty-differences.md` §2.1 lists what is left.
 
   The step is advanced by the coordinator, never by a module.
   """

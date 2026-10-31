@@ -180,7 +180,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.JumpToGoal do
   The jump in flight, as plain values.
 
   Monty's memento, written with one name and read with another — see
-  `docs/monty-bugs.md` §1.6. There is no load path here, so this is what a run
+  `docs/monty-differences.md` §1.6. There is no load path here, so this is what a run
   records and not something a policy is restored from.
   """
   @impl true

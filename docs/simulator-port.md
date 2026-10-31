@@ -169,6 +169,6 @@ ability to run the simulator on another machine later.
    [`scripts/probe_world_episodes.exs`](../scripts/probe_world_episodes.exs)
    already runs a config's own model against Monty's world; what that shows —
    objects agree, step counts part in the middle of an episode because of the
-   random-stream difference in §2.1 of [`monty-bugs.md`](monty-bugs.md) — is in
+   random-stream difference in §2.1 of [`monty-differences.md`](monty-differences.md) — is in
    [`validation.md`](validation.md). Closing that gap is a diff of two action
    logs, not a design.

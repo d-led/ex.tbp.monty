@@ -37,7 +37,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   normalised grid with depth `d` is the point `(x d fx, y d fy, -d)` in the
   sensor's frame. The grid is Monty's own, `linspace(-1, 1, width)` across and
   `linspace(1, -1, height)` down — the edges of the image rather than its pixel
-  centres (`docs/monty-bugs.md` §1.8) — so a simulator rendering this world has
+  centres (`docs/monty-differences.md` §1.8) — so a simulator rendering this world has
   to sample the same rays this transform unprojects. That pairing is what
   `Monty.Simulators.Synthetic.Scene` keeps, and what its test of rebuilt points
   checks.

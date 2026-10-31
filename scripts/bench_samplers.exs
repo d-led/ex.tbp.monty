@@ -3,7 +3,7 @@
 # Monty passes a mutable `RandomState` into every `sample` call and mutates it in
 # place, so one stream advances across the episode. Elixir cannot mutate it, so
 # the sampler answers the state it leaves behind and the policy threads it
-# (`docs/monty-bugs.md` §2.5). The alternative a context-shaped API would offer
+# (`docs/monty-differences.md` §2.5). The alternative a context-shaped API would offer
 # is to reseed per draw from `Context.rng_for/2`, which needs no state in the
 # caller. This script prices that alternative.
 #

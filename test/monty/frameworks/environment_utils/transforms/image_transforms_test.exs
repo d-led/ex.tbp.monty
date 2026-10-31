@@ -53,7 +53,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.ImageTransformsTest do
 
     test "draws the same noise twice for the same seed and step" do
       # The property that makes a noisy run comparable: the episode seed decides
-      # the noise, not the wall clock (`docs/monty-bugs.md` §2.1).
+      # the noise, not the wall clock (`docs/monty-differences.md` §2.1).
       transform = AddNoiseToRawDepthImage.new(agent_id: @agent, sigma: 0.01)
 
       once = AddNoiseToRawDepthImage.call(depth_observations(flat(1.0)), transform, ctx(7, 3))

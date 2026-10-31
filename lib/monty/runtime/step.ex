@@ -107,7 +107,7 @@ defmodule Monty.Runtime.Step do
   type, its matching-step count and each module's conclusion — four fields, not
   the model. The coordinator holds the pretrained memory in its own state, so
   answering with the whole thing would copy tens of megabytes per step to
-  deliver four values (`docs/monty-bugs.md` §2.17).
+  deliver four values (`docs/monty-differences.md` §2.17).
   """
   @spec status(server()) :: Monty.Experiment.RecognitionPolicy.model()
   def status(server), do: GenServer.call(server, :status, :infinity)
@@ -217,7 +217,7 @@ defmodule Monty.Runtime.Step do
     info = %{
       step: state.step,
       # A sensor that answered nothing is not a percept: a view finder measures
-      # the scene for the motor system and sends none (`docs/monty-bugs.md`
+      # the scene for the motor system and sends none (`docs/monty-differences.md`
       # §2.11).
       percept_ids:
         percepts

@@ -22,7 +22,7 @@ defmodule Monty.Frameworks.Actions.ActionSamplers do
       {action, rng} = ActionSampler.sample(sampler, agent_id, rng)
 
   Threading rather than rederiving the stream from the step is the decision of
-  `docs/monty-bugs.md` §2.5, and it is forced by behaviour rather than chosen
+  `docs/monty-differences.md` §2.5, and it is forced by behaviour rather than chosen
   on cost: a policy draws several times in one step, and a stream keyed to the
   step alone would answer those draws identically. `ActionSampler.stream/3` is
   where the thread begins for a policy that has none yet.

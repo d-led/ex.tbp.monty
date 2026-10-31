@@ -28,7 +28,7 @@ defmodule Monty.Frameworks.Models.SensorModules.ObservationProcessor do
 
   Monty reads `features["object_coverage"]` when a surface sensor's middle pixel
   is off the object, and raises `KeyError` if the config did not ask for that
-  feature. Here a missing coverage counts as zero (`docs/monty-bugs.md` §2.10).
+  feature. Here a missing coverage counts as zero (`docs/monty-differences.md` §2.10).
   """
 
   alias Monty.Cmp.Message
@@ -213,7 +213,7 @@ defmodule Monty.Frameworks.Models.SensorModules.ObservationProcessor do
   # when the fit answered. When either falls through it flags the percept with a
   # `pose_fully_defined` of false — in the features rather than among the
   # morphological ones, which is reproduced as it stands
-  # (`docs/monty-bugs.md` §1.10).
+  # (`docs/monty-differences.md` §1.10).
   defp with_curvatures(features, processor, first, second, valid_normal?, valid_curvatures?) do
     cond do
       not wants_curvatures?(processor) or not valid_normal? ->

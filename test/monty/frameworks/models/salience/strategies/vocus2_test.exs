@@ -115,7 +115,7 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2Test do
       # no depth at all: `-log(0)` is infinity, which Monty replaces with zero,
       # so the corner arrives *above* its surroundings on the log scale and is
       # salient too. That is Monty's behaviour, reproduced on purpose and
-      # recorded as §1.14 in `docs/monty-bugs.md`.
+      # recorded as §1.14 in `docs/monty-differences.md`.
       depth =
         for row <- 0..15 do
           for column <- 0..15 do

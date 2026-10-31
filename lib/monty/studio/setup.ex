@@ -1103,7 +1103,7 @@ defmodule Monty.Studio.Setup do
 
   # The transforms an experiment configures, in the order they run. They are the
   # layer between what a simulator rendered and what a sensor module is given, so
-  # a run that skips one is a different experiment (`docs/monty-bugs.md` §1.7).
+  # a run that skips one is a different experiment (`docs/monty-differences.md` §1.7).
   defp transforms(config) do
     config
     |> Map.get("environment", %{})

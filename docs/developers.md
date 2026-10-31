@@ -65,7 +65,7 @@ mix monty.port_census                  # what the newly planned classes actually
    a `TypedDict`, or a dataclass that does arithmetic. Only the last is a module
    to port; the counts it prints are the honest backlog, not a "classes remaining"
    number.
-5. **Behaviour.** Read what changed before porting it. [`monty-bugs.md`](monty-bugs.md)
+5. **Behaviour.** Read what changed before porting it. [`monty-differences.md`](monty-differences.md)
    records the places where Monty looks wrong and what this port does instead,
    with the reason; [`open-ends.md`](open-ends.md) records what upstream says is
    not done; [`validation.md`](validation.md) is what has actually been checked
@@ -88,7 +88,7 @@ mix monty.port_census                  # what the newly planned classes actually
 | What does the world boundary allow? | [`simulator-port.md`](simulator-port.md) |
 | Which files are Monty's, copied, and which are ours? | [`architecture.md`](architecture.md#what-comes-from-monty), section "What comes from Monty"; [`priv/monty/README.md`](../priv/monty/README.md) |
 | How do I refresh Monty's YAML, snapshots or memories? | `mix monty.inputs`, [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) |
-| Why does this disagree with Python? | [`monty-bugs.md`](monty-bugs.md) |
+| Why does this disagree with Python? | [`monty-differences.md`](monty-differences.md) |
 | What is actually proven? | [`validation.md`](validation.md) and [`test/fixtures/`](../test/fixtures) |
 | What is not built yet? | [`roadmap.md`](roadmap.md), [`open-ends.md`](open-ends.md) |
 | Which Monty is this repo pinned to? | [`priv/monty/inputs.json`](../priv/monty/inputs.json) |
@@ -110,7 +110,7 @@ mix monty.port_census                  # what the newly planned classes actually
   `mix monty.target_census`) and are otherwise read-only.
 - **Do not paper over a disagreement.** A run that "works" with a stand-in module
   is worse than a run that refuses: an unimplemented class is an error, never a
-  substitute. A deliberate difference goes in [`monty-bugs.md`](monty-bugs.md)
+  substitute. A deliberate difference goes in [`monty-differences.md`](monty-differences.md)
   with a reason.
 - **Do not let a number live in prose.** Counts belong to the command that
   prints them (`mix monty.port_census`, `mix monty.module_map.verify`, and
@@ -254,7 +254,7 @@ and `../tbp.teleop`), and `mix monty.port_census` reads it as well.
   sensor modules are stepped one at a time. `Monty.Context.rng_for/2` derives a
   stream per module per step for the sites not yet moved onto the stream (noise
   transforms, a camera's message noise); it is a different set of numbers by
-  construction, and [`monty-bugs.md`](monty-bugs.md) §2.1 lists what is left.
+  construction, and [`monty-differences.md`](monty-differences.md) §2.1 lists what is left.
 * **CMP payloads are validated at construction.** `Message.new/1` and
   `Goal.new/1` return `{:ok, struct} | {:error, reason}`; a process building a
   bad message gets an error, not a crash.

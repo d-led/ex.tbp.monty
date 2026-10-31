@@ -26,7 +26,7 @@ defmodule Monty.Frameworks.Models.MotorSystem do
       `motor_only_step` set on the step says so in the `MotorPolicyResult` it
       returns, which this module then carries.
 
-  Both are recorded in `docs/monty-bugs.md` §2.2 and §2.3.
+  Both are recorded in `docs/monty-differences.md` §2.2 and §2.3.
   """
 
   @behaviour Monty.Frameworks.Models.MotorSystem.RuntimeMotorSystem

@@ -25,7 +25,7 @@ defmodule Monty.Frameworks.Actions.ActionSamplers.ActionSampler do
   of taste — a policy draws several times in a single step (`SurfacePolicy`
   samples a direction, then a distance), and a per-step stream would answer
   those draws with the same action every time. Neither is it a matter of cost:
-  see `scripts/bench_samplers.exs`. See `docs/monty-bugs.md` §2.5 for the
+  see `scripts/bench_samplers.exs`. See `docs/monty-differences.md` §2.5 for the
   deviation this leaves and §2.1 for the streams themselves.
   """
 

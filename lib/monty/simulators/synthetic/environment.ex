@@ -168,7 +168,7 @@ defmodule Monty.Simulators.Synthetic.Environment do
   #
   # A ray that missed answers depth 0, which is what Monty's depth images use for
   # "no return", and an experiment's `MissingToMaxDepth` transform is what turns
-  # that into the furthest the sensor can see (`docs/monty-bugs.md` §1.7).
+  # that into the furthest the sensor can see (`docs/monty-differences.md` §1.7).
   #
   # The surface — its normal and its curvatures — is *not* answered here. A camera
   # reports an image, and a sensor module estimates the surface from it

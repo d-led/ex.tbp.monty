@@ -112,7 +112,7 @@ Monty's own `HabitatEnvironment` and eval
   A config's own model runs against it
   ([`scripts/probe_world_episodes.exs`](../scripts/probe_world_episodes.exs)), and
   what that comparison shows — objects agree, step counts do not, because of the
-  random-stream deviation of §2.1 in [`monty-bugs.md`](monty-bugs.md) — is in
+  random-stream deviation of §2.1 in [`monty-differences.md`](monty-differences.md) — is in
   [`validation.md`](validation.md).
 - **Next: MuJoCo — the same bridge, with a heavier far side.** All 17 classes of
   `simulators/mujoco/` are `:planned`: `agents.py` (`Axis`, `Embodiment`, `Agent`,
@@ -128,7 +128,7 @@ Monty's own `HabitatEnvironment` and eval
   object models under `MONTY_DATA`, `MuJoCoAgentFactory`'s choice of body per
   `embodiment`, and depth and colour a sensor can be checked against. Habitat has
   already shown where the difficulty is not: the wiring, which is shared, but the
-  random stream in the middle of an episode ([`monty-bugs.md`](monty-bugs.md) §2.1).
+  random stream in the middle of an episode ([`monty-differences.md`](monty-differences.md) §2.1).
   MuJoCo puts
   physics on top of that, so the comparison is the work, not the bridge.
   **Done when**: `world_simulator: :mujoco` steps Monty's own physics world through

@@ -443,7 +443,7 @@ defmodule Monty.ModuleMap.Data do
       classes: [
         %{
           reason:
-            "A Protocol for isinstance checks; the port's sensor behaviour already requires reset/1 (docs/monty-bugs.md §2.13)",
+            "A Protocol for isinstance checks; the port's sensor behaviour already requires reset/1 (docs/monty-differences.md §2.13)",
           status: :excluded,
           elixir: "Monty.Experiment.SensorModule.ResettableSensorModule",
           python: "ResettableSensorModule"
@@ -2413,7 +2413,7 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason:
-        "RuntimeSensorModule is a Protocol for isinstance checks; the port has one sensor behaviour instead (docs/monty-bugs.md §2.13)",
+        "RuntimeSensorModule is a Protocol for isinstance checks; the port has one sensor behaviour instead (docs/monty-differences.md §2.13)",
       status: :implemented,
       elixir: "Monty.SensorModules.SensorModule",
       package: "monty",
@@ -2436,7 +2436,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           reason:
-            "A Protocol for a sensor module's runtime interface; its members are the processes behind Monty.Runtime (docs/monty-bugs.md §2.13)",
+            "A Protocol for a sensor module's runtime interface; its members are the processes behind Monty.Runtime (docs/monty-differences.md §2.13)",
           status: :excluded,
           elixir: "Monty.SensorModules.SensorModule.RuntimeSensorModule",
           python: "RuntimeSensorModule"

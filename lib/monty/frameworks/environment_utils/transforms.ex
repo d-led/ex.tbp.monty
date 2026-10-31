@@ -25,7 +25,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms do
   `MissingToMaxDepth` is not housekeeping. A Habitat depth image has 0 where no
   mesh is present, and a surface agent's search asks whether the centre of its
   view is nearer than a metre — a 0 would be read as an object at zero distance
-  (`docs/monty-bugs.md` §1.7). Monty's experiments configure the transform; a
+  (`docs/monty-differences.md` §1.7). Monty's experiments configure the transform; a
   world that reports 0 and applies nothing is a different experiment.
 
   `DepthTo3DLocations` is what makes a sensor module's input a point cloud
@@ -77,7 +77,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms do
   # Each transform draws from its own stream for the step — from the run's
   # context, so the same episode seed sees the same noise, and two noise
   # transforms in one chain do not draw the same numbers
-  # (`docs/monty-bugs.md` §2.1).
+  # (`docs/monty-differences.md` §2.1).
   defp context(nil, state, _index), do: %TransformContext{rng: nil, state: state}
 
   defp context(ctx, state, index) do

@@ -18,7 +18,7 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.DepthSalience do
       minus infinity — Monty maps the infinities to zero. On a log-depth scale
       zero is *above* every real depth, so an empty pixel reads as the nearest
       patch in the view rather than as an absence. That is what the code does,
-      it is reproduced here on purpose, and `docs/monty-bugs.md` §1.14 records
+      it is reproduced here on purpose, and `docs/monty-differences.md` §1.14 records
       why it is probably not what was meant.
 
   Only the brighter side of the difference is kept, because depth has no "dark
@@ -107,7 +107,7 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.DepthSalience do
   # than an infinity. Monty gets there with `np.nan_to_num(..., posinf=0)`, and
   # this port reproduces the consequence as well as the arithmetic: zero is the
   # top of the log-depth scale, so an empty pixel is the nearest patch in the
-  # view. `docs/monty-bugs.md` §1.14.
+  # view. `docs/monty-differences.md` §1.14.
   defp negative_log(depth) when depth == 0.0, do: 0.0
   defp negative_log(depth), do: -:math.log(depth)
 

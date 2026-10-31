@@ -21,7 +21,7 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
   and every step shares. Here the sensor derives its stream from the context and
   its own id for the step (`Monty.Context.rng_for/2`), so the same episode seed
   replays the same noise whatever order the modules were stepped in — the same
-  deviation the learning modules and the policies make (`docs/monty-bugs.md`
+  deviation the learning modules and the policies make (`docs/monty-differences.md`
   §2.1). A sensor with no `noise_params` draws nothing and is unaffected.
 
   ## When there is no percept
@@ -29,7 +29,7 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
   Monty's processor raises if the observation never went through the
   depth-to-points transform. Here `step/4` answers `nil` — no point cloud, no
   percept — and the runtime treats a silent sensor as it treats a silent step,
-  which is what a view that sees nothing is (`docs/monty-bugs.md` §2.11).
+  which is what a view that sees nothing is (`docs/monty-differences.md` §2.11).
   """
 
   use Monty.Frameworks.Models.AbstractMontyClasses.SensorModule

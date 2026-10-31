@@ -5,7 +5,7 @@ defmodule Monty.Frameworks.Environments.PositioningProcedures.PositioningProcedu
   Mirrors
   `tbp/monty/frameworks/environments/positioning_procedures.py::PositioningProcedure`,
   a `Protocol` in Monty and a behaviour here, which is how this port spells every
-  abstract class (`docs/monty-bugs.md` §2.6).
+  abstract class (`docs/monty-differences.md` §2.6).
 
   A procedure is asked for one step at a time and answers with actions the
   environment should take, plus whether it is finished. It is *not* a motor

@@ -36,7 +36,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
   and overrides the step. Here the jump step is
   `InformedPolicy.goal_driven_actions/4`, taken by any policy carrying the jump
   fields, and Monty's `_handle_successful_jump` hook is `handle_successful_jump/1`
-  dispatched to the policy's own module (`docs/monty-bugs.md` §2.9). A jump that
+  dispatched to the policy's own module (`docs/monty-differences.md` §2.9). A jump that
   lands with the object in view restarts the cycle as if the agent had just
   moved tangentially, which is how a goal-driven step hands back to walking.
   """
@@ -122,7 +122,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
   A policy that can run the surface cycle: the fields the step reads.
 
   `SurfacePolicy` and `SurfacePolicyCurvatureInformed` both carry them, which is
-  how Monty's inheritance is expressed here (`docs/monty-bugs.md` §2.9).
+  how Monty's inheritance is expressed here (`docs/monty-differences.md` §2.9).
   """
   @type surface_state :: %{
           required(:agent_id) => atom() | String.t(),
@@ -183,7 +183,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
 
   Monty's `SurfacePolicy.__call__`, reached here through `call/6` and directly by
   `SurfacePolicyCurvatureInformed`, which is a subclass there and a second struct
-  here (`docs/monty-bugs.md` §2.9). The tangential direction is the one part it
+  here (`docs/monty-differences.md` §2.9). The tangential direction is the one part it
   overrides, so that is asked of the policy's own module.
   """
   @spec surface_step(
@@ -482,7 +482,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
 
   Monty's `SurfacePolicy.tangential_direction`, and the one method
   `SurfacePolicyCurvatureInformed` overrides — hence public, and reached by the
-  policy's own module (`docs/monty-bugs.md` §2.9).
+  policy's own module (`docs/monty-differences.md` §2.9).
   """
   @spec tangential_direction(surface_state(), Monty.Context.t(), map(), Cmp.Message.t() | nil) ::
           {Rotation.vector(), surface_state()}

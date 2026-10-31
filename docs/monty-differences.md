@@ -1,11 +1,11 @@
-# Suspected defects in Monty, and this port's decisions
+# Differences, and what this port suspects in Monty
 
-Two things make an Elixir run disagree with a Python one: something in Monty
-that looks wrong, and a decision here. Both are recorded here, in the same
-shape, because anyone comparing two sets of numbers needs them together. The
-word *suspected* is doing work: each entry says what the code does, what its own
-comments say it means, and what evidence there is — a reader who knows the
-project better may well read the intent differently, and the code has not been
+Two things make an Elixir run disagree with a Python one: a decision here, and
+something in Monty that looks wrong. Both are recorded here, in the same shape,
+because anyone comparing two sets of numbers needs them together. Where an entry
+suspects Monty, *suspected* is doing work: it says what the code does, what its
+own comments say it means, and what evidence there is — a reader who knows the
+project better may well read the intent differently, and nothing here has been
 reported upstream by us.
 
 **Read §2.1 and §2.5 before diffing any run.** They are the two that change the

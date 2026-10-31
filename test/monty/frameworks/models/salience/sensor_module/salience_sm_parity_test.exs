@@ -12,7 +12,7 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMParityTest do
   ## Why the confidences are compared with a bound, not a tolerance
 
   Monty dithers before it rescales, drawing from the run's random stream; this
-  port draws from its own stream by design (`docs/monty-bugs.md` §2.1), so the
+  port draws from its own stream by design (`docs/monty-differences.md` §2.1), so the
   two cannot produce the same confidences. The bound below is coarse on purpose
   and it is worth being plain about what it can see: it catches a module that
   scores the wrong pixels, forgets to rescale, or rescales the wrong way, and it

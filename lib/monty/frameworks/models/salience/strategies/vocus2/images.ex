@@ -47,7 +47,7 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
   close but not identical: measured over all 16,777,216 colours, the worst
   disagreement is 2.67 units of 255 — about one percent of the range, in the
   dark, saturated corner — which is OpenCV's 8-bit quantisation showing, not a
-  different colour space. `docs/monty-bugs.md` §1.12 records it.
+  different colour space. `docs/monty-differences.md` §1.12 records it.
   """
   @spec rgb_to_lab(colour_image()) :: colour_image()
   def rgb_to_lab(image) do
@@ -258,7 +258,7 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
   source: OpenCV was measured to answer something that is neither area nor
   linear there, and Monty never asks — the pyramids only ever shrink by area and
   enlarge by cubic. This port answers the ordinary area average in that case;
-  `docs/monty-bugs.md` §1.13 records the difference.
+  `docs/monty-differences.md` §1.13 records the difference.
   """
   @spec resize(plane(), {pos_integer(), pos_integer()}, :area | :cubic) :: plane()
   def resize(image, {rows, columns}, interpolation \\ :area) do

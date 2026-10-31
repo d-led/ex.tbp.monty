@@ -11,7 +11,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult do
 
   Monty lets a policy set `motor_only_step` on the motor system itself through a
   `fixme_provide_motor_system` handout; here the policy says it in the result it
-  returns (`docs/monty-bugs.md` §2.2).
+  returns (`docs/monty-differences.md` §2.2).
   """
 
   alias Monty.Frameworks.Models.MotorPolicies.PolicyStatus

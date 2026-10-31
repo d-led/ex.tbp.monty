@@ -23,7 +23,7 @@ steps for the right reason, and the weights are a claim rather than a constant.
 ## What is recorded, and what is not
 
 `SalienceSM` draws a dither from the run's random stream before it normalises,
-and this port draws from its own stream by design (`docs/monty-bugs.md` §2.1), so
+and this port draws from its own stream by design (`docs/monty-differences.md` §2.1), so
 the *confidences* cannot be compared — only their deterministic half. The
 recorder therefore patches `_randomize_salience` to the identity, and writes down
 

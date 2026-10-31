@@ -33,7 +33,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
   tangential step came from), `tangential_direction` and `reset`. Here it is a
   second struct carrying the same fields, calling `SurfacePolicy.surface_step/6`
   and overriding the one method, which that step asks of the policy's own module
-  (`docs/monty-bugs.md` §2.9).
+  (`docs/monty-differences.md` §2.9).
   """
 
   @behaviour Monty.Frameworks.Models.MotorPolicies.MotorPolicy

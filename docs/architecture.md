@@ -94,7 +94,7 @@ not moved onto the stream: the environment's noise transforms and a camera's
 message noise, which draw per module per step. It derives a stream from the seed,
 `phash2(module_id)` and the step, so it is independent of what ran before it —
 and therefore a *different set of numbers* by construction. §2.1 of
-[`monty-bugs.md`](monty-bugs.md) lists what is left, which is what a diff of two
+[`monty-differences.md`](monty-differences.md) lists what is left, which is what a diff of two
 action logs eventually comes down to.
 
 Determinism is a feature, not a coincidence: the coordinator advances the step,

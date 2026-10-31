@@ -174,7 +174,7 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
   # Monty's scatter matrix is reproduced as it stands: `p_mean` is the mean
   # divided by the count a second time, so the mean's outer product is
   # under-subtracted and the matrix is inflated along the neighbourhood's own
-  # offset (`docs/monty-bugs.md` §1.9). The points are already relative to the
+  # offset (`docs/monty-differences.md` §1.9). The points are already relative to the
   # middle pixel, so that offset is small and the estimate is barely moved; a
   # one-sided neighbourhood is where the difference shows.
   defp plane_normal(points) do

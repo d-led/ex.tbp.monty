@@ -11,7 +11,7 @@ defmodule Monty.Experiment.Environment.OneObjectPerEpisodeInterfaceTest do
   ## What is not compared
 
   Which distractors appear is drawn from Monty's stream, and this port draws from
-  its own (`docs/monty-bugs.md` §2.1), so the *choice* is not comparable — the
+  its own (`docs/monty-differences.md` §2.1), so the *choice* is not comparable — the
   candidates are, and they are Monty's rule. Nor does the stand-in world hold more
   than one object yet, so a config asking for distractors is refused rather than
   silently run without them.

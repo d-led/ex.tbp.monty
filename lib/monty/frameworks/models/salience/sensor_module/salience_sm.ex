@@ -27,7 +27,7 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   Monty draws it from the runtime's one `rng`; here it comes from the episode's
   one stream (`Monty.Random.Stream`, reached as `ctx.rng`), in the same order and
   from the same NumPy state, so a salience module dithers its scores with the
-  numbers Monty's would (`docs/monty-bugs.md` §2.1).
+  numbers Monty's would (`docs/monty-differences.md` §2.1).
 
   ## What is not here
 

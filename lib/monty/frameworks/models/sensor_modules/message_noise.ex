@@ -10,7 +10,7 @@ defmodule Monty.Frameworks.Models.SensorModules.MessageNoise do
   percept, drawing nothing else afterwards. The stream comes from
   `Monty.Context.rng_for/2`, so it is a function of the episode seed, the
   sensor's id and the step, and of nothing else — which is what makes a run
-  replayable (`docs/monty-bugs.md` §2.1).
+  replayable (`docs/monty-differences.md` §2.1).
   """
 
   alias Monty.Cmp.Message

@@ -6,7 +6,7 @@ defmodule Monty.Studio.TransformsTest do
   The one that matters today is `MissingToMaxDepth`: Habitat reports 0 where no
   mesh is present, a surface agent's search asks whether the middle of its view
   is nearer than a metre, and a 0 there would be read as an object at zero
-  distance (`docs/monty-bugs.md` §1.7). Monty's experiments configure it; a run
+  distance (`docs/monty-differences.md` §1.7). Monty's experiments configure it; a run
   that skipped it would be a different experiment.
   """
 
@@ -71,7 +71,7 @@ defmodule Monty.Studio.TransformsTest do
 
     test "draws the same noise twice for the same seed and step, and other noise at the next step" do
       # The property that makes a noisy run comparable with Monty's: the episode
-      # seed decides the noise, not the wall clock (`docs/monty-bugs.md` §2.1).
+      # seed decides the noise, not the wall clock (`docs/monty-differences.md` §2.1).
       depth_and_noise = Enum.take(Setup.built_transforms(noisy_setup()), 2)
       observations = %{"agent_id_0" => %{"patch" => %{"depth" => List.duplicate([0.2, 0.2], 2)}}}
 

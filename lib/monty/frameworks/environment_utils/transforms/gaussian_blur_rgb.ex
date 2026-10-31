@@ -20,7 +20,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.GaussianBlurRGB do
   zero; measured, it picks `8*sigma + 1` rounded up to odd for a float image
   (`sigma: 2` is a 17-pixel kernel, not 13). The code calls OpenCV, so the code
   is what the port follows and the comment is what it does not — recorded with
-  the other suspected defects (`docs/monty-bugs.md` §1.11).
+  the other suspected defects (`docs/monty-differences.md` §1.11).
 
   ## Which sensors
 

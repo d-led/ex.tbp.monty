@@ -174,7 +174,7 @@ defmodule Monty.Runtime.Episode do
     if decision.time_out_lms, do: :ok = Model.time_out(model_id)
   end
 
-  # The four things a policy may read off the model (`docs/monty-bugs.md` §2.17).
+  # The four things a policy may read off the model (`docs/monty-differences.md` §2.17).
   defp view(model_id), do: Model.status(model_id)
 
   # Monty's first step is taken with no action: the environment is asked for

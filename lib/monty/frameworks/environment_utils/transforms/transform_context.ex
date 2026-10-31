@@ -8,7 +8,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.TransformContext do
   Monty passes its one runtime `rng` here. The port passes the stream the *step*
   allows, derived from the run's context and the transform's place in the chain
   (`Monty.Context.rng_for/2`), so a transform that adds noise is reproducible
-  from the episode seed alone (`docs/monty-bugs.md` §2.1).
+  from the episode seed alone (`docs/monty-differences.md` §2.1).
   """
 
   @type rng :: :rand.state()

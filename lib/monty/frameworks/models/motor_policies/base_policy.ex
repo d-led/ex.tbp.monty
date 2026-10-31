@@ -13,7 +13,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.BasePolicy do
   first draw, then whatever that draw left behind. Monty reads the stream from
   the runtime context and mutates it there; a struct cannot be mutated here, so
   the policy owns it and `ActionSampler.stream/3` starts it from the context
-  (`docs/monty-bugs.md` §2.5).
+  (`docs/monty-differences.md` §2.5).
   """
 
   @behaviour Monty.Frameworks.Models.MotorPolicies.MotorPolicy

@@ -26,7 +26,7 @@ not recalled — run it after anything lands that can move one.
   (config and naming). Each check names its tolerance and its test.
   ([validation.md](validation.md), 10 `*_parity_test.exs` files)
 - **Deliberate differences are written down**, so a Python/Elixir diff is
-  explainable. ([monty-bugs.md](monty-bugs.md))
+  explainable. ([monty-differences.md](monty-differences.md))
 - Deterministic: one RNG value threaded through Python's call order.
   ([architecture.md](architecture.md))
 

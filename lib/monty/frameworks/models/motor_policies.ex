@@ -67,7 +67,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
   `Action.undo`; the name here leaves the complaint out and the doc keeps it.
   Monty raises `TypeError` for anything else and so does this, as an
   `ArgumentError`: a policy configured with an action it cannot undo has nothing
-  sensible to do with a percept that left the object. That is `docs/monty-bugs.md`
+  sensible to do with a percept that left the object. That is `docs/monty-differences.md`
   §2.8, along with the rest of the vocabulary differences.
   """
   @spec undo_last_action(Monty.Frameworks.Actions.Action.t()) ::
@@ -102,7 +102,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
   Monty's `PositioningProcedure.depth_at_center`, a static method of the
   positioning protocol; the function lives with the procedures now and this is a
   delegation, so a policy can ask the question without reaching into the
-  environment layer (`docs/monty-bugs.md` §2.7).
+  environment layer (`docs/monty-differences.md` §2.7).
   """
   @spec depth_at_center(map(), atom() | String.t(), String.t()) :: float()
   defdelegate depth_at_center(observations, agent_id, sensor_id),
@@ -112,7 +112,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies do
   Ask a policy what it does now that a jump has landed.
 
   Monty calls `self._handle_successful_jump()`, which a subclass overrides;
-  here the struct's module is asked instead (`docs/monty-bugs.md` §2.9).
+  here the struct's module is asked instead (`docs/monty-differences.md` §2.9).
   """
   @spec successful_jump(struct()) :: struct()
   def successful_jump(%module{} = policy) do

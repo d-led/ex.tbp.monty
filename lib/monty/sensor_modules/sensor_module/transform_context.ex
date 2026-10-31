@@ -10,7 +10,7 @@ defmodule Monty.SensorModules.SensorModule.TransformContext do
   Monty passes its one runtime `rng` here. The port passes the stream this
   sensor may draw from at this step (`Monty.Context.rng_for/2`), so a transform
   that samples is reproducible from the episode seed alone
-  (`docs/monty-bugs.md` §2.1).
+  (`docs/monty-differences.md` §2.1).
   """
 
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}

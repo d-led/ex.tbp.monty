@@ -34,7 +34,7 @@ defmodule Monty.Frameworks.Models.MotorSystemState.AgentState do
 
   Monty writes those two lines twice — once in `CameraSM.update_state`, once in
   the transform-pipeline `SensorModule.update_state` — and the port keeps one
-  copy, because it is one rule (`docs/monty-bugs.md` §2.12).
+  copy, because it is one rule (`docs/monty-differences.md` §2.12).
   """
   @spec sensor_pose(t(), sensor_id()) :: SensorState.t()
   def sensor_pose(%__MODULE__{} = agent, sensor_id) do

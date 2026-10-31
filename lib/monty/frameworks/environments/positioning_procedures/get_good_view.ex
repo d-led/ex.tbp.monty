@@ -32,7 +32,7 @@ defmodule Monty.Frameworks.Environments.PositioningProcedures.GetGoodView do
   the one the salience code uses (`cv2.GaussianBlur`, truncate `8σ+1`,
   reflect-101): scipy truncates at `4σ`, pads with zeros, and takes `sigma` in
   pixels. The rule below was measured against scipy's own answer to `2e-16`
-  rather than recalled — see `docs/monty-bugs.md` §1.15.
+  rather than recalled — see `docs/monty-differences.md` §1.15.
 
   ## State
 
@@ -54,7 +54,7 @@ defmodule Monty.Frameworks.Environments.PositioningProcedures.GetGoodView do
   @good_view_percentage_default 0.5
 
   # scipy's `gaussian_filter` truncates the kernel at four sigma and pads with
-  # zeros; `cv2.GaussianBlur` does neither (`docs/monty-bugs.md` §1.15).
+  # zeros; `cv2.GaussianBlur` does neither (`docs/monty-differences.md` §1.15).
   @truncate 4.0
 
   @enforce_keys [:agent_id, :sensor_id, :target_semantic_id]
