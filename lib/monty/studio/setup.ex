@@ -1549,19 +1549,21 @@ defmodule Monty.Studio.Setup do
       settings_findings(config)
   end
 
-  # A run with no memory cannot recognise anything, so it says so before it
-  # starts rather than reporting "no conclusion" after sixty steps. A memory
-  # from another release is not that: it is a run that will recognise with
-  # graphs Monty did not train for this config, which is worth knowing and not
-  # worth refusing.
+  # A run with no memory cannot recognise anything, so it does not start rather
+  # than reporting "no conclusion" after sixty steps: an empty memory gives the
+  # same answer to every observation, so the run is not a slower recognition but
+  # no recognition at all. A memory from another release is not that: it is a run
+  # that will recognise with graphs Monty did not train for this config, which is
+  # worth knowing and not worth refusing.
   @doc """
   What this setup says about the memory its run will load.
 
   Nothing when the config names no model, or when the model is exported from the
   release the config names. A warning when the model is exported from some other
   release — the run still starts, with graphs Monty would not have loaded for
-  this config — and a louder one when nothing is exported at all, because then
-  the run cannot recognise anything however long it runs.
+  this config. An error when nothing is exported at all: the run cannot
+  recognise anything however long it runs, so it is refused with the one thing
+  the reader can act on, where to fetch the memory.
   """
   @spec memory_findings(t()) :: [Finding.t()]
   def memory_findings(%__MODULE__{model_name_or_path: path}) when path in [nil, ""], do: []
@@ -1592,10 +1594,10 @@ defmodule Monty.Studio.Setup do
       true ->
         [
           Finding.new(
-            :warning,
+            :error,
             :no_pretrained_memory,
-            "No memory this application can read for #{name}, so the run starts " <>
-              "empty and cannot recognise any object.",
+            "No memory this application can read for #{name}, and a run without " <>
+              "one cannot recognise any object. Fetch it at /prerequisites.",
             "model_name_or_path"
           )
         ]

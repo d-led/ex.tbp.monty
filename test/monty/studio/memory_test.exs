@@ -125,7 +125,7 @@ defmodule Monty.Studio.MemoryTest do
       assert Setup.memory_findings(%Setup{}) == []
     end
 
-    test "warns when the memory is only exported from another release" do
+    test "warns when the memory is only exported from another release, and the run still starts" do
       setup = %Setup{
         model_name_or_path: monty_path("pretrained_ycb_v99", "surf_agent_1lm_10distinctobj")
       }
@@ -135,16 +135,23 @@ defmodule Monty.Studio.MemoryTest do
 
       assert message =~ "pretrained_ycb_v10"
       assert message =~ "pretrained_ycb_v99"
+
+      assert Setup.valid?(%{setup | findings: Setup.memory_findings(setup)})
     end
 
-    test "warns that nothing can be recognised when no release exports the model" do
+    test "refuses a run when no release exports the model, and says where to fetch it" do
       setup = %Setup{
         model_name_or_path: monty_path("pretrained_ycb_v13", "a_model_nobody_exported")
       }
 
-      assert [%{code: :no_pretrained_memory, message: message}] = Setup.memory_findings(setup)
+      assert [%{level: :error, code: :no_pretrained_memory, message: message}] =
+               Setup.memory_findings(setup)
+
       assert message =~ "a_model_nobody_exported"
       assert message =~ "cannot recognise any object"
+      assert message =~ "/prerequisites"
+
+      refute Setup.valid?(%{setup | findings: Setup.memory_findings(setup)})
     end
   end
 
