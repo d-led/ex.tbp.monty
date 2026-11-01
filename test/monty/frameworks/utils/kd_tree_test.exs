@@ -31,6 +31,13 @@ defmodule Monty.Frameworks.Utils.KdTreeTest do
     |> Enum.reduce(0.0, fn {a, b}, total -> total + (a - b) * (a - b) end)
   end
 
+  # How far each answered point is, for the comparison that survives a tie.
+  defp distances_of(points, query, ids) do
+    by_id = Map.new(points, fn {point, id} -> {id, squared_distance(query, point)} end)
+
+    Enum.map(ids, &Map.fetch!(by_id, &1))
+  end
+
   # Quarters rather than arbitrary floats: a grid of points produces plenty of
   # equally distant candidates, which is where a split can go wrong.
 
@@ -66,8 +73,25 @@ defmodule Monty.Frameworks.Utils.KdTreeTest do
             count <- integer(1..10)
           ) do
       tree = KdTree.build(points)
+      answered = KdTree.nearest(tree, query, count)
+      expected = comparing_every_point(points, query, count)
 
-      assert KdTree.nearest(tree, query, count) == comparing_every_point(points, query, count)
+      # The same points, at the same distances. The ids can differ where two
+      # candidates are equally close, because "equally close" is only exact:
+      # kiddo and this test reach the same squared distance by different
+      # floating-point routes, and a last-bit difference decides the order. That
+      # is the cross the property has to bear — an answer that is a point too
+      # far is still a failure, because its distance is wrong by more than the
+      # last bit.
+      assert length(answered) == length(expected)
+
+      Enum.zip(
+        distances_of(points, query, answered),
+        distances_of(points, query, expected)
+      )
+      |> Enum.each(fn {answered_distance, expected_distance} ->
+        assert_in_delta answered_distance, expected_distance, 1.0e-12
+      end)
     end
   end
 
