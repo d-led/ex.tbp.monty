@@ -41,3 +41,20 @@ prerequisites:
     target: pretrained_ycb_v14.tgz
     extract: true
     unpacks_to: pretrained_ycb_v14
+
+  # Not what a run needs: the recorded episodes in `test/fixtures` were made
+  # with this release (docs/validation.md), so replaying them — the parity tests
+  # that hold the port to Monty's own conclusions — reads this memory and no
+  # other. A page that offered it without saying so would be asking a person to
+  # download two hundred megabytes for no reason.
+  - id: pretrained_ycb_v10
+    title: Pretrained YCB models (v10)
+    description: >
+      The release the recorded episodes in this repository were made with. A
+      run does not need it; replaying those episodes against Monty's own
+      conclusions does.
+    url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v10.tgz
+    root: MONTY_MODELS
+    target: pretrained_ycb_v10.tgz
+    extract: true
+    unpacks_to: pretrained_ycb_v10

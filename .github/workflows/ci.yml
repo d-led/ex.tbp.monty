@@ -164,9 +164,11 @@ jobs:
       # Monty's pretrained memory is data, not source: it is downloaded and
       # exported here, by the same code a person's `/prerequisites` runs, and
       # never committed. A test that recognises an object needs it — this is a
-      # checkout with nothing but what the manifest names.
+      # checkout with nothing but what the manifest names. Both releases: v14 is
+      # what the configs name, and v10 is what the recorded episodes the parity
+      # tests replay were made with.
       - name: Fetch the pretrained memory
-        run: mix monty.prerequisites.fetch pretrained_ycb_v14
+        run: mix monty.prerequisites.fetch pretrained_ycb_v14 pretrained_ycb_v10
 
       # This partition's share of the files, and the coverage it collected on
       # the way: `--partitions` exports it to cover/<partition>.coverdata.
