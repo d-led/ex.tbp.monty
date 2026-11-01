@@ -313,6 +313,8 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
     # run id for a run that dies at its first step helps nobody. The answer is
     # the two things a caller can actually do about it.
     test "refuses a run whose files are not here yet, and says where to get them" do
+      # "nothing was recorded" is a claim about an empty history.
+      ExTbpMonty.Repo.delete_all(RunHistory.Run)
       Tmp.without_env("MONTY_PYTHON")
       Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
       Tmp.system_env("MONTY_MODELS", Tmp.dir("monty-models"))

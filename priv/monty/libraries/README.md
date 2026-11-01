@@ -1,24 +1,20 @@
 # Pretrained memories
 
-Monty's pretrained learning modules, exported as data this port can read.
+Monty's pretrained learning modules, as data this port can read.
 
-**In one line:** nothing here is computed by this project and nothing is
-hand-written — each file is a lossless export of graphs **Monty trained**, taken
-from Monty's own prerequisites. It is committed so a run can recognise an object
-without a Python interpreter and without a `torch` install.
+**In one line:** nothing in this directory is committed and nothing is
+hand-written. Each file is produced on the machine that needs it, by the
+application itself, from the pretrained archive `/prerequisites` unpacked — so a
+run recognises objects without a Python interpreter, without `torch`, and without
+a model file travelling through git.
 
 | Question | Answer |
 | --- | --- |
-| Which files ship? | one: `pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz`, two megabytes — the smallest complete memory Monty published, and the one the episode in `test/fixtures/` was recorded against. Everything else is exported on the machine that needs it (`_v11/`, `_v13/`, `_v14/` locally, the last holding the 77-object model an experiment names) and stays out of git |
-| Where do they come from? | Monty's prerequisites, unpacked under `$MONTY_MODELS` |
-| How do I refresh them? | `scripts/sync_monty_libraries.sh` |
+| Which files exist? | `<release>/<model>.jsonl.gz`, one for every model of every pretrained archive unpacked here. `priv/monty/libraries/*/*.jsonl.gz` is in `.gitignore`, with no exception |
+| Where do they come from? | `$MONTY_MODELS/<release>/<model>/pretrained/model.pt`, unpacked from the archive `priv/prerequisites.yaml` names |
+| Who writes them? | `Monty.Studio.Pretrained.sync/2` — the last phase of a prerequisite fetch, after the archive is unpacked |
 | How does a run find one? | `Monty.Studio.Memory`, from the config's `model_name_or_path` |
-
-One export is checked in because a checkout cannot recognise an object without
-one, and a suite that tests recognition would then only ever pass on a machine
-that had exported a model first. It is the one the recorded episode and the
-charts are made with, so the tests measure Monty's memory rather than a fixture
-that resembles it.
+| Why is it not in git? | It is derived: a function of an archive that is already downloaded, one file per model per release, and a release holds a dozen models. Committing it would put Monty's data in this project's history for good |
 
 ## The layout, and why it has a release in it
 
@@ -43,68 +39,49 @@ name in two releases is two memories, trained differently.
   release is exported here it says so (`:memory_from_another_release`) instead of
   substituting it quietly.
 
-## What is shipped, and where it comes from
+## What is in a file
 
-Both files exist for both models and both releases:
+One JSON object per line, one line per object and input channel:
 
-| file | objects |
-| --- | --- |
-| `pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz` | the ten distinct YCB objects Monty's `base_config_10distinctobj_*` evaluation uses |
-| `pretrained_ycb_v10/surf_agent_1lm_10similarobj.jsonl.gz` | the ten *similar* objects used by `base_10simobj_*` and `randrot_noise_10simobj_*`: `c_cups`, `cracker_box`, `d_cups`, `e_cups`, `fork`, `knife`, `mug`, `pudding_box`, `spoon`, `sugar_box` |
-| `pretrained_ycb_v13/surf_agent_1lm_10distinctobj.jsonl.gz` | as above, from the release Monty's configs resolve to by default |
-| `pretrained_ycb_v13/surf_agent_1lm_10similarobj.jsonl.gz` | as above |
-
-v10 is what the committed Monty recordings were produced with; v13 is what a
-config resolves to when nothing overrides `constants.pretrained_dir`.
+    {"object_id": "mug", "input_channel": "patch",
+     "positions": [[x, y, z], …],
+     "features": {"hsv": [[h, s, v], …], …}}
 
 Every node's position and the four features the evidence-based learning module
 matches on (`hsv`, `pose_vectors`, `pose_fully_defined`,
-`principal_curvatures_log`) are exported, one object per line, gzipped.
+`principal_curvatures_log`) are there, and nothing else: a graph that is only
+ever matched against does not need the rest. `pretrained_ycb_v10`'s models were
+trained with the older feature-graph learning module and store
+`GraphObjectModel`s; the evidence module loads them as they are
+(`use_original_graph`), which is why the stored graph is exported rather than a
+rebuilt one.
 
-**Where they come from.** Monty's prerequisites, published by the Thousand
-Brains Project:
+The archives Monty publishes, for reference:
+<https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v14.tgz>,
+and Monty's own instructions, "Download Pretrained Models", in
+`docs/how-to-use-monty/getting-started.md`.
 
-- Monty's own instructions, "Download Pretrained Models":
-  <https://github.com/thousandbrainsproject/tbp.monty/blob/main/docs/how-to-use-monty/getting-started.md#42-download-pretrained-models>
-- The archives themselves:
-  <https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v10.tgz>
-  and
-  <https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v13.zip>
+## How they are made, without torch
 
-Unpacked where Monty expects them (see `priv/prerequisites.yaml`), the archives
-put the pickles at:
+`model.pt` is a torch save: a zip holding a pickle and the raw bytes of every
+storage the pickle names. `Monty.Studio.Pretrained.Torch` reads both, using the
+[`unpickler`](https://hex.pm/packages/unpickler) dependency for the pickle and its
+own resolvers for torch's storages and `_rebuild_tensor_v2`. Monty's classes
+(`GraphObjectModel`, `Data`, `GlobalStorage`) are walked as attribute maps;
+nothing about how Monty computes with a graph is reimplemented.
 
-    $MONTY_MODELS/pretrained_ycb_v10/surf_agent_1lm_10distinctobj/pretrained/model.pt
-    $MONTY_MODELS/pretrained_ycb_v13/surf_agent_1lm_10similarobj/pretrained/model.pt
-    … and one for each of the other combinations
+That is not a guess about the format. The Elixir export was compared, record for
+record, against the same models exported by `torch` through the Python exporter
+that used to live in `scripts/`:
 
-## The commands that produced these files
+| release, model | records | identical to torch's |
+| --- | --- | --- |
+| `pretrained_ycb_v10/surf_agent_1lm_10distinctobj` | 10 | 10 |
+| `pretrained_ycb_v13/surf_agent_1lm_10distinctobj` | 10 | 10 |
+| `pretrained_ycb_v14/surf_agent_1lm_10distinctobj` | 10 | 10 |
 
-Run in a checkout of the port, with an interpreter that has `torch` — Monty's own
-pinned environment does (see `docs/validation.md`, "The environment the
-recordings came from"):
-
-```
-PYTHON=$(conda info --base)/envs/tbp.monty/bin/python \
-    scripts/sync_monty_libraries.sh --only surf_agent_1lm_10distinctobj --force
-
-PYTHON=$(conda info --base)/envs/tbp.monty/bin/python \
-    scripts/sync_monty_libraries.sh --only surf_agent_1lm_10similarobj --force
-```
-
-Each is a wrapper around the exporter itself, once per release:
-
-```
-python scripts/export_monty_pretrained.py \
-    --model "$MONTY_MODELS/pretrained_ycb_v10/surf_agent_1lm_10similarobj/pretrained/model.pt" \
-    --out priv/monty/libraries/pretrained_ycb_v10/surf_agent_1lm_10similarobj.jsonl.gz
-```
-
-The exporter's docstring is the specification of the format; briefly, each line
-is `{"object_id": …, "input_channel": "patch", "positions": [[x, y, z], …],
-"features": {…}}`, every number at full precision so the port reads the same
-bits Monty holds, and the stored graph is exported as stored rather than rebuilt,
-because that is what the evidence module loads.
+Every number equal, not merely close. `torch` is two hundred megabytes of
+numerics this application would never call, so it is not a dependency.
 
 **Why full precision.** The files were once written at six decimals, reasoning
 that micrometres are far below anything a voxel or a tolerance can tell apart.
@@ -118,34 +95,22 @@ Measured against Monty's own recording of an episode, they are not:
 That cost one object `8 %` of its evidence. The files are 2.3 times larger as a
 result, and they are the exact graph.
 
-**One oddity worth knowing.** A gzip archive records the name of the file it was
-created from, and that name is the one the export had at the time —
-`monty_pretrained_10distinctobj.jsonl`, `monty_pretrained_10similarobj.jsonl`. So
-`gunzip -l` and a hex dump of the header still show those names even though the
-files are now named after the model and the release they came from. The bytes are
-the model's; only the embedded name is stale.
-
 ## Keeping it current
 
-`scripts/sync_monty_libraries.sh` re-exports the models this port ships a library
-for, from whatever Monty prerequisites are installed — so after a Monty release
-moves, or after an archive is unpacked on a new machine, the memories are
-refreshed rather than grown stale:
+The export runs as the last phase of a prerequisite fetch, and it is idempotent: a
+library newer than the pickle it came from is left alone. Fetching something that
+is already here still runs it, which is how a library that was deleted — or one
+made by an older version — comes back without a second download:
 
-```
-scripts/sync_monty_libraries.sh                 # refresh every library present here
-scripts/sync_monty_libraries.sh --all           # also export every model of every installed release
-scripts/sync_monty_libraries.sh --only <model>  # every release that holds this model
-scripts/sync_monty_libraries.sh --release <release>  # narrow to one release
-scripts/sync_monty_libraries.sh --force         # re-export even if up to date
-```
+    /prerequisites → Download (of an archive that is already here)
 
-It downloads nothing: it reads `$MONTY_MODELS` (Monty's own default if unset)
-and says what to do when the archives are not unpacked yet. It is idempotent — a
-model whose library is newer than its pickle is left alone.
+From a checkout, the same thing without a browser:
 
-Only v10 and v13 are committed. v9 and v11 also hold these models; export them
-with `--release pretrained_ycb_v9` (or `--all`) when a config needs them.
+    mix monty.prerequisites.fetch            # everything the manifest names
+    mix monty.prerequisites.fetch pretrained_ycb_v14
+
+It downloads nothing that the manifest does not name, and it says so when the
+archives are not unpacked yet.
 
 ## How a run finds it
 

@@ -6,6 +6,9 @@ defmodule Mix.Tasks.Monty.BenchTest do
   setup do
     Mix.shell(Mix.Shell.Process)
 
+    # A benchmark records nothing, which is a claim about an empty table.
+    ExTbpMonty.Repo.delete_all(RunHistory.Run)
+
     on_exit(fn ->
       Mix.shell(Mix.Shell.IO)
       Monty.Test.PrerequisiteDownloads.stop_all()

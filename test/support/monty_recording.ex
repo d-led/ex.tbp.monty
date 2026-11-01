@@ -279,7 +279,7 @@ defmodule Monty.Test.MontyRecording do
   @doc """
   Loads a memory exported from Monty's pretrained models.
 
-  `scripts/export_monty_pretrained.py` writes one object per line: its node
+  `Monty.Studio.Pretrained` writes one object per line: its node
   positions and the features the learning module matches on. A model is those
   two things, so a memory is loaded rather than built — Monty keeps pretrained
   graphs exactly as they were stored, and so does this.

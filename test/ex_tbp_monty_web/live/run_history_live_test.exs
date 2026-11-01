@@ -31,6 +31,11 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   end
 
   setup do
+    # Counting runs is what most of this module asserts, and the table survives
+    # between local runs: a page that says "1–25 of 27" is worth testing on a
+    # history the test built itself.
+    ExTbpMonty.Repo.delete_all(RunHistory.Run)
+
     {:ok, run} =
       RunHistory.start(%{
         experiment: "tutorial/first_experiment",

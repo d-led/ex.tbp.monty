@@ -95,8 +95,9 @@ and corrected — which is the point of measuring rather than recalling:
 ## Recorded: Monty's episodes, conclusion for conclusion
 
 These use fixtures recorded while Monty ran, and Monty's own pretrained memory
-exported from its torch pickle ([`scripts/record_monty_episode.py`](../scripts/record_monty_episode.py),
-[`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py)).
+exported from its torch pickle by this application
+(`Monty.Studio.Pretrained`) — the recording is
+[`scripts/record_monty_episode.py`](../scripts/record_monty_episode.py).
 
 | What                                                                                                                           | Compared                                                                                                                                             | Agreement                                                                                                                                                          | Test                                                                                |
 | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
@@ -399,7 +400,7 @@ turned "where this hypothesis sits" into numbers:
    rows of length `0.995`–`1.004` that is not the same angle, and `arccos` near
    zero is where a thousandth of a cosine is a hundredth of a radian.
    After both, the port and Monty were still `1e-5` apart, and the rest of that was
-   the memory: [`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py)
+    the memory: the exporter
    wrote positions and features
    rounded to six decimals, "far below anything a voxel or a tolerance can tell
    apart". The replay says otherwise — a node frame a millionth short is a pose a
@@ -554,7 +555,7 @@ Monty revision moves:
 | [`test/fixtures/monty_vocus2_images.json`](../test/fixtures/monty_vocus2_images.json)                                                                                                    | [`scripts/record_monty_vocus2_images.py`](../scripts/record_monty_vocus2_images.py)                                                                                                                                                                                                                                                  |
 | [`test/fixtures/monty_pyramids.json`](../test/fixtures/monty_pyramids.json)                                                                                                              | [`scripts/record_monty_pyramids.py`](../scripts/record_monty_pyramids.py)                                                                                                                                                                                                                                                            |
 | [`test/fixtures/monty_vocus2.json`](../test/fixtures/monty_vocus2.json)                                                                                                                  | [`scripts/record_monty_vocus2.py`](../scripts/record_monty_vocus2.py)                                                                                                                                                                                                                                                                |
-| [`priv/monty/libraries/`](../priv/monty/libraries) `<release>/surf_agent_1lm_10distinctobj.jsonl.gz`, `…10similarobj…`                                                                   | [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh), which wraps [`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py) — one library per (release, model), because the same name in two releases is two memories ([`priv/monty/libraries/README.md`](../priv/monty/libraries/README.md)) |
+| [`priv/monty/libraries/`](../priv/monty/libraries) `<release>/surf_agent_1lm_10distinctobj.jsonl.gz`, `…10similarobj…`                                                                   | `Monty.Studio.Pretrained`, run by the prerequisite fetch — one library per (release, model), because the same name in two releases is two memories ([`priv/monty/libraries/README.md`](../priv/monty/libraries/README.md)) |
 | `test/fixtures/monty_*_episode.jsonl`                                                                                                                                                    | [`scripts/record_monty_episode.py`](../scripts/record_monty_episode.py) (needs Monty's own environment and a simulator)                                                                                                                                                                                                              |
 
 Two rules, learned the hard way:

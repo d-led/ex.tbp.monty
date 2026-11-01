@@ -4,7 +4,7 @@ defmodule Monty.PretrainedMemoryTest do
 
   `priv/monty/libraries/surf_agent_1lm_10distinctobj.jsonl.gz` is the memory Monty
   trained for `surf_agent_1lm_10distinctobj`, exported from the torch pickle by
-  `scripts/export_monty_pretrained.py`: ten YCB objects, sixteen thousand nodes,
+  `Monty.Studio.Pretrained`: ten YCB objects, sixteen thousand nodes,
   each with the features the evidence-based learning module compares. A model is
   positions and rows of features, so a model trained in Python is one this port
   can hold — which is what makes "the same numbers" a question that can be

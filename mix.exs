@@ -112,6 +112,11 @@ defmodule ExTbpMonty.MixProject do
       # unchanged is the compatibility promise, so the parser is a real
       # dependency rather than a hand-rolled subset.
       {:yaml_elixir, "~> 2.11"},
+      # Monty's pretrained memory is a torch pickle, and a run needs the graphs
+      # in it. Reading a pickle is what this does; torch itself is two hundred
+      # megabytes of numerics we would never call, so the archive is read here
+      # instead — see `Monty.Studio.Pretrained`.
+      {:unpickler, "~> 0.1.0"},
       # Monty's loggers call the Python `wandb` client, and this is how the port
       # reaches Python without an external interpreter to install or keep in step:
       # an embedded runtime the application manages itself.

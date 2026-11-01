@@ -32,7 +32,12 @@ defmodule Monty.Prerequisites.DownloadTest do
     """)
 
     previous = System.get_env("MONTY_DATA")
+    previous_models = System.get_env("MONTY_MODELS")
     System.put_env("MONTY_DATA", Path.join(tmp, "data"))
+    # The last phase of a download exports the memory of whatever pretrained
+    # archive it unpacked. There is none under this root, so it finds nothing to
+    # do — which is the phase, not an absence of one.
+    System.put_env("MONTY_MODELS", Path.join(tmp, "models"))
 
     Application.put_env(:ex_tbp_monty, :prerequisites_manifest, manifest)
     Application.put_env(:ex_tbp_monty, :prerequisite_fetcher, Monty.Test.FakeFetcher)
@@ -46,6 +51,10 @@ defmodule Monty.Prerequisites.DownloadTest do
       if previous,
         do: System.put_env("MONTY_DATA", previous),
         else: System.delete_env("MONTY_DATA")
+
+      if previous_models,
+        do: System.put_env("MONTY_MODELS", previous_models),
+        else: System.delete_env("MONTY_MODELS")
 
       Application.delete_env(:ex_tbp_monty, :prerequisites_manifest)
       Application.delete_env(:ex_tbp_monty, :prerequisite_fetcher)
@@ -106,6 +115,30 @@ defmodule Monty.Prerequisites.DownloadTest do
         ])
 
       assert File.exists?(unpacked)
+    end
+
+    test "ends by making the archive's memory available to a run", %{tmp: tmp} do
+      archive = Path.join(tmp, "tiny.tgz")
+
+      :ok =
+        :erl_tar.create(
+          to_charlist(archive),
+          [{~c"pretrained_ycb_v13/model.pt", "weights"}],
+          [:compressed]
+        )
+
+      Application.put_env(:ex_tbp_monty, :fake_download_chunks, [File.read!(archive)])
+
+      {:ok, _pid} = Download.start(Prerequisites.get("tiny_unpacked"))
+
+      # A run reads libraries, not pickles, so a fetch that stopped at the
+      # unpacking would leave the first run with nothing to recognise with.
+      assert_receive {:download, %{id: "tiny_unpacked", status: :exporting}}, 1_000
+
+      assert_receive {:download, %{id: "tiny_unpacked", status: :done, libraries: libraries}},
+                     1_000
+
+      assert %{exported: [], current: [], failed: []} = libraries
     end
 
     test "an archive that will not unpack fails, with the reason" do

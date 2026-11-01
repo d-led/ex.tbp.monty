@@ -6,6 +6,11 @@ defmodule Mix.Tasks.Monty.RunTest do
   setup do
     Mix.shell(Mix.Shell.Process)
 
+    # A run history is what this module asserts about, so it starts empty: the
+    # table survives between local runs, and "the database is untouched" is a
+    # claim about a database nothing else has written to.
+    ExTbpMonty.Repo.delete_all(RunHistory.Run)
+
     on_exit(fn ->
       Mix.shell(Mix.Shell.IO)
       Monty.Test.PrerequisiteDownloads.stop_all()

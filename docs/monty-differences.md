@@ -1086,7 +1086,7 @@ its own concern.
 holding `GraphObjectModel`s; `MontyExperiment` loads it into the learning modules
 it has just built (`initialize_model` in `monty_experiment.py`).
 
-**What this port does.** [`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py)
+**What this port does.** `Monty.Studio.Pretrained.Torch`
 reads that pickle in
 Monty's own environment and writes the graphs out as JSONL —
 `priv/monty/libraries/<model>.jsonl.gz`, one object per line, positions and the

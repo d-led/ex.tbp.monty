@@ -150,7 +150,7 @@ uses — and only the last of the three is code this repository owns.
 | Kind      | What                                                                                | Handles it                                                                     |
 | --------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | copied    | Monty's config tree, the snapshots it was composed into, and its licence            | `mix monty.inputs`                                                             |
-| copied    | Monty's pretrained memories, exported to a format this port reads                   | [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh)        |
+| derived   | Monty's pretrained memories, exported to a format this port reads                   | the prerequisite fetch (`/prerequisites`, `mix monty.prerequisites.fetch`) |
 | generated | the module contract (`lib/monty/module_map/data.ex`) and the two census files       | `mix monty.module_map.gen`, `mix monty.port_census`, `mix monty.target_census` |
 | written here | the world — MuJoCo's scene, agents and cameras, mirroring Monty's `simulators/mujoco/` | [`priv/monty_py/world.py`](../priv/monty_py/world.py), run by the embedded interpreter |
 

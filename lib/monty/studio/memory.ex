@@ -3,8 +3,8 @@ defmodule Monty.Studio.Memory do
   Monty's pretrained memory, as a run can load it.
 
   Monty stores a pretrained learning module as a torch pickle;
-  `scripts/export_monty_pretrained.py` turns one into a JSONL of objects, nodes
-  and features, and this reads one of those back. That is the bridge between
+  `Monty.Studio.Pretrained` turns one into a JSONL of objects, nodes and
+  features, and this reads one of those back. That is the bridge between
   Monty's memory and a run here: the arithmetic on top is the port's
   `EvidenceGraphLM`, which is what a run then recognises with.
 

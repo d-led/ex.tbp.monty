@@ -108,6 +108,15 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                   progress(@statuses, prerequisite.id).total
                 )}
               </p>
+              <p
+                :if={unread_libraries(progress(@statuses, prerequisite.id)) != []}
+                class="text-xs text-error"
+              >
+                Some of the memory in this archive was not read: {unread_libraries(
+                  progress(@statuses, prerequisite.id)
+                )
+                |> Enum.join(", ")}. A run of a model in this list has no memory to recognise with.
+              </p>
             </div>
           </article>
         </div>
@@ -218,11 +227,22 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp start_error(other), do: "Could not start: #{inspect(other)}"
 
   defp status(statuses, id), do: statuses |> Map.get(id) |> then(&(&1 && &1.status))
-  defp downloading?(statuses, id), do: status(statuses, id) in [:downloading, :extracting]
+
+  defp downloading?(statuses, id),
+    do: status(statuses, id) in [:downloading, :extracting, :exporting]
+
   defp progress(statuses, id), do: Map.get(statuses, id)
 
+  # Which of the archive's memories could not be read, by `release/model`. The
+  # archive is untouched and can be fetched again; what the person needs is the
+  # name of the model their run would be missing.
+  defp unread_libraries(%{libraries: %{failed: failed}}) when is_list(failed),
+    do: Enum.map(failed, fn {model, _reason} -> model end)
+
+  defp unread_libraries(_progress), do: []
+
   defp downloadable?(statuses, id) do
-    status(statuses, id) not in [:downloading, :extracting, :done]
+    status(statuses, id) not in [:downloading, :extracting, :exporting, :done]
   end
 
   defp status_label(nil, true), do: "present"
@@ -230,6 +250,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp status_label(:queued, _present), do: "queued"
   defp status_label(:downloading, _present), do: "downloading"
   defp status_label(:extracting, _present), do: "unpacking"
+  defp status_label(:exporting, _present), do: "reading memory"
   defp status_label(:done, _present), do: "done"
   defp status_label(:failed, _present), do: "failed"
   defp status_label(:cancelled, _present), do: "cancelled"
@@ -240,6 +261,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp badge_class(:failed, _present), do: "badge-error"
   defp badge_class(:downloading, _present), do: "badge-info"
   defp badge_class(:extracting, _present), do: "badge-info"
+  defp badge_class(:exporting, _present), do: "badge-info"
   defp badge_class(_other, _present), do: "badge-ghost"
 
   defp max_bytes(%{total: nil, bytes: bytes}), do: max(bytes, 1)

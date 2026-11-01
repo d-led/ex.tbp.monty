@@ -171,7 +171,7 @@ defmodule Monty.Studio.Setup do
       motor_system_config: Map.get(monty_config, "motor_system_config", %{}),
       transforms: transforms(config),
       positioning: get_in(config, ["eval_env_interface_args", "positioning_procedures"]) || [],
-      object_names: get_in(config, ["eval_env_interface_args", "object_names"]),
+      object_names: object_names(config),
       agent_class: agent_class_of(config),
       recognition_policy: Map.get(config, "recognition_policy"),
       model_name_or_path: Map.get(config, "model_name_or_path"),
@@ -778,34 +778,8 @@ defmodule Monty.Studio.Setup do
   # how Monty's own MuJoCo configs name `SurfaceAgent` or `DistantAgent`.
   defp agent_class(%__MODULE__{} = setup), do: setup.agent_class || "SurfaceAgent"
 
-  defp object_label(%__MODULE__{} = setup) do
-    directory = data_path(setup)
-
-    Enum.find(List.wrap(setup.object_names), &mesh?(directory, &1)) || first_mesh(directory)
-  end
-
-  defp mesh?(directory, name) when is_binary(directory) and is_binary(name) do
-    File.exists?(Path.join([directory, name, "textured.obj"]))
-  end
-
-  defp mesh?(_directory, _name), do: false
-
-  # A config that names no object still has a world: MuJoCo's configs list none
-  # and let the interface draw from the dataset, so the dataset is what a scene
-  # is built from. Sorted, so the same machine builds the same scene twice.
-  defp first_mesh(directory) when is_binary(directory) do
-    directory
-    |> Path.join("*")
-    |> Path.wildcard()
-    |> Enum.sort()
-    |> Enum.find(&File.exists?(Path.join(&1, "textured.obj")))
-    |> case do
-      nil -> nil
-      path -> Path.basename(path)
-    end
-  end
-
-  defp first_mesh(_no_data_path), do: nil
+  defp object_label(%__MODULE__{object_names: names}) when is_list(names), do: List.first(names)
+  defp object_label(_setup), do: nil
 
   defp data_path(%__MODULE__{environment: %{data_path: path}}) when is_binary(path), do: path
   defp data_path(%__MODULE__{}), do: nil
@@ -1067,7 +1041,7 @@ defmodule Monty.Studio.Setup do
           module: describe_target(Map.get(environment, "env_init_func")),
           interface: describe_target(interface_class(config)),
           data_path: Map.get(args, "data_path"),
-          objects: object_names(args)
+          objects: scene_objects(args)
         }
 
       _absent ->
@@ -1452,11 +1426,25 @@ defmodule Monty.Studio.Setup do
     OneObjectPerEpisodeInterface.new(object_names: names || [])
   end
 
-  defp object_names(args) do
+  # The objects a scene is built with, as the environment names them.
+  defp scene_objects(args) do
     case Map.get(args, "objects") do
       list when is_list(list) -> Enum.map(list, &named_object/1)
       _absent -> []
     end
+  end
+
+  # The objects a config visits. Monty names them per interface, and an
+  # experiment that only trains names them in the training half — the tutorial
+  # trains on one object and evaluates that same object, so a run without it
+  # would have nothing to look at. Nothing is read from the dataset: which meshes
+  # are installed says what a machine can render, not what an experiment is made
+  # of, and a run of "no objects" must be a run of no objects rather than a run of
+  # whatever happened to be there first.
+  defp object_names(config) do
+    get_in(config, ["eval_env_interface_args", "object_names"]) ||
+      get_in(config, ["train_env_interface_args", "object_names"]) ||
+      []
   end
 
   defp named_object(%{"name" => name}), do: name
@@ -1615,14 +1603,23 @@ defmodule Monty.Studio.Setup do
   end
 
   # The other case, said in one sentence: which memory the run will use, and the
-  # release the config asked for that it is not. A page that told a reader to run
-  # `scripts/sync_monty_libraries.sh` would be asking them to check out this
-  # repository — the same page, in a container, has no `scripts/` to run.
+  # release the config asked for that it is not. A page that told a reader to
+  # re-export the model would be asking them to check out this repository — the
+  # same page, in a container, has no `scripts/` to run.
   defp another_release(name, release) do
-    exported = Enum.join(Memory.releases_for(name), " and ")
+    exported = list(Memory.releases_for(name))
 
-    "The run uses #{name} from #{exported} — the export that is installed here. " <>
-      "This config names #{release}.#{unexported(name, release)}"
+    "It learns from #{exported}'s graphs, not from #{release}'s. This config names " <>
+      "the memory #{release} trained; #{exported} is what this installation has " <>
+      "exported for #{name}.#{unexported(name, release)} The run works — its numbers " <>
+      "are the ones those graphs give."
+  end
+
+  # "a", "a and b", "a, b and c": a list a person reads, not a list a program prints.
+  defp list([one]), do: one
+
+  defp list(many) do
+    Enum.map_join(Enum.drop(many, -1), ", ", & &1) <> " and " <> List.last(many)
   end
 
   # The release this machine has but nobody exported to the format this
@@ -1633,7 +1630,8 @@ defmodule Monty.Studio.Setup do
     if [Monty.Prerequisites.root_path("MONTY_MODELS"), release, name, "pretrained"]
        |> Path.join()
        |> File.dir?() do
-      " That one is on this machine, but not in the form this application reads."
+      " #{release}'s own model is on this machine, but nothing has turned it into " <>
+        "the export a run reads, so it is not used."
     else
       ""
     end

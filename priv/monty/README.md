@@ -24,7 +24,7 @@ which copies `*.yaml` from the two directories Monty keeps them in plus
 give, and writes nothing.
 
 The memories change only when
-[`scripts/sync_monty_libraries.sh`](../../scripts/sync_monty_libraries.sh) is run
+`Monty.Studio.Pretrained`, run by the prerequisite fetch, is run
 (it needs `torch`, so it needs Monty's Python), and the two census files only
 when their tasks are asked to write them.
 

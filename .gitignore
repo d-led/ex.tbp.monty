@@ -16,17 +16,9 @@ erl_crash.dump
 ### Prerequisites, not source ###
 # A memory is Monty's pretrained model, exported to the format this application
 # reads — a hundred megabytes of it, and the same kind of thing as the YCB
-# meshes: it arrives through `/prerequisites`, into the directory `Memory` reads,
-# and never through `git`. The `README.md` that explains the layout stays.
-#
-# One export is checked in, and only one: the ten-object memory of
-# `pretrained_ycb_v10`, which is the smallest complete memory Monty published and
-# in which the recorded episode in `test/fixtures` was made. Without it a
-# checkout cannot recognise anything, so the suite that tests recognition could
-# not run anywhere that had not exported a model first — which is every CI run.
-# It is two megabytes; the rest stay out.
+# meshes: it arrives through `/prerequisites`, which exports it, and it never
+# comes through `git`. The `README.md` that explains the layout stays.
 /priv/monty/libraries/*/*.jsonl.gz
-!/priv/monty/libraries/pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz
 /tmp/
 
 ### Elixir Patch ###

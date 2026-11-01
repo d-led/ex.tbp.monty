@@ -89,16 +89,30 @@ defmodule Monty.Studio.MemoryTest do
   end
 
   describe "a run of an experiment that names a model" do
-    test "gets that model's memory in its learning module, and says which release it came from" do
+    test "gets the memory the config names, in its learning module, and is not warned about it" do
       {:ok, opened} = Monty.Studio.open(@experiment)
 
-      # Every config now names `pretrained_ycb_v14`, which nobody has exported
-      # here, so the run gets this machine's export of the same model — and says
-      # so rather than loading nothing while claiming otherwise.
+      # The config names `pretrained_ycb_v14`, and the repository ships that
+      # release's export of the model — so a first run of this experiment has
+      # nothing to report and learns from the graphs it asked for.
+      assert Setup.memory_findings(opened.setup) == []
+
+      %{learning_modules: [learning_module]} = Setup.model_spec(opened.setup, "memory-test")
+
+      assert map_size(learning_module.state.graph_memory.models_in_memory) == 10
+    end
+
+    test "gets the newest export of that model when the named release has none, and says so" do
+      # A release nobody exported: the run still works, with the graphs that are
+      # here, and the page says which ones those are.
+      {:ok, opened} = Monty.Studio.open(@experiment, pretrained_dir: "/models/pretrained_ycb_v99")
+
       assert [%{code: :memory_from_another_release, message: message}] =
                Setup.memory_findings(opened.setup)
 
       assert message =~ "surf_agent_1lm_10distinctobj"
+      assert message =~ "pretrained_ycb_v99"
+      assert message =~ "The run works"
 
       %{learning_modules: [learning_module]} = Setup.model_spec(opened.setup, "memory-test")
 

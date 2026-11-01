@@ -161,6 +161,13 @@ jobs:
       - name: Prepare the database
         run: mix ecto.create --quiet && mix ecto.migrate
 
+      # Monty's pretrained memory is data, not source: it is downloaded and
+      # exported here, by the same code a person's `/prerequisites` runs, and
+      # never committed. A test that recognises an object needs it — this is a
+      # checkout with nothing but what the manifest names.
+      - name: Fetch the pretrained memory
+        run: mix monty.prerequisites.fetch pretrained_ycb_v14
+
       # This partition's share of the files, and the coverage it collected on
       # the way: `--partitions` exports it to cover/<partition>.coverdata.
       # `CI` also makes the suite write the JUnit report the next step reads.

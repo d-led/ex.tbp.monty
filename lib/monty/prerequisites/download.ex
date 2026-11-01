@@ -21,7 +21,7 @@ defmodule Monty.Prerequisites.Download do
   @topic "prerequisites"
   @broadcast_every 512 * 1024
 
-  @type status :: :queued | :downloading | :extracting | :done | :failed | :cancelled
+  @type status :: :queued | :downloading | :extracting | :exporting | :done | :failed | :cancelled
 
   @type progress :: %{
           id: String.t(),
@@ -31,6 +31,7 @@ defmodule Monty.Prerequisites.Download do
           total: non_neg_integer() | nil,
           path: Path.t(),
           extracted: non_neg_integer() | nil,
+          libraries: map() | nil,
           error: term() | nil,
           started_at: integer() | nil,
           finished_at: integer() | nil
@@ -170,6 +171,7 @@ defmodule Monty.Prerequisites.Download do
       bytes: 0,
       total: nil,
       extracted: nil,
+      libraries: nil,
       error: nil,
       # The destination is decided once, when the download starts: a change to
       # the environment variable afterwards must not move the file elsewhere.
@@ -195,7 +197,7 @@ defmodule Monty.Prerequisites.Download do
   defp continue(state) do
     cond do
       Monty.Prerequisites.present?(state.prerequisite) ->
-        {:noreply, done(state)}
+        {:noreply, start_exporting(state)}
 
       state.prerequisite.extract and File.exists?(state.path) ->
         {:noreply, start_extracting(%{state | status: :extracting})}
@@ -270,17 +272,21 @@ defmodule Monty.Prerequisites.Download do
   end
 
   def handle_info({:extracted, {:ok, files}}, %{status: :extracting} = state) do
-    {:noreply, done(%{state | extracted: files})}
+    {:noreply, start_exporting(%{state | extracted: files})}
   end
 
   def handle_info({:extracted, {:error, reason}}, %{status: :extracting} = state) do
     {:noreply, fail(state, reason)}
   end
 
+  def handle_info({:exported, libraries}, %{status: :exporting} = state) do
+    {:noreply, done(%{state | libraries: libraries})}
+  end
+
   def handle_info({:DOWN, reference, :process, pid, reason}, %{task: {pid, reference}} = state) do
     # The finished message arrives first in the normal case; an exit without
     # one is the downloader itself dying.
-    if state.status in [:downloading, :extracting],
+    if state.status in [:downloading, :extracting, :exporting],
       do: {:noreply, fail(state, reason)},
       else: {:noreply, state}
   end
@@ -320,6 +326,23 @@ defmodule Monty.Prerequisites.Download do
 
     broadcast(state)
     {:noreply, %{state | task: {pid, reference}}}
+  end
+
+  # A pretrained archive is not usable memory until its pickles are exported: a
+  # run reads libraries, and a download that stops at the pickles leaves a first
+  # run with nothing to recognise with. The export is idempotent, so it is the
+  # last phase of every fetch — including a fetch of something already here,
+  # which is how a library that was deleted, or made by an older version, is
+  # put back without a second download.
+  defp start_exporting(state) do
+    parent = self()
+
+    {pid, reference} =
+      spawn_monitor(fn -> send(parent, {:exported, Monty.Studio.Pretrained.sync()}) end)
+
+    state = %{state | status: :exporting, task: {pid, reference}}
+    broadcast(state)
+    state
   end
 
   defp done(state) do
@@ -375,6 +398,7 @@ defmodule Monty.Prerequisites.Download do
       total: state.total,
       path: state.path,
       extracted: state.extracted,
+      libraries: state.libraries,
       error: state.error,
       started_at: state.started_at,
       finished_at: state.finished_at
