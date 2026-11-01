@@ -43,6 +43,14 @@ defmodule Monty.Studio.Chart do
   # How much room an episode's label needs before it is drawn: anything less and
   # the labels of a long run run into each other.
   @label_min_gap 24
+
+  # The background behind an episode, alternating so two neighbouring episodes are
+  # never the same colour. Evidence restarts at zero at every boundary, and a
+  # reader counting the descents is counting episodes: two pale bands say where one
+  # ends without a line to decode, at a tint light enough to leave the series
+  # untouched.
+  @band_palette ["#fbe9e7", "#e8f5e9"]
+
   defstruct width: 0,
             height: 0,
             margin_left: 44,
@@ -55,6 +63,7 @@ defmodule Monty.Studio.Chart do
             y_max: 1.0,
             series: [],
             ticks: [],
+            episode_bands: [],
             episode_starts: [],
             episode_labels: [],
             mlh: nil,
@@ -101,6 +110,9 @@ defmodule Monty.Studio.Chart do
           y_max: float(),
           series: [series()],
           ticks: [%{value: float(), y: number(), label: String.t()}],
+          episode_bands: [
+            %{episode: non_neg_integer(), x: number(), width: number(), colour: String.t()}
+          ],
           episode_starts: [%{episode: non_neg_integer(), x: number(), label: String.t()}],
           episode_labels: [%{episode: non_neg_integer(), x: number(), label: String.t()}],
           mlh: %{graph_id: String.t(), x: number(), y: number()} | nil,
@@ -115,7 +127,7 @@ defmodule Monty.Studio.Chart do
   """
   @spec extent([step()]) :: {non_neg_integer(), non_neg_integer()}
   def extent(steps) do
-    {placed, _starts} = stack(steps)
+    {placed, _starts, _spans} = stack(steps)
     {0, last_step(placed)}
   end
 
@@ -133,7 +145,7 @@ defmodule Monty.Studio.Chart do
     width = Keyword.get(options, :width, 960)
     height = Keyword.get(options, :height, 300)
 
-    {placed, starts} = stack(steps)
+    {placed, starts, spans} = stack(steps)
     {from, to} = window(Keyword.get(options, :window), last_step(placed))
     placed = within(placed, from, to)
 
@@ -160,7 +172,13 @@ defmodule Monty.Studio.Chart do
       |> Enum.map(fn start -> %{start | x: rounded(x_coordinate(start.x, chart))} end)
 
     labelled = Enum.filter(starts, &there_is_room?(&1, starts))
-    chart = %{chart | episode_starts: starts, episode_labels: labelled}
+
+    chart = %{
+      chart
+      | episode_starts: starts,
+        episode_labels: labelled,
+        episode_bands: bands(spans, from, to, chart)
+    }
 
     series =
       objects
@@ -210,6 +228,26 @@ defmodule Monty.Studio.Chart do
   defp within(placed, from, to),
     do: Enum.filter(placed, fn {_episode, x, _belief} -> x >= from and x <= to end)
 
+  # A band per episode that the window can see, clipped to the window: the part
+  # of an episode a reader is looking at is shaded, and the colour alternates so
+  # neighbouring episodes never share one. An episode of a single step has no
+  # width to shade and is left out rather than drawn as a line of no colour.
+  defp bands(spans, from, to, chart) do
+    for %{episode: episode, from: first, to: last} <- spans,
+        clipped_first = max(first, from),
+        clipped_last = min(last, to),
+        clipped_first < clipped_last do
+      x = x_coordinate(clipped_first, chart)
+
+      %{
+        episode: episode,
+        x: rounded(x),
+        width: rounded(x_coordinate(clipped_last, chart) - x),
+        colour: Enum.at(@band_palette, rem(episode, length(@band_palette)))
+      }
+    end
+  end
+
   # One object's reported evidence, per step, in the order the module listed the
   # objects on the last step it reported them — so the line the run is chasing is
   # drawn last and ends on top.
@@ -239,11 +277,11 @@ defmodule Monty.Studio.Chart do
   # ended. That is what makes the drop back to zero — the thing an episode
   # boundary *is* — visible instead of hidden under the first episode's line.
   defp stack(steps) do
-    {placed, starts, _next} =
+    {placed, starts, spans, _next} =
       steps
       |> Enum.group_by(&elem(&1, 0))
       |> Enum.sort()
-      |> Enum.reduce({[], [], 0}, fn {episode, of_episode}, {placed, starts, base} ->
+      |> Enum.reduce({[], [], [], 0}, fn {episode, of_episode}, {placed, starts, spans, base} ->
         of_episode = Enum.sort_by(of_episode, &elem(&1, 1))
         first = of_episode |> hd() |> elem(1)
         last = of_episode |> List.last() |> elem(1)
@@ -252,12 +290,14 @@ defmodule Monty.Studio.Chart do
           for {_episode, step, belief} <- of_episode, do: {episode, base + step - first, belief}
 
         start = %{episode: episode, x: base, label: "ep #{episode + 1}"}
+        span = %{episode: episode, from: base, to: base + (last - first)}
+
         # The next episode begins on this one's last step, not after it: a gap
         # between them is a step the chart would be claiming nobody reported.
-        {placed ++ points, [start | starts], base + (last - first)}
+        {placed ++ points, [start | starts], [span | spans], base + (last - first)}
       end)
 
-    {placed, Enum.reverse(starts)}
+    {placed, Enum.reverse(starts), Enum.reverse(spans)}
   end
 
   defp last_step([]), do: 1

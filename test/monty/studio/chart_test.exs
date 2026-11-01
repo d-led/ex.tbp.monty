@@ -131,6 +131,76 @@ defmodule Monty.Studio.ChartTest do
     end
   end
 
+  describe "an episode's background" do
+    # Which stretch of the run was which episode is the thing a reader counts when
+    # the evidence falls back to zero; a shaded band says it without a legend.
+    test "covers the steps of its episode, end to end, and none of the next" do
+      chart =
+        Chart.new([
+          {0, 0, belief(%{"mug" => 1.0})},
+          {0, 1, belief(%{"mug" => 3.0})},
+          {1, 0, belief(%{"mug" => 0.5})},
+          {1, 1, belief(%{"mug" => 2.0})}
+        ])
+
+      assert [
+               %{episode: 0, x: first_x, width: first_width},
+               %{episode: 1, x: second_x}
+             ] = chart.episode_bands
+
+      # The first episode ends where the second begins: no gap, no overlap.
+      assert_in_delta first_x + first_width, second_x, 0.01
+      assert first_x == chart.margin_left
+    end
+
+    test "alternates its colour, so two neighbours are never the same one" do
+      chart =
+        Chart.new([
+          {0, 0, belief(%{"mug" => 1.0})},
+          {0, 1, belief(%{"mug" => 3.0})},
+          {1, 0, belief(%{"mug" => 0.5})},
+          {1, 1, belief(%{"mug" => 2.0})},
+          {2, 0, belief(%{"mug" => 0.2})},
+          {2, 1, belief(%{"mug" => 0.4})}
+        ])
+
+      colours = Enum.map(chart.episode_bands, & &1.colour)
+
+      assert length(colours) == 3
+      assert [first, second, third] = colours
+      assert first != second
+      assert third == first
+    end
+
+    test "is clipped to the stretch of the run being looked at" do
+      steps =
+        for episode <- 0..3, step <- 0..1, do: {episode, step, belief(%{"mug" => 1.0})}
+
+      # Four episodes of two steps each, laid end to end: 0..1, 1..2, 2..3, 3..4.
+      # The window is the middle two.
+      chart = Chart.new(steps, window: {1, 3})
+
+      assert chart.episode_bands |> Enum.map(& &1.episode) == [1, 2]
+
+      # Shaded from the window's own left edge, not from where the episode began.
+      assert hd(chart.episode_bands).x == chart.margin_left
+
+      assert chart.episode_bands
+             |> Enum.all?(fn band -> band.x + band.width <= chart.width - chart.margin_right end)
+    end
+
+    test "leaves a one-step episode unshaded, because it has no width to shade" do
+      chart =
+        Chart.new([
+          {0, 0, belief(%{"mug" => 1.0})},
+          {1, 0, belief(%{"mug" => 0.5})},
+          {1, 1, belief(%{"mug" => 2.0})}
+        ])
+
+      assert chart.episode_bands |> Enum.map(& &1.episode) == [1]
+    end
+  end
+
   describe "the axes" do
     test "start at zero, because evidence is a sum from zero" do
       chart = Chart.new([{0, 1, belief(%{"mug" => 20.0})}])

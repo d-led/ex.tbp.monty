@@ -68,6 +68,21 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         data-margin-top={@chart.margin_top}
         data-margin-bottom={@chart.margin_bottom}
       >
+        <%!-- Which episode each stretch of the run is. Evidence restarts at zero
+        at every boundary, and a reader counting the descents is counting
+        episodes, so they are shaded in turn rather than left to be inferred from
+        the dashes. Drawn first, behind the grid and the lines. --%>
+        <g :for={band <- @chart.episode_bands}>
+          <rect
+            x={band.x}
+            y={@chart.margin_top}
+            width={band.width}
+            height={@chart.height - @chart.margin_top - @chart.margin_bottom}
+            fill={band.colour}
+            class="episode-band"
+            data-episode={band.episode}
+          />
+        </g>
         <%!-- Where one episode ends and the next begins. Every episode starts its
         evidence again at zero, so the chart lays them end to end and marks the
         boundary: without it the drop is a fall nobody measured. --%>
