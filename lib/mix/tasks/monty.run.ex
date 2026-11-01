@@ -36,8 +36,6 @@ defmodule Mix.Tasks.Monty.Run do
 
   @requirements ["app.start"]
 
-  @default_steps 12
-
   @switches [
     steps: :integer,
     seed: :integer,
@@ -92,7 +90,11 @@ defmodule Mix.Tasks.Monty.Run do
   end
 
   defp start(opened, opts) do
-    {:ok, run} = Monty.Studio.Run.start(opened.setup, steps: opts[:steps] || @default_steps)
+    {:ok, run} =
+      Monty.Studio.Run.start(opened.setup,
+        steps: opts[:steps] || Monty.Studio.Run.default_steps()
+      )
+
     run
   end
 

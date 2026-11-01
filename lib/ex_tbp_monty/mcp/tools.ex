@@ -425,8 +425,11 @@ defmodule ExTbpMonty.Mcp.Tools do
             "type" => "integer",
             "minimum" => 1,
             "maximum" => 500,
-            "default" => 12,
-            "description" => "How many timesteps the run should take."
+            "default" => 500,
+            "description" =>
+              "The most timesteps one episode may take. Not a target: the experiment's own " <>
+                "recognition policy ends the episode first, which for a recognition is " <>
+                "about twenty matching steps."
           },
           "world" => %{
             "type" => "string",

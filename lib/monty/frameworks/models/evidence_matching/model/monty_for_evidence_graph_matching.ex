@@ -71,6 +71,21 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
   @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionPolicy.model()
   def status(model_id), do: Model.status(model_id)
 
+  @doc """
+  `MontyBase.set_experiment_mode`: whether this episode trains or evaluates.
+
+  The experiment knows — it runs training epochs or evaluation epochs — but what
+  an episode is working *towards* is the model's own business: an evaluation that
+  recognises its object ends, a training episode switches to exploring, and a
+  model that was told nothing does neither. Monty calls this on the model before
+  an epoch steps, so this port does too.
+  """
+  @spec set_experiment_mode(
+          atom() | String.t(),
+          Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.mode()
+        ) :: :ok
+  def set_experiment_mode(model_id, mode), do: Model.set_experiment_mode(model_id, mode)
+
   @doc "`Monty.switch_to_exploratory_step`: what a recognition policy can ask for."
   @spec switch_to_exploratory_step(atom() | String.t()) :: :ok
   def switch_to_exploratory_step(model_id), do: Model.switch_to_exploratory_step(model_id)

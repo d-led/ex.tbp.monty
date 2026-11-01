@@ -20,7 +20,13 @@ defmodule Monty.Studio.Run do
   alias Monty.Runtime.Positioning
   alias Monty.Studio.{Belief, Setup}
 
-  @default_steps 12
+  # How many steps an episode may take when the caller names no number. Not a
+  # budget a run should ever reach: it is the ceiling the experiment configs give
+  # an evaluation episode (`max_eval_steps: 500`), so a run that is left to itself
+  # gets as long as the experiment would have given it. Anything smaller cuts
+  # episodes Monty would have let conclude — a recognition here takes about
+  # twenty matching steps, and a twelve-step page stopped them all.
+  @default_steps 500
 
   @enforce_keys [:model, :model_id, :setup, :interface, :episode_seed]
   defstruct [
@@ -56,8 +62,9 @@ defmodule Monty.Studio.Run do
 
   Options: `:steps` (how many timesteps this run is for, used for the
   controller's progress), `:model_id`, `:episode` (which episode of the epoch it
-  is, counted from zero), and `:has_detailed_logger` (whether this run's logging
-  wants the whole hypothesis space per step).
+  is, counted from zero), `:mode` (`:eval` or `:train`, default `:eval`), and
+  `:has_detailed_logger` (whether this run's logging wants the whole hypothesis
+  space per step).
 
   The episode number is not bookkeeping: a run's random draws come from the
   seed its episode derives from the experiment's, so the same experiment and a
@@ -70,6 +77,7 @@ defmodule Monty.Studio.Run do
       Keyword.get_lazy(opts, :model_id, fn -> "studio-#{System.unique_integer([:positive])}" end)
 
     episode = Keyword.get(opts, :episode, 0)
+    mode = Keyword.get(opts, :mode, :eval)
 
     spec =
       Setup.model_spec(setup, model_id,
@@ -83,19 +91,26 @@ defmodule Monty.Studio.Run do
          {:ok, interface, positioning} <- position(setup, factories, episode) do
       case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {model, spec}) do
         {:ok, _pid} ->
+          # The mode is told to the model, not assumed by it. Monty's experiment
+          # sets it on the model before an epoch steps, and the coordinator's own
+          # ending rule has no branch for a model that was told nothing: an
+          # episode that recognises its object neither stops nor switches to
+          # exploring, and only the page's step budget ends it.
+          :ok = model.set_experiment_mode(model_id, mode)
+
           {:ok,
            %__MODULE__{
              model: model,
              model_id: model_id,
              setup: setup,
-             episode_seed: Seed.episode_seed(seed(setup), :eval, episode),
+             episode_seed: Seed.episode_seed(seed(setup), mode, episode),
              # The world starts where an episode starts, not where the last one
              # left it: a run is an episode — and where that is, the positioning
              # procedures have just decided.
              interface: interface,
              positioning: positioning,
              policy: policy,
-             counter: RecognitionCounter.new(:eval),
+             counter: RecognitionCounter.new(mode),
              steps: Keyword.get(opts, :steps, @default_steps)
            }}
 
