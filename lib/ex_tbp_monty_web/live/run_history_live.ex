@@ -817,7 +817,24 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   @impl true
-  def handle_info(:replay_tick, %{assigns: %{run: run, playing: true}} = socket) do
+  def handle_info(:replay_tick, socket), do: replay_tick(socket)
+
+  # The run said something: a step, the end of it, or a failure. Reading the
+  # record again is what keeps one source of truth — the worker writes it, the
+  # page shows it.
+  def handle_info({event, _payload}, socket) when event in [:started, :step, :finished, :failed],
+    do: refresh_own_run(socket)
+
+  # A run was written down, or settled. The index draws the record it was told
+  # about; the detail page keeps its own place and only asks for its own run.
+  def handle_info({:recorded, run}, socket), do: recorded(socket, run)
+  def handle_info({:settled, run}, socket), do: settled(socket, run)
+
+  # A page can outlive the thing that was talking to it: a message for another
+  # page, or one that arrived after the run was closed. It is not news.
+  def handle_info(_late_message, socket), do: {:noreply, socket}
+
+  defp replay_tick(%{assigns: %{run: run, playing: true}} = socket) do
     next = socket.assigns.step + 1
 
     if Replay.last_step(run) != nil and next <= Replay.last_step(run) do
@@ -827,30 +844,22 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     end
   end
 
-  def handle_info(:replay_tick, socket), do: {:noreply, socket}
+  defp replay_tick(socket), do: {:noreply, socket}
 
-  # The run said something: a step, the end of it, or a failure. Reading the
-  # record again is what keeps one source of truth — the worker writes it, the
-  # page shows it.
-  def handle_info({event, _payload}, %{assigns: %{live_action: :show, run: run}} = socket)
-      when event in [:started, :step, :finished, :failed] and not is_nil(run) do
-    {:noreply, refresh_run(socket, run.id)}
-  end
+  defp refresh_own_run(%{assigns: %{live_action: :show, run: run}} = socket) when not is_nil(run),
+    do: {:noreply, refresh_run(socket, run.id)}
 
-  # A run was written down, or settled. The index draws the record it was told
-  # about; the detail page keeps its own place and only asks for its own run.
-  def handle_info({:recorded, run}, %{assigns: %{live_action: :index}} = socket) do
-    {:noreply, stream_insert(socket, :runs, run, at: 0)}
-  end
+  defp refresh_own_run(socket), do: {:noreply, socket}
 
-  def handle_info({:settled, run}, %{assigns: %{live_action: :index}} = socket) do
-    {:noreply, stream_insert(socket, :runs, run)}
-  end
+  defp recorded(%{assigns: %{live_action: :index}} = socket, run),
+    do: {:noreply, stream_insert(socket, :runs, run, at: 0)}
 
-  def handle_info({:recorded, _run}, socket), do: {:noreply, socket}
-  def handle_info({:settled, _run}, socket), do: {:noreply, socket}
+  defp recorded(socket, _run), do: {:noreply, socket}
 
-  def handle_info(_late_message, socket), do: {:noreply, socket}
+  defp settled(%{assigns: %{live_action: :index}} = socket, run),
+    do: {:noreply, stream_insert(socket, :runs, run)}
+
+  defp settled(socket, _run), do: {:noreply, socket}
 
   defp replay_to(socket, run, step) do
     step = step |> max(Replay.first_step(run) || 0) |> min(Replay.last_step(run) || 0)

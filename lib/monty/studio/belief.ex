@@ -79,6 +79,51 @@ defmodule Monty.Studio.Belief do
 
   def of(_module_without_a_hypothesis_space), do: nil
 
+  @doc """
+  A belief as a run recorded it, read back.
+
+  `Monty.Studio.RunLog.entry/3` writes a belief with string keys all the way down,
+  because that is what the JSON column hands back. A page that reads a run from the
+  record — a reload, or a run watched from another node — draws the same chart a
+  live page does, so it has to read those maps back as beliefs rather than
+  inventing a second shape for them.
+  """
+  @spec from_stored(map()) :: t()
+  def from_stored(stored) do
+    %{
+      possible_matches: Map.get(stored, "possible_matches", []),
+      mlh: from_stored_mlh(Map.get(stored, "mlh")),
+      graphs:
+        Map.new(Map.get(stored, "graphs", %{}), fn {id, graph} ->
+          {id, from_stored_graph(graph)}
+        end),
+      x_percent_threshold: Map.get(stored, "x_percent_threshold"),
+      terminal_state: Map.get(stored, "terminal_state"),
+      detected_object: Map.get(stored, "detected_object")
+    }
+  end
+
+  defp from_stored_graph(graph) do
+    %{
+      hypotheses: Map.get(graph, "hypotheses"),
+      max_evidence: Map.get(graph, "max_evidence"),
+      within_x_percent: Map.get(graph, "within_x_percent"),
+      top_evidence: Map.get(graph, "top_evidence")
+    }
+  end
+
+  defp from_stored_mlh(nil), do: nil
+
+  defp from_stored_mlh(mlh) do
+    %{
+      graph_id: Map.get(mlh, "graph_id"),
+      id: Map.get(mlh, "id"),
+      location: Map.get(mlh, "location"),
+      rotation_wxyz: Map.get(mlh, "rotation_wxyz"),
+      evidence: Map.get(mlh, "evidence")
+    }
+  end
+
   @doc "The belief of a running module, by the model and module ids it was started with."
   @spec of(String.t(), atom() | String.t()) :: t() | nil
   def of(model_id, module_id) do

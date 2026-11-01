@@ -18,6 +18,16 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     on_exit(fn -> Monty.Test.PrerequisiteDownloads.stop_all() end)
 
+    # A test that only *queues* a run leaves a record saying "running", and the
+    # page of the next test then finds it and follows it instead of starting its
+    # own — which is the right behaviour and the wrong run. So the file puts
+    # back what it found: nothing running.
+    on_exit(fn ->
+      for run <- RunHistory.running() do
+        RunHistory.finish(run, %{"reason" => "the test ended"}, "stopped")
+      end
+    end)
+
     {:ok, tmp: tmp}
   end
 
@@ -36,29 +46,30 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       assert has_element?(view, "#world-select")
 
-      # Choosing Monty's world changes what the page says, and what it will
-      # queue: the stand-in warning is gone because the run is no longer one.
-      view |> element("#world-choice") |> render_change(%{"world" => "habitat"})
+      # Choosing the object's world changes what the page says, and what it
+      # will queue: the stand-in warning is gone because the run is no longer
+      # one.
+      view |> element("#world-choice") |> render_change(%{"world" => "mujoco"})
 
-      # The badge names the engine for Monty's world — MuJoCo for this
+      # The badge names the engine for the experiment's world — MuJoCo for this
       # experiment — and "stand-in scene" for this port's: the two answers a
       # reader has to tell apart.
       assert view |> element("#world") |> render() =~ "MuJoCo"
       refute render(view) =~ "world_is_a_stand_in"
 
-      # Both options are named for what they are, so "Monty's world" is never a
-      # mystery: the engine comes from the experiment's own config.
+      # Both options are named for what they are, so the world is never a
+      # mystery: MuJoCo is in this application, and it says so.
       select = view |> element("#world-select") |> render()
       assert select =~ "stand-in scene (Elixir, one sphere)"
-      assert select =~ "MuJoCo via Monty&#39;s Python"
+      assert select =~ "MuJoCo (in this application)"
       assert select =~ ~s(selected)
     end
 
-    # Poka-yoke: Monty's world reads a downloaded interpreter, object set and
-    # memory. Queuing a run without them answers with a run that dies at its
-    # first step, so the page says so first — and says where to get them.
+    # Poka-yoke: MuJoCo reads a downloaded object set and memory. Queuing a run
+    # without them answers with a run that dies at its first step, so the page
+    # says so first — and says where to get them. No interpreter is on that
+    # list: the world runs in the one this application carries.
     test "a run whose files are not here yet cannot be started, and says why", %{conn: conn} do
-      Tmp.without_env("MONTY_PYTHON")
       Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
       Tmp.system_env("MONTY_MODELS", Tmp.dir("monty-models"))
 
@@ -68,15 +79,15 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       refute has_element?(view, "#needs-prerequisites")
       assert has_element?(view, "#run:not([disabled])")
 
-      view |> element("#world-choice") |> render_change(%{"world" => "habitat"})
+      view |> element("#world-choice") |> render_change(%{"world" => "mujoco"})
 
       assert has_element?(view, "#needs-prerequisites")
       assert has_element?(view, "#run[disabled]")
 
       box = view |> element("#needs-prerequisites") |> render()
-      assert box =~ "MONTY_PYTHON"
       assert box =~ "objects this environment loads"
       assert box =~ "pretrained memory"
+      refute box =~ "MONTY_PYTHON"
 
       assert view
              |> element("#needs-prerequisites #download-prerequisites")
@@ -98,10 +109,10 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
 
-      view |> element("#world-choice") |> render_change(%{"world" => "habitat"})
+      view |> element("#world-choice") |> render_change(%{"world" => "mujoco"})
       view |> element("#run") |> render_click()
 
-      assert [%{inputs: %{"world" => "habitat"}} = run | _] =
+      assert [%{inputs: %{"world" => "mujoco"}} = run | _] =
                RunHistory.search(state: "all", text: "base_config_10distinctobj_dist_agent").runs
 
       # The queue steps what the record says, not what the worker's environment
@@ -170,13 +181,15 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # How many runs went side by side, off the record rather than the page's
       # current setting.
       assert row =~ "2"
-      assert row =~ ~s(href="#{~p"/runs/#{queued.id}"}")
+      assert row =~ ~s(id="experiment-run-#{queued.id}")
+      assert row =~ ~p"/runs/#{queued.id}"
 
       done = view |> element("#experiment-run-#{finished.id}") |> render()
       assert done =~ "finished"
       assert done =~ "7"
-      # A finished run has a time to show; the header says what it is.
-      assert render(view) =~ "ran for"
+      # A finished run has a time to show, and the header says what it is.
+      assert render(view) =~ "took"
+      assert done =~ ~r/\d+(µs|ms|s)/
     end
 
     test "leaves another experiment's runs out", %{conn: conn, elsewhere: elsewhere} do
@@ -244,7 +257,10 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # This experiment's logging group names the CSV handler and wandb. The
       # wrapper is this port's, but nothing it would wrap is; that is said here,
       # beside the findings, rather than only in the log of a run that has already
-      # happened.
+      # happened. A note about wandb is only said to a run that reports to it,
+      # and wandb is off by default.
+      Tmp.app_env(:wandb_mode, "online")
+
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
 
       assert has_element?(view, "#logging-notes")
@@ -279,7 +295,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   describe "during the run" do
     test "each step is streamed into the log as it happens", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=3")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=3&episodes=1")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -291,10 +307,10 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     test "a second viewer joins the run that is going instead of starting another", %{conn: conn} do
       {:ok, one, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       {:ok, two, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       one |> element("#run") |> render_click()
       started = current_run_id(one)
@@ -311,7 +327,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     test "in parallel starts one run per episode, one object each", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       view |> element("#parallelism") |> render_change(%{"parallelism" => "3"})
       view |> element("#run") |> render_click()
@@ -330,7 +346,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     test "each sensor has its own view, updated as the run steps", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -349,7 +365,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     test "where the agent is relative to the object is drawn as the run steps", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -363,7 +379,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     test "what the learning module believes is drawn while the run steps", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -378,9 +394,27 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert chart =~ "is the answer so far"
     end
 
+    test "lays a run's episodes end to end, because each one starts again at zero", %{
+      conn: conn
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=2")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # Drawn against the step alone, the second episode would sit on top of the
+      # first: both start at step 0 with zero evidence. The chart is against the
+      # run, so the second episode begins where the first ended — and says so.
+      chart = view |> element("#chart-learning_module_0") |> render()
+
+      assert chart =~ "ep 1"
+      assert chart =~ "ep 2"
+    end
+
     test "the log filter keeps a line only if every word matches", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -400,7 +434,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     test "a filter that matches nothing says so instead of going blank", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -412,7 +446,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     test "a log with no filter says nothing about matching", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -424,7 +458,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     test "opening the page again finds the run that is still going", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       # A run that is queued but not performed: the page that was closed while
       # it waited, and a page opened while it waits, show the same run.
@@ -432,7 +466,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       run_id = current_run_id(view)
 
       {:ok, reopened, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       assert current_run_id(reopened) == run_id
       assert has_element?(reopened, "#open-history")
@@ -442,7 +476,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   describe "after the run" do
     test "the summary reports what happened, including silence", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -476,7 +510,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       conn = Phoenix.ConnTest.build_conn()
 
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       # The row said `running`, but no job will ever run it and no process holds
       # it. Waiting for news that cannot come is the worst state a page can be
@@ -506,7 +540,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       conn = Phoenix.ConnTest.build_conn()
 
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       assert current_run_id(view) == record.id
       view |> element("#stop") |> render_click()
@@ -522,7 +556,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   describe "a page that was open before a run started" do
     test "picks the run up from the record instead of waiting for a click", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       refute has_element?(view, "#open-history")
 
@@ -539,7 +573,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       record = running_run()
 
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       assert current_run_id(view) == record.id
 
@@ -552,7 +586,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       watched = running_run()
 
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       assert current_run_id(view) == watched.id
 
@@ -571,7 +605,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   describe "a run reported from elsewhere" do
     test "the page catches up from the record", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       view |> element("#run") |> render_click()
       record = RunHistory.get(current_run_id(view))
@@ -667,11 +701,24 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
   # What the log actually renders, line by line: an id and its text. Reading the
   # page's own output is the point — a filtered log is a fact about the HTML.
+  # Found through the DOM rather than a pattern over the markup: a line carries a
+  # `<time>` holding the reader's clock, so its text is not one run of
+  # characters.
   defp rendered_lines(view) do
-    ~r/<li id="log-(\d+)"[^>]*>([^<]*)<\/li>/
-    |> Regex.scan(render(view))
-    |> Enum.map(fn [_, id, text] -> %{id: id, text: text} end)
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#run-log li[id^=log-]")
+    |> LazyHTML.to_tree()
+    |> Enum.map(fn {_tag, attributes, children} ->
+      {"id", id} = List.keyfind(attributes, "id", 0)
+      %{id: String.replace_prefix(id, "log-", ""), text: text_of(children)}
+    end)
   end
+
+  defp text_of(text) when is_binary(text), do: text
+  defp text_of({_tag, _attributes, children}), do: text_of(children)
+  defp text_of(children), do: Enum.map_join(children, &text_of/1)
 
   defp broken_config do
     """

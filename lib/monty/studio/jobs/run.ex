@@ -18,7 +18,6 @@ defmodule Monty.Studio.Jobs.Run do
 
   require Logger
 
-  alias Monty.Frameworks.Experiments.MontyExperiment
   alias Monty.Simulators.Synthetic.{Camera, Environment}
   alias Monty.Studio
   alias Monty.Studio.{Artifacts, CentreView, Logging, Run, RunHistory, RunLog, Setup, Summary}
@@ -113,70 +112,147 @@ defmodule Monty.Studio.Jobs.Run do
 
   # -- the run ---------------------------------------------------------------
 
+  # One run is one *epoch*: an episode per object the experiment names, each of
+  # them ending the way Monty's does — the recognition policy said done, or the
+  # page's step budget ran out. The loop is the experiment class's
+  # (`MontyExperiment.run_epoch/2`); this function is the world, the records and
+  # the page, which the loop asks for through callbacks.
   defp run_experiment(record, opened) do
     run_id = record.id
     log_ready = Artifacts.start(run_id)
     record = attach_log(record, run_id, log_ready)
     sensor_ids = Setup.sensor_ids(opened.setup)
+    experiment = Setup.experiment_class(opened.setup)
+    objects = Setup.objects(opened.setup)
+    # How much of the experiment this run is: all of it, unless its record says
+    # fewer episodes — which is how a page runs a slice and how a test runs one.
+    episodes = episodes_of(record, Setup.episodes(opened.setup))
 
     # What this run will leave behind is the config's answer, not the page's: the
     # handlers it names are also what decides whether the modules keep the whole
     # hypothesis space, which is Monty's `init_monty_data_loggers`.
     logging = Logging.open(opened.setup)
 
+    say(
+      run_id,
+      "run started: #{record.experiment}, #{length(objects)} object(s) × " <>
+        "#{Setup.eval_epochs(opened.setup)} rotation(s), #{episodes} episode(s) in all, " <>
+        "up to #{record.steps} steps each"
+    )
+
+    broadcast(run_id, {:started, record.steps})
+
+    # A class the config names that this port does not have is said out loud
+    # once, at the start, and the run goes on without it.
+    Enum.each(
+      logging.notes ++ Logging.describe(logging, Artifacts.dir(run_id)),
+      &say(run_id, &1)
+    )
+
+    # `episode` is the episode of the run the steps now belong to: the step
+    # counter restarts inside each one, and what a record and a page keep of a
+    # step has to say which episode it was in (`RunLog.entry/3`).
+    state = %{run: nil, record: record, logging: logging, infos: [], conclusion: %{}, episode: 0}
+
+    {outcome, ran, state} =
+      experiment.run_epochs(state, %{
+        objects: objects,
+        epochs: Setup.eval_epochs(opened.setup),
+        episodes: episodes,
+        pre_episode: &start_episode(run_id, opened, &1, &2, &3),
+        ground_truth: &ground_truth(&1),
+        step: &step_once(run_id, &1, sensor_ids),
+        finished?: fn %{run: run} -> Run.finished?(run) end,
+        stopped?: &stop_requested?/0,
+        post_episode: &end_episode(run_id, &1, &2, &3)
+      })
+
+    say(run_id, episodes_line(ran))
+    close(state.record, opened, outcome, state.infos, state.conclusion, run_id)
+  end
+
+  defp episodes_of(%{inputs: %{"episodes" => count}}, _default)
+       when is_integer(count) and count > 0,
+       do: count
+
+  defp episodes_of(_record, default), do: default
+
+  # Monty's `pre_episode`, interface half: an episode starts where it was told to
+  # — the world for this episode's object, the agent positioned, the sensors
+  # reset. The previous episode's processes go first, because a run steps one
+  # world at a time.
+  defp start_episode(run_id, opened, %{run: previous} = state, index, object) do
+    stop_run(previous)
+
     case Run.start(opened.setup,
-           steps: record.steps,
-           episode: record.episode,
-           has_detailed_logger: Logging.detailed?(logging)
+           steps: state.record.steps,
+           episode: index,
+           has_detailed_logger: Logging.detailed?(state.logging)
          ) do
       {:ok, run} ->
         Registry.update_value(Monty.Runtime.Registry, key(run_id), fn _ -> run.model_id end)
+        say(run_id, "episode #{index + 1}: #{object || "the scene's own object"}")
 
-        say(
+        broadcast(
           run_id,
-          "run started: #{record.experiment}, episode #{record.episode}, #{record.steps} steps"
+          {:episode, %{episode: index, object: object, steps: state.record.steps}}
         )
 
-        broadcast(run_id, {:started, record.steps})
-
-        # A class the config names that this port does not have is said out loud
-        # once, at the start, and the run goes on without it.
-        Enum.each(
-          logging.notes ++ Logging.describe(logging, Artifacts.dir(run_id)),
-          &say(run_id, &1)
-        )
-
-        {outcome, infos, {run, record}} =
-          MontyExperiment.run_episode_steps(
-            {run, record},
-            %{
-              step: &step_once(run_id, &1, sensor_ids),
-              finished?: fn {run, _record} -> Run.finished?(run) end,
-              stopped?: &stop_requested?/0
-            }
-          )
-
-        conclusion = Run.conclusion(run)
-
-        # Monty's `post_episode` order, and it matters: the episode is logged
-        # before the memory a training episode writes, because that write
-        # rewrites the episode's ground truth and an episode logged afterwards
-        # would look confused about the object it just recognised.
-        log_statistics(run_id, logging, run)
-
-        Run.stop(run)
-        close(record, opened, outcome, infos, conclusion, run_id)
+        {:ok, %{state | run: run, episode: index}}
 
       {:error, reason} ->
-        give_up(run_id, {:cannot_start, reason})
+        {:error, reason}
     end
   end
+
+  # Monty's `pre_episode`, experiment half: what the world chose, told to the
+  # model, so a step can name the object under the patch.
+  defp ground_truth(%{run: run} = state) do
+    :ok = Run.set_ground_truth(run)
+    {:ok, state}
+  end
+
+  # Monty's `post_episode`: the episode is logged, then its processes go. The
+  # order matters — the episode is logged *before* the memory a training episode
+  # writes, because that write rewrites the episode's ground truth and an episode
+  # logged afterwards would look confused about the object it just recognised.
+  defp end_episode(run_id, %{run: run} = state, _outcome, infos) do
+    log_statistics(run_id, state.logging, run)
+    conclusion = Run.conclusion(run)
+    stop_run(run)
+
+    # `infos` arrive newest first; a page reads an epoch oldest first.
+    %{state | run: nil, infos: state.infos ++ Enum.reverse(infos), conclusion: conclusion}
+  end
+
+  defp stop_run(nil), do: :ok
+
+  defp stop_run(run) do
+    Run.stop(run)
+  rescue
+    # A world already closed is a world with nothing left to stop; stopping is
+    # tidying up, not a step that can fail.
+    _no_world_left -> :ok
+  end
+
+  defp episodes_line(episodes) do
+    ran =
+      Enum.map_join(episodes, ", ", fn episode ->
+        "#{episode.object || "scene"} #{episode.steps} steps (#{ending(episode.outcome)})"
+      end)
+
+    "#{length(episodes)} episode(s): #{ran}"
+  end
+
+  defp ending(:finished), do: "concluded"
+  defp ending(:stopped), do: "stopped"
+  defp ending({:crashed, step, _reason}), do: "failed at step #{step}"
 
   # A step either reports or the run is broken. A broken step is recorded with
   # the reason it died, because a page that says "running" for ever is a page
   # nobody trusts. What the loop does with that — and with a caller's stop — is
   # `MontyExperiment.run_episode_steps/2`, which is Monty's episode loop.
-  defp step_once(run_id, {run, record}, sensor_ids) do
+  defp step_once(run_id, %{run: run} = state, sensor_ids) do
     {:ok, info, observations, run} = Run.step(run)
     beliefs = Run.beliefs(run)
 
@@ -186,10 +262,10 @@ defmodule Monty.Studio.Jobs.Run do
     # rendered. An experiment behind the port records nothing drawable otherwise,
     # which is a replay of blank frames.
     rendered = Run.rendered_observations(run) || observations
-    record = RunLog.record_step(record, info, rendered, beliefs)
+    record = RunLog.record_step(state.record, info, rendered, beliefs, episode: state.episode)
 
-    emit(run_id, info, rendered, sensor_ids, beliefs, centre_view(run, info.step))
-    {:ok, info, {run, record}}
+    emit(run_id, state.episode, info, rendered, sensor_ids, beliefs, centre_view(run, info.step))
+    {:ok, info, %{state | run: run, record: record}}
   catch
     # An exit and a raise are the same thing here: the step did not produce a
     # report. Both end the episode as a failure, because the alternative — the
@@ -224,8 +300,8 @@ defmodule Monty.Studio.Jobs.Run do
     end
   end
 
-  defp emit(run_id, info, observations, sensor_ids, beliefs, centre) do
-    entry = RunLog.entry(info, beliefs)
+  defp emit(run_id, episode, info, observations, sensor_ids, beliefs, centre) do
+    entry = RunLog.entry(info, beliefs, episode: episode)
     line = RunLog.line(entry)
     say(run_id, line)
     frames = frames_for(sensor_ids, observations, info.step)
@@ -235,6 +311,7 @@ defmodule Monty.Studio.Jobs.Run do
       {:step,
        %{
          line: line,
+         episode: episode,
          step: info.step,
          frames: frames,
          beliefs: beliefs,
@@ -261,7 +338,7 @@ defmodule Monty.Studio.Jobs.Run do
   end
 
   defp close(record, opened, outcome, infos, conclusion, run_id) do
-    summary = Summary.from_infos(Enum.reverse(infos), opened.setup, conclusion)
+    summary = Summary.from_infos(infos, opened.setup, conclusion)
     status = status_of(outcome)
 
     say(run_id, closing_line(outcome, infos, summary))

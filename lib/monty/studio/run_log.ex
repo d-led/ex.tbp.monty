@@ -19,10 +19,16 @@ defmodule Monty.Studio.RunLog do
   records the module's own numbers, which is what a run's page draws: the objects
   it had not ruled out, the hypothesis it believed most, and per object how many
   hypotheses were alive and how strong the best one was.
+
+  The episode travels with the step. A run is every object of the experiment in
+  every rotation, and the step counter restarts inside each episode, so
+  `"step" => 0` alone says *when inside an episode* and not *when in the run* —
+  which is exactly what a chart needs to keep the episodes apart.
   """
-  @spec entry(map(), map()) :: map()
-  def entry(info, beliefs \\ %{}) do
+  @spec entry(map(), map(), keyword()) :: map()
+  def entry(info, beliefs \\ %{}, options \\ []) do
     %{
+      "episode" => Keyword.get(options, :episode, 0),
       "step" => info.step,
       "at" => now().instant,
       "percepts" => Enum.map(info.percept_ids, &to_string/1),
@@ -234,7 +240,7 @@ defmodule Monty.Studio.RunLog do
   given: the group choices, the seed, the budget, and the modules it addresses.
   """
   @spec attributes(map(), pos_integer()) :: map()
-  def attributes(opened, steps, episode \\ 0, parallel \\ 1) do
+  def attributes(opened, steps, episode \\ 0, parallel \\ 1, episodes \\ nil) do
     %{
       experiment: opened.name,
       episode: episode,
@@ -248,6 +254,10 @@ defmodule Monty.Studio.RunLog do
         "world" => to_string(opened.setup.world),
         "train_epochs" => opened.setup.epochs.train,
         "eval_epochs" => opened.setup.epochs.eval,
+        # What this run is: every episode of the experiment (objects × rotations),
+        # unless the caller asked for fewer. The record keeps it so a page can say
+        # how far a run got without knowing the config.
+        "episodes" => episodes || Setup.episodes(opened.setup),
         "sensors" => Setup.sensor_ids(opened.setup),
         "learning_modules" => Enum.map(opened.setup.learning_modules, & &1.id),
         # How many runs were started together: one episode each, the same
@@ -260,8 +270,12 @@ defmodule Monty.Studio.RunLog do
 
   @doc "Records a step — what was reported, what was seen and what was believed — and returns the row."
   @spec record_step(RunHistory.Run.t(), map(), map(), map()) :: RunHistory.Run.t()
-  def record_step(history, info, observations, beliefs \\ %{}) do
-    case RunHistory.record_step(history, entry(info, beliefs), moment(info, observations)) do
+  def record_step(history, info, observations, beliefs \\ %{}, options \\ []) do
+    case RunHistory.record_step(
+           history,
+           entry(info, beliefs, options),
+           moment(info, observations)
+         ) do
       {:ok, history} -> history
       {:error, _changeset} -> history
     end

@@ -23,6 +23,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   alias Monty.Studio
 
   alias Monty.Studio.{
+    Belief,
     Chart,
     Duration,
     Jobs,
@@ -50,7 +51,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
     case Studio.open(name_of(params)) do
       {:ok, opened} ->
-        {:ok, follow_running(assign_opened(socket, opened, steps(params)))}
+        {:ok, follow_running(assign_opened(socket, opened, steps(params), episodes(params)))}
 
       {:error, reason} ->
         {:ok,
@@ -65,7 +66,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
-  defp assign_opened(socket, opened, steps) do
+  defp assign_opened(socket, opened, steps, episodes) do
     # What this experiment will leave behind, and what it would have left behind
     # if this port had it — said here as well as in the run's log, because a
     # config that logs nothing is worth knowing before the run, not after.
@@ -83,6 +84,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       logging: logging.notes,
       error: nil,
       steps: steps,
+      episodes: episodes,
       # What a run of this experiment reads off the disk, and which of those is
       # not there yet: the run buttons stay disabled while anything is missing,
       # and the box under the header names it.
@@ -451,7 +453,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
         <p :if={@run_id == nil and runable?(assigns)} class="text-sm text-base-content/60">
           A run keeps going if this page is closed, and its log and history are
-          written as it goes. It uses stand-in modules until the ported ones land.
+          written as it goes. One run is every object of the experiment, in every
+          rotation its config names.
         </p>
 
         <section :if={@charts != %{}} id="evidence-chart" class="space-y-2">
@@ -472,8 +475,37 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 viewBox={"0 0 #{chart.width} #{chart.height}"}
                 class="w-full"
                 role="img"
-                aria-label={"evidence per object, step by step, for #{module_id}"}
+                aria-label={"evidence per object, step by step and episode by episode, for #{module_id}"}
               >
+                <%!-- Where one episode ends and the next begins. Every episode
+                starts its evidence again at zero, so the chart lays them end to
+                end and marks the boundary: without it the drop is a fall nobody
+                measured. --%>
+                <g :for={start <- chart.episode_starts}>
+                  <%= if start.episode > 0 do %>
+                    <line
+                      x1={start.x}
+                      x2={start.x}
+                      y1="10"
+                      y2={chart.height - 22}
+                      stroke="currentColor"
+                      stroke-width="0.5"
+                      stroke-dasharray="2 2"
+                      class="text-base-content/30"
+                    />
+                  <% end %>
+                </g>
+                <g :for={start <- chart.episode_labels}>
+                  <text
+                    x={start.x + 2}
+                    y="8"
+                    fill="currentColor"
+                    font-size="7"
+                    class="text-base-content/40"
+                  >
+                    {start.label}
+                  </text>
+                </g>
                 <g :for={tick <- chart.ticks}>
                   <line
                     x1="44"
@@ -656,7 +688,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   @impl true
   def handle_event("run", _params, %{assigns: %{opened: opened, steps: steps}} = socket) do
     if Setup.valid?(opened.setup),
-      do: start(socket, opened, steps, socket.assigns.parallelism),
+      do: start(socket, opened, steps, socket.assigns.parallelism, socket.assigns.episodes),
       else: {:noreply, socket}
   end
 
@@ -677,7 +709,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # One step is a run of one step: a person clicking it twice wants two runs to
   # look at, not one run that pretends to have done two.
   def handle_event("step", _params, %{assigns: %{opened: opened}} = socket) do
-    if Setup.valid?(opened.setup), do: start(socket, opened, 1, 1), else: {:noreply, socket}
+    if Setup.valid?(opened.setup),
+      do: start(socket, opened, 1, 1, 1),
+      else: {:noreply, socket}
   end
 
   def handle_event("stop", _params, %{assigns: %{run_id: nil}} = socket), do: {:noreply, socket}
@@ -771,12 +805,23 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> refresh_runs()
   end
 
-  defp handle_studio({:step, %{line: text, step: step, frames: frames} = event}, socket) do
+  # One episode of the epoch has begun. A run is every object of the experiment
+  # in every rotation, so the page says which one it is on — the step counter
+  # restarts inside each episode, and a log that did not say so would look like
+  # a run going backwards.
+  defp handle_studio({:episode, %{episode: index, object: object}}, socket) do
+    push(socket, nil, "episode #{index + 1}: #{object || "the scene's own object"}", :info)
+  end
+
+  defp handle_studio(
+         {:step, %{line: text, step: step, frames: frames, episode: episode} = event},
+         socket
+       ) do
     socket
     |> push(step, text, :info)
     |> assign(progress: {step + 1, elem(socket.assigns.progress, 1)})
     |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
-    |> remember(step, Map.get(event, :beliefs, %{}))
+    |> remember(episode, step, Map.get(event, :beliefs, %{}))
     |> assign(centre: Map.get(event, :centre))
   end
 
@@ -813,19 +858,25 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   # What each learning module believed after this step, appended to what it held
-  # before it: the chart is the run's history, not the latest frame of it.
-  defp remember(socket, _step, beliefs) when beliefs == %{}, do: socket
+  # before it: the chart is the run's history, not the latest frame of it. The
+  # episode comes with it because a run is many episodes and each one starts its
+  # evidence again at zero — the chart stacks them end to end so a later episode
+  # is not drawn on top of the first.
+  defp remember(socket, _episode, _step, beliefs) when beliefs == %{}, do: socket
 
-  defp remember(socket, step, beliefs) do
+  defp remember(socket, episode, step, beliefs) do
     histories =
       Enum.reduce(beliefs, socket.assigns.beliefs, fn {module_id, belief}, histories ->
-        Map.update(histories, module_id, [{step, belief}], &(&1 ++ [{step, belief}]))
+        point = {episode, step, belief}
+        Map.update(histories, to_string(module_id), [point], &(&1 ++ [point]))
       end)
 
-    charts = Map.new(histories, fn {module_id, steps} -> {module_id, Chart.new(steps)} end)
-
-    assign(socket, beliefs: histories, charts: charts)
+    assign(socket, beliefs: histories, charts: charts_of(histories))
   end
+
+  # One chart per module, from the module's own history.
+  defp charts_of(histories),
+    do: Map.new(histories, fn {module_id, steps} -> {module_id, Chart.new(steps)} end)
 
   # What the record says, applied to the page.
   #
@@ -851,6 +902,33 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         )
         |> merge_lines(record)
         |> merge_frames(record)
+        |> merge_beliefs(record)
+    end
+  end
+
+  # A run's chart is the run's, not this socket's: a page opened halfway through
+  # an episode draws what the record already holds and then carries on live. It is
+  # done once — after that the messages are newer than the record.
+  defp merge_beliefs(%{assigns: %{beliefs_seeded: true}} = socket, _record), do: socket
+
+  defp merge_beliefs(socket, record) do
+    recorded =
+      for entry <- record.log,
+          entry["beliefs"] != nil,
+          {module_id, belief} <- entry["beliefs"],
+          into: [] do
+        {module_id, {entry["episode"] || 0, entry["step"] || 0, Belief.from_stored(belief)}}
+      end
+
+    if recorded == [] do
+      socket
+    else
+      histories =
+        Enum.reduce(recorded, socket.assigns.beliefs, fn {module, point}, histories ->
+          Map.update(histories, module, [point], &(&1 ++ [point]))
+        end)
+
+      assign(socket, beliefs_seeded: true, beliefs: histories, charts: charts_of(histories))
     end
   end
 
@@ -903,10 +981,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # number — n runs of n episodes, each its own record, its own topic and its own
   # seed — and the queue is told the same number, because a queue limit of two
   # would quietly turn ten runs into five rounds of two.
-  defp start(socket, opened, steps, parallelism) do
+  defp start(socket, opened, steps, parallelism, episodes) do
     _ = Jobs.parallelism(parallelism)
 
-    results = Enum.map(0..(parallelism - 1), &queue(opened, steps, &1, parallelism))
+    results = Enum.map(0..(parallelism - 1), &queue(opened, steps, &1, parallelism, episodes))
     records = Enum.flat_map(results, &started/1)
     refused = for {:error, changeset} <- results, do: changeset_errors(changeset)
 
@@ -949,7 +1027,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # experiments' worth of evidence — the stand-in checks the runtime, MuJoCo
   # produces the experiment's numbers — so a page that already has one going
   # can still be asked for the other, and the queue decides when it starts.
-  defp queue(opened, steps, episode, parallel) do
+  defp queue(opened, steps, episode, parallel, episodes) do
     world = to_string(opened.setup.world)
 
     case RunHistory.running_for(opened.name, episode) do
@@ -957,7 +1035,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         :going
 
       _nothing_or_another_world ->
-        RunHistory.start(RunLog.attributes(opened, steps, episode, parallel))
+        RunHistory.start(RunLog.attributes(opened, steps, episode, parallel, episodes))
     end
   end
 
@@ -1014,7 +1092,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp record_line(entry), do: line(entry["step"], RunLog.text(entry), :info, RunLog.at(entry))
 
   defp line(step, text, level, at) do
-    %{id: System.unique_integer([:monotonic, :positive]), step: step, text: text, level: level, at: at}
+    %{
+      id: System.unique_integer([:monotonic, :positive]),
+      step: step,
+      text: text,
+      level: level,
+      at: at
+    }
   end
 
   defp line_class(%{level: :error}), do: "text-error"
@@ -1063,15 +1147,24 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
+  # `?episodes=N`: a slice of the experiment, for when the whole of it — every
+  # object in every rotation — is more than a person wants to wait for now.
+  defp episodes(params) do
+    case Integer.parse(to_string(params["episodes"] || "")) do
+      {count, ""} when count > 0 -> count
+      _default -> nil
+    end
+  end
+
   # A world that is not Monty's simulator is a warning, not a badge of honour:
   # the experiment's own numbers come from MuJoCo, and a stand-in is not it.
   defp world_badge(%{world: :mujoco}), do: "badge-ghost"
   defp world_badge(_setup), do: "badge-warning"
 
   defp world_note(%{world: :mujoco} = setup) do
-    "Monty's own MuJoCo simulator, copied into this repository and run in the " <>
-      "interpreter this application carries: the experiment's `environment` names " <>
-      "#{engine_of(setup)}, its agents and cameras are Monty's, and no Python has to " <>
+    "MuJoCo, in the interpreter this application carries: the experiment's " <>
+      "`environment` names #{engine_of(setup)}, and the scene, the agents, their " <>
+      "cameras and their images are built here from that config. No Python has to " <>
       "be installed."
   end
 

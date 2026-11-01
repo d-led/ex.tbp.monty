@@ -53,6 +53,19 @@ defmodule Monty.Studio.RunLogTest do
     }
   end
 
+  describe "the episode a step belongs to" do
+    # The step counter restarts inside every episode of a run, so a record that
+    # kept the step alone could not tell the second episode's first step from the
+    # run's first step. The chart a page draws depends on the difference.
+    test "travels with the step" do
+      assert RunLog.entry(info(), %{}, episode: 2)["episode"] == 2
+    end
+
+    test "is the first episode when the caller does not say otherwise" do
+      assert RunLog.entry(info())["episode"] == 0
+    end
+  end
+
   describe "what the modules believed" do
     test "is recorded with the step, in the shape the database will hand back" do
       entry = RunLog.entry(info(), %{lm_0: belief()})

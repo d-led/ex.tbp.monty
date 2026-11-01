@@ -14,9 +14,13 @@ defmodule Monty.Studio.Jobs.RunTest do
 
   defp start_run(steps), do: start_run("tutorial/first_experiment", steps)
 
+  # One episode: what is under test is the job — its record, its log, what it
+  # broadcasts — and an experiment's own run is every object in every rotation,
+  # which is minutes of work this test does not need. The epoch itself is
+  # `Monty.Frameworks.Experiments.MontyExperiment`'s own spec.
   defp start_run(experiment, steps) do
     {:ok, opened} = Monty.Studio.open(experiment)
-    RunHistory.start(RunLog.attributes(opened, steps))
+    RunHistory.start(RunLog.attributes(opened, steps, 0, 1, 1))
   end
 
   defp perform(%RunHistory.Run{id: id}), do: perform_id(id)
@@ -89,6 +93,19 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert file =~ "run finished: 2 steps"
     end
 
+    test "keeps which episode each step was in, so two episodes cannot be read as one" do
+      # Two episodes of one object each. Every episode restarts the step counter,
+      # so the steps on their own read `[0, 0]` and say nothing about which
+      # episode they belong to — which is what a chart needs to keep them apart.
+      {:ok, opened} = Monty.Studio.open("base_config_10distinctobj_dist_agent")
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 1, 2))
+
+      assert {:ok, closed} = perform(record)
+
+      assert Enum.map(closed.log, & &1["episode"]) == [0, 1]
+      assert Enum.map(closed.log, & &1["step"]) == [0, 0]
+    end
+
     test "tells anyone watching what it is doing, step by step", %{root: _root} do
       {:ok, record} = start_run("base_config_10distinctobj_dist_agent", 2)
       Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
@@ -125,6 +142,10 @@ defmodule Monty.Studio.Jobs.RunTest do
     end
 
     test "says what it logs with, and which classes it skipped, before stepping" do
+      # wandb is off by default, and a note about a wandb class that was skipped
+      # is not said to nobody — so this run is told one is configured.
+      Tmp.app_env(:wandb_mode, "online")
+
       {:ok, record} = start_run("base_config_10distinctobj_dist_agent", 2)
 
       assert {:ok, closed} = perform(record)
@@ -253,20 +274,19 @@ defmodule Monty.Studio.Jobs.RunTest do
     # showed a run with no steps and no pictures, and the experiment refused to
     # run again because its old run was "already running".
     test "leaves its record failed, with the reason, instead of running for ever" do
+      # A world this build does not carry: the config composes, the page says so,
+      # and a run of it cannot start. What the record owes is the reason.
       Tmp.app_env(:world_simulator, :habitat)
-
-      Tmp.app_env(:monty_peer,
-        python: System.find_executable("python3"),
-        peer: Path.expand("../../../support/broken_world.py", __DIR__)
-      )
 
       {:ok, record} = start_run(2)
 
-      assert_raise RuntimeError, ~r/could not reset/, fn -> perform(record) end
+      assert_raise ArgumentError, ~r/is not a world this application carries/, fn ->
+        perform(record)
+      end
 
       closed = RunHistory.get(record.id)
       assert closed.status == "failed"
-      assert closed.summary["reason"] =~ "could not reset"
+      assert closed.summary["reason"] =~ "is not a world this application carries"
 
       # In its own log as well, because that file is what someone reads when the
       # page is not enough.
