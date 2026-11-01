@@ -1,14 +1,15 @@
 defmodule Monty.Simulators.Mujoco.Host do
   @moduledoc """
-  Monty's own simulator, hosted in the interpreter this application carries.
+  The MuJoCo world, in the interpreter this application carries.
 
-  `priv/monty_py` is Monty's MuJoCo connector, copied file for file (see its
-  `README.md`): `MuJoCoSimulator`, the agents that live in it, their cameras and
-  their actuations. `priv/monty_py/world.py` is the thin glue that builds them
-  from JSON and answers JSON back, and `pythonx` is the interpreter — built at
-  compile time by `config/pythonx.exs`, shipped inside the release. So a run
-  steps *Monty's* world without a Monty checkout and without installing
-  `tbp.monty`: the code travels with this application instead.
+  `priv/monty_py/world.py` is the world: a scene built from a spec, the agents
+  that live in it, their cameras and their actuations, written against `mujoco`
+  the same way Monty's `MuJoCoSimulator` is (numpy and numpy-quaternion for the
+  arithmetic, and nothing else). It builds a world from JSON and answers JSON
+  back, and `pythonx` is the interpreter — built at compile time by
+  `config/pythonx.exs`, shipped inside the release. So a run steps Monty's
+  world without a Monty checkout and without installing `tbp.monty`: the code
+  travels with this application instead.
 
   ## Why one process
 
@@ -79,7 +80,8 @@ defmodule Monty.Simulators.Mujoco.Host do
   def handle_call({:reset, id}, _from, state) do
     with {:ok, globals} <- world(state, id),
          {:ok, globals} <- evaluate(@reset, globals) do
-      {:reply, {:ok, answer(globals)}, %{state | globals: globals, worlds: put(state, id, globals)}}
+      {:reply, {:ok, answer(globals)},
+       %{state | globals: globals, worlds: put(state, id, globals)}}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
@@ -89,7 +91,8 @@ defmodule Monty.Simulators.Mujoco.Host do
     with {:ok, globals} <- world(state, id),
          {:ok, globals} <-
            evaluate(@step, Map.put(globals, "actions", Jason.encode!(actions))) do
-      {:reply, {:ok, answer(globals)}, %{state | globals: globals, worlds: put(state, id, globals)}}
+      {:reply, {:ok, answer(globals)},
+       %{state | globals: globals, worlds: put(state, id, globals)}}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end

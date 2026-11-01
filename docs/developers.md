@@ -28,8 +28,8 @@ gate. A test that asserts the implementation is what it is has bought nothing.
 the tables up and leaves paragraphs wrapped as written. Prettier comes from
 `npx` and is optional — with no node on the machine the step says so and skips,
 and CI never asks: [`scripts/quality.sh`](../scripts/quality.sh) is read-only on
-purpose. `priv/monty/` (Monty's own tree, copied file for file) and
-`assets/vendor/` (code we did not write) are left alone.
+purpose. `priv/monty/` (Monty's `conf/`, `snapshots/` and the two census files)
+and `assets/vendor/` (code we did not write) are left alone.
 
 ### When Monty moves
 
@@ -146,20 +146,16 @@ runs on, node/npm for the asset bundle, and Docker for the Postgres
 running again after a pull
 that moves a dependency or a migration. [`scripts/run-dev.sh`](../scripts/run-dev.sh)
 is `mix phx.server` with the code reloader — `PORT=4001 scripts/run-dev.sh` moves
-it, and `MONTY_PYTHON=… scripts/run-dev.sh` says where Monty's Python is, which
-is what lets a run step an experiment's own engine instead of the stand-in.
+it. A run needs no interpreter configured: the world is `priv/monty_py/world.py`
+in the interpreter `pythonx` builds, so MuJoCo is there by construction. The
+page's world selector chooses between that and the stand-in scene.
 
-Habitat in development: habitat-sim exists only as a conda package for **Python
-3.9**, and MuJoCo needs 3.10 or newer, so the two live in different
-environments — one interpreter cannot hold both:
-
-```sh
-micromamba create -n monty-habitat -c conda-forge -c aihabitat \
-  python=3.9 habitat-sim=0.2.4
-MONTY_PYTHON="$HOME/micromamba/envs/monty-habitat/bin/python" PORT=4001 scripts/run-dev.sh
-```
-
-The page's world selector then names Habitat-Sim for the `habitat_*` experiments
+Habitat-Sim is not a world a run can choose: it exists only as a conda package
+for **Python 3.9**, this application's interpreter is newer, and MuJoCo is the
+world its configs are written for. `Monty.Simulators.Habitat.Environment.HabitatEnvironment`
+and [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py)
+remain for an operator who wires one up, and no config this build carries is
+routed to them
 and MuJoCo for the rest; `/prerequisites` says per engine what this machine has.
 
 Tests need the same database; `mix test` creates and migrates it.
@@ -196,7 +192,7 @@ Only the world and the recorders. Nothing of Monty's own source is vendored:
 
 | Python                                                                                                                                                     | What it is                                                                                                                                         | Needs                                                        |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py)                                                                                    | the simulator and eval interface of the experiment's own config, behind the port's protocol — the world a run steps unless it chooses the stand-in | `$MONTY_PYTHON` with `tbp.monty` and its simulator installed |
+| [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py)                                                                                    | Habitat-Sim behind the port's protocol — not a world a run chooses; the world a run steps is `priv/monty_py/world.py` | `MONTY_PYTHON` naming an interpreter with `tbp.monty` and `habitat_sim` |
 | [`scripts/record_monty_*.py`](../scripts)                                                                                                                  | produce the fixtures the parity tests replay; run Monty once, offline, and write what it answered                                                  | `$MONTY_PYTHON` with the modules each recorder touches       |
 | [`scripts/export_monty_pretrained.py`](../scripts/export_monty_pretrained.py), [`scripts/classify_monty_classes.py`](../scripts/classify_monty_classes.py) | behind [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh) and `mix monty.port_census`                                         | `torch` for the export; plain `ast` for the census           |
 

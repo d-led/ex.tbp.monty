@@ -119,6 +119,22 @@ defmodule Monty.Studio.MemoryTest do
     end
   end
 
+  describe "a directory that holds libraries" do
+    test "lists the models each release exports, and nothing that is not one" do
+      dir = Tmp.dir("libraries")
+      release = Path.join(dir, "pretrained_ycb_v12")
+
+      File.mkdir_p!(release)
+      File.write!(Path.join(release, "surf_agent_1lm_10distinctobj.jsonl.gz"), "")
+      File.write!(Path.join(release, "notes.md"), "")
+      # A README beside the releases is not a release.
+      File.write!(Path.join(dir, "README.md"), "")
+
+      assert Memory.available_libraries(dir) ==
+               ["pretrained_ycb_v12/surf_agent_1lm_10distinctobj"]
+    end
+  end
+
   describe "a directory that holds no libraries" do
     test "answers that the model was never exported, rather than an empty memory" do
       empty = Tmp.dir("no-libraries")

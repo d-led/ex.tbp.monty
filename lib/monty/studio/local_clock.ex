@@ -23,7 +23,10 @@ defmodule Monty.Studio.LocalClock do
   def stamp(at) do
     here = at |> DateTime.add(offset(), :second) |> DateTime.truncate(:millisecond)
 
-    %{instant: DateTime.to_iso8601(at), clock: Calendar.strftime(here, "%H:%M:%S") <> millis(here)}
+    %{
+      instant: DateTime.to_iso8601(at),
+      clock: Calendar.strftime(here, "%H:%M:%S") <> millis(here)
+    }
   end
 
   @doc "Now, in the same shape."

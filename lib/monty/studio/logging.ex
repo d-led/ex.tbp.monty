@@ -160,9 +160,10 @@ defmodule Monty.Studio.Logging do
   defp worth_saying(notes),
     do: if(wandb_off?(), do: Enum.reject(notes, &wandb_note?/1), else: notes)
 
-  # The same answer the page shows (`config :ex_tbp_monty, wandb_mode`): disabled
-  # unless an operator asked otherwise.
-  defp wandb_off?, do: Application.get_env(:ex_tbp_monty, :wandb_mode, "disabled") == "disabled"
+  # The same answer the page shows, from the one place that decides it: a run
+  # whose wandb is off has nothing to lose to the handlers this port lacks, so
+  # the notes about them would be noise.
+  defp wandb_off?, do: ExTbpMonty.EmbeddedPython.wandb_mode() == "disabled"
 
   defp wandb_note?(note), do: note |> String.downcase() |> String.contains?("wandb")
 

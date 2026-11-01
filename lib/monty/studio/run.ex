@@ -83,12 +83,6 @@ defmodule Monty.Studio.Run do
          {:ok, interface, positioning} <- position(setup, factories, episode) do
       case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {model, spec}) do
         {:ok, _pid} ->
-          # Monty's `pre_episode`: the experiment tells the model what the episode
-          # is about, because only the world knows — a world that samples an object
-          # says which one, and one that does not says nothing and the model keeps
-          # what it knew.
-          tell_target(model, model_id, interface)
-
           {:ok,
            %__MODULE__{
              model: model,
@@ -111,13 +105,18 @@ defmodule Monty.Studio.Run do
     end
   end
 
-  # Monty's `MontyExperiment.pre_episode`: the experiment tells the model what the
-  # episode is about, and the two halves of that arrive from the same place. The
-  # world that chose the object also named the semantic ids in its scene, which
-  # is what lets a step say *which* object was under the patch rather than only
-  # that one was; Monty's own experiments pass both
-  # (`object_recognition_experiments.py`).
-  defp tell_target(model, model_id, interface) do
+  @doc """
+  Monty's `MontyObjectRecognitionExperiment.pre_episode`: the model is told what
+  the episode is about.
+
+  Both halves arrive from the same place. The world that chose the object also
+  named the semantic ids in its scene, which is what lets a step say *which*
+  object was under the patch rather than only that one was; Monty's own
+  experiment passes both
+  (`object_recognition_experiments.py`).
+  """
+  @spec set_ground_truth(t()) :: :ok
+  def set_ground_truth(%__MODULE__{model: model, model_id: model_id, interface: interface}) do
     world = interface.env
 
     target =
@@ -154,7 +153,9 @@ defmodule Monty.Studio.Run do
   # the procedures again would move an agent Monty had placed and make the episode
   # a different one.
   defp position(%Setup{} = setup, factories, episode) do
-    world = Setup.world(setup)
+    # The episode's own object: Monty's interface shows one object per episode and
+    # walks the list, so the world a run builds is about *this* episode's target.
+    world = Setup.world(setup, episode)
 
     interface =
       Interface.new(
@@ -305,9 +306,8 @@ defmodule Monty.Studio.Run do
     # Monty's `_recognition_complete` asks the policy and does what it asks for
     # before the loop decides whether to go on — which is what makes a stopping
     # decision's time-out reach the model, rather than being asked for and then
-    # never applied.
-    apply_reactions(run, decision(run))
-
+    # never applied. The loop asks it (`MontyExperiment.run_episode_steps/2`),
+    # so nothing about it belongs to the step.
     {:ok, info, observations, run}
   end
 
@@ -338,12 +338,18 @@ defmodule Monty.Studio.Run do
   @doc """
   Whether the run is over: the experiment's policy, or this page's step budget.
 
-  The policy is the experiment's answer and the budget is the page's, so a run
-  that concludes early stops early, and one that never concludes still yields.
+  Monty's `_recognition_complete`: the policy is asked, and the two things it may
+  ask for besides stopping are done here — so an episode that keeps exploring or
+  times its modules out is told before the next step, which is where Monty tells
+  it. The step budget is the page's addition: a run whose policy never concludes
+  still has to yield.
   """
   @spec finished?(t()) :: boolean()
-  def finished?(%__MODULE__{step: step, steps: steps} = run),
-    do: step >= steps or decision(run).is_done
+  def finished?(%__MODULE__{step: step, steps: steps} = run) do
+    decision = decision(run)
+    apply_reactions(run, decision)
+    step >= steps or decision.is_done
+  end
 
   @doc "Stops the run's processes — the model and the world it steps; safe to call twice."
   @spec stop(t()) :: :ok

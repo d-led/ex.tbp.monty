@@ -21,8 +21,8 @@ defmodule ExTbpMontyWeb.WelcomeLive do
   # and what its address is — so the old bookmark is carried there using that
   # vocabulary rather than a second copy of it.
   alias ExTbpMontyWeb.ExperimentsLive
-  alias Monty.Studio.Catalog
   alias Monty.ModuleMap
+  alias Monty.Studio.Catalog
 
   # Monty's own tutorial: the experiment its documentation walks a first-timer
   # through, and the one this port names as the place to start.

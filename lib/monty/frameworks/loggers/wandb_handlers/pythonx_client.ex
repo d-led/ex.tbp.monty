@@ -17,9 +17,12 @@ defmodule Monty.Frameworks.Loggers.WandbHandlers.PythonxClient do
 
   ## Where a run goes
 
-  Nothing here decides: wandb reads `WANDB_MODE` and `WANDB_DIR` from the
-  environment, so a test can point a run at a temporary directory in offline mode
-  and a deployment can sync it later, without this module knowing either.
+  wandb reads `WANDB_MODE` and `WANDB_DIR` from the environment, so a test can
+  point a run at a temporary directory in offline mode and a deployment can sync
+  it later. The `WANDB_*` variables the BEAM has are passed through as they are;
+  `WANDB_MODE` alone is decided elsewhere — `ExTbpMonty.EmbeddedPython.wandb_mode/0`
+  answers what it will be, and that answer is what the interpreter is given, so
+  what a page reports and what wandb does are the same thing.
   """
 
   @init_code """
@@ -90,9 +93,17 @@ defmodule Monty.Frameworks.Loggers.WandbHandlers.PythonxClient do
   end
 
   defp environment do
-    for {key, value} <- System.get_env(), String.starts_with?(key, "WANDB_"), into: %{} do
-      {key, value}
-    end
+    inherited =
+      for {key, value} <- System.get_env(),
+          String.starts_with?(key, "WANDB_"),
+          into: %{},
+          do: {key, value}
+
+    # The mode is decided once, in `ExTbpMonty.EmbeddedPython.wandb_mode/0`, and
+    # this is where that decision reaches wandb: the interpreter reads
+    # `os.environ`, and an app config that was never handed over would be a page
+    # saying `disabled` while the run synced anyway.
+    Map.put(inherited, "WANDB_MODE", ExTbpMonty.EmbeddedPython.wandb_mode())
   end
 
   # A Python exception is a failed call and not a crashed application: a logger

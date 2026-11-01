@@ -12,59 +12,27 @@ defmodule Monty.Config.Inputs do
   upstream deleted is deleted here too — a config that no longer exists must not
   linger in the studio and be run against nothing.
 
-  ## The MuJoCo connector
+  ## What is not copied
 
-  `priv/monty_py` is the second half of the same idea: the Python that talks to
-  MuJoCo — `simulators/mujoco/` and the modules it imports — copied so a run
-  steps *Monty's* world without a checkout and without installing `tbp.monty`.
-  It is written by this task too, from the same checkout and at the same
-  revision, so the two copies cannot disagree about which Monty they are. The
-  list below is a contract and not a glob: it is the import closure of
-  `tbp.monty.simulators.mujoco`, and every package directory on the way travels
-  with it, because a package without `__init__.py` does not import.
+  Monty's *Python* is not copied, and the world is why. The MuJoCo connector
+  was a copy of `simulators/mujoco/` and the framework classes it answers in;
+  that copy went stale the moment upstream moved, so the world is now this
+  application's own Python (`priv/monty_py/world.py`, written against `mujoco`
+  the same way Monty's simulator is). The other Python call site is the wandb
+  client, which calls the `wandb` package directly. There is therefore no
+  Monty Python file to keep in step with a checkout, and `priv/monty_py` holds
+  only what this repository wrote.
 
-  Every path below is one of two, and both are fixed by configuration: the
-  checkout root a caller passed in, and `priv/monty`. Neither is a request —
-  this runs in a Mix task — so the file operations carry `sobelow_skip` instead
-  of a guard that would only be defending against a value nobody supplies.
+  Every path below is fixed by configuration: the checkout root a caller passed
+  in, and `priv/monty`. Neither is a request — this runs in a Mix task — so the
+  file operations carry `sobelow_skip` instead of a guard that would only be
+  defending against a value nobody supplies.
   """
 
   alias Monty.Config.Source
 
   @conf ["src", "tbp", "monty", "conf"]
   @snapshots ["tests", "conf", "snapshots"]
-  @package ["src", "tbp", "monty"]
-
-  # Where the copied Python lives, beside `priv/monty` rather than inside it:
-  # Monty's own data tree is YAML, this is code, and the two are reviewed
-  # separately.
-  @python_root "monty_py"
-
-  # The import closure of `tbp.monty.simulators.mujoco`, relative to `src/`.
-  @python [
-    "tbp/monty/cmp.py",
-    "tbp/monty/context.py",
-    "tbp/monty/experiment/learning_module.py",
-    "tbp/monty/experiment/monty.py",
-    "tbp/monty/experiment/recognition_status.py",
-    "tbp/monty/experiment/sensor_module.py",
-    "tbp/monty/frameworks/actions/actions.py",
-    "tbp/monty/frameworks/agents.py",
-    "tbp/monty/frameworks/environments/environment.py",
-    "tbp/monty/frameworks/experiments/mode.py",
-    "tbp/monty/frameworks/models/abstract_monty_classes.py",
-    "tbp/monty/frameworks/models/motor_system_state.py",
-    "tbp/monty/frameworks/sensors.py",
-    "tbp/monty/geometry.py",
-    "tbp/monty/math.py",
-    "tbp/monty/memento.py",
-    "tbp/monty/observations.py",
-    "tbp/monty/sensor_modules/sensor_module.py",
-    "tbp/monty/simulators/mujoco/__init__.py",
-    "tbp/monty/simulators/mujoco/agents.py",
-    "tbp/monty/simulators/mujoco/objects.py",
-    "tbp/monty/simulators/mujoco/simulator.py"
-  ]
 
   @typedoc """
   What a sync did, so the caller can show it instead of saying "done".
@@ -75,7 +43,6 @@ defmodule Monty.Config.Inputs do
           monty: String.t(),
           conf_files: non_neg_integer(),
           snapshot_files: non_neg_integer(),
-          python_files: non_neg_integer(),
           added: non_neg_integer(),
           updated: non_neg_integer(),
           removed: non_neg_integer()
@@ -94,7 +61,7 @@ defmodule Monty.Config.Inputs do
       changes =
         copy(monty_root, destination, "conf", @conf) ++
           copy(monty_root, destination, "snapshots", @snapshots) ++
-          copy_licence(monty_root, destination) ++ copy_python(monty_root, destination)
+          copy_licence(monty_root, destination)
 
       summary = summarise(monty_root, destination, changes)
       write_manifest(destination, summary)
@@ -138,8 +105,7 @@ defmodule Monty.Config.Inputs do
   defp ensure_directories(monty_root) do
     [
       {"config tree", Path.join([monty_root | @conf])},
-      {"snapshots", Path.join([monty_root | @snapshots])},
-      {"Monty's package", Path.join([monty_root | @package])}
+      {"snapshots", Path.join([monty_root | @snapshots])}
     ]
     |> Enum.find(fn {_name, dir} -> not File.dir?(dir) end)
     |> case do
@@ -155,7 +121,7 @@ defmodule Monty.Config.Inputs do
     snapshots = yaml_files(Path.join([monty_root | @snapshots]), "snapshots")
     licence = %{"LICENSE" => File.read!(Path.join(monty_root, "LICENSE"))}
 
-    Map.merge(Map.merge(Map.merge(conf, snapshots), licence), wanted_python(monty_root))
+    Map.merge(Map.merge(conf, snapshots), licence)
   end
 
   # sobelow_skip ["Traversal.FileModule"]
@@ -177,7 +143,7 @@ defmodule Monty.Config.Inputs do
       |> Map.new(&{Path.relative_to(&1, destination), File.read!(&1)})
     end
     |> then(fn [conf, snapshots] ->
-      Map.merge(Map.merge(conf, snapshots), licence_file(destination) |> with_python(destination))
+      Map.merge(Map.merge(conf, snapshots), licence_file(destination))
     end)
   end
 
@@ -206,102 +172,6 @@ defmodule Monty.Config.Inputs do
       change -> [change]
     end
   end
-
-  # -- the MuJoCo connector ---------------------------------------------------
-
-  # What the Python copy should hold, keyed `monty_py/<path>` so that a check
-  # compares the two copies with one map rather than two roots.
-  # sobelow_skip ["Traversal.FileModule"]
-  defp wanted_python(monty_root) do
-    source = Path.join(monty_root, "src")
-
-    modules =
-      for relative <- @python, into: %{} do
-        {Path.join(@python_root, relative), File.read!(Path.join(source, relative))}
-      end
-
-    modules
-    |> Map.merge(package_files(monty_root))
-    |> Map.put(
-      Path.join(@python_root, "LICENSE"),
-      File.read!(Path.join(monty_root, "LICENSE"))
-    )
-  end
-
-  # The copy's own Python, keyed the same way, so `check/2` can compare them.
-  # Only `tbp/` is Monty's: the files at the root of `priv/monty_py` are ours —
-  # the glue that drives the copied classes — and are not this task's business.
-  # sobelow_skip ["Traversal.FileModule"]
-  defp with_python(files, destination) do
-    directory = python_destination(destination)
-
-    modules =
-      directory
-      |> Path.join("tbp/**/*.py")
-      |> Path.wildcard()
-      |> Map.new(&{Path.join(@python_root, Path.relative_to(&1, directory)), File.read!(&1)})
-
-    licence = %{Path.join(@python_root, "LICENSE") => File.read!(Path.join(directory, "LICENSE"))}
-
-    files |> Map.merge(modules) |> Map.merge(licence)
-  end
-
-  # Copies the closure, every package `__init__.py` on the way, and the licence.
-  # A file upstream deleted is deleted here too: a module the simulator no
-  # longer imports must not linger and be importable by accident.
-  # sobelow_skip ["Traversal.FileModule"]
-  defp copy_python(monty_root, destination) do
-    wanted = wanted_python(monty_root)
-    directory = python_destination(destination)
-
-    written =
-      for {relative, content} <- wanted do
-        relative |> relative() |> then(&write(directory, &1, content))
-      end
-
-    written ++ prune_python(directory, wanted |> Map.keys() |> Enum.map(&relative/1))
-  end
-
-  # A package directory without `__init__.py` does not import, so every one on
-  # the way travels with the modules it contains.
-  # sobelow_skip ["Traversal.FileModule"]
-  defp package_files(monty_root) do
-    source = Path.join(monty_root, "src")
-
-    @python
-    |> Enum.flat_map(&ancestors/1)
-    |> Enum.uniq()
-    |> Enum.map(&Path.join(&1, "__init__.py"))
-    |> Enum.filter(&File.exists?(Path.join(source, &1)))
-    |> Map.new(fn relative ->
-      {Path.join(@python_root, relative), File.read!(Path.join(source, relative))}
-    end)
-  end
-
-  # Every directory above a file, up to the package root but not above it.
-  defp ancestors(relative) do
-    relative
-    |> Path.split()
-    |> Enum.drop(-1)
-    |> Enum.scan(nil, fn segment, acc -> if acc, do: Path.join(acc, segment), else: segment end)
-  end
-
-  # sobelow_skip ["Traversal.FileModule"]
-  defp prune_python(directory, keep) do
-    wanted = MapSet.new(keep)
-
-    for path <- Path.wildcard(Path.join(directory, "tbp/**/*.py")),
-        relative = Path.relative_to(path, directory),
-        not MapSet.member?(wanted, relative) do
-      File.rm!(path)
-      {:removed, Path.join(@python_root, relative)}
-    end
-    |> tap(fn _removed -> prune_empty_directories(Path.join(directory, "tbp")) end)
-  end
-
-  defp relative(path), do: String.replace_prefix(path, @python_root <> "/", "")
-
-  defp python_destination(destination), do: Path.join(Path.dirname(destination), @python_root)
 
   # sobelow_skip ["Traversal.FileModule"]
   defp write(destination, relative, content) do
@@ -350,14 +220,10 @@ defmodule Monty.Config.Inputs do
     conf = Path.wildcard(Path.join([destination, "conf", "**/*.yaml"])) |> length()
     snapshots = Path.wildcard(Path.join([destination, "snapshots", "**/*.yaml"])) |> length()
 
-    python =
-      Path.wildcard(Path.join([python_destination(destination), "tbp/**/*.py"])) |> length()
-
     %{
       monty: revision(monty_root),
       conf_files: conf,
       snapshot_files: snapshots,
-      python_files: python,
       added: Enum.count(changes, &match?({:added, _}, &1)),
       updated: Enum.count(changes, &match?({:updated, _}, &1)),
       removed: Enum.count(changes, &match?({:removed, _}, &1))
@@ -378,8 +244,7 @@ defmodule Monty.Config.Inputs do
     manifest = %{
       "monty" => summary.monty,
       "conf_files" => summary.conf_files,
-      "snapshot_files" => summary.snapshot_files,
-      "python_files" => summary.python_files
+      "snapshot_files" => summary.snapshot_files
     }
 
     File.write!(

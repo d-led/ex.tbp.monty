@@ -95,11 +95,11 @@ the limit to the same number — one object per episode.
 Monty does the same thing its own way: Monty's run_parallel.py, one process per
 episode.
 
-World: the simulator in an external process, via Monty's Python — the default
-for a run that does not choose one; `world: "monty"` on `monty_run_experiment`
-(or the run page's selector) says so explicitly, `world: "synthetic"` steps this
-port's stand-in, and the record keeps which one it was. `MONTY_PYTHON` is the
-interpreter it runs in.
+World: MuJoCo, in the interpreter this application carries — the default for a
+run that does not choose one; `world: "monty"` or `world: "mujoco"` on
+`monty_run_experiment` says so explicitly, `world: "synthetic"` steps this port's
+stand-in scene, which is Elixir and needs no interpreter, and the record keeps
+which one it was. Nothing is installed to step either.
 
 Prerequisites: 2/2 present (pretrained_ycb_v13 present · pretrained_ycb_v13_zip present)
 

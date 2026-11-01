@@ -142,35 +142,37 @@ can be MuJoCo, Habitat or a camera without touching the model. See
 ## What comes from Monty
 
 Four things are _copied_, the module contract and the census are _generated_, and
-the world is only ever _started_. The distinction is the one to keep: a copy can
-be diffed against a checkout, a generated file is a map _of_ Monty rather than a
-copy of it, a started process is Monty's own code doing its own work — and none
-of the three is a port.
+the world is written here. The distinction is the one to keep: a copy can be
+diffed against a checkout, a generated file is a map _of_ Monty rather than a
+copy of it, and the world is a re-implementation against the same library Monty
+uses — and only the last of the three is code this repository owns.
 
 | Kind      | What                                                                                | Handles it                                                                     |
 | --------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | copied    | Monty's config tree, the snapshots it was composed into, and its licence            | `mix monty.inputs`                                                             |
 | copied    | Monty's pretrained memories, exported to a format this port reads                   | [`scripts/sync_monty_libraries.sh`](../scripts/sync_monty_libraries.sh)        |
 | generated | the module contract (`lib/monty/module_map/data.ex`) and the two census files       | `mix monty.module_map.gen`, `mix monty.port_census`, `mix monty.target_census` |
-| started   | the world — Monty's `HabitatEnvironment` and eval interface, out of `$MONTY_PYTHON` | [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py)        |
+| written here | the world — MuJoCo's scene, agents and cameras, mirroring Monty's `simulators/mujoco/` | [`priv/monty_py/world.py`](../priv/monty_py/world.py), run by the embedded interpreter |
 
 Every path, glob, writer and the command that checks it is in
 [`from-monty.md`](from-monty.md) — one list, kept there so it cannot drift from
 one page to another. What deliberately does not travel, and why, is in the same
 place.
 
-## Where Python is, and is not
+## Where Python is
 
-Two interpreters are involved and they never meet. One is carried by the
-application, built into the release by uv, and reached only by the ported wandb
-logger ([`config/pythonx.exs`](../config/pythonx.exs),
-`Monty.Frameworks.Loggers.WandbHandlers.PythonxClient`).
-The other is _yours_: `MONTY_PYTHON` (or `python3` on the PATH if it is unset), an
-interpreter with Monty installed, which runs the world on the other side of the
-port. A run that chooses nothing steps that world — MuJoCo or Habitat-Sim, named
-by the experiment's own config. The third is chosen deliberately: the stand-in
-scene, which is Elixir, although a config that names a wandb logger reaches the
-embedded interpreter whatever the world is.
+One interpreter, and it is this application's own: built into the release by uv
+at compile time, reached through `pythonx` ([`config/pythonx.exs`](../config/pythonx.exs)).
+Two things use it, and neither is optional:
+
+- the **world** — `priv/monty_py/world.py`, MuJoCo driven the way Monty drives
+  it, answering observations and proprioceptive state;
+- the **wandb logger** — `Monty.Frameworks.Loggers.WandbHandlers.PythonxClient`.
+
+There is no second interpreter and nothing to configure: an operator does not
+install a Python, and `MONTY_PYTHON` is not what a run looks at. The third
+choice a run has is the stand-in scene, which is Elixir and needs no interpreter
+at all.
 
 ```mermaid
 ---
@@ -178,14 +180,15 @@ config:
   layout: elk
 ---
 flowchart TD
-    studio["studio (Elixir)"] -->|"a wandb logger writes an episode<br/>pythonx, in-process"| embedded["embedded CPython 3.13<br/>uv-built at compile time<br/>dependency: wandb 0.19.1"]
-    studio -->|"a run steps a world<br/>port, one JSON round trip per step"| monty["$MONTY_PYTHON<br/>tbp.monty + MuJoCo installed"]
-    studio -->|"no MONTY_PYTHON<br/>no process, no interpreter"| synthetic["synthetic scene (Elixir)<br/>one sphere, in the BEAM"]
+    studio["studio (Elixir)"] -->|"a wandb logger writes an episode<br/>pythonx, in-process"| embedded["embedded CPython 3.13<br/>uv-built at compile time<br/>dependencies: wandb, mujoco, numpy"]
+    studio -->|"a run steps MuJoCo<br/>one JSON round trip per step"| world["priv/monty_py/world.py<br/>MuJoCo's scene, agents and cameras"]
+    embedded --> world
+    studio -->|"or no world at all"| synthetic["stand-in scene (Elixir)<br/>one sphere, in the BEAM"]
 ```
 
-That the embedded interpreter is a real dependency rather than a decoration is
-reported at run time by `ExTbpMonty.EmbeddedPython.version/0`, so a page cannot
-say "prerequisites present" while a wandb run would fail.
+That the interpreter is a real dependency rather than a decoration is reported at
+run time by `ExTbpMonty.EmbeddedPython.version/0`, so a page cannot say
+"prerequisites present" while a MuJoCo run would fail.
 
 ### One step across the port
 
@@ -306,7 +309,7 @@ flowchart TD
     gen["mix monty.module_map.gen<br/>mix monty.module_map.verify"] -->|"walks both packages"| source["$MONTY_SOURCE<br/>(default ../monty-orig)"]
     census["mix monty.port_census"] -->|"classifies planned classes"| source
     inputs["mix monty.inputs"] -->|"refreshes from, never edits"| source
-    run["a run in an external process"] -->|"imports at run time"| python["$MONTY_PYTHON's tbp.monty"]
+    peer["the Habitat peer (not a world a run chooses)"] -->|"imports at run time"| python["an interpreter with tbp.monty"]
 ```
 
 `MONTY_SOURCE` and `TELEOP_SOURCE` point at checkouts for the tasks that

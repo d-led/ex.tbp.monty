@@ -22,10 +22,10 @@ defmodule ExTbpMonty.Application do
       # One child per prerequisite download, restarted never: a download either
       # finishes or is started again deliberately.
       {DynamicSupervisor, name: ExTbpMonty.PrerequisitesSupervisor, strategy: :one_for_one},
-      # The world: Monty's own MuJoCo simulator (copied into `priv/monty_py`),
-      # hosted in the interpreter this application carries. One process, because
-      # a step is a model, an agent and a camera read in sequence, and two runs
-      # must not interleave inside one.
+      # The world: MuJoCo, through this application's own Python
+      # (`priv/monty_py`), hosted in the interpreter this application carries.
+      # One process, because a step is a model, an agent and a camera read in
+      # sequence, and two runs must not interleave inside one.
       Monty.Simulators.Mujoco.Host,
       # Experiment runs are queued jobs, so closing a page does not close a run.
       {Oban, Application.fetch_env!(:ex_tbp_monty, Oban)},

@@ -136,7 +136,9 @@ defmodule Monty.Simulators.Mujoco.Environment do
   end
 
   @impl true
-  @spec positions_itself?() :: boolean()
+  # This world steps what the actions say and never moves an agent on its own:
+  # Monty's `SetAgentPose` has nothing to set here.
+  @spec positions_itself?() :: false
   def positions_itself?, do: false
 
   @impl true

@@ -249,7 +249,7 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
     view
     |> render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query("#experiments li[id]")
+    |> LazyHTML.query("#experiments tr[id]")
     |> LazyHTML.attribute("id")
     |> List.flatten()
     |> Enum.map(&String.trim_leading(&1, "experiment-"))
@@ -258,11 +258,14 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
 
   # The blocks of the results section, in the order a reader meets them: what
   # narrows the list, then the rows it narrows.
+  # The blocks that narrow the list, in the order the page puts them in. The rows
+  # are a table's body rather than a sibling of the filters, so the order is the
+  # document's, read off the ids that are there rather than assumed.
   defp blocks_in_order(view) do
     view
     |> render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query("#results > *[id]")
+    |> LazyHTML.query("#facets, #active-filters, #experiment-search, #experiments")
     |> LazyHTML.attribute("id")
     |> List.flatten()
   end

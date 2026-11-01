@@ -298,7 +298,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert view |> element("#run-waiting") |> render() =~ "appear here as the run goes"
     end
 
-    test "links to the experiment page, which is where it can be watched", %{
+    test "links to the experiment page, which is where a run is started", %{
       conn: conn,
       running: run
     } do
@@ -307,7 +307,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert view |> element("#open-experiment") |> render() =~
                ~s(href="#{~p"/experiments/#{run.experiment}"}")
 
-      assert view |> element("#open-experiment") |> render() =~ "Watch it run"
+      assert view |> element("#open-experiment") |> render() =~ "Open the experiment"
     end
 
     test "offers Stop, not Delete, while it is in flight", %{conn: conn, running: run} do

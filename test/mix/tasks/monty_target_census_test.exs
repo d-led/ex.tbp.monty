@@ -27,7 +27,7 @@ defmodule Mix.Tasks.Monty.TargetCensusTest do
 
     assert %{
              "class" => "MontyObjectRecognitionExperiment",
-             "status" => "planned",
+             "status" => "implemented",
              "snapshots" => named
            } =
              census[

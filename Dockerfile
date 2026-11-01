@@ -124,60 +124,6 @@ COPY config/runtime.exs config/
 RUN mix build.info \
   && mix release
 
-# --- the world's interpreter -------------------------------------------------
-# Monty's own Python, but only the half a run's *world* needs: Monty's simulator
-# and environment modules. The half that learns is this port's Elixir, so the
-# torch stack Monty's model would pull — 2.5 GB, and torch-scatter and
-# torch-sparse have no wheels at all, so pip compiles them from source — is
-# deliberately absent. `--no-deps` plus the handful of packages those modules
-# import is the whole list, and the import below is what proves it: a missing
-# wheel fails this build instead of failing the first run that needs a scene.
-#
-# What is *not* here, on purpose: the experiment data and the pretrained memory.
-# Those are downloads (`/prerequisites`), measured in gigabytes, and they belong
-# on a volume — see `priv/prerequisites.yaml`.
-FROM ${RUNNER_IMAGE} AS world
-
-ARG MONTY_VERSION=0.56.0
-
-# No compiler in this stage, and none wanted: every package with a C extension
-# comes as a wheel, on both architectures (`--only-binary=:all:` below makes a
-# missing wheel a build failure rather than a fifteen-minute compile that breaks
-# on the next version bump). Monty itself publishes only an sdist — it is pure
-# Python, so pip assembles a wheel out of it with no toolchain involved.
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-       python3 python3-venv ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
-
-ENV VIRTUAL_ENV=/opt/monty \
-    PATH=/opt/monty/bin:/usr/local/bin:/usr/bin:/bin
-
-# pip reports "dependency resolver ... does not take into account" below and
-# exits 0: `tbp.monty` is installed without its own dependency list on purpose —
-# that list is torch and its geometric stack, which this image does not need and
-# cannot build. The import on the next line is what says the list written here is
-# the complete one.
-RUN python3 -m venv "$VIRTUAL_ENV" \
-  && pip install --no-cache-dir --upgrade pip \
-  && pip install --no-cache-dir --no-deps "tbp.monty==${MONTY_VERSION}" \
-  && pip install --no-cache-dir --only-binary=:all: \
-       mujoco numpy scipy pydantic attrs typing-extensions tqdm numpy-quaternion
-
-RUN python -c "\
-import tbp.monty.simulators.mujoco.simulator as mujoco_world; \
-import tbp.monty.frameworks.environments.environment as env; \
-import tbp.monty.frameworks.actions.actions as actions; \
-print('world ok:', mujoco_world.__name__, env.__name__, actions.__name__)"
-
-# pip leaves. Nothing in this image installs a package at run time, and pip
-# carries its own vendored copies of urllib3, msgpack and setuptools — versions
-# written in `pip/_vendor/vendor.txt`, which is what the image scan reads and
-# rightly refuses. The copies a run actually imports are the wheels installed
-# above, all of them newer than the fixes; the vendored ones never execute.
-RUN python -m pip uninstall -y pip \
-  && rm -rf "$VIRTUAL_ENV"/lib/python3.*/site-packages/pip-*
-
 # --- what ships --------------------------------------------------------------
 FROM ${RUNNER_IMAGE} AS runtime
 
@@ -193,14 +139,18 @@ LABEL org.opencontainers.image.title="Elixir TBP Monty" \
 
 # Runtime libraries the release needs: openssl for crypto, libstdc++ for NIFs,
 # ncurses for the shell, libsctp for distribution, locales so UTF-8 experiment
-# names sort and log correctly, tzdata for how long ago a run finished.
-# python3 runs the world's interpreter (the `world` stage above), and the GL
+# names sort and log correctly, tzdata for how long ago a run finished. The GL
 # libraries are MuJoCo's offscreen renderer — a sensor camera is what a step
 # returns, so a missing EGL provider is a run that cannot see.
+#
+# There is no Python package here and no interpreter to install: the world is
+# `priv/monty_py/world.py`, run in the interpreter `pythonx` builds and ships
+# inside the release. `mujoco` and `numpy` arrive as wheels at compile time
+# (`config/pythonx.exs`), which is the only thing a build has to fetch.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        ca-certificates libstdc++6 openssl libncurses6 libsctp1 locales tzdata \
-       python3 libegl1 libgl1 libosmesa6 \
+       libegl1 libgl1 libosmesa6 \
   && rm -rf /var/lib/apt/lists/* \
   && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
   && locale-gen
@@ -234,11 +184,6 @@ RUN rm -rf /app/lib/pythonx-*/priv/uv/python/*/lib/python3.*/site-packages/pip \
 # libraries in `priv/monty/libraries`, the generated assets, and the
 # prerequisite manifest `/prerequisites` reads.
 COPY --from=builder --chown=10001:10001 /app/priv /app/priv
-
-# Monty's Python, read-only and root-owned: a run imports Monty's simulator from
-# it and never writes to it. `MONTY_PYTHON` is what tells the port where it is —
-# the peer, and the prerequisite check a page shows before a run.
-COPY --from=world /opt/monty /opt/monty
 
 # Everything a non-root container has to be able to write, in one directory:
 #
@@ -280,7 +225,6 @@ RUN mkdir -p /app/priv/wandb /app/priv/tbp \
 # and `WANDB_DIR` above is where it would write.
 ENV WANDB_DIR=/app/priv/wandb \
     WANDB_MODE=disabled \
-    MONTY_PYTHON=/opt/monty/bin/python \
     HOME=/app/priv
 
 USER 10001:10001

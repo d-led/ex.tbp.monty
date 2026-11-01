@@ -17,10 +17,11 @@ config :ex_tbp_monty, :source, repo: "https://github.com/d-led/ex.tbp.monty"
 
 # What wandb does. wandb's own default is `online`: a config that names a wandb
 # logger would try to sync a run the moment it starts, which is not something a
-# local deployment should do because nobody said otherwise. `WANDB_MODE=online`
-# (with `WANDB_API_KEY`) is how an operator asks for it, and the image states the
-# same default so a container and a checkout behave alike.
-config :ex_tbp_monty, wandb_mode: System.get_env("WANDB_MODE") || "disabled"
+# local deployment should do because nobody said otherwise. So the default here
+# is `disabled`, the environment (`WANDB_MODE`, read at run time — see
+# `ExTbpMonty.EmbeddedPython.wandb_mode/0`) wins over it, and what it answers is
+# what the interpreter is told before `wandb.init`, so the two cannot disagree.
+config :ex_tbp_monty, wandb_mode: "disabled"
 
 # Which world a run steps when nobody chooses one. MuJoCo is the world Monty's
 # own configs are written for, and it costs nothing here: the interpreter that

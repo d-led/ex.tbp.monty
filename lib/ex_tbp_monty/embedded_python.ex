@@ -41,12 +41,22 @@ defmodule ExTbpMonty.EmbeddedPython do
   @doc """
   What wandb will do with a run.
 
-  `disabled` unless an operator asked otherwise (`config :ex_tbp_monty,
-  wandb_mode`): wandb's own default is `online`, which would try to sync the
-  first run whose config names a wandb logger.
+  `disabled` unless an operator asked otherwise, in which case the environment
+  (`WANDB_MODE`) answers and wins over `config :ex_tbp_monty, wandb_mode`. An
+  empty variable is no answer rather than a mode called empty, and the question
+  is asked at run time because the interpreter reads the environment then.
+
+  The answer is not only reported: `Monty.Frameworks.Loggers.WandbHandlers.PythonxClient`
+  hands it to the interpreter before `wandb.init`, so what a page says and what
+  wandb does cannot drift apart.
   """
   @spec wandb_mode() :: String.t()
-  def wandb_mode, do: Application.get_env(:ex_tbp_monty, :wandb_mode, "disabled")
+  def wandb_mode do
+    case System.get_env("WANDB_MODE") do
+      mode when mode in [nil, ""] -> Application.get_env(:ex_tbp_monty, :wandb_mode, "disabled")
+      mode -> mode
+    end
+  end
 
   @doc """
   Whether the interpreter this application carries can import a module.

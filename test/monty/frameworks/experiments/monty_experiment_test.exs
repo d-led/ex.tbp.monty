@@ -48,4 +48,102 @@ defmodule Monty.Frameworks.Experiments.MontyExperimentTest do
     assert {:finished, [1], 1} =
              MontyExperiment.run_episode_steps(0, episode(finished?: fn count -> count >= 1 end))
   end
+
+  describe "an epoch" do
+    test "is one episode per object, in the order the experiment names them" do
+      callbacks = epoch(%{objects: ["mug", "bowl"]})
+
+      assert {:finished, [%{object: "mug"}, %{object: "bowl"}], _state} =
+               MontyExperiment.run_epoch(0, callbacks)
+
+      assert Enum.map(
+               elem(MontyExperiment.run_epoch(0, callbacks), 1),
+               & &1.object
+             ) == ["mug", "bowl"]
+    end
+
+    test "numbers its episodes from where the epoch is told to start" do
+      assert {:finished, [%{episode: 77}, %{episode: 78}], _} =
+               MontyExperiment.run_epoch(0, epoch(%{objects: ["mug", "bowl"], first_episode: 77}))
+    end
+
+    test "says what each episode did: which object, how many steps, how it ended" do
+      assert {:finished, [mug, bowl], _} =
+               MontyExperiment.run_epoch(0, epoch(%{objects: ["mug", "bowl"]}))
+
+      assert mug == %{object: "mug", episode: 0, outcome: :finished, steps: 3}
+      assert bowl == %{object: "bowl", episode: 1, outcome: :finished, steps: 3}
+    end
+
+    test "is an episode the caller stopped, and no more objects after it" do
+      callbacks = epoch(%{objects: ["mug", "bowl"], stopped?: fn -> true end})
+
+      assert {:stopped, [], _} = MontyExperiment.run_epoch(0, callbacks)
+    end
+
+    test "ends at the object whose episode could not begin, and names it" do
+      callbacks =
+        epoch(%{
+          objects: ["mug", "bowl"],
+          pre_episode: fn
+            state, 0, "mug" -> {:ok, state}
+            state, _index, _object -> {:error, :object_not_visible}
+          end
+        })
+
+      assert {{:crashed, 0, :object_not_visible}, [mug, bowl], _} =
+               MontyExperiment.run_epoch(0, callbacks)
+
+      assert %{object: "bowl", steps: 0, outcome: {:crashed, 0, :object_not_visible}} = bowl
+      assert %{object: "mug", outcome: :finished} = mug
+    end
+  end
+
+  describe "several epochs" do
+    test "walk the object list again, numbering every episode of the run" do
+      callbacks = epoch(%{objects: ["mug", "bowl"], epochs: 2})
+
+      assert {:finished, episodes, _} = MontyExperiment.run_epochs(0, callbacks)
+      assert Enum.map(episodes, & &1.episode) == [0, 1, 2, 3]
+      assert Enum.map(episodes, & &1.object) == ["mug", "bowl", "mug", "bowl"]
+    end
+
+    test "stop after the episode budget, rather than at the end of an epoch" do
+      callbacks = epoch(%{objects: ["mug", "bowl"], epochs: 3, episodes: 3})
+
+      assert {:finished, episodes, _} = MontyExperiment.run_epochs(0, callbacks)
+      assert length(episodes) == 3
+      assert Enum.map(episodes, & &1.object) == ["mug", "bowl", "mug"]
+    end
+
+    test "are one epoch when the config names none, rather than none at all" do
+      assert {:finished, [_, _], _} =
+               MontyExperiment.run_epochs(0, epoch(%{objects: ["mug", "bowl"], epochs: 0}))
+    end
+
+    test "end at the first epoch a caller stops" do
+      assert {:stopped, [], _} =
+               MontyExperiment.run_epochs(
+                 0,
+                 epoch(%{objects: ["mug"], epochs: 3, stopped?: fn -> true end})
+               )
+    end
+  end
+
+  defp epoch(options \\ []) do
+    Map.merge(
+      Map.merge(
+        %{
+          objects: ["mug"],
+          epochs: 1,
+          # Every episode starts where Monty's does: a fresh count in a fresh
+          # world, which is what the studio's `pre_episode` gives it.
+          pre_episode: fn _state, _index, _object -> {:ok, 0} end,
+          post_episode: fn state, _outcome, _infos -> state end
+        },
+        episode()
+      ),
+      Map.new(options)
+    )
+  end
 end

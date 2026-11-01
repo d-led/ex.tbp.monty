@@ -15,7 +15,11 @@ reader checks a row instead of trusting this page.
 | what each Python class _is_, and which classes Monty's configs name                   | [`priv/monty/port_census.json`](../priv/monty/port_census.json), [`target_census.json`](../priv/monty/target_census.json) | one file each                          | `mix monty.port_census --json`, `mix monty.target_census --json`                                                                       | run them again with `--json`                                    |
 | what Monty _answered_, so the parity tests replay it rather than recompute it         | [`test/fixtures/monty_*`](../test/fixtures)                                                                               | `*.json`, `*.jsonl`                    | [`scripts/record_monty_*.py`](../scripts) (needs a `$MONTY_PYTHON` with Monty in it)                                                   | `git diff test/fixtures`                                        |
 | the module contract — Monty's file to Elixir module, **generated** rather than copied | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex)                                                         | one generated module                   | `mix monty.module_map.gen`                                                                                                             | `mix monty.module_map.verify`                                   |
-| the world — Monty's own simulator, **started** and never vendored                     | a Python process, no file                                                                                                 | —                                      | `$MONTY_PYTHON` importing Monty's `HabitatEnvironment`, behind [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) | a run that needs it says so; see [`container.md`](container.md) |
+| the world — MuJoCo, in this repository's own Python, mirroring Monty's simulator
+        | [`priv/monty_py/world.py`](../priv/monty_py/world.py)
+                                                    | one file
+             | written here, against `mujoco`, `numpy` and `numpy-quaternion`; run by `pythonx` inside the release
+                                                                      | `mix test`, and a run that steps MuJoCo |
 
 Three kinds, and the distinction is the one to keep:
 
@@ -26,8 +30,11 @@ Three kinds, and the distinction is the one to keep:
   here too, because a config that no longer exists must not linger in the studio.
 - **generated** — a map or a classification _of_ Monty, written from a checkout by
   a task: `data.ex` and the two census files. Re-running the task is the review.
-- **started** — Monty's code running somewhere else, from an interpreter the
-  operator supplies. Nothing of it is in this repository.
+- **written here** — the world: MuJoCo's scene, its agents and its cameras, in
+  `priv/monty_py/world.py`. It mirrors Monty's `simulators/mujoco/` rather than
+  being copied, because the copy answered in Monty's Python classes and went
+  stale with them. It travels with this repository and runs in the interpreter
+  the release carries, so nothing has to be installed to step a scene.
 
 ## What deliberately does not travel
 

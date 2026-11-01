@@ -996,7 +996,7 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/experiments/object_recognition_experiments.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
           elixir:
             "Monty.Frameworks.Experiments.ObjectRecognitionExperiments.MontyObjectRecognitionExperiment",
           python: "MontyObjectRecognitionExperiment"

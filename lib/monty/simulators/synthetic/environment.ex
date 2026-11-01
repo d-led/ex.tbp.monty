@@ -68,7 +68,11 @@ defmodule Monty.Simulators.Synthetic.Environment do
   steers by; without one it reports only where the sensors are, and a percept
   built from it says its pose is undefined.
   """
-  @spec new([Monty.Simulators.Environment.sensor_id()], Scene.t() | nil, keyword()) :: t()
+  @spec new(
+          [Monty.Simulators.Environment.sensor_id()],
+          Monty.Simulators.Synthetic.Scene.t() | nil,
+          keyword()
+        ) :: t()
   def new(sensor_ids, scene, options \\ []) do
     sensor_ids = if sensor_ids == [], do: [@default_sensor], else: sensor_ids
     agent = Keyword.get(options, :agent)

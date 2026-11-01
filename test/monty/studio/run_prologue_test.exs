@@ -1,85 +1,51 @@
 defmodule Monty.Studio.RunPrologueTest do
   @moduledoc """
-  An episode starts the way Monty starts one: the world is reset, and only then
-  is anything positioned or stepped.
+  An episode starts the way Monty starts one.
 
-  The world under test is the probe behind the port rather than Habitat, because
-  the claim is about the run asking its world for an episode at all — a world in
-  another process starts nothing until it is told to. Without the reset a run
-  stepped a world that had never been told an episode had begun, which is also
-  why a world that positions an episode itself had never done so.
+  Monty's `Interface.pre_episode/1` is where an episode begins: the world is
+  asked for one, and only then is the model told what it is about — in that order,
+  because the second answer comes from the world the first one reset.
+
+  The stand-in scene is the instrument: it is a value, so a run of it needs no
+  process, no interpreter and no mesh. A MuJoCo run is the same prologue with a
+  world that names an object, and that half is specified beside the world it
+  belongs to (`Monty.Simulators.Mujoco.Environment`).
   """
 
   use ExUnit.Case, async: false
 
+  alias Monty.Experiment.Environment.Interface
   alias Monty.Runtime.{LearningModuleServer, Registry}
   alias Monty.Studio.Run
-  alias Monty.Test.Tmp
-
-  @experiment "base_config_10distinctobj_dist_agent"
-  @peer Path.expand("../../support/probe_world.py", __DIR__)
 
   setup do
-    log = Path.join(Tmp.dir("peer-requests"), "requests.txt")
+    {:ok, opened} = Monty.Studio.open("base_10simobj_surf_agent", world_simulator: :synthetic)
+    {:ok, run} = Run.start(opened.setup, steps: 1)
+    on_exit(fn -> Run.stop(run) end)
 
-    Tmp.app_env(:world_simulator, :habitat)
-    Tmp.app_env(:monty_peer, python: System.find_executable("python3"), peer: @peer)
-    Tmp.system_env("PROBE_WORLD_LOG", log)
-
-    {:ok, opened} = Monty.Studio.open(@experiment)
-
-    {:ok, setup: opened.setup, log: log}
+    {:ok, setup: opened.setup, run: run}
   end
 
-  test "the world is asked for an episode before the run steps it", %{setup: setup, log: log} do
-    {:ok, run} = Run.start(setup, steps: 1)
-
-    try do
-      # A world that positions itself has done so inside that reset, so the run
-      # does not walk the procedures over an agent Monty already placed.
-      assert run.positioning == %{steps: nil, success: true, procedures: [:world]}
-      assert requested?(log, "reset"), "the world was never asked for an episode"
-    after
-      Run.stop(run)
-    end
+  test "a run steps the world its pre-episode reset answered", %{run: run} do
+    # `Interface.pre_episode/1` answers the interface holding the world's reset,
+    # and positioning ran on that one: a run that had skipped it would be stepping
+    # a world nobody had told an episode had begun.
+    assert %Interface{env: %Monty.Simulators.Synthetic.Environment{}} = run.interface
+    assert is_map(run.positioning)
   end
 
-  test "and what it answers is what the learning modules are told", %{setup: setup} do
-    {:ok, run} = Run.start(setup, steps: 1)
+  test "and a world that names no object leaves the model without a target", %{
+    setup: setup,
+    run: run
+  } do
+    # Monty's `MontyObjectRecognitionExperiment.pre_episode` carries the world's
+    # answer to the model. This world answers nothing — one sphere, and no object
+    # — so the model is told nothing rather than told a guess.
+    assert :ok = Run.set_ground_truth(run)
 
-    try do
-      [lm | _rest] = setup.learning_modules
+    [lm | _rest] = setup.learning_modules
+    state = LearningModuleServer.state(Registry.via({:learning_module, run.model_id, lm.id}))
 
-      state =
-        LearningModuleServer.state(Registry.via({:learning_module, run.model_id, lm.id}))
-
-      # Only the world knows which object it chose; a model told nothing could not
-      # say whether it recognised anything.
-      assert state.primary_target == "probe"
-    after
-      Run.stop(run)
-    end
-  end
-
-  test "the ids the world's scene was built with reach the model too", %{setup: setup} do
-    # A target names the object an episode is about; the id map names every object
-    # a sensor can read at a pixel, which is what a stepwise target is made of.
-    # The two come from the same place, so they travel together.
-    {:ok, run} = Run.start(setup, steps: 1)
-
-    try do
-      assert Monty.Runtime.Model.state(run.model_id).semantic_id_to_label == %{1 => "probe"}
-    after
-      Run.stop(run)
-    end
-  end
-
-  # What the probe behind the port was sent. A world that is never asked anything
-  # writes nothing, which is itself the answer.
-  defp requested?(log, command) do
-    case File.read(log) do
-      {:ok, requests} -> requests =~ command
-      {:error, :enoent} -> false
-    end
+    assert state.primary_target == nil
   end
 end

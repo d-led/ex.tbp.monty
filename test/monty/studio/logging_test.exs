@@ -88,6 +88,8 @@ defmodule Monty.Studio.LoggingTest do
   end
 
   test "says which classes this port does not have, and logs with the ones it does" do
+    Tmp.app_env(:wandb_mode, "online")
+
     assert %{
              logger: %BasicGraphMatchingLogger{handlers: [%BasicCSVStatsHandler{}]} = logger,
              notes: notes

@@ -4,6 +4,7 @@ defmodule ExTbpMonty.EmbeddedPythonTest do
   use ExUnit.Case, async: false
 
   alias ExTbpMonty.EmbeddedPython
+  alias Monty.Test.Tmp
 
   setup do
     EmbeddedPython.forget()
@@ -41,22 +42,26 @@ defmodule ExTbpMonty.EmbeddedPythonTest do
   end
 
   describe "wandb_mode/0" do
-    test "wandb's own default applies when nothing says otherwise" do
+    # A config that names a wandb logger must not start syncing because nobody
+    # said anything: the default is this deployment's, not wandb's.
+    test "nothing said in the environment means this deployment's default" do
       set_wandb_mode(nil)
 
-      assert EmbeddedPython.wandb_mode() == "online"
+      assert EmbeddedPython.wandb_mode() == Application.get_env(:ex_tbp_monty, :wandb_mode)
+      assert EmbeddedPython.wandb_mode() == "disabled"
     end
 
-    test "the environment wins, which is how the image turns wandb off" do
-      set_wandb_mode("disabled")
+    test "the environment wins, which is how an operator asks for syncing" do
+      set_wandb_mode("online")
+      Tmp.app_env(:wandb_mode, "disabled")
 
-      assert EmbeddedPython.wandb_mode() == "disabled"
+      assert EmbeddedPython.wandb_mode() == "online"
     end
 
     test "an empty variable is no answer, not a mode called empty" do
       set_wandb_mode("")
 
-      assert EmbeddedPython.wandb_mode() == "online"
+      assert EmbeddedPython.wandb_mode() == "disabled"
     end
   end
 

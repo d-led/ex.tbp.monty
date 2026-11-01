@@ -174,12 +174,14 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
 
   # `world` is the same choice the run page offers, in the words the page and
   # Monty's configs use: Monty's own simulator answers a different question from
-  # this port's stand-in scene, so the caller says which one it wants.
+  # this port's stand-in scene, so the caller says which one it wants. Habitat is
+  # a third thing this application does not carry, so naming it is refused rather
+  # than quietly answered with MuJoCo.
   defp world(args) do
     case Args.optional(args, "world") do
       {:ok, nil} -> {:ok, nil}
       {:ok, "synthetic"} -> {:ok, :synthetic}
-      {:ok, world} when world in ["monty", "mujoco", "habitat"] -> {:ok, :mujoco}
+      {:ok, world} when world in ["monty", "mujoco"] -> {:ok, :mujoco}
       {:ok, other} -> {:error, "`world` must be `synthetic` or `mujoco`, not `#{other}`."}
     end
   end

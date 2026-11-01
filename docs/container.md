@@ -129,14 +129,14 @@ explicit, local.
 
 ### World
 
-Monty's own simulator runs out of process, in an interpreter of its own
-(`MONTY_PYTHON`); without these a run steps this port's synthetic scene, and the
-setup page says so.
+A run steps MuJoCo, in the interpreter the release carries. `mujoco` arrives as
+a wheel when the image is built (`config/pythonx.exs`), the scene is
+`priv/monty_py/world.py`, and there is nothing for an operator to install. The
+other choice is this port's stand-in scene, which the setup page names.
 
-| Variable          | Default                 | Meaning                                                                                                                                                                                                                                          |
-| ----------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `MONTY_PYTHON`    | `/opt/monty/bin/python` | The interpreter the peer runs on. It is _not_ the embedded one: Monty's simulator brings its own dependencies, and this image ships them.                                                                                                        |
-| `MONTY_OVERRIDES` | unset                   | Hydra overrides for the peer, space separated as on Monty's own command line, e.g. `constants.pretrained_dir=/data/models`. How a config that names a world this machine cannot run is pointed at one it can (`environment=habitat_dist_agent`). |
+| Variable          | Default | Meaning                                                                                                  |
+| ----------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| `MONTY_OVERRIDES` | unset   | Hydra overrides for a config composed from a checkout, space separated as on Monty's own command line.    |
 
 ### This image's own choices
 
@@ -146,7 +146,6 @@ setup page says so.
 | `WANDB_DIR`      | `/app/priv/wandb`       | Where a wandb run would write. It has to exist — wandb silently uses the system temp directory otherwise — so `bin/server` creates it at boot.                                                    |
 | `HOME`           | `/app/priv`             | A run's downloads and pretrained models go under `$HOME/tbp`, i.e. `/app/priv/tbp`; the image gives the unprivileged user a writable home on the volume.                                          |
 | `LANG`, `LC_ALL` | `en_US.UTF-8`           | Experiment names sort and log as written.                                                                                                                                                         |
-| `MONTY_PYTHON`   | `/opt/monty/bin/python` | The world's interpreter travels with the image, so a run can step Monty's own simulator without the operator installing anything. See [the interpreter](#the-worlds-interpreter-is-in-the-image). |
 | `MIX_ENV`        | `prod`                  | The release is a prod build; this is only informational at run time.                                                                                                                              |
 
 Not used by the image: `MONTY_SOURCE` and `TELEOP_SOURCE` (only the tasks that
@@ -194,40 +193,19 @@ restart.
 Nothing is fetched at boot: an offline container runs any experiment whose files
 are in place, and `/prerequisites` is what says which ones are missing.
 
-### The world's interpreter is in the image
+### The world needs nothing installed
 
-A run that steps Monty's own world needs Monty's Python, and the image carries
-it at `/opt/monty` — `MONTY_PYTHON` already points there:
+MuJoCo runs in the interpreter the release already carries. `pythonx` builds it
+at compile time and ships it under `/app/lib/pythonx-*/priv`, with `mujoco` and
+`numpy` in it; `priv/monty_py/world.py` is the scene, the agents and their
+cameras. So a MuJoCo run needs two things beyond the image, and neither is a
+package: the GL libraries MuJoCo's offscreen camera rendering uses (`libegl1`,
+`libgl1`, `libosmesa6`, installed by the Dockerfile) and the datasets below.
 
-- Monty's Python package, installed with `--no-deps`, plus the packages its
-  simulator and environment modules import (`mujoco`, `numpy`, `scipy`,
-  `pydantic`, `attrs`, `numpy-quaternion`, …). Monty's _model_ brings `torch`,
-  `torch-geometric`, `torch-scatter` and `torch-sparse`; the model half of a run
-  is this port's Elixir, so none of those are in the image. The build imports
-  the modules to prove the list is complete.
-- The GL libraries MuJoCo's offscreen camera rendering needs (`libegl1`,
-  `libgl1`, `libosmesa6`).
-
-What that does **not** buy you: the datasets and the pretrained memory, which
-are the downloads above — with the interpreter in place they are the only thing
-between the image and a real MuJoCo run, and `/prerequisites` names each one by
-path.
-
-**Habitat-Sim is not in the image, on either architecture.** It exists only as a
-conda package for `linux-64` and `osx-64`, built against **Python 3.9**, and
-MuJoCo needs 3.10 or newer — so one interpreter cannot hold both, and a second
-3.9 environment for one engine is not worth what it costs a pull. Habitat
-configs are a dev-machine concern:
-
-```sh
-micromamba create -n monty-habitat -c conda-forge -c aihabitat \
-  python=3.9 habitat-sim=0.2.4
-MONTY_PYTHON="$HOME/micromamba/envs/monty-habitat/bin/python" mix phx.server
-```
-
-`/prerequisites` reports each engine as installed or not, so a habitat config on
-a deployed image says why it will not start instead of failing at its first
-step.
+**Habitat-Sim is not carried.** It exists only as a conda package for `linux-64`
+and `osx-64`, built against Python 3.9, and this application's world is MuJoCo.
+A Habitat config is reported as a world this build does not have, rather than
+being started and failing at its first step.
 
 ### The embedded Python is not one of them
 

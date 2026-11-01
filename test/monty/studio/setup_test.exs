@@ -74,12 +74,6 @@ defmodule Monty.Studio.SetupTest do
   defp errors(setup), do: setup.findings |> Finding.at(:error) |> Enum.map(& &1.code)
   defp warnings(setup), do: setup.findings |> Finding.at(:warning) |> Enum.map(& &1.code)
 
-  defp finding(setup, code) do
-    setup.findings
-    |> Enum.find(&(&1.code == code)) ||
-      flunk("no finding #{inspect(code)}; got #{inspect(Enum.map(setup.findings, & &1.code))}")
-  end
-
   @base %{
     "monty" => "graph_exp1000_e3_t3",
     "monty/motor_system_config" => "distant_5",
@@ -230,14 +224,14 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "the mistakes Monty would only find later" do
-    test "a sensor no learning module matches on is explained, not raised as a mistake" do
+    test "a sensor no learning module matches on is not raised as a mistake" do
       setup = setup_for("tutorial/first_experiment")
 
-      assert %Finding{level: :info, message: message, where: "view_finder"} =
-               finding(setup, :sensor_not_matched)
-
-      assert message =~ "feeds no learning module"
+      # `first_experiment`'s view finder feeds no learning module, which is how
+      # that experiment is written — not a mistake, and not something to warn
+      # about. Nothing to say is the answer.
       refute :sensor_unconnected in warnings(setup)
+      refute :sensor_not_matched in Enum.map(setup.findings, & &1.code)
     end
 
     test "a feature the sensor does not produce is called out" do
@@ -298,15 +292,17 @@ defmodule Monty.Studio.SetupTest do
       refute stand_ins.message =~ "MuJoCoSimulator"
     end
 
-    test "and says which classes are Monty's own code, copied and run" do
+    test "and does not explain itself where Monty's code is what runs" do
       {:ok, setup} =
         Setup.from_experiment("tutorial/first_experiment", world_simulator: :mujoco)
 
-      assert [carried] = for(%{code: :modules_run_from_monty} = finding <- setup.findings, do: finding)
+      # The MuJoCo classes a run executes are Monty's design, carried out by
+      # this application's own Python: neither a stand-in nor a fact a reader of
+      # the run needs, so nothing is said about them at all.
+      stand_ins = Enum.find(setup.findings, &(&1.code == :modules_not_ported))
 
-      assert carried.level == :info
-      assert carried.message =~ "MuJoCoSimulator"
-      assert carried.message =~ "copied into this repository"
+      refute stand_ins && stand_ins.message =~ "MuJoCoSimulator"
+      refute :modules_run_from_monty in Enum.map(setup.findings, & &1.code)
     end
 
     test "and warns that a run without Monty's world does not produce Monty's numbers" do
@@ -339,7 +335,8 @@ defmodule Monty.Studio.SetupTest do
 
       assert shell.level == :info
       assert shell.message =~ "MontyForGraphMatching"
-      assert shell.message =~ "runtime"
+      assert shell.message =~ "replaced here, not missing"
+      assert shell.message =~ "Monty.Studio.Run"
     end
 
     test "a class this port has written is reported as ported" do

@@ -5,6 +5,14 @@ run in the BEAM, so it sits on the other side of a port, and everything that is
 _not_ the world — the model, the body, the policies, the learning modules — stays
 here.
 
+**No run's world uses this port any more.** The world a run steps is
+`priv/monty_py/world.py`, MuJoCo driven in the interpreter this application
+carries ([architecture](architecture.md#where-python-is)), and the other choice is
+the stand-in scene, which is Elixir. What is described below is the contract and
+the `scripts/`-side peer that a run used when the world was a separate process;
+they are kept because the protocol is tested and the peer is how a Habitat world
+would be reached if one were ever carried, not because a run today reaches them.
+
 Elixir side, both written and tested:
 
 | Module                              | What it is                                                                        |

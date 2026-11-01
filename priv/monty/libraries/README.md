@@ -9,7 +9,7 @@ without a Python interpreter and without a `torch` install.
 
 | Question | Answer |
 | --- | --- |
-| Which files ship? | four: two models × two releases, `pretrained_ycb_v10/` and `pretrained_ycb_v13/` |
+| Which files ship? | whichever models of whichever releases are exported here — `pretrained_ycb_v10/`, `_v11/`, `_v13/` and `_v14/` today, the last holding the 77-object model an experiment names |
 | Where do they come from? | Monty's prerequisites, unpacked under `$MONTY_MODELS` |
 | How do I refresh them? | `scripts/sync_monty_libraries.sh` |
 | How does a run find one? | `Monty.Studio.Memory`, from the config's `model_name_or_path` |

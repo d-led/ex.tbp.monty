@@ -139,6 +139,11 @@ defmodule Monty.Prerequisites do
   @spec for_setup(map()) :: [need()]
   def for_setup(%{world: :synthetic}), do: []
 
+  # MuJoCo has no engine to check: its package travels in the interpreter this
+  # application carries, by construction. What it does need is the dataset and
+  # the memory — the two downloads — so those are what a page names.
+  def for_setup(%{world: :mujoco} = setup), do: data_need(setup) ++ models_need(setup)
+
   def for_setup(%{world: :habitat} = setup) do
     engine_need(setup) ++ data_need(setup) ++ models_need(setup)
   end

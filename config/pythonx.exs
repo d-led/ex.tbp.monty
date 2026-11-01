@@ -25,15 +25,12 @@ config :pythonx, :uv_init,
     # else. Habitat-Sim has no wheel at all — it comes from conda, which is what
     # `environment.yml` in a Monty checkout is for.
     "mujoco",
-    # What Monty's copied MuJoCo connector imports (`priv/monty_py`, see its
-    # README): the simulator has no wheels of its own beyond these. `scipy` is
-    # there for `spatial.transform.Rotation`, `numpy-quaternion` for the
-    # `quaternion.quaternion` Monty's agent state carries, and `pydantic` for
-    # the action and state models it defines.
+    # What the world (`priv/monty_py/world.py`) is written against: the scene
+    # and its images from `mujoco`, the arithmetic from `numpy`, and the `wxyz`
+    # rotations an agent's state carries from `numpy-quaternion`. Nothing else,
+    # because `world.py` imports nothing else.
     "numpy",
-    "scipy",
     "numpy-quaternion",
-    "pydantic",
     # Floors, not pins: these arrive as wandb's own dependencies, and the version
     # that lands is the one a scanner reads. `wandb==0.31.0` pulls urllib3 2.7.0
     # and msgpack 1.1.2, each with a fix above it — a TLS-interception and a

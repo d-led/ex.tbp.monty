@@ -362,6 +362,27 @@ defmodule Monty.Studio.Setup do
 
   def model_class(%__MODULE__{}), do: Monty.Runtime.Model
 
+  # The experiment classes a config may name, by Monty's name for each. A config
+  # naming any other runs the base epoch, which is what `MontyExperiment` is.
+  @experiment_classes %{
+    "MontyObjectRecognitionExperiment" =>
+      Monty.Frameworks.Experiments.ObjectRecognitionExperiments.MontyObjectRecognitionExperiment
+  }
+
+  @doc """
+  The experiment class a run of this setup goes through.
+
+  Monty's own class when this port has written it, `MontyExperiment` when it has
+  not — the same answer `model_class/1` gives for a model, from the same kind of
+  map. The class decides how an episode begins, so a config naming
+  `MontyObjectRecognitionExperiment` is run by that class rather than beside it.
+  """
+  @spec experiment_class(t()) :: module()
+  def experiment_class(%__MODULE__{experiment_class: %{class: class}}),
+    do: Map.get(@experiment_classes, class, Monty.Frameworks.Experiments.MontyExperiment)
+
+  def experiment_class(%__MODULE__{}), do: Monty.Frameworks.Experiments.MontyExperiment
+
   @doc """
   The model spec a run starts: what the config resolved to, as processes can be
   given it.
@@ -553,11 +574,12 @@ defmodule Monty.Studio.Setup do
   stand-in.
 
   `:mujoco` is the world the experiment was written for. `priv/monty_py` is
-  Monty's own MuJoCo connector — `MuJoCoSimulator`, `SurfaceAgent`/`DistantAgent`,
-  their cameras and their actuations — copied file for file and run in the
-  interpreter this application carries (`Monty.Simulators.Mujoco.Environment`).
-  So the scene, the agent body and the images are Monty's, and nothing of it is
-  installed or fetched: the code travels inside this release.
+  this application's own Python written against MuJoCo — the scene, the agents,
+  their cameras and their actuations, mirroring Monty's `MuJoCoSimulator` and its
+  agents — run in the interpreter this application carries
+  (`Monty.Simulators.Mujoco.Environment`). So the scene, the agent body and the
+  images are Monty's design and this build's code, and nothing of it is
+  installed or fetched: it travels inside this release.
 
   `:synthetic` is this port's sphere, which needs no scene description and no
   interpreter, and whose numbers are nobody's but its own.
@@ -568,14 +590,29 @@ defmodule Monty.Studio.Setup do
   look as if it ran.
   """
   @spec world(t(), :synthetic | :mujoco) :: Monty.Simulators.Environment.t()
-  def world(%__MODULE__{} = setup, :mujoco) do
+  def world(%__MODULE__{} = setup, world) when is_atom(world), do: world(setup, world, 0)
+
+  @spec world(t(), non_neg_integer()) :: Monty.Simulators.Environment.t()
+  def world(%__MODULE__{} = setup, episode) when is_integer(episode),
+    do: world(setup, setup.world, episode)
+
+  @doc """
+  The world episode `episode` of an epoch steps.
+
+  Monty's `OneObjectPerEpisodeInterface` shows one object per episode and walks
+  the list, so the episode number is what says *which* object stands in front of
+  the agent — a scene built without it would show the first object in every
+  episode and call that a run of ten.
+  """
+  @spec world(t(), :synthetic | :mujoco, non_neg_integer()) :: Monty.Simulators.Environment.t()
+  def world(%__MODULE__{} = setup, :mujoco, episode) do
     case engine(setup) do
-      :mujoco -> mujoco_world(setup)
+      :mujoco -> mujoco_world(setup, episode)
       engine -> raise ArgumentError, uncarried_engine(engine)
     end
   end
 
-  def world(%__MODULE__{} = setup, :synthetic) do
+  def world(%__MODULE__{} = setup, :synthetic, _episode) do
     Monty.Simulators.Synthetic.Environment.new(
       sensor_ids(setup),
       Monty.Simulators.Synthetic.Scene.new(
@@ -588,6 +625,14 @@ defmodule Monty.Studio.Setup do
     )
   end
 
+  # A world this build does not carry — an operator can configure one — is
+  # refused with the words a page shows, not a FunctionClauseError.
+  def world(%__MODULE__{}, world, _episode) when is_atom(world) do
+    raise ArgumentError,
+          "#{inspect(world)} is not a world this application carries: only MuJoCo " <>
+            "and the stand-in scene can be stepped here."
+  end
+
   defp uncarried_engine(engine) do
     "this experiment's world is #{engine_name(engine)}, which this application does not " <>
       "carry: only MuJoCo and the stand-in scene can be stepped here."
@@ -595,12 +640,12 @@ defmodule Monty.Studio.Setup do
 
   # Monty's simulator, from the numbers the config states: the data path the
   # meshes load from, the agent its `env_init_args` names (class, start pose and
-  # per-sensor camera), and the one object this scene holds.
-  defp mujoco_world(%__MODULE__{} = setup) do
+  # per-sensor camera), and the object this episode is about.
+  defp mujoco_world(%__MODULE__{} = setup, episode) do
     Monty.Simulators.Mujoco.Environment.new(
       data_path: data_path(setup),
       agents: [agent_spec(setup)],
-      objects: object_specs(setup),
+      objects: object_specs(setup, episode),
       sensors: sensor_ids(setup)
     )
   end
@@ -636,16 +681,81 @@ defmodule Monty.Studio.Setup do
     end
   end
 
-  defp quaternion(%Rotation{} = rotation), do: rotation |> Rotation.to_quaternion() |> Tuple.to_list()
+  defp quaternion(%Rotation{} = rotation),
+    do: rotation |> Rotation.to_quaternion() |> Tuple.to_list()
 
-  # The one object this scene holds: the first name the config lists that this
-  # machine has a mesh for, standing where the interface's own sampler puts it.
-  defp object_specs(%__MODULE__{} = setup) do
-    case object_label(setup) do
-      nil -> []
-      label -> [%{"name" => label, "position" => object_centre(setup), "semantic_id" => 1}]
+  # The object this episode is about, standing where the interface's own sampler
+  # puts it. One object at a time is Monty's own scene: the primary target, and
+  # its distractors when a config asks for any.
+  defp object_specs(%__MODULE__{} = setup, episode) do
+    case object_name(setup, episode) do
+      nil ->
+        []
+
+      name ->
+        [
+          %{
+            "name" => name,
+            "position" => object_centre(setup),
+            "semantic_id" => target_semantic_id(setup, episode)
+          }
+        ]
     end
   end
+
+  @doc """
+  The object episode `episode` of an epoch is about.
+
+  `OneObjectPerEpisodeInterface.object_for/2` is Monty's cycle — the next name in
+  the config's list, and the first again past its end — so a run of ten objects
+  is ten episodes in the order the experiment wrote them. A config that names no
+  object leaves the scene to the dataset, and the first mesh the machine has is
+  what it holds.
+  """
+  @spec object_name(t(), non_neg_integer()) :: String.t() | nil
+  def object_name(%__MODULE__{} = setup, episode \\ 0) do
+    OneObjectPerEpisodeInterface.object_for(object_interface(setup), episode) ||
+      object_label(setup)
+  end
+
+  @doc """
+  The objects an epoch visits, one episode each — Monty's `object_names`.
+
+  A config that names none is still one episode: the scene is the dataset's, and
+  a run of nothing would be a run with no result.
+  """
+  @spec objects(t()) :: [String.t()]
+  def objects(%__MODULE__{} = setup) do
+    case object_interface(setup).object_names do
+      [] -> List.wrap(object_name(setup, 0))
+      names -> names
+    end
+  end
+
+  @doc """
+  How many eval epochs the run is: Monty's `n_eval_epochs`.
+
+  A rotation experiment is the same object list walked again —
+  `base_77obj_dist_agent` names `${constants.rotations_3_count}`, which is three
+  walks of seventy-seven objects, not one. A config that names no count is one
+  walk, which is what a single epoch is.
+  """
+  @spec eval_epochs(t()) :: pos_integer()
+  def eval_epochs(%__MODULE__{epochs: %{eval: epochs}}) when is_integer(epochs) and epochs > 0,
+    do: epochs
+
+  def eval_epochs(%__MODULE__{}), do: 1
+
+  @doc """
+  How many episodes a run of this experiment is: every object, in every rotation.
+
+  `base_77obj_dist_agent` is seventy-seven objects in three rotations, so two
+  hundred and thirty-one episodes — Monty's `run_epoch` inside his `evaluate`.
+  A page shows this number before starting, because "run the experiment" and
+  "run twelve steps" are very different promises.
+  """
+  @spec episodes(t()) :: pos_integer()
+  def episodes(%__MODULE__{} = setup), do: length(objects(setup)) * eval_epochs(setup)
 
   defp engine(%__MODULE__{environment: %{module: %{class: "MuJoCoSimulator"}}}), do: :mujoco
   defp engine(%__MODULE__{environment: %{module: %{class: "HabitatEnvironment"}}}), do: :habitat
@@ -1344,13 +1454,13 @@ defmodule Monty.Studio.Setup do
 
   defp object_names(args) do
     case Map.get(args, "objects") do
-      list when is_list(list) -> Enum.map(list, &object_name/1)
+      list when is_list(list) -> Enum.map(list, &named_object/1)
       _absent -> []
     end
   end
 
-  defp object_name(%{"name" => name}), do: name
-  defp object_name(name), do: name
+  defp named_object(%{"name" => name}), do: name
+  defp named_object(name), do: name
 
   defp motor_system(monty_config) do
     motor = Map.get(monty_config, "motor_system_config")
@@ -1544,17 +1654,15 @@ defmodule Monty.Studio.Setup do
   # is the point.
   @shell_classes [
     "Monty",
-    "MontyForGraphMatching",
-    "MontyObjectRecognitionExperiment"
+    "MontyForGraphMatching"
   ]
 
   # Classes whose code this repository *carries and runs*: `priv/monty_py` is
-  # the MuJoCo connector, copied file for file from the pinned revision and
-  # executed in the interpreter this application carries. The module map calls
-  # them `planned` because no Elixir module of that name exists — the right
-  # answer to "is it ported" and the wrong one to "does it run". It runs; the
-  # code that runs is Monty's own.
-  @copied_marker ".simulators.mujoco."
+  # the MuJoCo world, written here against `mujoco` and executed in the
+  # interpreter this application carries. The module map calls the classes it
+  # mirrors `planned` because no Elixir module of that name exists — the right
+  # answer to "is it ported" and the wrong one to "does it run". It runs.
+  @world_marker ".simulators.mujoco."
 
   defp module_findings(setup) do
     modules = all_modules(setup)
@@ -1566,7 +1674,7 @@ defmodule Monty.Studio.Setup do
           module.class not in @shell_classes,
           do: module
 
-    {carried, stand_ins} = Enum.split_with(planned, &copied?/1)
+    {in_the_world, stand_ins} = Enum.split_with(planned, &runs_in_the_world?/1)
 
     shell =
       for module <- modules,
@@ -1576,15 +1684,18 @@ defmodule Monty.Studio.Setup do
 
     Enum.map(unknown, &unknown_module_finding/1) ++
       not_ported_finding(Enum.map(stand_ins, & &1.class), length(modules)) ++
-      carried_finding(setup, Enum.map(carried, & &1.class)) ++
+      carried_finding(setup, Enum.map(in_the_world, & &1.class)) ++
       shell_finding(shell, length(modules)) ++
       world_finding(setup)
   end
 
-  defp copied?(%{python: python}) when is_binary(python),
-    do: String.contains?(python, @copied_marker)
+  # A MuJoCo class is not a stand-in: the world a run steps implements it, in
+  # `priv/monty_py`, so listing it would tell a reader that a scene is missing
+  # when the scene is exactly what ran.
+  defp runs_in_the_world?(%{python: python}) when is_binary(python),
+    do: String.contains?(python, @world_marker)
 
-  defp copied?(_module), do: false
+  defp runs_in_the_world?(_module), do: false
 
   # Said only where it is true of the run: a MuJoCo run executes those classes.
   # A stand-in run does not execute them at all, so it has nothing to report.
@@ -1636,6 +1747,22 @@ defmodule Monty.Studio.Setup do
 
   defp world_finding(%__MODULE__{world: :mujoco} = setup), do: mujoco_findings(setup)
 
+  # A world this build does not carry — an operator can configure one — is said
+  # plainly rather than crashing the page: the experiment's numbers come from its
+  # own simulator, and this is not it.
+  defp world_finding(%__MODULE__{world: world} = setup) do
+    [
+      Finding.new(
+        :warning,
+        :world_not_carried,
+        "This run's world is #{world_name(setup, world)}, so its results are not the " <>
+          "experiment's. Choose MuJoCo in the selector to step the world the config was " <>
+          "written for.",
+        "monty_config"
+      )
+    ]
+  end
+
   defp mujoco_findings(%__MODULE__{} = setup) do
     case object_label(setup) do
       nil ->
@@ -1650,17 +1777,8 @@ defmodule Monty.Studio.Setup do
           )
         ]
 
-      label ->
-        [
-          Finding.new(
-            :info,
-            :world_holds_one_object,
-            "One object is in the world for this run — #{label}. Monty's run visits " <>
-              "every object this experiment names, one episode each; this build runs " <>
-              "one episode, so the others are not visited yet.",
-            "environment.env_init_args.data_path"
-          )
-        ]
+      _label ->
+        []
     end
   end
 

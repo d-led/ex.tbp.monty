@@ -139,23 +139,73 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   end
 
   @doc """
-  Rebuild the feature rows and column names for every graph in memory.
+  Ensures every graph's feature rows and column names are present.
+
+  A pretrained library is read once and its rows travel with the memory, so the
+  learning module's `reset_stm/1` — which asks for the rows at the start of
+  *every* episode, Monty's own order — finds them already there. Only rows that
+  are missing are built, and rows go missing in exactly one way: a graph is
+  written (`add_graph_to_memory/3`, `build_graph/5`, `extend_graph/8`), which
+  drops the rows derived from it. A count is not that signal — a graph replaced
+  by one of the same size has rows that name the old nodes.
+
+  This is not only an optimisation. A seventy-seven-object library is a hundred
+  and fifty thousand nodes, and building their rows takes minutes; an experiment
+  of three rotations would spend those minutes two hundred and thirty times.
   """
   @spec initialize_feature_arrays(t()) :: t()
   def initialize_feature_arrays(%__MODULE__{} = memory) do
     Enum.reduce(get_memory_ids(memory), memory, fn graph_id, memory ->
-      channels = get_input_channels_in_graph(memory, graph_id)
-
-      {arrays, orders} =
-        Enum.reduce(channels, {%{}, %{}}, fn input_channel, {arrays, orders} ->
-          {rows, order} = all_node_features(memory, graph_id, input_channel)
-          {Map.put(arrays, input_channel, rows), Map.put(orders, input_channel, order)}
-        end)
-
-      memory
-      |> put_in([Access.key(:feature_array), graph_id], arrays)
-      |> put_in([Access.key(:feature_order), graph_id], orders)
+      Enum.reduce(get_input_channels_in_graph(memory, graph_id), memory, fn input_channel,
+                                                                            memory ->
+        build_rows_if_missing(memory, graph_id, input_channel)
+      end)
     end)
+  end
+
+  defp build_rows_if_missing(memory, graph_id, input_channel) do
+    if Map.has_key?(channels(memory.feature_array, graph_id), input_channel) do
+      memory
+    else
+      {rows, order} = all_node_features(memory, graph_id, input_channel)
+
+      %{
+        memory
+        | feature_array: put_channel(memory.feature_array, graph_id, input_channel, rows),
+          feature_order: put_channel(memory.feature_order, graph_id, input_channel, order)
+      }
+    end
+  end
+
+  defp put_channel(by_graph, graph_id, input_channel, value) do
+    Map.update(by_graph, graph_id, %{input_channel => value}, fn channels ->
+      Map.put(channels, input_channel, value)
+    end)
+  end
+
+  defp channels(by_graph, graph_id), do: Map.get(by_graph, graph_id, %{})
+
+  # The rows of a graph are its nodes' features in its own order, so writing the
+  # graph is what makes them wrong. Every writer says so here, and a reader that
+  # finds rows takes them as current.
+  defp forget_rows(memory, graph_id, input_channel) do
+    %{
+      memory
+      | feature_array: drop_channel(memory.feature_array, graph_id, input_channel),
+        feature_order: drop_channel(memory.feature_order, graph_id, input_channel)
+    }
+  end
+
+  defp forget_rows(memory, graph_id) do
+    %{
+      memory
+      | feature_array: Map.delete(memory.feature_array, graph_id),
+        feature_order: Map.delete(memory.feature_order, graph_id)
+    }
+  end
+
+  defp drop_channel(by_graph, graph_id, input_channel) do
+    Map.update(by_graph, graph_id, %{}, &Map.delete(&1, input_channel))
   end
 
   @doc """
@@ -345,13 +395,17 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   @doc "Store a model under `graph_id`, replacing anything with that id."
   @spec add_graph_to_memory(t(), map(), graph_id()) :: t()
   def add_graph_to_memory(%__MODULE__{} = memory, model, graph_id) do
-    put_in(memory, [Access.key(:models_in_memory), graph_id], model)
+    memory
+    |> put_in([Access.key(:models_in_memory), graph_id], model)
+    |> forget_rows(graph_id)
   end
 
   @doc "Forget an object."
   @spec remove_graph_from_memory(t(), graph_id()) :: t()
   def remove_graph_from_memory(%__MODULE__{} = memory, graph_id) do
-    update_in(memory.models_in_memory, &Map.delete(&1, graph_id))
+    memory
+    |> update_in([Access.key(:models_in_memory)], &Map.delete(&1, graph_id))
+    |> forget_rows(graph_id)
   end
 
   @doc """
@@ -372,6 +426,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
           Map.get(memory.models_in_memory, graph_id, %{})
         )
         |> put_in([Access.key(:models_in_memory), graph_id, input_channel], model)
+        |> forget_rows(graph_id, input_channel)
         |> then(fn memory ->
           Logger.info("added graph #{graph_id} for #{input_channel}")
           memory
@@ -425,7 +480,9 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
            object_rotation
          ) do
       {:ok, model} ->
-        put_in(memory, [Access.key(:models_in_memory), graph_id, input_channel], model)
+        memory
+        |> put_in([Access.key(:models_in_memory), graph_id, input_channel], model)
+        |> forget_rows(graph_id, input_channel)
 
       {:error, reason} ->
         Logger.warning(
@@ -454,18 +511,29 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   # Every node's features, packed into rows in one order — the layout the
   # calculator compares against. Pose features are left out: they are matched as
   # poses, elsewhere.
+  #
+  # Each feature is read as one column and indexed by node, rather than asking
+  # for one node at a time: the per-node answer rebuilds the whole column tuple
+  # on every call, which is quadratic in a graph's size and minutes on a library
+  # of seventy-seven objects.
   defp all_node_features(memory, graph_id, input_channel) do
     nodes = get_graph_node_ids(memory, graph_id, input_channel)
+    graph = get_graph(memory, graph_id, input_channel)
 
-    per_node =
-      Enum.map(nodes, fn node_id ->
-        memory
-        |> get_features_at_node(graph_id, input_channel, node_id)
-        |> Map.drop(@pose_features)
+    order =
+      memory.features_to_use
+      |> Map.fetch!(input_channel)
+      |> Enum.reject(&(&1 in @pose_features))
+
+    columns =
+      Map.new(order, fn key ->
+        {key, graph |> memory.object_model.get_values_for_feature(key) |> List.to_tuple()}
       end)
 
-    order = per_node |> hd() |> Map.keys()
-    rows = Enum.map(per_node, fn features -> Enum.flat_map(order, &Map.fetch!(features, &1)) end)
+    rows =
+      Enum.map(nodes, fn node_id ->
+        Enum.flat_map(order, fn key -> elem(Map.fetch!(columns, key), node_id) end)
+      end)
 
     {rows, order}
   end

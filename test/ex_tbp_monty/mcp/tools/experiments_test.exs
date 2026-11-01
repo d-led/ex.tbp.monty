@@ -301,12 +301,12 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                  @ctx
                )
 
-      assert run.world == "habitat"
-      assert text =~ "in Monty's simulator, out of process"
+      assert run.world == "mujoco"
+      assert text =~ "in Monty's MuJoCo simulator, in this application"
 
       # What the queue will step is the record, not the worker's environment.
       record = RunHistory.get(run.run_id)
-      assert record.inputs["world"] == "habitat"
+      assert record.inputs["world"] == "mujoco"
     end
 
     # The same rule the page holds, at the door an assistant comes in by: a
@@ -338,7 +338,7 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                  @ctx
                )
 
-      assert message =~ "`world` must be `synthetic` or `monty`"
+      assert message =~ "`world` must be `synthetic` or `mujoco`"
     end
 
     test "a run nobody can find is named as missing" do
