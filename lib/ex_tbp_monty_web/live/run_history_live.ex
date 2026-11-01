@@ -525,7 +525,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
             id="run-progress"
             class="badge badge-ghost badge-sm"
           >
-            step {length(@run.log)} / {@run.steps}
+            step {steps_into_episode(@run)} / {@run.steps}
           </span>
           <span class="badge badge-ghost badge-sm">{@run.source}</span>
 
@@ -1044,6 +1044,16 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
        do: "queued"
 
   defp run_state(run, _not_yet_started), do: run.status
+
+  # How far into its current episode a run is. Every episode restarts the step
+  # counter, so the length of the whole log is not a step count: a run of seventy
+  # seven episodes would claim step nine hundred of twelve.
+  defp steps_into_episode(%{log: []}), do: 0
+
+  defp steps_into_episode(%{log: log}) do
+    episode = log |> List.last() |> Map.get("episode")
+    Enum.count(log, &(Map.get(&1, "episode") == episode))
+  end
 
   # In flight means both halves agree: the record says `running` *and* a job
   # still owns it. Either alone puts Stop in front of a run that is over.

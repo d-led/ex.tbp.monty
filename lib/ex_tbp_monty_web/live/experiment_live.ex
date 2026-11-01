@@ -177,7 +177,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> assign(
       run_id: record.id,
       status: record.status,
-      progress: {length(record.timeline), record.steps},
+      progress: steps_of_last_episode(record),
       log_path: record.log_path,
       summary: nil,
       beliefs: %{},
@@ -896,13 +896,23 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         socket
         |> assign(
           status: record.status,
-          progress: {length(record.log), record.steps},
+          progress: steps_of_last_episode(record),
           log_path: record.log_path,
           summary: if(record.summary == %{}, do: socket.assigns.summary, else: record.summary)
         )
         |> merge_lines(record)
         |> merge_frames(record)
         |> merge_beliefs(record)
+    end
+  end
+
+  # "step 2 of 12" is about the episode being run: every episode of a run starts
+  # its step counter again, so counting a run's whole log against one episode's
+  # budget would have the page claim step seven of three.
+  defp steps_of_last_episode(record) do
+    case List.last(record.log) do
+      nil -> {0, record.steps}
+      last -> {Enum.count(record.log, &(&1["episode"] == last["episode"])), record.steps}
     end
   end
 

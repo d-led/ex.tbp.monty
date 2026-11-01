@@ -394,6 +394,18 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert chart =~ "is the answer so far"
     end
 
+    test "counts the steps of the episode it is running, not of the whole run", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=2")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # Two episodes of two steps: a page counting the run's whole log would end
+      # at "step 4 / 2", which is not a thing that can happen.
+      assert view |> element("#run-progress") |> render() =~ "step 2 / 2"
+    end
+
     test "lays a run's episodes end to end, because each one starts again at zero", %{
       conn: conn
     } do
