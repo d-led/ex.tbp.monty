@@ -13,6 +13,14 @@ erl_crash.dump
 /config/*.secret.exs
 .elixir_ls/
 
+### Prerequisites, not source ###
+# A memory is Monty's pretrained model, exported to the format this application
+# reads — a hundred megabytes of it, and the same kind of thing as the YCB
+# meshes: it arrives through `/prerequisites`, into the directory `Memory` reads,
+# and never through `git`. The `README.md` that explains the layout stays.
+/priv/monty/libraries/*/*.jsonl.gz
+/tmp/
+
 ### Elixir Patch ###
 
 ### Node ###
