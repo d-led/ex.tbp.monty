@@ -138,7 +138,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
               {template}
               <.icon
                 name="hero-arrow-right-mini"
-                class="size-3 shrink-0 text-primary opacity-50 transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100"
+                class="size-3 shrink-0 text-primary-content opacity-60 transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100"
               />
             </.link>
           </li>

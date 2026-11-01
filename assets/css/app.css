@@ -46,4 +46,18 @@
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
+/* A link is body text with an accent line under it.
+   daisyUI's `link-primary` colours a link with the theme's primary, and this
+   theme's primary is a 90%-lightness tint: meant to fill a button, unreadable
+   as text on a white surface. The paired ink, `--color-primary-content`, is the
+   same hue at 49% and can be read; it is what the accent uses everywhere. */
+.link {
+  color: var(--color-base-content);
+  text-decoration-color: var(--color-primary-content);
+}
+
+.link-primary {
+  color: var(--color-primary-content);
+}
+
 /* This file is for your main application CSS */
