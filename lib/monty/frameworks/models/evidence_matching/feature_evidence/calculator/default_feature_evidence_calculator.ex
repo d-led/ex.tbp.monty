@@ -78,7 +78,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.De
   defp broadcast(value, _offset) when is_number(value), do: value
 
   defp node_evidence(row, columns) do
-    node_values = Enum.map(columns, &Enum.at(row, &1.index))
+    # The row is indexed once into a tuple: a list's `Enum.at` walks from the
+    # front, and asking it for every column of every row of every node was most
+    # of a step's time — a hundred million list steps per step of a 77-object
+    # experiment.
+    values = List.to_tuple(row)
+    node_values = Enum.map(columns, &value_at(values, &1.index))
 
     if Enum.any?(node_values, &is_nil/1) do
       nil
@@ -86,6 +91,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.De
       weighted_mean(Enum.zip_with(columns, node_values, &{&1, &2}))
     end
   end
+
+  # A row shorter than the features asked for answers nothing there, which is
+  # what reading past the end of a list answered before.
+  defp value_at(values, index) when index < tuple_size(values), do: elem(values, index)
+  defp value_at(_values, _index), do: nil
 
   defp weighted_mean([]), do: nil
 
