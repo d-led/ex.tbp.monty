@@ -15,9 +15,20 @@ defmodule ExTbpMontyWeb.LocalTime do
 
   The hook goes on the container that holds the times, not on each `<time>`: a
   log of two thousand lines is two thousand elements and one hook.
+
+  Its name is written out in full wherever it is used (`hook_name/0`), because a
+  bare `.LocalTime` is resolved against the module whose *template* carries the
+  attribute — `ExTbpMontyWeb.ExperimentLive.LocalTime`, which does not exist. The
+  hook is defined here, so the attribute has to say so.
   """
 
   use Phoenix.Component
+
+  @hook "ExTbpMontyWeb.LocalTime.LocalTime"
+
+  @doc "The registered name of the hook, for the `phx-hook` of a container."
+  @spec hook_name() :: String.t()
+  def hook_name, do: @hook
 
   attr :at, :any, required: true
   attr :style, :atom, values: [:stamp, :clock], default: :stamp

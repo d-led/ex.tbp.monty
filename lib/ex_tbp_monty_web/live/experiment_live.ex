@@ -154,8 +154,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp run_duration(%{duration_us: nil}), do: "—"
   defp run_duration(%{duration_us: us}), do: Duration.humanize(us)
 
-  defp run_time(%{inserted_at: nil}), do: "unknown"
-  defp run_time(%{inserted_at: at}), do: Calendar.strftime(at, "%H:%M:%S")
   # What a page can be set here, read off the run's own record: the rest is the
   # run page's business.
   defp input_of(%{inputs: %{} = inputs}, key), do: Map.get(inputs, key) |> to_string()
@@ -298,8 +296,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             class="btn btn-primary btn-sm"
             disabled={!runable?(assigns)}
           >
-            <.icon name="hero-play-mini" class="size-4" /> Run {@steps} steps
+            <.icon name="hero-play-mini" class="size-4" /> Run it
           </button>
+          <%!-- The number is a ceiling, not a target: the experiment's own
+          recognition policy ends each episode first, and for a recognition that
+          is about twenty matching steps. --%>
+          <span class="font-mono text-[11px] text-base-content/60">
+            up to {@steps} steps per episode
+          </span>
           <button id="step" phx-click="step" class="btn btn-sm" disabled={!runable?(assigns)}>
             <.icon name="hero-forward-mini" class="size-4" /> One step
           </button>
@@ -419,7 +423,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             No run of this experiment yet. The buttons above start one.
           </p>
 
-          <table :if={@runs != []} id="experiment-runs-table" phx-hook=".LocalTime" class={table_class()}>
+          <table
+            :if={@runs != []}
+            id="experiment-runs-table"
+            phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
+            class={table_class()}
+          >
             <thead class="text-left text-base-content/60">
               <tr>
                 <th class="font-normal">when</th>
@@ -594,7 +603,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
           <ul
             id="run-log"
-            phx-hook=".LocalTime"
+            phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
             class="max-h-56 overflow-auto rounded-field border border-base-300 bg-base-100 p-2 font-mono text-[11px] leading-5"
           >
             <%!-- An empty state is for a log with nothing in it, or a filter

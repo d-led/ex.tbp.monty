@@ -356,7 +356,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       </div>
 
       <div class="overflow-hidden rounded-box border border-base-300 bg-base-100">
-        <table id="runs-table" phx-hook=".LocalTime" class="table table-sm">
+        <table id="runs-table" phx-hook={ExTbpMontyWeb.LocalTime.hook_name()} class="table table-sm">
           <thead>
             <tr class="text-xs text-base-content/60">
               <th class="w-6">
@@ -580,10 +580,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           </div>
         </div>
         <p class="text-xs text-base-content/60">
-          started
-          <ExTbpMontyWeb.LocalTime.local_time at={@run.inserted_at} style={:clock} /> · {@run.steps} steps · {duration(
-            @run.duration_us
-          )}
+          started <ExTbpMontyWeb.LocalTime.local_time at={@run.inserted_at} style={:clock} />
+          · {@run.steps} steps · {duration(@run.duration_us)}
         </p>
       </header>
 
