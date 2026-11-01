@@ -77,7 +77,7 @@ defmodule Monty.Studio.ChartTest do
     # alone, the second episode would be laid on top of the first — which is the
     # chart you cannot read. The x axis is the run's, so a new episode begins
     # where the one before it ended, and the drop back to zero is the boundary.
-    test "begins each episode where the one before it ended" do
+    test "begins each episode where the one before it ended, with no gap" do
       chart =
         Chart.new([
           {0, 0, belief(%{"mug" => 1.0})},
@@ -86,8 +86,10 @@ defmodule Monty.Studio.ChartTest do
           {1, 1, belief(%{"mug" => 2.0})}
         ])
 
-      assert [%{evidence: [{0, 1.0}, {1, 3.0}, {2, 0.5}, {3, 2.0}]}] = chart.series
-      assert {chart.x_min, chart.x_max} == {0, 3}
+      # The second episode starts on the first one's last step: a gap would read
+      # as a step that happened and was not reported.
+      assert [%{evidence: [{0, 1.0}, {1, 3.0}, {1, 0.5}, {2, 2.0}]}] = chart.series
+      assert {chart.x_min, chart.x_max} == {0, 2}
     end
 
     test "marks where each episode begins" do

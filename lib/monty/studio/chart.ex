@@ -45,6 +45,10 @@ defmodule Monty.Studio.Chart do
   @label_min_gap 24
   defstruct width: 0,
             height: 0,
+            margin_left: 44,
+            margin_right: 12,
+            margin_top: 10,
+            margin_bottom: 22,
             x_min: 0,
             x_max: 0,
             y_min: 0.0,
@@ -87,6 +91,10 @@ defmodule Monty.Studio.Chart do
   @type t :: %__MODULE__{
           width: number(),
           height: number(),
+          margin_left: number(),
+          margin_right: number(),
+          margin_top: number(),
+          margin_bottom: number(),
           x_min: non_neg_integer(),
           x_max: non_neg_integer(),
           y_min: float(),
@@ -108,8 +116,8 @@ defmodule Monty.Studio.Chart do
   """
   @spec new([step()], keyword()) :: t()
   def new(steps, options \\ []) do
-    width = Keyword.get(options, :width, 640)
-    height = Keyword.get(options, :height, 240)
+    width = Keyword.get(options, :width, 960)
+    height = Keyword.get(options, :height, 300)
 
     {placed, starts} = stack(steps)
 
@@ -207,7 +215,9 @@ defmodule Monty.Studio.Chart do
           for {_episode, step, belief} <- of_episode, do: {episode, base + step - first, belief}
 
         start = %{episode: episode, x: base, label: "ep #{episode + 1}"}
-        {placed ++ points, [start | starts], base + (last - first) + 1}
+        # The next episode begins on this one's last step, not after it: a gap
+        # between them is a step the chart would be claiming nobody reported.
+        {placed ++ points, [start | starts], base + (last - first)}
       end)
 
     {placed, Enum.reverse(starts)}

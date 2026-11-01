@@ -199,8 +199,11 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     end
 
     test "says so when there is nothing yet", %{conn: conn} do
-      # An experiment that exists and simply has no runs: the sandbox is empty,
-      # so this is the page's own empty state and not a missing experiment.
+      # An experiment that exists and simply has no runs. The page reads the run
+      # history, so "nothing yet" has to mean it: this file starts real runs in
+      # other tests, and their records are not this test's subject.
+      ExTbpMonty.Repo.delete_all(RunHistory.Run)
+
       {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment")
 
       assert view |> element("#runs-empty") |> render() =~ "No run of this experiment yet"
@@ -487,6 +490,10 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
   describe "after the run" do
     test "the summary reports what happened, including silence", %{conn: conn} do
+      # One run, so the history is cleared first: what this test is about is what
+      # the run left, not what an earlier test left lying around.
+      ExTbpMonty.Repo.delete_all(RunHistory.Run)
+
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
