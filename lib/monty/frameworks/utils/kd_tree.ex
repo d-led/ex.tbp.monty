@@ -26,13 +26,12 @@ defmodule Monty.Frameworks.Utils.KdTree do
   @type point :: [number()]
   @type id :: non_neg_integer()
 
-  # `:empty`; the native index, when this VM built one; or the point stored, its
-  # id, the axis it was split on, and the two subtrees — the lower-coordinate one
-  # on the left.
-  @type t ::
-          :empty
-          | {:nif, reference()}
-          | {number(), number(), number(), id(), 0 | 1 | 2, t(), t()}
+  # `:empty`, or the point stored, its id, the axis it was split on, and the two
+  # subtrees — the lower-coordinate one on the left.
+  @type tree :: :empty | {number(), number(), number(), id(), 0 | 1 | 2, tree(), tree()}
+
+  # Either engine's index: the native one, when this VM built one, or the tree.
+  @type t :: {:nif, reference()} | tree()
 
   # What a native answer uses where a query found fewer neighbours than asked.
   @no_neighbour 4_294_967_295
@@ -59,7 +58,7 @@ defmodule Monty.Frameworks.Utils.KdTree do
   and what runs wherever the native index is not built. A caller asking for it
   by name wants that answer, not the fastest one.
   """
-  @spec build_elixir([{point(), id()}]) :: t()
+  @spec build_elixir([{point(), id()}]) :: tree()
   def build_elixir([]), do: :empty
 
   def build_elixir(points) do
