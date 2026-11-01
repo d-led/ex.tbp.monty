@@ -15,9 +15,16 @@ const BREAKPOINTS = window.matchMedia(DESKTOP_QUERY);
 const state = { open: false, collapsed: readCollapsed() };
 
 // Opening the column for somebody else — the walkthrough points at items in it,
-// and a step aimed at a collapsed rail or a closed drawer is a step aimed at
-// nothing. Not remembered: the preference a person set is theirs to keep.
+// and a step aimed at a collapsed rail is a step aimed at nothing. Not
+// remembered: the preference a person set is theirs to keep.
+//
+// On a phone this does nothing. There the column is a drawer, and opening it
+// slides a panel over the page and blurs everything underneath, so the steps
+// after it would be read through somebody else's backdrop; the walkthrough's
+// first step is the header toggle instead, which is the same lesson.
 export function revealSidebar() {
+  if (!onDesktop()) return;
+
   state.open = true;
   state.collapsed = false;
   render();

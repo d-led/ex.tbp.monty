@@ -46,9 +46,11 @@ defmodule ExTbpMontyWeb.Router do
   scope "/", ExTbpMontyWeb do
     pipe_through :browser
 
-    # The studio is the application: the first thing you see is the list of
-    # experiments you can open, build or run.
-    live "/", ExperimentsLive, :index
+    # The front door: what Monty is, and the ways into it. The list of every
+    # experiment is one link away rather than the first thing a visitor sees —
+    # a hundred configurations is a good index and a poor welcome.
+    live "/", WelcomeLive, :index
+    live "/experiments", ExperimentsLive, :index
     live "/build", BuildLive, :new
     # A glob: Monty names experiments by path (`tutorial/first_experiment`).
     live "/experiments/*name", ExperimentLive, :show

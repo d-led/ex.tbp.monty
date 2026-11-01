@@ -5,12 +5,16 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   A list of experiment names is a list you scan, so this page is built for
   scanning: four facets whose counts respect each other (pick "surface agent"
   and the other counts become what is still reachable), a search box for when
-  you know the name, and active filters as chips you can click off. The whole
-  state lives in the URL — `/?agent=surf&modules=5` — so a filtered view can be
-  bookmarked, shared, or walked back with the browser's back button.
+  you know the name, and the values in force as chips you can click off.
 
-  The filtering itself is `Monty.Studio.Index`, which is pure; this module only
-  turns parameters into pill state and pill state back into parameters.
+  The filters are this LiveView's state, not the address bar's. Choosing a tag
+  re-renders the list in place — no navigation, no reload — and the text and the
+  tags are both required of a row, never either. A query string is read once, on
+  arrival, so a narrowed list can still be shared; nothing is written back, so
+  the page a reader sees and the address they copied cannot disagree.
+
+  The filtering itself is `Monty.Studio.Index`, which is pure; this module turns
+  what a reader chose into the parameters `Index` takes.
   """
 
   use ExTbpMontyWeb, :live_view
@@ -18,6 +22,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   alias Monty.Studio.{Catalog, Drafts, Index}
 
   @page_size 30
+  @default_size "some"
 
   @impl true
   def mount(_params, _session, socket) do
@@ -26,28 +31,81 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
      |> assign(
        index: Index.build(Catalog.experiments()),
        templates: Catalog.templates(),
-       drafts: Drafts.names()
+       drafts: Drafts.names(),
+       filters: %{},
+       query: "",
+       size: @default_size
      )
      |> stream_configure(:experiments, dom_id: &"experiment-#{dom_id_of(&1.name)}")
-     |> stream(:experiments, [])}
+     |> stream(:experiments, [])
+     |> narrow()}
   end
 
+  # Arriving from a link: the query string seeds the filters once. From then on
+  # the LiveView owns them, so every click is a re-render and not a navigation.
   @impl true
   def handle_params(params, _uri, socket) do
-    result = Index.filter(socket.assigns.index, params)
-    size = Map.get(params, "size", "some")
-    {entries, truncated?} = window(result.entries, size)
-
     {:noreply,
      socket
      |> assign(
-       result: result,
-       params: params,
-       size: size,
-       truncated?: truncated?,
-       truncated_when_paged?: length(result.entries) > @page_size
+       filters: Map.take(params, Index.facet_keys()),
+       query: Map.get(params, "q", ""),
+       size: Map.get(params, "size", @default_size)
      )
-     |> stream(:experiments, entries, reset: true)}
+     |> narrow()}
+  end
+
+  @impl true
+  def handle_event("toggle", %{"facet" => facet, "option" => option}, socket) do
+    {:noreply,
+     socket
+     |> assign(filters: toggle(socket.assigns.filters, facet, option), size: @default_size)
+     |> narrow()}
+  end
+
+  def handle_event("search", %{"q" => query}, socket) do
+    {:noreply, socket |> assign(query: String.trim(query), size: @default_size) |> narrow()}
+  end
+
+  def handle_event("size", %{"size" => size}, socket) do
+    {:noreply, socket |> assign(size: size) |> narrow()}
+  end
+
+  def handle_event("clear", _params, socket) do
+    {:noreply, socket |> assign(filters: %{}, query: "", size: @default_size) |> narrow()}
+  end
+
+  # One place where the list is computed: whatever changed, the reader sees the
+  # rows, the counts and the chips that follow from it.
+  defp narrow(socket) do
+    result = Index.filter(socket.assigns.index, params_of(socket.assigns))
+    {entries, truncated?} = window(result.entries, socket.assigns.size)
+
+    socket
+    |> assign(
+      result: result,
+      truncated?: truncated?,
+      truncated_when_paged?: length(result.entries) > @page_size
+    )
+    |> stream(:experiments, entries, reset: true)
+  end
+
+  # The parameters `Index` takes, built from what the LiveView holds.
+  defp params_of(%{filters: filters, query: query}) do
+    filters
+    |> Map.reject(fn {_facet, values} -> values in [nil, ""] end)
+    |> Map.put("q", query)
+  end
+
+  # A value in force is released by choosing it again; the values of one facet
+  # are alternatives (a surface OR a distant agent), facets are not.
+  defp toggle(filters, facet, option) do
+    current = values(filters, facet)
+
+    toggled =
+      if option in current, do: Enum.reject(current, &(&1 == option)), else: current ++ [option]
+
+    Map.put(filters, facet, Enum.join(toggled, ","))
   end
 
   @impl true
@@ -63,82 +121,140 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
         </p>
       </header>
 
-      <form id="experiment-search" phx-change="search" class="flex flex-wrap items-center gap-2">
-        <input
-          type="search"
-          name="q"
-          value={@params["q"]}
-          placeholder="Search names and components…"
-          phx-debounce="200"
-          class="input input-bordered input-sm w-full sm:w-80"
-        />
-        <.link navigate={~p"/build"} class="btn btn-primary btn-sm">
-          <.icon name="hero-wrench-screwdriver-mini" class="size-4" /> Build
-        </.link>
-      </form>
+      <%!-- Three experiments Monty ships, named as Monty names them, as things
+      you can pick rather than a line of text: a bordered chip is what the rest
+      of the page uses for something you can choose. What each one is made of is
+      on its own page, where the config is. --%>
+      <section :if={not @result.filtered?} id="templates" class="space-y-1.5">
+        <h2 class="text-xs font-medium tracking-wide text-base-content/50 uppercase">
+          Start from
+        </h2>
+        <ul class="flex flex-wrap gap-2">
+          <li :for={template <- @templates} id={"template-#{Path.basename(template)}"}>
+            <.link
+              navigate={~p"/experiments/#{segments(template)}"}
+              title={"Open #{template}"}
+              class="group inline-flex items-center gap-1.5 rounded-field border border-base-300 bg-base-100 px-2.5 py-1 font-mono text-xs transition hover:border-primary/50 hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              {template}
+              <.icon
+                name="hero-arrow-right-mini"
+                class="size-3 shrink-0 text-primary opacity-50 transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100"
+              />
+            </.link>
+          </li>
+        </ul>
+      </section>
 
-      <section id="facets" class="space-y-2">
-        <div
-          :for={facet <- @result.facets}
-          id={"facet-#{facet.key}"}
-          class="flex flex-wrap items-baseline gap-2"
-        >
-          <span class="w-36 shrink-0 text-xs font-medium tracking-wide text-base-content/50 uppercase">
-            {facet.label}
-          </span>
-          <button
-            :for={value <- facet.values}
-            id={"facet-#{facet.key}-#{value.value}"}
-            phx-click="toggle"
-            phx-value-facet={facet.key}
-            phx-value-value={value.value}
-            class={[
-              "btn btn-xs gap-1.5",
-              if(selected?(@params, facet.key, value.value), do: "btn-primary", else: "btn-ghost")
-            ]}
+      <section :if={@drafts != []} id="drafts" class="space-y-2">
+        <h2 class="text-lg font-semibold tracking-tight">Built here</h2>
+        <ul class="space-y-1">
+          <li :for={draft <- @drafts} id={"draft-#{draft}"}>
+            <.link
+              navigate={~p"/experiments/#{segments(draft)}"}
+              class="font-mono text-sm link link-hover"
+            >
+              {draft}
+            </.link>
+          </li>
+        </ul>
+      </section>
+
+      <%!-- Everything that narrows the list, on the list: the tags, the ones in
+      force, and the box that searches it, then the rows they all act on. --%>
+      <section id="results" class="space-y-3">
+        <section id="facets" class="space-y-2">
+          <div
+            :for={facet <- @result.facets}
+            id={"facet-#{facet.key}"}
+            class="flex flex-wrap items-center gap-2"
           >
-            {value.label}
-            <span class="opacity-50">{value.count}</span>
+            <span class="w-36 shrink-0 text-xs font-medium tracking-wide text-base-content/50 uppercase">
+              {facet.label}
+            </span>
+            <%!-- `phx-value-option`, not `phx-value-value`: a phx-value key of
+            `value` collides with the element's own value and arrives empty, so
+            the tag filters nothing and looks like a dead button. --%>
+            <button
+              :for={value <- facet.values}
+              type="button"
+              phx-click="toggle"
+              phx-value-facet={facet.key}
+              phx-value-option={value.value}
+              id={"facet-#{facet.key}-#{value.value}"}
+              data-active={selected?(@filters, facet.key, value.value) && "true"}
+              class={[
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                if(selected?(@filters, facet.key, value.value),
+                  do: "bg-primary text-primary-content",
+                  else: "bg-base-200 text-base-content/70 hover:bg-base-300 hover:text-base-content"
+                )
+              ]}
+            >
+              {value.label}
+              <span class="text-[11px] opacity-60">{value.count}</span>
+            </button>
+          </div>
+        </section>
+
+        <section :if={@result.filtered?} id="active-filters" class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-base-content/50">filtered:</span>
+          <button
+            :for={chip <- chips(@result.active)}
+            type="button"
+            phx-click="toggle"
+            phx-value-facet={chip.key}
+            phx-value-option={chip.value}
+            id={"chip-#{chip.key}-#{chip.value}"}
+            title="release this filter"
+            class="badge badge-sm gap-1 bg-primary text-primary-content"
+          >
+            {chip.key}: {chip.value} <.icon name="hero-x-mark-mini" class="size-3" />
           </button>
-        </div>
-      </section>
+          <button
+            type="button"
+            phx-click="clear"
+            id="clear-filters"
+            class="btn btn-ghost btn-xs"
+          >
+            clear
+          </button>
+        </section>
 
-      <section :if={@result.filtered?} id="active-filters" class="flex flex-wrap items-center gap-2">
-        <span class="text-xs text-base-content/50">filtered:</span>
-        <button
-          :for={chip <- chips(@result.active)}
-          id={"chip-#{chip.key}-#{chip.value}"}
-          phx-click="toggle"
-          phx-value-facet={chip.key}
-          phx-value-value={chip.value}
-          class="badge badge-primary badge-sm gap-1"
-        >
-          {chip.key}: {chip.value} <.icon name="hero-x-mark-mini" class="size-3" />
-        </button>
-        <.link patch={~p"/"} id="clear-filters" class="btn btn-ghost btn-xs">clear</.link>
-      </section>
-
-      <section class="space-y-2">
+        <form id="experiment-search" phx-change="search" class="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            name="q"
+            value={@query}
+            placeholder="Search names and the columns shown…"
+            phx-debounce="200"
+            class="input input-bordered input-sm w-full sm:w-80"
+          />
+        </form>
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <p id="result-count" class="text-sm text-base-content/60">
             {showing(@result.matching, @result.total)}
           </p>
-          <.link
+          <button
             :if={@truncated?}
-            patch={patch_url(@params, %{"size" => "all"})}
+            type="button"
+            phx-click="size"
+            phx-value-size="all"
             id="show-all"
             class="btn btn-ghost btn-xs"
           >
             show all {@result.matching}
-          </.link>
-          <.link
+          </button>
+          <button
             :if={@size == "all" and @truncated_when_paged?}
-            patch={patch_url(@params, %{"size" => "some"})}
+            type="button"
+            phx-click="size"
+            phx-value-size="some"
             id="show-fewer"
             class="btn btn-ghost btn-xs"
           >
             show fewer
-          </.link>
+          </button>
         </div>
 
         <ul
@@ -169,67 +285,25 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
           </li>
         </ul>
       </section>
-
-      <section :if={@drafts != []} id="drafts" class="space-y-2">
-        <h2 class="text-lg font-semibold tracking-tight">Built here</h2>
-        <ul class="space-y-1">
-          <li :for={draft <- @drafts} id={"draft-#{draft}"}>
-            <.link
-              navigate={~p"/experiments/#{segments(draft)}"}
-              class="font-mono text-sm link link-hover"
-            >
-              {draft}
-            </.link>
-          </li>
-        </ul>
-      </section>
-
-      <section :if={not @result.filtered?} class="space-y-2">
-        <h2 class="text-lg font-semibold tracking-tight">Start from</h2>
-        <div class="grid gap-3 sm:grid-cols-3">
-          <article
-            :for={template <- @templates}
-            id={"template-#{Path.basename(template.base)}"}
-            class="flex flex-col gap-1.5 rounded-box border border-base-300 bg-base-100 p-3"
-          >
-            <h3 class="font-semibold">{template.label}</h3>
-            <p class="text-sm text-base-content/70">{template.why}</p>
-            <p class="mt-auto font-mono text-xs text-base-content/50">{template.base}</p>
-            <.link
-              navigate={~p"/experiments/#{segments(template.base)}"}
-              class="btn btn-sm btn-outline"
-            >
-              Open
-            </.link>
-          </article>
-        </div>
-      </section>
     </Layouts.app>
     """
   end
 
-  @impl true
-  def handle_event("search", %{"q" => query}, socket) do
-    {:noreply, patch(socket, %{"q" => String.trim(query)})}
+  @doc """
+  Whether these parameters belong to the list rather than to a page.
+
+  The list lived at `/` before the welcome page did, with its filters in the
+  query string; `WelcomeLive` asks this to carry an old bookmark of
+  `/?agent=surf` to where the list lives now.
+  """
+  @spec list_params?(map()) :: boolean()
+  def list_params?(params) do
+    Enum.any?(Index.facet_keys() ++ ["q", "size"], &Map.has_key?(params, &1))
   end
 
-  def handle_event("toggle", %{"facet" => facet, "value" => value}, socket) do
-    current = values(socket.assigns.params, facet)
-
-    toggled =
-      if value in current, do: Enum.reject(current, &(&1 == value)), else: current ++ [value]
-
-    {:noreply, patch(socket, %{facet => Enum.join(toggled, ",")})}
-  end
-
-  # Narrowing a list and being shown the first page of it is right, so a new
-  # filter resets the window unless the window is what changed.
-  defp patch(socket, changes) do
-    changes =
-      if Map.has_key?(changes, "size"), do: changes, else: Map.put(changes, "size", "some")
-
-    push_patch(socket, to: patch_url(socket.assigns.params, changes))
-  end
+  @doc "The list at these parameters, as the string a link or a redirect needs."
+  @spec list_url(map()) :: String.t()
+  def list_url(params), do: patch_url(params, %{})
 
   @doc false
   def patch_url(params, changes) do
@@ -241,8 +315,8 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
       |> Enum.reject(fn {key, value} -> value == "" or (key == "size" and value == "some") end)
 
     case query do
-      [] -> ~p"/"
-      query -> ~p"/?#{query}"
+      [] -> ~p"/experiments"
+      query -> ~p"/experiments?#{query}"
     end
   end
 

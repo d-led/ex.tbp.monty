@@ -18,8 +18,25 @@ defmodule ExTbpMontyWeb.TourTest do
       assert selectors == Enum.uniq(selectors)
     end
 
+    test "a step says which page it describes, and every scope has one" do
+      for step <- Tour.steps() do
+        assert step.scope in Tour.scopes(),
+               "#{step.element} is scoped #{inspect(step.scope)}, which no page asks for"
+      end
+
+      for scope <- Tour.scopes() do
+        assert Tour.steps(scope) != [], "nothing in the tour describes #{scope}"
+      end
+    end
+
+    test "the page-specific steps stay on their page" do
+      assert Enum.all?(Tour.steps(:welcome), &(&1.scope == :welcome))
+      refute Tour.steps(:welcome) == Tour.steps(:index)
+    end
+
     test "the payload is the steps, decoded, for a hook that knows nothing of Elixir" do
-      assert Tour.steps() == Jason.decode!(Tour.payload(), keys: :atoms)
+      assert Jason.decode!(Tour.payload(), keys: :atoms) ==
+               Enum.map(Tour.steps(), &Map.take(&1, [:element, :popover]))
     end
 
     test "the browser is told where to remember having seen it" do

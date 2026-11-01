@@ -28,22 +28,16 @@ defmodule Monty.Studio.Catalog do
     telemetry
   )
 
+  # Starting points are experiments Monty ships, named as Monty names them. The
+  # list is a list of names and nothing else: a card built from these shows the
+  # config's own `defaults:` list, because that is what the source says about it.
+  # Anything else — "the shape most benchmarks use", "the simplest one" — is this
+  # studio's opinion, and it has no business being on a page about Monty's own
+  # configurations.
   @templates [
-    %{
-      label: "One learning module, distant agent",
-      why: "Monty's own first experiment: a distant camera feeding one graph learning module.",
-      base: "tutorial/first_experiment"
-    },
-    %{
-      label: "One learning module, evidence matching",
-      why: "The shape most benchmarks use: evidence graph LM, distant agent, YCB objects.",
-      base: "base_config_10distinctobj_dist_agent"
-    },
-    %{
-      label: "Five learning modules, voting",
-      why: "A hierarchy with lateral votes, to see a whole system wired up.",
-      base: "randrot_noise_10distinctobj_5lms_dist_agent"
-    }
+    "tutorial/first_experiment",
+    "base_config_10distinctobj_dist_agent",
+    "randrot_noise_10distinctobj_5lms_dist_agent"
   ]
 
   @type experiment :: %{
@@ -57,8 +51,8 @@ defmodule Monty.Studio.Catalog do
   @spec groups() :: [String.t()]
   def groups, do: @groups
 
-  @doc "Named starting points, each a real experiment to start from."
-  @spec templates() :: [%{label: String.t(), why: String.t(), base: String.t()}]
+  @doc "Experiments to start from, named as Monty names them."
+  @spec templates() :: [String.t()]
   def templates, do: @templates
 
   @doc """

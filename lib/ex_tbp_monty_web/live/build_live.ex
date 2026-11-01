@@ -142,19 +142,37 @@ defmodule ExTbpMontyWeb.BuildLive do
           reported on the experiment's page.
         </p>
 
+        <%!-- Two captioned fields and one action: the name and the file each sit
+        in a column of their own, captioned above the field the way `<.input>`
+        captions its own, and the button lines up with their bottom edge. In one
+        wrapping row they shared a line with the button, so the caption floated
+        beside the picker and the three heights disagreed. --%>
         <.form
           for={@import_form}
           id="import-form"
           phx-change="validate-import"
           phx-submit="import"
-          class="flex flex-wrap items-end gap-2"
+          class="grid items-end gap-3 sm:grid-cols-[minmax(0,18rem)_minmax(0,22rem)_max-content]"
         >
-          <.input field={@import_form[:name]} label="Name for the draft" type="text" required />
-          <div class="space-y-1">
-            <span class="text-sm font-medium">File</span>
-            <.live_file_input upload={@uploads.yaml} class="file-input file-input-sm" />
+          <.input
+            field={@import_form[:name]}
+            label="Name for the draft"
+            type="text"
+            required
+            class="w-full input input-sm"
+          />
+
+          <div class="fieldset mb-2">
+            <label class="block">
+              <span class="label mb-1">File</span>
+              <.live_file_input
+                upload={@uploads.yaml}
+                class="w-full file-input file-input-sm"
+              />
+            </label>
           </div>
-          <button type="submit" class="btn btn-primary btn-sm">Import</button>
+
+          <button type="submit" class="btn btn-sm btn-primary mb-2">Import</button>
         </.form>
 
         <p :for={error <- upload_errors(@uploads.yaml)} class="text-sm text-error">
@@ -301,9 +319,9 @@ defmodule ExTbpMontyWeb.BuildLive do
   end
 
   defp base_options do
-    templates = Enum.map(Catalog.templates(), &{&1.label <> " (" <> &1.base <> ")", &1.base})
+    templates = Catalog.templates()
     others = Catalog.experiments() |> Enum.map(&{&1.name, &1.name})
-    templates ++ others
+    templates |> Enum.map(&{&1, &1}) |> Enum.concat(others) |> Enum.uniq()
   end
 
   defp saveable?(%{setup: setup, findings: findings}) do

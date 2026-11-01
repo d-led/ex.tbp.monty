@@ -22,15 +22,17 @@ export const StudioTour = {
   },
 
   start() {
-    // The walkthrough points at the nav, and a collapsed rail or a closed drawer
-    // would leave those steps pointing at nothing.
+    // The steps below name items in the column, and a column folded to a rail
+    // would leave them pointing at icons. `revealSidebar` opens it — and on a
+    // phone, where the column is a drawer that would cover the page, it does
+    // nothing and those steps drop out through the filter below.
     revealSidebar();
 
     // Steps name a selector, and a page that does not have that element — or has
-    // it off-screen, behind a drawer — would otherwise show a popover pointing
+    // it off-screen, inside a drawer — would otherwise show a popover pointing
     // at nothing. Which page a visitor is on is the browser's to know, so the
-    // filter lives here: the full tour on the index, the shell (sidebar, footer)
-    // everywhere else.
+    // filter lives here: the whole tour on the welcome page and the index, the
+    // shell everywhere else.
     const steps = JSON.parse(this.el.dataset.steps || "[]").filter((step) =>
       onScreen(step.element),
     );

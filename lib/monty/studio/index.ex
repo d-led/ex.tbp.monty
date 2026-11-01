@@ -96,15 +96,16 @@ defmodule Monty.Studio.Index do
     groups = experiment.groups
     config = Map.get(experiment, :config) || %{}
 
-    %{
+    entry = %{
       name: experiment.name,
       agent: agent(groups["environment"]),
       modules: modules(groups["monty/learning_module"], groups["monty/connectivity"]),
       learning_module: learning_module(groups["monty/learning_module"]),
       model: model(config),
-      groups: groups,
-      search: searchable(experiment)
+      groups: groups
     }
+
+    Map.put(entry, :search, searchable(entry))
   end
 
   defp agent(environment) when is_binary(environment) do
@@ -142,8 +143,12 @@ defmodule Monty.Studio.Index do
     end
   end
 
-  defp searchable(experiment) do
-    [experiment.name | Map.values(experiment.groups)]
+  # What the row prints, and nothing else. A search that also read the config's
+  # hidden group options matched rows that showed no reason: "al" hit every
+  # config whose environment happened to be called `eval_…`, and the list then
+  # looked like it had not filtered at all.
+  defp searchable(entry) do
+    [entry.name, entry.agent, "#{entry.modules} lm", entry.learning_module, entry.model]
     |> Enum.join(" ")
     |> String.downcase()
   end

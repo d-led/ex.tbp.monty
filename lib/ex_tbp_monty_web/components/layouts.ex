@@ -98,6 +98,25 @@ defmodule ExTbpMontyWeb.Layouts do
             <.link navigate={~p"/"} class="flex items-center gap-2 rounded-field px-1 py-1 lg:hidden">
               <span class="text-sm font-semibold tracking-tight">Monty on the BEAM</span>
             </.link>
+
+            <%!-- The walkthrough, in the header rather than at the foot of the
+            column: on a phone the column is a drawer, and a help button behind
+            a closed drawer is a help button nobody finds. One button on every
+            page, in every layout. --%>
+            <button
+              id="tour-start"
+              type="button"
+              phx-hook="StudioTour"
+              phx-update="ignore"
+              data-steps={ExTbpMontyWeb.Tour.payload()}
+              data-seen-key={ExTbpMontyWeb.Tour.seen_key()}
+              aria-label="Show the walkthrough"
+              title="Show the walkthrough"
+              class="ms-auto inline-flex shrink-0 items-center gap-1.5 rounded-field px-2 py-1.5 text-sm text-base-content/70 transition hover:bg-base-200 hover:text-base-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              <.icon name="hero-question-mark-circle-mini" class="size-4 shrink-0 opacity-80" />
+              <span class="hidden sm:inline">help</span>
+            </button>
           </div>
         </header>
 
@@ -165,7 +184,7 @@ defmodule ExTbpMontyWeb.Layouts do
         <nav class="mt-2 flex flex-col gap-0.5" aria-label="Sections">
           <.sidebar_link
             id="nav-experiments"
-            navigate={~p"/"}
+            navigate={~p"/experiments"}
             label="Experiments"
             icon="hero-beaker-mini"
           />
@@ -191,25 +210,6 @@ defmodule ExTbpMontyWeb.Layouts do
             icon="hero-code-bracket-mini"
           />
         </nav>
-
-        <div class="mt-auto flex flex-col gap-0.5 border-t border-base-300 pt-2">
-          <%!-- The walkthrough, on every page rather than on the one it describes:
-          a help button nobody can find is not help. driver.js skips the steps
-          whose target a page does not have. --%>
-          <button
-            id="tour-start"
-            type="button"
-            phx-hook="StudioTour"
-            phx-update="ignore"
-            data-steps={ExTbpMontyWeb.Tour.payload()}
-            data-seen-key={ExTbpMontyWeb.Tour.seen_key()}
-            class="flex w-full items-center gap-2.5 rounded-field px-2 py-2 text-sm font-normal text-base-content/70 transition hover:bg-base-200 hover:text-base-content"
-            title="Show the walkthrough"
-          >
-            <.icon name="hero-question-mark-circle-mini" class="size-4 shrink-0 opacity-70" />
-            <span class="truncate group-data-[collapsed]:hidden">help</span>
-          </button>
-        </div>
       </div>
     </aside>
     """
