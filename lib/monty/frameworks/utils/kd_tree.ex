@@ -25,7 +25,10 @@ defmodule Monty.Frameworks.Utils.KdTree do
 
   @type point :: [number()]
   @type id :: non_neg_integer()
-  @type t :: :empty | {point(), id(), axis :: 0 | 1 | 2, t(), t()}
+
+  # `:empty`, or the point stored, its id, the axis it was split on, and the two
+  # subtrees — the lower-coordinate one on the left.
+  @type t :: :empty | {number(), number(), number(), id(), 0 | 1 | 2, t(), t()}
 
   @doc """
   Indexes `points`, each a `{point, id}` pair.
@@ -38,9 +41,9 @@ defmodule Monty.Frameworks.Utils.KdTree do
 
     sorted = Enum.sort_by(points, fn {point, id} -> {coordinate(point, axis), id} end)
     middle = div(length(sorted), 2)
-    {{point, id}, left, right} = split_at(sorted, middle)
+    {{[x, y, z], id}, left, right} = split_at(sorted, middle)
 
-    {point, id, axis, build(left), build(right)}
+    {x * 1.0, y * 1.0, z * 1.0, id, axis, build(left), build(right)}
   end
 
   @doc """
@@ -55,6 +58,18 @@ defmodule Monty.Frameworks.Utils.KdTree do
     {ids, _visits} = nearest_with_visits(tree, query, count)
     ids
   end
+
+  @doc """
+  The ids of the `count` points nearest each of `queries`, one list per query.
+
+  One call for a step's worth of questions, in the order they were asked, and
+  each answer is exactly what `nearest/3` would have said: a caller never has to
+  interleave the index with its own loop. It is also the shape a native index
+  would have — one crossing for the whole batch — which is why callers should
+  ask this way rather than map over `nearest/3`.
+  """
+  @spec nearest_many(t(), [point()], pos_integer()) :: [[id()]]
+  def nearest_many(tree, queries, count), do: Enum.map(queries, &nearest(tree, &1, count))
 
   @doc """
   The same answer as `nearest/3`, and how many nodes finding it took.
@@ -92,57 +107,73 @@ defmodule Monty.Frameworks.Utils.KdTree do
     |> Enum.map(fn {squared, id} -> {:math.sqrt(squared), id} end)
   end
 
+  # The descent threads its answers as `{kept, size}`; a query wants only the
+  # answers and the number of nodes that found them.
   defp query(tree, query, count) do
-    {{kept, _size}, visits} = search(tree, query, count, {[], 0}, 0)
+    {{kept, _size}, visits} = search(tree, triple(query), count, {[], 0}, 0)
     {kept, visits}
   end
 
-  # `kept` is worst-first and holds at most `count` answers; `visits` counts the
-  # nodes this query has looked at.
+  # `kept` is worst-first and holds at most `count` answers, with its own size
+  # beside it; `visits` counts the nodes this query has looked at.
   defp search(:empty, _query, _count, kept, visits), do: {kept, visits}
 
-  defp search({point, id, axis, left, right}, query, count, {kept, size}, visits) do
-    kept = keep(kept, size, count, {squared_distance(query, point), id})
+  defp search({x, y, z, id, axis, left, right}, {qx, qy, qz}, count, {kept, size}, visits) do
+    dx = qx - x
+    dy = qy - y
+    dz = qz - z
 
-    difference = coordinate(query, axis) - coordinate(point, axis)
+    kept = keep(kept, size, count, dx * dx + dy * dy + dz * dz, id)
+
+    # The one coordinate this node splits on, and nothing else. Inlined rather
+    # than a helper: a visit is the unit cost of the whole module, and a call
+    # plus the tuple it returns to say "which side" is a quarter of it.
+    difference =
+      if axis == 0, do: dx, else: if(axis == 1, do: dy, else: dz)
+
     {near, far} = if difference <= 0, do: {left, right}, else: {right, left}
-
-    {kept, visits} = search(near, query, count, kept, visits + 1)
+    {kept, visits} = search(near, {qx, qy, qz}, count, kept, visits + 1)
 
     # The far side is worth visiting only while it could still hold something
     # closer than the farthest answer kept so far — the head of the list, which
-    # is kept worst-first. Comparing against the head itself, rather than its
-    # distance, silently compares a number with a tuple and never prunes.
+    # is kept worst-first, and its *distance* rather than the entry: a number
+    # compared with a `{distance, id}` tuple is always less in Erlang's term
+    # order, so comparing entries never prunes.
     {[{worst, _worst_id} | _], size} = kept
 
     if size < count or difference * difference <= worst do
-      search(far, query, count, kept, visits)
+      search(far, {qx, qy, qz}, count, kept, visits)
     else
       {kept, visits}
     end
   end
 
   # One candidate, worst-first: the farthest kept is dropped when the list is
-  # full. A candidate farther than that one costs one comparison.
-  defp keep([], _size, _count, candidate), do: {[candidate], 1}
+  # full. A candidate farther than that one costs one comparison; anything else
+  # is walked into a list that is already in order, which is cheaper than
+  # sorting four entries for every node visited. The distance and the id arrive
+  # apart so that a visit allocates nothing for a candidate it discards.
+  defp keep([], _size, _count, distance, id), do: {[{distance, id}], 1}
 
-  defp keep(kept, size, count, candidate) do
-    [far | rest] = kept
+  defp keep([{_worst, _worst_id} = head | rest], size, count, distance, id) do
+    candidate = {distance, id}
 
     cond do
-      size < count -> {Enum.sort([candidate | kept], :desc), size + 1}
-      candidate >= far -> {kept, size}
-      true -> {Enum.sort([candidate | rest], :desc), size}
+      # Not full yet: the candidate goes wherever it belongs, including at the
+      # head — the head has to stay the farthest answer, because pruning reads it.
+      size < count -> {insert([head | rest], candidate), size + 1}
+      candidate >= head -> {[head | rest], size}
+      true -> {insert(rest, candidate), size}
     end
   end
 
-  defp squared_distance([qx, qy, qz], [px, py, pz]) do
-    dx = qx - px
-    dy = qy - py
-    dz = qz - pz
+  # Into a list that is already worst-first, at the first entry it beats. A tie
+  # in distance sorts by id descending, so that reversing the list puts the lower
+  # id first — the rule `nearest/3` promises.
+  defp insert([], candidate), do: [candidate]
 
-    dx * dx + dy * dy + dz * dz
-  end
+  defp insert([head | rest] = list, candidate),
+    do: if(head >= candidate, do: [head | insert(rest, candidate)], else: [candidate | list])
 
   defp split_at(list, middle) do
     {before, [at | after_it]} = Enum.split(list, middle)
@@ -155,24 +186,32 @@ defmodule Monty.Frameworks.Utils.KdTree do
   defp widest_axis(points) do
     {low, high} = bounds(points)
 
-    [low, high]
-    |> Enum.zip()
-    |> Enum.map(fn {lowest, highest} -> highest - lowest end)
+    [
+      elem(high, 0) - elem(low, 0),
+      elem(high, 1) - elem(low, 1),
+      elem(high, 2) - elem(low, 2)
+    ]
     |> Enum.with_index()
     |> Enum.max_by(fn {spread, _axis} -> spread end)
     |> elem(1)
   end
 
   defp bounds([{point, _id} | rest]) do
-    Enum.reduce(rest, {point, point}, fn {point, _id}, {low, high} ->
-      {lowest(low, point), highest(high, point)}
+    {x, y, z} = triple(point)
+
+    Enum.reduce(rest, {{x, y, z}, {x, y, z}}, fn {point, _id}, {low, high} ->
+      {x, y, z} = triple(point)
+      {lowest(low, x, y, z), highest(high, x, y, z)}
     end)
   end
 
-  defp lowest([lx, ly, lz], [x, y, z]), do: [min(lx, x), min(ly, y), min(lz, z)]
-  defp highest([hx, hy, hz], [x, y, z]), do: [max(hx, x), max(hy, y), max(hz, z)]
+  defp lowest({lx, ly, lz}, x, y, z), do: {min(lx, x), min(ly, y), min(lz, z)}
+  defp highest({hx, hy, hz}, x, y, z), do: {max(hx, x), max(hy, y), max(hz, z)}
 
-  defp coordinate([x, _, _], 0), do: x
-  defp coordinate([_, y, _], 1), do: y
-  defp coordinate([_, _, z], 2), do: z
+  defp coordinate(point, 0), do: point |> triple() |> elem(0)
+  defp coordinate(point, 1), do: point |> triple() |> elem(1)
+  defp coordinate(point, 2), do: point |> triple() |> elem(2)
+
+  defp triple([x, y, z]), do: {x, y, z}
+  defp triple({x, y, z}), do: {x, y, z}
 end

@@ -216,12 +216,11 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
     capacity = min(num_neighbors, num_nodes(model))
     tree = location_tree(model)
 
-    query =
-      if Keyword.get(options, :distance, false),
-        do: &KdTree.nearest_with_distances/3,
-        else: &KdTree.nearest/3
-
-    Enum.map(search_locations, &query.(tree, &1, capacity))
+    if Keyword.get(options, :distance, false) do
+      Enum.map(search_locations, &KdTree.nearest_with_distances(tree, &1, capacity))
+    else
+      KdTree.nearest_many(tree, search_locations, capacity)
+    end
   end
 
   # The index over this model's node positions, kept with the graph it belongs

@@ -222,12 +222,13 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
     capacity = min(count, length(positions))
     tree = location_tree(model)
 
-    query =
-      if Keyword.get(options, :distance, false),
-        do: &KdTree.nearest_with_distances/3,
-        else: &KdTree.nearest/3
-
-    Enum.map(search_locations, &query.(tree, &1, capacity))
+    # One call for every hypothesis's question, which is the shape a native index
+    # would answer in a single crossing.
+    if Keyword.get(options, :distance, false) do
+      Enum.map(search_locations, &KdTree.nearest_with_distances(tree, &1, capacity))
+    else
+      KdTree.nearest_many(tree, search_locations, capacity)
+    end
   end
 
   # The index over the graph's positions, built once with the graph rather than
