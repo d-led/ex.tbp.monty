@@ -160,6 +160,9 @@ LABEL org.opencontainers.image.title="Elixir TBP Monty" \
 # libraries are MuJoCo's offscreen renderer — a sensor camera is what a step
 # returns, so a missing EGL provider is a run that cannot see.
 #
+# Libraries alone are not enough: MuJoCo picks its backend from `MUJOCO_GL`,
+# which `rel/env.sh.eex` fills in on Linux for the reason written there.
+#
 # There is no Python package here and no interpreter to install: the world is
 # `priv/monty_py/world.py`, run in the interpreter `pythonx` builds and ships
 # inside the release. `mujoco` and `numpy` arrive as wheels at compile time
