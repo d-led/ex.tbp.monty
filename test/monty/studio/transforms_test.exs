@@ -84,10 +84,15 @@ defmodule Monty.Studio.TransformsTest do
     end
   end
 
+  @tag timeout: 300_000
   test "a miss is handed on as the furthest the sensor can see" do
     # The world answers 0 where a ray missed; the transform turns that into "as
     # far as the sensor can see" before any module reads it. A patch means a
     # partial miss is normal: some pixels see the object, some see nothing.
+    #
+    # It earns a longer timeout than the default minute because it steps the
+    # simulated world 25 times, and that is measured in wall time: on a machine
+    # with anything else running, a minute is a coin toss rather than a check.
     {patch, view_finder} = look_for(25)
 
     # The view finder is not a finger, so a miss is a metre away in it.

@@ -151,8 +151,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
   end
 
   defp evidence_to_add(displacer, features, graph_id, input_channels, to_test, hypotheses) do
-    search_locations = Enum.map(to_test, &Enum.at(hypotheses.locations, &1))
-    poses = Enum.map(to_test, &Enum.at(hypotheses.poses, &1))
+    # Hypotheses are reached by position, so they are turned into tuples once:
+    # `Enum.at/2` on a list walks to the index, and asking that of every index
+    # is a quadratic pass over the whole hypothesis space, every step.
+    locations = List.to_tuple(hypotheses.locations)
+    poses = List.to_tuple(hypotheses.poses)
+
+    search_locations = Enum.map(to_test, &elem(locations, &1))
+    tested_poses = Enum.map(to_test, &elem(poses, &1))
 
     # Where each tested hypothesis sits in the full set, so the update can be
     # spread over every hypothesis without searching for them one at a time.
@@ -168,18 +174,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
           graph_id,
           channel,
           search_locations,
-          poses,
+          tested_poses,
           channel_features
         )
+        |> List.to_tuple()
 
       # Untested hypotheses get the worst tested update, floored at zero: being
       # skipped must not earn evidence, and must not be punished either.
-      skipped_update = evidence |> Enum.min() |> max(0.0)
+      skipped_update = evidence |> Tuple.to_list() |> Enum.min() |> max(0.0)
 
-      Enum.map(Enum.with_index(totals), fn {total, index} ->
+      Enum.with_index(totals)
+      |> Enum.map(fn {total, index} ->
         case Map.fetch(positions, index) do
           :error -> total + skipped_update
-          {:ok, position} -> total + Enum.at(evidence, position)
+          {:ok, position} -> total + elem(evidence, position)
         end
       end)
     end)
@@ -224,20 +232,22 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
     {all_node_poses, all_node_pose_flags} =
       node_poses(displacer, graph_id, input_channel, tuple_size(channel_locations))
 
-    Enum.zip_with([search_locations, rotated, nearest], fn [
-                                                             search_location,
-                                                             pose_vectors,
-                                                             node_ids
-                                                           ] ->
-      node_locations = Enum.map(node_ids, &elem(channel_locations, &1))
+    # One distance call for the whole channel: the search locations and their
+    # normals are already per hypothesis, and asking one at a time re-built the
+    # same lists thousands of times per step.
+    node_locations_per_hypothesis =
+      Enum.map(nearest, fn node_ids -> Enum.map(node_ids, &elem(channel_locations, &1)) end)
 
-      [distances] =
-        GraphMatchingUtils.custom_distances(
-          [node_locations],
-          [search_location],
-          [hd(pose_vectors)],
-          curvature
-        )
+    distances_per_hypothesis =
+      GraphMatchingUtils.custom_distances(
+        node_locations_per_hypothesis,
+        search_locations,
+        Enum.map(rotated, &hd/1),
+        curvature
+      )
+
+    Enum.zip_with([rotated, nearest, distances_per_hypothesis], fn one ->
+      [pose_vectors, node_ids, distances] = one
 
       too_far = Enum.map(distances, fn distance -> weight(displacer, distance) <= 0 end)
 
@@ -253,11 +263,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
 
       radius_evidence
       |> Enum.zip(node_ids)
-      |> Enum.with_index()
-      |> Enum.map(fn {{evidence, node_id}, position} ->
-        if Enum.at(too_far, position),
-          do: @min_evidence,
-          else: evidence + elem(node_feature_evidence, node_id)
+      |> Enum.zip(too_far)
+      |> Enum.map(fn {{evidence, node_id}, far?} ->
+        if far?, do: @min_evidence, else: evidence + elem(node_feature_evidence, node_id)
       end)
       |> Enum.max()
     end)
