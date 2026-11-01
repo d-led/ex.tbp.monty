@@ -68,7 +68,7 @@ defmodule Monty.Studio.Failure do
   defp plain(reason), do: %{what: reason, hint: nil, technical: nil}
 
   defp translated(kind, message, reason) do
-    case about(kind, message) do
+    case about(kind, message, reason) do
       {what, hint} -> %{what: what, hint: hint, technical: reason}
       nil -> %{what: sentence(kind, message), hint: nil, technical: reason}
     end
@@ -77,11 +77,15 @@ defmodule Monty.Studio.Failure do
   # The ones worth a sentence of their own, because the exception's own words are
   # about machinery the reader has never seen. Matched on what was said rather
   # than on where it was raised, so a move of the code does not lose the message.
-  defp about(_kind, message) do
+  defp about(_kind, message, reason) do
     cond do
       message =~ "sets a pose outright" or message =~ "stand-in world" ->
         {"This world cannot be posed directly, so the agent cannot be placed in it.",
-         "Run it against a simulator — the monty or habitat world — or pick an experiment whose agent starts where the stand-in puts it."}
+         "Run it against a simulator — MuJoCo, in this application — or pick an experiment whose agent starts where the stand-in puts it."}
+
+      reason =~ "Monty.Simulators.Mujoco.Host" and reason =~ "time out" ->
+        {"The world stopped answering: MuJoCo did not return a step in two minutes.",
+         "That is the simulator, not the model. Try the run again — and if it repeats, the stand-in scene is a way to check that the rest of the experiment still steps."}
 
       message =~ "no such file" or message =~ "enoent" ->
         {"A file the run needs is not there.",

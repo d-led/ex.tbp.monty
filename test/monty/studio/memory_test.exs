@@ -115,7 +115,7 @@ defmodule Monty.Studio.MemoryTest do
 
       assert [%{code: :no_pretrained_memory, message: message}] = Setup.memory_findings(setup)
       assert message =~ "a_model_nobody_exported"
-      assert message =~ "cannot recognise anything"
+      assert message =~ "cannot recognise any object"
     end
   end
 

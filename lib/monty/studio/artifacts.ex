@@ -53,13 +53,19 @@ defmodule Monty.Studio.Artifacts do
     end
   end
 
-  @doc "Appends one line to a run's log file."
+  @doc "Appends one line to a run's log file, stamped with the clock it happened at."
   # A run's own log file, under the UUID-checked directory `dir/1` builds.
   # sobelow_skip ["Traversal.FileModule"]
   @spec append(binary(), String.t()) :: :ok | {:error, term()}
   def append(run_id, line) do
-    File.write(log_path(run_id), line <> "\n", [:append])
+    File.write(log_path(run_id), stamped(line) <> "\n", [:append])
   end
+
+  # Every line says when it was written, on the clock of the machine that ran
+  # it. A step line carries its own step time, which is a duration and not a
+  # time of day: without a stamp, "run started" and "run finished" cannot be
+  # lined up with anything else a person did that afternoon.
+  defp stamped(line), do: "#{Monty.Studio.LocalClock.now().clock} #{line}"
 
   @doc "Forgets a run's directory, if it has one."
   # A run's own directory, named by a UUID `dir/1` has checked; a recursive

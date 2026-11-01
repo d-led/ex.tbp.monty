@@ -15,6 +15,21 @@ config :ex_tbp_monty,
 # that does not want the upstream link drops the key, and the link goes with it.
 config :ex_tbp_monty, :source, repo: "https://github.com/d-led/ex.tbp.monty"
 
+# What wandb does. wandb's own default is `online`: a config that names a wandb
+# logger would try to sync a run the moment it starts, which is not something a
+# local deployment should do because nobody said otherwise. `WANDB_MODE=online`
+# (with `WANDB_API_KEY`) is how an operator asks for it, and the image states the
+# same default so a container and a checkout behave alike.
+config :ex_tbp_monty, wandb_mode: System.get_env("WANDB_MODE") || "disabled"
+
+# Which world a run steps when nobody chooses one. MuJoCo is the world Monty's
+# own configs are written for, and it costs nothing here: the interpreter that
+# renders it travels with the application (`config/pythonx.exs`), so a checkout
+# and a container run the same experiment without anyone installing anything.
+# The stand-in scene is the other choice, and what the suite uses — it needs no
+# scene description and no interpreter.
+config :ex_tbp_monty, world_simulator: :mujoco
+
 # "Is MuJoCo here?" is answered by the interpreter this application carries, not
 # by whatever `python3` the PATH offers: `config/pythonx.exs` is where the build
 # installs packages into it, so the answer is a property of the deployment. A

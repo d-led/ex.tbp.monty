@@ -43,6 +43,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   @impl true
   def mount(params, _session, socket) do
+    # Runs of this experiment arrive as messages, the same way a run's steps do:
+    # the record is written once, and every page showing it hears about it. No
+    # page has to ask the database what changed.
+    if connected?(socket), do: RunHistory.subscribe()
+
     case Studio.open(name_of(params)) do
       {:ok, opened} ->
         {:ok, follow_running(assign_opened(socket, opened, steps(params)))}
@@ -144,17 +149,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp input_of(%{inputs: %{} = inputs}, key), do: Map.get(inputs, key) |> to_string()
   defp input_of(_run, _key), do: "—"
 
-  # The record keeps the atom a run stepped; the table says what that atom is,
-  # in the same words the selector above uses. Not `world_of/1`: that one reads
-  # the selector's value back into an atom.
-  defp world_label(run) do
-    case input_of(run, "world") do
-      "synthetic" -> "stand-in"
-      "habitat" -> "Monty's Python"
-      other -> other
-    end
-  end
-
   # A run outlives its page, so a page that loads must find the run its
   # experiment is in the middle of instead of pretending nothing is happening.
   defp follow_running(%{assigns: %{opened: %{name: name}}} = socket) do
@@ -176,6 +170,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     # A page that moves to another run starts that run's story, not the last
     # one's: charts, beliefs and frames are per run, and two runs' steps in one
     # chart would be a line through episodes that never happened.
+
     socket
     |> assign(
       run_id: record.id,
@@ -197,7 +192,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp seed_log(socket, record) do
     lines =
       record.log
-      |> Enum.map(fn entry -> line(entry["step"], RunLog.line(entry)) end)
+      |> Enum.map(&record_line/1)
       |> Enum.take(-@log_limit)
 
     assign(socket, lines: lines)
@@ -212,7 +207,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         <p class="text-base-content/70">
           This config does not compose from Monty's conf tree: <code>{inspect(@error)}</code>
         </p>
-        <.link navigate={~p"/"} class="btn btn-sm btn-outline">Back to the experiments</.link>
+        <.link navigate={~p"/experiments"} class="btn btn-sm btn-outline">
+          Back to the experiments
+        </.link>
       </section>
     </Layouts.app>
     """
@@ -323,11 +320,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               class="select select-xs w-72"
               aria-label="Which world the run steps"
             >
-              <%!-- Both are named for what they are: this port's stand-in, or
-              the simulator in an external process, named by the engine the experiment's config
-              picks (MuJoCo, or Habitat-Sim for the habitat_* ones). --%>
+              <%!-- Two worlds, each named for what it is: Monty's own MuJoCo
+              simulator (copied in, run in this application's interpreter), or
+              this port's stand-in sphere. --%>
               <option
-                :for={world <- [:synthetic, :habitat]}
+                :for={world <- [:mujoco, :synthetic]}
                 value={world}
                 selected={world == @opened.setup.world}
               >
@@ -352,7 +349,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         <%!-- Poka-yoke: a run that reads files nobody has downloaded cannot
         start, so the page says which files before the button is pressed and
         names the page that fetches them — the button is disabled, the reason is
-        here. A stand-in run reads nothing and never sees this. --%>
+        here. A need is not always a download: the interpreter is configuration
+        (`MONTY_PYTHON`), and offering a download for it is offering something
+        that does not exist. A stand-in run reads nothing and never sees this. --%>
         <div
           :if={@missing != []}
           id="needs-prerequisites"
@@ -361,18 +360,23 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         >
           <.icon name="hero-exclamation-triangle-mini" class="size-4 mt-0.5" />
           <div class="space-y-1 text-sm">
-            <p class="font-medium">This run would not start: it reads files that are not here yet.</p>
+            <p class="font-medium">This run needs something before it can start.</p>
             <ul class="list-disc space-y-0.5 pl-4">
               <li :for={need <- @missing}>
-                {need.what} — <code class="font-mono text-xs">{need.path}</code>
+                {need.what}<span :if={need.path}> — <code class="font-mono text-xs">{need.path}</code></span>
               </li>
             </ul>
-            <p>
+            <p :if={any_remedy?(@missing, :download)}>
               <.link id="download-prerequisites" navigate={~p"/prerequisites"} class="link">
                 Download them on the Prerequisites page
               </.link>
-              — or step this port's stand-in scene instead, which reads nothing
-              from disk.
+            </p>
+            <p :if={any_remedy?(@missing, :configure)}>
+              Point <code>MONTY_PYTHON</code> at an interpreter with <code>tbp.monty</code> in
+              it — <code>scripts/run-dev.sh</code> passes it through — and reload this page.
+            </p>
+            <p>
+              Or step this port's stand-in scene instead, which reads nothing from disk.
             </p>
           </div>
         </div>
@@ -403,7 +407,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             No run of this experiment yet. The buttons above start one.
           </p>
 
-          <table :if={@runs != []} class="w-full text-xs">
+          <table :if={@runs != []} class={table_class()}>
             <thead class="text-left text-base-content/60">
               <tr>
                 <th class="font-normal">when</th>
@@ -411,16 +415,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 <th class="font-normal text-right">steps</th>
                 <th class="font-normal text-right">seed</th>
                 <th class="font-normal text-right">parallel</th>
-                <th class="font-normal text-right">ran for</th>
+                <th class="font-normal text-right">took</th>
                 <th class="font-normal">world</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
+              <%!-- The row is the link: a whole row a person can click beats a
+              word at the end of it, and every cell is then the same target. --%>
               <tr
                 :for={run <- @runs}
                 id={"experiment-run-#{run.id}"}
-                class="border-t border-base-300"
+                phx-click={JS.navigate(~p"/runs/#{run.id}")}
+                class="cursor-pointer border-t border-base-300 hover:bg-base-200"
               >
                 <td class="py-0.5 font-mono text-base-content/60">{run_time(run)}</td>
                 <td>
@@ -434,16 +440,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 <td class="text-right font-mono">{run.steps}</td>
                 <td class="text-right font-mono">{input_of(run, "seed")}</td>
                 <td class="text-right font-mono">{input_of(run, "parallel")}</td>
-                <td class="text-right font-mono">{run_duration(run)}</td>
-                <td class="text-[11px]">{world_label(run)}</td>
-                <td class="text-right">
-                  <.link
-                    id={"open-run-#{run.id}"}
-                    navigate={~p"/runs/#{run.id}"}
-                    class="link link-hover"
-                  >
-                    open
-                  </.link>
+                <td class="text-right font-mono whitespace-nowrap">{run_duration(run)}</td>
+                <td class="text-[11px] whitespace-nowrap">
+                  {ExTbpMontyWeb.StudioComponents.world_label(run)}
                 </td>
               </tr>
             </tbody>
@@ -583,6 +582,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
           <ul
             id="run-log"
+            phx-hook=".LocalTime"
             class="max-h-56 overflow-auto rounded-field border border-base-300 bg-base-100 p-2 font-mono text-[11px] leading-5"
           >
             <%!-- An empty state is for a log with nothing in it, or a filter
@@ -592,9 +592,50 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               {if @lines == [], do: "no lines yet", else: "no line matches this filter"}
             </li>
             <li :for={line <- @shown} id={"log-#{line.id}"} class={line_class(line)}>
-              {line.text}
+              <%!-- The clock is a `<time>` with the instant in it, not a
+              string: a run's log says when a step happened, and "when" means
+              the reader's clock, not the server's. The hook rewrites the UTC
+              text the server sent into the browser's own time zone. --%>
+              <time
+                :if={line.at}
+                datetime={line.at.instant}
+                title={line.at.instant}
+                class="me-1.5 text-base-content/40 tabular-nums"
+              >
+                {line.at.clock}
+              </time>{line.text}
             </li>
           </ul>
+          <script :type={Phoenix.LiveView.ColocatedHook} name=".LocalTime">
+            // A log line is stamped in UTC because that is what a server knows.
+            // The reader's clock is what they compare it to, and only the
+            // browser knows that zone, so each `<time>` is rewritten here — on
+            // mount and again after every patch, because a live log keeps
+            // appending lines while it is read.
+            export default {
+              mounted() {
+                this.localise()
+              },
+
+              updated() {
+                this.localise()
+              },
+
+              localise() {
+                for (const node of this.el.querySelectorAll("time[datetime]")) {
+                  const at = new Date(node.getAttribute("datetime"))
+                  if (Number.isNaN(at.getTime())) continue
+
+                  node.textContent = at.toLocaleTimeString(undefined, {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })
+                  node.title = at.toLocaleString()
+                }
+              },
+            }
+          </script>
         </div>
 
         <ExTbpMontyWeb.StudioComponents.summary :if={@summary} summary={@summary} />
@@ -659,6 +700,23 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   @impl true
+  # A run of this experiment was written down, or settled. The row this page
+  # draws is the record the database just wrote, so a run that is still queued is
+  # in the table from the moment it is queued — not when a worker picks it up.
+  def handle_info({:recorded, run}, %{assigns: %{opened: %{name: name}}} = socket)
+      when run.experiment == name do
+    {:noreply, put_run(socket, run, :first)}
+  end
+
+  def handle_info({:recorded, _other}, socket), do: {:noreply, socket}
+
+  def handle_info({:settled, run}, %{assigns: %{opened: %{name: name}}} = socket)
+      when run.experiment == name do
+    {:noreply, put_run(socket, run, :in_place)}
+  end
+
+  def handle_info({:settled, _other}, socket), do: {:noreply, socket}
+
   def handle_info({:studio, run_id, event}, %{assigns: %{run_id: run_id}} = socket) do
     {:noreply, handle_studio(event, socket)}
   end
@@ -742,6 +800,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   defp refresh_runs(socket), do: socket
 
+  # A newly recorded run goes to the top; one that has settled keeps its place,
+  # because a page must not shuffle under a reader while they are reading it.
+  defp put_run(socket, run, where) do
+    runs =
+      case where do
+        :first -> [run | Enum.reject(socket.assigns.runs, &(&1.id == run.id))]
+        :in_place -> Enum.map(socket.assigns.runs, &if(&1.id == run.id, do: run, else: &1))
+      end
+
+    assign(socket, runs: runs, queue: Map.merge(socket.assigns.queue, Jobs.by_run([run.id])))
+  end
+
   # What each learning module believed after this step, appended to what it held
   # before it: the chart is the run's history, not the latest frame of it.
   defp remember(socket, _step, beliefs) when beliefs == %{}, do: socket
@@ -812,7 +882,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       socket
     else
       chatter = Enum.filter(socket.assigns.lines, &is_nil(&1.step))
-      recorded = Enum.map(record.log, fn entry -> line(entry["step"], RunLog.line(entry)) end)
+      recorded = Enum.map(record.log, &record_line/1)
       assign(socket, lines: Enum.sort_by(recorded ++ chatter, & &1.id))
     end
   end
@@ -874,10 +944,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp refused(socket, [reason | _rest]),
     do: push(socket, nil, "could not record every run: #{reason}", :error)
 
+  # Two runs of the same experiment in the same world would be the same run
+  # twice, and that is what this refuses. Two *worlds* are two different
+  # experiments' worth of evidence — the stand-in checks the runtime, MuJoCo
+  # produces the experiment's numbers — so a page that already has one going
+  # can still be asked for the other, and the queue decides when it starts.
   defp queue(opened, steps, episode, parallel) do
-    if RunHistory.running_for(opened.name, episode),
-      do: :going,
-      else: RunHistory.start(RunLog.attributes(opened, steps, episode, parallel))
+    world = to_string(opened.setup.world)
+
+    case RunHistory.running_for(opened.name, episode) do
+      %{inputs: %{"world" => ^world}} ->
+        :going
+
+      _nothing_or_another_world ->
+        RunHistory.start(RunLog.attributes(opened, steps, episode, parallel))
+    end
   end
 
   defp started({:ok, record}), do: [record]
@@ -924,12 +1005,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # -- the log ---------------------------------------------------------------
 
   defp push(socket, step, text, level) do
-    line = line(step, text, level)
+    line = line(step, text, level, RunLog.now())
     assign(socket, lines: Enum.take(socket.assigns.lines ++ [line], -@log_limit))
   end
 
-  defp line(step, text, level \\ :info) do
-    %{id: System.unique_integer([:monotonic, :positive]), step: step, text: text, level: level}
+  # A recorded step keeps its own instant, and the page writes a clock it can
+  # hand to the browser: the words are the run's, the hour is the reader's.
+  defp record_line(entry), do: line(entry["step"], RunLog.text(entry), :info, RunLog.at(entry))
+
+  defp line(step, text, level, at) do
+    %{id: System.unique_integer([:monotonic, :positive]), step: step, text: text, level: level, at: at}
   end
 
   defp line_class(%{level: :error}), do: "text-error"
@@ -958,6 +1043,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # -- helpers ---------------------------------------------------------------
 
+  # A gutter between columns, once, for both tables that show runs. Without it
+  # a duration and the world it was measured in read as one word ("38.3
+  # smujoco"), and a header sits on its neighbour's values. The last column has
+  # no trailing padding, so the row does not end in a gap.
+  defp table_class do
+    "w-full text-xs [&_th]:pb-1 [&_th]:pr-4 [&_td]:py-0.5 [&_td]:pr-4 " <>
+      "[&_th:last-child]:pr-0 [&_td:last-child]:pr-0"
+  end
+
   # The route is a glob, so the name arrives as its segments.
   defp name_of(%{"name" => segments}), do: segments |> List.wrap() |> Enum.join("/")
   defp name_of(_params), do: ""
@@ -969,21 +1063,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
-  # A stand-in world is a warning, not a badge of honour: the experiment's own
-  # numbers come from Monty's simulator, and this one is not it.
-  defp world_badge(%{world: :habitat}), do: "badge-ghost"
+  # A world that is not Monty's simulator is a warning, not a badge of honour:
+  # the experiment's own numbers come from MuJoCo, and a stand-in is not it.
+  defp world_badge(%{world: :mujoco}), do: "badge-ghost"
   defp world_badge(_setup), do: "badge-warning"
 
-  defp world_note(%{world: :habitat} = setup) do
-    "A simulator stepped in an external process behind Monty.Simulators.Port: " <>
-      "the experiment's `environment` names the engine — #{engine_of(setup)} — and " <>
-      "this port carries it out."
+  defp world_note(%{world: :mujoco} = setup) do
+    "Monty's own MuJoCo simulator, copied into this repository and run in the " <>
+      "interpreter this application carries: the experiment's `environment` names " <>
+      "#{engine_of(setup)}, its agents and cameras are Monty's, and no Python has to " <>
+      "be installed."
   end
 
   defp world_note(_setup) do
     "This port's own scene: one sphere, stepped in the BEAM. A run here exercises " <>
-      "the port, not the experiment — choose the external process above, and set " <>
-      "MONTY_PYTHON to an interpreter with `tbp.monty` in it."
+      "the port, not the experiment — choose MuJoCo above to step the world the " <>
+      "experiment was written for."
   end
 
   defp engine_of(%{environment: %{module: %{class: class}}}), do: class
@@ -991,8 +1086,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # What the selector sends back, as the atom a setup carries. A value that is
   # neither is nothing to do, because a page cannot ask for a world no port here
-  # has.
-  defp world_of("habitat"), do: :habitat
+  # has. `"habitat"` is kept for a browser sitting on the old page: it is the
+  # world this build no longer carries, so asking for it changes nothing.
+  defp world_of("mujoco"), do: :mujoco
   defp world_of("synthetic"), do: :synthetic
   defp world_of(_other), do: nil
 
@@ -1044,15 +1140,23 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # An option nobody can pick should say so where it is picked: the engine is
   # the experiment's, and whether this deployment has it is a fact about the
-  # deployment, not about the config.
+  # deployment, not about the config. Only answered when an interpreter was
+  # named: "not installed" about a `python3` nobody chose is not a fact.
   defp unavailable(setup, :habitat) do
     case Prerequisites.engine(setup) do
-      nil -> ""
-      engine -> if Prerequisites.engine_installed?(engine), do: "", else: " — not installed here"
+      nil ->
+        ""
+
+      engine ->
+        if Prerequisites.python_configured?() and not Prerequisites.engine_installed?(engine),
+          do: " — not in MONTY_PYTHON",
+          else: ""
     end
   end
 
   defp unavailable(_setup, _world), do: ""
+
+  defp any_remedy?(needs, remedy), do: Enum.any?(needs, &(Prerequisites.remedy(&1) == remedy))
 
   # Which files a run of this experiment reads before it steps, and which of
   # them are not here. A stand-in run reads nothing, so this is empty for one.

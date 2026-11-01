@@ -26,6 +26,8 @@ prerequisites:
     root: MONTY_DATA
     target: mujoco/objects/ycb/ycb_objects_1.0.tgz
     extract: true
+    # The archive's name is not the directory it fills.
+    unpacks_to: mujoco/objects/ycb
 
   # The release Monty's current configs name (`constants.pretrained_dir`), which
   # is the one a run of `base_10simobj_surf_agent` and its siblings loads.
@@ -38,3 +40,4 @@ prerequisites:
     root: MONTY_MODELS
     target: pretrained_ycb_v14.tgz
     extract: true
+    unpacks_to: pretrained_ycb_v14

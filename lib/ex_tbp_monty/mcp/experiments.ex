@@ -567,16 +567,42 @@ defmodule ExTbpMonty.Mcp.Experiments do
         {:error, "`#{opened.name}` would not run: #{errors}"}
 
       missing != [] ->
-        listed = Enum.map_join(missing, "; ", &"#{&1.what} at #{&1.path}")
-
-        {:error,
-         "`#{opened.name}` needs files that are not here yet: #{listed}. " <>
-           "Download them at /prerequisites — or run with `world: \"synthetic\"`, " <>
-           "which reads nothing from disk."}
+        {:error, refusal(opened, missing)}
 
       true ->
         :ok
     end
+  end
+
+  # Two kinds of missing need, two fixes: a dataset or a memory is fetched on
+  # `/prerequisites`, while an interpreter is configuration — `MONTY_PYTHON` —
+  # that no page can download.
+  defp refusal(opened, missing) do
+    downloads = Enum.filter(missing, &(Prerequisites.remedy(&1) == :download))
+    configure = missing -- downloads
+
+    ["`#{opened.name}` cannot start yet." | remedies(downloads, configure)]
+    |> Enum.join(" ")
+  end
+
+  defp remedies(downloads, configure) do
+    [
+      if(downloads != [],
+        do: "Not downloaded yet: #{listed(downloads)} — fetch them at /prerequisites."
+      ),
+      if(configure != [],
+        do:
+          "Needs configuration: #{listed(configure)} — set `MONTY_PYTHON` to an " <>
+            "interpreter with `tbp.monty` in it."
+      ),
+      "`world: \"synthetic\"` steps this port's stand-in, which reads nothing."
+    ]
+  end
+
+  defp listed(needs) do
+    Enum.map_join(needs, "; ", fn need ->
+      if need.path, do: "#{need.what} (#{need.path})", else: need.what
+    end)
   end
 
   defp record(opened, steps) do

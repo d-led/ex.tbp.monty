@@ -109,7 +109,9 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       for need <- summary.needs do
         assert %{kind: kind, what: what, path: path, present?: present?} = need
         assert kind in [:interpreter, :engine, :data, :models]
-        assert is_binary(what) and is_binary(path)
+        assert is_binary(what)
+        # An engine that travels in the release has no path to point at.
+        assert is_nil(path) or is_binary(path)
         assert is_boolean(present?)
       end
 
@@ -322,9 +324,8 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                  @ctx
                )
 
-      assert message =~ "files that are not here yet"
+      assert message =~ "Not downloaded yet"
       assert message =~ "/prerequisites"
-      assert message =~ "world: \"synthetic\""
 
       assert RunHistory.search(state: "all", text: @experiment).runs == []
     end

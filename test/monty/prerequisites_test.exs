@@ -113,7 +113,7 @@ defmodule Monty.PrerequisitesTest do
 
       needs = Prerequisites.for_setup(setup)
 
-      assert Enum.map(needs, & &1.kind) == [:interpreter, :data, :models]
+      assert Enum.map(needs, & &1.kind) == [:data, :models]
       assert Enum.all?(needs, & &1.present?)
     end
 
@@ -128,19 +128,17 @@ defmodule Monty.PrerequisitesTest do
         Prerequisites.for_setup(%{world: :habitat, model_name_or_path: "pretrained_ycb_v13"})
 
       refute Enum.any?(needs, & &1.present?)
-      assert Enum.map(needs, & &1.kind) == [:interpreter, :models]
-
-      assert %{what: what} = Enum.find(needs, &(&1.kind == :interpreter))
-      assert what =~ "MONTY_PYTHON"
+      assert Enum.map(needs, & &1.kind) == [:models]
 
       assert %{path: path} = Enum.find(needs, &(&1.kind == :models))
       assert path == Path.join(System.get_env("MONTY_MODELS"), "pretrained_ycb_v13")
     end
 
-    test "a setup that names neither data nor memory reads only the interpreter" do
-      Tmp.system_env("MONTY_PYTHON", interpreter())
-
-      assert [%{kind: :interpreter, present?: true}] = Prerequisites.for_setup(%{world: :habitat})
+    # No operator interpreter to check any more: the world steps in the
+    # interpreter this application carries, so a setup that names no data and no
+    # memory reads nothing.
+    test "a setup that names neither data nor memory needs nothing" do
+      assert Prerequisites.for_setup(%{world: :habitat}) == []
     end
   end
 

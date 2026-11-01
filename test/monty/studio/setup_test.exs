@@ -7,7 +7,8 @@ defmodule Monty.Studio.SetupTest do
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
   alias Monty.Frameworks.Models.SensorModules.{CameraSM, FeatureChangeFilter}
   alias Monty.SensorModules.SensorModule
-  alias Monty.Simulators.Habitat.Environment.HabitatEnvironment
+  # The Habitat class is still in the map until the sweep that removes it; the
+  # specs below name it as a string, so no alias is needed.
   alias Monty.Simulators.Synthetic
   alias Monty.Studio.{Finding, Setup}
   alias Monty.Test.Tmp
@@ -20,13 +21,13 @@ defmodule Monty.Studio.SetupTest do
   defp setup_for(name, options \\ []), do: elem(Setup.from_experiment(name, options), 1)
 
   describe "the default world" do
-    # A run that says nothing steps the simulator in an external process, the way
-    # an experiment is meant to run. The stand-in is something a run chooses.
-    test "is Monty's Python, so an experiment's own engine steps it" do
-      Tmp.without_env("MONTY_PYTHON")
+    # A run that says nothing steps Monty's own simulator: this build carries it
+    # (`priv/monty_py`), so there is nothing to install and nothing to configure.
+    # The stand-in is something a run chooses.
+    test "is MuJoCo, so an experiment's own world steps it" do
       Tmp.app_env(:world_simulator, nil)
 
-      assert setup_for("tutorial/first_experiment").world == :habitat
+      assert setup_for("tutorial/first_experiment").world == :mujoco
     end
 
     test "is what the run asked for, instead" do
@@ -290,11 +291,22 @@ defmodule Monty.Studio.SetupTest do
       assert [stand_ins] =
                for(%{code: :modules_not_ported} = finding <- setup.findings, do: finding)
 
-      # The world is not on this list: it has a class of its own now, and the
-      # warning below is about the world a run actually steps.
+      # Not MuJoCo's simulator: this build carries Monty's code for it, so it is
+      # not a stand-in — see the finding below, and the world's own warning.
       assert stand_ins.level == :info
       assert stand_ins.message =~ "DisplacementGraphLM"
-      refute stand_ins.message =~ "HabitatEnvironment"
+      refute stand_ins.message =~ "MuJoCoSimulator"
+    end
+
+    test "and says which classes are Monty's own code, copied and run" do
+      {:ok, setup} =
+        Setup.from_experiment("tutorial/first_experiment", world_simulator: :mujoco)
+
+      assert [carried] = for(%{code: :modules_run_from_monty} = finding <- setup.findings, do: finding)
+
+      assert carried.level == :info
+      assert carried.message =~ "MuJoCoSimulator"
+      assert carried.message =~ "copied into this repository"
     end
 
     test "and warns that a run without Monty's world does not produce Monty's numbers" do
@@ -308,14 +320,13 @@ defmodule Monty.Studio.SetupTest do
       # The finding says why the run is a stand-in — no interpreter — and both
       # ways out: configuring one, which makes it the default, or choosing it
       # for one run.
-      assert world.message =~ "not Monty's"
-      assert world.message =~ "No interpreter is configured"
-      assert world.message =~ "MONTY_PYTHON"
-      assert world.message =~ "choose it for one run"
+      assert world.message =~ "not the experiment's"
+      assert world.message =~ "stand-in scene"
+      assert world.message =~ "Choose MuJoCo"
     end
 
     test "and says nothing about the world when Monty's own is what a run steps" do
-      {:ok, setup} = Setup.from_experiment("tutorial/first_experiment", world_simulator: :habitat)
+      {:ok, setup} = Setup.from_experiment("tutorial/first_experiment", world_simulator: :mujoco)
 
       refute :world_is_a_stand_in in Enum.map(setup.findings, & &1.code)
     end
@@ -366,39 +377,45 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "the world a run steps" do
-    test "is this port's own scene unless a machine can run Monty's" do
-      assert %Synthetic.Environment{} = Setup.world(setup_for("tutorial/first_experiment"))
+    test "is this port's own scene when a run chooses it" do
+      assert %Synthetic.Environment{} =
+               Setup.world(setup_for("tutorial/first_experiment"), :synthetic)
+    end
+
+    test "is Monty's own simulator, hosted here, when a run takes it" do
+      # Not a re-implementation: the world is `Monty.Simulators.Mujoco.Environment`,
+      # which builds Monty's `MuJoCoSimulator` from `priv/monty_py` in the
+      # interpreter this application carries.
+      assert %Monty.Simulators.Mujoco.Environment{sensors: sensors} =
+               Setup.world(setup_for("tutorial/first_experiment"), :mujoco)
+
+      assert "patch" in sensors
     end
 
     test "and says which one it is, in words a page can show" do
       # A stand-in scene and Monty's own world are not the same claim about a
       # run, so the page gets two different answers rather than one "world".
-      assert Setup.world_name(setup_for("tutorial/first_experiment")) ==
+      assert Setup.world_name(setup_for("tutorial/first_experiment"), :synthetic) ==
                "stand-in scene (Elixir, one sphere)"
 
-      # And Monty's own world is named by the engine its config picks: this
-      # experiment names `MuJoCoSimulator`, not Habitat.
-      assert Setup.world_name(setup_for("tutorial/first_experiment", world_simulator: :habitat)) ==
-               "MuJoCo via Monty's Python"
+      assert Setup.world_name(setup_for("tutorial/first_experiment"), :mujoco) ==
+               "MuJoCo (in this application)"
     end
 
-    test "names Habitat-Sim when the experiment's config is a habitat one" do
-      setup = setup_for("tutorial/first_experiment", world_simulator: :habitat)
+    test "and refuses an engine this build does not carry, instead of stepping another" do
+      setup = setup_for("tutorial/first_experiment", world_simulator: :mujoco)
 
-      # The same world choice, a different engine, because the config says so.
+      # Habitat-Sim is a conda package for another Python and is on its way out
+      # of Monty; a config that names it must not be handed MuJoCo's world.
       habitat = %{
         setup
         | environment: %{setup.environment | module: %{class: "HabitatEnvironment"}}
       }
 
-      assert Setup.world_name(habitat) == "Habitat-Sim via Monty's Python"
-    end
+      assert Setup.world_name(habitat) ==
+               "HabitatEnvironment (not carried by this application)"
 
-    test "is Monty's HabitatEnvironment, named by the experiment, when it can be" do
-      assert %HabitatEnvironment{experiment: "tutorial/first_experiment", sensors: sensors} =
-               Setup.world(setup_for("tutorial/first_experiment"), :habitat)
-
-      assert "patch" in sensors
+      assert_raise ArgumentError, ~r/does not carry/, fn -> Setup.world(habitat) end
     end
 
     test "shows the experiment's object to every sensor" do

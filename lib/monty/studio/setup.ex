@@ -27,7 +27,6 @@ defmodule Monty.Studio.Setup do
   alias Monty.Frameworks.Utils.SpatialArithmetics
   alias Monty.Geometry.Rotation
   alias Monty.ModuleMap
-  alias Monty.Simulators.Habitat.Environment.HabitatEnvironment
   alias Monty.Studio.Finding
   alias Monty.Studio.Memory
 
@@ -62,6 +61,7 @@ defmodule Monty.Studio.Setup do
             findings: [],
             positioning: [],
             object_names: nil,
+            agent_class: nil,
             recognition_policy: nil,
             model_name_or_path: nil
 
@@ -142,7 +142,7 @@ defmodule Monty.Studio.Setup do
   Reads a composed experiment tree.
 
   Options: `:name`, used only for display and logging, `:world_simulator`
-  (`:synthetic` or `:habitat`), which world a run is being read for, and
+  (`:mujoco` or `:synthetic`), which world a run is being read for, and
   `:pretrained_dir`, the release to load pretrained models from instead of the
   one the config names — see `pretrained_dir/2`.
   """
@@ -164,7 +164,7 @@ defmodule Monty.Studio.Setup do
       experiment_class: describe_target(Map.get(tree["experiment"] || %{}, "_target_")),
       monty_class: describe_target(Map.get(monty_config, "monty_class")),
       environment: environment(config),
-      world: Keyword.get_lazy(opts, :world_simulator, &configured_world/0),
+      world: Keyword.get(opts, :world_simulator) || configured_world(),
       cameras: cameras(config),
       scene: scene(config),
       motor_system: motor_system(monty_config),
@@ -172,6 +172,7 @@ defmodule Monty.Studio.Setup do
       transforms: transforms(config),
       positioning: get_in(config, ["eval_env_interface_args", "positioning_procedures"]) || [],
       object_names: get_in(config, ["eval_env_interface_args", "object_names"]),
+      agent_class: agent_class_of(config),
       recognition_policy: Map.get(config, "recognition_policy"),
       model_name_or_path: Map.get(config, "model_name_or_path"),
       attention_system: describe_target(get_in(monty_config, ["attention_system", "_target_"])),
@@ -237,17 +238,18 @@ defmodule Monty.Studio.Setup do
   defp monty_root(opts), do: Keyword.get(opts, :monty_root)
 
   # Which world a run steps is the machine's, not the experiment's: a config
-  # says nothing about whether this host can run Monty's simulator, so it stays
-  # apart from the config tree and the finding below says what it means.
+  # says nothing about whether this host can render a scene, so it stays apart
+  # from the config tree and the finding below says what it means.
   #
-  # The external process is the default, because that is the world that answers
-  # the question the experiment asks. The stand-in is a choice a run makes — the
-  # selector, or `world_simulator: :synthetic` — never a silent consequence of a
-  # missing interpreter; what a missing interpreter costs is that the run cannot
-  # start, and the page says which pieces are absent.
+  # MuJoCo is the default because it is the world Monty's own configs are
+  # written for, and here it costs nothing: the interpreter that renders it
+  # travels with the application (`config/pythonx.exs`), so no operator installs
+  # anything and no download stands between a checkout and a run. The stand-in
+  # is the other choice — the selector, or `world_simulator: :synthetic` — and a
+  # test picks it because a sphere needs no interpreter at all.
   # `||`, not a default argument: a key that exists and is nil is "nothing
   # configured", and `Application.get_env/3` would hand that nil on as a world.
-  defp configured_world, do: Application.get_env(:ex_tbp_monty, :world_simulator) || :habitat
+  defp configured_world, do: Application.get_env(:ex_tbp_monty, :world_simulator) || :mujoco
 
   defp resolution_findings(false), do: []
 
@@ -509,59 +511,68 @@ defmodule Monty.Studio.Setup do
   @doc """
   Which world this experiment would step, in the words a page can show.
 
-  Neither is a second implementation of the experiment. One runs the *simulator*
-  in an external process — the connector this project ships
-  (`scripts/monty_simulator_peer.py`) drives upstream's `MuJoCoSimulator` or
-  `HabitatEnvironment` there, and no upstream Monty model runs beside it — and
-  the other is this port's stand-in. Which engine that is comes from the
-  experiment's own config, so the name says the engine rather than repeating
-  "python".
+  Neither is a second implementation of the experiment. `:mujoco` is the world
+  the experiment was written for — MuJoCo, with the object its config names —
+  rendered in the interpreter this application carries, so nothing has to be
+  installed for it. `:synthetic` is this port's stand-in: one sphere, stepped in
+  the BEAM, which exists so the runtime can be developed without a scene at all.
 
-  `:synthetic` is this port's scene: one sphere stepped in the BEAM, which exists
-  so a run works where Monty's environment is not installed. Nothing it produces
-  is a result of the experiment, and a page deciding whether to trust a run has to
-  be able to say so in the header rather than in a warning somewhere below.
-
-  (`:habitat` is the historical name for "the simulator in an external
-  process", from when Habitat-Sim was the only engine Monty had. It is still the
-  atom a run records, so old runs keep meaning what they meant.)
+  Nothing a stand-in produces is a result of the experiment, and a page deciding
+  whether to trust a run has to be able to say so in the header rather than in a
+  warning somewhere below.
   """
   @spec world_name(t()) :: String.t()
   def world_name(%__MODULE__{world: world} = setup), do: world_name(setup, world)
 
   @doc """
   One of the two worlds, named in the context of this setup — which is what the
-  selector offers, because the engine behind the external process is the
-  config's.
+  selector offers, because a config whose environment is not MuJoCo cannot be
+  given MuJoCo's scene and has to say so.
   """
-  @spec world_name(t(), :synthetic | :habitat) :: String.t()
+  @spec world_name(t(), atom()) :: String.t()
   def world_name(_setup, :synthetic), do: "stand-in scene (Elixir, one sphere)"
-  def world_name(setup, :habitat), do: monty_world_name(setup)
+  def world_name(setup, :mujoco), do: mujoco_world_name(setup)
+
+  # An operator can configure a world this build does not carry. Saying so is
+  # the whole answer; a page that crashed instead would blame itself.
+  def world_name(_setup, other), do: "#{inspect(other)} (not carried by this application)"
 
   # The class the experiment's `environment` block names, read out of the composed
   # tree rather than guessed from the experiment's name.
-  defp monty_world_name(%__MODULE__{environment: %{module: %{class: class}}}) do
+  defp mujoco_world_name(%__MODULE__{environment: %{module: %{class: class}}}) do
     case class do
-      "MuJoCoSimulator" -> "MuJoCo via Monty's Python"
-      "HabitatEnvironment" -> "Habitat-Sim via Monty's Python"
-      "HabitatSim" -> "Habitat-Sim via Monty's Python"
-      other -> "#{other} via Monty's Python"
+      "MuJoCoSimulator" -> "MuJoCo (in this application)"
+      other -> "#{other} (not carried by this application)"
     end
   end
 
-  defp monty_world_name(%__MODULE__{}), do: "simulator via Monty's Python"
+  defp mujoco_world_name(%__MODULE__{}), do: "MuJoCo (in this application)"
 
   @doc """
-  The world a run of this experiment steps: Monty's own, or the stand-in.
+  The world a run of this experiment steps: Monty's MuJoCo simulator, or the
+  stand-in.
 
-  `:habitat` is `Monty.Simulators.Habitat.Environment.HabitatEnvironment`, which
-  runs Monty's `HabitatEnvironment` in Monty's own Python environment — the
-  world the experiment was written for, one round trip per step. `:synthetic`
-  is this port's scene, which steps in the BEAM and steps nothing Monty posed.
+  `:mujoco` is the world the experiment was written for. `priv/monty_py` is
+  Monty's own MuJoCo connector — `MuJoCoSimulator`, `SurfaceAgent`/`DistantAgent`,
+  their cameras and their actuations — copied file for file and run in the
+  interpreter this application carries (`Monty.Simulators.Mujoco.Environment`).
+  So the scene, the agent body and the images are Monty's, and nothing of it is
+  installed or fetched: the code travels inside this release.
+
+  `:synthetic` is this port's sphere, which needs no scene description and no
+  interpreter, and whose numbers are nobody's but its own.
+
+  A config that names an engine this application does not carry — Habitat-Sim,
+  which exists only as a conda package for another Python and is on its way out
+  of Monty — is refused here rather than given MuJoCo's simulator and allowed to
+  look as if it ran.
   """
-  @spec world(t(), :synthetic | :habitat) :: Monty.Simulators.Environment.t()
-  def world(%__MODULE__{} = setup, :habitat) do
-    HabitatEnvironment.new(experiment: setup.name, sensors: sensor_ids(setup))
+  @spec world(t(), :synthetic | :mujoco) :: Monty.Simulators.Environment.t()
+  def world(%__MODULE__{} = setup, :mujoco) do
+    case engine(setup) do
+      :mujoco -> mujoco_world(setup)
+      engine -> raise ArgumentError, uncarried_engine(engine)
+    end
   end
 
   def world(%__MODULE__{} = setup, :synthetic) do
@@ -576,6 +587,118 @@ defmodule Monty.Studio.Setup do
       sensors: setup.scene.sensors
     )
   end
+
+  defp uncarried_engine(engine) do
+    "this experiment's world is #{engine_name(engine)}, which this application does not " <>
+      "carry: only MuJoCo and the stand-in scene can be stepped here."
+  end
+
+  # Monty's simulator, from the numbers the config states: the data path the
+  # meshes load from, the agent its `env_init_args` names (class, start pose and
+  # per-sensor camera), and the one object this scene holds.
+  defp mujoco_world(%__MODULE__{} = setup) do
+    Monty.Simulators.Mujoco.Environment.new(
+      data_path: data_path(setup),
+      agents: [agent_spec(setup)],
+      objects: object_specs(setup),
+      sensors: sensor_ids(setup)
+    )
+  end
+
+  defp agent_spec(%__MODULE__{} = setup) do
+    %{
+      "class" => agent_class(setup),
+      "agent_id" => Monty.Simulators.Synthetic.Environment.agent_id(),
+      "position" => setup.scene.agent && setup.scene.agent.position,
+      "rotation" => setup.scene.agent && quaternion(setup.scene.agent.rotation),
+      "sensor_configs" => sensor_specs(setup)
+    }
+  end
+
+  # A sensor's camera is the experiment's — resolution and zoom from its config —
+  # and its pose is the agent's own sensor pose. `semantic` is asked for unless
+  # the config says otherwise: the port's `DepthTo3DLocations` builds
+  # `semantic_3d` from that image, and `on_object` is read from it.
+  defp sensor_specs(%__MODULE__{} = setup) do
+    for {sensor_id, pose} <- setup.scene.sensors, into: %{} do
+      camera = Map.get(setup.cameras, sensor_id, [])
+      {height, width} = Keyword.get(camera, :resolution, {64, 64})
+
+      {to_string(sensor_id),
+       %{
+         "width" => width,
+         "height" => height,
+         "zoom" => Keyword.get(camera, :zoom, 1.0),
+         "position" => pose.position,
+         "rotation" => quaternion(pose.rotation),
+         "semantic" => true
+       }}
+    end
+  end
+
+  defp quaternion(%Rotation{} = rotation), do: rotation |> Rotation.to_quaternion() |> Tuple.to_list()
+
+  # The one object this scene holds: the first name the config lists that this
+  # machine has a mesh for, standing where the interface's own sampler puts it.
+  defp object_specs(%__MODULE__{} = setup) do
+    case object_label(setup) do
+      nil -> []
+      label -> [%{"name" => label, "position" => object_centre(setup), "semantic_id" => 1}]
+    end
+  end
+
+  defp engine(%__MODULE__{environment: %{module: %{class: "MuJoCoSimulator"}}}), do: :mujoco
+  defp engine(%__MODULE__{environment: %{module: %{class: "HabitatEnvironment"}}}), do: :habitat
+  defp engine(%__MODULE__{environment: %{module: %{class: "HabitatSim"}}}), do: :habitat
+  defp engine(%__MODULE__{}), do: nil
+
+  defp engine_name(:habitat), do: "Habitat-Sim"
+  defp engine_name(nil), do: "no simulator its config names"
+
+  # The class the experiment's agent is, from `env_init_args.agents` — which is
+  # how Monty's own MuJoCo configs name `SurfaceAgent` or `DistantAgent`.
+  defp agent_class_of(config) do
+    case get_in(config, ["environment", "env_init_args", "agents"]) do
+      [%{"_target_" => target} | _more] -> target |> String.split(".") |> List.last()
+      _not_named -> nil
+    end
+  end
+
+  # The class the experiment's agent is, from `env_init_args.agents` — which is
+  # how Monty's own MuJoCo configs name `SurfaceAgent` or `DistantAgent`.
+  defp agent_class(%__MODULE__{} = setup), do: setup.agent_class || "SurfaceAgent"
+
+  defp object_label(%__MODULE__{} = setup) do
+    directory = data_path(setup)
+
+    Enum.find(List.wrap(setup.object_names), &mesh?(directory, &1)) || first_mesh(directory)
+  end
+
+  defp mesh?(directory, name) when is_binary(directory) and is_binary(name) do
+    File.exists?(Path.join([directory, name, "textured.obj"]))
+  end
+
+  defp mesh?(_directory, _name), do: false
+
+  # A config that names no object still has a world: MuJoCo's configs list none
+  # and let the interface draw from the dataset, so the dataset is what a scene
+  # is built from. Sorted, so the same machine builds the same scene twice.
+  defp first_mesh(directory) when is_binary(directory) do
+    directory
+    |> Path.join("*")
+    |> Path.wildcard()
+    |> Enum.sort()
+    |> Enum.find(&File.exists?(Path.join(&1, "textured.obj")))
+    |> case do
+      nil -> nil
+      path -> Path.basename(path)
+    end
+  end
+
+  defp first_mesh(_no_data_path), do: nil
+
+  defp data_path(%__MODULE__{environment: %{data_path: path}}) when is_binary(path), do: path
+  defp data_path(%__MODULE__{}), do: nil
 
   # How big the stand-in's sphere is. Its *position* is the config's — where the
   # interface's sampler puts the object — so its size is what is left to choose,
@@ -1343,13 +1466,18 @@ defmodule Monty.Studio.Setup do
   the run cannot recognise anything however long it runs.
   """
   @spec memory_findings(t()) :: [Finding.t()]
-  def memory_findings(%__MODULE__{model_name_or_path: nil}), do: []
+  def memory_findings(%__MODULE__{model_name_or_path: path}) when path in [nil, ""], do: []
 
   def memory_findings(%__MODULE__{model_name_or_path: path}) do
     name = Memory.name_of(path)
     release = Memory.release_of(path)
 
     cond do
+      # A path this port cannot read as `<release>/<model>/pretrained/` names no
+      # memory to look for, so there is nothing to say about one.
+      name == nil or release == nil ->
+        []
+
       Memory.available?(name, release) ->
         []
 
@@ -1358,12 +1486,7 @@ defmodule Monty.Studio.Setup do
           Finding.new(
             :warning,
             :memory_from_another_release,
-            "#{name} is exported from " <>
-              Enum.join(Memory.releases_for(name), ", ") <>
-              ", but this config's pretrained_dir names #{inspect(release)}. The run " <>
-              "uses the graphs that are here, which are not the ones Monty would " <>
-              "load for this config. Export the release it names with " <>
-              "scripts/sync_monty_libraries.sh --only #{name} --release #{release}.",
+            another_release(name, release),
             "model_name_or_path"
           )
         ]
@@ -1373,14 +1496,36 @@ defmodule Monty.Studio.Setup do
           Finding.new(
             :warning,
             :no_pretrained_memory,
-            "No exported memory for #{name || path} from #{inspect(release)}: this run " <>
-              "starts with an empty memory and cannot recognise anything. Export one " <>
-              "with scripts/sync_monty_libraries.sh --only <model> --release <release>; " <>
-              "exported here: " <>
-              Enum.join(Memory.available_libraries(), ", ") <> ".",
+            "No memory this application can read for #{name}, so the run starts " <>
+              "empty and cannot recognise any object.",
             "model_name_or_path"
           )
         ]
+    end
+  end
+
+  # The other case, said in one sentence: which memory the run will use, and the
+  # release the config asked for that it is not. A page that told a reader to run
+  # `scripts/sync_monty_libraries.sh` would be asking them to check out this
+  # repository — the same page, in a container, has no `scripts/` to run.
+  defp another_release(name, release) do
+    exported = Enum.join(Memory.releases_for(name), " and ")
+
+    "The run uses #{name} from #{exported} — the export that is installed here. " <>
+      "This config names #{release}.#{unexported(name, release)}"
+  end
+
+  # The release this machine has but nobody exported to the format this
+  # application reads is a second fact, and only worth its clause when it is
+  # true: it is the difference between "the graphs are old" and "the graphs are
+  # missing".
+  defp unexported(name, release) do
+    if [Monty.Prerequisites.root_path("MONTY_MODELS"), release, name, "pretrained"]
+       |> Path.join()
+       |> File.dir?() do
+      " That one is on this machine, but not in the form this application reads."
+    else
+      ""
     end
   end
 
@@ -1403,6 +1548,14 @@ defmodule Monty.Studio.Setup do
     "MontyObjectRecognitionExperiment"
   ]
 
+  # Classes whose code this repository *carries and runs*: `priv/monty_py` is
+  # the MuJoCo connector, copied file for file from the pinned revision and
+  # executed in the interpreter this application carries. The module map calls
+  # them `planned` because no Elixir module of that name exists — the right
+  # answer to "is it ported" and the wrong one to "does it run". It runs; the
+  # code that runs is Monty's own.
+  @copied_marker ".simulators.mujoco."
+
   defp module_findings(setup) do
     modules = all_modules(setup)
     unknown = Enum.filter(modules, &(&1.status == :unknown))
@@ -1411,7 +1564,9 @@ defmodule Monty.Studio.Setup do
       for module <- modules,
           module.status == :planned,
           module.class not in @shell_classes,
-          do: module.class
+          do: module
+
+    {carried, stand_ins} = Enum.split_with(planned, &copied?/1)
 
     shell =
       for module <- modules,
@@ -1420,10 +1575,23 @@ defmodule Monty.Studio.Setup do
           do: module.class
 
     Enum.map(unknown, &unknown_module_finding/1) ++
-      not_ported_finding(planned, length(modules)) ++
+      not_ported_finding(Enum.map(stand_ins, & &1.class), length(modules)) ++
+      carried_finding(setup, Enum.map(carried, & &1.class)) ++
       shell_finding(shell, length(modules)) ++
       world_finding(setup)
   end
+
+  defp copied?(%{python: python}) when is_binary(python),
+    do: String.contains?(python, @copied_marker)
+
+  defp copied?(_module), do: false
+
+  # Said only where it is true of the run: a MuJoCo run executes those classes.
+  # A stand-in run does not execute them at all, so it has nothing to report.
+  # A class whose code runs here as copied Python is not a fact about the run:
+  # what a reader needs to know is which world stepped it, and `world` says that
+  # in one word. The note lived on every MuJoCo page and explained ourselves.
+  defp carried_finding(_setup, _classes), do: []
 
   defp unknown_module_finding(module) do
     Finding.new(
@@ -1441,8 +1609,8 @@ defmodule Monty.Studio.Setup do
       Finding.new(
         :info,
         :modules_not_ported,
-        "#{length(classes)} class(es) this experiment uses are still stand-ins at run time: " <>
-          Enum.join(Enum.sort(classes), ", ") <> ".",
+        "#{length(classes)} class(es) this experiment uses have no implementation here, so a " <>
+          "stand-in runs in their place: #{Enum.join(Enum.sort(classes), ", ")}.",
         "monty_config"
       )
     ]
@@ -1450,22 +1618,51 @@ defmodule Monty.Studio.Setup do
 
   # The world is the one stand-in whose absence changes what a run's numbers
   # mean, so it is the one finding that is a warning: every step of a synthetic
-  # scene is a step Monty did not take.
+  # scene is a step Monty did not take. A MuJoCo run has the geometry its config
+  # asks for, and what is left to say is which object the scene holds — a run
+  # with an empty scene would otherwise look like a camera fault.
   defp world_finding(%__MODULE__{world: :synthetic}) do
     [
       Finding.new(
         :warning,
         :world_is_a_stand_in,
-        "No interpreter is configured, so a run steps this port's synthetic scene and its " <>
-          "results are not Monty's. The simulator can run out of process instead: set " <>
-          "`MONTY_PYTHON` to an interpreter with `tbp.monty` in it and that becomes the " <>
-          "default here — or choose it for one run.",
+        "This run steps the stand-in scene — one sphere in the BEAM — so its results are not " <>
+          "the experiment's. Choose MuJoCo in the selector to run it against the object its " <>
+          "config names.",
         "monty_config"
       )
     ]
   end
 
-  defp world_finding(%__MODULE__{world: :habitat}), do: []
+  defp world_finding(%__MODULE__{world: :mujoco} = setup), do: mujoco_findings(setup)
+
+  defp mujoco_findings(%__MODULE__{} = setup) do
+    case object_label(setup) do
+      nil ->
+        [
+          Finding.new(
+            :warning,
+            :world_holds_no_object,
+            "This world has no object in it: none of the meshes this config names is under " <>
+              "#{data_path(setup)}. Download the objects on the Prerequisites page, or the " <>
+              "first sensor that looks for a surface will find nothing.",
+            "environment.env_init_args.data_path"
+          )
+        ]
+
+      label ->
+        [
+          Finding.new(
+            :info,
+            :world_holds_one_object,
+            "One object is in the world for this run — #{label}. Monty's run visits " <>
+              "every object this experiment names, one episode each; this build runs " <>
+              "one episode, so the others are not visited yet.",
+            "environment.env_init_args.data_path"
+          )
+        ]
+    end
+  end
 
   defp shell_finding([], _total), do: []
 
@@ -1474,9 +1671,10 @@ defmodule Monty.Studio.Setup do
       Finding.new(
         :info,
         :modules_not_ported_shell,
-        "Monty's model and experiment loop are this port's own runtime, not a port: " <>
+        "The class that owns Monty's episode loop — " <>
           Enum.join(Enum.sort(classes), ", ") <>
-          ". The topology they build is the config's; the classes that do the stepping are ours.",
+          " — is replaced here, not missing: this application steps the same modules " <>
+          "with `Monty.Runtime.Step` and runs the episode with `Monty.Studio.Run`.",
         "monty_config"
       )
     ]
@@ -1593,26 +1791,12 @@ defmodule Monty.Studio.Setup do
 
   defp range_findings(_matrix, _count, _name), do: []
 
+  # A sensor that feeds no learning module is not a finding: `view_finder` is
+  # how every MuJoCo config keeps a wide shot and Monty never matches on it, so
+  # saying it on every page passed a note about Monty's design off as a caveat
+  # about the run.
   defp wiring_findings(setup) do
-    unconnected_sensors(setup) ++ unconnected_learning_modules(setup) ++ feature_findings(setup)
-  end
-
-  defp unconnected_sensors(setup) do
-    connected =
-      for %{kind: :sensor_input, from: {:sensor, id}} <- setup.connections,
-          into: MapSet.new(),
-          do: id
-
-    for sensor <- setup.sensors, not MapSet.member?(connected, sensor.id) do
-      Finding.new(
-        :info,
-        :sensor_not_matched,
-        "#{sensor.id} feeds no learning module, so nothing matches on its percepts. " <>
-          "Monty still steps it and can record its observations — a view finder is how an " <>
-          "experiment keeps a wide shot — and `sm_to_lm_matrix` is where it would be matched.",
-        sensor.id
-      )
-    end
+    unconnected_learning_modules(setup) ++ feature_findings(setup)
   end
 
   defp unconnected_learning_modules(setup) do

@@ -42,34 +42,13 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
   # "What is available here?" is the question the page is open for, so the
   # answer comes before the list of what has to be downloaded — and it names the
   # engine each world would step, not just "Python is installed".
-  # The world card names the interpreter a run would use and nothing else: two
-  # answers to "is MuJoCo here" is how a machine with MuJoCo came to read
-  # "not available" first.
+  # One interpreter, and it is this application's own: a page that printed a
+  # PATH `python3` read as "here is what your runs use", which was never true.
   test "the page names the interpreter the world runs in", %{conn: conn} do
-    Tmp.system_env("MONTY_PYTHON", "/usr/bin/false")
-
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 
-    assert view |> element("#world-python") |> render() =~ "/usr/bin/false"
-    refute has_element?(view, "#world-engines")
-  end
-
-  test "says a run cannot step its own world when no interpreter is configured", %{conn: conn} do
-    Tmp.without_env("MONTY_PYTHON")
-
-    {:ok, view, _html} = live(conn, ~p"/prerequisites")
-
-    assert view |> element("#world-python-warning") |> render() =~ "MONTY_PYTHON"
-  end
-
-  test "the page says which Python it carries, and where a run would report", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/prerequisites")
-
-    # Not a download: part of the build, and the page says so rather than
-    # leaving a run's loggers to fail quietly.
-    assert has_element?(view, "#embedded-python")
-    assert view |> element("#embedded-python-version") |> render() =~ "Python"
-    assert view |> element("#embedded-python-wandb") |> render() =~ "wandb"
+    assert view |> element("#world-python") |> render() =~ "own interpreter"
+    refute has_element?(view, "#world-python-warning")
   end
 
   # The interpreter this build carries is where MuJoCo is installed

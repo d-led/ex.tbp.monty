@@ -25,7 +25,8 @@ defmodule Monty.Prerequisites do
           required(:root) => String.t(),
           required(:target) => String.t(),
           optional(:sha256) => String.t() | nil,
-          optional(:extract) => boolean()
+          optional(:extract) => boolean(),
+          optional(:unpacks_to) => String.t() | nil
         }
 
   @doc "Every configured prerequisite."
@@ -76,9 +77,33 @@ defmodule Monty.Prerequisites do
           "unknown prerequisite root #{inspect(root)}; expected MONTY_DATA, MONTY_MODELS or MONTY_LOGS"
   end
 
-  @doc "Whether a prerequisite is already in place."
+  @doc """
+  Whether a prerequisite is already in place.
+
+  For an archive that is unpacked, "in place" is the *directory it fills*, not
+  the archive: an archive sitting on disk with nothing unpacked beside it is a
+  download that was interrupted, and a page that called it present would be
+  telling a reader their data is there when no run can read it.
+  """
   @spec present?(prerequisite()) :: boolean()
+  def present?(%{extract: true} = prerequisite), do: File.dir?(where_it_lands(prerequisite))
   def present?(prerequisite), do: File.exists?(target_path(prerequisite))
+
+  @doc "Whether the file itself is on disk, unpacked or not."
+  @spec downloaded?(prerequisite()) :: boolean()
+  def downloaded?(prerequisite), do: File.exists?(target_path(prerequisite))
+
+  # Where an archive unpacks to. An entry says so when the archive's name is not
+  # the directory it fills (`ycb_objects_1.0.tgz` fills `ycb/`); otherwise the
+  # archive's name without its suffix is the directory, which is what `tar xf`
+  # does with it.
+  @spec where_it_lands(prerequisite()) :: Path.t()
+  def where_it_lands(%{unpacks_to: to} = prerequisite) when is_binary(to),
+    do: Path.join(root_path(prerequisite.root), to)
+
+  def where_it_lands(%{root: root, target: target}) do
+    Path.join(root_path(root), Path.rootname(target))
+  end
 
   @typedoc """
   One file a run reads before it steps, and whether it is there.
@@ -115,7 +140,7 @@ defmodule Monty.Prerequisites do
   def for_setup(%{world: :synthetic}), do: []
 
   def for_setup(%{world: :habitat} = setup) do
-    [interpreter() | engine_need(setup)] ++ data_need(setup) ++ models_need(setup)
+    engine_need(setup) ++ data_need(setup) ++ models_need(setup)
   end
 
   def for_setup(_setup), do: []
@@ -290,18 +315,14 @@ defmodule Monty.Prerequisites do
       # to answer for: "MuJoCo is missing" about a `python3` nobody chose is how a
       # machine with MuJoCo installed came to be told it had none.
       engine when not is_nil(engine) ->
-        if python_configured?() do
-          [
-            %{
-              kind: :engine,
-              what: "#{engine_name(engine)} in the interpreter the world runs in",
-              path: python(),
-              present?: engine_installed?(engine)
-            }
-          ]
-        else
-          []
-        end
+        [
+          %{
+            kind: :engine,
+            what: "#{engine_name(engine)}, which the world steps",
+            path: nil,
+            present?: engine_installed?(engine)
+          }
+        ]
 
       nil ->
         []
@@ -310,32 +331,6 @@ defmodule Monty.Prerequisites do
 
   defp engine_name(:mujoco), do: "MuJoCo"
   defp engine_name(:habitat), do: "Habitat-Sim"
-
-  # The peer imports `tbp.monty` from `MONTY_PYTHON`; without it, `python3` is
-  # almost never an interpreter that has Monty and MuJoCo installed, so the
-  # variable is the honest check. The message says which one is being looked for
-  # rather than a bare "missing".
-  defp interpreter do
-    case System.get_env("MONTY_PYTHON") do
-      nil ->
-        %{
-          kind: :interpreter,
-          what: "an interpreter with tbp.monty installed (MONTY_PYTHON is not set)",
-          # No path: `python3` on the PATH is not the interpreter a run uses, and
-          # naming it reads as "here is the one it uses, and it is wrong".
-          path: nil,
-          present?: false
-        }
-
-      path ->
-        %{
-          kind: :interpreter,
-          what: "the interpreter Monty runs in",
-          path: path,
-          present?: executable?(path)
-        }
-    end
-  end
 
   defp data_need(%{environment: %{data_path: path}}) when is_binary(path) and path != "" do
     [
@@ -413,7 +408,8 @@ defmodule Monty.Prerequisites do
       sha256: Map.get(entry, "sha256"),
       # An archive is unpacked where it lands: a prerequisite Monty's docs say
       # to unpack is not in place until it is unpacked.
-      extract: Map.get(entry, "extract", false)
+      extract: Map.get(entry, "extract", false),
+      unpacks_to: Map.get(entry, "unpacks_to")
     }
   end
 end

@@ -30,8 +30,6 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
        present: Map.new(prerequisites, &{&1.id, Prerequisites.present?(&1)}),
        python: EmbeddedPython.version(),
        wandb: EmbeddedPython.wandb_mode(),
-       world_python: Prerequisites.python(),
-       python_configured: Prerequisites.python_configured?(),
        engines: Prerequisites.engines(),
        storage: Storage.usage(Prerequisites.root_path("MONTY_DATA"))
      )}
@@ -53,48 +51,6 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
             {free_space(@storage)}
           </p>
         </header>
-
-        <%!--
-          What a run can step here, before the list of what has to be
-          downloaded: the interpreter is the operator's (`MONTY_PYTHON`), so the
-          answer is about that interpreter — and says which one it asked.
-        --%>
-        <article
-          id="world"
-          class="rounded-box border border-base-300 bg-base-100 p-4"
-        >
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div class="space-y-1">
-              <h2 class="font-semibold">The world</h2>
-              <p class="text-sm text-base-content/70">
-                A run steps one of two worlds. The <strong>built-in scene</strong>
-                needs nothing installed — it is part of this application.
-                <strong>Monty's simulator</strong>
-                runs in Python, in the interpreter named below.
-              </p>
-              <p id="world-python" class="font-mono text-xs break-all text-base-content/60">
-                {@world_python || "no interpreter: set MONTY_PYTHON"}
-              </p>
-            </div>
-          </div>
-
-          <%!--
-            Which engines this deployment has is answered once, below, by the
-            interpreter the build installs them into. Asking the world's
-            interpreter as well meant two answers to one question, and the one a
-            person read first said "not available" on a machine that had it.
-          --%>
-          <p
-            :if={not @python_configured}
-            id="world-python-warning"
-            class="mt-2 text-xs text-base-content/60"
-          >
-            Nothing is broken: with no interpreter set, runs use the built-in scene. Set
-            <code>MONTY_PYTHON</code>
-            to a Python with <code>tbp.monty</code>
-            in it to step Monty's simulator instead.
-          </p>
-        </article>
 
         <div class="space-y-3">
           <article
@@ -171,9 +127,10 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
             <div class="space-y-1">
               <h2 class="font-semibold">Embedded Python</h2>
               <p class="text-sm text-base-content/70">
-                Part of this build, not a download: Monty's loggers call <code>wandb</code>
-                through a CPython that travels in the release
-                and starts with the application.
+                Installed at build time by uv and started with the application. It carries
+                <code>wandb</code>
+                (Monty's loggers) and <code>mujoco</code>
+                (the physics engine a MuJoCo experiment's world steps).
               </p>
               <p id="embedded-python-version" class="font-mono text-xs text-base-content/60">
                 {version_label(@python)}
@@ -193,6 +150,23 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
             <span id="embedded-python-wandb" class={["badge", wandb_badge(@wandb)]}>
               {wandb_label(@wandb)}
             </span>
+          </div>
+        </article>
+        <%!--
+          Last, because it depends on the card above: a run's world steps in the
+          interpreter this application carries.
+        --%>
+        <article id="world" class="rounded-box border border-base-300 bg-base-100 p-4">
+          <div class="space-y-1">
+            <h2 class="font-semibold">The world</h2>
+            <p class="text-sm text-base-content/70">
+              A run steps one of two worlds: the <strong>built-in scene</strong>, part of
+              this application, or <strong>Monty's simulator</strong>, which steps in the
+              interpreter above.
+            </p>
+            <p id="world-python" class="font-mono text-xs break-all text-base-content/60">
+              {version_label(@python)} — this application's own interpreter
+            </p>
           </div>
         </article>
       </section>

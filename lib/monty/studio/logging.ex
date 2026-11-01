@@ -160,7 +160,9 @@ defmodule Monty.Studio.Logging do
   defp worth_saying(notes),
     do: if(wandb_off?(), do: Enum.reject(notes, &wandb_note?/1), else: notes)
 
-  defp wandb_off?, do: System.get_env("WANDB_MODE") == "disabled"
+  # The same answer the page shows (`config :ex_tbp_monty, wandb_mode`): disabled
+  # unless an operator asked otherwise.
+  defp wandb_off?, do: Application.get_env(:ex_tbp_monty, :wandb_mode, "disabled") == "disabled"
 
   defp wandb_note?(note), do: note |> String.downcase() |> String.contains?("wandb")
 

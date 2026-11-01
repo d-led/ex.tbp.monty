@@ -184,6 +184,28 @@ defmodule Monty.Prerequisites.Download do
 
   @impl true
   def handle_continue(:download, state) do
+    continue(state)
+  end
+
+  # An archive already on disk is not fetched a second time. A download
+  # interrupted after the file moved into place left the unpacking undone, and
+  # the only work left is to finish it — unpacking writes the same bytes over
+  # the same names, so asking twice is harmless, and asking again is exactly
+  # what a reader does when nothing seemed to happen.
+  defp continue(state) do
+    cond do
+      Monty.Prerequisites.present?(state.prerequisite) ->
+        {:noreply, done(state)}
+
+      state.prerequisite.extract and File.exists?(state.path) ->
+        {:noreply, start_extracting(%{state | status: :extracting})}
+
+      true ->
+        download(state)
+    end
+  end
+
+  defp download(state) do
     %{prerequisite: prerequisite, fetcher: fetcher, part: part} = state
 
     parent = self()

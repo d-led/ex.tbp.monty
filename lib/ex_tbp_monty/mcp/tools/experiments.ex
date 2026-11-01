@@ -179,12 +179,12 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
     case Args.optional(args, "world") do
       {:ok, nil} -> {:ok, nil}
       {:ok, "synthetic"} -> {:ok, :synthetic}
-      {:ok, world} when world in ["monty", "habitat"] -> {:ok, :habitat}
-      {:ok, other} -> {:error, "`world` must be `synthetic` or `monty`, not `#{other}`."}
+      {:ok, world} when world in ["monty", "mujoco", "habitat"] -> {:ok, :mujoco}
+      {:ok, other} -> {:error, "`world` must be `synthetic` or `mujoco`, not `#{other}`."}
     end
   end
 
-  defp world_name("habitat"), do: "Monty's simulator, out of process"
+  defp world_name("mujoco"), do: "Monty's MuJoCo simulator, in this application"
   defp world_name(_synthetic), do: "this port's synthetic scene"
 
   @doc "`monty_run_report`: what a run did, and what it is doing."

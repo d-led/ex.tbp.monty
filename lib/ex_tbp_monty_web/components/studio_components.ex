@@ -168,6 +168,27 @@ defmodule ExTbpMontyWeb.StudioComponents do
   def status_class(:excluded), do: "badge-warning"
   def status_class(_unknown), do: "badge-error"
 
+  @doc """
+  The world a run stepped, in the words the selector used to offer it.
+
+  A record keeps the atom a run was started with, which is the right kind of
+  thing to keep and the wrong kind to read: `synthetic` says nothing to somebody
+  choosing between "the stand-in sphere" and "the simulator the experiment's
+  config names". A run that recorded no world says so rather than being labelled
+  with whatever this build happens to default to now.
+  """
+  @spec world_label(map()) :: String.t()
+  def world_label(%{inputs: %{} = inputs}) do
+    case Map.get(inputs, "world") do
+      nil -> "—"
+      "synthetic" -> "stand-in"
+      "habitat" -> "Monty's Python"
+      other -> to_string(other)
+    end
+  end
+
+  def world_label(_run), do: "—"
+
   @doc "The counts a run leaves behind, as the database stores them."
   attr :summary, :map, required: true
 

@@ -24,7 +24,7 @@ defmodule Monty.Simulators.Synthetic.Environment do
   @behaviour Monty.Simulators.Environment
 
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
-  alias Monty.Simulators.Synthetic.{Kinematics, Scene}
+  alias Monty.Simulators.Synthetic.Kinematics
 
   @agent_id "agent_id_0"
   @default_sensor "patch"
@@ -43,7 +43,7 @@ defmodule Monty.Simulators.Synthetic.Environment do
   @type t :: %__MODULE__{
           sensor_ids: [Monty.Simulators.Environment.sensor_id()],
           world: Kinematics.t(),
-          scene: Scene.t() | nil,
+          scene: Monty.Simulators.Synthetic.Scene.t() | nil,
           views: %{optional(Monty.Simulators.Environment.sensor_id()) => keyword()},
           agent: Kinematics.pose() | nil,
           sensors: %{optional(Monty.Simulators.Environment.sensor_id()) => Kinematics.pose()},
@@ -158,7 +158,9 @@ defmodule Monty.Simulators.Synthetic.Environment do
   # A world with no scene can say nothing about a surface, so it says nothing.
   defp features(nil, _pose, _view), do: %{}
 
-  defp features(scene, pose, view), do: features(Scene.render(scene, pose, view))
+  # A scene is whatever answers a camera's question, so which one this is, the
+  # scene's own module says.
+  defp features(scene, pose, view), do: features(scene.__struct__.render(scene, pose, view))
 
   # What a sensor sees, in the shape Monty's worlds answer in: images of depth,
   # colour and semantic id, and nothing else. Monty's own code indexes these

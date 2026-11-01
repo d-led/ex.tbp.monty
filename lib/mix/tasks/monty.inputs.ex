@@ -100,7 +100,7 @@ defmodule Mix.Tasks.Monty.Inputs do
       {:ok, summary} ->
         Mix.shell().info(
           "monty inputs: copied monty@#{summary.monty} — #{summary.conf_files} configs, " <>
-            "#{summary.snapshot_files} snapshots " <>
+            "#{summary.snapshot_files} snapshots, #{summary.python_files} python modules " <>
             "(+#{summary.added} new, #{summary.updated} changed, #{summary.removed} removed)"
         )
 

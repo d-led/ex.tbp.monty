@@ -14,7 +14,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   use ExTbpMontyWeb, :live_view
 
   alias ExTbpMontyWeb.RunHistoryLive.Selection
-  alias Monty.Studio.{Artifacts, Duration, Failure, Jobs, Json, Replay, RunHistory}
+  alias Monty.Studio.{Artifacts, Duration, Failure, Jobs, Json, Replay, RunHistory, RunLog}
   alias Monty.Studio.Jobs.Reaper
   alias Monty.Studio.Replay.Chart
 
@@ -32,6 +32,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    # The list is a stream fed by the record's topic, not by re-reading: a run
+    # appears the moment it is written — queued, before a worker picks it up —
+    # and the row it settles into is the row the database wrote.
+    if connected?(socket), do: RunHistory.subscribe()
+
     {:ok,
      socket
      |> assign(confirming: nil, confirming_bulk: nil, selected: MapSet.new())
@@ -275,7 +280,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
             inputs, and how it ended. A run that is waiting or going can be stopped here.
           </p>
         </div>
-        <.link navigate={~p"/"} class="btn btn-ghost btn-sm">Experiments</.link>
+        <.link navigate={~p"/experiments"} class="btn btn-ghost btn-sm">Experiments</.link>
       </header>
 
       <div class="flex flex-wrap items-center gap-2">
@@ -380,6 +385,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               </th>
               <th class="w-full">experiment</th>
               <th>state</th>
+              <th>world</th>
               <th class="text-right">steps</th>
               <th class="text-right">duration</th>
               <th>started</th>
@@ -388,7 +394,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           </thead>
           <tbody id="runs" phx-update="stream">
             <tr id="runs-empty" class="hidden only:table-row">
-              <td colspan="7" class="text-sm text-base-content/60">
+              <td colspan="8" class="text-sm text-base-content/60">
                 No run matches.
                 <.link patch={filter_href(@state, "")} class="link link-primary">Clear the filter</.link>
               </td>
@@ -429,6 +435,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                 <span class={["badge badge-sm", status_class(run_state(run, @queue[run.id]))]}>
                   {run_state(run, @queue[run.id])}
                 </span>
+              </td>
+              <%!-- Which world it stepped: two runs of one experiment are not
+              comparable otherwise, and the default is not the only choice. --%>
+              <td class="text-[11px] whitespace-nowrap">
+                {ExTbpMontyWeb.StudioComponents.world_label(run)}
               </td>
               <td class="text-right font-mono text-xs">{run.steps}</td>
               <td class="text-right font-mono text-xs">{duration(run.duration_us)}</td>
@@ -518,17 +529,16 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           </span>
           <span class="badge badge-ghost badge-sm">{@run.source}</span>
 
-          <%!-- The experiment page is where a run can be watched while it
-          steps: sensor views, progress, the log. This page is the record. A
-          reader who lands here from a link should not have to know that. --%>
+          <%!-- Watching happens here: this page follows the run it shows. The
+          experiment page is where a run is started, so that is all this link
+          claims to do. --%>
           <div class="ms-auto flex items-center gap-1">
             <.link
               id="open-experiment"
               navigate={~p"/experiments/#{@run.experiment}"}
-              class="btn btn-primary btn-xs"
+              class="btn btn-ghost btn-xs"
             >
-              <span :if={in_flight?(@run, @queue)}>Watch it run</span>
-              <span :if={not in_flight?(@run, @queue)}>Open the experiment</span>
+              Open the experiment
             </.link>
 
             <%!-- Three different things, three different words: a run that is
@@ -656,7 +666,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               no steps recorded
             <% end %>
           </li>
-          <li :for={{dom_id, entry} <- @streams.log} id={dom_id}>{log_line(entry)}</li>
+          <li :for={{dom_id, entry} <- @streams.log} id={dom_id}>{RunLog.line(entry)}</li>
         </ul>
       </section>
 
@@ -827,6 +837,19 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     {:noreply, refresh_run(socket, run.id)}
   end
 
+  # A run was written down, or settled. The index draws the record it was told
+  # about; the detail page keeps its own place and only asks for its own run.
+  def handle_info({:recorded, run}, %{assigns: %{live_action: :index}} = socket) do
+    {:noreply, stream_insert(socket, :runs, run, at: 0)}
+  end
+
+  def handle_info({:settled, run}, %{assigns: %{live_action: :index}} = socket) do
+    {:noreply, stream_insert(socket, :runs, run)}
+  end
+
+  def handle_info({:recorded, _run}, socket), do: {:noreply, socket}
+  def handle_info({:settled, _run}, socket), do: {:noreply, socket}
+
   def handle_info(_late_message, socket), do: {:noreply, socket}
 
   defp replay_to(socket, run, step) do
@@ -979,18 +1002,6 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   defp format(value) when is_list(value), do: Enum.join(value, ", ")
   defp format(value), do: to_string(value)
-
-  defp log_line(entry) do
-    inputs =
-      entry
-      |> Map.get("inputs", %{})
-      |> Enum.map_join(" ", fn {module, count} -> "#{module}=#{count}" end)
-
-    votes = Map.get(entry, "votes", %{})
-
-    "step #{entry["step"]} · percepts #{Enum.join(Map.get(entry, "percepts", []), ",")} · " <>
-      "inputs #{inputs} · votes #{votes["used"]}/#{votes["sent"]} · goals #{entry["goals"]}"
-  end
 
   defp status_class("running"), do: "badge-info"
   defp status_class("queued"), do: "badge-info"

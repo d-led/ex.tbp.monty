@@ -15,6 +15,11 @@ defmodule Monty.Studio.RunHistory do
   alias ExTbpMonty.Repo
   alias Monty.Studio.RunHistory.Run
 
+  # One topic for every run of the application: a page that lists runs
+  # subscribes once and gets the record itself, so it never has to guess
+  # from a query what changed.
+  @topic "studio_runs"
+
   @doc """
   Records a run that is starting.
 
@@ -33,6 +38,10 @@ defmodule Monty.Studio.RunHistory do
     %Run{}
     |> Run.changeset(attributes)
     |> Repo.insert()
+    |> tap(fn
+      {:ok, run} -> broadcast({:recorded, run})
+      _refused -> :ok
+    end)
   end
 
   @doc """
@@ -67,6 +76,28 @@ defmodule Monty.Studio.RunHistory do
       duration_us: duration(run.started_at, finished_at)
     })
     |> Repo.update()
+    |> tap(fn
+      {:ok, settled} -> broadcast({:settled, settled})
+      _refused -> :ok
+    end)
+  end
+
+  @doc """
+  The topic a page listens to for runs it is showing.
+
+  One topic for every run of the application, and the message carries the run
+  itself: a page filters by experiment, and the row it draws is the row the
+  database wrote — no second read, no page that shows a run it invented. The
+  reference for the shape is `ConfluencePhxMirror`'s log and reconcile topics.
+  """
+  @spec topic() :: String.t()
+  def topic, do: @topic
+
+  @spec subscribe() :: :ok | {:error, term()}
+  def subscribe, do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, @topic)
+
+  defp broadcast(message) do
+    Phoenix.PubSub.broadcast(ExTbpMonty.PubSub, @topic, message)
   end
 
   @doc "Runs, newest first."

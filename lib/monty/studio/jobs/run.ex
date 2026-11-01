@@ -343,8 +343,13 @@ defmodule Monty.Studio.Jobs.Run do
     Studio.open(name, world_simulator: world_of(inputs))
   end
 
-  defp world_of(%{"world" => "habitat"}), do: :habitat
-  defp world_of(_inputs), do: :synthetic
+  # The record keeps the world a run was started with; the job turns that back
+  # into the world to step. A value this build does not carry is `nil`, which
+  # `Monty.Studio.Setup` reads as "nothing chosen" — never a silent stand-in: a
+  # run recorded as MuJoCo must not step a sphere.
+  defp world_of(%{"world" => "mujoco"}), do: :mujoco
+  defp world_of(%{"world" => "synthetic"}), do: :synthetic
+  defp world_of(_inputs), do: nil
 
   defp attach_log(record, run_id, :ok) do
     path = Artifacts.log_path(run_id)

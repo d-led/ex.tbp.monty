@@ -98,18 +98,36 @@ defmodule Monty.Studio.RunLogTest do
     test "the line starts with the time the step happened" do
       line = info() |> RunLog.entry() |> RunLog.line()
 
-      assert line =~ ~r/^\d\d:\d\d:\d\d step 3 /
+      # To the millisecond: a step is a handful of them, and seconds alone would
+      # round every step of a run to the same instant.
+      assert line =~ ~r/^\d\d:\d\d:\d\d\.\d{3} step 3 /
+    end
+
+    test "the clock is kept apart from the words, so a page can show the reader's own hour" do
+      entry = RunLog.entry(info())
+
+      # The instant and the words, separately: a page writes the first into a
+      # `<time>` and the browser says it in the zone the reader is in, which is
+      # the only one they compare it to.
+      assert %{instant: instant, clock: clock} = RunLog.at(entry)
+      assert {:ok, _at, _offset} = DateTime.from_iso8601(instant)
+      assert RunLog.line(entry) == clock <> " " <> RunLog.text(entry)
+      refute RunLog.text(entry) =~ clock
+    end
+
+    test "and a line recorded before times were kept has no instant to show" do
+      assert RunLog.at(%{"step" => 0}) == nil
     end
 
     test "and says how long the step took in words" do
-      # 1.4 s is a line a person can read; 1400000 µs is a number to divide.
+      # "1.4s" is a line a person can read; 1400000 µs is a number to divide.
       line =
         info()
         |> Map.put(:duration_us, 1_400_000)
         |> RunLog.entry()
         |> RunLog.line()
 
-      assert line =~ "1.4 s"
+      assert line =~ "1.4s"
     end
 
     test "a line recorded before times were kept still prints" do

@@ -39,19 +39,14 @@ defmodule ExTbpMonty.EmbeddedPython do
   end
 
   @doc """
-  What wandb will do with a run, from the environment the interpreter inherits.
+  What wandb will do with a run.
 
-  `online` is wandb's own default when nothing is set: a run then tries to sync,
-  and says so if it cannot.
+  `disabled` unless an operator asked otherwise (`config :ex_tbp_monty,
+  wandb_mode`): wandb's own default is `online`, which would try to sync the
+  first run whose config names a wandb logger.
   """
   @spec wandb_mode() :: String.t()
-  def wandb_mode do
-    case System.get_env("WANDB_MODE") do
-      nil -> "online"
-      "" -> "online"
-      mode -> mode
-    end
-  end
+  def wandb_mode, do: Application.get_env(:ex_tbp_monty, :wandb_mode, "disabled")
 
   @doc """
   Whether the interpreter this application carries can import a module.

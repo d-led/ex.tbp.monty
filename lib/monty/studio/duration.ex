@@ -15,21 +15,24 @@ defmodule Monty.Studio.Duration do
   the row exists either way.
   """
   @spec humanize(non_neg_integer() | nil) :: String.t()
-  def humanize(nil), do: "0 µs"
-  def humanize(us) when us < 1_000, do: "#{us} µs"
-  def humanize(us) when us < 1_000_000, do: "#{decimal(us / 1_000)} ms"
-  def humanize(us) when us < 60_000_000, do: "#{decimal(us / 1_000_000)} s"
+  def humanize(nil), do: "0µs"
+  def humanize(us) when us < 1_000, do: "#{us}µs"
+  def humanize(us) when us < 1_000_000, do: "#{decimal(us / 1_000)}ms"
+  def humanize(us) when us < 60_000_000, do: "#{decimal(us / 1_000_000)}s"
 
   def humanize(us) when us < 3_600_000_000,
     do: minutes(div(us, 60_000_000), div(rem(us, 60_000_000), 1_000_000))
 
   def humanize(us), do: hours(div(us, 3_600_000_000), div(rem(us, 3_600_000_000), 60_000_000))
 
-  defp minutes(minutes, 0), do: "#{minutes} min"
-  defp minutes(minutes, seconds), do: "#{minutes} min #{seconds} s"
+  # A number and its unit are one token ("38.3s", not "38.3 s"): a column of
+  # durations then reads as a column of numbers. Two units keep a space, because
+  # "1min 18s" is two measures and "1min18s" is a puzzle.
+  defp minutes(minutes, 0), do: "#{minutes}min"
+  defp minutes(minutes, seconds), do: "#{minutes}min #{seconds}s"
 
-  defp hours(hours, 0), do: "#{hours} h"
-  defp hours(hours, minutes), do: "#{hours} h #{minutes} min"
+  defp hours(hours, 0), do: "#{hours}h"
+  defp hours(hours, minutes), do: "#{hours}h #{minutes}min"
 
   # One decimal, and none when the decimal is zero: "2.4 s" and "38 s", never
   # "38.0 s".

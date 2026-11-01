@@ -24,7 +24,7 @@ defmodule Monty.Studio.RunLog do
   def entry(info, beliefs \\ %{}) do
     %{
       "step" => info.step,
-      "at" => now(),
+      "at" => now().instant,
       "percepts" => Enum.map(info.percept_ids, &to_string/1),
       "inputs" => Map.new(info.inputs, fn {module, count} -> {to_string(module), count} end),
       "votes" => %{"sent" => info.votes.sent, "used" => info.votes.used},
@@ -116,7 +116,17 @@ defmodule Monty.Studio.RunLog do
   question anyone asks a log.
   """
   @spec line(map()) :: String.t()
-  def line(entry) do
+  def line(entry), do: clock(entry) <> text(entry)
+
+  @doc """
+  The line without its clock.
+
+  A page shows the time in the reader's own zone, which a string cannot: it needs
+  the instant, next to the words. The file on disk keeps `line/1`, which is the
+  same words with the clock in front.
+  """
+  @spec text(map()) :: String.t()
+  def text(entry) do
     inputs =
       entry
       |> Map.get("inputs", %{})
@@ -124,24 +134,40 @@ defmodule Monty.Studio.RunLog do
 
     votes = Map.get(entry, "votes", %{})
 
-    "#{at(entry)}step #{entry["step"]} · percepts #{Enum.join(Map.get(entry, "percepts", []), ",")} · " <>
+    "step #{entry["step"]} · percepts #{Enum.join(Map.get(entry, "percepts", []), ",")} · " <>
       "inputs #{inputs} · votes #{votes["used"]}/#{votes["sent"]} · " <>
       "goals #{entry["goals"]} · #{Duration.humanize(Map.get(entry, "duration_us", 0))}" <>
       believed(entry)
   end
 
-  # When the step happened, to the second. A line recorded before runs kept the
-  # time is history, not an error: it prints without the prefix.
-  defp at(entry) do
+  alias Monty.Studio.LocalClock
+
+  @doc """
+  When the step happened: the instant it belongs to, and that instant as UTC.
+
+  A line recorded before runs kept the time is history, not an error, so it
+  answers `nil` and the page shows no clock rather than a wrong one.
+  """
+  @spec at(map()) :: %{instant: String.t(), clock: String.t()} | nil
+  def at(entry) do
     with iso when is_binary(iso) <- Map.get(entry, "at"),
          {:ok, at, _offset} <- DateTime.from_iso8601(iso) do
-      Calendar.strftime(at, "%H:%M:%S ")
+      %{LocalClock.stamp(at) | instant: iso}
     else
-      _missing -> ""
+      _missing -> nil
     end
   end
 
-  defp now, do: DateTime.utc_now() |> DateTime.to_iso8601()
+  @doc "Now, in the shape `at/1` answers, for a line this side of the log writes."
+  @spec now() :: %{instant: String.t(), clock: String.t()}
+  def now, do: LocalClock.now()
+
+  defp clock(entry) do
+    case at(entry) do
+      nil -> ""
+      %{clock: clock} -> clock <> " "
+    end
+  end
 
   # What each module believes, on the same line: a run that is watched through a
   # log is watched for this, and a line that only counts percepts says a run is
