@@ -33,6 +33,13 @@
   --border: 1px;
   --depth: 0;
   --noise: 0;
+
+  /* The pastel theme's primary is a 90 %-lightness tint: fine as a wash, but as
+     a button it reads as disabled and as text it cannot be seen. So the accent
+     is the theme's own deep violet, and what goes on top of it is near-white —
+     the two values swapped, not invented. */
+  --color-primary: oklch(49% 0.265 301.924);
+  --color-primary-content: oklch(98% 0.01 306.703);
 }
 
 /* Add variants based on LiveView classes */
@@ -46,18 +53,16 @@
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
-/* A link is body text with an accent line under it.
-   daisyUI's `link-primary` colours a link with the theme's primary, and this
-   theme's primary is a 90%-lightness tint: meant to fill a button, unreadable
-   as text on a white surface. The paired ink, `--color-primary-content`, is the
-   same hue at 49% and can be read; it is what the accent uses everywhere. */
+/* A link is body text with an accent line under it. daisyUI's `link-primary`
+   colours a link with the theme's primary, which is the accent ink; a plain
+   `.link` stays body-coloured so a list of names reads as words. */
 .link {
   color: var(--color-base-content);
-  text-decoration-color: var(--color-primary-content);
+  text-decoration-color: var(--color-primary);
 }
 
 .link-primary {
-  color: var(--color-primary-content);
+  color: var(--color-primary);
 }
 
 /* This file is for your main application CSS */

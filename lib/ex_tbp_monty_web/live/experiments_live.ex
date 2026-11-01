@@ -138,7 +138,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
               {template}
               <.icon
                 name="hero-arrow-right-mini"
-                class="size-3 shrink-0 text-primary-content opacity-60 transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100"
+                class="size-3 shrink-0 text-primary opacity-60 transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100"
               />
             </.link>
           </li>
@@ -256,33 +256,59 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
           </button>
         </div>
 
-        <ul
-          id="experiments"
-          phx-update="stream"
-          class="divide-y divide-base-300 overflow-hidden rounded-box border border-base-300 bg-base-100"
-        >
-          <li id="experiments-empty" class="hidden only:block px-3 py-2 text-sm text-base-content/60">
-            Nothing matches these filters.
-          </li>
-          <li
-            :for={{dom_id, entry} <- @streams.experiments}
-            id={dom_id}
-            class="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-1.5"
-          >
-            <.link
-              navigate={~p"/experiments/#{segments(entry.name)}"}
-              class="font-mono text-sm link link-hover"
-            >
-              {entry.name}
-            </.link>
-            <span class="ms-auto flex flex-wrap items-center gap-1.5">
-              <span class="badge badge-ghost badge-sm">{entry.agent}</span>
-              <span class="badge badge-ghost badge-sm">{entry.modules} lm</span>
-              <span class="badge badge-ghost badge-sm">{entry.learning_module}</span>
-              <span class="badge badge-ghost badge-sm">{entry.model}</span>
-            </span>
-          </li>
-        </ul>
+        <%!-- A table, because these rows have columns. Four pills and no heading
+        leave the reader guessing that `surf`, `1 lm`, `evidence`, `pretrained`
+        are the agent, the number of learning modules, the learning-module kind
+        and the memory the run starts from. The headings are the facets' own
+        words, and a cell is the facet's own column, so a heading and the tag
+        that filters it cannot drift apart. --%>
+        <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-base-300 text-left text-xs font-medium tracking-wide text-base-content/50 uppercase">
+                <th scope="col" class="py-2 pe-3 pl-3 font-medium whitespace-nowrap">Experiment</th>
+                <th
+                  :for={facet <- @result.facets}
+                  scope="col"
+                  class="py-2 pe-3 pl-0 font-medium whitespace-nowrap"
+                >
+                  {facet.label}
+                </th>
+              </tr>
+            </thead>
+            <tbody id="experiments" phx-update="stream" class="divide-y divide-base-300">
+              <tr id="experiments-empty" class="hidden only:table-row">
+                <td
+                  colspan={length(@result.facets) + 1}
+                  class="px-3 py-2 text-sm text-base-content/60"
+                >
+                  Nothing matches these filters.
+                </td>
+              </tr>
+              <tr
+                :for={{dom_id, entry} <- @streams.experiments}
+                id={dom_id}
+                phx-click={JS.navigate(~p"/experiments/#{segments(entry.name)}")}
+                class="cursor-pointer transition-colors hover:bg-base-200/60"
+              >
+                <td class="py-1.5 pe-3 pl-3 align-middle">
+                  <.link
+                    navigate={~p"/experiments/#{segments(entry.name)}"}
+                    class="font-mono text-sm link link-hover"
+                  >
+                    {entry.name}
+                  </.link>
+                </td>
+                <td
+                  :for={facet <- @result.facets}
+                  class="py-1.5 pe-3 pl-0 align-middle whitespace-nowrap"
+                >
+                  <span class="badge badge-ghost badge-sm">{column(entry, facet.key)}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </Layouts.app>
     """
@@ -341,6 +367,14 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
 
   # Monty's names are paths; a glob path is built from its segments.
   defp segments(name), do: String.split(name, "/")
+
+  # What a row shows under one of the facets' headings. The four labels are
+  # `Monty.Studio.Index`'s; the values are this entry's own, so a column and the
+  # tag that filters it say the same thing in the same words.
+  defp column(entry, "modules"), do: "#{entry.modules} lm"
+  defp column(entry, "agent"), do: entry.agent
+  defp column(entry, "learning_module"), do: entry.learning_module
+  defp column(entry, "model"), do: entry.model
 
   defp showing(matching, total) when matching == total, do: "#{total} experiments"
   defp showing(matching, total), do: "#{matching} of #{total} experiments"

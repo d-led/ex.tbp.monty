@@ -58,7 +58,7 @@ defmodule ExTbpMontyWeb.WelcomeLive do
     ~H"""
     <Layouts.app flash={@flash}>
       <header id="welcome-hero">
-        <p class="text-[11px] font-semibold tracking-[0.18em] text-primary-content uppercase">
+        <p class="text-[11px] font-semibold tracking-[0.18em] text-primary uppercase">
           Thousand Brains Project · Elixir
         </p>
         <h1 class="mt-1 text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
@@ -152,7 +152,7 @@ defmodule ExTbpMontyWeb.WelcomeLive do
     >
       <.icon
         name={@icon}
-        class="mt-0.5 size-4 shrink-0 text-primary-content transition motion-safe:group-hover:translate-x-0.5"
+        class="mt-0.5 size-4 shrink-0 text-primary transition motion-safe:group-hover:translate-x-0.5"
       />
       <span class="min-w-0">
         <span class="block text-sm font-semibold">{@title}</span>

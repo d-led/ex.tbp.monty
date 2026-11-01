@@ -159,7 +159,7 @@ defmodule ExTbpMontyWeb.Layouts do
             navigate={~p"/"}
             class="flex min-w-0 flex-1 items-center gap-2 rounded-field px-2 py-2 hover:bg-base-200"
           >
-            <span class="grid size-8 shrink-0 place-items-center rounded-field bg-primary/15 text-primary-content">
+            <span class="grid size-8 shrink-0 place-items-center rounded-field bg-primary/15 text-primary">
               <.icon name="hero-cpu-chip-mini" class="size-5" />
             </span>
             <span class="truncate text-sm font-semibold tracking-tight group-data-[collapsed]:hidden">
