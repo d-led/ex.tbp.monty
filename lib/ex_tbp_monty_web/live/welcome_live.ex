@@ -57,22 +57,20 @@ defmodule ExTbpMontyWeb.WelcomeLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <header id="welcome-hero" class="pt-2">
-        <p class="text-xs font-semibold tracking-[0.18em] text-primary uppercase">
+      <header id="welcome-hero">
+        <p class="text-[11px] font-semibold tracking-[0.18em] text-primary uppercase">
           Thousand Brains Project · Elixir
         </p>
-        <h1 class="mt-2 max-w-2xl text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+        <h1 class="mt-1 text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
           Monty, running on the BEAM.
         </h1>
-        <p class="mt-3 max-w-2xl text-base text-base-content/75">
-          Monty learns an object by moving a sensor over it: it carries many hypotheses
-          about what it is touching, gathers evidence for each, and decides when one has
-          won. This is the Thousand Brains Project's reference implementation,
-          reimplemented module for module in Elixir — the same configurations, the same
-          numbers, and a studio for looking inside a run.
+        <p class="mt-2 max-w-2xl text-sm text-base-content/70">
+          Monty recognises objects by moving a sensor over them. This is the Thousand Brains
+          Project's implementation, reimplemented module for module in Elixir — the same
+          configurations, the same numbers — with a studio for looking inside a run.
         </p>
 
-        <div class="mt-5 flex flex-wrap items-center gap-2">
+        <div class="mt-3 flex flex-wrap items-center gap-2">
           <.link navigate={~p"/experiments"} id="welcome-browse" class="btn btn-primary btn-sm">
             <.icon name="hero-beaker-mini" class="size-4" /> Browse {@experiments} experiments
           </.link>
@@ -86,50 +84,50 @@ defmodule ExTbpMontyWeb.WelcomeLive do
         </div>
       </header>
 
-      <section id="welcome-ways" class="grid gap-3 sm:grid-cols-3">
+      <section id="welcome-ways" class="grid gap-2 sm:grid-cols-3">
         <.way
           id="welcome-way-experiments"
           navigate={~p"/experiments"}
           icon="hero-table-cells-mini"
-          title="Read what ships"
-          body="Monty's own configurations, narrowed by agent, module count, learning module and starting point — and the wiring of each one before anything runs."
+          title="Pre-configured experiments"
+          body="Monty's own configurations, with agent, module count, learning module and starting point."
         />
         <.way
           id="welcome-way-build"
           navigate={~p"/build"}
           icon="hero-wrench-screwdriver-mini"
-          title="Compose a config"
-          body="Build one from Monty's own options. The studio applies the checks Monty would make, so a config here composes against Monty's tree unchanged."
+          title="Build an experiment"
+          body="A configuration from Monty's own options, checked before it is saved."
         />
         <.way
           id="welcome-way-runs"
           navigate={~p"/runs"}
           icon="hero-play-mini"
-          title="Watch it run"
-          body="What each module believes, step by step, with the frames its sensors actually received — and every run this instance has done."
+          title="Runs"
+          body="Every run, with each module's beliefs and the sensor frames it recorded."
         />
       </section>
 
-      <section id="welcome-also" class="grid gap-3 sm:grid-cols-2">
+      <section id="welcome-also" class="grid gap-2 sm:grid-cols-2">
         <.aside_link
           id="welcome-prerequisites"
           navigate={~p"/prerequisites"}
           icon="hero-arrow-down-tray-mini"
-          title="Data and models"
-          body="The config tree and pretrained libraries a run reads, what is already here, and what still has to be downloaded."
+          title="Prerequisites"
+          body="What a run reads from disk, and what is still missing."
         />
         <.aside_link
           id="welcome-mcp"
           navigate={~p"/mcp/config"}
           icon="hero-code-bracket-mini"
-          title="Ask from an editor"
-          body="The same studio over MCP: the endpoint, and the configuration to paste into an editor."
+          title="MCP"
+          body="The same studio over MCP, for an editor."
         />
       </section>
 
       <p id="welcome-port" class="text-xs text-base-content/55">
-        {@ported} of {@mapped} classes in Monty's packages have an Elixir module here. The
-        rest are mapped, named, and listed as pending — nothing is guessed at.
+        {@ported} of {@mapped} classes in Monty's packages have an Elixir module here; the rest
+        are listed as pending.
       </p>
     </Layouts.app>
     """
@@ -141,27 +139,24 @@ defmodule ExTbpMontyWeb.WelcomeLive do
   attr :title, :string, required: true
   attr :body, :string, required: true
 
-  # One of the three ways in. A whole card is the link: on a phone the pointer is
-  # a thumb, and a card with a small "Open" in the corner is a target that is
-  # easy to miss.
+  # One of the three ways in. The whole row is the link — a card with a small
+  # "Open" in the corner is a target that is easy to miss and a line of height
+  # nobody needs — and the icon sits with the title instead of in a box of its
+  # own.
   defp way(assigns) do
     ~H"""
     <.link
       id={@id}
       navigate={@navigate}
-      class="group flex flex-col gap-1 rounded-box border border-base-300 bg-base-100 p-4 transition hover:border-primary/40 hover:bg-base-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      class="group flex items-start gap-2.5 rounded-box border border-base-300 bg-base-100 p-3 transition hover:border-primary/40 hover:bg-base-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
     >
-      <span class="grid size-8 place-items-center rounded-field bg-primary/10 text-primary">
-        <.icon name={@icon} class="size-4" />
-      </span>
-      <h2 class="mt-1 font-semibold">{@title}</h2>
-      <p class="text-sm text-base-content/70">{@body}</p>
-      <span class="mt-auto inline-flex items-center gap-1 pt-2 text-sm font-medium text-primary">
-        Open
-        <.icon
-          name="hero-arrow-right-mini"
-          class="size-3.5 transition motion-safe:group-hover:translate-x-0.5"
-        />
+      <.icon
+        name={@icon}
+        class="mt-0.5 size-4 shrink-0 text-primary transition motion-safe:group-hover:translate-x-0.5"
+      />
+      <span class="min-w-0">
+        <span class="block text-sm font-semibold">{@title}</span>
+        <span class="block text-sm text-base-content/70">{@body}</span>
       </span>
     </.link>
     """
@@ -180,7 +175,7 @@ defmodule ExTbpMontyWeb.WelcomeLive do
     <.link
       id={@id}
       navigate={@navigate}
-      class="group flex items-start gap-3 rounded-box border border-base-300 bg-base-100 px-4 py-3 transition hover:border-primary/40 hover:bg-base-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      class="group flex items-start gap-2.5 rounded-box border border-base-300 bg-base-100 px-3 py-2 transition hover:border-primary/40 hover:bg-base-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
     >
       <.icon name={@icon} class="mt-0.5 size-4 shrink-0 opacity-70" />
       <span class="min-w-0">

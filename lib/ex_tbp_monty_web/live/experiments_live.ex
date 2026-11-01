@@ -115,9 +115,8 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
       <header id="intro" class="space-y-2">
         <h1 class="text-3xl font-semibold tracking-tight">Monty experiments</h1>
         <p class="max-w-3xl text-base-content/70">
-          {@result.total} experiments, each one of Monty's own configs. Narrow the list by
-          agent, module count, learning module or starting point — or open one to see how it
-          is wired before it runs.
+          {@result.total} configurations Monty ships. Filter by agent, module count, learning
+          module or starting point, or open one to see what it wires together.
         </p>
       </header>
 
@@ -226,7 +225,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
             type="search"
             name="q"
             value={@query}
-            placeholder="Search names and the columns shown…"
+            placeholder="Search names, agents, learning modules…"
             phx-debounce="200"
             class="input input-bordered input-sm w-full sm:w-80"
           />

@@ -40,12 +40,10 @@ defmodule ExTbpMontyWeb.Tour do
       element: "#app-sidebar",
       scope: :shell,
       popover: %{
-        title: "Everything is here",
+        title: "Five places",
         description:
-          "Five places: the experiments Monty ships, the builder, the data and models, " <>
-            "what ran, and the same studio answered over MCP. The toggle above folds this " <>
-            "column to icons. On a phone this column is a drawer, so this step is skipped " <>
-            "there and the toggle above is the whole lesson."
+          "Experiments, Build, Prerequisites, Runs and MCP. The toggle above folds this " <>
+            "column to icons."
       }
     },
     %{
@@ -62,10 +60,10 @@ defmodule ExTbpMontyWeb.Tour do
       element: "#welcome-ways",
       scope: :welcome,
       popover: %{
-        title: "Three ways in",
+        title: "Three places to start",
         description:
-          "Read what Monty ships, compose a configuration of your own, or watch a run and " <>
-            "the beliefs it forms step by step."
+          "Experiments to read, Build to make one, Runs to see what happened. Prerequisites " <>
+            "and MCP are beside them."
       }
     },
     %{
@@ -82,11 +80,10 @@ defmodule ExTbpMontyWeb.Tour do
       element: "#welcome-also",
       scope: :welcome,
       popover: %{
-        title: "Data, models, and the other door",
+        title: "Prerequisites and MCP",
         description:
-          "A run reads Monty's config tree and its pretrained libraries; that page says " <>
-            "what is here and what is still to download. MCP is the same studio, answered " <>
-            "into an editor."
+          "Prerequisites lists what a run reads from disk. MCP is the same studio, for an " <>
+            "editor."
       }
     },
     %{

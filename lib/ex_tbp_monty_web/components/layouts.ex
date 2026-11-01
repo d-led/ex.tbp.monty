@@ -120,8 +120,8 @@ defmodule ExTbpMontyWeb.Layouts do
           </div>
         </header>
 
-        <main class="flex-1 px-3 py-5 sm:px-5 lg:px-6">
-          <div class="mx-auto max-w-6xl space-y-6">
+        <main class="flex-1 px-3 py-4 sm:px-5 lg:px-6">
+          <div class="mx-auto max-w-6xl space-y-4">
             {render_slot(@inner_block)}
           </div>
         </main>
