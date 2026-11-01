@@ -9,8 +9,9 @@
 # `mix setup` decides what that costs; everything it writes stays local — a
 # Docker volume for Postgres, deps/ and _build/, the development database.
 #
-# Needs Elixir 1.20 with the OTP it runs on, node/npm for the asset bundle, and
-# Docker for the Postgres config/dev.exs expects on port 6432.
+# Needs node/npm for the asset bundle and Docker for the Postgres config/dev.exs
+# expects on port 6432. Elixir 1.20 and a Rust toolchain are installed for you
+# when this machine has neither.
 
 set -euo pipefail
 
@@ -22,7 +23,7 @@ die() {
 }
 
 usage() {
-  sed -n '3,13p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'
+  sed -n '3,14p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'
 }
 
 while (($#)); do
@@ -32,14 +33,24 @@ while (($#)); do
   esac
 done
 
-command -v mix >/dev/null 2>&1 ||
-  die "mix is not on PATH: install Elixir 1.20 (https://elixir-lang.org/install.html) and run this again"
-
 command -v npm >/dev/null 2>&1 ||
   die "npm is not on PATH: the asset bundle is built with it (nodejs.org), so install Node and run this again"
 
 command -v docker >/dev/null 2>&1 ||
   die "docker is not on PATH: install Docker Desktop (https://docs.docker.com/get-docker/) for the development Postgres and run this again"
+
+# The two toolchains come after the cheap checks, because installing one is a
+# download measured in minutes. Both are build requirements — `mix compile`
+# stops without Elixir, and it stops without Rust too, which is what rustler
+# compiles the nearest-neighbour index (native/kd_tree_nif) with. Each
+# installer is a no-op where its own toolchain is already on PATH.
+elixir_bin="$(scripts/install-elixir.sh)"
+if [ -n "$elixir_bin" ]; then
+  PATH="$elixir_bin:$PATH"
+  export PATH
+fi
+
+scripts/install-rust.sh
 
 echo "starting Postgres (docker compose -f docker-compose.dev.yml)" >&2
 docker compose -f docker-compose.dev.yml up -d

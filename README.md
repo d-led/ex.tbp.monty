@@ -48,16 +48,18 @@ scripts/init-dev.sh    # Postgres on 6432, dependencies, database, assets
 scripts/run-dev.sh     # http://localhost:4000
 ```
 
-Needs Elixir 1.20 with its OTP, node/npm, Docker, and a Rust toolchain: the
-nearest-neighbour index is a NIF (`native/kd_tree_nif`) that rustler compiles
-with the application, so `mix compile` will not finish without `cargo`.
+Needs Elixir 1.20, node/npm, Docker, and a Rust toolchain — and installs the
+first and the last itself when the machine has neither:
 
 ```bash
-scripts/install-rust.sh    # the toolchain, on a machine that has none
+scripts/install-elixir.sh    # Elixir 1.20.5 + OTP 29.1, per user, no root
+scripts/install-rust.sh      # the Rust toolchain
 ```
 
-It takes no arguments and does nothing where `cargo` is already there. Running
-the app needs none of it: the release carries the compiled shared object.
+Both take no arguments and do nothing where their toolchain is already there.
+Rust is a _build_ requirement: the nearest-neighbour index is a NIF
+(`native/kd_tree_nif`) that rustler compiles with the application. Running the
+app needs none of it — the release carries the compiled shared object.
 [docs/developers.md](docs/developers.md) has the tests, the gates CI runs and how
 a module is added.
 
