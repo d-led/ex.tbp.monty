@@ -48,7 +48,9 @@ defmodule Monty.Frameworks.Utils.KdTreeTest do
   end
 
   defp query_cost(points_count) do
-    tree = points(points_count) |> KdTree.build()
+    # The reference tree: a native index has no visit count to hold to
+    # anything, so the cost tests are about this implementation.
+    tree = points(points_count) |> KdTree.build_elixir()
     [query] = queries(1)
 
     KdTree.nearest_with_visits(tree, query, 5)
@@ -127,7 +129,7 @@ defmodule Monty.Frameworks.Utils.KdTreeTest do
       points = points(2_000)
       [query] = queries(1)
 
-      {ids, _visits} = KdTree.nearest_with_visits(KdTree.build(points), query, 5)
+      {ids, _visits} = KdTree.nearest_with_visits(KdTree.build_elixir(points), query, 5)
 
       assert ids == comparing_every_point(points, query, 5)
     end

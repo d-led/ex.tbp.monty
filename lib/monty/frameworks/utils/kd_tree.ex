@@ -26,24 +26,50 @@ defmodule Monty.Frameworks.Utils.KdTree do
   @type point :: [number()]
   @type id :: non_neg_integer()
 
-  # `:empty`, or the point stored, its id, the axis it was split on, and the two
-  # subtrees — the lower-coordinate one on the left.
-  @type t :: :empty | {number(), number(), number(), id(), 0 | 1 | 2, t(), t()}
+  # `:empty`; the native index, when this VM built one; or the point stored, its
+  # id, the axis it was split on, and the two subtrees — the lower-coordinate one
+  # on the left.
+  @type t ::
+          :empty
+          | {:nif, reference()}
+          | {number(), number(), number(), id(), 0 | 1 | 2, t(), t()}
+
+  # What a native answer uses where a query found fewer neighbours than asked.
+  @no_neighbour 4_294_967_295
 
   @doc """
   Indexes `points`, each a `{point, id}` pair.
+
+  The native index when this machine has one, the tree below otherwise. Both
+  answer the same question; `build_elixir/1` is the one that says which.
   """
   @spec build([{point(), id()}]) :: t()
-  def build([]), do: :empty
-
   def build(points) do
+    if ExTbpMonty.KdTreeNif.loaded?() and consecutive?(points) do
+      {:nif, ExTbpMonty.KdTreeNif.build(positions(points))}
+    else
+      build_elixir(points)
+    end
+  end
+
+  @doc """
+  The reference index: our own tree, in Elixir.
+
+  This is what the tests describe — including how many nodes a query looks at —
+  and what runs wherever the native index is not built. A caller asking for it
+  by name wants that answer, not the fastest one.
+  """
+  @spec build_elixir([{point(), id()}]) :: t()
+  def build_elixir([]), do: :empty
+
+  def build_elixir(points) do
     axis = widest_axis(points)
 
     sorted = Enum.sort_by(points, fn {point, id} -> {coordinate(point, axis), id} end)
     middle = div(length(sorted), 2)
     {{[x, y, z], id}, left, right} = split_at(sorted, middle)
 
-    {x * 1.0, y * 1.0, z * 1.0, id, axis, build(left), build(right)}
+    {x * 1.0, y * 1.0, z * 1.0, id, axis, build_elixir(left), build_elixir(right)}
   end
 
   @doc """
@@ -53,6 +79,11 @@ defmodule Monty.Frameworks.Utils.KdTree do
   """
   @spec nearest(t(), point(), pos_integer()) :: [id()]
   def nearest(:empty, _query, _count), do: []
+
+  def nearest({:nif, _index} = tree, query, count) do
+    [ids] = nearest_many(tree, [query], count)
+    ids
+  end
 
   def nearest(tree, query, count) do
     {ids, _visits} = nearest_with_visits(tree, query, count)
@@ -64,11 +95,23 @@ defmodule Monty.Frameworks.Utils.KdTree do
 
   One call for a step's worth of questions, in the order they were asked, and
   each answer is exactly what `nearest/3` would have said: a caller never has to
-  interleave the index with its own loop. It is also the shape a native index
-  would have — one crossing for the whole batch — which is why callers should
-  ask this way rather than map over `nearest/3`.
+  interleave the index with its own loop. On the native index this is genuinely
+  one call — twenty thousand queries cross the boundary once, not twenty
+  thousand times.
   """
   @spec nearest_many(t(), [point()], pos_integer()) :: [[id()]]
+  def nearest_many(:empty, _queries, _count), do: []
+
+  def nearest_many({:nif, _index}, _queries, 0), do: []
+
+  def nearest_many({:nif, index}, queries, count) do
+    index
+    |> ExTbpMonty.KdTreeNif.nearest_many(queries_bytes(queries), count)
+    |> ids_in()
+    |> Enum.chunk_every(count)
+    |> Enum.map(fn ids -> Enum.reject(ids, &(&1 == @no_neighbour)) end)
+  end
+
   def nearest_many(tree, queries, count), do: Enum.map(queries, &nearest(tree, &1, count))
 
   @doc """
@@ -98,6 +141,17 @@ defmodule Monty.Frameworks.Utils.KdTree do
   """
   @spec nearest_with_distances(t(), point(), pos_integer()) :: [{float(), id()}]
   def nearest_with_distances(:empty, _query, _count), do: []
+
+  def nearest_with_distances({:nif, index}, query, count) do
+    {ids, distances} =
+      ExTbpMonty.KdTreeNif.nearest_many_with_distances(index, queries_bytes([query]), count)
+
+    ids
+    |> ids_in()
+    |> Enum.zip(distances_in(distances))
+    |> Enum.reject(fn {id, _distance} -> id == @no_neighbour end)
+    |> Enum.map(fn {id, distance} -> {distance, id} end)
+  end
 
   def nearest_with_distances(tree, query, count) do
     {kept, _visits} = query(tree, query, count)
@@ -214,4 +268,35 @@ defmodule Monty.Frameworks.Utils.KdTree do
 
   defp triple([x, y, z]), do: {x, y, z}
   defp triple({x, y, z}), do: {x, y, z}
+
+  # -- the native boundary --------------------------------------------------
+  #
+  # Points cross as bytes, not as lists: twenty thousand queries worth of
+  # little triples is a megabyte either way, and building them costs less than
+  # asking the runtime to encode them.
+
+  defp positions(points) do
+    for {point, _id} <- points, into: <<>>, do: point_bytes(point)
+  end
+
+  defp queries_bytes(queries) do
+    for query <- queries, into: <<>>, do: point_bytes(query)
+  end
+
+  defp point_bytes(point) do
+    {x, y, z} = triple(point)
+    <<x * 1.0::little-float-64, y * 1.0::little-float-64, z * 1.0::little-float-64>>
+  end
+
+  defp ids_in(bytes), do: for(<<id::little-32 <- bytes>>, do: id)
+  defp distances_in(bytes), do: for(<<value::little-float-64 <- bytes>>, do: value)
+
+  # The native index takes a point's id to be its position, so it can only answer
+  # for points numbered that way — which is how every caller in this port
+  # numbers them. Any other numbering keeps the Elixir tree.
+  defp consecutive?(points) do
+    points
+    |> Enum.with_index()
+    |> Enum.all?(fn {{_point, id}, index} -> id == index end)
+  end
 end

@@ -117,6 +117,11 @@ defmodule ExTbpMonty.MixProject do
       # megabytes of numerics we would never call, so the archive is read here
       # instead — see `Monty.Studio.Pretrained`.
       {:unpickler, "~> 0.1.0"},
+      # The nearest-neighbour index is the one hot loop that Elixir cannot make
+      # cheap enough (`native/kd_tree_nif`, over the Rust `kiddo` crate). Optional
+      # on purpose: without it `Monty.Frameworks.Utils.KdTree` uses its own tree,
+      # which is the reference the native one is tested against.
+      {:rustler, "~> 0.38", runtime: false},
       # Monty's loggers call the Python `wandb` client, and this is how the port
       # reaches Python without an external interpreter to install or keep in step:
       # an embedded runtime the application manages itself.

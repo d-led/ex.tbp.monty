@@ -238,6 +238,10 @@ priv/build_info.json
 backups/
 
 # Dialyzer PLTs are built locally and cached in CI
+# The native index, built by rustler from native/kd_tree_nif during compile: a
+# shared object is this machine's, not the repository's.
+/priv/native/
+
 /priv/plts/
 
 # Studio runs write their logs here; they are not source.
