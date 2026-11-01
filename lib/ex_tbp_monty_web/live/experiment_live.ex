@@ -156,7 +156,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   defp run_time(%{inserted_at: nil}), do: "unknown"
   defp run_time(%{inserted_at: at}), do: Calendar.strftime(at, "%H:%M:%S")
-
   # What a page can be set here, read off the run's own record: the rest is the
   # run page's business.
   defp input_of(%{inputs: %{} = inputs}, key), do: Map.get(inputs, key) |> to_string()
@@ -420,7 +419,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             No run of this experiment yet. The buttons above start one.
           </p>
 
-          <table :if={@runs != []} class={table_class()}>
+          <table :if={@runs != []} id="experiment-runs-table" phx-hook=".LocalTime" class={table_class()}>
             <thead class="text-left text-base-content/60">
               <tr>
                 <th class="font-normal">when</th>
@@ -441,7 +440,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 phx-click={JS.navigate(~p"/runs/#{run.id}")}
                 class="cursor-pointer border-t border-base-300 hover:bg-base-200"
               >
-                <td class="py-0.5 font-mono text-base-content/60">{run_time(run)}</td>
+                <td class="py-0.5 font-mono text-base-content/60">
+                  <ExTbpMontyWeb.LocalTime.local_time at={run.inserted_at} class="tabular-nums" />
+                </td>
                 <td>
                   <span class={[
                     "badge badge-xs",
@@ -460,6 +461,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               </tr>
             </tbody>
           </table>
+          <ExTbpMontyWeb.LocalTime.local_time_hook />
         </section>
 
         <p :if={@run_id == nil and runable?(assigns)} class="text-sm text-base-content/60">
@@ -530,297 +532,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             </div>
           </div>
           <div class={["grid gap-2", map_size(@charts) > 1 && "lg:grid-cols-2"]}>
-            <figure
+            <ExTbpMontyWeb.EvidenceChart.evidence_chart
               :for={{module_id, chart} <- @charts}
-              id={"chart-#{module_id}"}
-              class="relative rounded-field border border-base-300 bg-base-100 p-2"
-            >
-              <figcaption class="flex items-baseline justify-between px-0.5 pb-1 font-mono text-[11px] text-base-content/60">
-                <span>{module_id}</span>
-                <span :if={chart.mlh}>
-                  {chart.mlh.graph_id} is the answer so far
-                </span>
-              </figcaption>
-              <svg
-                id={"chart-svg-#{module_id}"}
-                phx-hook=".EvidenceChart"
-                viewBox={"0 0 #{chart.width} #{chart.height}"}
-                class="w-full touch-none"
-                role="img"
-                aria-label={"evidence per object, step by step and episode by episode, for #{module_id}"}
-                data-x-min={chart.x_min}
-                data-x-max={chart.x_max}
-                data-y-max={chart.y_max}
-                data-width={chart.width}
-                data-height={chart.height}
-                data-margin-left={chart.margin_left}
-                data-margin-right={chart.margin_right}
-                data-margin-top={chart.margin_top}
-                data-margin-bottom={chart.margin_bottom}
-              >
-                <%!-- Where one episode ends and the next begins. Every episode
-                starts its evidence again at zero, so the chart lays them end to
-                end and marks the boundary: without it the drop is a fall nobody
-                measured. --%>
-                <g :for={start <- chart.episode_starts}>
-                  <%= if start.episode > 0 do %>
-                    <line
-                      x1={start.x}
-                      x2={start.x}
-                      y1="10"
-                      y2={chart.height - 22}
-                      stroke="currentColor"
-                      stroke-width="0.5"
-                      stroke-dasharray="2 2"
-                      class="text-base-content/30"
-                    />
-                  <% end %>
-                </g>
-                <g :for={start <- chart.episode_labels}>
-                  <text
-                    x={start.x + 2}
-                    y="8"
-                    fill="currentColor"
-                    font-size="7"
-                    class="text-base-content/40"
-                  >
-                    {start.label}
-                  </text>
-                </g>
-                <g :for={tick <- chart.ticks}>
-                  <line
-                    x1={chart.margin_left}
-                    x2={chart.width - chart.margin_right}
-                    y1={tick.y}
-                    y2={tick.y}
-                    stroke="currentColor"
-                    stroke-width="0.5"
-                    class="text-base-content/20"
-                  />
-                  <text
-                    x={chart.margin_left - 6}
-                    y={tick.y + 3}
-                    text-anchor="end"
-                    fill="currentColor"
-                    font-size="8"
-                    class="text-base-content/50"
-                  >
-                    {tick.label}
-                  </text>
-                </g>
-                <g :for={series <- chart.series}>
-                  <polyline
-                    :for={points <- series.points}
-                    points={points}
-                    fill="none"
-                    stroke={series.colour}
-                    stroke-width="1.5"
-                    data-graph={series.graph_id}
-                  />
-                </g>
-                <circle
-                  :if={chart.mlh}
-                  cx={chart.mlh.x}
-                  cy={chart.mlh.y}
-                  r="3"
-                  fill={chart.mlh_colour}
-                />
-              </svg>
-              <ul class="flex flex-wrap gap-x-3 gap-y-1 px-0.5 pb-0.5 text-[11px]">
-                <li :for={series <- chart.series} class="flex items-center gap-1">
-                  <span
-                    class="inline-block size-2 rounded-full"
-                    style={"background-color: #{series.colour}"}
-                  ></span>
-                  <span class="font-mono text-base-content/70">{series.graph_id}</span>
-                  <span class="text-base-content/50">
-                    {series.evidence |> List.last() |> elem(1) |> Float.round(2)}
-                  </span>
-                </li>
-              </ul>
-              <div
-                class="pointer-events-none absolute z-10 hidden max-w-[16rem] rounded-field border border-base-300 bg-base-100/95 px-2 py-1 font-mono text-[11px] leading-4 shadow-sm"
-                data-chart-tooltip
-              >
-              </div>
-            </figure>
+              module_id={module_id}
+              chart={chart}
+            />
           </div>
-          <script :type={Phoenix.LiveView.ColocatedHook} name=".EvidenceChart">
-            // A line says which objects were climbing; only a hover says by how
-            // much at which step. The numbers are already in the picture — every
-            // polyline carries its own points and its object's name — so the
-            // crosshair reads them out of the SVG instead of asking the server
-            // for a second copy of the same data.
-            export default {
-              mounted() {
-                this.tooltip = this.el.parentElement.querySelector("[data-chart-tooltip]")
-                this.el.addEventListener("mousemove", (event) => this.hover(event))
-                this.el.addEventListener("mouseleave", () => this.hide())
-              },
-
-              // The chart is redrawn every step, so a tooltip from before the
-              // patch would be describing a picture that is no longer there.
-              updated() {
-                this.hide()
-              },
-
-              geometry() {
-                const data = this.el.dataset
-
-                return {
-                  width: Number(data.width),
-                  height: Number(data.height),
-                  left: Number(data.marginLeft),
-                  right: Number(data.marginRight),
-                  top: Number(data.marginTop),
-                  bottom: Number(data.marginBottom),
-                  xMin: Number(data.xMin),
-                  xMax: Number(data.xMax),
-                  yMax: Number(data.yMax),
-                }
-              },
-
-              hover(event) {
-                const chart = this.geometry()
-                const rect = this.el.getBoundingClientRect()
-                const scale = rect.width / chart.width
-                const x = (event.clientX - rect.left) / scale
-                const plot = chart.width - chart.left - chart.right
-
-                if (x < chart.left || x > chart.left + plot) return this.hide()
-
-                const rows = this.rowsAt(x, chart)
-                if (rows.length === 0) return this.hide()
-
-                this.show(rows, chart, rect, event)
-              },
-
-              // The values at the step nearest the cursor, which is the question
-              // a hover asks: the cursor sits between steps, the numbers do not.
-              // Snapping to that step, rather than demanding the cursor be near a
-              // point, is what makes a chart with far-apart steps still answer.
-              rowsAt(x, chart) {
-                const snap = this.nearestStep(x)
-                if (snap === null) return []
-
-                const rows = []
-
-                for (const line of this.el.querySelectorAll("polyline[data-graph]")) {
-                  const point = nearestPoint(line.points, snap)
-                  if (!point || Math.abs(point.x - snap) > 0.01) continue
-
-                  rows.push({
-                    graph: line.dataset.graph,
-                    colour: line.getAttribute("stroke"),
-                    x: point.x,
-                    evidence: ((chart.height - chart.bottom - point.y) /
-                      (chart.height - chart.top - chart.bottom)) * chart.yMax,
-                  })
-                }
-
-                return rows.sort((a, b) => b.evidence - a.evidence)
-              },
-
-              // The x of the reported step closest to `x`. Every line's points are
-              // already in the picture, so the axis needs no second copy of them.
-              nearestStep(x) {
-                let best = null
-
-                for (const line of this.el.querySelectorAll("polyline[data-graph]")) {
-                  for (let index = 0; index < line.points.numberOfItems; index++) {
-                    const pointX = line.points.getItem(index).x
-                    if (best === null || Math.abs(pointX - x) < Math.abs(best - x)) best = pointX
-                  }
-                }
-
-                return best
-              },
-
-              show(rows, chart, rect, event) {
-                const shown = rows.slice(0, 8)
-                const hidden = rows.length - shown.length
-
-                this.tooltip.innerHTML =
-                  rows
-                    .slice(0, 8)
-                    .map(
-                      (row) =>
-                        `<div class="flex items-center gap-1.5">` +
-                        `<span class="inline-block size-2 rounded-full" style="background-color: ${row.colour}"></span>` +
-                        `<span class="text-base-content/70">${escape(row.graph)}</span>` +
-                        `<span class="text-base-content/90">${row.evidence.toFixed(2)}</span>` +
-                        `</div>`,
-                    )
-                    .join("") +
-                  (hidden > 0
-                    ? `<div class="text-base-content/50">and ${hidden} more below</div>`
-                    : "")
-
-                // Beside the cursor, and on the other side of it near the edge:
-                // a tooltip that hangs off the chart is a tooltip nobody reads.
-                // Both numbers are in the reader's pixels — the box is positioned
-                // in the page, not in the SVG's own units.
-                const left = Math.min(
-                  event.clientX - rect.left + 14,
-                  rect.width - this.tooltip.offsetWidth - 4,
-                )
-
-                this.tooltip.style.left = `${Math.max(left, 4)}px`
-                this.tooltip.style.top = `${Math.max(event.clientY - rect.top - 10, 4)}px`
-                this.tooltip.classList.remove("hidden")
-
-                this.crosshairFor(shown[0].x, chart)
-              },
-
-              // The step the values are from, drawn where it is: the cursor is
-              // between steps and the numbers are not.
-              crosshairFor(x, chart) {
-                this.crosshairMark?.remove()
-
-                const line = document.createElementNS("http://www.w3.org/2000/svg", "line")
-                line.setAttribute("x1", x)
-                line.setAttribute("x2", x)
-                line.setAttribute("y1", chart.top)
-                line.setAttribute("y2", chart.height - chart.bottom)
-                line.setAttribute("stroke", "currentColor")
-                line.setAttribute("stroke-width", "0.5")
-                line.setAttribute("class", "text-base-content/50")
-                line.setAttribute("pointer-events", "none")
-
-                this.el.appendChild(line)
-                this.crosshairMark = line
-
-                return line
-              },
-
-              hide() {
-                if (this.tooltip) this.tooltip.classList.add("hidden")
-                this.crosshairMark?.remove()
-                this.crosshairMark = null
-              },
-            }
-
-            // The point in a polyline whose x is nearest `x`, in the SVG's own
-            // units, so nothing has to guess what the browser scaled it to.
-            // Indexed rather than iterated: `SVGPointList` is not an iterable in
-            // every browser this page is read in.
-            function nearestPoint(points, x) {
-              let best = null
-
-              for (let index = 0; index < points.numberOfItems; index++) {
-                const point = points.getItem(index)
-                if (!best || Math.abs(point.x - x) < Math.abs(best.x - x)) best = point
-              }
-
-              return best
-            }
-
-            function escape(text) {
-              const node = document.createElement("span")
-              node.textContent = text
-              return node.innerHTML
-            }
-          </script>
         </section>
 
         <section :if={@centre} id="centre-view" class="space-y-2">
@@ -887,50 +604,19 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               {if @lines == [], do: "no lines yet", else: "no line matches this filter"}
             </li>
             <li :for={line <- @shown} id={"log-#{line.id}"} class={line_class(line)}>
-              <%!-- The clock is a `<time>` with the instant in it, not a
-              string: a run's log says when a step happened, and "when" means
-              the reader's clock, not the server's. The hook rewrites the UTC
-              text the server sent into the browser's own time zone. --%>
-              <time
+              <%!-- The clock is a `<time>` with the instant in it, not a string:
+              a run's log says when a step happened, and "when" means the
+              reader's clock, not the server's. The hook rewrites the UTC text
+              the server sent into the browser's own time zone. --%>
+              <ExTbpMontyWeb.LocalTime.local_time
                 :if={line.at}
-                datetime={line.at.instant}
-                title={line.at.instant}
+                at={line.at}
+                style={:clock}
                 class="me-1.5 text-base-content/40 tabular-nums"
-              >
-                {line.at.clock}
-              </time>{line.text}
+              />{line.text}
             </li>
           </ul>
-          <script :type={Phoenix.LiveView.ColocatedHook} name=".LocalTime">
-            // A log line is stamped in UTC because that is what a server knows.
-            // The reader's clock is what they compare it to, and only the
-            // browser knows that zone, so each `<time>` is rewritten here — on
-            // mount and again after every patch, because a live log keeps
-            // appending lines while it is read.
-            export default {
-              mounted() {
-                this.localise()
-              },
-
-              updated() {
-                this.localise()
-              },
-
-              localise() {
-                for (const node of this.el.querySelectorAll("time[datetime]")) {
-                  const at = new Date(node.getAttribute("datetime"))
-                  if (Number.isNaN(at.getTime())) continue
-
-                  node.textContent = at.toLocaleTimeString(undefined, {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                  })
-                  node.title = at.toLocaleString()
-                }
-              },
-            }
-          </script>
+          <ExTbpMontyWeb.LocalTime.local_time_hook />
         </div>
 
         <ExTbpMontyWeb.StudioComponents.summary :if={@summary} summary={@summary} />

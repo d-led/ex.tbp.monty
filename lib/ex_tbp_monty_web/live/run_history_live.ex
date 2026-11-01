@@ -356,7 +356,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       </div>
 
       <div class="overflow-hidden rounded-box border border-base-300 bg-base-100">
-        <table class="table table-sm">
+        <table id="runs-table" phx-hook=".LocalTime" class="table table-sm">
           <thead>
             <tr class="text-xs text-base-content/60">
               <th class="w-6">
@@ -443,7 +443,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               </td>
               <td class="text-right font-mono text-xs">{run.steps}</td>
               <td class="text-right font-mono text-xs">{duration(run.duration_us)}</td>
-              <td class="font-mono text-xs">{when_ran(run)}</td>
+              <td class="font-mono text-xs">
+                <ExTbpMontyWeb.LocalTime.local_time at={run.inserted_at} class="tabular-nums" />
+              </td>
               <td class="text-right whitespace-nowrap">
                 <%!-- Two ways out: a run that is stepping ends at its next step of
                 its own accord, one stuck in a step has to be ended. --%>
@@ -483,6 +485,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
             </tr>
           </tbody>
         </table>
+        <ExTbpMontyWeb.LocalTime.local_time_hook />
       </div>
 
       <div class="flex items-center gap-3 text-xs">
@@ -577,7 +580,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           </div>
         </div>
         <p class="text-xs text-base-content/60">
-          started {when_ran(@run)} · {@run.steps} steps · {duration(@run.duration_us)}
+          started
+          <ExTbpMontyWeb.LocalTime.local_time at={@run.inserted_at} style={:clock} /> · {@run.steps} steps · {duration(
+            @run.duration_us
+          )}
         </p>
       </header>
 
@@ -1024,12 +1030,6 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp bytes(size) when size >= 1_048_576, do: "#{Float.round(size / 1_048_576, 1)} MB"
   defp bytes(size) when size >= 1_024, do: "#{Float.round(size / 1_024, 1)} kB"
   defp bytes(size), do: "#{size} B"
-
-  defp when_ran(%{inserted_at: nil}), do: "unknown"
-
-  defp when_ran(%{inserted_at: inserted_at}) do
-    inserted_at |> DateTime.truncate(:second) |> Calendar.strftime("%Y-%m-%d %H:%M:%S UTC")
-  end
 
   defp stopped_message(:stopping), do: "Stopping: the run ends after its next step."
   defp stopped_message(:settled), do: "Stopped: the run never started."
