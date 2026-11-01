@@ -54,3 +54,7 @@ docker-compose.yml
 AGENTS.md
 README.md
 LICENSE
+
+# The Rust crate's build artefacts: the image compiles its own, and copying a
+# `target/` directory would be hundreds of megabytes of another machine's work.
+native/**/target

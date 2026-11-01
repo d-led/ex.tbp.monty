@@ -45,11 +45,24 @@ ENV MIX_ENV=prod \
 
 # build-essential for NIFs, git for the two GitHub dependencies (heroicons and
 # daisyUI), unzip for the esbuild and tailwind binaries fetched by `mix
-# assets.setup`.
+# `mix assets.setup`, curl for the Rust installer below.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-       build-essential git ca-certificates unzip \
+       build-essential git ca-certificates unzip curl \
   && rm -rf /var/lib/apt/lists/*
+
+# A Rust toolchain, because compiling this application needs one: the
+# nearest-neighbour index is a NIF (`native/kd_tree_nif`) and rustler builds it
+# during `mix compile`. This is a requirement of *building*, not of running —
+# the runtime stage carries the release, and the release carries the compiled
+# shared object. The installer is a script rather than a line here so that a
+# developer's machine, this build and CI get the toolchain the same way.
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:${PATH}
+
+COPY scripts/install-rust.sh scripts/install-rust.sh
+RUN scripts/install-rust.sh
 
 # Node and npm from the stage above — the same distribution family (trixie),
 # so the binaries link against the libc that is here. The npm and npx entry
@@ -99,6 +112,10 @@ RUN mix deps.compile
 
 COPY priv priv
 COPY lib lib
+# Rustler builds this crate while `lib/ex_tbp_monty/kd_tree_nif.ex` compiles, so
+# the crate has to be in the image before `mix compile` — without it the compiler
+# stops with "Could not cd to native/kd_tree_nif".
+COPY native native
 # The project's own Mix tasks (`assets.install`, `build.info`): `elixirc_paths`
 # compiles them outside `lib/`, and both are called later in this build.
 COPY mix_tasks mix_tasks

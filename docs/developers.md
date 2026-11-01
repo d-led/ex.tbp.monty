@@ -140,11 +140,18 @@ scripts/run-dev.sh     # http://localhost:4000
 ```
 
 [`scripts/init-dev.sh`](../scripts/init-dev.sh) needs Elixir 1.20 with the OTP it
-runs on, node/npm for the asset bundle, and Docker for the Postgres
-[`config/dev.exs`](../config/dev.exs) expects on port 6432; it runs
+runs on, node/npm for the asset bundle, a Rust toolchain, and Docker for the
+Postgres [`config/dev.exs`](../config/dev.exs) expects on port 6432. The
+toolchain is a build requirement because the nearest-neighbour index is a NIF
+(`native/kd_tree_nif`) that rustler compiles with the application: without
+`cargo`, `mix compile` stops with "Could not cd to native/kd_tree_nif".
+[`scripts/install-rust.sh`](../scripts/install-rust.sh) takes no arguments,
+installs nothing on a machine that already has `cargo`, and is what the
+`Dockerfile` and the CI jobs call. Running the app needs none of it — the release
+carries the compiled shared object. The script itself runs
 `docker compose -f docker-compose.dev.yml up -d` and `mix setup`, and is worth
-running again after a pull
-that moves a dependency or a migration. [`scripts/run-dev.sh`](../scripts/run-dev.sh)
+running again after a pull that moves a dependency or a migration.
+[`scripts/run-dev.sh`](../scripts/run-dev.sh)
 is `mix phx.server` with the code reloader — `PORT=4001 scripts/run-dev.sh` moves
 it. A run needs no interpreter configured: the world is `priv/monty_py/world.py`
 in the interpreter `pythonx` builds, so MuJoCo is there by construction. The

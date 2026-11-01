@@ -95,6 +95,9 @@ jobs:
           key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
           restore-keys: ${{ runner.os }}-mix-
 
+      # A NIF is compiled with the application, so the runner needs a Rust
+      # toolchain. The script is a no-op where one is already installed.
+      - run: scripts/install-rust.sh
       - run: mix deps.get
       - run: mix lint
 
@@ -155,6 +158,9 @@ jobs:
           key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
           restore-keys: ${{ runner.os }}-mix-
 
+      # A NIF is compiled with the application, so the runner needs a Rust
+      # toolchain. The script is a no-op where one is already installed.
+      - run: scripts/install-rust.sh
       - run: mix deps.get
 
       # Run history is stored, so the suite needs its table.
@@ -243,6 +249,9 @@ jobs:
           key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
           restore-keys: ${{ runner.os }}-mix-
 
+      # A NIF is compiled with the application, so the runner needs a Rust
+      # toolchain. The script is a no-op where one is already installed.
+      - run: scripts/install-rust.sh
       - run: mix deps.get
 
       # The four exports, side by side in cover/ under the names the partitions
@@ -308,6 +317,9 @@ jobs:
           key: ${{ runner.os }}-plt-${{ hashFiles('mix.lock') }}
           restore-keys: ${{ runner.os }}-plt-
 
+      # A NIF is compiled with the application, so the runner needs a Rust
+      # toolchain. The script is a no-op where one is already installed.
+      - run: scripts/install-rust.sh
       - run: mix deps.get
       - run: mix dialyzer
 
