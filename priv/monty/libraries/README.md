@@ -9,10 +9,16 @@ without a Python interpreter and without a `torch` install.
 
 | Question | Answer |
 | --- | --- |
-| Which files ship? | whichever models of whichever releases are exported here — `pretrained_ycb_v10/`, `_v11/`, `_v13/` and `_v14/` today, the last holding the 77-object model an experiment names |
+| Which files ship? | one: `pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz`, two megabytes — the smallest complete memory Monty published, and the one the episode in `test/fixtures/` was recorded against. Everything else is exported on the machine that needs it (`_v11/`, `_v13/`, `_v14/` locally, the last holding the 77-object model an experiment names) and stays out of git |
 | Where do they come from? | Monty's prerequisites, unpacked under `$MONTY_MODELS` |
 | How do I refresh them? | `scripts/sync_monty_libraries.sh` |
 | How does a run find one? | `Monty.Studio.Memory`, from the config's `model_name_or_path` |
+
+One export is checked in because a checkout cannot recognise an object without
+one, and a suite that tests recognition would then only ever pass on a machine
+that had exported a model first. It is the one the recorded episode and the
+charts are made with, so the tests measure Monty's memory rather than a fixture
+that resembles it.
 
 ## The layout, and why it has a release in it
 
@@ -30,7 +36,7 @@ name in two releases is two memories, trained differently.
 
 * A config naming `${constants.pretrained_dir}/…` means whichever release its
   `pretrained_dir` resolves to.
-* Monty's default is `pretrained_ycb_v13`; the recordings in `test/fixtures/`
+* Monty's default is `pretrained_ycb_v14`; the recordings in `test/fixtures/`
   were made with `pretrained_dir` overridden to `pretrained_ycb_v10`.
 * Recognising with another release's graphs would answer a question nobody asked.
   So the port looks in the release the config names, and when only another

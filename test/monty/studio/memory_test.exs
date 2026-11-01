@@ -49,13 +49,28 @@ defmodule Monty.Studio.MemoryTest do
       release = "pretrained_ycb_v10"
 
       assert Memory.available?(name, release)
-      assert Memory.releases_for(name) == ["pretrained_ycb_v10", "pretrained_ycb_v13"]
 
       {:ok, memory} = Memory.load(name, release)
 
       assert memory.models_in_memory |> Map.keys() |> Enum.sort() ==
                ~w(banana bowl c_lego_duplo dice golf_ball mug mustard_bottle
                   potted_meat_can spoon strawberry)
+    end
+
+    test "is found in every release that exported it, and in no other" do
+      # Discovery is a question about a directory, so it is asked of one the test
+      # builds: which releases a machine happens to have exported says nothing
+      # about the lookup.
+      dir = Tmp.dir("libraries")
+      export!(dir, "pretrained_ycb_v10", "surf_agent_1lm_10distinctobj")
+      export!(dir, "pretrained_ycb_v13", "surf_agent_1lm_10distinctobj")
+      export!(dir, "pretrained_ycb_v13", "surf_agent_1lm_10similarobj")
+
+      assert Memory.releases_for("surf_agent_1lm_10distinctobj", dir) ==
+               ["pretrained_ycb_v10", "pretrained_ycb_v13"]
+
+      assert Memory.releases_for("surf_agent_1lm_10similarobj", dir) == ["pretrained_ycb_v13"]
+      assert Memory.releases_for("a_model_nobody_exported", dir) == []
     end
 
     test "is not the same memory as another release's, so another release is not a match" do
@@ -122,17 +137,38 @@ defmodule Monty.Studio.MemoryTest do
   describe "a directory that holds libraries" do
     test "lists the models each release exports, and nothing that is not one" do
       dir = Tmp.dir("libraries")
-      release = Path.join(dir, "pretrained_ycb_v12")
 
-      File.mkdir_p!(release)
-      File.write!(Path.join(release, "surf_agent_1lm_10distinctobj.jsonl.gz"), "")
-      File.write!(Path.join(release, "notes.md"), "")
+      export!(dir, "pretrained_ycb_v12", "surf_agent_1lm_10distinctobj")
+      File.write!(Path.join([dir, "pretrained_ycb_v12", "notes.md"]), "")
       # A README beside the releases is not a release.
       File.write!(Path.join(dir, "README.md"), "")
 
       assert Memory.available_libraries(dir) ==
                ["pretrained_ycb_v12/surf_agent_1lm_10distinctobj"]
     end
+  end
+
+  # An export in the format `Memory` reads: one object, one channel, one node.
+  # Discovery looks at which files exist rather than what is in them, but a file
+  # that could not be loaded would be a lie about what a library is.
+  defp export!(dir, release, name) do
+    path = Memory.path_for(name, release, dir)
+    File.mkdir_p!(Path.dirname(path))
+
+    record = %{
+      "object_id" => name,
+      "input_channel" => "patch",
+      "positions" => [[0.0, 0.0, 0.0]],
+      "features" => %{
+        "hsv" => [[0.1, 0.2, 0.3]],
+        "pose_vectors" => [[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]],
+        "pose_fully_defined" => [[1.0]],
+        "principal_curvatures_log" => [[0.0]]
+      }
+    }
+
+    File.write!(path, :zlib.gzip(Jason.encode!(record) <> "\n"))
+    path
   end
 
   describe "a directory that holds no libraries" do

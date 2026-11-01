@@ -86,6 +86,8 @@ defmodule Monty.Studio.PortedBodyTest do
   end
 
   # The exported library, named by the release it came from. Only the last two
-  # segments are read, so the test runs without Monty's models on this machine.
-  defp pretrained_dir, do: Path.join(__DIR__, "pretrained_ycb_v13")
+  # segments are read, so the test runs without Monty's models on this machine —
+  # and it names the release the repository ships, so it loads the same memory
+  # here as in CI.
+  defp pretrained_dir, do: Path.join(__DIR__, "pretrained_ycb_v10")
 end

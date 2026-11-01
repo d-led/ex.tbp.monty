@@ -17,13 +17,18 @@ alias Monty.Studio.{Run, Setup}
 
 IO.puts("#{length(Setup.objects(opened.setup))} objects in the memory")
 
-{first_us, {:ok, _info, _observations, run}} = :timer.tc(fn -> Run.step(run) end)
-IO.puts("first step: #{Float.round(first_us / 1_000_000, 2)} s")
+# A step costs more once the module has hypotheses to weigh, so the first few
+# steps are timed and the profile is taken on one that is carrying evidence.
+{totals, run} =
+  Enum.map_reduce(1..6, run, fn step, run ->
+    {us, {:ok, _info, _observations, run}} = :timer.tc(fn -> Run.step(run) end)
+    IO.puts("step #{step}: #{Float.round(us / 1_000, 1)} ms")
+    {us, run}
+  end)
 
-{second_us, {:ok, _info, _observations, run}} = :timer.tc(fn -> Run.step(run) end)
-IO.puts("second step: #{Float.round(second_us / 1_000_000, 2)} s")
+IO.puts("mean: #{Float.round(Enum.sum(totals) / length(totals) / 1_000, 1)} ms")
 
-IO.puts("\nby function, the third step (microseconds):")
+IO.puts("\nby function, one more step (microseconds):")
 :eprof.start()
 :eprof.profile(fn -> Run.step(run) end)
 :eprof.analyze(:total, sort: :time)
