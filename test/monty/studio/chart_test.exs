@@ -181,4 +181,42 @@ defmodule Monty.Studio.ChartTest do
       assert chart.mlh.y < chart.height
     end
   end
+
+  describe "a stretch of the run" do
+    test "is all a chart draws when it is given a window, and it says how long the run is" do
+      steps = [
+        {0, 0, belief(%{"mug" => 0.1})},
+        {0, 1, belief(%{"mug" => 0.2})},
+        {0, 2, belief(%{"mug" => 0.3})},
+        {0, 3, belief(%{"mug" => 0.4})}
+      ]
+
+      chart = Chart.new(steps, window: {1, 3})
+
+      assert {chart.x_min, chart.x_max} == {1, 3}
+      assert Chart.extent(steps) == {0, 3}
+      # Both ends are in: "steps 1–3" is three steps of a four-step run, and the
+      # step before the window is not one of them.
+      assert chart.series |> hd() |> Map.fetch!(:evidence) == [{1, 0.2}, {2, 0.3}, {3, 0.4}]
+    end
+
+    test "cannot reach past either end of the run" do
+      steps = [{0, 0, belief(%{"mug" => 0.1})}, {0, 1, belief(%{"mug" => 0.2})}]
+
+      chart = Chart.new(steps, window: {-5, 99})
+
+      assert {chart.x_min, chart.x_max} == {0, 1}
+    end
+
+    test "is the whole run when the window is empty or back to front" do
+      steps = [{0, 0, belief(%{"mug" => 0.1})}, {0, 1, belief(%{"mug" => 0.2})}]
+
+      for window <- [{1, 1}, {1, 0}, :nonsense] do
+        chart = Chart.new(steps, window: window)
+
+        assert {chart.x_min, chart.x_max} == {0, 1}
+        assert chart.series != []
+      end
+    end
+  end
 end

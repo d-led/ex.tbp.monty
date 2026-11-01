@@ -51,7 +51,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
     case Studio.open(name_of(params)) do
       {:ok, opened} ->
-        {:ok, follow_running(assign_opened(socket, opened, steps(params), episodes(params)))}
+        {:ok,
+         follow_running(
+           assign_opened(socket, opened, steps(params), episodes(params), window_of(params))
+         )}
 
       {:error, reason} ->
         {:ok,
@@ -61,12 +64,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
            error: reason,
            run_id: nil,
            lines: [],
-           filter: ""
+           filter: "",
+           x_window: window_of(params),
+           chart_extent: {0, 0}
          )}
     end
   end
 
-  defp assign_opened(socket, opened, steps, episodes) do
+  defp assign_opened(socket, opened, steps, episodes, window) do
     # What this experiment will leave behind, and what it would have left behind
     # if this port had it — said here as well as in the run's log, because a
     # config that logs nothing is worth knowing before the run, not after.
@@ -105,6 +110,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # has two answers, and averaging them would be a third.
       beliefs: %{},
       charts: %{},
+      # Which stretch of the run's own x axis the chart draws, `{from, to}` or
+      # `nil` for all of it. It comes from the URL rather than from an assign the
+      # page owns: a zoomed chart is a link that can be kept, and every way of
+      # changing it — zoom, pan, reset — is a patch.
+      x_window: window,
+      chart_extent: {0, 0},
       # The object and the agent in one picture per step: the views a sensor
       # streams say what a camera saw, this says whether there was anything to see.
       centre: nil
@@ -458,7 +469,66 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         </p>
 
         <section :if={@charts != %{}} id="evidence-chart" class="space-y-2">
-          <h3 class="text-sm font-medium">What the learning modules believe</h3>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="text-sm font-medium">What the learning modules believe</h3>
+            <%!-- Zooming is a patch: the server redraws the stretch asked for and
+            the address bar keeps it, so a zoomed chart is a link somebody can
+            send, and nothing about it lives only in the browser. --%>
+            <div class="join" id="chart-zoom">
+              <button
+                id="zoom-out"
+                phx-click="zoom"
+                phx-value-how="out"
+                class="btn btn-xs join-item"
+                aria-label="show more of the run"
+              >
+                −
+              </button>
+              <button
+                id="zoom-left"
+                phx-click="zoom"
+                phx-value-how="left"
+                class="btn btn-xs join-item"
+                aria-label="earlier steps"
+              >
+                ←
+              </button>
+              <span
+                id="chart-extent"
+                class="join-item border border-base-300 px-2 font-mono text-[11px] leading-6 text-base-content/70"
+              >
+                {window_label(@x_window, @chart_extent)}
+              </span>
+              <button
+                id="zoom-right"
+                phx-click="zoom"
+                phx-value-how="right"
+                class="btn btn-xs join-item"
+                aria-label="later steps"
+              >
+                →
+              </button>
+              <button
+                id="zoom-in"
+                phx-click="zoom"
+                phx-value-how="in"
+                class="btn btn-xs join-item"
+                aria-label="show less of the run"
+              >
+                +
+              </button>
+              <button
+                id="zoom-all"
+                phx-click="zoom"
+                phx-value-how="all"
+                class="btn btn-xs join-item"
+                disabled={is_nil(@x_window)}
+                aria-label="the whole run"
+              >
+                all
+              </button>
+            </div>
+          </div>
           <div class={["grid gap-2", map_size(@charts) > 1 && "lg:grid-cols-2"]}>
             <figure
               :for={{module_id, chart} <- @charts}
@@ -879,10 +949,36 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   @impl true
+  def handle_params(params, _uri, socket) do
+    window = window_of(params)
+
+    socket =
+      if window == socket.assigns[:x_window] do
+        socket
+      else
+        socket
+        |> assign(x_window: window)
+        |> assign(charts: charts_of(socket.assigns.beliefs, window))
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("run", _params, %{assigns: %{opened: opened, steps: steps}} = socket) do
     if Setup.valid?(opened.setup),
       do: start(socket, opened, steps, socket.assigns.parallelism, socket.assigns.episodes),
       else: {:noreply, socket}
+  end
+
+  # The chart is drawn for a stretch of the run, and zooming means saying which:
+  # `in` halves it around the middle, `out` doubles it, `left` and `right` move
+  # it by a quarter without changing its width, and `all` is the whole run.
+  # Each is a patch, so the address bar follows the picture.
+  def handle_event("zoom", %{"how" => how}, socket) do
+    window = zoom(socket.assigns[:x_window], socket.assigns[:chart_extent], how)
+
+    {:noreply, push_patch(socket, to: experiment_path(socket, window))}
   end
 
   def handle_event("parallelism", %{"parallelism" => count}, socket) do
@@ -1064,12 +1160,108 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         Map.update(histories, to_string(module_id), [point], &(&1 ++ [point]))
       end)
 
-    assign(socket, beliefs: histories, charts: charts_of(histories))
+    assign_charts(socket, histories)
   end
 
-  # One chart per module, from the module's own history.
-  defp charts_of(histories),
-    do: Map.new(histories, fn {module_id, steps} -> {module_id, Chart.new(steps)} end)
+  # The histories, the chart of the stretch being looked at, and how long the run
+  # is so far — the last of those is what zoom and pan move within.
+  defp assign_charts(socket, histories) do
+    window = socket.assigns.x_window
+
+    longest =
+      histories
+      |> Map.values()
+      |> Enum.max_by(&length/1, fn -> [] end)
+
+    assign(socket,
+      beliefs: histories,
+      charts: charts_of(histories, window),
+      chart_extent: Chart.extent(longest)
+    )
+  end
+
+  # One chart per module, from the module's own history, drawn for the stretch of
+  # the run the page is looking at.
+  defp charts_of(histories, window),
+    do:
+      Map.new(histories, fn {module_id, steps} ->
+        {module_id, Chart.new(steps, window: window)}
+      end)
+
+  # Zoom is a parameter, not a mode: `?x_from=12&x_to=30` is the chart of the
+  # run between those two moments, and a link holding it can be sent to somebody
+  # else. Nothing about it needs the browser to remember anything.
+  defp window_of(params) do
+    with {from, ""} <- Integer.parse(to_string(params["x_from"] || "")),
+         {to, ""} <- Integer.parse(to_string(params["x_to"] || "")),
+         true <- from < to do
+      {from, to}
+    else
+      _all -> nil
+    end
+  end
+
+  # The stretch on screen, in the run's own x units: "steps 12–30 of 120", or the
+  # whole run when nothing is zoomed.
+  defp window_label(nil, {first, last}), do: "steps #{first}–#{last}"
+  defp window_label({from, to}, {_first, last}), do: "steps #{from}–#{to} of #{last}"
+
+  # The next window, given the one on screen and how long the run is. Every
+  # result stays inside `first..last` and keeps at least one step of width, so a
+  # person mashing "zoom in" ends up looking at a single step rather than at
+  # nothing.
+  defp zoom(_window, {0, 0}, _how), do: nil
+
+  defp zoom(_window, _extent, "all"), do: nil
+
+  defp zoom(window, {first, last}, "in") do
+    {from, to} = window || {first, last}
+    middle = (from + to) / 2
+    half = max((to - from) / 4, 0.5)
+
+    clamp({round(middle - half), round(middle + half)}, first, last)
+  end
+
+  defp zoom(window, {first, last}, "out") do
+    {from, to} = window || {first, last}
+    middle = (from + to) / 2
+    half = to - from
+
+    clamp({round(middle - half), round(middle + half)}, first, last)
+  end
+
+  defp zoom(window, {first, last}, "left"), do: pan(window || {first, last}, first, last, -1)
+  defp zoom(window, {first, last}, "right"), do: pan(window || {first, last}, first, last, 1)
+
+  # Moving without resizing: a quarter of the window, and never past an end.
+  defp pan({from, to}, first, last, direction) do
+    step = max(div(to - from, 4), 1)
+    taken = min(max(from + direction * step, first), max(last - (to - from), first))
+
+    {taken, taken + (to - from)}
+  end
+
+  defp clamp({from, to}, first, last) do
+    {from, to} = {max(from, first), min(to, last)}
+
+    if from < to, do: {from, to}, else: {first, max(first + 1, last)}
+  end
+
+  # Where the page is now, with a chart window in it — the address every zoom
+  # and pan patches to.
+  defp experiment_path(socket, window) do
+    query =
+      [episodes: socket.assigns[:episodes], steps: socket.assigns[:steps]]
+      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+
+    query =
+      case window do
+        nil -> query
+        {from, to} -> query ++ [x_from: from, x_to: to]
+      end
+
+    ~p"/experiments/#{socket.assigns.opened.name}?#{query}"
+  end
 
   # What the record says, applied to the page.
   #
@@ -1131,7 +1323,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           Map.update(histories, module, [point], &(&1 ++ [point]))
         end)
 
-      assign(socket, beliefs_seeded: true, beliefs: histories, charts: charts_of(histories))
+      socket
+      |> assign(:beliefs_seeded, true)
+      |> assign_charts(histories)
     end
   end
 

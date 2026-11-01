@@ -427,6 +427,35 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert chart =~ "ep 2"
     end
 
+    test "zooming draws a stretch of the run, and the whole run is one click away", %{
+      conn: conn
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=2")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # Unzoomed, the label names the run and there is nothing to go back to.
+      assert view |> element("#chart-extent") |> render() =~ "steps 0–2"
+      assert has_element?(view, "#zoom-all[disabled]")
+
+      view |> element("#zoom-in") |> render_click()
+
+      assert view |> element("#chart-extent") |> render() =~ "of 2"
+      assert has_element?(view, "#zoom-all:not([disabled])")
+
+      assert_patch(
+        view,
+        ~p"/experiments/base_config_10distinctobj_dist_agent?#{[episodes: 2, steps: 2, x_from: 1, x_to: 2]}"
+      )
+
+      view |> element("#zoom-all") |> render_click()
+
+      assert view |> element("#chart-extent") |> render() =~ "steps 0–2"
+      refute has_element?(view, "#zoom-all:not([disabled])")
+    end
+
     test "the log filter keeps a line only if every word matches", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")

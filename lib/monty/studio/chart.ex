@@ -108,11 +108,25 @@ defmodule Monty.Studio.Chart do
         }
 
   @doc """
+  How far the run goes: `{0, last}`, the whole of what a window can show.
+
+  The page keeps this so zoom and pan have something to stay inside — a chart
+  drawn for a window no longer knows how long the run is.
+  """
+  @spec extent([step()]) :: {non_neg_integer(), non_neg_integer()}
+  def extent(steps) do
+    {placed, _starts} = stack(steps)
+    {0, last_step(placed)}
+  end
+
+  @doc """
   The chart of `steps` — `[{episode, step, belief}]`, in any order.
 
-  Options: `:width` and `:height` in user units, and `:objects` to draw only
-  those graphs (default: every graph that was ever reported, worst first so the
-  winner's line ends on top).
+  Options: `:width` and `:height` in user units, `:objects` to draw only those
+  graphs (default: every graph that was ever reported, worst first so the
+  winner's line ends on top), and `:window` — `{from, to}` on the run's own x
+  axis — to draw one stretch of it. A window wider than the run is the whole
+  run, which is what a page that has been zoomed beyond either end should show.
   """
   @spec new([step()], keyword()) :: t()
   def new(steps, options \\ []) do
@@ -120,6 +134,8 @@ defmodule Monty.Studio.Chart do
     height = Keyword.get(options, :height, 300)
 
     {placed, starts} = stack(steps)
+    {from, to} = window(Keyword.get(options, :window), last_step(placed))
+    placed = within(placed, from, to)
 
     # Ranked worst first, so the object a run is converging on is drawn last and
     # its line ends on top of the others.
@@ -130,15 +146,19 @@ defmodule Monty.Studio.Chart do
     chart = %__MODULE__{
       width: width,
       height: height,
-      x_min: 0,
-      x_max: last_step(placed),
+      x_min: from,
+      x_max: to,
       y_max: ceiling(Enum.map(ranked, fn {_id, points} -> Enum.map(points, &elem(&1, 2)) end))
     }
 
     # Where the episodes begin, in the SVG's own units: a boundary line for every
     # one after the first, and a label only where there is room for one — a
     # seventy-seven-episode run would otherwise label itself into a grey smear.
-    starts = Enum.map(starts, fn start -> %{start | x: rounded(x_coordinate(start.x, chart))} end)
+    starts =
+      starts
+      |> Enum.filter(&(&1.x >= from and &1.x <= to))
+      |> Enum.map(fn start -> %{start | x: rounded(x_coordinate(start.x, chart))} end)
+
     labelled = Enum.filter(starts, &there_is_room?(&1, starts))
     chart = %{chart | episode_starts: starts, episode_labels: labelled}
 
@@ -172,6 +192,23 @@ defmodule Monty.Studio.Chart do
 
   defp last_point({_episode, x, evidence}, _chart), do: {x, evidence}
   defp last_point(nil, chart), do: {chart.x_min, 0.0}
+
+  # The stretch to draw, kept inside the run: a window that runs off either end
+  # is the run, and one that is empty or back-to-front is the whole run rather
+  # than a chart with nothing in it.
+  defp window(nil, last), do: {0, last}
+
+  defp window({from, to}, last) when is_number(from) and is_number(to) and from < to do
+    from = from |> max(0) |> min(last)
+    to = to |> max(0) |> min(last)
+
+    if from < to, do: {from, to}, else: {0, last}
+  end
+
+  defp window(_nonsense, last), do: {0, last}
+
+  defp within(placed, from, to),
+    do: Enum.filter(placed, fn {_episode, x, _belief} -> x >= from and x <= to end)
 
   # One object's reported evidence, per step, in the order the module listed the
   # objects on the last step it reported them — so the line the run is chasing is
