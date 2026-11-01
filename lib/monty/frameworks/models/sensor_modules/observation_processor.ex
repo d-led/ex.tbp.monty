@@ -95,12 +95,16 @@ defmodule Monty.Frameworks.Models.SensorModules.ObservationProcessor do
   def process(%__MODULE__{} = processor, observation) do
     with {:ok, points} <- point_cloud(observation) do
       center_id = center_id(points)
-      features = coverage_feature(processor, points)
+      # Once: the coverage feature needs it, and a surface sensor decides on the
+      # same number whether to fit anything at all. It was counted twice, over
+      # the whole patch, for every observation.
+      coverage = coverage(points)
+      features = coverage_feature(processor, coverage)
       [x, y, z, semantic_id] = Enum.at(points, center_id)
       on_object? = semantic_id > 0.0
 
       {features, morphological_features, valid_signals?} =
-        if on_object? or (processor.is_surface_sm and coverage(points) > 0.0),
+        if on_object? or (processor.is_surface_sm and coverage > 0.0),
           do: extract(processor, observation, points, center_id, features),
           else: {features, %{}, false}
 
@@ -150,8 +154,8 @@ defmodule Monty.Frameworks.Models.SensorModules.ObservationProcessor do
   # Coverage is read before the surface is fitted, because a surface sensor is
   # allowed to report features with its middle pixel off the object as long as
   # some of the patch is on it (`sensor_modules.py:216-222`).
-  defp coverage_feature(%__MODULE__{features: wanted}, points) do
-    if "object_coverage" in wanted, do: %{"object_coverage" => coverage(points)}, else: %{}
+  defp coverage_feature(%__MODULE__{features: wanted}, coverage) do
+    if "object_coverage" in wanted, do: %{"object_coverage" => coverage}, else: %{}
   end
 
   # The two depths, over the pixels on the surface rather than over the whole
