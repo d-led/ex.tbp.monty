@@ -38,6 +38,8 @@ defmodule Mix.Tasks.Monty.Bench do
 
   use Mix.Task
 
+  alias Monty.Studio.BenchReport
+
   @requirements ["app.start"]
 
   @default_steps 20
@@ -60,11 +62,18 @@ defmodule Mix.Tasks.Monty.Bench do
   @impl true
   def run(args) do
     {opts, experiments} = OptionParser.parse!(args, strict: @switches)
+    validate!(opts)
 
     case experiments do
       [] -> Mix.raise("which experiment? mix monty.bench <experiment> [<experiment> ...]")
       experiments -> measure_all(experiments, opts)
     end
+  end
+
+  # `for _ <- 1..0` is a range of two, so a zero would have measured twice.
+  defp validate!(opts) do
+    if (opts[:steps] || @default_steps) < 1, do: Mix.raise("--steps must be at least 1")
+    if (opts[:repeat] || @default_repeat) < 1, do: Mix.raise("--repeat must be at least 1")
   end
 
   defp measure_all(experiments, opts) do
@@ -73,7 +82,8 @@ defmodule Mix.Tasks.Monty.Bench do
     if opts[:json] do
       Mix.shell().info(Jason.encode!(results, pretty: true))
     else
-      table(results)
+      shell = Mix.shell()
+      results |> BenchReport.table() |> Enum.each(&shell.info/1)
     end
 
     if Enum.any?(results, &(&1.runnable? == false)) do
@@ -89,13 +99,13 @@ defmodule Mix.Tasks.Monty.Bench do
       {:ok, opened} ->
         if Monty.Studio.Setup.valid?(opened.setup) do
           samples = for _ <- 1..repeat, do: sample(opened, steps)
-          summarise(experiment, samples, steps)
+          BenchReport.summarise(experiment, samples, steps)
         else
-          not_runnable(experiment, steps)
+          BenchReport.not_runnable(experiment, steps)
         end
 
       {:error, _reason} ->
-        not_runnable(experiment, steps)
+        BenchReport.not_runnable(experiment, steps)
     end
   end
 
@@ -120,66 +130,5 @@ defmodule Mix.Tasks.Monty.Bench do
     if Monty.Studio.Run.finished?(next_run),
       do: {Enum.reverse(infos), next_run},
       else: step_through(next_run, infos)
-  end
-
-  # The median of the repetitions, because one unlucky run says more about the
-  # machine than about the code.
-  defp summarise(experiment, samples, steps) do
-    durations = samples |> Enum.map(& &1.durations) |> List.flatten() |> Enum.sort()
-
-    %{
-      experiment: experiment,
-      steps: steps,
-      total_us: samples |> Enum.map(& &1.summary.duration_us) |> Enum.sort() |> median(),
-      mean_us: durations |> Enum.sum() |> Kernel./(max(length(durations), 1)),
-      p50_us: percentile(durations, 0.50),
-      p95_us: percentile(durations, 0.95),
-      max_us: List.last(durations) || 0,
-      deadline_hits: samples |> Enum.map(& &1.summary.deadline_hits) |> Enum.max(),
-      runnable?: true
-    }
-  end
-
-  defp not_runnable(experiment, steps) do
-    %{
-      experiment: experiment,
-      steps: steps,
-      total_us: 0,
-      mean_us: 0.0,
-      p50_us: 0,
-      p95_us: 0,
-      max_us: 0,
-      deadline_hits: 0,
-      runnable?: false
-    }
-  end
-
-  defp median([]), do: 0
-  defp median(sorted), do: Enum.at(sorted, div(length(sorted), 2))
-
-  defp percentile([], _fraction), do: 0
-
-  defp percentile(sorted, fraction) do
-    index = round(fraction * (length(sorted) - 1))
-    Enum.at(sorted, index)
-  end
-
-  defp table(results) do
-    Mix.shell().info(
-      "experiment                                   steps  total µs  µs/step  p50  p95  max  deadlines"
-    )
-
-    Enum.each(results, fn result ->
-      Mix.shell().info(
-        String.pad_trailing(result.experiment, 44) <>
-          String.pad_leading(Integer.to_string(result.steps), 6) <>
-          String.pad_leading(Integer.to_string(result.total_us), 10) <>
-          String.pad_leading(:erlang.float_to_binary(result.mean_us, decimals: 1), 9) <>
-          String.pad_leading(Integer.to_string(result.p50_us), 5) <>
-          String.pad_leading(Integer.to_string(result.p95_us), 5) <>
-          String.pad_leading(Integer.to_string(result.max_us), 5) <>
-          String.pad_leading(Integer.to_string(result.deadline_hits), 11)
-      )
-    end)
   end
 end

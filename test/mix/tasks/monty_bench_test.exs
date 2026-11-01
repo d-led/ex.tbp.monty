@@ -44,6 +44,20 @@ defmodule Mix.Tasks.Monty.BenchTest do
     test "no experiment at all" do
       assert_raise Mix.Error, ~r/which experiment/, fn -> Mix.Tasks.Monty.Bench.run([]) end
     end
+
+    # `for _ <- 1..0` counts down and yields two, so a zero used to measure
+    # twice rather than not at all.
+    test "zero steps, because that would have measured two" do
+      assert_raise Mix.Error, ~r/--steps must be at least 1/, fn ->
+        Mix.Tasks.Monty.Bench.run(["tutorial/first_experiment", "--steps", "0"])
+      end
+    end
+
+    test "zero repetitions, for the same reason" do
+      assert_raise Mix.Error, ~r/--repeat must be at least 1/, fn ->
+        Mix.Tasks.Monty.Bench.run(["tutorial/first_experiment", "--repeat", "0"])
+      end
+    end
   end
 
   defp capture(args) do
