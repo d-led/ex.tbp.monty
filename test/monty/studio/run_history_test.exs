@@ -156,6 +156,58 @@ defmodule Monty.Studio.RunHistoryTest do
   # progressing. That is not the reaper's question — it asks whether a process is
   # working on the run at all — and it is not the same as a slow step, which is
   # why the threshold is minutes rather than seconds.
+  describe "what a run actually did" do
+    test "counts the steps it took, not the budget it was allowed" do
+      # The column says 500 because that is what an episode may use; the run
+      # recognised its object at step 22 and stopped.
+      run = %Run{status: "finished", steps: 500, log: for(n <- 1..22, do: %{"step" => n})}
+
+      assert RunHistory.steps_run(run) == 22
+      assert run.steps == 500
+    end
+
+    test "counts the episodes it stepped, against the ones it was asked for" do
+      run = %Run{
+        status: "finished",
+        inputs: %{"episodes" => 140},
+        log: for(step <- 0..1, episode <- 0..27, do: %{"step" => step, "episode" => episode})
+      }
+
+      assert RunHistory.episodes_run(run) == 28
+      assert RunHistory.episodes_asked(run) == 140
+    end
+
+    test "says a record that was not asked for a scope does not know one" do
+      assert RunHistory.episodes_asked(%Run{inputs: %{}}) == nil
+    end
+
+    test "a run that recognised its object ends as a recognition" do
+      run = %Run{
+        status: "finished",
+        summary: %{"steps" => 22, "outcome" => %{"learning_module_0" => "match"}}
+      }
+
+      assert RunHistory.ending(run) == "recognised"
+    end
+
+    test "a run whose modules said no is not a recognition" do
+      run = %Run{
+        status: "finished",
+        summary: %{"steps" => 500, "outcome" => %{"learning_module_0" => "no_match"}}
+      }
+
+      assert RunHistory.ending(run) == "no match"
+    end
+
+    test "an abandoned run ends as abandoned, and a running one has not ended" do
+      abandoned = %Run{status: "failed", summary: %{"reason" => "it stopped before it finished"}}
+      running = %Run{status: "running", summary: %{}}
+
+      assert RunHistory.ending(abandoned) == "abandoned"
+      assert RunHistory.ending(running) == nil
+    end
+  end
+
   describe "a run that has gone quiet" do
     test "is not stalled while its steps keep landing" do
       run = %Run{status: "running", updated_at: DateTime.utc_now()}

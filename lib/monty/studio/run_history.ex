@@ -320,6 +320,76 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
+  How many steps the run actually took.
+
+  The record's `steps` column is the budget an episode is allowed, not what
+  happened: a run given 500 steps that recognised its object at 22 has a column
+  saying 500 and a log saying 22. A page that shows the column as the run's
+  length is a page that lies, so it asks this instead.
+  """
+  @spec steps_run(Run.t()) :: non_neg_integer()
+  def steps_run(%Run{log: log}), do: length(log)
+
+  @doc "How many of the experiment's episodes this run actually stepped."
+  @spec episodes_run(Run.t()) :: non_neg_integer()
+  def episodes_run(%Run{log: log}) do
+    log |> Enum.map(& &1["episode"]) |> Enum.uniq() |> length()
+  end
+
+  @doc """
+  How many episodes the run was asked for — the whole experiment, unless the
+  caller sliced it. `nil` for a record that does not say.
+  """
+  @spec episodes_asked(Run.t()) :: non_neg_integer() | nil
+  def episodes_asked(%Run{inputs: %{"episodes" => count}}) when is_integer(count) and count > 0,
+    do: count
+
+  def episodes_asked(%Run{}), do: nil
+
+  @doc """
+  How the run ended, in the model's own terms, or `nil` where the state says it.
+
+  The state badge answers "did the record close"; this answers "what did it
+  conclude" — the question a run that stopped after twenty-two steps raises and
+  a step count cannot settle.
+  """
+  @spec ending(Run.t()) :: String.t() | nil
+  def ending(%Run{status: "running"}), do: nil
+
+  def ending(%Run{status: "failed"} = run) do
+    case run.summary do
+      # The Reaper's words, condensed to a column: the sentence it wrote is on
+      # the run's own page.
+      %{"reason" => reason} when is_binary(reason) -> "abandoned"
+      _failed_another_way -> "failed"
+    end
+  end
+
+  def ending(%Run{status: "finished"} = run) do
+    case run.summary do
+      %{"steps" => 0} -> "no steps"
+      %{"outcome" => outcome} when is_map(outcome) -> conclusion(outcome)
+      _no_summary -> nil
+    end
+  end
+
+  def ending(%Run{}), do: nil
+
+  # What the modules concluded. `match` anywhere is a recognition, which is the
+  # criterion these configs name; a run whose modules simply said no is not the
+  # same result and does not get the same word.
+  defp conclusion(outcome) do
+    concluded = outcome |> Map.values() |> Enum.reject(&is_nil/1)
+
+    cond do
+      "match" in concluded -> "recognised"
+      "no_match" in concluded -> "no match"
+      "time_out" in concluded -> "timed out"
+      true -> nil
+    end
+  end
+
+  @doc """
   Is this run claiming to be running with nothing to show for it?
 
   Silence is only a fault while a run says it is going: a queued run has no steps

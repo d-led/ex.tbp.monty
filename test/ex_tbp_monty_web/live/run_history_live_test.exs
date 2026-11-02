@@ -83,6 +83,38 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     {:ok, run: run}
   end
 
+  describe "what a row says a run did" do
+    test "the steps and episodes it stepped, not the budget it was allowed", %{conn: conn} do
+      # The run in question: allowed 500 steps an episode, given all 140 episodes
+      # of the experiment, it recognised its object and stopped after three steps
+      # in two of them. The old row said "500" — a number that never happened.
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "base_config_10distinctobj_dist_agent",
+          source: "monty",
+          steps: 500,
+          inputs: %{"episodes" => 140}
+        })
+
+      run =
+        Enum.reduce([{0, 0}, {0, 1}, {1, 0}], run, fn {episode, step}, run ->
+          {:ok, next} =
+            RunHistory.record_step(run, %{"step" => step, "episode" => episode}, moment(step))
+
+          next
+        end)
+
+      {:ok, run} =
+        RunHistory.finish(run, %{"steps" => 3, "outcome" => %{"learning_module_0" => "match"}})
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      assert view |> element("#steps-#{run.id}") |> render() =~ "3"
+      assert view |> element("#episodes-#{run.id}") |> render() =~ "ep 2/140"
+      assert view |> element("#ending-#{run.id}") |> render() =~ "recognised"
+    end
+  end
+
   # A step's moment, recorded the way a run records one: the arrays a camera
   # answers with go in, and the pictures a page draws them into come out. The
   # depth grows with the step, so a step is visibly a different step.

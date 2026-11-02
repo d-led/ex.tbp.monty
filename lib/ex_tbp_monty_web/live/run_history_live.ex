@@ -355,7 +355,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         </button>
       </div>
 
-      <div class="overflow-hidden rounded-box border border-base-300 bg-base-100">
+      <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
         <table id="runs-table" phx-hook={ExTbpMontyWeb.LocalTime.hook_name()} class="table table-sm">
           <thead>
             <tr class="text-xs text-base-content/60">
@@ -383,18 +383,18 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                   />
                 </button>
               </th>
-              <th class="w-full">experiment</th>
+              <th>experiment</th>
               <th>state</th>
-              <th>world</th>
-              <th class="text-right">steps</th>
-              <th class="text-right">duration</th>
-              <th>started</th>
+              <th class="text-right whitespace-nowrap">steps</th>
+              <th class="text-right whitespace-nowrap">duration</th>
+              <th class="whitespace-nowrap">ending</th>
+              <th class="whitespace-nowrap">started</th>
               <th class="text-right"></th>
             </tr>
           </thead>
           <tbody id="runs" phx-update="stream">
             <tr id="runs-empty" class="hidden only:table-row">
-              <td colspan="8" class="text-sm text-base-content/60">
+              <td colspan="7" class="text-sm text-base-content/60">
                 No run matches.
                 <.link patch={filter_href(@state, "")} class="link link-primary">Clear the filter</.link>
               </td>
@@ -421,14 +421,23 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                   />
                 </button>
               </td>
-              <td class="w-full">
+              <td class="whitespace-nowrap">
                 <.link navigate={~p"/runs/#{run.id}"} class="link link-hover font-mono text-sm">
                   {run.experiment}
                 </.link>
-                <%!-- Which episode, always: after a parallel run the name alone
-                does not say which of the rows this one is. --%>
-                <span class="ms-1.5 font-mono text-[10px] text-base-content/50">
-                  ep {run.episode}
+                <%!-- Which slice of the experiment this row is, and how much of
+                it actually ran: the name alone does not say it, and the record's
+                episode is where the run started rather than how far it got. --%>
+                <span
+                  id={"episodes-#{run.id}"}
+                  class="ms-1.5 font-mono text-[10px] text-base-content/50"
+                >
+                  {episodes_label(run)}
+                </span>
+                <%!-- Which world it stepped: two runs of one experiment are not
+                comparable otherwise, and the default is not the only choice. --%>
+                <span class="ms-1.5 font-mono text-[10px] text-base-content/40">
+                  {ExTbpMontyWeb.StudioComponents.world_label(run)}
                 </span>
               </td>
               <td>
@@ -450,9 +459,26 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               <td class="text-[11px] whitespace-nowrap">
                 {ExTbpMontyWeb.StudioComponents.world_label(run)}
               </td>
-              <td class="text-right font-mono text-xs">{run.steps}</td>
-              <td class="text-right font-mono text-xs">{duration(run.duration_us)}</td>
-              <td class="font-mono text-xs">
+              <td
+                id={"steps-#{run.id}"}
+                class="text-right font-mono text-xs tabular-nums"
+                title={"up to #{run.steps} steps an episode"}
+              >
+                {RunHistory.steps_run(run)}
+              </td>
+              <td class="text-right font-mono text-xs whitespace-nowrap">
+                {duration(run.duration_us)}
+              </td>
+              <%!-- What the run concluded, when it concluded something other
+              than using up its budget: the step count alone cannot tell a run
+              that recognised its object from one that ran out. --%>
+              <td
+                id={"ending-#{run.id}"}
+                class="text-xs whitespace-nowrap text-base-content/70"
+              >
+                {RunHistory.ending(run)}
+              </td>
+              <td class="font-mono text-xs whitespace-nowrap">
                 <ExTbpMontyWeb.LocalTime.local_time at={run.inserted_at} class="tabular-nums" />
               </td>
               <td class="text-right whitespace-nowrap">
@@ -590,7 +616,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         </div>
         <p class="text-xs text-base-content/60">
           started <ExTbpMontyWeb.LocalTime.local_time at={@run.inserted_at} style={:clock} />
-          · {@run.steps} steps · {duration(@run.duration_us)}
+          · {RunHistory.steps_run(@run)} steps in {episodes_label(@run)} · {duration(@run.duration_us)}
+          <span :if={RunHistory.ending(@run)} id="run-ending">
+            · {RunHistory.ending(@run)}
+          </span>
           <%!-- "Time is not enough": a stamp says when the last step was, not
           whether another is coming. This says both — the run claims to be
           running and nothing has been recorded for longer than a slow step. --%>
@@ -1054,6 +1083,18 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   # How long a run has been quiet, in the unit that answers the question asked.
   defp quiet(run), do: Duration.humanize(RunHistory.quiet_for(run) * 1_000_000)
+
+  # How much of the experiment this run is, and how much of that it did: "ep
+  # 28/140" is the comparison a run is worth, and "ep 0" — the episode it
+  # started at — said nothing about it.
+  defp episodes_label(run) do
+    ran = RunHistory.episodes_run(run)
+
+    case RunHistory.episodes_asked(run) do
+      nil -> "ep #{ran}"
+      asked -> "ep #{ran}/#{asked}"
+    end
+  end
 
   # A file's size, in the unit a person reading a list of three files thinks in.
   defp bytes(size) when size >= 1_048_576, do: "#{Float.round(size / 1_048_576, 1)} MB"
