@@ -297,9 +297,18 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
     top_indices = top_indices(node_evidence, div(count, per_node))
 
-    locations = GraphMemory.get_locations_in_graph(updater.graph_memory, graph_id, input_channel)
-    selected_locations = Enum.map(top_indices, &Enum.at(locations, &1))
-    selected_evidence = Enum.map(top_indices, &Enum.at(node_evidence, &1))
+    # A top index is a position, and `Enum.at/2` walks a list to reach it: a few
+    # hundred picks from a graph of thousands of nodes spent 13 µs each doing
+    # the walk rather than the work, so the two per-node lists are tuples here.
+    locations =
+      updater.graph_memory
+      |> GraphMemory.get_locations_in_graph(graph_id, input_channel)
+      |> List.to_tuple()
+
+    evidence = List.to_tuple(node_evidence)
+
+    selected_locations = Enum.map(top_indices, &elem(locations, &1))
+    selected_evidence = Enum.map(top_indices, &elem(evidence, &1))
 
     rotations = rotations(updater, graph_id, input_channel, features, top_indices, per_node)
 
@@ -335,13 +344,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
          per_node
        ) do
     node_directions =
-      GraphMemory.get_rotation_features_at_all_nodes(
-        updater.graph_memory,
-        graph_id,
-        input_channel
-      )
+      updater.graph_memory
+      |> GraphMemory.get_rotation_features_at_all_nodes(graph_id, input_channel)
+      |> List.to_tuple()
 
-    directions = Enum.map(top_indices, &Enum.at(node_directions, &1))
+    directions = Enum.map(top_indices, &elem(node_directions, &1))
 
     features
     |> sensed_pose_vectors()
