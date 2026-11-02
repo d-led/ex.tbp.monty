@@ -303,18 +303,65 @@ defmodule ExTbpMontyWeb.StudioComponents do
       </p>
 
       <form :if={@moment} id="replay-seek" phx-change="replay_seek" class="px-0.5">
+        <%!-- The slider is drawn from the step the page is showing, so every
+        patch that arrives while a drag is in flight would put the handle back
+        where the server last left it. The hook holds the reader's own value for
+        as long as the pointer is down: the page catches up when the drag ends,
+        not while it is happening. --%>
         <input
           type="range"
           name="step"
           id="replay-slider"
+          phx-hook=".ReplaySlider"
           min="0"
           max={max(@recorded - 1, 0)}
           value={@moment.position}
-          phx-debounce="150"
+          phx-debounce="120"
           class="range range-xs range-primary w-full"
           aria-label="Step"
         />
       </form>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".ReplaySlider">
+        export default {
+          mounted() {
+            this.dragging = false
+            this.wanted = this.el.value
+
+            this.hold = () => {
+              this.dragging = true
+            }
+            this.release = () => {
+              this.dragging = false
+            }
+            this.remember = () => {
+              this.wanted = this.el.value
+            }
+
+            this.el.addEventListener("pointerdown", this.hold)
+            this.el.addEventListener("input", this.remember)
+
+            // A pointer released anywhere ends the drag, including one the
+            // pointer left the slider for.
+            window.addEventListener("pointerup", this.release)
+            window.addEventListener("pointercancel", this.release)
+          },
+
+          // The element's own listeners go with the element; the window's do
+          // not, so a page navigated away from would keep one per visit.
+          destroyed() {
+            window.removeEventListener("pointerup", this.release)
+            window.removeEventListener("pointercancel", this.release)
+          },
+
+          // A patch that lands mid-drag is behind the reader's hand, not ahead
+          // of it: putting it in would move the handle backwards under the
+          // pointer. The value the reader chose wins until the drag ends.
+          updated() {
+            if (this.dragging && this.el.value !== this.wanted) this.el.value = this.wanted
+          },
+        }
+      </script>
 
       <%!-- What the step under the slider was deciding between. Two names and two
       numbers, so dragging the slider answers "and then what?" without reading a

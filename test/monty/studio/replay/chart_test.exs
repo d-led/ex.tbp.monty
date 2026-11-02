@@ -278,4 +278,24 @@ defmodule Monty.Studio.Replay.ChartTest do
              }
     end
   end
+
+  describe "moving the playhead" do
+    test "leaves the lines, the bands and the samples where they were" do
+      series = [%{id: "mug", label: "mug", unit: "", points: points([1.0, 2.0, 3.0])}]
+      chart = Chart.many(series, window: {0, 2}, playhead: 0)
+
+      moved = Chart.with_playhead(chart, 2)
+
+      # A drag of the slider moves one dashed line: everything else in a chart is
+      # a function of the series and the window, and redrawing it per pixel of
+      # drag is what made a slider in flight feel unlike a slider.
+      assert moved.lines == chart.lines
+      assert moved.polylines == chart.polylines
+      assert moved.hover == chart.hover
+      assert moved.bands == chart.bands
+      assert moved.ticks == chart.ticks
+      assert moved.playhead == 320
+      assert chart.playhead == 0
+    end
+  end
 end

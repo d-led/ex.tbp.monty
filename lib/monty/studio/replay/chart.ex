@@ -154,6 +154,19 @@ defmodule Monty.Studio.Replay.Chart do
     }
   end
 
+  @doc """
+  The same chart with the playhead moved to `step`.
+
+  Everything else in a chart is a function of the series and the window: the
+  lines, the bands, the axis, and the samples a hover reads. Only the dashed line
+  moves when a reader drags the slider, so a drag moves that line — rebuilding a
+  thousand points per pixel of drag was most of what a drag cost, and it is what
+  made a slider in flight feel unlike a slider.
+  """
+  @spec with_playhead(t(), Replay.step_number() | nil) :: t()
+  def with_playhead(%__MODULE__{from: from, to: to} = chart, step),
+    do: %{chart | playhead: playhead(step, from, to)}
+
   # Four values across the axis, always including both ends, in the fewest
   # decimals that tell them apart: the numbers a reader uses to say how far one
   # line is above another.

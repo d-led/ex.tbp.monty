@@ -246,6 +246,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     series_id = socket.assigns[:series_id] || default_series(series)
     window = Replay.window(run, socket.assigns[:window] || whole_run(run))
     moment = run |> Replay.at(step) |> with_pictures(run)
+    {chart, chart_key, chart_base} = chart_with(socket, catalog, series_id, window, step)
 
     socket
     |> assign(
@@ -255,13 +256,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       series_id: series_id,
       window: window,
       pictures: socket.assigns[:pictures] || kept_pictures?(run),
-      best: Replay.best_evidence(run),
+      best: catalog.best,
       theories: Replay.theories(moment),
       graphs: catalog.objects != [],
-      chart: chart_for(catalog, series_id, window, step),
-      playing: false
+      chart: chart,
+      # Playback is the play button's, not a redraw's: a tick that redrew the
+      # page after switching playback off stopped after a single step.
+      playing: Map.get(socket.assigns, :playing, false)
     )
-    |> assign(catalog_key: catalog.key, catalog: catalog)
+    |> assign(
+      catalog_key: catalog.key,
+      catalog: catalog,
+      chart_key: chart_key,
+      chart_base: chart_base
+    )
   end
 
   # The pictures of the step being shown, asked for by itself: the record is read
@@ -308,8 +316,16 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     key = {run.id, length(run.log), length(run.timeline)}
 
     case socket.assigns[:catalog_key] do
-      ^key -> socket.assigns.catalog
-      _other -> %{key: key, objects: Replay.objects(run), series: Replay.series(run)}
+      ^key ->
+        socket.assigns.catalog
+
+      _other ->
+        %{
+          key: key,
+          objects: Replay.objects(run),
+          series: Replay.series(run),
+          best: Replay.best_evidence(run)
+        }
     end
   end
 
@@ -322,8 +338,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     [%{id: @objects, label: "every object (#{length(objects)})", unit: "", points: []} | series]
   end
 
-  defp chart_for(catalog, series_id, window, step) do
-    Chart.many(chart_lines(catalog, series_id), window: window, playhead: step)
+  # The chart, and what it was drawn from: the lines, the axis and the samples a
+  # hover reads are a function of the series and the window, so they are drawn
+  # once and kept. Dragging the slider then moves one dashed line instead of
+  # rebuilding every point of every line, which is what a drag is supposed to be.
+  defp chart_with(socket, catalog, series_id, window, step) do
+    key = {catalog.key, series_id, window}
+
+    base =
+      case socket.assigns[:chart_key] do
+        ^key -> socket.assigns.chart_base
+        _other -> Chart.many(chart_lines(catalog, series_id), window: window)
+      end
+
+    {Chart.with_playhead(base, step), key, base}
   end
 
   defp chart_lines(%{objects: objects}, @objects), do: objects
@@ -1050,11 +1078,16 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp replay_window(socket, window) do
-    assign(socket,
-      window: window,
-      chart:
-        chart_for(socket.assigns.catalog, socket.assigns.series_id, window, socket.assigns.step)
-    )
+    {chart, chart_key, chart_base} =
+      chart_with(
+        socket,
+        socket.assigns.catalog,
+        socket.assigns.series_id,
+        window,
+        socket.assigns.step
+      )
+
+    assign(socket, window: window, chart: chart, chart_key: chart_key, chart_base: chart_base)
   end
 
   defp schedule_replay(socket) do

@@ -45,3 +45,8 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# The replay's own clock. A test that presses play asks where playback starts,
+# not how fast it is, and a timer that fires every 120 ms makes "it started at
+# the first step" a test of the scheduler.
+config :ex_tbp_monty, studio_replay_tick_ms: 5_000

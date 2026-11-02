@@ -664,6 +664,11 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     test "opens at the last step, with the picture that step saw", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
+      # The slider is held by a hook while it is dragged: a patch that lands
+      # mid-drag would otherwise put the handle back where the server left it.
+      assert view |> element("#replay-slider") |> render() =~
+               ~s(phx-hook="ExTbpMontyWeb.StudioComponents.ReplaySlider")
+
       assert has_element?(view, "#replay-panel")
       assert has_element?(view, "#replay-slider")
       assert has_element?(view, "#replay-frame-patch")
@@ -845,13 +850,23 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       refute has_element?(view, "#replay-chart-no-graphs")
     end
 
-    test "playing walks the steps forward on its own", %{conn: conn, run: run} do
+    test "playing walks the steps forward on its own", %{conn: conn} do
+      # Three steps, because two ticks are the point: a run of two would have
+      # stopped at its own end and proved nothing.
+      run = run_believing([%{"mug" => 1.0}, %{"mug" => 2.0}, %{"mug" => 3.0}])
+
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
       # Playing from the end starts again at the beginning, which is what a
       # person who pressed play wanted.
       view |> element("#replay-play") |> render_click()
       assert view |> element("#replay-step") |> render() =~ "step 0"
+
+      # The replay's clock, wound by hand: two ticks are two steps, which a
+      # redraw that quietly switches playback off would not be.
+      send(view.pid, :replay_tick)
+      send(view.pid, :replay_tick)
+      assert view |> element("#replay-step") |> render() =~ "step 2"
     end
 
     test "a run with no steps says so instead of showing an empty slider", %{conn: conn} do
