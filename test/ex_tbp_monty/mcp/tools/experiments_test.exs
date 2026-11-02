@@ -69,8 +69,10 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                Tools.call("monty_describe_experiment", %{"name" => @experiment}, @ctx)
 
       assert text =~ @experiment
-      assert text =~ "sensors (2): "
-      assert text =~ "ported here: #{summary.ported.implemented}/#{summary.ported.total} classes"
+      # The same sentences the studio page shows and the CLI prints.
+      assert text =~ "sensors: patch, view_finder"
+      assert text =~ "episodes, as the config runs them: 1 train"
+      assert text =~ "ported here: #{summary.ported.implemented}/#{summary.ported.total}"
     end
 
     test "is an error for a name that is not an experiment" do

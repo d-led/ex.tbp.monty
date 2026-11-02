@@ -16,7 +16,19 @@ defmodule ExTbpMonty.Mcp.Experiments do
   alias Monty.Config.Source
   alias Monty.Prerequisites
   alias Monty.Studio
-  alias Monty.Studio.{Blueprint, Catalog, Drafts, Finding, Index, Jobs, RunHistory, RunLog, Setup}
+
+  alias Monty.Studio.{
+    Blueprint,
+    Catalog,
+    Drafts,
+    Finding,
+    Index,
+    Jobs,
+    Panel,
+    RunHistory,
+    RunLog,
+    Setup
+  }
 
   @default_limit 25
   @max_limit 200
@@ -361,6 +373,9 @@ defmodule ExTbpMonty.Mcp.Experiments do
             "runs and steps them one at a time"
       },
       connections: Enum.map(opened.setup.connections, &connection/1),
+      # The same sentences the studio page shows before a run and the CLI prints
+      # before one: a tool that phrased them itself would be a third promise.
+      facts: Panel.facts(opened.setup),
       epochs: opened.setup.epochs,
       # Which halves of it run: `n_train_epochs` is not "does it train".
       epoch_plan: Setup.epoch_plan(opened.setup),

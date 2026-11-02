@@ -248,31 +248,26 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
       "\n\nAsk for one group's options with monty_experiment_options."
   end
 
-  # "14 eval epoch(s)", or both phases in the order Monty runs them.
-  defp epochs_text(%{epoch_plan: plan}), do: epochs_text(plan)
-
-  defp epochs_text(plan) when is_list(plan) do
-    case plan do
-      [] -> "none (the config switches both phases off)"
-      plan -> Enum.map_join(plan, " then ", fn {mode, epochs} -> "#{epochs} #{mode} epoch(s)" end)
-    end
-  end
-
+  # The config in the words the studio page and the CLI use, then what only a
+  # reader of the catalog wants: the objects, the connections, how Monty would
+  # parallelise it, and what it reads off the disk.
   defp describe_text(summary) do
     """
     `#{summary.name}` — #{summary.experiment_class.class} (#{summary.source})
 
-    sensors (#{summary.counts.sensors}): #{Enum.map_join(summary.sensors, ", ", & &1.id)}
-    learning modules (#{summary.counts.learning_modules}): #{Enum.map_join(summary.learning_modules, ", ", & &1.id)}
+    #{facts_text(summary.facts)}
     objects: #{objects_text(summary.objects)}
-    connections: #{summary.counts.connections} · epochs: #{epochs_text(summary)} · seed: #{inspect(summary.seed)}
+    connections: #{summary.counts.connections}
     parallel: #{parallel_text(summary.parallel)}
-    ported here: #{summary.ported.implemented}/#{summary.ported.total} classes
+
     #{needs_text(summary)}
 
     #{findings_text(summary.findings)}
     """
   end
+
+  defp facts_text(facts),
+    do: Enum.map_join(facts, "\n", fn {label, value} -> "#{label}: #{value}" end)
 
   # The question before the button: a run refuses while any of these is missing,
   # so the answer belongs here rather than only in a refusal at the end.
