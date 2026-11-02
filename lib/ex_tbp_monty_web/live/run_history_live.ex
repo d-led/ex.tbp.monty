@@ -36,6 +36,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # between two steps and will never send another.
   @show_poll_ms 2_000
 
+  # The two keys that answer "why did this stop", shown in the failure panel and
+  # kept out of the table of everything else.
+  @said_above ["reason", "technical"]
+
   @impl true
   def mount(_params, _session, socket) do
     # The list is a stream fed by the record's topic, not by re-reading: a run
@@ -894,24 +898,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # The run said something: a step, the end of it, or a failure. The worker
   # publishes on the run's topic as `{:studio, run_id, event}`, and reading the
   # record again is what keeps one source of truth — the worker writes it, the
-  # page shows it. A message for a run this page is not showing is not news.
-  def handle_info({:studio, run_id, _event}, %{assigns: %{run: %{id: run_id}}} = socket),
-    do: refresh_own_run(socket)
-
-  def handle_info({:studio, _other_run, _event}, socket), do: {:noreply, socket}
+  # page shows it. This page subscribes to one topic, the run it shows, so every
+  # message on it is that run's.
+  def handle_info({:studio, _run_id, _event}, socket), do: refresh_own_run(socket)
 
   # A page that shows a run keeps asking, even though the worker broadcasts: a
   # message can arrive while the socket is reconnecting, and a worker can die
-  # without saying anything at all. Asking the record — after a sweep, so a run
-  # nobody owns is settled instead of shown as alive — is what stops the page
-  # from saying "running" while nothing is running.
-  def handle_info(:show_poll, %{assigns: %{live_action: :show, run: %{id: id} = run}} = socket) do
-    if in_flight?(run, socket.assigns.queue), do: Reaper.sweep()
-
-    {:noreply, socket |> refresh_run(id) |> keep_polling()}
-  end
-
-  def handle_info(:show_poll, socket), do: {:noreply, socket}
+  # without saying anything at all.
+  def handle_info(:show_poll, socket), do: {:noreply, poll_shown_run(socket)}
 
   # A run was written down, or settled. The index draws the record it was told
   # about; the detail page keeps its own place and only asks for its own run.
@@ -975,6 +969,17 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     if connected?(socket), do: Process.send_after(self(), :show_poll, @show_poll_ms)
     socket
   end
+
+  # Asking the record — after a sweep, so a run nobody owns is settled instead
+  # of shown as alive — is what stops the page from saying "running" while
+  # nothing is running.
+  defp poll_shown_run(%{assigns: %{live_action: :show, run: %{id: id} = run}} = socket) do
+    if in_flight?(run, socket.assigns.queue), do: Reaper.sweep()
+
+    socket |> refresh_run(id) |> keep_polling()
+  end
+
+  defp poll_shown_run(socket), do: socket
 
   # A run that has stopped does not need asking again.
   defp keep_polling(socket) do
@@ -1088,18 +1093,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   defp summary(%{summary: summary}) do
     summary
-    |> Enum.reject(fn {_key, value} -> value in [%{}, []] end)
+    |> Enum.reject(fn {key, value} ->
+      key in @said_above or value in [%{}, []]
+    end)
     |> Enum.sort_by(fn {key, _value} -> key end)
     |> Enum.map(fn {key, value} -> {key, format(value)} end)
   end
 
   # What ended a run that did not finish. Absent is a real answer: a run that
-  # finished, or one still going, has nothing that ended it.
-  # Why it stopped, said the way a person reads it. The record keeps whatever the
-  # worker could say — often a stacktrace — and `Failure` turns that into a
-  # sentence without throwing the original away.
+  # finished, or one still going, has nothing that ended it. The record keeps the
+  # sentence in one key and the traceback beside it in another, and both are
+  # shown above; a summary grid that listed them again would repeat one and
+  # unfold the other.
   defp failure(%{status: "failed", summary: summary}) when is_map(summary),
-    do: Failure.explain(summary["reason"])
+    do: Failure.explain(summary["reason"], summary["technical"])
 
   defp failure(_run), do: nil
 

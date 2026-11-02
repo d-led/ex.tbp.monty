@@ -2,23 +2,23 @@ defmodule Monty.Studio.Failure do
   @moduledoc """
   What stopped a run, said in words a person can act on.
 
-  A record keeps the reason in whatever shape ended the run: a sentence we wrote
-  ("it was stopped before it finished"), an exception's message, or — worst for
-  reading — `Exception.format/3`, which is a stacktrace with a dump of internal
-  module names. A page that showed the last one would be asking someone to read
-  Elixir to find out that the world could not be posed.
+  A record keeps two things: `reason`, which is always a sentence, and
+  `technical` beside it when something crashed — the traceback, untouched, for
+  whoever is debugging. `recorded/1` is the shape both arrive in, so the page
+  shows the sentence plainly and keeps the traceback one fold away.
 
-  So every reason passes through here first: `what` is one sentence, `hint` says
-  what to do about it when there is something to do, and `technical` keeps the
-  original untouched for the reader who does want it.
+  Records written before that was true keep the traceback in `reason` itself, so
+  `explain/1` reads those too: a banner becomes a sentence and the stacktrace
+  beneath it becomes the fold. What it never does is hand a reader a dump of
+  somebody's internals — an inspected tuple, a killed process — as the answer to
+  "why did this stop". There is always a sentence; the detail is always kept.
   """
 
   @typedoc """
   A reason, explained.
 
-  `technical` is `nil` when the reason was already plain English: there is
-  nothing to expand, and a "details" fold that only repeats the sentence is
-  noise.
+  `technical` is `nil` when there was nothing to expand: a sentence we wrote, or
+  a detail a newer record keeps in its own key instead.
   """
   @type explained :: %{
           what: String.t(),
@@ -28,39 +28,100 @@ defmodule Monty.Studio.Failure do
 
   @simulator_hint "The simulator is the first thing to check: the run needs a world it can step."
 
-  @doc """
-  Explains the reason a run stopped.
+  @killed "The run's process was killed, so it stopped where it stood."
 
-  A reason that is already a sentence stays one; an exception becomes a sentence
-  about the world rather than about Elixir.
+  @killed_hint "Something outside the experiment ended it: a stop, a shutdown, or its code being rebuilt while it stepped. Start the run again."
+
+  @exited "A process the run was waiting on exited, so the run stopped."
+
+  @exited_hint "Nothing in the experiment raised. The run's own log says how far it got."
+
+  @unreadable "The run stopped with an error this page cannot put in words."
+
+  @unreadable_hint "The technical details hold what it was; the run's own log has the rest."
+
+  @doc """
+  Explains a reason a record keeps.
+
+  A reason that is already a sentence stays one; a crash becomes a sentence
+  about the run rather than about Elixir.
   """
   @spec explain(String.t() | nil) :: explained()
   def explain(nil), do: %{what: "It stopped without saying why.", hint: nil, technical: nil}
 
   def explain(reason) when is_binary(reason) do
-    case exception(reason) do
+    case banner(reason) do
       {kind, message} -> translated(kind, message, reason)
       nil -> bare(reason)
     end
   end
 
-  # `Exception.format/3` starts with "** (Kind) message" and puts the stacktrace
-  # underneath, indented. Both halves are kept: the message is what we explain,
-  # the whole thing is what "technical details" unfolds.
-  defp exception(reason) do
-    case Regex.run(~r/^\*\* \(([A-Za-z0-9_.]+)\) ?(.*)$/m, reason) do
-      [_all, kind, message] -> {kind, String.trim(message)}
+  @doc """
+  Explains a reason this application wrote, unfolding `technical` beside it.
+
+  A record from before the two keys were split keeps its traceback in `reason`,
+  and then the traceback it already had is the one to unfold — passing `nil`
+  here must not drop it.
+  """
+  @spec explain(String.t() | nil, String.t() | nil) :: explained()
+  def explain(reason, technical) do
+    explained = explain(reason)
+    %{explained | technical: technical || explained.technical}
+  end
+
+  @doc """
+  A crash, as a record keeps it: the sentence under `reason`, the traceback
+  under `technical`.
+
+  `kind` is what `catch` was handed — `:error`, `:throw`, or `:exit` — and the
+  last is how a process that was killed arrives: no experiment kills itself, so
+  that one is explained as something outside it.
+  """
+  @spec crashed(atom(), term(), Exception.stacktrace()) :: %{String.t() => String.t() | nil}
+  def crashed(kind, reason, stacktrace) do
+    kind |> Exception.format(reason, stacktrace) |> explain() |> recorded()
+  end
+
+  @doc """
+  A reason as a record keeps it: the sentence in `reason`, the detail beside it
+  in `technical`, where the page looks for each.
+  """
+  @spec recorded(explained()) :: %{String.t() => String.t() | nil}
+  def recorded(%{what: what, technical: technical}),
+    do: %{"reason" => what, "technical" => technical}
+
+  # `Exception.format/3` opens with "** (Kind) message" and indents the stacktrace
+  # beneath it. The kind is a module name for an error, a thrown value's own word
+  # for a throw, and `EXIT`, sometimes with the process it came from, for a death.
+  # Both halves are kept: the message is what we explain, the whole thing is what
+  # "technical details" unfolds.
+  defp banner(reason) do
+    case Regex.run(~r/^\*\* \(([^)]*)\) ?(.*)$/m, reason) do
+      [_all, kind, message] -> {kind(kind), String.trim(message)}
       nil -> nil
     end
   end
 
-  # A reason that was never an exception: either one of our own sentences, or a
-  # value somebody inspected into the record.
+  # `EXIT from #PID<…>` and `exit` are the same thing to a reader, and the
+  # process it came from is nobody's business on a page: the traceback keeps it.
+  defp kind("EXIT" <> _from_a_process), do: "exit"
+  defp kind(kind), do: kind
+
+  # Not a banner: either one of our own sentences, or a value somebody inspected
+  # into the record. A term is not an answer to "why did this stop", so it is
+  # kept as the detail and answered with a sentence of ours.
   defp bare(reason) do
     case weak_tuple(reason) do
-      nil -> plain(reason)
+      nil -> if dump?(reason), do: unreadable(reason), else: plain(reason)
       text -> %{what: text, hint: @simulator_hint, technical: reason}
     end
+  end
+
+  # A sentence never opens the way a term does.
+  defp dump?(text), do: String.match?(text, ~r/^\s*(#|%|\{|\[|:")/)
+
+  defp unreadable(reason) do
+    %{what: @unreadable, hint: @unreadable_hint, technical: reason}
   end
 
   # Already our own words — a stop, an end, an abandoned record. Nothing to
@@ -73,6 +134,11 @@ defmodule Monty.Studio.Failure do
       nil -> %{what: sentence(kind, message), hint: nil, technical: reason}
     end
   end
+
+  # A process was killed. `Process.exit(pid, :kill)` cannot be trapped, so this
+  # is never the experiment's own doing: a stop, a shutdown, or a rebuild that
+  # purged the code the stepping process was running.
+  defp about("exit", message, _reason), do: exit_words(message)
 
   # The ones worth a sentence of their own, because the exception's own words are
   # about machinery the reader has never seen. Matched on what was said rather
@@ -96,6 +162,12 @@ defmodule Monty.Studio.Failure do
     end
   end
 
+  defp exit_words(message) do
+    if message =~ "kill",
+      do: {@killed, @killed_hint},
+      else: {@exited, @exited_hint}
+  end
+
   defp weak_tuple(message) do
     case Regex.run(~r/^\{:simulator_exited, (\d+)\}$/, message) do
       [_, code] -> "The simulator stopped while the run was stepping (exit code #{code})."
@@ -105,9 +177,14 @@ defmodule Monty.Studio.Failure do
 
   # Every other exception keeps its own sentence: the message is written by
   # whoever raised it, and it is usually the most useful thing there is — it just
-  # does not need the stacktrace underneath it on a page meant to be read.
+  # does not need the stacktrace underneath it on a page meant to be read. A
+  # thrown term is not that message, and gets one of ours.
   defp sentence(kind, ""), do: "The run stopped with an error (#{kind})."
-  defp sentence(_kind, message), do: first_sentence(message)
+  defp sentence(_kind, message) when is_binary(message), do: sayable(message)
+
+  defp sayable(message) do
+    if dump?(message), do: @unreadable, else: first_sentence(message)
+  end
 
   defp first_sentence(message) do
     message

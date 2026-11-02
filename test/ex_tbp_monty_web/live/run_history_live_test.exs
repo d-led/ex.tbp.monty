@@ -432,6 +432,25 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert view |> element("#run-progress") |> render() =~ "step 1 / 3"
     end
 
+    test "asks again, so a run whose job died stops claiming to be running", %{
+      conn: conn,
+      running: run
+    } do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#run-status") |> render() =~ "queued"
+
+      # Nothing owns the run any more: the job was cancelled out from under it.
+      ExTbpMonty.Repo.update_all(
+        from(j in Oban.Job, where: fragment("?->>'run_id' = ?", j.args, ^run.id)),
+        set: [state: "cancelled"]
+      )
+
+      send(view.pid, :show_poll)
+
+      assert view |> element("#run-status") |> render() =~ "no worker"
+    end
+
     test "says no worker is running it when the record outlives its job", %{conn: conn} do
       # A worker that is cancelled leaves a record that still says `running`.
       # The page must not repeat the word: nothing is coming.
@@ -596,6 +615,54 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       # The trace is there for whoever wants it, and costs nobody else a glance.
       assert has_element?(view, "#run-failure-technical pre")
       refute has_element?(view, "details#run-failure-technical[open]")
+    end
+
+    # A process that was killed leaves the queue's own words in the record, and
+    # those words are `** (EXIT from #PID<…>)` — not something to hand a reader.
+    test "a killed process is said in a sentence, not by its pid", %{conn: conn, run: run} do
+      {:ok, failed} =
+        RunHistory.finish(run, %{"reason" => "** (EXIT from #PID<0.5994.0>) killed"}, "failed")
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{failed.id}")
+
+      assert view |> element("#run-failure-what") |> render() =~
+               "process was killed"
+
+      refute view |> element("#run-failure-what") |> render() =~ "**"
+
+      assert view |> element("#run-failure-technical pre") |> render() =~ "** (EXIT from"
+    end
+
+    test "a record that keeps its traceback apart shows the sentence over it", %{
+      conn: conn,
+      run: run
+    } do
+      {:ok, failed} =
+        RunHistory.finish(
+          run,
+          %{"reason" => "The run could not start.", "technical" => "** (exit) :killed"},
+          "failed"
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{failed.id}")
+
+      assert view |> element("#run-failure-what") |> render() =~ "The run could not start."
+      assert view |> element("#run-failure-technical pre") |> render() =~ "** (exit)"
+    end
+
+    test "how it ended is said once, not again in the summary", %{conn: conn, run: run} do
+      {:ok, failed} =
+        RunHistory.finish(
+          run,
+          %{"reason" => "the world would not start", "steps" => 3},
+          "failed"
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{failed.id}")
+
+      said = view |> render() |> String.split("the world would not start") |> length()
+
+      assert said == 2
     end
 
     test "a run that finished says nothing about how it ended", %{conn: conn, run: run} do

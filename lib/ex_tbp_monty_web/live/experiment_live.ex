@@ -26,6 +26,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     Belief,
     Chart,
     Duration,
+    Failure,
     Jobs,
     LogFilter,
     Logging,
@@ -1184,7 +1185,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         :ok
 
       {:error, reason} ->
-        {:ok, _closed} = RunHistory.finish(record, %{"reason" => inspect(reason)}, "failed")
+        recorded =
+          "The run could not be queued."
+          |> Failure.explain(inspect(reason))
+          |> Failure.recorded()
+
+        {:ok, _closed} = RunHistory.finish(record, recorded, "failed")
         :ok
     end
   end

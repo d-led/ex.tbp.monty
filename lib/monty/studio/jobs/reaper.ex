@@ -34,7 +34,7 @@ defmodule Monty.Studio.Jobs.Reaper do
   require Logger
 
   alias ExTbpMonty.Repo
-  alias Monty.Studio.{Artifacts, RunHistory}
+  alias Monty.Studio.{Artifacts, Failure, RunHistory}
   alias Monty.Studio.Jobs.Run
 
   # Oban's own words for a job that has not reached an outcome and is not
@@ -88,18 +88,21 @@ defmodule Monty.Studio.Jobs.Reaper do
   defp recent?(at), do: DateTime.diff(DateTime.utc_now(), at, :second) < @grace_seconds
 
   defp abandon(record) do
-    reason = reason_of(record.id)
+    recorded = record.id |> reason_of() |> Failure.explain() |> Failure.recorded()
 
-    Logger.warning("studio run #{record.id} was abandoned: #{reason}")
+    Logger.warning(
+      "studio run #{record.id} was abandoned: #{recorded["technical"] || recorded["reason"]}"
+    )
 
-    # The reason is written where a person will look for it — the record a page
+    # The sentence is written where a person will look for it — the record a page
     # reads and the run's own log, which exists whether or not the run got far
-    # enough to make it.
+    # enough to make it. The traceback a job left goes beside it, in the record,
+    # for whoever is debugging.
     _ = Artifacts.start(record.id)
-    _ = Artifacts.append(record.id, "the run was abandoned: #{reason}")
-    _ = RunHistory.finish(record, Map.put(record.summary || %{}, "reason", reason), "failed")
+    _ = Artifacts.append(record.id, "the run was abandoned: #{recorded["reason"]}")
+    _ = RunHistory.finish(record, Map.merge(record.summary || %{}, recorded), "failed")
     _ = cancel_job(record.id)
-    _ = announce(record.id, reason)
+    _ = announce(record.id, recorded["reason"])
 
     :ok
   end

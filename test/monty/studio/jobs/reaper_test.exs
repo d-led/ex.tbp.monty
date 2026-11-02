@@ -160,8 +160,12 @@ defmodule Monty.Studio.Jobs.ReaperTest do
 
       _ = Reaper.sweep()
 
-      assert RunHistory.get(record.id).summary["reason"] ==
-               "** (RuntimeError) the world would not start"
+      # The sentence is the answer; the banner it came from is the detail, kept
+      # beside it rather than printed at whoever opens the run.
+      kept = RunHistory.get(record.id).summary
+
+      assert kept["reason"] == "the world would not start"
+      assert kept["technical"] =~ "** (RuntimeError) the world would not start"
     end
   end
 

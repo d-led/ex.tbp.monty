@@ -20,7 +20,18 @@ defmodule Monty.Studio.Jobs.Run do
 
   alias Monty.Simulators.Synthetic.{Camera, Environment}
   alias Monty.Studio
-  alias Monty.Studio.{Artifacts, CentreView, Logging, Run, RunHistory, RunLog, Setup, Summary}
+
+  alias Monty.Studio.{
+    Artifacts,
+    CentreView,
+    Failure,
+    Logging,
+    Run,
+    RunHistory,
+    RunLog,
+    Setup,
+    Summary
+  }
 
   @doc "Enqueues a run of `attributes` (see `RunLog.attributes/2`) and returns the job."
   @spec enqueue(map()) :: {:ok, Oban.Job.t()} | {:error, term()}
@@ -95,11 +106,11 @@ defmodule Monty.Studio.Jobs.Run do
       end
     rescue
       exception ->
-        died(run_id, Exception.message(exception))
+        died(run_id, Failure.crashed(:error, exception, __STACKTRACE__))
         reraise exception, __STACKTRACE__
     catch
       kind, reason ->
-        died(run_id, Exception.format(kind, reason, __STACKTRACE__))
+        died(run_id, Failure.crashed(kind, reason, __STACKTRACE__))
         :erlang.raise(kind, reason, __STACKTRACE__)
     after
       unregister(run_id)
@@ -389,30 +400,35 @@ defmodule Monty.Studio.Jobs.Run do
   # -- failing loudly enough -------------------------------------------------
 
   # A run whose worker raised has ended. Oban records the crash on the job, but
-  # jobs are pruned and a person reads the run — so the reason goes where the
-  # run's own page can show it, in the database and in the run's own log, and
-  # only then is the exception let out, for the job's attempt to be counted.
-  defp died(run_id, message) do
-    Logger.error("studio run #{run_id} died: #{message}")
+  # jobs are pruned and a person reads the run — so the sentence goes where the
+  # run's own page shows it, the traceback beside it for whoever is debugging,
+  # and only then is the exception let out, for the job's attempt to be counted.
+  defp died(run_id, %{"reason" => what} = recorded) do
+    Logger.error("studio run #{run_id} died: #{recorded["technical"] || what}")
     _ = Artifacts.start(run_id)
-    _ = say(run_id, "the run died: #{message}")
+    _ = say(run_id, "the run died: #{what}")
 
     with {:ok, record} <- fetch(run_id),
-         do: RunHistory.finish(record, %{"reason" => message}, "failed")
+         do: RunHistory.finish(record, Map.merge(record.summary || %{}, recorded), "failed")
 
-    broadcast(run_id, {:failed, %{reason: message}})
+    broadcast(run_id, {:failed, %{reason: what}})
   end
 
   defp give_up(run_id, reason) do
     Logger.error("studio run #{run_id} did not happen: #{inspect(reason)}")
 
+    recorded =
+      "The run could not start: its experiment would not open."
+      |> Failure.explain(inspect(reason))
+      |> Failure.recorded()
+
     with {:ok, record} <- fetch(run_id) do
       _ = Artifacts.start(run_id)
-      _ = say(run_id, "run did not happen: #{inspect(reason)}")
-      _ = RunHistory.finish(record, %{"reason" => inspect(reason)}, "failed")
+      _ = say(run_id, "run did not happen: #{recorded["reason"]}")
+      _ = RunHistory.finish(record, Map.merge(record.summary || %{}, recorded), "failed")
     end
 
-    broadcast(run_id, {:failed, %{reason: reason}})
+    broadcast(run_id, {:failed, %{reason: recorded["reason"]}})
     {:cancel, reason}
   end
 
