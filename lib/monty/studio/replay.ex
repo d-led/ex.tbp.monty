@@ -287,8 +287,12 @@ defmodule Monty.Studio.Replay do
     end)
   end
 
+  # A drawn moment is a recorded one plus the pictures it delivered, so it keeps
+  # its place in the run: `at/2` promises a moment, and a moment that had
+  # forgotten where it sat would not be one.
   defp draw(moment) do
     %{
+      position: moment.position,
       step: moment.step,
       sensors: moment.sensors,
       entry: moment.entry,
