@@ -53,10 +53,12 @@ defmodule Monty.Runtime.Model do
   The modules' own states as they stand, for a logger writing an episode in full.
 
   Monty's loggers read their modules straight off the model; here the modules are
-  processes, so this is the model being asked for all of them at once.
+  processes, so this is the model being asked for all of them at once. See
+  `Monty.Runtime.Step.detailed/2` for why the caller brings a projection.
   """
-  @spec detailed(atom() | String.t()) :: Monty.Runtime.Step.detailed()
-  def detailed(model_id), do: Step.detailed(Registry.via({:step, model_id}))
+  @spec detailed(atom() | String.t(), (term() -> term())) :: Monty.Runtime.Step.detailed()
+  def detailed(model_id, projection \\ & &1),
+    do: Step.detailed(Registry.via({:step, model_id}), projection)
 
   @doc "The four things a recognition policy may read off the model."
   @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionPolicy.model()

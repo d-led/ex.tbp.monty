@@ -96,9 +96,18 @@ defmodule Monty.Runtime.Step do
           motor: struct() | nil
         }
 
-  @doc "The modules' own states, and the motor system, for a detailed log."
-  @spec detailed(server()) :: detailed()
-  def detailed(server), do: GenServer.call(server, :detailed, :infinity)
+  @doc """
+  The modules' own states, and the motor system, for a detailed log.
+
+  `projection` runs inside each module's own process, so a logger that reads one
+  number out of a module holding a whole hypothesis space asks for that number
+  instead of for the space. `& &1` asks for the state itself: the DETAILED log
+  writes an episode in full and is the one caller that wants it, and it is the
+  one caller that pays for the copy.
+  """
+  @spec detailed(server(), (term() -> term())) :: detailed()
+  def detailed(server, projection \\ & &1),
+    do: GenServer.call(server, {:detailed, projection}, :infinity)
 
   @doc """
   The four things a recognition policy may read off the model.
@@ -264,11 +273,14 @@ defmodule Monty.Runtime.Step do
 
   def handle_call(:state, _from, state), do: {:reply, state, state}
 
-  def handle_call(:detailed, _from, %State{} = state) do
+  def handle_call({:detailed, projection}, _from, %State{} = state) do
     {:reply,
      %{
        learning_modules:
-         Enum.map(state.learning_modules, &live_learning_module(&1, state.model_id)),
+         Enum.map(
+           state.learning_modules,
+           &live_learning_module(&1, state.model_id, projection)
+         ),
        sensor_modules: Enum.map(state.sensor_modules, &live_sensor_module(&1, state.model_id)),
        motor: state.motor_state
      }, state}
@@ -700,10 +712,14 @@ defmodule Monty.Runtime.Step do
   # copy of a module is its wiring, not its memory: a training episode's buffer is
   # tens of megabytes, and copying it into the coordinator on every step would be
   # the cost of a log nobody has asked for yet.
-  defp live_learning_module(spec, model_id) do
+  defp live_learning_module(spec, model_id, projection) do
     %{
       spec
-      | state: LearningModuleServer.state(Registry.via({:learning_module, model_id, spec.id}))
+      | state:
+          LearningModuleServer.query(
+            Registry.via({:learning_module, model_id, spec.id}),
+            projection
+          )
     }
   end
 

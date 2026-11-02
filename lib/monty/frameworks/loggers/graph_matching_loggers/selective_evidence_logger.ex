@@ -132,12 +132,31 @@ defmodule Monty.Frameworks.Loggers.GraphMatchingLoggers.SelectiveEvidenceLogger 
 
   @doc """
   The evidence pool for a model: its modules as `Monty.Runtime.Model.detailed/1`
-  answers them.
+  answers them, cut down to what this pool reads.
+
+  The buffer keeps one entry per step of the episode, and a detailed run keeps
+  the whole hypothesis space in each of them. This pool reads the *last* entry of
+  five of those stats and no more, so the slice is taken inside the module: the
+  alternative is copying every hypothesis's evidence for every step of the
+  episode across to the coordinator, once per step, for numbers nobody reads.
   """
   @spec evidence_pool(State.t(), map(), ExperimentMode.t()) :: map()
   def evidence_pool(%State{model_id: model_id}, logger_args, mode) do
-    model_id |> Model.detailed() |> pool(logger_args, mode)
+    model_id |> Model.detailed(&slice/1) |> pool(logger_args, mode)
   end
+
+  # Monty's `[-1]`: the step the episode ended on. A single value wrapped in a
+  # list, because that is the shape `last/2` reads back.
+  @last_of ~w(evidences possible_locations possible_matches current_mlh symmetry_evidence)
+
+  defp slice(%{buffer: %{stats: stats}} = module) do
+    stats = Map.new(stats, fn {key, value} -> {key, trim(key, value)} end)
+
+    %{module | buffer: %{stats: stats}}
+  end
+
+  defp trim(key, value) when key in @last_of, do: [List.last(List.wrap(value))]
+  defp trim(_key, value), do: value
 
   @doc """
   The pool, from the modules as they are.
