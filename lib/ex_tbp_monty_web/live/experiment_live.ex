@@ -118,7 +118,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       chart_extent: {0, 0},
       # The object and the agent in one picture per step: the views a sensor
       # streams say what a camera saw, this says whether there was anything to see.
-      centre: nil
+      centre: nil,
+      # The seed a run here would start from. It is the config's until somebody
+      # changes it, which is what makes it worth showing: the number a sweep is
+      # about is the one a page can say.
+      seed: opened.setup.seed
     )
     |> stream_configure(:frames, dom_id: &"frame-#{&1.sensor_id}")
     |> stream(:frames, [])
@@ -275,6 +279,23 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         />
         <ExTbpMontyWeb.StudioComponents.fact label="epochs" value={epochs(@opened.setup)} />
         <ExTbpMontyWeb.StudioComponents.fact label="ported here" value={ported(@opened.setup)} />
+        <%!-- What Monty's own configuration panel shows about a run, in the
+        same words: the memory it starts from, the seed it runs under, and the
+        step limits its termination names. A page that kept these in a YAML
+        nobody reads would be asking a reader to trust it. --%>
+        <ExTbpMontyWeb.StudioComponents.fact
+          label="model"
+          value={model_summary(@opened.setup)}
+        />
+        <ExTbpMontyWeb.StudioComponents.fact label="seed" value={to_string(@seed)} />
+        <ExTbpMontyWeb.StudioComponents.fact
+          label="training · evaluation"
+          value={phases(@opened.setup)}
+        />
+        <ExTbpMontyWeb.StudioComponents.fact
+          label="steps, as the config limits them"
+          value={budget(@opened.setup)}
+        />
       </dl>
 
       <ExTbpMontyWeb.StudioComponents.diagram :if={@opened.diagram} diagram={@opened.diagram} />
@@ -327,6 +348,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           simulator in an external process — the experiment's own engine — and
           the stand-in is the deliberate other way: they answer different
           questions, so the choice is on the run. --%>
+          <%!-- The seed is the config's until somebody says otherwise, and the
+          record keeps the one a run started from — the worker reads it back, so
+          a sweep over seeds is a number on this page rather than a second
+          script. --%>
+          <form :if={@opened} id="seed-choice" phx-change="seed" class="flex items-center gap-1">
+            <label for="seed-value" class="text-[11px] text-base-content/60">seed</label>
+            <input
+              id="seed-value"
+              type="number"
+              name="seed"
+              value={@seed}
+              class="input input-xs w-20 font-mono"
+              aria-label="The seed this run starts from"
+            />
+          </form>
           <form id="world-choice" phx-change="world" class="flex items-center gap-1">
             <label for="world-select" class="text-[11px] text-base-content/60">world</label>
             <select
@@ -679,6 +715,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   def handle_event("parallelism", %{"parallelism" => count}, socket) do
     {:noreply, assign(socket, parallelism: parallelism(%{"parallelism" => count}))}
   end
+
+  # A seed this page cannot read is not a seed: the number stays as it was and
+  # the run keeps the one the setup already had.
+  def handle_event("seed", %{"seed" => value}, socket),
+    do: {:noreply, with_chosen_seed(socket, value)}
 
   # The world is a choice made here and recorded on the run, not a property of
   # the deployment: the queue executes what the record says it was given, so two
@@ -1355,10 +1396,66 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp learning_module_summary(setup),
     do: Enum.map_join(setup.learning_modules, ", ", & &1.id)
 
+  defp with_seed(%{setup: setup} = opened, seed),
+    do: %{opened | setup: Setup.with_seed(setup, seed)}
+
+  defp with_chosen_seed(%{assigns: %{opened: %{} = opened}} = socket, value) do
+    case Integer.parse(to_string(value)) do
+      {seed, ""} -> assign(socket, seed: seed, opened: with_seed(opened, seed))
+      _not_a_number -> socket
+    end
+  end
+
+  defp with_chosen_seed(socket, _value), do: socket
+
   defp epochs(setup), do: "train #{setup.epochs.train} · eval #{setup.epochs.eval}"
 
   defp ported(setup) do
     %{implemented: implemented, total: total} = Setup.ported(setup)
     "#{implemented}/#{total}"
+  end
+
+  # The memory a run starts from, named the way Monty's own panel names it: the
+  # release's directory, not the path to it. An experiment that trains instead
+  # of loading says so, because that is a different run.
+  defp model_summary(%{model_name_or_path: nil}), do: "trained here"
+
+  defp model_summary(%{model_name_or_path: path}) do
+    path
+    |> to_string()
+    |> Path.split()
+    |> Enum.reverse()
+    |> Enum.reject(&(&1 in ["pretrained", ""]))
+    |> case do
+      [name | _rest] -> name
+      [] -> "trained here"
+    end
+  end
+
+  # Monty's panel says Training and Evaluation separately, because an experiment
+  # can do one without the other. The port reads the same two epoch counts.
+  defp phases(setup) do
+    "train #{yes_no(setup.epochs.train)} · eval #{yes_no(setup.epochs.eval)}"
+  end
+
+  defp yes_no(nil), do: "no"
+  defp yes_no(0), do: "no"
+  defp yes_no(_a_run_of_them), do: "yes"
+
+  # What the config's termination allows, in the order Monty's panel lists it.
+  # These are the experiment's, not a page's: a run here is capped per episode
+  # and the ceiling is shown next to the button that starts it.
+  defp budget(%{monty_args: args}) do
+    [
+      {"explore", Map.get(args, "num_exploratory_steps")},
+      {"min eval", Map.get(args, "min_eval_steps")},
+      {"min train", Map.get(args, "min_train_steps")}
+    ]
+    |> Enum.reject(fn {_name, limit} -> is_nil(limit) end)
+    |> Enum.map_join(" · ", fn {name, limit} -> "#{name} #{limit}" end)
+    |> case do
+      "" -> "not named by the config"
+      named -> named
+    end
   end
 end

@@ -27,6 +27,28 @@ defmodule Monty.Studio.Jobs.RunTest do
 
   defp perform_id(id), do: Jobs.Run.perform(%Oban.Job{args: %{"run_id" => id}, attempt: 1})
 
+  # Two fields of a record are choices the config cannot make for a particular
+  # run: the world to step and the seed to step it from. Both are read back from
+  # the record, so a seed a page shows is the seed the run used.
+  describe "the experiment a record describes" do
+    test "a run steps from the seed its record kept" do
+      {:ok, record} = start_run(1)
+
+      {:ok, opened} = Jobs.Run.opened_for(%{record | seed: 7})
+
+      assert opened.setup.seed == 7
+    end
+
+    test "a record that kept no seed leaves the config's own" do
+      {:ok, record} = start_run(1)
+      {:ok, from_config} = Monty.Studio.open(record.experiment)
+
+      {:ok, opened} = Jobs.Run.opened_for(%{record | seed: nil})
+
+      assert opened.setup.seed == from_config.setup.seed
+    end
+  end
+
   describe "a run that is performed" do
     test "closes its record with the summary of what it did, and what it concluded" do
       {:ok, record} = start_run(3)

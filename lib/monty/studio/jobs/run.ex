@@ -61,6 +61,24 @@ defmodule Monty.Studio.Jobs.Run do
   @spec topic(binary()) :: String.t()
   def topic(run_id), do: "studio:run:" <> run_id
 
+  @doc """
+  The experiment a record describes: its config, the world it was started
+  with, and the seed it kept.
+
+  A record is what a run is told to be. Two of its fields are choices the
+  config cannot make for a particular run — the world to step and the seed to
+  step it from — so they are read back here rather than taken from the config a
+  second time. A record that kept no seed leaves the config's own, which is
+  what `Monty.Studio.Setup.with_seed/2` reads `nil` as.
+  """
+  @spec opened_for(RunHistory.Run.t()) :: {:ok, Studio.opened()} | {:error, term()}
+  def opened_for(%RunHistory.Run{experiment: name, inputs: inputs, seed: seed}) do
+    case Studio.open(name, world_simulator: world_of(inputs)) do
+      {:ok, opened} -> {:ok, %{opened | setup: Setup.with_seed(opened.setup, seed)}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"run_id" => run_id}}) do
     # Ownership first, before anything can fail. "Is a process working on this
@@ -70,7 +88,7 @@ defmodule Monty.Studio.Jobs.Run do
 
     try do
       with {:ok, record} <- fetch(run_id),
-           {:ok, opened} <- open(record) do
+           {:ok, opened} <- opened_for(record) do
         run_experiment(record, opened)
       else
         {:error, reason} -> give_up(run_id, reason)
@@ -416,10 +434,6 @@ defmodule Monty.Studio.Jobs.Run do
   # executes that, not whatever the worker's own environment happens to be. Two
   # processes can share the queue and this database, and one of them may have
   # Monty's world configured while the other does not.
-  defp open(%RunHistory.Run{experiment: name, inputs: inputs}) do
-    Studio.open(name, world_simulator: world_of(inputs))
-  end
-
   # The record keeps the world a run was started with; the job turns that back
   # into the world to step. A value this build does not carry is `nil`, which
   # `Monty.Studio.Setup` reads as "nothing chosen" — never a silent stand-in: a

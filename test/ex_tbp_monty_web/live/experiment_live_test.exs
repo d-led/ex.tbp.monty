@@ -829,4 +829,30 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     File.chmod!(path, 0o755)
     path
   end
+
+  # Monty's own configuration panel puts the seed next to the step limits, and a
+  # sweep over seeds is the simplest experiment there is: the number belongs on
+  # the page, where a reader can change it, and not only in the YAML behind it.
+  describe "the configuration a run starts from" do
+    test "shows the seed the config names, and takes another", %{conn: conn} do
+      {:ok, opened} = Monty.Studio.open("tutorial/first_experiment")
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment")
+
+      assert view |> element("#seed-value") |> render() =~
+               ~s(value="#{opened.setup.seed}")
+
+      changed = view |> element("#seed-choice") |> render_change(%{"seed" => "7"})
+
+      assert changed =~ ~s(value="7")
+    end
+
+    test "a seed it cannot read leaves the one it had", %{conn: conn} do
+      {:ok, opened} = Monty.Studio.open("tutorial/first_experiment")
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment")
+
+      unchanged = view |> element("#seed-choice") |> render_change(%{"seed" => "not a number"})
+
+      assert unchanged =~ ~s(value="#{opened.setup.seed}")
+    end
+  end
 end

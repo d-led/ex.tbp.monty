@@ -757,6 +757,18 @@ defmodule Monty.Studio.Setup do
   @spec episodes(t()) :: pos_integer()
   def episodes(%__MODULE__{} = setup), do: length(objects(setup)) * eval_epochs(setup)
 
+  @doc """
+  The same experiment with another seed.
+
+  The seed is the one input a run is varied by most often — a sweep over seeds
+  is the simplest experiment there is — and it is the one the config cannot
+  answer for a particular run. `nil` means the config's own seed, which is why
+  a record that kept no seed leaves the setup alone rather than picking zero.
+  """
+  @spec with_seed(t(), integer() | nil) :: t()
+  def with_seed(%__MODULE__{} = setup, nil), do: setup
+  def with_seed(%__MODULE__{} = setup, seed), do: %{setup | seed: seed}
+
   defp engine(%__MODULE__{environment: %{module: %{class: "MuJoCoSimulator"}}}), do: :mujoco
   defp engine(%__MODULE__{environment: %{module: %{class: "HabitatEnvironment"}}}), do: :habitat
   defp engine(%__MODULE__{environment: %{module: %{class: "HabitatSim"}}}), do: :habitat
