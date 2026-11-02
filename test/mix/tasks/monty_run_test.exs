@@ -21,7 +21,14 @@ defmodule Mix.Tasks.Monty.RunTest do
 
   describe "a headless run" do
     test "steps the experiment and prints the same log the page streams" do
-      output = run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "2"])
+      output =
+        run_and_capture([
+          "base_config_10distinctobj_dist_agent",
+          "--steps",
+          "2",
+          "--episodes",
+          "1"
+        ])
 
       assert output =~ "base_config_10distinctobj_dist_agent"
       assert output =~ "sensors: patch, view_finder"
@@ -32,8 +39,37 @@ defmodule Mix.Tasks.Monty.RunTest do
       assert output =~ "2 steps in"
     end
 
+    test "covers the whole experiment by default, not one episode of it" do
+      # One object in three rotations, so the experiment is three episodes and
+      # all three have to happen: a single episode is a smoke test that would
+      # sit in the history looking like a result.
+      output = run_and_capture(["tutorial/first_experiment", "--steps", "1"])
+
+      assert output =~ "episode 1/3"
+      assert output =~ "episode 3/3"
+
+      assert [run] = RunHistory.list()
+      assert run.inputs["episodes"] == 3
+      assert run.log |> Enum.map(& &1["episode"]) |> Enum.uniq() == [0, 1, 2]
+    end
+
+    test "--episodes is a slice, and the record keeps the slice it ran" do
+      run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "1", "--episodes", "2"])
+
+      assert [run] = RunHistory.list()
+      assert run.inputs["episodes"] == 2
+      assert run.log |> Enum.map(& &1["episode"]) |> Enum.uniq() == [0, 1]
+    end
+
     test "records the run, so a headless run is history like any other" do
-      output = run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "2"])
+      output =
+        run_and_capture([
+          "base_config_10distinctobj_dist_agent",
+          "--steps",
+          "2",
+          "--episodes",
+          "1"
+        ])
 
       assert [run] = RunHistory.list()
       assert run.experiment == "base_config_10distinctobj_dist_agent"
@@ -44,14 +80,21 @@ defmodule Mix.Tasks.Monty.RunTest do
     end
 
     test "leaves nothing running" do
-      run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "1"])
+      run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "1", "--episodes", "1"])
 
       assert DynamicSupervisor.which_children(ExTbpMonty.ModelSupervisor) == []
     end
 
     test "--no-record keeps the database out of it" do
       output =
-        run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "1", "--no-record"])
+        run_and_capture([
+          "base_config_10distinctobj_dist_agent",
+          "--steps",
+          "1",
+          "--episodes",
+          "1",
+          "--no-record"
+        ])
 
       assert RunHistory.list() == []
       assert output =~ "not recorded"
@@ -59,7 +102,14 @@ defmodule Mix.Tasks.Monty.RunTest do
 
     test "--quiet prints the summary without the per-step lines" do
       output =
-        run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "2", "--quiet"])
+        run_and_capture([
+          "base_config_10distinctobj_dist_agent",
+          "--steps",
+          "2",
+          "--episodes",
+          "1",
+          "--quiet"
+        ])
 
       refute output =~ "step 0 ·"
       assert output =~ "2 steps in"

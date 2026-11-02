@@ -15,6 +15,13 @@ defmodule Mix.Tasks.Monty.Run do
   composed from Monty's own Hydra groups and checked before anything starts, so
   a config that would not start in Monty fails here too.
 
+  A run is the whole experiment, as Monty's `evaluate` is: every object in every
+  rotation the config names, each episode ending on its own recognition policy —
+  not one episode out of a hundred and forty. A single episode is a smoke test
+  that looks exactly like a result in the history, so it takes asking for:
+  `--episodes N`. Either way the record keeps the number that actually ran, and
+  so do the summary and the page.
+
   A run is recorded in the database by default, which is what makes a headless
   run appear in `/runs` next to one started from the page: same record, same
   log, same summary. `--no-record` is for throwaway runs and for benches.
@@ -24,7 +31,9 @@ defmodule Mix.Tasks.Monty.Run do
 
   ## Options
 
-    * `--steps N` — timesteps to run (default: #{12})
+    * `--steps N` — timesteps to run in an episode (default: #{12})
+    * `--episodes N` — how many of the experiment's episodes to run (default:
+      all of them: every object, in every rotation)
     * `--seed N` — episode seed, overriding the config's
     * `--pretrained-dir DIR` — the release to load pretrained models from, when
       the one the config names is not on this machine
@@ -38,6 +47,7 @@ defmodule Mix.Tasks.Monty.Run do
 
   @switches [
     steps: :integer,
+    episodes: :integer,
     seed: :integer,
     record: :boolean,
     quiet: :boolean,
@@ -61,16 +71,89 @@ defmodule Mix.Tasks.Monty.Run do
 
     unless Monty.Studio.Setup.valid?(opened.setup), do: refuse(opened.setup.findings)
 
-    run = start(opened, opts)
-    history = record(opened, run, opts)
-    {infos, history, last_run} = step_through(run, history, opts, [])
+    scope = scope(opened, opts)
+    history = record(opened, scope, opts)
+    {infos, history, conclusion} = run_episodes(opened, scope, history, opts)
 
-    # Read before the model is stopped: the ending a time-out gives an episode
-    # happens after the last step's report, and is part of what the run concluded.
-    summary = summary(infos, opened.setup, Monty.Studio.Run.conclusion(last_run))
+    summary = summary(infos, opened.setup, conclusion)
     describe_run(finish(history, summary), summary)
-    # Leave nothing running: a headless process should end when the run does.
+  end
+
+  # What Monty's `evaluate` would run: every episode the config names, each
+  # capped at the same step budget. `--episodes` is the slice, and it is the only
+  # way to ask for less — a run that answered one episode out of a hundred and
+  # forty answers a different question from the experiment.
+  defp scope(opened, opts) do
+    %{
+      steps: opts[:steps] || Monty.Studio.Run.default_steps(),
+      episodes: opts[:episodes] || Monty.Studio.Setup.episodes(opened.setup)
+    }
+  end
+
+  defp run_episodes(opened, %{episodes: count} = scope, history, opts) do
+    Enum.reduce(0..(count - 1)//1, {[], history, %{}}, fn index, {infos, history, _conclusion} ->
+      {episode_infos, history, conclusion} = run_episode(opened, scope, index, history, opts)
+      {infos ++ episode_infos, history, conclusion}
+    end)
+  end
+
+  # The episode index is also where the object comes from: the queued runner
+  # starts its episodes the same way, so both cover the same ground.
+  defp run_episode(opened, scope, index, history, opts) do
+    {:ok, run} = Monty.Studio.Run.start(opened.setup, steps: scope.steps, episode: index)
+    :ok = Monty.Studio.Run.set_ground_truth(run)
+    say_episode(index, scope.episodes, opts)
+
+    {infos, history, last_run} = step_through(run, history, opts, index, [])
+    conclusion = Monty.Studio.Run.conclusion(last_run)
     Monty.Studio.Run.stop(last_run)
+
+    {Enum.reverse(infos), history, conclusion}
+  end
+
+  defp say_episode(_index, 1, _opts), do: :ok
+
+  defp say_episode(index, count, opts) do
+    unless opts[:quiet], do: Mix.shell().info("episode #{index + 1}/#{count}")
+  end
+
+  defp record(opened, scope, opts) do
+    if opts[:record] == false do
+      nil
+    else
+      {:ok, history} =
+        Monty.Studio.RunHistory.start(
+          Monty.Studio.RunLog.attributes(opened, scope.steps, 0, 1, scope.episodes)
+        )
+
+      history
+    end
+  end
+
+  defp step_through(run, history, opts, episode, infos) do
+    {:ok, info, observations, next_run} = Monty.Studio.Run.step(run)
+    beliefs = Monty.Studio.Run.beliefs(run)
+    print_step(info, beliefs, episode, opts)
+
+    history =
+      if history,
+        do:
+          Monty.Studio.RunLog.record_step(history, info, observations, beliefs, episode: episode)
+
+    infos = [info | infos]
+
+    if Monty.Studio.Run.finished?(next_run) do
+      {infos, history, next_run}
+    else
+      step_through(next_run, history, opts, episode, infos)
+    end
+  end
+
+  defp print_step(info, beliefs, episode, opts) do
+    unless opts[:quiet] do
+      entry = Monty.Studio.RunLog.entry(info, beliefs, episode: episode)
+      Mix.shell().info(Monty.Studio.RunLog.line(entry))
+    end
   end
 
   defp open(name, opts) do
@@ -86,50 +169,6 @@ defmodule Mix.Tasks.Monty.Run do
     case opts[:seed] do
       nil -> opened
       seed -> %{opened | setup: %{opened.setup | seed: seed}}
-    end
-  end
-
-  defp start(opened, opts) do
-    {:ok, run} =
-      Monty.Studio.Run.start(opened.setup,
-        steps: opts[:steps] || Monty.Studio.Run.default_steps()
-      )
-
-    run
-  end
-
-  defp record(opened, run, opts) do
-    if opts[:record] == false do
-      nil
-    else
-      {:ok, history} =
-        Monty.Studio.RunHistory.start(Monty.Studio.RunLog.attributes(opened, run.steps))
-
-      history
-    end
-  end
-
-  defp step_through(run, history, opts, infos) do
-    {:ok, info, observations, next_run} = Monty.Studio.Run.step(run)
-    beliefs = Monty.Studio.Run.beliefs(run)
-    print_step(info, beliefs, opts)
-
-    history =
-      if history,
-        do: Monty.Studio.RunLog.record_step(history, info, observations, beliefs)
-
-    infos = [info | infos]
-
-    if Monty.Studio.Run.finished?(next_run) do
-      {Enum.reverse(infos), history, next_run}
-    else
-      step_through(next_run, history, opts, infos)
-    end
-  end
-
-  defp print_step(info, beliefs, opts) do
-    unless opts[:quiet] do
-      Mix.shell().info(Monty.Studio.RunLog.line(Monty.Studio.RunLog.entry(info, beliefs)))
     end
   end
 
