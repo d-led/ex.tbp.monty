@@ -343,12 +343,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
          top_indices,
          per_node
        ) do
-    node_directions =
-      updater.graph_memory
-      |> GraphMemory.get_rotation_features_at_all_nodes(graph_id, input_channel)
-      |> List.to_tuple()
-
-    directions = Enum.map(top_indices, &elem(node_directions, &1))
+    # Only the picked nodes are read. Asking for every node's pose vectors and
+    # keeping a few hundred built a row list and a tuple for the whole graph on
+    # every step, per channel — most of what this function allocated.
+    directions =
+      GraphMemory.get_rotation_features_at_nodes(
+        updater.graph_memory,
+        graph_id,
+        input_channel,
+        top_indices
+      )
 
     features
     |> sensed_pose_vectors()

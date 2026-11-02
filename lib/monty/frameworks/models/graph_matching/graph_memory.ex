@@ -356,15 +356,25 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
           [SpatialArithmetics.vector()]
         ]
   def get_rotation_features_at_all_nodes(%__MODULE__{} = memory, graph_id, input_channel) do
+    node_ids = get_graph_node_ids(memory, graph_id, input_channel)
+
+    get_rotation_features_at_nodes(memory, graph_id, input_channel, node_ids)
+  end
+
+  @doc """
+  The pose vectors stored at the named nodes, one 3×3 set each.
+
+  The same rows as `get_rotation_features_at_all_nodes/3`, for a chosen few. A
+  burst samples rotations from a few hundred nodes of a graph that may hold
+  twenty thousand, and reading every node's pose vectors to keep a handful built
+  a row list and a tuple for the whole graph on every step, per channel.
+  """
+  @spec get_rotation_features_at_nodes(t(), graph_id(), input_channel(), [non_neg_integer()]) :: [
+          [SpatialArithmetics.vector()]
+        ]
+  def get_rotation_features_at_nodes(%__MODULE__{} = memory, graph_id, input_channel, node_ids) do
     memory
-    |> get_features_at_node(
-      graph_id,
-      input_channel,
-      get_graph_node_ids(memory, graph_id, input_channel),
-      [
-        "pose_vectors"
-      ]
-    )
+    |> get_features_at_node(graph_id, input_channel, node_ids, ["pose_vectors"])
     |> Map.fetch!("pose_vectors")
     |> Enum.map(&Enum.chunk_every(&1, 3))
   end
