@@ -58,6 +58,40 @@ defmodule Monty.Studio.Jobs.ReaperTest do
     :ok
   end
 
+  # A run nobody has written to for a while: the other half of "nothing is
+  # working on it", now that a record still being written counts as a worker.
+  defp quiet_since(record, seconds) do
+    at = DateTime.add(DateTime.utc_now(), -seconds, :second)
+
+    {1, nil} =
+      Repo.update_all(from(r in RunHistory.Run, where: r.id == ^record.id),
+        set: [updated_at: at]
+      )
+
+    record
+  end
+
+  describe "a run being stepped somewhere this node cannot see" do
+    test "is left alone while its record is still being written" do
+      # `mix monty.run` steps in its own VM: no process this registry holds, no
+      # job in this queue. Its record moving is the only evidence it exists, and
+      # judging it by absence used to close a healthy run at the first page visit.
+      record = start_run()
+      {:ok, _stepped} = RunHistory.record_step(record, %{"step" => 0}, %{})
+
+      assert Reaper.sweep() == 0
+      assert RunHistory.get(record.id).status == "running"
+    end
+
+    test "is abandoned once it has been silent for a minute" do
+      record = start_run()
+      _quiet = quiet_since(record, 61)
+
+      assert Reaper.sweep() == 1
+      assert RunHistory.get(record.id).status == "failed"
+    end
+  end
+
   describe "a run whose job is still waiting" do
     test "is not abandoned: it is a run that has not started yet" do
       record = start_run()
@@ -73,6 +107,7 @@ defmodule Monty.Studio.Jobs.ReaperTest do
       record = start_run()
       job = enqueue(record)
       :ok = Oban.cancel_job(job)
+      _quiet = quiet_since(record, 61)
 
       assert Reaper.sweep() == 1
 
@@ -86,6 +121,7 @@ defmodule Monty.Studio.Jobs.ReaperTest do
       record = start_run()
       job = enqueue(record)
       :ok = Oban.cancel_job(job)
+      _quiet = quiet_since(record, 61)
 
       _ = Reaper.sweep()
 
@@ -98,6 +134,7 @@ defmodule Monty.Studio.Jobs.ReaperTest do
       record = start_run()
       job = enqueue(record)
       :ok = Oban.cancel_job(job)
+      _quiet = quiet_since(record, 61)
       Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
 
       _ = Reaper.sweep()
@@ -111,6 +148,7 @@ defmodule Monty.Studio.Jobs.ReaperTest do
       # useless.
       record = start_run()
       job = enqueue(record)
+      _quiet = quiet_since(record, 61)
 
       {1, nil} =
         Repo.update_all(from(j in Oban.Job, where: j.id == ^job.id),
@@ -130,6 +168,7 @@ defmodule Monty.Studio.Jobs.ReaperTest do
   describe "a run whose job never existed" do
     test "is closed too: nothing was ever going to run it" do
       record = start_run()
+      _quiet = quiet_since(record, 61)
 
       assert Reaper.sweep() == 1
       assert RunHistory.get(record.id).status == "failed"
@@ -165,6 +204,7 @@ defmodule Monty.Studio.Jobs.ReaperTest do
       record = start_run()
       job = enqueue(record)
       :ok = executing_since(job, 300)
+      _quiet = quiet_since(record, 300)
 
       assert Reaper.sweep() == 1
       assert RunHistory.get(record.id).status == "failed"

@@ -1,6 +1,7 @@
 defmodule ExTbpMontyWeb.ExperimentLiveTest do
   use ExTbpMontyWeb.ConnCase
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
 
   alias Monty.Prerequisites
@@ -557,6 +558,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       conn = Phoenix.ConnTest.build_conn()
 
+      quiet_since(record, 61)
+
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
@@ -670,6 +673,19 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert visible_lines(view) |> Enum.any?(&(&1 =~ "step 0"))
       assert has_element?(view, "#run-summary")
     end
+  end
+
+  # A record nobody has written to for a while: the half of "nothing is working
+  # on it" that a run stepped elsewhere can still disprove, by being written.
+  defp quiet_since(record, seconds) do
+    at = DateTime.add(DateTime.utc_now(), -seconds, :second)
+
+    ExTbpMonty.Repo.update_all(
+      from(r in Monty.Studio.RunHistory.Run, where: r.id == ^record.id),
+      set: [updated_at: at]
+    )
+
+    record
   end
 
   defp entry(step) do

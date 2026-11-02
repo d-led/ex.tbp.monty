@@ -83,6 +83,19 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     {:ok, run: run}
   end
 
+  # A record nobody has written to for a while: a fresh record gets a minute's
+  # grace, because a worker elsewhere may not have written its first step yet.
+  defp quiet_since(record, seconds) do
+    at = DateTime.add(DateTime.utc_now(), -seconds, :second)
+
+    ExTbpMonty.Repo.update_all(
+      from(r in RunHistory.Run, where: r.id == ^record.id),
+      set: [updated_at: at]
+    )
+
+    record
+  end
+
   describe "what a row says a run did" do
     test "the steps and episodes it stepped, not the budget it was allowed", %{conn: conn} do
       # The run in question: allowed 500 steps an episode, given all 140 episodes
@@ -491,10 +504,13 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     end
 
     test "a run whose process is gone is closed when its page is opened", %{conn: conn} do
-      # The row a restart leaves behind: `running`, with no job and no process.
+      # The row a restart leaves behind: `running`, with no job, no process, and
+      # nothing written to it for longer than the grace a fresh record gets.
       # Opening the page is the first thing that could notice, so it notices.
       {:ok, abandoned} =
         RunHistory.start(%{experiment: "tutorial/first_experiment", source: "monty", steps: 2})
+
+      quiet_since(abandoned, 61)
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{abandoned.id}")
 

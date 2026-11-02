@@ -30,6 +30,7 @@ defmodule Monty.Studio.Replay.Chart do
     :playhead,
     lines: [],
     bands: [],
+    polylines: [],
     hover: [],
     width: @width,
     height: @height
@@ -55,7 +56,7 @@ defmodule Monty.Studio.Replay.Chart do
           label: String.t(),
           colour: non_neg_integer(),
           points: [{float(), float()}],
-          polyline: String.t()
+          polylines: [String.t()]
         }
 
   @typedoc """
@@ -78,6 +79,7 @@ defmodule Monty.Studio.Replay.Chart do
           height: pos_integer(),
           lines: [line()],
           bands: [band()],
+          polylines: [%{colour: non_neg_integer(), points: String.t()}],
           min: number(),
           max: number(),
           from: number(),
@@ -122,6 +124,7 @@ defmodule Monty.Studio.Replay.Chart do
     %__MODULE__{
       lines: lines,
       bands: bands(visible, {from, to}),
+      polylines: polylines_of(lines),
       min: min,
       max: max,
       from: from,
@@ -129,6 +132,14 @@ defmodule Monty.Studio.Replay.Chart do
       hover: List.flatten(samples),
       playhead: playhead(Keyword.get(opts, :playhead), from, to)
     }
+  end
+
+  # Every line's stretches, flat: a template draws one `<polyline>` per stretch,
+  # and how many stretches a line has is the chart's business, not the page's.
+  defp polylines_of(lines) do
+    Enum.flat_map(lines, fn line ->
+      Enum.map(line.polylines, &%{colour: line.colour, points: &1})
+    end)
   end
 
   # One band per episode the window can see, from the series that carries
@@ -183,7 +194,7 @@ defmodule Monty.Studio.Replay.Chart do
       label: series.label,
       colour: colour,
       points: points,
-      polyline: polyline(points)
+      polylines: polylines(series.points, points, {from, to})
     }
 
     samples =
@@ -216,6 +227,51 @@ defmodule Monty.Studio.Replay.Chart do
 
   defp playhead(nil, _from, _to), do: nil
   defp playhead(step, from, to), do: x(step, from, to)
+
+  # One polyline per stretch the line was actually drawn on. Evidence restarts at
+  # zero when an episode begins, and a theory the module culled is simply gone —
+  # a line drawn across either gap is a fall or a run of zeros nobody measured.
+  # A record that never kept episodes, and a theory that lived throughout, still
+  # draw as one line.
+  defp polylines(drawn_from, points, {from, to}) do
+    drawn_from
+    |> Enum.zip_with(points, fn point, xy -> {point[:episode], point.step, xy} end)
+    |> stretches()
+    |> Enum.map(fn run -> run |> to_the_edge(from, to) |> Enum.map(&elem(&1, 2)) |> polyline() end)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  # A step's value holds until the next step begins, so a stretch is drawn to the
+  # edge of the step it was last seen in. Without that the line stops at its last
+  # sample and leaves a band-wide gap of tint beside it, which reads as a missing
+  # step rather than as an episode ending.
+  defp to_the_edge(run, from, to) do
+    {_episode, last_step, {last_x, last_y}} = List.last(run)
+    edge = min(x(last_step + 1, from, to), @width)
+
+    if edge > last_x, do: run ++ [{nil, nil, {edge, last_y}}], else: run
+  end
+
+  # The stretches a line is one piece on: consecutive steps of one episode. A new
+  # point starts a stretch wherever the episode changes — evidence restarts at
+  # zero there — or a step is missing, which is a theory the module culled and
+  # has nothing to report about.
+  defp stretches(points) do
+    points
+    |> Enum.reduce([], fn {episode, step, _xy} = point, stretches ->
+      case stretches do
+        [[{same, previous, _} | _] = run | earlier] ->
+          if episode == same and step == previous + 1,
+            do: [[point | run] | earlier],
+            else: [[point], run | earlier]
+
+        [] ->
+          [[point]]
+      end
+    end)
+    |> Enum.reverse()
+    |> Enum.map(&Enum.reverse/1)
+  end
 
   defp polyline([]), do: ""
 

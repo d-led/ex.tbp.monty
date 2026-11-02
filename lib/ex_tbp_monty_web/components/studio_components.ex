@@ -463,11 +463,11 @@ defmodule ExTbpMontyWeb.StudioComponents do
               data-episode={band.episode}
             />
             <polyline
-              :for={line <- @chart.lines}
-              id={"replay-line-#{line.colour}"}
-              points={line.polyline}
+              :for={polyline <- @chart.polylines}
+              id={"replay-line-#{polyline.colour}"}
+              points={polyline.points}
               fill="none"
-              stroke={line_colour(line.colour)}
+              stroke={line_colour(polyline.colour)}
               stroke-width="1.5"
               stroke-linejoin="round"
               vector-effect="non-scaling-stroke"

@@ -119,7 +119,9 @@ defmodule Monty.Studio.Replay do
         label: name,
         unit: "",
         points:
-          Enum.map(moments, fn moment ->
+          moments
+          |> Enum.filter(&(name in object_names(&1)))
+          |> Enum.map(fn moment ->
             %{
               step: moment.position,
               value: evidence_of(moment, name),

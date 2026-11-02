@@ -56,10 +56,21 @@ defmodule Monty.Studio.Jobs.Reaper do
   @spec sweep() :: non_neg_integer()
   def sweep do
     RunHistory.running()
-    |> Enum.reject(&(Run.held?(&1.id) or waiting?(&1)))
+    |> Enum.reject(&(Run.held?(&1.id) or alive?(&1)))
     |> Enum.map(&abandon/1)
     |> length()
   end
+
+  # A run is alive if this node holds a process for it, if Oban still has its job
+  # queued or freshly started, or if its record has been written to in the last
+  # minute.
+  #
+  # That last one is what a headless run needs: `mix monty.run` steps the
+  # experiment in its own VM, so this node's registry can never see it, and
+  # judging it by absence was this module killing a healthy run at the first
+  # page visit. Silence is what can be judged here; absence only means the
+  # process is not this node's.
+  defp alive?(record), do: waiting?(record) or fresh?(record)
 
   # A job that is queued will still be tried, and one that is executing may have
   # started a moment ago.
@@ -70,6 +81,9 @@ defmodule Monty.Studio.Jobs.Reaper do
       _settled_or_missing -> false
     end
   end
+
+  # Every step a run takes writes its record, whoever is stepping it.
+  defp fresh?(record), do: RunHistory.quiet_for(record) < @grace_seconds
 
   defp recent?(at), do: DateTime.diff(DateTime.utc_now(), at, :second) < @grace_seconds
 

@@ -113,8 +113,25 @@ defmodule Monty.Studio.Replay.ChartTest do
     test "an empty window is a chart, not a crash" do
       chart = Chart.new([], window: {})
 
-      assert [%{polyline: ""}] = chart.lines
+      assert [%{polylines: [], points: []}] = chart.lines
+      assert chart.polylines == []
       assert chart.hover == []
+    end
+
+    test "a line is cut at an episode boundary, not drawn across it" do
+      # Evidence restarts at zero when the next episode begins. Joined up, that
+      # reads as a fall nobody measured; cut, it reads as the episode ending.
+      chart =
+        Chart.new([
+          %{step: 0, value: 4.0, episode: 0},
+          %{step: 1, value: 6.0, episode: 0},
+          %{step: 2, value: 0.5, episode: 1},
+          %{step: 3, value: 3.0, episode: 1}
+        ])
+
+      assert [%{polylines: [first, second]}] = chart.lines
+      assert first != "" and second != ""
+      assert length(chart.polylines) == 2
     end
 
     test "a flat series is drawn across the middle" do

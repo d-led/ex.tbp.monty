@@ -295,6 +295,48 @@ defmodule Monty.Studio.ReplayTest do
              ]
     end
 
+    test "a theory the module culled ends where the module stopped holding it" do
+      # Bowl is gone from step 2 onwards: the run ruled it out, so the chart must
+      # end that line rather than carry it at zero and imply it was still in play.
+      run = %Run{
+        timeline: [moment(0), moment(1), moment(2)],
+        log: [
+          %{
+            "step" => 0,
+            "beliefs" => %{
+              "learning_module_0" => %{
+                "graphs" => %{
+                  "mug" => %{"max_evidence" => 1.0},
+                  "bowl" => %{"max_evidence" => 2.0}
+                }
+              }
+            }
+          },
+          %{
+            "step" => 1,
+            "beliefs" => %{
+              "learning_module_0" => %{
+                "graphs" => %{
+                  "mug" => %{"max_evidence" => 2.0},
+                  "bowl" => %{"max_evidence" => 1.0}
+                }
+              }
+            }
+          },
+          %{
+            "step" => 2,
+            "beliefs" => %{
+              "learning_module_0" => %{"graphs" => %{"mug" => %{"max_evidence" => 3.0}}}
+            }
+          }
+        ]
+      }
+
+      bowl = Enum.find(Replay.objects(run), &(&1.label == "bowl"))
+
+      assert Enum.map(bowl.points, & &1.step) == [0, 1]
+    end
+
     test "an object is as strong as the strongest module that held it" do
       record = %Run{
         timeline: Enum.map([0], &moment/1),
