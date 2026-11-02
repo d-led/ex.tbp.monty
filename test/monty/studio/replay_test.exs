@@ -140,21 +140,21 @@ defmodule Monty.Studio.ReplayTest do
       assert series |> Enum.map(& &1.id) |> Enum.take(2) == ["sensor:patch", "sensor:view_finder"]
 
       assert Replay.chart_series(run(0..2), "sensor:patch").points == [
-               %{step: 0, value: 0.0},
-               %{step: 1, value: 0.01},
-               %{step: 2, value: 0.02}
+               %{step: 0, value: 0.0, episode: nil},
+               %{step: 1, value: 0.01, episode: nil},
+               %{step: 2, value: 0.02, episode: nil}
              ]
     end
 
     test "continue with what the modules made of it" do
       assert Replay.chart_series(run(0..1), "percepts").points == [
-               %{step: 0, value: 1},
-               %{step: 1, value: 1}
+               %{step: 0, value: 1, episode: nil},
+               %{step: 1, value: 1, episode: nil}
              ]
 
       assert Replay.chart_series(run(0..1), "votes_used").points == [
-               %{step: 0, value: 1},
-               %{step: 1, value: 0}
+               %{step: 0, value: 1, episode: nil},
+               %{step: 1, value: 0, episode: nil}
              ]
 
       assert Replay.chart_series(run(0..1), "duration_us").unit == "µs"
@@ -164,8 +164,8 @@ defmodule Monty.Studio.ReplayTest do
       run = %Run{timeline: [moment(0), moment(1)], log: [entry(0)]}
 
       assert Replay.chart_series(run, "percepts").points == [
-               %{step: 0, value: 1},
-               %{step: 1, value: 0}
+               %{step: 0, value: 1, episode: nil},
+               %{step: 1, value: 0, episode: nil}
              ]
     end
 
@@ -178,9 +178,9 @@ defmodule Monty.Studio.ReplayTest do
       assert %{label: "best evidence", unit: ""} = Replay.chart_series(run, "evidence")
 
       assert Replay.chart_series(run, "evidence").points == [
-               %{step: 0, value: 0.5},
-               %{step: 1, value: 4.0},
-               %{step: 2, value: 9.5}
+               %{step: 0, value: 0.5, episode: nil},
+               %{step: 1, value: 4.0, episode: nil},
+               %{step: 2, value: 9.5, episode: nil}
              ]
     end
 
@@ -190,13 +190,13 @@ defmodule Monty.Studio.ReplayTest do
         log: [believe(entry(0), %{"learning_module_0" => 1.0, "learning_module_1" => 7.0})]
       }
 
-      assert Replay.chart_series(run, "evidence").points == [%{step: 0, value: 7.0}]
+      assert Replay.chart_series(run, "evidence").points == [%{step: 0, value: 7.0, episode: nil}]
     end
 
     test "say a run believed nothing when no module believed anything" do
       assert Replay.chart_series(run(0..1), "evidence").points == [
-               %{step: 0, value: 0.0},
-               %{step: 1, value: 0.0}
+               %{step: 0, value: 0.0, episode: nil},
+               %{step: 1, value: 0.0, episode: nil}
              ]
     end
 
@@ -216,7 +216,9 @@ defmodule Monty.Studio.ReplayTest do
         log: [entry(0)]
       }
 
-      assert Replay.chart_series(run, "sensor:patch").points == [%{step: 0, value: 0.5}]
+      assert Replay.chart_series(run, "sensor:patch").points == [
+               %{step: 0, value: 0.5, episode: nil}
+             ]
     end
   end
 
@@ -254,8 +256,10 @@ defmodule Monty.Studio.ReplayTest do
     end
 
     test "a run of one step cannot be zoomed into a hole" do
-      assert Replay.zoom(run([7]), {7, 7}, 7, :in) == {7, 7}
-      assert Replay.zoom(run([7]), {7, 7}, 7, :out) == {7, 7}
+      # One recorded moment, whatever step number it carries: the replay's axis
+      # is the run's own sequence, so its only position is 0.
+      assert Replay.zoom(run([7]), {0, 0}, 0, :in) == {0, 0}
+      assert Replay.zoom(run([7]), {0, 0}, 0, :out) == {0, 0}
     end
   end
 

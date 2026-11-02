@@ -11,6 +11,58 @@ defmodule Monty.Studio.Replay.ChartTest do
 
   defp series(values, label), do: %{id: label, label: label, points: points(values)}
 
+  describe "the episodes the chart shades" do
+    test "is one band per episode, and neighbouring bands never share a colour" do
+      chart =
+        Chart.new([
+          %{step: 0, value: 1.0, episode: 0},
+          %{step: 1, value: 2.0, episode: 0},
+          %{step: 2, value: 1.0, episode: 1},
+          %{step: 3, value: 2.0, episode: 1}
+        ])
+
+      assert [first, second] = chart.bands
+      assert {first.episode, second.episode} == {0, 1}
+      assert first.colour != second.colour
+      assert first.width > 0 and second.width > 0
+    end
+
+    test "tiles the axis, so no step falls between two bands" do
+      chart =
+        Chart.new([
+          %{step: 0, value: 1.0, episode: 0},
+          %{step: 1, value: 2.0, episode: 0},
+          %{step: 2, value: 1.0, episode: 1},
+          %{step: 3, value: 2.0, episode: 1}
+        ])
+
+      assert [first, second] = chart.bands
+
+      # The first episode ends where the second begins: a gap would be a
+      # boundary the chart drew but the run did not have.
+      assert_in_delta first.x + first.width, second.x, 0.001
+      assert_in_delta second.x + second.width, chart.width, 0.001
+    end
+
+    test "an episode of a single step at the edge has no width, so it is left out" do
+      # The rule the live chart states too: a band of no width would be a line of
+      # no colour, which reads as a boundary rather than an episode.
+      chart =
+        Chart.new([
+          %{step: 0, value: 1.0, episode: 0},
+          %{step: 1, value: 2.0, episode: 0},
+          %{step: 2, value: 1.0, episode: 1}
+        ])
+
+      assert [band] = chart.bands
+      assert band.episode == 0
+    end
+
+    test "a chart whose series carries no episodes is not shaded at all" do
+      assert Chart.new(points([1, 2, 3])).bands == []
+    end
+  end
+
   describe "a series drawn in a window" do
     test "scales the window across the width and the values across the height" do
       chart = Chart.new(points([0, 1, 2, 3]), window: {0, 3}, playhead: 0)

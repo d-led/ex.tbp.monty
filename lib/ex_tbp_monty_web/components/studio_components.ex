@@ -449,6 +449,19 @@ defmodule ExTbpMontyWeb.StudioComponents do
             role="img"
             aria-label="The chosen series over the steps in the window"
           >
+            <%!-- Which episode each stretch of the run is: evidence restarts at
+            zero at every boundary, so the shading is what makes the rhythm
+            countable. Drawn first, behind the lines. --%>
+            <rect
+              :for={band <- @chart.bands}
+              x={band.x}
+              y="0"
+              width={band.width}
+              height={@chart.height}
+              fill={band.colour}
+              class="episode-band"
+              data-episode={band.episode}
+            />
             <polyline
               :for={line <- @chart.lines}
               id={"replay-line-#{line.colour}"}

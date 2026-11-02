@@ -21,7 +21,7 @@ defmodule Monty.Studio.Replay do
 
   @type step_number :: integer()
 
-  @type point :: %{step: step_number(), value: number()}
+  @type point :: %{step: step_number(), value: number(), episode: non_neg_integer() | nil}
 
   @type series :: %{id: String.t(), label: String.t(), unit: String.t(), points: [point()]}
 
@@ -30,6 +30,7 @@ defmodule Monty.Studio.Replay do
   went with them, and what the sensors were looking at.
   """
   @type moment :: %{
+          position: non_neg_integer(),
           step: step_number(),
           frames: [Camera.frame()],
           entry: map() | nil,
@@ -37,13 +38,17 @@ defmodule Monty.Studio.Replay do
         }
 
   @doc """
-  The step numbers a run recorded, in order.
+  The positions a replay can show, in order.
+
+  A moment's position is its place in the run's own sequence, not the step
+  number it carries: every episode counts its steps from zero again, so a run of
+  nine episodes has nine step 0s and one position 0.
 
   Empty for a run that has not stepped yet — a run is a record from the moment
   it starts, and a replay of no steps is a page that says so, not a crash.
   """
   @spec steps(Run.t()) :: [step_number()]
-  def steps(%Run{timeline: timeline}), do: Enum.map(timeline, & &1["step"])
+  def steps(%Run{timeline: timeline}), do: Enum.to_list(0..(length(timeline) - 1)//1)
 
   @doc "The first step a replay can show, or `nil` when there is nothing to show."
   @spec first_step(Run.t()) :: step_number() | nil
@@ -78,7 +83,7 @@ defmodule Monty.Studio.Replay do
   def at(%Run{} = run, step) do
     case recorded(run) do
       [] -> nil
-      recorded -> recorded |> Enum.min_by(&abs(&1.step - step)) |> draw()
+      recorded -> recorded |> Enum.min_by(&abs(&1.position - step)) |> draw()
     end
   end
 
@@ -115,7 +120,11 @@ defmodule Monty.Studio.Replay do
         unit: "",
         points:
           Enum.map(moments, fn moment ->
-            %{step: moment.step, value: evidence_of(moment, name)}
+            %{
+              step: moment.position,
+              value: evidence_of(moment, name),
+              episode: episode_of(moment)
+            }
           end)
       }
     end)
@@ -194,9 +203,16 @@ defmodule Monty.Studio.Replay do
       label: label_of(id),
       unit: unit_of(id),
       points:
-        Enum.map(recorded(run), fn moment -> %{step: moment.step, value: value_of(moment, id)} end)
+        Enum.map(recorded(run), fn moment ->
+          # The episode travels with the point: the chart shades them in turn,
+          # and a step on its own does not say which episode it belonged to.
+          %{step: moment.position, value: value_of(moment, id), episode: episode_of(moment)}
+        end)
     }
   end
+
+  defp episode_of(%{entry: %{"episode" => episode}}) when is_integer(episode), do: episode
+  defp episode_of(_moment), do: nil
 
   @doc """
   A window over the recorded steps, clamped to the ones the run has.
@@ -249,13 +265,22 @@ defmodule Monty.Studio.Replay do
   # The timeline is the spine: a step exists because the run saw something at
   # it, and the log is what the modules said about that same step.
   defp recorded(%Run{timeline: timeline, log: log}) do
-    log_by_step = Map.new(log, &{&1["step"], &1})
+    # A step's own number restarts at zero in every episode, so it cannot address
+    # a replay: nine episodes of twelve steps are 108 recorded moments, not
+    # twelve. The log and the timeline are appended together, one entry each per
+    # step, so a moment's place in the sequence is what pairs it with its
+    # report — and its episode is what the band on the chart is drawn from.
+    log = log ++ List.duplicate(nil, max(length(timeline) - length(log), 0))
 
-    Enum.map(timeline, fn moment ->
+    timeline
+    |> Enum.zip(log)
+    |> Enum.with_index()
+    |> Enum.map(fn {{moment, entry}, position} ->
       %{
+        position: position,
         step: moment["step"],
         sensors: Map.get(moment, "sensors", %{}),
-        entry: Map.get(log_by_step, moment["step"])
+        entry: entry
       }
     end)
   end

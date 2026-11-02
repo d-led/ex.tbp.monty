@@ -14,6 +14,7 @@ defmodule Monty.Studio.Replay.Chart do
   rather than as a table to compare.
   """
 
+  alias Monty.Studio.Chart, as: EvidenceChart
   alias Monty.Studio.Replay
 
   @width 320
@@ -28,10 +29,20 @@ defmodule Monty.Studio.Replay.Chart do
     :to,
     :playhead,
     lines: [],
+    bands: [],
     hover: [],
     width: @width,
     height: @height
   ]
+
+  @typedoc """
+  One episode's stretch of the x axis, tinted.
+
+  Evidence restarts at zero at every episode boundary, so a run's lines climb
+  and drop in a rhythm. The bands are what makes that rhythm countable: without
+  them the drops are falls nobody measured.
+  """
+  @type band :: %{episode: non_neg_integer(), x: float(), width: float(), colour: String.t()}
 
   @typedoc """
   One drawn series: where it was drawn, and what to call it.
@@ -66,6 +77,7 @@ defmodule Monty.Studio.Replay.Chart do
           width: pos_integer(),
           height: pos_integer(),
           lines: [line()],
+          bands: [band()],
           min: number(),
           max: number(),
           from: number(),
@@ -109,12 +121,51 @@ defmodule Monty.Studio.Replay.Chart do
 
     %__MODULE__{
       lines: lines,
+      bands: bands(visible, {from, to}),
       min: min,
       max: max,
       from: from,
       to: to,
       hover: List.flatten(samples),
       playhead: playhead(Keyword.get(opts, :playhead), from, to)
+    }
+  end
+
+  # One band per episode the window can see, from the series that carries
+  # episodes: consecutive steps of an episode are one stretch, and a band runs to
+  # the step before the next episode begins so that neighbours tile without a gap.
+  defp bands(series, {from, to}) do
+    episodes =
+      series
+      |> Enum.map(fn drawn -> Enum.filter(drawn.points, &is_integer(&1[:episode])) end)
+      |> Enum.find(&(&1 != []))
+
+    case episodes do
+      nil ->
+        []
+
+      points ->
+        runs = Enum.chunk_by(points, & &1.episode)
+        starts = Enum.map(runs, fn run -> hd(run).step end) ++ [to + 1]
+
+        runs
+        |> Enum.with_index()
+        |> Enum.map(fn {run, index} -> band(run, Enum.at(starts, index + 1), {from, to}) end)
+        |> Enum.reject(&(&1.width <= 0))
+    end
+  end
+
+  defp band(run, next_start, {from, to}) do
+    first = hd(run).step
+    x = x(first, from, to)
+
+    %{
+      episode: hd(run).episode,
+      x: x,
+      # An episode reaches to the step the next one begins at — not to its own
+      # last step, which would leave every episode a step short of the next.
+      width: min(x(next_start, from, to), @width) - x,
+      colour: EvidenceChart.band_colour(hd(run).episode)
     }
   end
 

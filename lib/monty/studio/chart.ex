@@ -243,10 +243,21 @@ defmodule Monty.Studio.Chart do
         episode: episode,
         x: rounded(x),
         width: rounded(x_coordinate(clipped_last, chart) - x),
-        colour: Enum.at(@band_palette, rem(episode, length(@band_palette)))
+        colour: band_colour(episode)
       }
     end
   end
+
+  @doc """
+  The tint of episode `episode`'s band.
+
+  Two in turn, so neighbouring episodes never share one. Both charts shade
+  episodes — the live one and the replay of a stored run — so the palette lives
+  here rather than in either of them, and a reader who learns one page's colours
+  reads the other's.
+  """
+  @spec band_colour(non_neg_integer()) :: String.t()
+  def band_colour(episode), do: Enum.at(@band_palette, rem(episode, length(@band_palette)))
 
   # One object's reported evidence, per step, in the order the module listed the
   # objects on the last step it reported them — so the line the run is chasing is
