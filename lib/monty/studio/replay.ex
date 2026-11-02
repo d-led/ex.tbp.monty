@@ -48,7 +48,7 @@ defmodule Monty.Studio.Replay do
   it starts, and a replay of no steps is a page that says so, not a crash.
   """
   @spec steps(Run.t()) :: [step_number()]
-  def steps(%Run{timeline: timeline}), do: Enum.to_list(0..(length(timeline) - 1)//1)
+  def steps(%Run{} = run), do: positions(run)
 
   @doc "The first step a replay can show, or `nil` when there is nothing to show."
   @spec first_step(Run.t()) :: step_number() | nil
@@ -73,6 +73,19 @@ defmodule Monty.Studio.Replay do
   end
 
   @doc """
+  Whether these observations kept a picture at all.
+
+  The same question `pictures?/1` asks of a whole run, for a page that read the
+  record without its pictures (`RunHistory.head/1`) and has one step's
+  observations in hand.
+  """
+  @spec kept_pictures?(map() | nil) :: boolean()
+  def kept_pictures?(sensors) when is_map(sensors),
+    do: sensors |> Map.values() |> Enum.any?(&Camera.pictures?/1)
+
+  def kept_pictures?(_none), do: false
+
+  @doc """
   One recorded step.
 
   A step the run never reached is answered with the nearest one it did, because
@@ -81,9 +94,9 @@ defmodule Monty.Studio.Replay do
   """
   @spec at(Run.t(), step_number()) :: moment() | nil
   def at(%Run{} = run, step) do
-    case recorded(run) do
-      [] -> nil
-      recorded -> recorded |> Enum.min_by(&abs(&1.position - step)) |> draw()
+    case last_step(run) do
+      nil -> nil
+      last -> run |> moment(step |> min(last) |> max(0)) |> draw()
     end
   end
 
@@ -264,27 +277,61 @@ defmodule Monty.Studio.Replay do
 
   # -- what a step is made of ------------------------------------------------
 
-  # The timeline is the spine: a step exists because the run saw something at
-  # it, and the log is what the modules said about that same step.
-  defp recorded(%Run{timeline: timeline, log: log}) do
+  # The log is the spine, and the timeline is what the sensors saw at each place
+  # on it. Both are written one entry per step, but a record read without its
+  # pictures (`RunHistory.head/1`) has the log alone: every line, every number
+  # and every theory is still there, and only the frames are missing — which is
+  # why a step made from a log-only record is a step with no pictures, not a
+  # step that did not happen.
+  defp recorded(%Run{} = run) do
     # A step's own number restarts at zero in every episode, so it cannot address
     # a replay: nine episodes of twelve steps are 108 recorded moments, not
     # twelve. The log and the timeline are appended together, one entry each per
     # step, so a moment's place in the sequence is what pairs it with its
     # report — and its episode is what the band on the chart is drawn from.
-    log = log ++ List.duplicate(nil, max(length(timeline) - length(log), 0))
+    run
+    |> positions()
+    |> Enum.map(&moment(run, &1))
+  end
 
-    timeline
-    |> Enum.zip(log)
-    |> Enum.with_index()
-    |> Enum.map(fn {{moment, entry}, position} ->
-      %{
-        position: position,
-        step: moment["step"],
-        sensors: Map.get(moment, "sensors", %{}),
-        entry: entry
-      }
-    end)
+  # One position, read from the two lists without walking them all: `at/2` is
+  # called on every drag of the slider, and a replay that built every moment to
+  # then pick one took a tenth of a second to answer.
+  defp moment(%Run{} = run, position) do
+    entry = Enum.at(run.log, position)
+    seen = Enum.at(run.timeline, position) || %{}
+
+    %{
+      position: position,
+      step: Map.get(seen, "step") || (entry || %{})["step"],
+      sensors: Map.get(seen, "sensors", %{}),
+      entry: entry
+    }
+  end
+
+  # The run's places, in order. Whichever of the two lists is longer is the
+  # spine: a run whose pictures were not read still has every step.
+  defp positions(%Run{timeline: timeline, log: log}) do
+    case max(length(timeline), length(log)) do
+      0 -> []
+      count -> Enum.to_list(0..(count - 1)//1)
+    end
+  end
+
+  @doc """
+  The same moment, with the pictures those sensors kept.
+
+  A moment built from a record without its timeline (`RunHistory.head/1`) has no
+  frames; this puts them back for the one step being shown, from the one entry
+  that step owns.
+  """
+  @spec with_pictures(moment() | nil, map() | nil) :: moment() | nil
+  def with_pictures(nil, _sensors), do: nil
+
+  def with_pictures(moment, nil), do: moment
+
+  def with_pictures(%{step: step} = moment, sensors) when is_map(sensors) do
+    %{moment | sensors: sensors, frames: frames(%{sensors: sensors, step: step})}
   end
 
   # A drawn moment is a recorded one plus the pictures it delivered, so it keeps

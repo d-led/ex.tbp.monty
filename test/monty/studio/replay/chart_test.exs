@@ -77,6 +77,7 @@ defmodule Monty.Studio.Replay.ChartTest do
       assert {first_x, first_y} = hd(drawn)
       assert {last_x, last_y} = List.last(drawn)
 
+      # The plot is the whole width: the value labels live beside it, not in it.
       assert first_x == 0
       assert last_x == chart.width
 
@@ -205,15 +206,22 @@ defmodule Monty.Studio.Replay.ChartTest do
       chart = Chart.new(points([5, 5]), window: {0, 1}, playhead: 0)
 
       assert chart.min == chart.max
-      assert [%{points: drawn}] = chart.lines
-      assert Enum.map(drawn, fn {_x, y} -> y end) == [32.0, 32.0]
+
+      assert [%{points: [first, second]}] = chart.lines
+      # One height for both: a series with no range has no slope to draw.
+      assert elem(first, 1) == elem(second, 1)
+
+      # And it sits inside the plot, not on its edge.
+      assert elem(first, 1) > 0 and elem(first, 1) < chart.height
     end
 
-    test "a run of one step is a point in the middle" do
+    test "a run of one step is a point in the plot's middle" do
       chart = Chart.new(points([7]), window: {0, 0}, playhead: 0)
 
-      assert [%{points: drawn}] = chart.lines
-      assert drawn == [{chart.width / 2, chart.height / 2}]
+      assert [%{points: [point]}] = chart.lines
+
+      assert elem(point, 0) > 0 and elem(point, 0) < chart.width
+      assert elem(point, 1) > 0 and elem(point, 1) < chart.height
     end
   end
 
@@ -255,13 +263,16 @@ defmodule Monty.Studio.Replay.ChartTest do
 
     test "every drawn point knows which line it is on, so a hover can say so" do
       samples = two_objects().hover
+      chart = two_objects()
 
       assert Enum.map(samples, & &1.line) == ["mug", "mug", "mug", "bowl", "bowl", "bowl"]
 
+      # The highest value is drawn at the top of the plot, one inset below the
+      # edge, and the first step after the value labels.
       assert Enum.find(samples, &(&1.line == "bowl" and &1.step == 0)) == %{
                line: "bowl",
                x: 0.0,
-               y: 3.0,
+               y: 4.0,
                step: 0,
                value: 8
              }

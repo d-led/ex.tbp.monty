@@ -428,7 +428,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       broadcast(run.id, {:step, %{line: "step 0", step: 0, frames: [], episode: 0, beliefs: %{}}})
 
-      assert has_element?(view, "#log-0")
+      assert has_element?(view, "#log-0-0")
       assert view |> element("#run-progress") |> render() =~ "step 1 / 3"
     end
 
@@ -440,31 +440,19 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert view |> element("#run-status") |> render() =~ "queued"
 
-      # Nothing owns the run any more: the job was cancelled out from under it.
+      # Nothing owns the run any more: the job was cancelled out from under it,
+      # and the record has said nothing since. What stops the page saying
+      # `running` is the record being closed, not a third word for a run that is
+      # over.
       ExTbpMonty.Repo.update_all(
         from(j in Oban.Job, where: fragment("?->>'run_id' = ?", j.args, ^run.id)),
         set: [state: "cancelled"]
       )
 
+      quiet_since(run, 61)
       send(view.pid, :show_poll)
 
-      assert view |> element("#run-status") |> render() =~ "no worker"
-    end
-
-    test "says no worker is running it when the record outlives its job", %{conn: conn} do
-      # A worker that is cancelled leaves a record that still says `running`.
-      # The page must not repeat the word: nothing is coming.
-      {:ok, abandoned} =
-        RunHistory.start(%{
-          experiment: "tutorial/first_experiment",
-          source: "monty",
-          steps: 3,
-          config: %{}
-        })
-
-      {:ok, view, _html} = live(conn, ~p"/runs/#{abandoned.id}")
-
-      assert view |> element("#run-status") |> render() =~ "no worker"
+      assert view |> element("#run-status") |> render() =~ "failed"
     end
   end
 
@@ -474,8 +462,8 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert has_element?(view, "#run-config")
       assert render(view) =~ "monty/learning_module"
-      assert has_element?(view, "#log-0")
-      assert has_element?(view, "#log-1")
+      assert has_element?(view, "#log-0-0")
+      assert has_element?(view, "#log-0-1")
     end
 
     # A step's clock is the reader's, and only the browser knows their zone. So
@@ -489,7 +477,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
       assert has_element?(view, "#run-log[phx-hook='ExTbpMontyWeb.LocalTime.LocalTime']")
-      assert has_element?(view, "#log-0 time[data-local-time='clock'][datetime]")
+      assert has_element?(view, "#log-0-0 time[data-local-time='clock'][datetime]")
     end
 
     # The tooltip is drawn by a hook, but the words and numbers in it come from
@@ -511,7 +499,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       decoded = Jason.decode!(hd(samples))
 
       assert decoded != []
-      assert Enum.all?(decoded, &(&1["label"] =~ "step "))
+      assert Enum.all?(decoded, &(&1["label"] =~ "#"))
       assert Enum.at(decoded, 0)["label"] =~ "·"
     end
 
@@ -713,6 +701,49 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert view |> element("#replay-panel") |> render() =~ "steps 0–1"
     end
 
+    # A run of two episodes counts its steps from zero twice, so the step a
+    # recorded moment carries cannot address it. The slider is the run's own
+    # sequence, one position per recorded step.
+    test "the slider runs over recorded positions", %{conn: conn} do
+      run = run_believing([%{"mug" => 1.0}, %{"mug" => 2.0}, %{"mug" => 3.0}])
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+      slider = view |> element("#replay-slider") |> render()
+
+      assert slider =~ ~s{min="0"}
+      assert slider =~ ~s{max="2"}
+
+      # The window is the chart's axis; zooming it leaves the slider alone.
+      view |> element("#replay-zoom-in") |> render_click()
+
+      assert view |> element("#replay-slider") |> render() =~ ~s{max="2"}
+    end
+
+    test "a drag across the chart zooms to the range it drew", %{conn: conn} do
+      run = run_believing([%{"mug" => 1.0}, %{"mug" => 2.0}, %{"mug" => 3.0}])
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      view |> render_hook("replay_brush", %{"from" => "1", "to" => "2"})
+
+      assert view |> element("#replay-panel") |> render() =~ "steps 1–2"
+    end
+
+    test "the value axis is labelled beside the plot", %{conn: conn} do
+      run = run_believing([%{"mug" => 1.0}, %{"mug" => 5.0}])
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+      axis = view |> element("#replay-chart-y-axis") |> render()
+      words = axis |> LazyHTML.from_fragment() |> LazyHTML.text()
+
+      # Four values across the range, both ends included.
+      assert length(String.split(axis, "<span")) - 1 == 4
+      assert words =~ "1"
+      assert words =~ "5"
+
+      # The labels are beside the plot, not in it: text inside an SVG stretched
+      # by `preserveAspectRatio="none"` is drawn wider than it is tall.
+      plot = view |> element("#replay-chart") |> render()
+      refute plot =~ "15.2"
+    end
+
     test "a chart can show another series", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
@@ -728,7 +759,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       # The readout is made on the server, so it is worded like the rest of the
       # page; the hover itself only picks the nearest one and draws the line.
-      assert view |> element("#replay-chart-hover") |> render() =~ "step 1 · "
+      assert view |> element("#replay-chart-hover") |> render() =~ "#1 · "
     end
 
     test "a series measured in metres says so", %{conn: conn, run: run} do
@@ -766,7 +797,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      assert view |> element("#replay-chart-hover") |> render() =~ "bowl · step 0 · "
+      assert view |> element("#replay-chart-hover") |> render() =~ "bowl · #0 · "
     end
 
     test "the two strongest theories change as the slider moves", %{conn: conn} do

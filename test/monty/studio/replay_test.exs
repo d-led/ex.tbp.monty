@@ -385,4 +385,52 @@ defmodule Monty.Studio.ReplayTest do
       assert [%{object: "bowl"}] = Replay.theories(Replay.at(with_graphs([3]), 3), 1)
     end
   end
+
+  describe "a record read without its pictures" do
+    # What `RunHistory.head/1` hands a page: the log of every step, and no
+    # observations. The observations are a column of their own, fetched for the
+    # one step being shown.
+    defp log_only(steps), do: %Run{log: Enum.map(steps, &entry/1), timeline: []}
+
+    test "still replays every step it recorded" do
+      run = log_only([0, 1, 2])
+
+      assert Replay.steps(run) == [0, 1, 2]
+      assert Replay.last_step(run) == 2
+
+      moment = Replay.at(run, 1)
+      assert moment.position == 1
+      assert moment.step == 1
+      assert moment.entry["duration_us"] == 101
+      assert moment.frames == []
+    end
+
+    test "draws every line the log can draw, and no line it has no observations for" do
+      steps = [0, 1, 2]
+      drawn = Enum.map(Replay.series(log_only(steps)), & &1.id)
+      kept = Enum.map(Replay.series(run(steps)), & &1.id)
+
+      # A sensor line is where the sensor was, which is the observations column;
+      # everything the modules concluded is in the log.
+      assert drawn == Enum.reject(kept, &String.starts_with?(&1, "sensor:"))
+      assert "evidence" in drawn
+    end
+
+    test "takes the pictures back one step at a time" do
+      run = log_only([0, 1])
+      moment = Replay.at(run, 1)
+
+      filled = Replay.with_pictures(moment, %{"patch" => %{"images" => %{"depth" => "png"}}})
+
+      assert [%{sensor_id: "patch"}] = filled.frames
+      assert Replay.with_pictures(moment, nil) == moment
+      assert Replay.with_pictures(nil, %{}) == nil
+    end
+
+    test "says a run kept no pictures when no step has one" do
+      refute Replay.kept_pictures?(%{"patch" => %{"location" => [0.0, 0.0, 0.1]}})
+      assert Replay.kept_pictures?(%{"patch" => %{"images" => %{"depth" => "png"}}})
+      refute Replay.kept_pictures?(nil)
+    end
+  end
 end

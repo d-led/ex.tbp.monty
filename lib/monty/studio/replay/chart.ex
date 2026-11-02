@@ -28,8 +28,14 @@ defmodule Monty.Studio.Replay.Chart do
   alias Monty.Studio.Replay
 
   @width 320
-  @height 64
-  @inset 3
+  @height 150
+  @inset 4
+
+  # The plot uses the whole box: the value labels are HTML beside it, not SVG
+  # text inside it. Text inside a chart drawn with `preserveAspectRatio="none"`
+  # is stretched with the geometry — twice as wide as it is tall, at this
+  # chart's shape — and a gutter in user units costs that many stretched pixels
+  # of line. Beside the plot, a label is a label, and the plot loses no width.
 
   @enforce_keys [:lines, :min, :max, :from, :to]
   defstruct [
@@ -42,6 +48,7 @@ defmodule Monty.Studio.Replay.Chart do
     bands: [],
     polylines: [],
     hover: [],
+    ticks: [],
     width: @width,
     height: @height
   ]
@@ -95,7 +102,8 @@ defmodule Monty.Studio.Replay.Chart do
           from: number(),
           to: number(),
           playhead: float() | nil,
-          hover: [sample()]
+          hover: [sample()],
+          ticks: [%{value: number(), y: float(), label: String.t()}]
         }
 
   @doc """
@@ -141,9 +149,27 @@ defmodule Monty.Studio.Replay.Chart do
       from: from,
       to: to,
       hover: List.flatten(samples),
+      ticks: ticks(min, max),
       playhead: playhead(Keyword.get(opts, :playhead), from, to)
     }
   end
+
+  # Four values across the axis, always including both ends, in the fewest
+  # decimals that tell them apart: the numbers a reader uses to say how far one
+  # line is above another.
+  defp ticks(min, max) when max > min do
+    steps = 3
+
+    for index <- 0..steps do
+      value = min + (max - min) * index / steps
+      %{value: value, y: Float.round(y(value, min, max), 2), label: number(value)}
+    end
+  end
+
+  defp ticks(min, _max), do: [%{value: min, y: Float.round(@height / 2, 2), label: number(min)}]
+
+  defp number(value) when value == trunc(value), do: Integer.to_string(trunc(value))
+  defp number(value), do: :erlang.float_to_binary(value * 1.0, decimals: 1)
 
   # Every line's stretches, flat: a template draws one `<polyline>` per stretch,
   # and how many stretches a line has is the chart's business, not the page's.
@@ -240,14 +266,21 @@ defmodule Monty.Studio.Replay.Chart do
     end
   end
 
-  defp x(_step, from, to) when to == from, do: @width / 2
+  defp x(_step, from, to) when to == from, do: middle_x()
+
   defp x(step, from, to), do: (step - from) / (to - from) * @width
 
-  defp y(_value, min, max) when max == min, do: @height / 2
+  defp middle_x, do: @width / 2
+
+  defp y(_value, min, max) when max == min, do: middle_y()
 
   defp y(value, min, max) do
-    @height - @inset - (value - min) / (max - min) * (@height - 2 * @inset)
+    bottom = @height - @inset
+    top = @inset
+    bottom - (value - min) / (max - min) * (bottom - top)
   end
+
+  defp middle_y, do: @height / 2
 
   defp playhead(nil, _from, _to), do: nil
   defp playhead(step, from, to), do: x(step, from, to)

@@ -20,6 +20,10 @@ defmodule Monty.Studio.RunHistory do
   # from a query what changed.
   @topic "studio_runs"
 
+  # Every field but the pictures, for `head/1`. Taken from the schema so a field
+  # added later is read by default rather than silently left behind.
+  @without_pictures Run.__schema__(:fields) -- [:timeline]
+
   @doc """
   Records a run that is starting.
 
@@ -252,6 +256,64 @@ defmodule Monty.Studio.RunHistory do
     case Ecto.UUID.cast(id) do
       {:ok, uuid} -> Repo.get(Run, uuid)
       :error -> nil
+    end
+  end
+
+  @doc """
+  One run without the pictures its sensors kept.
+
+  A step records both halves of what a timestep is: the log, which says what the
+  modules concluded, and the timeline, which holds the observations that went
+  with it. Measured on a run of a thousand steps, a log row is 1.7 kB and a
+  timeline entry is 11 kB — the whole record was 16 MB, and a page that read it
+  again on every step spent two and a half seconds doing it.
+
+  A page needs the log on every step and the pictures of the one step it is
+  looking at, so it reads this and asks `sensors_at/2` for the frames of that
+  step. The pictures are not lost, they are simply not carried around.
+  """
+  @spec head(binary()) :: Run.t() | nil
+  def head(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        Run
+        |> where([run], run.id == ^uuid)
+        |> select([run], map(run, @without_pictures))
+        |> Repo.one()
+        |> case do
+          nil -> nil
+          row -> struct(Run, row)
+        end
+
+      :error ->
+        nil
+    end
+  end
+
+  @doc """
+  What the sensors of one recorded position saw, or `nil` if nothing was recorded there.
+
+  `position` counts steps the way a replay does — from zero, across episodes —
+  which is the array's own index.
+  """
+  @spec sensors_at(binary(), non_neg_integer()) :: map() | nil
+  def sensors_at(id, position) when position >= 0 do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        Run
+        |> where([run], run.id == ^uuid)
+        |> select(
+          [run],
+          type(fragment("(?)[CAST(? AS int)]", run.timeline, ^(position + 1)), :map)
+        )
+        |> Repo.one()
+        |> case do
+          nil -> nil
+          entry -> Map.get(entry, "sensors", %{})
+        end
+
+      :error ->
+        nil
     end
   end
 

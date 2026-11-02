@@ -307,10 +307,10 @@ defmodule ExTbpMontyWeb.StudioComponents do
           type="range"
           name="step"
           id="replay-slider"
-          min={@chart.from}
-          max={@chart.to}
-          value={@moment.step}
-          phx-debounce="0"
+          min="0"
+          max={max(@recorded - 1, 0)}
+          value={@moment.position}
+          phx-debounce="150"
           class="range range-xs range-primary w-full"
           aria-label="Step"
         />
@@ -433,57 +433,110 @@ defmodule ExTbpMontyWeb.StudioComponents do
         it is, and what it was worth. The samples come from the server, so the
         words and the unit are the ones the rest of the page uses; the hook only
         decides which drawn point is nearest and where to put the line. --%>
-        <div
-          id="replay-chart-hover"
-          phx-hook=".ChartHover"
-          data-width={@chart.width}
-          data-height={@chart.height}
-          data-samples={chart_samples(@chart, @series, @series_id)}
-          class="relative cursor-crosshair"
-        >
-          <svg
-            id="replay-chart"
-            viewBox={"0 0 #{@chart.width} #{@chart.height}"}
-            preserveAspectRatio="none"
-            class="h-20 w-full rounded-field border border-base-300 bg-base-100"
-            role="img"
-            aria-label="The chosen series over the steps in the window"
+        <%!-- The value axis, outside the plot. Inside it, a label would be
+        stretched with the chart's geometry — `preserveAspectRatio="none"`
+        makes every glyph as wide as the box is wider than the viewBox — and its
+        gutter would cost that many stretched pixels of line. A column beside
+        the plot costs only the width of the words. --%>
+        <div class="flex gap-1.5">
+          <div
+            id="replay-chart-y-axis"
+            class="relative w-9 shrink-0 text-right font-mono text-[10px] leading-none text-base-content/50"
+            style={"height: #{@chart.height}"}
+            aria-hidden="true"
           >
-            <%!-- Which episode each stretch of the run is: evidence restarts at
+            <span
+              :for={tick <- @chart.ticks}
+              class="absolute right-0 -translate-y-1/2 tabular-nums"
+              style={"top: #{tick.y / @chart.height * 100}%"}
+            >
+              {tick.label}
+            </span>
+          </div>
+          <div
+            id="replay-chart-hover"
+            phx-hook=".ChartHover"
+            data-width={@chart.width}
+            data-height={@chart.height}
+            data-from={@chart.from}
+            data-to={@chart.to}
+            data-samples={chart_samples(@chart, @series, @series_id)}
+            class="relative min-w-0 flex-1 cursor-crosshair touch-none select-none"
+          >
+            <svg
+              id="replay-chart"
+              viewBox={"0 0 #{@chart.width} #{@chart.height}"}
+              preserveAspectRatio="none"
+              class="h-40 w-full rounded-field border border-base-300 bg-base-100"
+              role="img"
+              aria-label="The chosen series over the steps in the window"
+            >
+              <%!-- Which episode each stretch of the run is: evidence restarts at
             zero at every boundary, so the shading is what makes the rhythm
             countable. Drawn first, behind the lines. --%>
-            <rect
-              :for={band <- @chart.bands}
-              x={band.x}
-              y="0"
-              width={band.width}
-              height={@chart.height}
-              fill={band.colour}
-              class="episode-band"
-              data-episode={band.episode}
-            />
-            <polyline
-              :for={polyline <- @chart.polylines}
-              id={polyline.id}
-              points={polyline.points}
-              fill="none"
-              stroke={line_colour(polyline.colour)}
-              stroke-width="1.5"
-              stroke-linejoin="round"
-              vector-effect="non-scaling-stroke"
-            />
-            <line
-              :if={@chart.playhead}
-              x1={@chart.playhead}
-              y1="0"
-              x2={@chart.playhead}
-              y2={@chart.height}
-              stroke="currentColor"
-              stroke-opacity="0.35"
-              stroke-dasharray="2 2"
-              vector-effect="non-scaling-stroke"
-            />
-          </svg>
+              <rect
+                :for={band <- @chart.bands}
+                x={band.x}
+                y="0"
+                width={band.width}
+                height={@chart.height}
+                fill={band.colour}
+                class="episode-band"
+                data-episode={band.episode}
+              />
+              <%!-- Where the labels beside the plot sit, drawn under the lines so a
+            line is never hidden by a gridline. --%>
+              <g id="replay-chart-gridlines">
+                <line
+                  :for={tick <- @chart.ticks}
+                  x1="0"
+                  y1={tick.y}
+                  x2={@chart.width}
+                  y2={tick.y}
+                  stroke="currentColor"
+                  stroke-opacity="0.12"
+                  vector-effect="non-scaling-stroke"
+                />
+              </g>
+              <polyline
+                :for={polyline <- @chart.polylines}
+                id={polyline.id}
+                points={polyline.points}
+                fill="none"
+                stroke={line_colour(polyline.colour)}
+                stroke-width="1.5"
+                stroke-linejoin="round"
+                vector-effect="non-scaling-stroke"
+              />
+              <line
+                :if={@chart.playhead}
+                x1={@chart.playhead}
+                y1="0"
+                x2={@chart.playhead}
+                y2={@chart.height}
+                stroke="currentColor"
+                stroke-opacity="0.35"
+                stroke-dasharray="2 2"
+                vector-effect="non-scaling-stroke"
+              />
+              <%!-- The range a drag is choosing, drawn while the pointer is down
+            and gone on release: the zoom is the drag, so the box is feedback
+            rather than a state the page has to keep. --%>
+              <rect
+                id="replay-chart-brush"
+                x="0"
+                y="0"
+                width="0"
+                height="0"
+                fill="currentColor"
+                fill-opacity="0.12"
+                stroke="currentColor"
+                stroke-opacity="0.4"
+                vector-effect="non-scaling-stroke"
+                visibility="hidden"
+              />
+            </svg>
+          </div>
         </div>
 
         <%!-- A legend is only worth its line when there is a choice to make: a
@@ -535,6 +588,13 @@ defmodule ExTbpMontyWeb.StudioComponents do
               // the slider below the chart does the same thing, one drag at a time.
               this.el.addEventListener("click", event => this.seek(event))
 
+              // Dragging across the plot is the other way to be told what to
+              // look at: it chooses a range and zooms to it.
+              this.el.addEventListener("pointerdown", event => this.startBrush(event))
+              this.el.addEventListener("pointermove", event => this.drag(event))
+              this.el.addEventListener("pointerup", event => this.endBrush(event))
+              this.el.addEventListener("pointercancel", () => this.cancelBrush())
+
               this.read()
             },
 
@@ -555,6 +615,81 @@ defmodule ExTbpMontyWeb.StudioComponents do
               this.samples = JSON.parse(this.el.dataset.samples || "[]")
               this.width = Number(this.el.dataset.width || 320)
               this.height = Number(this.el.dataset.height || 64)
+              this.from = Number(this.el.dataset.from || 0)
+              this.to = Number(this.el.dataset.to || 0)
+              this.brush = null
+            },
+
+            // Where a pointer is across the plot, in the chart's own units.
+            unitX(event) {
+              const box = this.el.getBoundingClientRect()
+              if (box.width === 0) return 0
+
+              return ((event.clientX - box.left) / box.width) * this.width
+            },
+
+            // And where that is in the window's own terms: the plot is the whole
+            // width of the box, so a position is a fraction of it.
+            positionOf(unitX) {
+              const fraction = unitX / Math.max(this.width, 1)
+
+              return this.from + fraction * (this.to - this.from)
+            },
+
+            startBrush(event) {
+              if (event.button !== 0 || this.to <= this.from) return
+
+              const unitX = this.unitX(event)
+              this.brush = {from: unitX, to: unitX, moved: false}
+              this.showBrush()
+            },
+
+            drag(event) {
+              if (!this.brush) return
+
+              const unitX = this.unitX(event)
+
+              this.brush.to = unitX
+              this.brush.moved = this.brush.moved || Math.abs(unitX - this.brush.from) > 4
+              this.showBrush()
+            },
+
+            showBrush() {
+              const box = this.el.querySelector("#replay-chart-brush")
+              if (!box || !this.brush) return
+
+              box.setAttribute("x", String(Math.min(this.brush.from, this.brush.to)))
+              box.setAttribute("width", String(Math.abs(this.brush.to - this.brush.from)))
+              box.setAttribute("height", String(this.height))
+              box.setAttribute("visibility", "visible")
+            },
+
+            // A drag that went nowhere is a click, and a click already means
+            // "show me that step"; only a real drag scopes the window.
+            endBrush(_event) {
+              const brush = this.brush
+              if (!brush) return
+
+              this.brush = null
+              this.cancelBrush()
+
+              if (!brush.moved) return
+
+              // The click that ends a drag is not a seek: the reader chose a
+              // range, not a point.
+              this.dragged = true
+
+              const ends = [this.positionOf(brush.from), this.positionOf(brush.to)].map(Math.round)
+
+              this.pushEvent("replay_brush", {
+                from: String(Math.min(...ends)),
+                to: String(Math.max(...ends))
+              })
+            },
+
+            cancelBrush() {
+              const box = this.el.querySelector("#replay-chart-brush")
+              if (box) box.setAttribute("visibility", "hidden")
             },
 
             // The pointer is in box pixels, the points are in the SVG's own
@@ -603,10 +738,17 @@ defmodule ExTbpMontyWeb.StudioComponents do
             },
 
             seek(event) {
+              // The mouse-up of a drag fires a click too, and a drag has already
+              // said what it wanted.
+              if (this.dragged) {
+                this.dragged = false
+                return
+              }
+
               const nearest = this.nearest(event)
               if (!nearest) return
 
-              this.pushEvent("replay_seek", {step: String(nearest.step)})
+              this.pushEvent("replay_seek", {step: String(nearest.position)})
             },
 
             hide() {
@@ -620,15 +762,26 @@ defmodule ExTbpMontyWeb.StudioComponents do
     """
   end
 
+  # The chart's points are thinned to what a pointer can tell apart before they
+  # are sent: this many per line, which is more than the plot has pixels for.
+  @samples_per_line 160
+
   # One entry per drawn point: where it sits, and the words a hover shows. The
   # label is made here, not in the browser, so it says "mug · step 3 · 0.41" like
   # every other number on the page — and it names the line, because with ten of
   # them a value alone does not say whose it is.
+  #
+  # The points are thinned to what a pointer can tell apart before they are sent:
+  # a run of a thousand steps over ten objects is seven thousand drawn points in
+  # three hundred and twenty units of chart, so a hover was answered by scanning
+  # seven thousand entries to name the one under the cursor, and the entries
+  # themselves were seven hundred kilobytes in the page's own attributes.
   defp chart_samples(chart, series, series_id) do
     unit = chart_unit(series, series_id)
     named? = length(chart.lines) > 1
 
     chart.hover
+    |> nearest_per_unit(chart.width)
     |> Enum.map(fn %{line: line, x: x, y: y, step: step, value: value} ->
       %{
         x: Float.round(x * 1.0, 2),
@@ -640,11 +793,25 @@ defmodule ExTbpMontyWeb.StudioComponents do
     |> Jason.encode!()
   end
 
-  defp label(line, true, step, value, unit),
-    do: "#{line} · step #{step} · #{format_value(value)}#{unit_note(unit)}"
+  # Every point per line whose place a pointer could land on, and the last one it
+  # could not: a line's shape is kept — its top, its bottom, where it turns — and
+  # the steps in between are the ones a pixel cannot separate anyway.
+  defp nearest_per_unit(points, _width) do
+    points
+    |> Enum.group_by(& &1.line)
+    |> Enum.flat_map(fn {_line, drawn} ->
+      Enum.take_every(drawn, max(div(length(drawn), @samples_per_line), 1))
+    end)
+  end
 
-  defp label(_line, false, step, value, unit),
-    do: "step #{step} · #{format_value(value)}#{unit_note(unit)}"
+  # `#647` is the recorded moment's place in the run, not the step number an
+  # episode carries: every episode counts from zero again, so "step 647" would
+  # be a step no episode has. The badge over the slider says the episode's own.
+  defp label(line, true, position, value, unit),
+    do: "#{line} · ##{position} · #{format_value(value)}#{unit_note(unit)}"
+
+  defp label(_line, false, position, value, unit),
+    do: "##{position} · #{format_value(value)}#{unit_note(unit)}"
 
   defp unit_note(""), do: ""
   defp unit_note(unit), do: " " <> unit

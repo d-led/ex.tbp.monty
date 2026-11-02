@@ -307,4 +307,34 @@ defmodule Monty.Studio.RunHistoryTest do
       refute RunHistory.stalled?(run)
     end
   end
+
+  describe "a run read for a page" do
+    test "comes back without the pictures its steps kept" do
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 1, "goals" => 0}, moment(1))
+
+      head = RunHistory.head(run.id)
+
+      # The log is what a page reads on every step and the observations are what
+      # it asks for one step at a time: a run of a thousand steps carries eleven
+      # kilobytes of picture per step, and a page that read them all spent longer
+      # decoding the record than the run spent stepping.
+      assert head.log == run.log
+      assert head.timeline == []
+      assert head.status == "running"
+      assert head.config == run.config
+    end
+
+    test "answers with the observations of one step, and nothing where there was no step" do
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 1, "goals" => 0}, moment(1))
+
+      assert RunHistory.sensors_at(run.id, 1)["patch"]["location"] == [0.01, 0.0, 0.1]
+      assert RunHistory.sensors_at(run.id, 2) == nil
+      assert RunHistory.sensors_at("not-an-id", 0) == nil
+      assert RunHistory.head("not-an-id") == nil
+    end
+  end
 end

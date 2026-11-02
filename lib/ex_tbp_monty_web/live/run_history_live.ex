@@ -28,7 +28,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   @selection_events Selection.events()
 
   # The replay panel's controls, grouped the same way and for the same reason.
-  @replay_events ~w(replay_seek replay_step replay_play replay_pause replay_zoom replay_series)
+  @replay_events ~w(replay_seek replay_step replay_play replay_pause replay_zoom replay_brush replay_series)
 
   # How often a page showing a run asks the record what the run is doing. The
   # worker broadcasts every step, so this is the answer to silence: a message
@@ -36,9 +36,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # between two steps and will never send another.
   @show_poll_ms 2_000
 
+  # How long the page waits for a run to stop talking before it reads the record.
+  # A step is published as several messages, and reading the record once per
+  # message meant the page spent longer rendering than the run spent stepping.
+  @refresh_after_ms 250
+
   # The two keys that answer "why did this stop", shown in the failure panel and
   # kept out of the table of everything else.
   @said_above ["reason", "technical"]
+
+  # A step's number restarts in every episode, so it alone does not name a line:
+  # the page appends as a run grows, and a stream with two lines of one id is not
+  # a page. A run recorded before a step said which episode it was in is one
+  # episode.
+  defp log_id(entry), do: "log-#{Map.get(entry, "episode") || 0}-#{entry["step"]}"
 
   @impl true
   def mount(_params, _session, socket) do
@@ -50,7 +61,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     {:ok,
      socket
      |> assign(confirming: nil, confirming_bulk: nil, selected: MapSet.new())
-     |> stream_configure(:log, dom_id: &"log-#{&1["step"]}")
+     |> stream_configure(:log, dom_id: &log_id/1)
      |> stream_configure(:runs, dom_id: &"run-#{&1.id}")
      |> stream(:runs, [])
      |> stream(:log, [])}
@@ -156,7 +167,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp where_each_run_is(runs), do: Jobs.by_run(Enum.map(runs, & &1.id))
 
   defp assign_run(%{"id" => id}, socket) do
-    case RunHistory.get(id) do
+    case RunHistory.head(id) do
       nil ->
         {:noreply,
          assign(socket, run: nil, moment: nil) |> put_flash(:error, "That run is gone.")}
@@ -169,6 +180,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          |> assign(queue: where_each_run_is([run]))
          |> follow(run)
          |> stream(:log, run.log, reset: true)
+         |> assign(logged: length(run.log))
          |> assign_replay(run, Replay.last_step(run))}
     end
   end
@@ -200,26 +212,40 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp refresh_run(socket, id) do
-    case RunHistory.get(id) do
+    case RunHistory.head(id) do
       nil ->
         assign(socket, run: nil)
 
       run ->
         socket
         |> assign(run: run, files: Artifacts.files(run.id), queue: where_each_run_is([run]))
-        |> stream(:log, run.log, reset: true)
+        |> append_log(run)
         |> assign_replay(run, socket.assigns[:step])
     end
+  end
+
+  # The log grows a step at a time, and the page sends the steps that are new
+  # rather than the run's whole scrollback again: a refresh used to re-render and
+  # re-send every line of a thousand-step run, twice a second, while the reader
+  # was scrolling through them.
+  defp append_log(socket, run) do
+    shown = socket.assigns[:logged] || 0
+    fresh = Enum.drop(run.log, shown)
+
+    socket
+    |> assign(logged: shown + length(fresh))
+    |> stream(:log, fresh)
   end
 
   # The replay starts where the run ended: a person opening a finished run wants
   # to see what it came to, and rewinding is one drag away.
   defp assign_replay(socket, run, step) do
     step = step || Replay.first_step(run)
-    series = charts_of(run)
+    catalog = catalog(socket, run)
+    series = charts_of(catalog)
     series_id = socket.assigns[:series_id] || default_series(series)
     window = Replay.window(run, socket.assigns[:window] || whole_run(run))
-    moment = Replay.at(run, step)
+    moment = run |> Replay.at(step) |> with_pictures(run)
 
     socket
     |> assign(
@@ -228,14 +254,33 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       series: series,
       series_id: series_id,
       window: window,
-      pictures: Replay.pictures?(run),
+      pictures: socket.assigns[:pictures] || kept_pictures?(run),
       best: Replay.best_evidence(run),
       theories: Replay.theories(moment),
-      graphs: Replay.objects(run) != [],
-      chart: chart_for(run, series_id, window, step),
+      graphs: catalog.objects != [],
+      chart: chart_for(catalog, series_id, window, step),
       playing: false
     )
+    |> assign(catalog_key: catalog.key, catalog: catalog)
   end
+
+  # The pictures of the step being shown, asked for by itself: the record is read
+  # without them (see `RunHistory.head/1`), and one step's observations are the
+  # only ones a page can draw.
+  defp with_pictures(moment, run) do
+    case moment do
+      %{frames: [_ | _]} ->
+        moment
+
+      %{position: position} ->
+        Replay.with_pictures(moment, RunHistory.sensors_at(run.id, position))
+
+      nil ->
+        nil
+    end
+  end
+
+  defp kept_pictures?(run), do: run.id |> RunHistory.sensors_at(0) |> Replay.kept_pictures?()
 
   defp whole_run(run) do
     {Replay.first_step(run) || 0, Replay.last_step(run) || 0}
@@ -255,28 +300,34 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp first_id([first | _rest]), do: first.id
   defp first_id([]), do: nil
 
-  # The per-object chart is offered first when a run built graphs: a single
-  # maximum hides what the episode was actually about, which objects were still
-  # in the running and when one of them won.
-  defp charts_of(run) do
-    case Replay.objects(run) do
-      [] ->
-        Replay.series(run)
+  # Every line the replay can draw, worked out once per version of the record.
+  # The answer to "which objects did this run still hold, and how strongly" is
+  # the same for the same record, and rebuilding it on every drag of the slider
+  # was most of what a drag cost.
+  defp catalog(socket, run) do
+    key = {run.id, length(run.log), length(run.timeline)}
 
-      objects ->
-        [
-          %{id: @objects, label: "every object (#{length(objects)})", unit: "", points: []}
-          | Replay.series(run)
-        ]
+    case socket.assigns[:catalog_key] do
+      ^key -> socket.assigns.catalog
+      _other -> %{key: key, objects: Replay.objects(run), series: Replay.series(run)}
     end
   end
 
-  defp chart_for(run, series_id, window, step) do
-    Chart.many(chart_lines(run, series_id), window: window, playhead: step)
+  # The per-object chart is offered first when a run built graphs: a single
+  # maximum hides what the episode was actually about, which objects were still
+  # in the running and when one of them won.
+  defp charts_of(%{objects: [], series: series}), do: series
+
+  defp charts_of(%{objects: objects, series: series}) do
+    [%{id: @objects, label: "every object (#{length(objects)})", unit: "", points: []} | series]
   end
 
-  defp chart_lines(run, @objects), do: Replay.objects(run)
-  defp chart_lines(run, series_id), do: [Replay.chart_series(run, series_id)]
+  defp chart_for(catalog, series_id, window, step) do
+    Chart.many(chart_lines(catalog, series_id), window: window, playhead: step)
+  end
+
+  defp chart_lines(%{objects: objects}, @objects), do: objects
+  defp chart_lines(%{series: series}, series_id), do: Enum.filter(series, &(&1.id == series_id))
 
   @impl true
   def render(%{live_action: :index} = assigns) do
@@ -888,6 +939,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     )
   end
 
+  # A drag across the chart chose the range it drew: that is the window now,
+  # kept inside the run like any other zoom.
+  defp replay("replay_brush", %{"from" => from, "to" => to}, %{assigns: %{run: run}} = socket) do
+    replay_window(socket, Replay.window(run, {parse_step(from), parse_step(to)}))
+  end
+
   defp replay("replay_series", %{"series" => id}, socket) do
     socket |> assign(series_id: id) |> replay_window(socket.assigns.window)
   end
@@ -900,7 +957,26 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # record again is what keeps one source of truth — the worker writes it, the
   # page shows it. This page subscribes to one topic, the run it shows, so every
   # message on it is that run's.
-  def handle_info({:studio, _run_id, _event}, socket), do: refresh_own_run(socket)
+  #
+  # A step is several messages, and reading the record is not free: a page that
+  # read it once per message spent longer rebuilding itself than the run spent
+  # stepping, so a burst of them became a queue of rebuilds that fell further
+  # behind with every step. The first message of a burst is answered at once and
+  # the rest wait for `@refresh_after_ms`, which coalesces them into one read.
+  # The end of a run is never news to wait on: a page that says "running" for a
+  # quarter of a second after the run has stopped is a page lying, however
+  # briefly.
+  def handle_info({:studio, _run_id, ending}, socket)
+      when is_tuple(ending) and elem(ending, 0) in [:finished, :failed],
+      do: refresh_now(socket)
+
+  def handle_info({:studio, _run_id, _event}, socket) do
+    if answered?(socket), do: {:noreply, refresh_later(socket)}, else: refresh_now(socket)
+  end
+
+  def handle_info(:refresh_due, socket) do
+    socket |> assign(refresh_due: false) |> refresh_now()
+  end
 
   # A page that shows a run keeps asking, even though the worker broadcasts: a
   # message can arrive while the socket is reconnecting, and a worker can die
@@ -915,6 +991,28 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # A page can outlive the thing that was talking to it: a message for another
   # page, or one that arrived after the run was closed. It is not news.
   def handle_info(_late_message, socket), do: {:noreply, socket}
+
+  defp refresh_now(socket) do
+    socket
+    |> assign(refreshed_at: System.monotonic_time(:millisecond))
+    |> refresh_own_run()
+  end
+
+  # One rebuild per burst: the first step of the next second is answered when it
+  # arrives, and the ones behind it share the read it schedules.
+  defp refresh_later(%{assigns: %{refresh_due: true}} = socket), do: socket
+
+  defp refresh_later(socket) do
+    Process.send_after(self(), :refresh_due, @refresh_after_ms)
+    assign(socket, refresh_due: true)
+  end
+
+  defp answered?(socket) do
+    case socket.assigns[:refreshed_at] do
+      nil -> false
+      at -> System.monotonic_time(:millisecond) - at < @refresh_after_ms
+    end
+  end
 
   defp replay_tick(%{assigns: %{run: run, playing: true}} = socket) do
     next = socket.assigns.step + 1
@@ -950,11 +1048,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp replay_window(socket, window) do
-    run = socket.assigns.run
-
     assign(socket,
       window: window,
-      chart: chart_for(run, socket.assigns.series_id, window, socket.assigns.step)
+      chart:
+        chart_for(socket.assigns.catalog, socket.assigns.series_id, window, socket.assigns.step)
     )
   end
 
@@ -973,11 +1070,19 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # Asking the record — after a sweep, so a run nobody owns is settled instead
   # of shown as alive — is what stops the page from saying "running" while
   # nothing is running.
-  defp poll_shown_run(%{assigns: %{live_action: :show, run: %{id: id} = run}} = socket) do
-    if in_flight?(run, socket.assigns.queue), do: Reaper.sweep()
+  # A record that says `running` is asked after, and the Reaper is asked too: a
+  # run whose worker died, or whose job was cancelled out from under it, leaves
+  # the word behind, and closing the record is what stops the page saying it.
+  defp poll_shown_run(
+         %{assigns: %{live_action: :show, run: %{id: id, status: "running"}}} = socket
+       ) do
+    Reaper.sweep()
 
     socket |> refresh_run(id) |> keep_polling()
   end
+
+  defp poll_shown_run(%{assigns: %{live_action: :show, run: %{id: id}}} = socket),
+    do: socket |> refresh_run(id) |> keep_polling()
 
   defp poll_shown_run(socket), do: socket
 
@@ -1155,21 +1260,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp all_picked?(selected, page_ids),
     do: page_ids != [] and Enum.all?(page_ids, &MapSet.member?(selected, &1))
 
-  # A record that says `running` is only running while a job still owns it: a
-  # worker that died, a node that went away, or an application that shut down
-  # mid-run all leave the word behind, and a page that repeated it would be
-  # telling a reader to wait for something that is not coming.
+  # What state to show: a record is written the moment a run is queued, so the
+  # word `running` on it means the job was picked up, and a job that has not
+  # started yet is the one thing the queue knows better than the record.
   defp run_state(%{status: "running"}, %{state: state})
        when state in ~w(available scheduled retryable),
        do: "queued"
 
-  defp run_state(%{status: "running"}, nil), do: "no worker"
-
-  defp run_state(%{status: "running"}, %{state: state})
-       when state in ~w(cancelled discarded completed),
-       do: "no worker"
-
-  defp run_state(run, _not_yet_started), do: run.status
+  defp run_state(run, _job), do: run.status
 
   # How far into its current episode a run is. Every episode restarts the step
   # counter, so the length of the whole log is not a step count: a run of seventy
