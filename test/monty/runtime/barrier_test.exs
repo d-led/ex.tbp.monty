@@ -40,6 +40,23 @@ defmodule Monty.Runtime.BarrierTest do
                Barrier.run([{:lm_0, echo(server, :hello)}], 1_000)
     end
 
+    # The round is where a module's bug would be swallowed by the next round's
+    # polite "no answer", so a raise is carried out of it with its reason.
+    test "a request that raises is not swallowed as a missing answer" do
+      reason = catch_exit(Barrier.run([{:lm_0, fn -> raise "a module bug" end}], 1_000))
+
+      assert {:request_crashed, {%RuntimeError{message: "a module bug"}, _stacktrace}} = reason
+    end
+
+    # A call that gives up on its own — the request's own deadline, not the
+    # round's — is a module that did not answer, not a bug in it.
+    test "a request whose own call times out is a missing contribution" do
+      silent = start_supervised!(Supervisor.child_spec({SilentServer, []}, id: :own_deadline))
+
+      assert %{replies: %{}, timed_out: [:lm_0]} =
+               Barrier.run([{:lm_0, fn -> GenServer.call(silent, :send_out_vote, 20) end}], 5_000)
+    end
+
     test "no modules is an empty round" do
       assert Barrier.run([], 50) == %{replies: %{}, timed_out: []}
     end
