@@ -237,7 +237,9 @@ defmodule Monty.Studio.Replay.Chart do
     drawn_from
     |> Enum.zip_with(points, fn point, xy -> {point[:episode], point.step, xy} end)
     |> stretches()
-    |> Enum.map(fn run -> run |> to_the_edge(from, to) |> Enum.map(&elem(&1, 2)) |> polyline() end)
+    |> Enum.map(fn run ->
+      run |> to_the_edge(from, to) |> Enum.map(&elem(&1, 2)) |> polyline()
+    end)
     |> Enum.reject(&(&1 == ""))
   end
 

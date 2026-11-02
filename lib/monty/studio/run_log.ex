@@ -268,6 +268,12 @@ defmodule Monty.Studio.RunLog do
     }
   end
 
+  @doc "Appends a step to the record in hand, leaving it unwritten until `RunHistory.checkpoint/1`."
+  @spec append_step(RunHistory.Run.t(), map(), map(), map(), keyword()) :: RunHistory.Run.t()
+  def append_step(history, info, observations, beliefs \\ %{}, options \\ []) do
+    RunHistory.append_step(history, entry(info, beliefs, options), moment(info, observations))
+  end
+
   @doc "Records a step — what was reported, what was seen and what was believed — and returns the row."
   @spec record_step(RunHistory.Run.t(), map(), map(), map()) :: RunHistory.Run.t()
   def record_step(history, info, observations, beliefs \\ %{}, options \\ []) do

@@ -104,11 +104,14 @@ defmodule Mix.Tasks.Monty.Run do
     :ok = Monty.Studio.Run.set_ground_truth(run)
     say_episode(index, scope.episodes, opts)
 
-    {infos, history, last_run} = step_through(run, history, opts, index, [])
+    beat = System.monotonic_time(:second)
+    {infos, history, last_run} = step_through(run, history, opts, index, [], beat)
     conclusion = Monty.Studio.Run.conclusion(last_run)
     Monty.Studio.Run.stop(last_run)
 
-    {Enum.reverse(infos), history, conclusion}
+    # The episode is what a run has to show for itself: the steps of an episode
+    # are worth one write, and the record is the checkpoint, not the transcript.
+    {Enum.reverse(infos), checkpoint(history), conclusion}
   end
 
   defp say_episode(_index, 1, _opts), do: :ok
@@ -130,23 +133,51 @@ defmodule Mix.Tasks.Monty.Run do
     end
   end
 
-  defp step_through(run, history, opts, episode, infos) do
+  defp step_through(run, history, opts, episode, infos, beat) do
     {:ok, info, observations, next_run} = Monty.Studio.Run.step(run)
     beliefs = Monty.Studio.Run.beliefs(run)
     print_step(info, beliefs, episode, opts)
 
-    history =
-      if history,
-        do:
-          Monty.Studio.RunLog.record_step(history, info, observations, beliefs, episode: episode)
-
+    history = append(history, info, observations, beliefs, episode)
+    beat = heartbeat(history, beat)
     infos = [info | infos]
 
     if Monty.Studio.Run.finished?(next_run) do
       {infos, history, next_run}
     else
-      step_through(next_run, history, opts, episode, infos)
+      step_through(next_run, history, opts, episode, infos, beat)
     end
+  end
+
+  defp append(nil, _info, _observations, _beliefs, _episode), do: nil
+
+  defp append(history, info, observations, beliefs, episode) do
+    Monty.Studio.RunLog.append_step(history, info, observations, beliefs, episode: episode)
+  end
+
+  # An episode is minutes of stepping between two writes, and the Reaper judges a
+  # run by its silence. A run being stepped says so, cheaply, rather than looking
+  # abandoned for the length of an episode.
+  @heartbeat_seconds 10
+
+  defp heartbeat(nil, beat), do: beat
+
+  defp heartbeat(history, beat) do
+    now = System.monotonic_time(:second)
+
+    if now - beat >= @heartbeat_seconds do
+      Monty.Studio.RunHistory.alive(history)
+      now
+    else
+      beat
+    end
+  end
+
+  defp checkpoint(nil), do: nil
+
+  defp checkpoint(history) do
+    {:ok, saved} = Monty.Studio.RunHistory.checkpoint(history)
+    saved
   end
 
   defp print_step(info, beliefs, episode, opts) do
@@ -178,7 +209,11 @@ defmodule Mix.Tasks.Monty.Run do
   defp finish(nil, _summary), do: nil
 
   defp finish(history, summary) do
-    {:ok, history} = Monty.Studio.RunHistory.finish(history, Monty.Studio.RunLog.summary(summary))
+    {:ok, history} =
+      history
+      |> checkpoint()
+      |> Monty.Studio.RunHistory.finish(Monty.Studio.RunLog.summary(summary))
+
     history
   end
 

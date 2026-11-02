@@ -523,7 +523,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
               this.label = document.createElement("div")
               this.label.className =
-                "pointer-events-none absolute top-0.5 z-10 whitespace-nowrap rounded bg-base-content px-1 py-0.5 font-mono text-[10px] leading-none text-base-100"
+                "pointer-events-none absolute z-10 whitespace-nowrap rounded bg-base-content px-1 py-0.5 font-mono text-[10px] leading-none text-base-100"
               this.label.hidden = true
 
               this.attach()
@@ -590,6 +590,15 @@ defmodule ExTbpMontyWeb.StudioComponents do
               this.label.style.left = `${percent}%`
               this.label.style.transform =
                 percent < 20 ? "translateX(0)" : percent > 80 ? "translateX(-100%)" : "translateX(-50%)"
+
+              // The label stands on the far side of the point it names. A label at
+              // the top edge sits on top of a point high in the chart, and the
+              // point of intersection is the thing being read: a point in the top
+              // half puts the label below it, a point in the bottom half above.
+              const high = nearest.y / this.height < 0.5
+              this.label.style.top = high ? "" : "0.125rem"
+              this.label.style.bottom = high ? "0.125rem" : ""
+
               this.label.hidden = false
             },
 

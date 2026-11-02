@@ -45,17 +45,64 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
-  Appends one step to a run: what the modules reported and what they saw.
+  Appends one step to the record this process holds, writing nothing.
+
+  The log is the run's transcript and the row is its checkpoint. Writing the
+  whole transcript per step made a step cost grow with the run: measured on a
+  300-step run, one step took 0.6–1.4 s against 2–6 ms for a single row, because
+  every step re-encoded and re-sent the 3.3 MB timeline it had already sent. A
+  run that steps thousands of times appends here and calls `checkpoint/1` when it
+  reaches a point worth remembering.
+  """
+  @spec append_step(Run.t(), map(), map()) :: Run.t()
+  def append_step(%Run{log: log, timeline: timeline} = run, entry, moment) do
+    %{run | log: log ++ [entry], timeline: timeline ++ [moment]}
+  end
+
+  @doc """
+  Writes the steps appended since the last checkpoint.
 
   Both arrays are written in one update, so a step is either in the record or
   not — a log that says step 4 happened while the timeline is still at 3 would
   be a replay that disagrees with itself.
+
+  The change is forced: the struct in hand carries the steps, so the array it
+  holds is by definition what the row does not have yet, and an ordinary
+  `put_change/3` would compare it with itself and write nothing.
+  """
+  @spec checkpoint(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
+  def checkpoint(%Run{log: log, timeline: timeline} = run) do
+    run
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.force_change(:log, log)
+    |> Ecto.Changeset.force_change(:timeline, timeline)
+    |> Repo.update()
+  end
+
+  @doc """
+  Appends one step and writes it, for a run whose page is watching every step.
   """
   @spec record_step(Run.t(), map(), map()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
-  def record_step(%Run{log: log, timeline: timeline} = run, entry, moment) do
+  def record_step(run, entry, moment) do
     run
-    |> Run.changeset(%{log: log ++ [entry], timeline: timeline ++ [moment]})
-    |> Repo.update()
+    |> append_step(entry, moment)
+    |> checkpoint()
+  end
+
+  @doc """
+  Says the run is still being stepped, without writing its log.
+
+  Between checkpoints a working run's row is silent, and silence is also what a
+  run whose process died looks like; the Reaper must not confuse the two. This
+  is the smallest write that answers "is anybody working on it".
+  """
+  @spec alive(Run.t()) :: :ok
+  def alive(%Run{id: id}) do
+    Run
+    |> where([run], run.id == ^id)
+    |> Repo.update_all(set: [updated_at: DateTime.utc_now()])
+
+    :ok
   end
 
   @doc """
@@ -294,19 +341,20 @@ defmodule Monty.Studio.RunHistory do
     |> Repo.all()
   end
 
-  # A run writes its record on every step, so silence is evidence. How much
-  # silence is a judgement, and one fixed number cannot make it: steps on a
-  # loaded machine were measured at 35 s each, so a flat minute would call a
-  # working run stuck, and five minutes is long enough that a person has given
-  # up watching before the page agrees with them. Three of the run's own steps,
-  # and never less than a minute — measured from its own pace, so a slow run is
-  # given the time its slow steps need.
+  # A run writes its record while it is working — a step's results, or the
+  # heartbeat a runner sends between them — so silence means one thing: nothing
+  # new has happened. That is the only question worth asking here.
   #
-  # Death is not this: `Monty.Studio.Jobs.Reaper` settles that by looking for a
-  # process. And nothing here cancels a run. A quiet record is the page saying so
-  # and the run left to finish; whoever owns the process decides.
-  @stall_floor_seconds 60
-  @stall_steps 3
+  # Not the run's total. A run that has been going for hours is no closer to
+  # being dead than one that started a minute ago, and projecting a deadline
+  # from its average pace abandons a run for being slow — which is what a
+  # 140-episode run is. The grace is a minute: long enough that a slow step does
+  # not trip it, short enough that a person does not outlive the page.
+  #
+  # Death is not this either: `Monty.Studio.Jobs.Reaper` settles that by looking
+  # for a process. And nothing here cancels a run. A quiet record is the page
+  # saying so and the run left to finish; whoever owns the process decides.
+  @quiet_seconds 60
 
   @doc """
   How long this run's record has been unchanged, in seconds.
@@ -393,27 +441,17 @@ defmodule Monty.Studio.RunHistory do
   Is this run claiming to be running with nothing to show for it?
 
   Silence is only a fault while a run says it is going: a queued run has no steps
-  yet by definition, and a finished one has nothing left to say. A run whose own
-  steps have been taking a while is allowed three of them before it is doubted.
+  yet by definition, and a finished one has nothing left to say. What is measured
+  is whether anything new arrived — nothing else about the run enters into it.
   """
   @spec stalled?(Run.t(), DateTime.t()) :: boolean()
   def stalled?(run, now \\ DateTime.utc_now())
 
   def stalled?(%Run{status: "running"} = run, now) do
-    quiet_for(run, now) > stall_after(run)
+    quiet_for(run, now) > @quiet_seconds
   end
 
   def stalled?(%Run{}, _now), do: false
-
-  # Three of its own steps, at the pace it has managed so far — and a minute
-  # before any step has landed to measure.
-  defp stall_after(%Run{steps: steps, started_at: %DateTime{} = at} = run)
-       when steps > 0 do
-    pace_ms = DateTime.diff(run.updated_at, at, :millisecond) / steps
-    max(@stall_floor_seconds, ceil(@stall_steps * pace_ms / 1_000))
-  end
-
-  defp stall_after(%Run{}), do: @stall_floor_seconds
 
   defp duration(nil, _finished_at), do: 0
   defp duration(started_at, finished_at), do: DateTime.diff(finished_at, started_at, :microsecond)

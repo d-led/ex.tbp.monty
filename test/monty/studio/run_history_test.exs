@@ -1,6 +1,9 @@
 defmodule Monty.Studio.RunHistoryTest do
   use ExTbpMonty.DataCase, async: false
 
+  import Ecto.Query
+
+  alias ExTbpMonty.Repo
   alias Monty.Studio.RunHistory
   alias Monty.Studio.RunHistory.Run
 
@@ -70,6 +73,52 @@ defmodule Monty.Studio.RunHistoryTest do
       # be a replay that disagrees with itself.
       assert length(run.log) == length(run.timeline)
     end
+  end
+
+  describe "a run that steps faster than it is worth writing" do
+    test "holds an appended step until the run checkpoints" do
+      # Writing the whole log per step made a step cost grow with the run: a
+      # 300-step run paid 0.6–1.4 s per step for 3 MB it had already written.
+      {:ok, run} = RunHistory.start(@attributes)
+
+      stepped =
+        run
+        |> RunHistory.append_step(%{"step" => 0, "goals" => 1}, moment(0))
+        |> RunHistory.append_step(%{"step" => 1, "goals" => 0}, moment(1))
+
+      assert Enum.map(stepped.log, & &1["step"]) == [0, 1]
+      assert RunHistory.get(run.id).log == []
+
+      assert {:ok, saved} = RunHistory.checkpoint(stepped)
+      assert Enum.map(RunHistory.get(run.id).log, & &1["step"]) == [0, 1]
+      assert saved.log == RunHistory.get(run.id).log
+    end
+
+    test "says it is being stepped without writing its log" do
+      # Between checkpoints the row is silent, and silence is what an abandoned
+      # run also looks like.
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = quiet_since(run, 300)
+
+      assert RunHistory.quiet_for(RunHistory.get(run.id)) > 299
+
+      assert RunHistory.alive(run) == :ok
+
+      assert RunHistory.quiet_for(RunHistory.get(run.id)) < 5
+      assert RunHistory.get(run.id).log == []
+    end
+  end
+
+  # A run whose row has said nothing for a while: a step was being taken.
+  defp quiet_since(record, seconds) do
+    updated_at = DateTime.add(DateTime.utc_now(), -seconds, :second)
+
+    {1, nil} =
+      Repo.update_all(from(run in Run, where: run.id == ^record.id),
+        set: [updated_at: updated_at]
+      )
+
+    :ok
   end
 
   # A step's moment: what the sensors were looking at, in Monty's units.
@@ -221,20 +270,20 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.stalled?(run, DateTime.add(DateTime.utc_now(), 61, :second))
     end
 
-    test "gives a slow run three of its own steps, not a flat minute" do
+    test "is not given longer because it has been running longer" do
       now = DateTime.utc_now()
 
-      # Twenty-five seconds a step so far, and quiet for 74 s: past a minute,
-      # but not yet three of its own steps.
+      # Twenty-five seconds a step, half an hour into a 140-episode run: a
+      # deadline projected from that total would wait minutes before doubting
+      # it. What is asked is whether anything new arrived, and the answer is no.
       run = %Run{
         status: "running",
-        steps: 20,
-        started_at: DateTime.add(now, -574, :second),
+        steps: 500,
+        started_at: DateTime.add(now, -1800, :second),
         updated_at: DateTime.add(now, -74, :second)
       }
 
-      refute RunHistory.stalled?(run, now)
-      assert RunHistory.stalled?(run, DateTime.add(now, 2, :second))
+      assert RunHistory.stalled?(run, now)
     end
 
     test "says how long it has been quiet" do
