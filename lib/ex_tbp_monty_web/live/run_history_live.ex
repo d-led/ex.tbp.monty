@@ -435,6 +435,15 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                 <span class={["badge badge-sm", status_class(run_state(run, @queue[run.id]))]}>
                   {run_state(run, @queue[run.id])}
                 </span>
+                <%!-- Running and silent is its own story: the badge says what
+                the record says, and this says whether to believe it. --%>
+                <span
+                  :if={RunHistory.stalled?(run)}
+                  id={"quiet-#{run.id}"}
+                  class="ms-1 font-mono text-[10px] text-warning"
+                >
+                  quiet {quiet(run)}
+                </span>
               </td>
               <%!-- Which world it stepped: two runs of one experiment are not
               comparable otherwise, and the default is not the only choice. --%>
@@ -582,6 +591,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         <p class="text-xs text-base-content/60">
           started <ExTbpMontyWeb.LocalTime.local_time at={@run.inserted_at} style={:clock} />
           · {@run.steps} steps · {duration(@run.duration_us)}
+          <%!-- "Time is not enough": a stamp says when the last step was, not
+          whether another is coming. This says both — the run claims to be
+          running and nothing has been recorded for longer than a slow step. --%>
+          <span :if={RunHistory.stalled?(@run)} id="run-stalled" class="text-warning">
+            · nothing recorded for {quiet(@run)} — not progressing
+          </span>
         </p>
       </header>
 
@@ -1036,6 +1051,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp status_class(_other), do: "badge-ghost"
 
   defp duration(microseconds), do: Duration.humanize(microseconds)
+
+  # How long a run has been quiet, in the unit that answers the question asked.
+  defp quiet(run), do: Duration.humanize(RunHistory.quiet_for(run) * 1_000_000)
 
   # A file's size, in the unit a person reading a list of three files thinks in.
   defp bytes(size) when size >= 1_048_576, do: "#{Float.round(size / 1_048_576, 1)} MB"

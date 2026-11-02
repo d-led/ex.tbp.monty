@@ -294,6 +294,41 @@ defmodule Monty.Studio.RunHistory do
     |> Repo.all()
   end
 
+  # A run writes its record on every step, so silence is evidence. Five minutes
+  # without one is a step stuck in the simulator, or a worker waiting on
+  # something that will never answer — not death, which is what
+  # `Monty.Studio.Jobs.Reaper` settles by looking for a process, and not nothing
+  # either, which is why it gets a word of its own. The number is a judgement:
+  # steps on a loaded machine are tens of seconds, so five minutes is an order of
+  # magnitude past slow.
+  @stall_seconds 300
+
+  @doc """
+  How long this run's record has been unchanged, in seconds.
+
+  A step writes the record, so this is also how long ago the last step landed —
+  the one number a page can offer when a run looks alive but says nothing.
+  """
+  @spec quiet_for(Run.t(), DateTime.t()) :: non_neg_integer()
+  def quiet_for(%Run{updated_at: %DateTime{} = at}, now \\ DateTime.utc_now()) do
+    DateTime.diff(now, at, :second)
+  end
+
+  @doc """
+  Is this run claiming to be running with nothing to show for it?
+
+  Silence is only a fault while a run says it is going: a queued run has no steps
+  yet by definition, and a finished one has nothing left to say.
+  """
+  @spec stalled?(Run.t(), DateTime.t()) :: boolean()
+  def stalled?(run, now \\ DateTime.utc_now())
+
+  def stalled?(%Run{status: "running"} = run, now) do
+    quiet_for(run, now) > @stall_seconds
+  end
+
+  def stalled?(%Run{}, _now), do: false
+
   defp duration(nil, _finished_at), do: 0
   defp duration(started_at, finished_at), do: DateTime.diff(finished_at, started_at, :microsecond)
 end

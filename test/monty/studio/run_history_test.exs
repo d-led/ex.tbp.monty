@@ -2,6 +2,7 @@ defmodule Monty.Studio.RunHistoryTest do
   use ExTbpMonty.DataCase, async: false
 
   alias Monty.Studio.RunHistory
+  alias Monty.Studio.RunHistory.Run
 
   @attributes %{
     experiment: "tutorial/first_experiment",
@@ -147,6 +148,40 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.get(dist.id) == nil
       assert RunHistory.get(surf.id) != nil
       assert RunHistory.get(tutorial.id) != nil
+    end
+  end
+
+  # A run writes its record on every step, so a page that shows a run "running"
+  # with no step for a long time is showing something that has stopped
+  # progressing. That is not the reaper's question — it asks whether a process is
+  # working on the run at all — and it is not the same as a slow step, which is
+  # why the threshold is minutes rather than seconds.
+  describe "a run that has gone quiet" do
+    test "is not stalled while its steps keep landing" do
+      run = %Run{status: "running", updated_at: DateTime.utc_now()}
+
+      refute RunHistory.stalled?(run)
+    end
+
+    test "is stalled once nothing has been recorded for longer than a slow step" do
+      run = %Run{status: "running", updated_at: DateTime.utc_now()}
+
+      assert RunHistory.stalled?(run, DateTime.add(DateTime.utc_now(), 301, :second))
+    end
+
+    test "says how long it has been quiet" do
+      run = %Run{status: "running", updated_at: DateTime.utc_now()}
+
+      assert RunHistory.quiet_for(run, DateTime.add(DateTime.utc_now(), 90, :second)) == 90
+    end
+
+    test "a run that has finished is not stalled, however old it is" do
+      run = %Run{
+        status: "finished",
+        updated_at: DateTime.add(DateTime.utc_now(), -86_400, :second)
+      }
+
+      refute RunHistory.stalled?(run)
     end
   end
 end
