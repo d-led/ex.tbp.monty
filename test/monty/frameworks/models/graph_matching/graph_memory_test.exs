@@ -117,6 +117,32 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemoryTest do
                pose
              ]
     end
+
+    test "the pose vectors of named nodes come back in the order they were named" do
+      # Two nodes with different frames, so that keeping the order of the ids
+      # and reaching the right nodes are both visible in the answer.
+      turned = [0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0]
+      locations = for index <- 0..2//1, do: [index / 10, 0.0, 0.0]
+
+      mug =
+        GraphObjectModel.new("mug")
+        |> GraphObjectModel.build_model(
+          locations,
+          %{
+            "rgba" => Enum.map(locations, fn [x | _] -> [x] end),
+            "pose_vectors" => [@pose, @pose, turned]
+          },
+          nil,
+          nil
+        )
+
+      memory = loaded(%{"mug" => mug})
+
+      assert GraphMemory.get_rotation_features_at_nodes(memory, "mug", "patch", [2, 0]) == [
+               [[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]],
+               [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+             ]
+    end
   end
 
   describe "learning from observations" do
