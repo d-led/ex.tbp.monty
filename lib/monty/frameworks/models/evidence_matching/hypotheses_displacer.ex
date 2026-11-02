@@ -215,7 +215,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
         min(displacer.max_nneighbors, tuple_size(channel_locations))
       )
 
-    rotated = Enum.map(poses, fn pose -> rotate(channel_features["pose_vectors"], pose) end)
+    # Only the normal and the first curvature direction are ever read off the
+    # rotated pose, so those are the two that get turned.
+    {normals, curvatures} =
+      poses
+      |> Enum.map(&rotate_normal_and_curvature(channel_features["pose_vectors"], &1))
+      |> Enum.unzip()
+
     curvature = GraphMatchingUtils.relevant_curvature(channel_features)
 
     node_feature_evidence =
@@ -242,19 +248,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
       GraphMatchingUtils.custom_distances(
         node_locations_per_hypothesis,
         search_locations,
-        Enum.map(rotated, &hd/1),
+        normals,
         curvature
       )
 
-    Enum.zip_with([rotated, nearest, distances_per_hypothesis], fn one ->
-      [pose_vectors, node_ids, distances] = one
+    Enum.zip_with([normals, curvatures, nearest, distances_per_hypothesis], fn one ->
+      [normal, curvature_1, node_ids, distances] = one
 
       too_far = Enum.map(distances, fn distance -> weight(displacer, distance) <= 0 end)
 
       radius_evidence =
         pose_evidence(
           displacer,
-          pose_vectors,
+          normal,
+          curvature_1,
           channel_features["pose_fully_defined"],
           Enum.map(node_ids, &elem(all_node_poses, &1)),
           Enum.map(node_ids, &elem(all_node_pose_flags, &1)),
@@ -292,7 +299,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
   # direction is always 90° from the first, so it adds nothing.
   defp pose_evidence(
          displacer,
-         [normal, curvature_1 | _rest],
+         normal,
+         curvature_1,
          fully_defined?,
          node_poses,
          node_defined,
@@ -331,10 +339,19 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
   # them first "fixes" a cosine that is not wrong and moves the evidence.
   defp angle(a, b), do: SpatialArithmetics.get_angle(a, b)
 
-  defp rotate(pose_vectors, pose) do
-    pose_vectors
-    |> Enum.chunk_every(3)
-    |> Enum.map(&Geometry.apply(pose, &1))
+  # The sensed pose arrives as three directions end to end, and Monty turns each
+  # by the hypothesis pose. The third is never read, so it is not turned; and
+  # the two that are turned are one matrix times one vector, which the generic
+  # three-vectors-in-a-list helpers spend a chunk and a closure per hypothesis to
+  # say. Same products in the same order, so the same floats.
+  defp rotate_normal_and_curvature(
+         [n1, n2, n3, d1, d2, d3 | _unread],
+         [[p, q, r], [s, t, u], [v, w, x]]
+       ) do
+    normal = [p * n1 + q * n2 + r * n3, s * n1 + t * n2 + u * n3, v * n1 + w * n2 + x * n3]
+    curvature = [p * d1 + q * d2 + r * d3, s * d1 + t * d2 + u * d3, v * d1 + w * d2 + x * d3]
+
+    {normal, curvature}
   end
 
   defp weight(%__MODULE__{max_match_distance: max}, distance), do: (max - distance) / max
