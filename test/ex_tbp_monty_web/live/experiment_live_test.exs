@@ -854,5 +854,35 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       assert unchanged =~ ~s(value="#{opened.setup.seed}")
     end
+
+    # `n_train_epochs: 3` with `do_train: false` is what this config says. A page
+    # that read the count announced training the experiment never does.
+    test "says which phases the config runs, not how many epochs it names", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      assert html =~ "train no · eval yes"
+      refute html =~ "train yes"
+    end
+
+    test "says how many episodes that is, and what ends one", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      # Ten objects, fourteen rotations.
+      assert html =~ "140 eval"
+
+      # The `termination` group's ceilings, beside the allowances `/monty` names.
+      assert html =~ "max eval 500"
+      assert html =~ "max train 1000"
+      assert html =~ "total 6000"
+    end
+
+    # The page's own cap on an episode is the config's ceiling, never a per-mode
+    # limit: the tutorial allows one *matching* step and three exploring ones, so
+    # a cap of `max_train_steps` would cut two steps the experiment asked for.
+    test "caps an episode at the config's total ceiling", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/experiments/tutorial/first_experiment")
+
+      assert html =~ "up to 5 steps"
+    end
   end
 end

@@ -56,15 +56,37 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert {:ok, closed} = perform(record)
 
       assert closed.status == "finished"
-      assert closed.summary["steps"] == 1
-      assert [0] = Enum.map(closed.timeline, & &1["step"])
 
-      # This experiment's own policy allows exactly one matching step
-      # (`StepLimit(max_eval_steps: 1)`), so the episode ends there — and the
-      # learning module, which never answered, is timed out. That is the ending
-      # Monty's config asks for, and it is what the record says instead of a
-      # run that quietly used three steps.
-      assert closed.summary["outcome"] == %{"learning_module_0" => "time_out"}
+      # The tutorial trains and does not evaluate, and a training episode
+      # explores: its policy is
+      # `MinEvalMaxTotalSteps(max_total_steps: 5, wrapped: StepLimit(num_exploring_steps: 3,
+      # max_train_steps: 1, max_eval_steps: 1))`, so the three steps are the
+      # exploring allowance and not the page's cap. The run used to take one,
+      # because it was stepped in the mode the config does not run.
+      assert closed.summary["steps"] == 3
+      assert Enum.map(closed.timeline, & &1["step"]) == [0, 1, 2]
+
+      # A training episode recognises nothing, so there is no conclusion to
+      # report — and none invented.
+      assert closed.summary["outcome"] == %{}
+    end
+
+    test "steps the epochs the config asks for, train before eval" do
+      # Monty's `run()` is `train()` and then `evaluate()`, each with its own
+      # mode. The tutorial is train-only; the config that only evaluates must
+      # not train, even though it names `n_train_epochs: 3`.
+      {:ok, tutorial} = start_run("tutorial/first_experiment", 3)
+      assert {:ok, trained} = perform(tutorial)
+
+      assert File.read!(trained.log_path) =~ "1 train epoch(s)"
+      refute File.read!(trained.log_path) =~ "eval epoch(s)"
+
+      {:ok, opened} = Monty.Studio.open("base_config_10distinctobj_dist_agent")
+      {:ok, one_episode} = RunHistory.start(RunLog.attributes(opened, 1, 0, 1, 1))
+      assert {:ok, evaluated} = perform(one_episode)
+
+      assert File.read!(evaluated.log_path) =~ "14 eval epoch(s)"
+      refute File.read!(evaluated.log_path) =~ "train epoch(s)"
     end
 
     test "keeps what each step saw, so the run can be replayed" do

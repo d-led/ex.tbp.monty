@@ -71,36 +71,47 @@ defmodule Mix.Tasks.Monty.Run do
 
     unless Monty.Studio.Setup.valid?(opened.setup), do: refuse(opened.setup.findings)
 
-    scope = scope(opened, opts)
-    history = record(opened, scope, opts)
-    {infos, history, conclusion} = run_episodes(opened, scope, history, opts)
+    history = record(opened, opts)
+    {infos, history, conclusion} = run_phases(opened, opts, history)
 
     summary = summary(infos, opened.setup, conclusion)
     describe_run(finish(history, summary), summary)
   end
 
-  # What Monty's `evaluate` would run: every episode the config names, each
-  # capped at the same step budget. `--episodes` is the slice, and it is the only
-  # way to ask for less — a run that answered one episode out of a hundred and
-  # forty answers a different question from the experiment.
-  defp scope(opened, opts) do
-    %{
-      steps: opts[:steps] || Monty.Studio.Run.default_steps(),
-      episodes: opts[:episodes] || Monty.Studio.Setup.episodes(opened.setup)
-    }
+  # Monty's `run()`: every epoch of every phase the config runs, train before
+  # eval, with the phase's mode told to the model. `--episodes` is the slice and
+  # the only way to ask for less — a run that answered one episode out of a
+  # hundred and forty answers a different question from the experiment.
+  defp run_phases(opened, opts, history) do
+    objects = length(Monty.Studio.Setup.objects(opened.setup))
+    plan = Monty.Studio.Setup.epoch_plan(opened.setup)
+
+    Enum.reduce(plan, {[], history, %{}}, fn {mode, epochs}, {infos, history, _conclusion} ->
+      episodes = opts[:episodes] || objects * epochs
+      scope = %{mode: mode, steps: steps(opened, opts), episodes: episodes}
+
+      Enum.reduce(0..(episodes - 1)//1, {infos, history, %{}}, fn index,
+                                                                  {infos, history, _conclusion} ->
+        {episode_infos, history, conclusion} = run_episode(opened, scope, index, history, opts)
+        {infos ++ episode_infos, history, conclusion}
+      end)
+    end)
   end
 
-  defp run_episodes(opened, %{episodes: count} = scope, history, opts) do
-    Enum.reduce(0..(count - 1)//1, {[], history, %{}}, fn index, {infos, history, _conclusion} ->
-      {episode_infos, history, conclusion} = run_episode(opened, scope, index, history, opts)
-      {infos ++ episode_infos, history, conclusion}
-    end)
+  # The safety cap an episode gets when the command names none: the config's own
+  # ceiling on one episode. The per-mode limits belong to the recognition policy,
+  # which is what actually ends an episode.
+  defp steps(opened, opts) do
+    opts[:steps] || Monty.Studio.Setup.max_total_steps(opened.setup) ||
+      Monty.Studio.Run.default_steps()
   end
 
   # The episode index is also where the object comes from: the queued runner
   # starts its episodes the same way, so both cover the same ground.
   defp run_episode(opened, scope, index, history, opts) do
-    {:ok, run} = Monty.Studio.Run.start(opened.setup, steps: scope.steps, episode: index)
+    {:ok, run} =
+      Monty.Studio.Run.start(opened.setup, steps: scope.steps, episode: index, mode: scope.mode)
+
     :ok = Monty.Studio.Run.set_ground_truth(run)
     say_episode(index, scope.episodes, opts)
 
@@ -120,13 +131,15 @@ defmodule Mix.Tasks.Monty.Run do
     unless opts[:quiet], do: Mix.shell().info("episode #{index + 1}/#{count}")
   end
 
-  defp record(opened, scope, opts) do
+  defp record(opened, opts) do
     if opts[:record] == false do
       nil
     else
+      episodes = opts[:episodes] || Monty.Studio.Setup.planned_episodes(opened.setup)
+
       {:ok, history} =
         Monty.Studio.RunHistory.start(
-          Monty.Studio.RunLog.attributes(opened, scope.steps, 0, 1, scope.episodes)
+          Monty.Studio.RunLog.attributes(opened, steps(opened, opts), 0, 1, episodes)
         )
 
       history
@@ -229,12 +242,20 @@ defmodule Mix.Tasks.Monty.Run do
         "learning modules: #{Enum.map_join(setup.learning_modules, ", ", & &1.id)}"
     )
 
-    Mix.shell().info(
-      "  epochs: train #{setup.epochs.train} · eval #{setup.epochs.eval} · seed #{setup.seed}"
-    )
+    Mix.shell().info("  epochs: #{epochs_line(setup)} · seed #{setup.seed}")
 
     for finding <- setup.findings, finding.level != :info do
       Mix.shell().info("  " <> Monty.Studio.Finding.describe(finding))
+    end
+  end
+
+  # The epochs a run of this config steps, in Monty's order — train first when
+  # the config trains at all. `n_train_epochs` is not the answer: a config can
+  # name three and switch training off.
+  defp epochs_line(setup) do
+    case Monty.Studio.Setup.epoch_plan(setup) do
+      [] -> "none (the config switches both phases off)"
+      plan -> Enum.map_join(plan, " then ", fn {mode, epochs} -> "#{epochs} #{mode}" end)
     end
   end
 

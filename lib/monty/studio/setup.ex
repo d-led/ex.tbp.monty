@@ -55,6 +55,8 @@ defmodule Monty.Studio.Setup do
             learning_modules: [],
             connections: [],
             epochs: %{},
+            phases: %{train: false, eval: true},
+            termination: %{},
             seed: nil,
             supervised_lm_ids: [],
             logging: %{output_dir: nil, run_name: nil, logger: nil, handlers: []},
@@ -184,6 +186,18 @@ defmodule Monty.Studio.Setup do
         train: Map.get(config, "n_train_epochs"),
         eval: Map.get(config, "n_eval_epochs")
       },
+      # Which halves of the experiment a run of this config is. Monty's
+      # `run()` asks `do_train` and `do_eval` before either loop, and they are
+      # not derivable from the epoch counts: `base_config_10distinctobj_dist_agent`
+      # says `n_train_epochs: 3` with `do_train: false`, so a page that read the
+      # count and announced "training" would be describing a phase the
+      # experiment never runs.
+      phases: %{
+        train: Map.get(config, "do_train") == true,
+        eval: Map.get(config, "do_eval", true) != false
+      },
+      # The `termination` group's limits, which are what ends an episode.
+      termination: termination(Map.get(config, "recognition_policy")),
       seed: Map.get(config, "seed"),
       supervised_lm_ids: Map.get(config, "supervised_lm_ids"),
       logging: logging(config)
@@ -747,6 +761,87 @@ defmodule Monty.Studio.Setup do
   def eval_epochs(%__MODULE__{}), do: 1
 
   @doc """
+  How many train epochs the config names, or `nil` when it names none.
+
+  Not every config that names a count trains (`do_train` decides that), and a
+  training-only config — `only_surf_agent_training_10obj` — is the one place the
+  count is the run itself.
+  """
+  @spec train_epochs(t()) :: pos_integer() | nil
+  def train_epochs(%__MODULE__{epochs: %{train: epochs}}) when is_integer(epochs) and epochs > 0,
+    do: epochs
+
+  def train_epochs(%__MODULE__{}), do: nil
+
+  @doc "Whether a run of this config trains — Monty's `do_train`."
+  @spec do_train(t()) :: boolean()
+  def do_train(%__MODULE__{phases: phases}), do: Map.get(phases, :train, false)
+
+  @doc "Whether a run of this config evaluates — Monty's `do_eval`."
+  @spec do_eval(t()) :: boolean()
+  def do_eval(%__MODULE__{phases: phases}), do: Map.get(phases, :eval, true)
+
+  @doc """
+  The epochs a run of this config is, in the order Monty runs them.
+
+  Monty's `run()` is `train()` and then `evaluate()`, each with its own mode set
+  on the model and its own loop, so the answer is a list of phases rather than
+  one number: `[{:eval, 14}]` for a config that only evaluates,
+  `[{:train, 3}, {:eval, 14}]` for one that does both, and `[{:train, 3}]` for
+  the training-only configs. A phase the config switches on but gives no count
+  is left out rather than run once by accident.
+  """
+  @spec epoch_plan(t()) :: [{:train | :eval, pos_integer()}]
+  def epoch_plan(%__MODULE__{} = setup) do
+    [
+      {:train, do_train(setup) && train_epochs(setup)},
+      {:eval, do_eval(setup) && eval_epochs(setup)}
+    ]
+    |> Enum.filter(fn {_phase, epochs} -> is_integer(epochs) and epochs > 0 end)
+  end
+
+  @doc """
+  The step limit the config's termination puts on one episode of `mode`.
+
+  This is `maximum_steps` in Monty's recognition policy — `max_train_steps` while
+  training, `max_eval_steps` while evaluating — and it is what a run is capped by
+  unless its record asks for something shorter. `nil` means the config named no
+  policy, which is the one case a page has to invent a number.
+  """
+  @spec max_steps(t(), :train | :eval) :: pos_integer() | nil
+  def max_steps(%__MODULE__{termination: termination}, :train),
+    do: Map.get(termination, :max_train_steps)
+
+  def max_steps(%__MODULE__{termination: termination}, :eval),
+    do: Map.get(termination, :max_eval_steps)
+
+  @doc """
+  The ceiling the config puts on one episode, whatever its mode.
+
+  This is the number a page's own safety cap should be: the per-mode limits are
+  the policy's to enforce, and a training episode may explore for longer than
+  its matching limit — the tutorial allows one matching step and three exploring
+  ones — so capping an episode at `max_train_steps` would cut a step the
+  experiment asked for.
+  """
+  @spec max_total_steps(t()) :: pos_integer() | nil
+  def max_total_steps(%__MODULE__{termination: termination}),
+    do: Map.get(termination, :max_total_steps)
+
+  # The `termination` group, as the limits it puts on an episode. Monty's policy
+  # validates them when it is built; here they are read, and the policy itself
+  # (`recognition_policy/1`) does the validating.
+  defp termination(%{"_target_" => _policy} = policy) do
+    %{
+      max_train_steps: Map.get(policy, "max_train_steps"),
+      max_eval_steps: Map.get(policy, "max_eval_steps"),
+      max_total_steps: Map.get(policy, "max_total_steps")
+    }
+  end
+
+  defp termination(_none), do: %{}
+
+  @doc """
   How many episodes a run of this experiment is: every object, in every rotation.
 
   `base_77obj_dist_agent` is seventy-seven objects in three rotations, so two
@@ -756,6 +851,24 @@ defmodule Monty.Studio.Setup do
   """
   @spec episodes(t()) :: pos_integer()
   def episodes(%__MODULE__{} = setup), do: length(objects(setup)) * eval_epochs(setup)
+
+  @doc """
+  How many episodes the whole experiment is, phases and all.
+
+  `episodes/1` answers what a reader means by "the eval episodes"; this answers
+  what a run does: every object, in every epoch of every phase the config runs,
+  added up — 140 for a ten-object experiment evaluated fourteen times, and 28 for
+  a two-object tutorial trained fourteen times.
+  """
+  @spec planned_episodes(t()) :: non_neg_integer()
+  def planned_episodes(%__MODULE__{} = setup) do
+    per_epoch = length(objects(setup))
+
+    setup
+    |> epoch_plan()
+    |> Enum.map(fn {_mode, epochs} -> per_epoch * epochs end)
+    |> Enum.sum()
+  end
 
   @doc """
   The same experiment with another seed.

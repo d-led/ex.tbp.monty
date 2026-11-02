@@ -362,6 +362,8 @@ defmodule ExTbpMonty.Mcp.Experiments do
       },
       connections: Enum.map(opened.setup.connections, &connection/1),
       epochs: opened.setup.epochs,
+      # Which halves of it run: `n_train_epochs` is not "does it train".
+      epoch_plan: Setup.epoch_plan(opened.setup),
       seed: opened.setup.seed,
       monty_args: opened.setup.monty_args,
       supervised_lm_ids: opened.setup.supervised_lm_ids,
@@ -384,6 +386,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
       sensors: Enum.map(setup.sensors, & &1.id),
       learning_modules: Enum.map(setup.learning_modules, & &1.id),
       epochs: setup.epochs,
+      epoch_plan: Setup.epoch_plan(setup),
       seed: setup.seed,
       ported: Setup.ported(setup),
       findings: findings(setup.findings)

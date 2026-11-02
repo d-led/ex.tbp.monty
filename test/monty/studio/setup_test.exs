@@ -86,6 +86,52 @@ defmodule Monty.Studio.SetupTest do
     "telemetry" => "warning"
   }
 
+  describe "the phases a run is" do
+    # `n_train_epochs` is not the question "does this train": this config names
+    # three train epochs and switches training off (`do_train: false`), so a page
+    # that read the count announced a phase the experiment never runs.
+    test "a config that only evaluates does not train" do
+      setup = setup_for("base_config_10distinctobj_dist_agent")
+
+      assert Setup.do_eval(setup)
+      refute Setup.do_train(setup)
+      assert Setup.epoch_plan(setup) == [{:eval, 14}]
+    end
+
+    test "a training config trains, and does not evaluate" do
+      setup = setup_for("tutorial/first_experiment")
+
+      assert Setup.do_train(setup)
+      refute Setup.do_eval(setup)
+      assert Setup.epoch_plan(setup) == [{:train, 1}]
+    end
+
+    test "train epochs come before eval ones, as Monty's run() does them" do
+      # No shipped config does both; the order is Monty's, and the pairs are
+      # what a run steps.
+      setup = %{
+        setup_for("base_config_10distinctobj_dist_agent")
+        | phases: %{train: true, eval: true}
+      }
+
+      assert Setup.epoch_plan(setup) == [{:train, 3}, {:eval, 14}]
+    end
+
+    test "the termination says how long one episode of each mode may be" do
+      setup = setup_for("base_config_10distinctobj_dist_agent")
+
+      assert Setup.max_steps(setup, :eval) == 500
+      assert Setup.max_steps(setup, :train) == 1000
+      assert setup.termination.max_total_steps == 6000
+    end
+
+    test "a config that names no policy says so rather than inventing a limit" do
+      setup = %{setup_for("tutorial/first_experiment") | termination: %{}}
+
+      assert Setup.max_steps(setup, :eval) == nil
+    end
+  end
+
   describe "reading a real experiment" do
     test "Monty's one-sensor, one-module experiment reads as one of each" do
       setup = setup_for("tutorial/first_experiment")

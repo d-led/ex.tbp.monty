@@ -40,17 +40,30 @@ defmodule Mix.Tasks.Monty.RunTest do
     end
 
     test "covers the whole experiment by default, not one episode of it" do
-      # One object in three rotations, so the experiment is three episodes and
-      # all three have to happen: a single episode is a smoke test that would
-      # sit in the history looking like a result.
-      output = run_and_capture(["tutorial/first_experiment", "--steps", "1"])
+      # Two objects in fourteen training epochs, which is twenty-eight episodes —
+      # and all of them have to happen: a single episode is a smoke test that
+      # would sit in the history looking like a result.
+      output = run_and_capture(["tutorial/dist_agent_5lm_2obj_train", "--steps", "1"])
 
-      assert output =~ "episode 1/3"
-      assert output =~ "episode 3/3"
+      assert output =~ "episode 1/28"
+      assert output =~ "episode 28/28"
 
       assert [run] = RunHistory.list()
-      assert run.inputs["episodes"] == 3
-      assert run.log |> Enum.map(& &1["episode"]) |> Enum.uniq() == [0, 1, 2]
+      assert run.inputs["episodes"] == 28
+      assert run.log |> Enum.map(& &1["episode"]) |> Enum.uniq() |> length() == 28
+    end
+
+    test "steps the epochs the config asks for, in Monty's order" do
+      # The tutorial names three train epochs, switches training on and
+      # evaluation off, so its one object is one episode — not three eval
+      # episodes, which is what a runner that ignored the phases used to do.
+      output = run_and_capture(["tutorial/first_experiment", "--steps", "1"])
+
+      assert output =~ "epochs: 1 train"
+      refute output =~ "episode 1/3"
+
+      assert [run] = RunHistory.list()
+      assert run.inputs["episodes"] == 1
     end
 
     test "--episodes is a slice, and the record keeps the slice it ran" do

@@ -155,17 +155,20 @@ defmodule Monty.Studio.Jobs.Run do
     objects = Setup.objects(opened.setup)
     # How much of the experiment this run is: all of it, unless its record says
     # fewer episodes — which is how a page runs a slice and how a test runs one.
-    episodes = episodes_of(record, Setup.episodes(opened.setup))
+    # The number is per phase, so a two-phase config sliced to two runs two of
+    # each; every shipped config has one phase, where the two are the same.
+    episodes = episodes_of(record, Setup.planned_episodes(opened.setup))
 
     # What this run will leave behind is the config's answer, not the page's: the
     # handlers it names are also what decides whether the modules keep the whole
     # hypothesis space, which is Monty's `init_monty_data_loggers`.
     logging = Logging.open(opened.setup)
+    plan = Setup.epoch_plan(opened.setup)
 
     say(
       run_id,
       "run started: #{record.experiment}, #{length(objects)} object(s) × " <>
-        "#{Setup.eval_epochs(opened.setup)} rotation(s), #{episodes} episode(s) in all, " <>
+        "#{phases_line(plan)}, #{episodes} episode(s) in all, " <>
         "up to #{record.steps} steps each"
     )
 
@@ -180,14 +183,23 @@ defmodule Monty.Studio.Jobs.Run do
 
     # `episode` is the episode of the run the steps now belong to: the step
     # counter restarts inside each one, and what a record and a page keep of a
-    # step has to say which episode it was in (`RunLog.entry/3`).
-    state = %{run: nil, record: record, logging: logging, infos: [], conclusion: %{}, episode: 0}
+    # step has to say which episode it was in (`RunLog.entry/3`). `mode` is the
+    # phase being run — Monty sets it on the model before the epoch steps, and
+    # it is what his ending rule reads.
+    state = %{
+      run: nil,
+      record: record,
+      logging: logging,
+      infos: [],
+      conclusion: %{},
+      episode: 0,
+      mode: :eval
+    }
 
     {outcome, ran, state} =
-      experiment.run_epochs(state, %{
+      run_phases(plan, episodes, state, %{
+        experiment: experiment,
         objects: objects,
-        epochs: Setup.eval_epochs(opened.setup),
-        episodes: episodes,
         pre_episode: &start_episode(run_id, opened, &1, &2, &3),
         ground_truth: &ground_truth(&1),
         step: &step_once(run_id, &1, sensor_ids),
@@ -198,6 +210,36 @@ defmodule Monty.Studio.Jobs.Run do
 
     say(run_id, episodes_line(ran))
     close(state.record, opened, outcome, state.infos, state.conclusion, run_id)
+  end
+
+  # Monty's `run()`: `train()` and then `evaluate()`, each a loop of its own with
+  # the mode set on the model before it starts. An epoch that ends badly ends the
+  # run, because the next phase would step a model that is not there.
+  defp run_phases([{mode, epochs} | rest], episodes, state, callbacks) do
+    {outcome, ran, state} =
+      callbacks.experiment.run_epochs(
+        %{state | mode: mode},
+        Map.merge(callbacks, %{epochs: epochs, episodes: episodes})
+      )
+
+    case outcome do
+      :finished when rest != [] ->
+        {later, more, state} = run_phases(rest, episodes, state, callbacks)
+        {later, ran ++ more, state}
+
+      finished_or_ended ->
+        {finished_or_ended, ran, state}
+    end
+  end
+
+  defp run_phases([], _episodes, state, _callbacks), do: {:finished, [], state}
+
+  # "3 train epoch(s) then 14 eval epoch(s)", in the words the record uses.
+  defp phases_line([]), do: "no epochs: the config switches both phases off"
+
+  defp phases_line(plan) do
+    plan
+    |> Enum.map_join(" then ", fn {mode, epochs} -> "#{epochs} #{mode} epoch(s)" end)
   end
 
   defp episodes_of(%{inputs: %{"episodes" => count}}, _default)
@@ -216,6 +258,7 @@ defmodule Monty.Studio.Jobs.Run do
     case Run.start(opened.setup,
            steps: state.record.steps,
            episode: index,
+           mode: state.mode,
            has_detailed_logger: Logging.detailed?(state.logging)
          ) do
       {:ok, run} ->

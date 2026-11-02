@@ -89,7 +89,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       queue: Jobs.by_run(Enum.map(runs, & &1.id)),
       logging: logging.notes,
       error: nil,
-      steps: steps,
+      steps: cap(steps, opened.setup),
       episodes: episodes,
       # What a run of this experiment reads off the disk, and which of those is
       # not there yet: the run buttons stay disabled while anything is missing,
@@ -292,6 +292,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         <ExTbpMontyWeb.StudioComponents.fact
           label="training · evaluation"
           value={phases(@opened.setup)}
+        />
+        <ExTbpMontyWeb.StudioComponents.fact
+          label="episodes, as the config runs them"
+          value={episodes_planned(@opened.setup)}
         />
         <ExTbpMontyWeb.StudioComponents.fact
           label="steps, as the config limits them"
@@ -1282,9 +1286,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp steps(params) do
     case Integer.parse(to_string(params["steps"] || "")) do
       {count, ""} when count > 0 -> count
-      _default -> Monty.Studio.Run.default_steps()
+      _default -> nil
     end
   end
+
+  # The safety cap a run gets when the page names none: the config's own ceiling
+  # on one episode. The per-mode limits belong to the recognition policy, which
+  # is what actually ends an episode; this is only here so an episode that never
+  # recognises anything still ends.
+  defp cap(nil, setup), do: Setup.max_total_steps(setup) || Monty.Studio.Run.default_steps()
+  defp cap(asked, _setup), do: asked
 
   # `?episodes=N`: a slice of the experiment, for when the whole of it — every
   # object in every rotation — is more than a person wants to wait for now.
@@ -1439,23 +1450,38 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   # Monty's panel says Training and Evaluation separately, because an experiment
-  # can do one without the other. The port reads the same two epoch counts.
+  # can do one without the other. The port reads the config's own two switches:
+  # `n_train_epochs` is not the question "does this train" — the config that
+  # announces three train epochs runs none.
   defp phases(setup) do
-    "train #{yes_no(setup.epochs.train)} · eval #{yes_no(setup.epochs.eval)}"
+    "train #{yes_no(Setup.do_train(setup))} · eval #{yes_no(Setup.do_eval(setup))}"
   end
 
-  defp yes_no(nil), do: "no"
-  defp yes_no(0), do: "no"
-  defp yes_no(_a_run_of_them), do: "yes"
+  defp yes_no(true), do: "yes"
+  defp yes_no(_off), do: "no"
 
-  # What the config's termination allows, in the order Monty's panel lists it.
-  # These are the experiment's, not a page's: a run here is capped per episode
-  # and the ceiling is shown next to the button that starts it.
-  defp budget(%{monty_args: args}) do
+  # Every object, in every epoch the config runs: "30 train · 140 eval". What
+  # "Run it" promises before it is pressed.
+  defp episodes_planned(setup) do
+    objects = length(Setup.objects(setup))
+
+    case Setup.epoch_plan(setup) do
+      [] -> "none: the config switches both phases off"
+      plan -> Enum.map_join(plan, " · ", fn {mode, epochs} -> "#{objects * epochs} #{mode}" end)
+    end
+  end
+
+  # What the config's termination allows: the exploration allowance and the two
+  # minimums from `/monty`, and the ceilings the `termination` group names. Each
+  # is the experiment's, not a page's.
+  defp budget(%{termination: termination, monty_args: args}) do
     [
       {"explore", Map.get(args, "num_exploratory_steps")},
       {"min eval", Map.get(args, "min_eval_steps")},
-      {"min train", Map.get(args, "min_train_steps")}
+      {"min train", Map.get(args, "min_train_steps")},
+      {"max eval", Map.get(termination, :max_eval_steps)},
+      {"max train", Map.get(termination, :max_train_steps)},
+      {"total", Map.get(termination, :max_total_steps)}
     ]
     |> Enum.reject(fn {_name, limit} -> is_nil(limit) end)
     |> Enum.map_join(" · ", fn {name, limit} -> "#{name} #{limit}" end)
