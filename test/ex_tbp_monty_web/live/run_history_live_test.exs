@@ -214,6 +214,18 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       refute view |> element("#run-#{queued.id}") |> render() =~ "running"
     end
 
+    test "every heading sits over the value it names", %{conn: conn, run: run} do
+      # A heading over the neighbouring column reads as a different fact: a
+      # count headed "elapsed", a timestamp headed "ending". One heading per
+      # cell is the whole guarantee, so it is counted rather than eyeballed.
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      document = LazyHTML.from_fragment(render(view))
+
+      assert Enum.count(LazyHTML.query(document, "thead th")) ==
+               Enum.count(LazyHTML.query(LazyHTML.query(document, "#run-#{run.id}"), "td"))
+    end
+
     test "says so when nothing has run", %{conn: conn} do
       # Empty is the state a fresh database is in, and it has to be a page.
       ExTbpMonty.Repo.delete_all(Monty.Studio.RunHistory.Run)

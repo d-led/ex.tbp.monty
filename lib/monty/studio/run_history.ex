@@ -425,7 +425,10 @@ defmodule Monty.Studio.RunHistory do
 
   # What the modules concluded. `match` anywhere is a recognition, which is the
   # criterion these configs name; a run whose modules simply said no is not the
-  # same result and does not get the same word.
+  # the same result and does not get the same word. A finished run that
+  # concluded nothing ran its whole budget, which is a reason too — a blank cell
+  # said nothing, and the one thing a column of endings must not do is leave a
+  # reader guessing whether the run is still going.
   defp conclusion(outcome) do
     concluded = outcome |> Map.values() |> Enum.reject(&is_nil/1)
 
@@ -433,7 +436,7 @@ defmodule Monty.Studio.RunHistory do
       "match" in concluded -> "recognised"
       "no_match" in concluded -> "no match"
       "time_out" in concluded -> "timed out"
-      true -> nil
+      true -> "out of steps"
     end
   end
 

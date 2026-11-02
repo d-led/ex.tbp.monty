@@ -383,18 +383,23 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                   />
                 </button>
               </th>
+              <th class="whitespace-nowrap">started</th>
               <th>experiment</th>
               <th>state</th>
               <th class="text-right whitespace-nowrap">steps</th>
-              <th class="text-right whitespace-nowrap">duration</th>
+              <th
+                class="text-right whitespace-nowrap"
+                title="Wall-clock time from the run's first step to its last"
+              >
+                elapsed
+              </th>
               <th class="whitespace-nowrap">ending</th>
-              <th class="whitespace-nowrap">started</th>
               <th class="text-right"></th>
             </tr>
           </thead>
           <tbody id="runs" phx-update="stream">
             <tr id="runs-empty" class="hidden only:table-row">
-              <td colspan="7" class="text-sm text-base-content/60">
+              <td colspan="8" class="text-sm text-base-content/60">
                 No run matches.
                 <.link patch={filter_href(@state, "")} class="link link-primary">Clear the filter</.link>
               </td>
@@ -420,6 +425,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                     ]}
                   />
                 </button>
+              </td>
+              <td class="font-mono text-xs whitespace-nowrap">
+                <ExTbpMontyWeb.LocalTime.local_time at={run.inserted_at} class="tabular-nums" />
               </td>
               <td class="whitespace-nowrap">
                 <.link navigate={~p"/runs/#{run.id}"} class="link link-hover font-mono text-sm">
@@ -454,11 +462,6 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                   quiet {quiet(run)}
                 </span>
               </td>
-              <%!-- Which world it stepped: two runs of one experiment are not
-              comparable otherwise, and the default is not the only choice. --%>
-              <td class="text-[11px] whitespace-nowrap">
-                {ExTbpMontyWeb.StudioComponents.world_label(run)}
-              </td>
               <td
                 id={"steps-#{run.id}"}
                 class="text-right font-mono text-xs tabular-nums"
@@ -477,9 +480,6 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                 class="text-xs whitespace-nowrap text-base-content/70"
               >
                 {RunHistory.ending(run)}
-              </td>
-              <td class="font-mono text-xs whitespace-nowrap">
-                <ExTbpMontyWeb.LocalTime.local_time at={run.inserted_at} class="tabular-nums" />
               </td>
               <td class="text-right whitespace-nowrap">
                 <%!-- Two ways out: a run that is stepping ends at its next step of

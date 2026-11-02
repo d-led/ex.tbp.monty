@@ -248,6 +248,12 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.ending(run) == "no match"
     end
 
+    test "a run that used its budget without concluding ends out of steps" do
+      run = %Run{status: "finished", summary: %{"steps" => 500, "outcome" => %{}}}
+
+      assert RunHistory.ending(run) == "out of steps"
+    end
+
     test "an abandoned run ends as abandoned, and a running one has not ended" do
       abandoned = %Run{status: "failed", summary: %{"reason" => "it stopped before it finished"}}
       running = %Run{status: "running", summary: %{}}
