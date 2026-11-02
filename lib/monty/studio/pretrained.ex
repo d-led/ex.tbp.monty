@@ -141,7 +141,10 @@ defmodule Monty.Studio.Pretrained do
         {:error, reason}
     end
   rescue
-    error in [ArgumentError, File.Error] -> {:error, Exception.message(error)}
+    # A pickle this build cannot read is one model the run can go ahead without:
+    # `sync/2` collects these into its `failed` list and names them, which is
+    # better than the export stopping at the first one and writing nothing.
+    error -> {:error, Exception.message(error)}
   end
 
   # sobelow_skip ["Traversal.FileModule"]
@@ -202,6 +205,12 @@ defmodule Monty.Studio.Pretrained do
 
   defp graph_of(%Object{state: %{} = state}) when is_map_key(state, "_mapping"),
     do: state |> Map.fetch!("_mapping") |> graph_of()
+
+  # Some releases hand the graph over already unwrapped: the object's own state
+  # is the mapping, with no `_graph` or `_store` around it. A struct does not
+  # match the plain-map clause below, so without this the whole export stops on
+  # the first model written that way.
+  defp graph_of(%Object{state: %{} = state}) when is_map_key(state, "x"), do: state
 
   defp graph_of(%{} = mapping) when is_map_key(mapping, "x"), do: mapping
 

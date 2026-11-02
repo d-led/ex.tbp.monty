@@ -3,8 +3,10 @@ defmodule Monty.Studio.PretrainedTest do
 
   alias Monty.Studio.Memory
   alias Monty.Studio.Pretrained
+  alias Monty.Studio.Pretrained.Tensor
   alias Monty.Studio.Pretrained.Torch
   alias Monty.Test.Tmp
+  alias Unpickler.Object
 
   @name "surf_agent_1lm_10distinctobj"
   @release "pretrained_ycb_v14"
@@ -67,6 +69,21 @@ defmodule Monty.Studio.PretrainedTest do
     end
   end
 
+  describe "a graph as another torch version writes it" do
+    test "is the same records whether the graph is wrapped or is the state itself" do
+      graph = graph_mapping()
+
+      # `_graph` around it is the shape this port first met. Some releases hand
+      # the mapping over as the object's own state instead, which is the same
+      # graph and has to be read the same way.
+      assert [record] = Pretrained.records(model(%Object{state: graph}))
+
+      assert record ==
+               Pretrained.records(model(%Object{state: %{"_graph" => graph}}))
+               |> then(&hd/1)
+    end
+  end
+
   describe "a real pretrained model" do
     test "is read as the objects and channels Monty trained" do
       records = pretrained_pickle() |> Torch.load!() |> Pretrained.records()
@@ -114,6 +131,41 @@ defmodule Monty.Studio.PretrainedTest do
     File.mkdir_p!(Path.dirname(pickle))
     File.write!(pickle, contents)
     pickle
+  end
+
+  # A model of one object in one channel, keeping `graph` where a run would
+  # find it — under `lm_dict`, one learning module, one graph memory.
+  defp model(graph) do
+    %{"lm_dict" => [%{"graph_memory" => %{"mug" => %{"patch" => graph}}}]}
+  end
+
+  # Two nodes of the widths Monty stores: three coordinates of place, a colour,
+  # a 3×3 pose frame, the flag, and two log curvatures.
+  defp graph_mapping do
+    %{
+      "pos" => tensor([[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]]),
+      "x" => tensor([for(n <- 1..15, do: n * 1.0), for(n <- 16..30, do: n * 1.0)]),
+      "feature_mapping" => %{
+        "hsv" => [0, 3],
+        "pose_vectors" => [3, 12],
+        "pose_fully_defined" => [12, 13],
+        "principal_curvatures_log" => [13, 15]
+      }
+    }
+  end
+
+  defp tensor(rows) do
+    columns = length(hd(rows))
+    storage = for row <- rows, value <- row, into: <<>>, do: <<value::float-little-32>>
+
+    %Tensor{
+      type: :f32,
+      count: columns * length(rows),
+      size: [length(rows), columns],
+      strides: [columns, 1],
+      offset: 0,
+      storage: storage
+    }
   end
 
   # A library as a previous export left it, `age` seconds old.
