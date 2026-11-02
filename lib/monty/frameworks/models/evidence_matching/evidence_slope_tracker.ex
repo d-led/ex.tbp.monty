@@ -130,36 +130,35 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   """
   @spec calculate_slopes(t()) :: [float() | nil]
   def calculate_slopes(%__MODULE__{} = tracker) do
+    # Each window is walked once, adding up the steps that have two observations
+    # as it goes. A 77-object memory tracks a few hundred thousand windows, and
+    # building the per-step difference list for every one of them — then
+    # rejecting the nils back out of it — is most of what a step allocates.
     channel_counts = tl(tracker.channels)
 
-    Enum.map(tracker.evidence, fn window ->
-      window
-      |> diffs(channel_counts)
-      |> valid_slopes()
-    end)
+    Enum.map(tracker.evidence, &window_slope(&1, channel_counts))
   end
 
-  defp diffs([_single], _channels), do: []
+  # Monty's `np.nanmean(np.diff(window) / channels)`: the mean of the steps that
+  # have two observations, and `nil` for a window that has none.
+  defp window_slope(window, channel_counts), do: sum_and_count(window, channel_counts, 0.0, 0)
 
-  defp diffs([older, newer | rest], [channels | more_channels]) do
-    diff =
-      if is_nil(older) or is_nil(newer),
-        do: nil,
-        else: (newer - older) / channels
+  defp sum_and_count([], _channels, sum, count), do: mean(sum, count)
+  defp sum_and_count([_single], _channels, sum, count), do: mean(sum, count)
 
-    [diff | diffs([newer | rest], more_channels)]
+  defp sum_and_count([older, newer | rest], [channels | more_channels], sum, count) do
+    {sum, count} =
+      if is_nil(older) or is_nil(newer) do
+        {sum, count}
+      else
+        {sum + (newer - older) / channels, count + 1}
+      end
+
+    sum_and_count([newer | rest], more_channels, sum, count)
   end
 
-  defp diffs([], _channels), do: []
-
-  defp valid_slopes(slopes) do
-    valid = Enum.reject(slopes, &is_nil/1)
-
-    case valid do
-      [] -> nil
-      _some -> Enum.sum(valid) / length(valid)
-    end
-  end
+  defp mean(_sum, 0), do: nil
+  defp mean(sum, count), do: sum / count
 
   @doc "Removes the hypotheses at the given indices, keeping the rest in order."
   @spec remove_hyp(t(), [non_neg_integer()]) :: t()
