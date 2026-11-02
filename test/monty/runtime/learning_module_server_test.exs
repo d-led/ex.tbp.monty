@@ -67,4 +67,22 @@ defmodule Monty.Runtime.LearningModuleServerTest do
       assert LearningModuleServer.get_output(server) == nil
     end
   end
+
+  describe "reading the module" do
+    test "a question is answered against the module's own state", %{model_id: model_id} do
+      server = start_server(model_id, :lm_0)
+      percept = Messages.percept()
+      LearningModuleServer.matching_step(server, [percept], Context.new(1))
+
+      assert LearningModuleServer.query(server, & &1.percepts) == [percept]
+    end
+
+    test "asking leaves the module as it was", %{model_id: model_id} do
+      server = start_server(model_id, :lm_0)
+      before = :sys.get_state(server)
+
+      assert :no_answer = LearningModuleServer.query(server, fn _state -> :no_answer end)
+      assert :sys.get_state(server) == before
+    end
+  end
 end

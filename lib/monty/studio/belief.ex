@@ -129,8 +129,7 @@ defmodule Monty.Studio.Belief do
   def of(model_id, module_id) do
     {:learning_module, model_id, module_id}
     |> Registry.via()
-    |> LearningModuleServer.state()
-    |> of()
+    |> LearningModuleServer.query(&of/1)
   end
 
   @doc "Every learning module of a model that holds a belief, keyed by module id."

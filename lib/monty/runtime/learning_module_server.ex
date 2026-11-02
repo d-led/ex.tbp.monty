@@ -133,6 +133,21 @@ defmodule Monty.Runtime.LearningModuleServer do
   @spec state(server()) :: term()
   def state(server), do: GenServer.call(server, :state, :infinity)
 
+  @doc """
+  Asks the module a question about its state, and answers only the answer.
+
+  `projection` runs inside the process that owns the state, so a caller that
+  wants four numbers out of a module holding ten object models asks for those
+  four numbers instead of copying the models across to read them. Copying is
+  not free: the graph memory of a pretrained ten-object module is tens of
+  megabytes, and a page that refreshes every step was paying for it per step.
+
+  The projection must not change the state — this is a read, and the module is
+  left exactly as it was.
+  """
+  @spec query(server(), (term() -> answer)) :: answer when answer: var
+  def query(server, projection), do: GenServer.call(server, {:query, projection}, :infinity)
+
   # -- callbacks ------------------------------------------------------------
 
   @impl true
@@ -225,4 +240,8 @@ defmodule Monty.Runtime.LearningModuleServer do
   end
 
   def handle_call(:state, _from, server), do: {:reply, server.state, server}
+
+  def handle_call({:query, projection}, _from, server) do
+    {:reply, projection.(server.state), server}
+  end
 end
