@@ -992,10 +992,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # page, or one that arrived after the run was closed. It is not news.
   def handle_info(_late_message, socket), do: {:noreply, socket}
 
+  # Stamped when the read is finished, not when it started: the window is the
+  # time between two reads, so a page cannot read faster than it can rebuild —
+  # which is what keeps a burst from becoming a backlog.
   defp refresh_now(socket) do
-    socket
-    |> assign(refreshed_at: System.monotonic_time(:millisecond))
-    |> refresh_own_run()
+    {:noreply, refreshed} = refresh_own_run(socket)
+    {:noreply, assign(refreshed, refreshed_at: System.monotonic_time(:millisecond))}
   end
 
   # One rebuild per burst: the first step of the next second is answered when it

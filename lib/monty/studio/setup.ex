@@ -793,12 +793,14 @@ defmodule Monty.Studio.Setup do
   """
   @spec epoch_plan(t()) :: [{:train | :eval, pos_integer()}]
   def epoch_plan(%__MODULE__{} = setup) do
-    [
-      {:train, do_train(setup) && train_epochs(setup)},
-      {:eval, do_eval(setup) && eval_epochs(setup)}
-    ]
-    |> Enum.filter(fn {_phase, epochs} -> is_integer(epochs) and epochs > 0 end)
+    phase(:train, do_train(setup), train_epochs(setup)) ++
+      phase(:eval, do_eval(setup), eval_epochs(setup))
   end
+
+  # A phase runs when its flag is on and its count is a count: a phase switched
+  # on without one is left out rather than run once by accident.
+  defp phase(name, true, count) when is_integer(count) and count > 0, do: [{name, count}]
+  defp phase(_name, _on, _count), do: []
 
   @doc """
   The step limit the config's termination puts on one episode of `mode`.
@@ -864,10 +866,13 @@ defmodule Monty.Studio.Setup do
   def planned_episodes(%__MODULE__{} = setup) do
     per_epoch = length(objects(setup))
 
+    # Added up rather than handed to `Enum.sum/1`, whose type is a list of
+    # numbers summing to a number: an episode count is a count, and a type that
+    # admits a float invites one.
     setup
     |> epoch_plan()
     |> Enum.map(fn {_mode, epochs} -> per_epoch * epochs end)
-    |> Enum.sum()
+    |> Enum.reduce(0, &+/2)
   end
 
   @doc """
