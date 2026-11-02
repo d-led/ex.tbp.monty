@@ -238,48 +238,97 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
     {all_node_poses, all_node_pose_flags} =
       node_poses(displacer, graph_id, input_channel, tuple_size(channel_locations))
 
-    # One distance call for the whole channel: the search locations and their
-    # normals are already per hypothesis, and asking one at a time re-built the
-    # same lists thousands of times per step.
-    node_locations_per_hypothesis =
-      Enum.map(nearest, fn node_ids -> Enum.map(node_ids, &elem(channel_locations, &1)) end)
+    comparison = %{
+      weights: pose_weights(displacer, input_channel, channel_features["pose_fully_defined"]),
+      fully_defined?: channel_features["pose_fully_defined"],
+      locations: channel_locations,
+      flatness: GraphMatchingUtils.flatness(curvature),
+      node_poses: all_node_poses,
+      node_defined: all_node_pose_flags,
+      node_feature_evidence: node_feature_evidence,
+      max_match_distance: displacer.max_match_distance
+    }
 
-    distances_per_hypothesis =
-      GraphMatchingUtils.custom_distances(
-        node_locations_per_hypothesis,
-        search_locations,
-        normals,
-        curvature
-      )
-
-    Enum.zip_with([normals, curvatures, nearest, distances_per_hypothesis], fn one ->
-      [normal, curvature_1, node_ids, distances] = one
-
-      too_far = Enum.map(distances, fn distance -> weight(displacer, distance) <= 0 end)
-
-      radius_evidence =
-        pose_evidence(
-          displacer,
-          normal,
-          curvature_1,
-          channel_features["pose_fully_defined"],
-          Enum.map(node_ids, &elem(all_node_poses, &1)),
-          Enum.map(node_ids, &elem(all_node_pose_flags, &1)),
-          input_channel
-        )
-
-      radius_evidence
-      |> Enum.zip(node_ids)
-      |> Enum.zip(too_far)
-      |> Enum.map(fn {{evidence, node_id}, far?} ->
-        if far?, do: @min_evidence, else: evidence + elem(node_feature_evidence, node_id)
-      end)
-      |> Enum.max()
+    Enum.zip_with([normals, curvatures, nearest, search_locations], fn one ->
+      [normal, curvature_1, node_ids, search_location] = one
+      best_of_neighbours(node_ids, search_location, normal, curvature_1, comparison)
     end)
   end
 
-  # One pose per node, flattened as stored, and whether that pose was fully
-  # defined — the two things the pose comparison reads.
+  # The best neighbour decides a hypothesis' evidence, so the neighbour ids are
+  # walked once and the best kept. Everything a neighbour is judged by — where it
+  # sits, what it looks like, what it is worth — is read by id, so no list of
+  # node locations, of distances or of evidence is built per hypothesis.
+  defp best_of_neighbours(
+         [node_id | ids],
+         search_location,
+         normal,
+         curvature_1,
+         comparison
+       ) do
+    best_of_neighbours(
+      ids,
+      search_location,
+      normal,
+      curvature_1,
+      comparison,
+      neighbour_evidence(node_id, search_location, normal, curvature_1, comparison)
+    )
+  end
+
+  defp best_of_neighbours([], _search_location, _normal, _curvature_1, _comparison, best),
+    do: best
+
+  defp best_of_neighbours(
+         [node_id | ids],
+         search_location,
+         normal,
+         curvature_1,
+         comparison,
+         best
+       ) do
+    best_of_neighbours(
+      ids,
+      search_location,
+      normal,
+      curvature_1,
+      comparison,
+      max(best, neighbour_evidence(node_id, search_location, normal, curvature_1, comparison))
+    )
+  end
+
+  # A neighbour beyond `max_match_distance` is no neighbour at all: it says the
+  # sensor's location has nothing to do with this hypothesis, which is the worst
+  # evidence there is.
+  defp neighbour_evidence(node_id, search_location, normal, curvature_1, comparison) do
+    distance =
+      GraphMatchingUtils.custom_distance(
+        elem(comparison.locations, node_id),
+        search_location,
+        normal,
+        comparison.flatness
+      )
+
+    if (comparison.max_match_distance - distance) / comparison.max_match_distance <= 0 do
+      @min_evidence
+    else
+      {stored_normal, stored_curvature} = elem(comparison.node_poses, node_id)
+
+      pose_evidence(
+        comparison,
+        normal,
+        curvature_1,
+        stored_normal,
+        stored_curvature,
+        elem(comparison.node_defined, node_id) != 0.0
+      ) + elem(comparison.node_feature_evidence, node_id)
+    end
+  end
+
+  # One stored pose, cut into the two directions the comparison reads: the
+  # normal and the first curvature direction. Where a pose is stored end to end
+  # the cut is the same for every node, so it belongs to the graph rather than to
+  # the hypothesis that happens to ask.
   defp node_poses(displacer, graph_id, input_channel, num_nodes) do
     features =
       displacer.graph_memory
@@ -290,45 +339,45 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
         ["pose_vectors", "pose_fully_defined"]
       )
 
-    {List.to_tuple(Map.fetch!(features, "pose_vectors")),
+    {features
+     |> Map.fetch!("pose_vectors")
+     |> Enum.map(fn pose -> {Enum.take(pose, 3), Enum.slice(pose, 3, 3)} end)
+     |> List.to_tuple(),
      features |> Map.fetch!("pose_fully_defined") |> Enum.map(&hd/1) |> List.to_tuple()}
+  end
+
+  # What the pose comparison weighs its two directions: the normal always, the
+  # first curvature direction only when the observation defined one.
+  defp pose_weights(displacer, input_channel, fully_defined?) do
+    weights = Map.fetch!(displacer.feature_weights, input_channel)["pose_vectors"]
+    {Enum.at(weights, 0), if(fully_defined?, do: Enum.at(weights, 1), else: 0.0)}
   end
 
   # Pose evidence in [-1, 1]: surface normal and first curvature direction, each
   # worth 0.5 when they match and -0.5 when perpendicular. The second curvature
   # direction is always 90° from the first, so it adds nothing.
   defp pose_evidence(
-         displacer,
+         comparison,
          normal,
          curvature_1,
-         fully_defined?,
-         node_poses,
-         node_defined,
-         input_channel
+         stored_normal,
+         stored_curvature,
+         stored_defined?
        ) do
-    weights = Map.fetch!(displacer.feature_weights, input_channel)["pose_vectors"]
-    normal_weight = Enum.at(weights, 0)
-    curvature_weight = if fully_defined?, do: Enum.at(weights, 1), else: 0.0
+    {normal_weight, curvature_weight} = comparison.weights
+    normal_evidence = -(:math.sin(angle(stored_normal, normal) / 2) - 0.5)
 
-    Enum.zip_with(node_poses, node_defined, fn node_pose, stored_defined ->
-      stored_normal = Enum.take(node_pose, 3)
-      stored_curvature = Enum.slice(node_pose, 3, 3)
-      stored_defined? = stored_defined != 0.0
+    curvature_evidence =
+      if comparison.fully_defined? do
+        # A curvature direction has no sign, so 0° and 180° are equally good and
+        # 90° is the worst case: that is what folding the angle at π/2 does.
+        error = @half_turn - abs(angle(stored_curvature, curvature_1) - @half_turn)
+        -(:math.sin(error) - 0.5) * if(stored_defined?, do: 1.0, else: 0.0)
+      else
+        0.0
+      end
 
-      normal_evidence = -(:math.sin(angle(stored_normal, normal) / 2) - 0.5)
-
-      curvature_evidence =
-        if fully_defined? do
-          # A curvature direction has no sign, so 0° and 180° are equally good and
-          # 90° is the worst case: that is what folding the angle at π/2 does.
-          error = @half_turn - abs(angle(stored_curvature, curvature_1) - @half_turn)
-          -(:math.sin(error) - 0.5) * if(stored_defined?, do: 1.0, else: 0.0)
-        else
-          0.0
-        end
-
-      normal_evidence * normal_weight + curvature_evidence * curvature_weight
-    end)
+    normal_evidence * normal_weight + curvature_evidence * curvature_weight
   end
 
   # The angle Monty reads off two pose directions, straight from the dot product
@@ -353,8 +402,6 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
 
     {normal, curvature}
   end
-
-  defp weight(%__MODULE__{max_match_distance: max}, distance), do: (max - distance) / max
 
   defp argmax(values) do
     values |> Enum.with_index() |> Enum.max_by(fn {value, _index} -> value end) |> elem(1)

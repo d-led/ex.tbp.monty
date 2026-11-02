@@ -283,18 +283,41 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtils do
         ) ::
           [[float()]]
   def custom_distances(nearest_node_locations, search_locations, search_normals, search_curvature) do
-    flatness = 1 / (abs(search_curvature) + 0.5)
+    flatness = flatness(search_curvature)
 
     [nearest_node_locations, search_locations, search_normals]
     |> Enum.zip()
     |> Enum.map(fn {node_locations, search_location, search_normal} ->
-      Enum.map(node_locations, fn node_location ->
-        difference = SpatialArithmetics.subtract(node_location, search_location)
-
-        SpatialArithmetics.magnitude(difference) +
-          abs(SpatialArithmetics.dot(difference, search_normal)) * flatness
-      end)
+      Enum.map(node_locations, &custom_distance(&1, search_location, search_normal, flatness))
     end)
+  end
+
+  @doc """
+  How far off its tangent plane a curved surface lets a search stray.
+
+  `1 / (|curvature| + 0.5)`: a curved surface searches further off the plane than
+  a flat one, and the 0.5 keeps a flat surface from collapsing the sphere to a
+  disc (and the division from being by zero). One number per channel, handed to
+  `custom_distance/4` for every neighbour of every hypothesis.
+  """
+  @spec flatness(number()) :: float()
+  def flatness(search_curvature), do: 1 / (abs(search_curvature) + 0.5)
+
+  @doc """
+  The distance from one search point to one node, flattened along the normal.
+
+  The three products `subtract`, `magnitude` and `dot` would make, without the
+  difference they would build in between: this runs once per neighbour of every
+  hypothesis, which at Monty's own hypothesis counts is millions of times a step.
+  """
+  @spec custom_distance(locations(), locations(), SpatialArithmetics.vector(), number()) ::
+          float()
+  def custom_distance([x, y, z], [sx, sy, sz], [nx, ny, nz], flatness) do
+    dx = x - sx
+    dy = y - sy
+    dz = z - sz
+
+    :math.sqrt(dx * dx + dy * dy + dz * dz) + abs(dx * nx + dy * ny + dz * nz) * flatness
   end
 
   @doc """

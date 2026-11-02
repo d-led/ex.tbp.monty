@@ -10,18 +10,19 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
   @pose [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
   @identity Rotation.to_matrix(Rotation.identity())
 
-  # Two nodes a decimetre apart, both facing +z with a defined pose.
-  defp memory do
-    locations = [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]]
+  # Two nodes a decimetre apart unless the test asks for other places, both
+  # facing +z with a defined pose.
+  defp memory(locations) do
+    count = length(locations)
 
     model =
       GraphObjectModel.new("mug")
       |> GraphObjectModel.build_model(
         locations,
         %{
-          "pose_vectors" => [@pose, @pose],
-          "pose_fully_defined" => [[1.0], [1.0]],
-          "rgba" => [[0.2], [0.2]]
+          "pose_vectors" => List.duplicate(@pose, count),
+          "pose_fully_defined" => List.duplicate([1.0], count),
+          "rgba" => List.duplicate([0.2], count)
         },
         nil,
         nil
@@ -33,8 +34,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
   end
 
   defp displacer(options \\ []) do
+    {locations, options} = Keyword.pop(options, :locations, [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]])
+
     HypothesesDisplacer.new(
-      memory(),
+      memory(locations),
       Keyword.merge(
         [
           feature_weights: %{"patch" => %{"pose_vectors" => [1.0, 1.0, 1.0], "rgba" => 1.0}},
@@ -113,6 +116,44 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
       assert [evidence] = updated.evidence
       assert evidence > 1.0
       assert is_float(telemetry.mlh_prediction_error)
+    end
+
+    # The number the neighbourhood pass answers with, pinned. It used to be
+    # computed a neighbour at a time with a list of evidence per hypothesis; the
+    # walk is now one pass, and the arithmetic has to be the same arithmetic —
+    # 0.5 for the normal, 0.5 for the first curvature direction, plus the node's
+    # own feature evidence — so a change that moves it has to say so.
+    test "a perfect match at a node earns 1 for its pose and 1 for its features" do
+      {updated, _telemetry} =
+        HypothesesDisplacer.compute_evidence(
+          displacer(),
+          features(),
+          0.0,
+          "mug",
+          hypotheses([0.0], [[0.0, 0.0, 0.0]])
+        )
+
+      assert [evidence] = updated.evidence
+      assert_in_delta evidence, 2.0, 1.0e-12
+    end
+
+    # Being nearest is not the same as being in range: the distance is flattened
+    # along the sensed normal, so a node straight up from the search point scores
+    # further away than one the same distance across it. The nearest of these two
+    # is out of range and the other is not, and the hypothesis earns the best of
+    # them rather than the nearest one's -1.
+    test "a neighbour out of range does not spoil one that is in range" do
+      {updated, _telemetry} =
+        HypothesesDisplacer.compute_evidence(
+          displacer(locations: [[0.0, 0.0, 0.49], [0.49, 0.0, 0.0]]),
+          features(),
+          0.0,
+          "mug",
+          hypotheses([0.0], [[0.0, 0.0, 0.0]])
+        )
+
+      assert [evidence] = updated.evidence
+      assert_in_delta evidence, 2.0, 1.0e-12
     end
 
     test "past and present are weighted when combining evidence" do
