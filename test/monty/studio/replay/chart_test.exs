@@ -11,6 +11,12 @@ defmodule Monty.Studio.Replay.ChartTest do
 
   defp series(values, label), do: %{id: label, label: label, points: points(values)}
 
+  # The y of one "x,y" point of a polyline.
+  defp ordinate(point) do
+    {value, _rest} = point |> String.split(",") |> List.last() |> Float.parse()
+    value
+  end
+
   describe "the episodes the chart shades" do
     test "is one band per episode, and neighbouring bands never share a colour" do
       chart =
@@ -87,17 +93,78 @@ defmodule Monty.Studio.Replay.ChartTest do
       assert chart.from == 1 and chart.to == 3
     end
 
-    test "rescales to the window, so a quiet stretch is not a flat line" do
-      # Values 10..20 across the whole run are a gentle slope; the window over
-      # the last three steps must fill the height like any other series.
-      chart = Chart.new(points([10, 11, 12, 19, 20]), window: {3, 4}, playhead: 3)
+    test "zooming narrows the axis, and leaves the values where they were" do
+      # Values 10..20 across the whole run are a gentle slope. Zoomed to the last
+      # two steps, the line is still the same line on the same axis: a scale per
+      # window redrew every line against a new one, so walking along a run
+      # rewrote the picture instead of moving along it.
+      whole = Chart.new(points([10, 11, 12, 19, 20]), window: {0, 4}, playhead: 0)
+      zoomed = Chart.new(points([10, 11, 12, 19, 20]), window: {3, 4}, playhead: 3)
 
-      assert chart.min == 19 and chart.max == 20
+      assert zoomed.min == whole.min
+      assert zoomed.max == whole.max
+      assert {zoomed.min, zoomed.max} == {10, 20}
 
-      # The lower value sits at the foot of the chart (minus its inset), the
-      # higher one at the top: the window fills the height.
-      assert [%{points: drawn}] = chart.lines
-      assert Enum.map(drawn, fn {_x, y} -> y end) == [61.0, 3.0]
+      # The last two steps, at the heights the unzoomed chart gives them: only x
+      # moved, because x is the only axis that was zoomed.
+      assert [%{points: drawn}] = zoomed.lines
+      assert [%{points: all}] = whole.lines
+
+      assert Enum.map(drawn, &elem(&1, 1)) ==
+               all |> Enum.take(-2) |> Enum.map(&elem(&1, 1))
+
+      assert Enum.map(drawn, &elem(&1, 0)) == [0.0, zoomed.width * 1.0]
+    end
+
+    test "a rise of a fraction of a unit is a slope, not a cliff" do
+      # A run whose evidence reaches 48: four hundredths of a unit of it is a
+      # twentieth of one pixel of the chart's own height, so rounded to whole
+      # units every one of those steps landed on the same ordinate and the rise
+      # became a vertical jump at one place on the axis — the staircase in the
+      # screenshot.
+      chart = Chart.new(points([0, 0.04, 0.08, 48]), window: {0, 3}, playhead: 0)
+
+      assert [%{polylines: [line]}] = chart.lines
+      ys = line |> String.split(" ") |> Enum.map(&ordinate/1)
+
+      # The three steps that creep, and nothing collapsed onto one of them.
+      creeping = Enum.take(ys, 3)
+
+      assert length(Enum.uniq(creeping)) == 3
+      assert creeping == Enum.sort(creeping, :desc), "a rising line is drawn upwards"
+      assert Enum.any?(creeping, &(&1 != trunc(&1))), "heights are not whole units"
+    end
+
+    test "every drawn stretch is an element of its own" do
+      # A ten-object run cut at every episode is sixty polylines; sixty elements
+      # with ten ids is an error the browser reports on every render.
+      chart =
+        Chart.many(
+          [
+            %{
+              id: "object:mug",
+              label: "mug",
+              points: [
+                %{step: 0, value: 1.0, episode: 0},
+                %{step: 1, value: 2.0, episode: 1}
+              ]
+            },
+            %{
+              id: "object:bowl",
+              label: "bowl",
+              points: [
+                %{step: 0, value: 3.0, episode: 0},
+                %{step: 1, value: 4.0, episode: 1}
+              ]
+            }
+          ],
+          window: {0, 1}
+        )
+
+      ids = Enum.map(chart.polylines, & &1.id)
+
+      assert length(ids) == 4
+      assert length(Enum.uniq(ids)) == 4
     end
 
     test "puts the playhead where the step is" do

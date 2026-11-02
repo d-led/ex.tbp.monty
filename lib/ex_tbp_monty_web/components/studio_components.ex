@@ -464,7 +464,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
             />
             <polyline
               :for={polyline <- @chart.polylines}
-              id={"replay-line-#{polyline.colour}"}
+              id={polyline.id}
               points={polyline.points}
               fill="none"
               stroke={line_colour(polyline.colour)}

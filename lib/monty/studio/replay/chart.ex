@@ -4,9 +4,19 @@ defmodule Monty.Studio.Replay.Chart do
 
   The geometry is here rather than in HEEx for the same reason the wiring
   diagram's is: "zoomed into steps 3 to 7, the line should enter at the left
-  edge" is an assertion, not a matter of taste. Values are scaled to the window
-  being looked at, so zooming into a quiet stretch shows the stretch and not a
-  flat line at the foot of a chart scaled for the whole run.
+  edge" is an assertion, not a matter of taste.
+
+  Zoom moves the **x axis only**. The value axis is the run's, so a line keeps
+  the shape it has while a reader walks along it, and two windows can be
+  compared: a scale per window redrew every line against a new axis on every
+  click, so the same line looked like a different one and the picture was not of
+  anything. A series whose values never move still needs a scale, so a flat run
+  is drawn across the middle rather than at the top or the foot.
+
+  Coordinates come out as floats. A run of 546 steps drawn in 320 units puts
+  four steps in a pixel and a whole evidence unit in little more than one, so a
+  rounded ordinate turns every small rise into a cliff: the line reads as a
+  staircase that the data does not have.
 
   One chart holds many lines because that is how an episode is read: every object
   a learning module still had a graph for, on the same axis. The moment one line
@@ -79,7 +89,7 @@ defmodule Monty.Studio.Replay.Chart do
           height: pos_integer(),
           lines: [line()],
           bands: [band()],
-          polylines: [%{colour: non_neg_integer(), points: String.t()}],
+          polylines: [%{colour: non_neg_integer(), id: String.t(), points: String.t()}],
           min: number(),
           max: number(),
           from: number(),
@@ -112,7 +122,8 @@ defmodule Monty.Studio.Replay.Chart do
     {from, to} = window(series, Keyword.get(opts, :window))
     visible = Enum.map(series, &%{&1 | points: inside(&1.points, {from, to})})
 
-    values = Enum.flat_map(visible, fn drawn -> Enum.map(drawn.points, & &1.value) end)
+    # The run's own range, not the window's: see the moduledoc.
+    values = Enum.flat_map(series, fn drawn -> Enum.map(drawn.points, & &1.value) end)
     {min, max} = {Enum.min(values, fn -> 0 end), Enum.max(values, fn -> 0 end)}
 
     {lines, samples} =
@@ -136,9 +147,22 @@ defmodule Monty.Studio.Replay.Chart do
 
   # Every line's stretches, flat: a template draws one `<polyline>` per stretch,
   # and how many stretches a line has is the chart's business, not the page's.
+  # Each carries an id of its own — a line cut at every episode of a ten-object
+  # run is sixty polylines, and sixty elements with ten ids is an error the
+  # browser reports on every render.
   defp polylines_of(lines) do
-    Enum.flat_map(lines, fn line ->
-      Enum.map(line.polylines, &%{colour: line.colour, points: &1})
+    lines
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {line, line_index} ->
+      line.polylines
+      |> Enum.with_index()
+      |> Enum.map(fn {points, stretch} ->
+        %{
+          colour: line.colour,
+          id: "replay-line-#{line_index}-#{stretch}",
+          points: points
+        }
+      end)
     end)
   end
 
@@ -277,6 +301,11 @@ defmodule Monty.Studio.Replay.Chart do
 
   defp polyline([]), do: ""
 
+  # Two decimals, not whole numbers: the chart is 320 units wide for a run of
+  # hundreds of steps, so a rounded ordinate is a cliff where the data has a
+  # slope.
   defp polyline(points),
-    do: points |> Enum.map_join(" ", fn {x, y} -> "#{round(x)},#{round(y)}" end)
+    do: points |> Enum.map_join(" ", fn {x, y} -> "#{round_to(x)},#{round_to(y)}" end)
+
+  defp round_to(value), do: Float.round(value * 1.0, 2)
 end

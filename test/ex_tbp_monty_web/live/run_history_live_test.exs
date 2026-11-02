@@ -747,9 +747,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       # The picker offers it, and it is where the page opened.
       assert has_element?(view, "#replay-series option[value='objects'][selected]")
 
-      # One line per object, each with its own colour.
-      assert has_element?(view, "#replay-line-0")
-      assert has_element?(view, "#replay-line-1")
+      # One line per object, each with its own colour. A line is cut wherever an
+      # episode ends, so the element is named by its line and its stretch.
+      assert has_element?(view, "#replay-line-0-0")
+      assert has_element?(view, "#replay-line-1-0")
 
       # Named, because a colour nobody can name is a puzzle.
       legend = view |> element("#replay-chart-legend") |> render()
@@ -793,8 +794,8 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     test "a run with nothing to compare gets one line and no legend", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      assert has_element?(view, "#replay-line-0")
-      refute has_element?(view, "#replay-line-1")
+      assert has_element?(view, "#replay-line-0-0")
+      refute has_element?(view, "#replay-line-1-0")
       refute has_element?(view, "#replay-chart-legend")
       refute has_element?(view, "#replay-best")
     end
