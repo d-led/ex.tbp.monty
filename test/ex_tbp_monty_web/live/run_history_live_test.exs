@@ -51,6 +51,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
         run,
         %{
           "step" => 0,
+          "at" => Monty.Studio.RunLog.now().instant,
           "goals" => 1,
           "votes" => %{"sent" => 1, "used" => 1},
           "percepts" => ["patch"],
@@ -66,6 +67,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
         run,
         %{
           "step" => 1,
+          "at" => Monty.Studio.RunLog.now().instant,
           "goals" => 0,
           "votes" => %{"sent" => 1, "used" => 1},
           "percepts" => ["patch"],
@@ -351,6 +353,20 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert render(view) =~ "monty/learning_module"
       assert has_element?(view, "#log-0")
       assert has_element?(view, "#log-1")
+    end
+
+    # A step's clock is the reader's, and only the browser knows their zone. So
+    # the page has to hand it the instant and let the hook rewrite the words;
+    # printing the server's own clock would show a container's UTC to someone
+    # sitting in Berlin.
+    test "a step's clock reaches the browser as an instant, not as the server's text", %{
+      conn: conn,
+      run: run
+    } do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert has_element?(view, "#run-log[phx-hook='ExTbpMontyWeb.LocalTime.LocalTime']")
+      assert has_element?(view, "#log-0 time[data-local-time='clock'][datetime]")
     end
 
     # The tooltip is drawn by a hook, but the words and numbers in it come from

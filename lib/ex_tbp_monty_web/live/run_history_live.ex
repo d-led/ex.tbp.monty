@@ -656,6 +656,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         <ul
           id="run-log"
           phx-update="stream"
+          phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
           class="max-h-[28rem] overflow-auto rounded-box border border-base-300 bg-base-100 p-2 font-mono text-[11px] leading-5"
         >
           <%!-- What the reader is waiting for is said where the waiting
@@ -670,7 +671,19 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               no steps recorded
             <% end %>
           </li>
-          <li :for={{dom_id, entry} <- @streams.log} id={dom_id}>{RunLog.line(entry)}</li>
+          <%!-- The clock is a `<time>` carrying the instant, not a string: a
+          step's time means the reader's clock, and only the browser knows that
+          zone. `RunLog.line/1` builds the same words with the server's clock,
+          which is right for the log file on disk and wrong for a page. --%>
+          <li :for={{dom_id, entry} <- @streams.log} id={dom_id}>
+            <% at = RunLog.at(entry) %>
+            <ExTbpMontyWeb.LocalTime.local_time
+              :if={at}
+              at={at}
+              style={:clock}
+              class="me-1.5 text-base-content/40 tabular-nums"
+            />{RunLog.text(entry)}
+          </li>
         </ul>
       </section>
 
