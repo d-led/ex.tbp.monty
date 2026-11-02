@@ -30,6 +30,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # The replay panel's controls, grouped the same way and for the same reason.
   @replay_events ~w(replay_seek replay_step replay_play replay_pause replay_zoom replay_series)
 
+  # How often a page showing a run asks the record what the run is doing. The
+  # worker broadcasts every step, so this is the answer to silence: a message
+  # that arrived while the socket was reconnecting, or a worker that died
+  # between two steps and will never send another.
+  @show_poll_ms 2_000
+
   @impl true
   def mount(_params, _session, socket) do
     # The list is a stream fed by the record's topic, not by re-reading: a run
@@ -185,7 +191,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
         Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(run.id))
 
-        assign(socket, followed: run.id)
+        assign(socket, followed: run.id) |> schedule_show_poll()
     end
   end
 
@@ -557,7 +563,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         <div class="flex flex-wrap items-center gap-2">
           <h1 class="font-mono text-2xl font-semibold tracking-tight">{@run.experiment}</h1>
           <span class="badge badge-sm" id="run-episode">episode {@run.episode}</span>
-          <span class={["badge badge-sm", status_class(@run.status)]}>{@run.status}</span>
+          <span
+            id="run-status"
+            class={["badge badge-sm", status_class(run_state(@run, @queue[@run.id]))]}
+          >
+            {run_state(@run, @queue[@run.id])}
+          </span>
           <span
             :if={in_flight?(@run, @queue)}
             id="run-progress"
@@ -880,11 +891,27 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   @impl true
   def handle_info(:replay_tick, socket), do: replay_tick(socket)
 
-  # The run said something: a step, the end of it, or a failure. Reading the
+  # The run said something: a step, the end of it, or a failure. The worker
+  # publishes on the run's topic as `{:studio, run_id, event}`, and reading the
   # record again is what keeps one source of truth — the worker writes it, the
-  # page shows it.
-  def handle_info({event, _payload}, socket) when event in [:started, :step, :finished, :failed],
+  # page shows it. A message for a run this page is not showing is not news.
+  def handle_info({:studio, run_id, _event}, %{assigns: %{run: %{id: run_id}}} = socket),
     do: refresh_own_run(socket)
+
+  def handle_info({:studio, _other_run, _event}, socket), do: {:noreply, socket}
+
+  # A page that shows a run keeps asking, even though the worker broadcasts: a
+  # message can arrive while the socket is reconnecting, and a worker can die
+  # without saying anything at all. Asking the record — after a sweep, so a run
+  # nobody owns is settled instead of shown as alive — is what stops the page
+  # from saying "running" while nothing is running.
+  def handle_info(:show_poll, %{assigns: %{live_action: :show, run: %{id: id} = run}} = socket) do
+    if in_flight?(run, socket.assigns.queue), do: Reaper.sweep()
+
+    {:noreply, socket |> refresh_run(id) |> keep_polling()}
+  end
+
+  def handle_info(:show_poll, socket), do: {:noreply, socket}
 
   # A run was written down, or settled. The index draws the record it was told
   # about; the detail page keeps its own place and only asks for its own run.
@@ -943,6 +970,18 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp replay_tick_ms, do: Application.get_env(:ex_tbp_monty, :studio_replay_tick_ms, 120)
+
+  defp schedule_show_poll(socket) do
+    if connected?(socket), do: Process.send_after(self(), :show_poll, @show_poll_ms)
+    socket
+  end
+
+  # A run that has stopped does not need asking again.
+  defp keep_polling(socket) do
+    if in_flight?(socket.assigns.run, socket.assigns.queue),
+      do: schedule_show_poll(socket),
+      else: socket
+  end
 
   # Three zooms, named: a button sends a string, and turning arbitrary strings
   # into atoms is how a page leaks memory one click at a time.
@@ -1109,9 +1148,19 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp all_picked?(selected, page_ids),
     do: page_ids != [] and Enum.all?(page_ids, &MapSet.member?(selected, &1))
 
+  # A record that says `running` is only running while a job still owns it: a
+  # worker that died, a node that went away, or an application that shut down
+  # mid-run all leave the word behind, and a page that repeated it would be
+  # telling a reader to wait for something that is not coming.
   defp run_state(%{status: "running"}, %{state: state})
        when state in ~w(available scheduled retryable),
        do: "queued"
+
+  defp run_state(%{status: "running"}, nil), do: "no worker"
+
+  defp run_state(%{status: "running"}, %{state: state})
+       when state in ~w(cancelled discarded completed),
+       do: "no worker"
 
   defp run_state(run, _not_yet_started), do: run.status
 

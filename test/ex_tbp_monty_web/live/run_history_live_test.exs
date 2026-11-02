@@ -30,6 +30,16 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     :ok
   end
 
+  # What the worker publishes: the run's id says which page it is for, so a
+  # page showing one run ignores another's steps.
+  defp broadcast(run_id, event) do
+    Phoenix.PubSub.broadcast(
+      ExTbpMonty.PubSub,
+      Monty.Studio.Jobs.Run.topic(run_id),
+      {:studio, run_id, event}
+    )
+  end
+
   setup do
     # Counting runs is what most of this module asserts, and the table survives
     # between local runs: a page that says "1–25 of 27" is worth testing on a
@@ -389,16 +399,53 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       {:ok, _closed} = RunHistory.finish(run, %{"steps" => 3})
 
-      Phoenix.PubSub.broadcast(
-        ExTbpMonty.PubSub,
-        Monty.Studio.Jobs.Run.topic(run.id),
-        {:finished, %{}}
-      )
+      broadcast(run.id, {:finished, %{}})
 
       assert render(view) =~ "finished"
       assert has_element?(view, "#delete-#{run.id}")
       refute has_element?(view, "#stop-#{run.id}")
       refute has_element?(view, "#run-waiting")
+    end
+
+    test "a step the worker publishes lands on the page", %{conn: conn, running: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      # The step is written the way the worker writes it, so the page is
+      # re-reading a record it would really meet.
+      info = %{
+        step: 0,
+        duration_us: 1_000,
+        percept_ids: ["patch"],
+        inputs: %{"learning_module_0" => 1},
+        votes: %{sent: 1, used: 1},
+        goals: 1,
+        actions: []
+      }
+
+      entry = Monty.Studio.RunLog.entry(info)
+      moment = Monty.Studio.RunLog.moment(info, %{})
+      {:ok, _written} = RunHistory.record_step(run, entry, moment)
+
+      broadcast(run.id, {:step, %{line: "step 0", step: 0, frames: [], episode: 0, beliefs: %{}}})
+
+      assert has_element?(view, "#log-0")
+      assert view |> element("#run-progress") |> render() =~ "step 1 / 3"
+    end
+
+    test "says no worker is running it when the record outlives its job", %{conn: conn} do
+      # A worker that is cancelled leaves a record that still says `running`.
+      # The page must not repeat the word: nothing is coming.
+      {:ok, abandoned} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 3,
+          config: %{}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{abandoned.id}")
+
+      assert view |> element("#run-status") |> render() =~ "no worker"
     end
   end
 
