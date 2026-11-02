@@ -30,6 +30,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     Jobs,
     LogFilter,
     Logging,
+    Panel,
     Replay,
     RunHistory,
     RunLog,
@@ -269,37 +270,17 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         </p>
       </header>
 
+      <%!-- What Monty's own configuration panel shows about a run, in the same
+      words: the modules, the memory it starts from, the seed it runs under, and
+      the step limits its termination names. A page that kept these in a YAML
+      nobody reads would be asking a reader to trust it — and the run page shows
+      the same sentences from the record, so what was promised and what was done
+      are written once. --%>
       <dl class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <ExTbpMontyWeb.StudioComponents.fact
-          label="sensors"
-          value={sensor_summary(@opened.setup)}
-        />
-        <ExTbpMontyWeb.StudioComponents.fact
-          label="learning modules"
-          value={learning_module_summary(@opened.setup)}
-        />
-        <ExTbpMontyWeb.StudioComponents.fact label="epochs" value={epochs(@opened.setup)} />
-        <ExTbpMontyWeb.StudioComponents.fact label="ported here" value={ported(@opened.setup)} />
-        <%!-- What Monty's own configuration panel shows about a run, in the
-        same words: the memory it starts from, the seed it runs under, and the
-        step limits its termination names. A page that kept these in a YAML
-        nobody reads would be asking a reader to trust it. --%>
-        <ExTbpMontyWeb.StudioComponents.fact
-          label="model"
-          value={model_summary(@opened.setup)}
-        />
-        <ExTbpMontyWeb.StudioComponents.fact label="seed" value={to_string(@seed)} />
-        <ExTbpMontyWeb.StudioComponents.fact
-          label="training · evaluation"
-          value={phases(@opened.setup)}
-        />
-        <ExTbpMontyWeb.StudioComponents.fact
-          label="episodes, as the config runs them"
-          value={episodes_planned(@opened.setup)}
-        />
-        <ExTbpMontyWeb.StudioComponents.fact
-          label="steps, as the config limits them"
-          value={budget(@opened.setup)}
+          :for={{label, value} <- Panel.facts(@opened.setup, @seed)}
+          label={label}
+          value={value}
         />
       </dl>
 
@@ -1408,11 +1389,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp missing(nil), do: []
   defp missing(opened), do: needs(opened) |> Enum.reject(& &1.present?)
 
-  defp sensor_summary(setup), do: Enum.map_join(setup.sensors, ", ", & &1.id)
-
-  defp learning_module_summary(setup),
-    do: Enum.map_join(setup.learning_modules, ", ", & &1.id)
-
   defp with_seed(%{setup: setup} = opened, seed),
     do: %{opened | setup: Setup.with_seed(setup, seed)}
 
@@ -1424,70 +1400,4 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   defp with_chosen_seed(socket, _value), do: socket
-
-  defp epochs(setup), do: "train #{setup.epochs.train} · eval #{setup.epochs.eval}"
-
-  defp ported(setup) do
-    %{implemented: implemented, total: total} = Setup.ported(setup)
-    "#{implemented}/#{total}"
-  end
-
-  # The memory a run starts from, named the way Monty's own panel names it: the
-  # release's directory, not the path to it. An experiment that trains instead
-  # of loading says so, because that is a different run.
-  defp model_summary(%{model_name_or_path: nil}), do: "trained here"
-
-  defp model_summary(%{model_name_or_path: path}) do
-    path
-    |> to_string()
-    |> Path.split()
-    |> Enum.reverse()
-    |> Enum.reject(&(&1 in ["pretrained", ""]))
-    |> case do
-      [name | _rest] -> name
-      [] -> "trained here"
-    end
-  end
-
-  # Monty's panel says Training and Evaluation separately, because an experiment
-  # can do one without the other. The port reads the config's own two switches:
-  # `n_train_epochs` is not the question "does this train" — the config that
-  # announces three train epochs runs none.
-  defp phases(setup) do
-    "train #{yes_no(Setup.do_train(setup))} · eval #{yes_no(Setup.do_eval(setup))}"
-  end
-
-  defp yes_no(true), do: "yes"
-  defp yes_no(_off), do: "no"
-
-  # Every object, in every epoch the config runs: "30 train · 140 eval". What
-  # "Run it" promises before it is pressed.
-  defp episodes_planned(setup) do
-    objects = length(Setup.objects(setup))
-
-    case Setup.epoch_plan(setup) do
-      [] -> "none: the config switches both phases off"
-      plan -> Enum.map_join(plan, " · ", fn {mode, epochs} -> "#{objects * epochs} #{mode}" end)
-    end
-  end
-
-  # What the config's termination allows: the exploration allowance and the two
-  # minimums from `/monty`, and the ceilings the `termination` group names. Each
-  # is the experiment's, not a page's.
-  defp budget(%{termination: termination, monty_args: args}) do
-    [
-      {"explore", Map.get(args, "num_exploratory_steps")},
-      {"min eval", Map.get(args, "min_eval_steps")},
-      {"min train", Map.get(args, "min_train_steps")},
-      {"max eval", Map.get(termination, :max_eval_steps)},
-      {"max train", Map.get(termination, :max_train_steps)},
-      {"total", Map.get(termination, :max_total_steps)}
-    ]
-    |> Enum.reject(fn {_name, limit} -> is_nil(limit) end)
-    |> Enum.map_join(" · ", fn {name, limit} -> "#{name} #{limit}" end)
-    |> case do
-      "" -> "not named by the config"
-      named -> named
-    end
-  end
 end

@@ -14,7 +14,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   use ExTbpMontyWeb, :live_view
 
   alias ExTbpMontyWeb.RunHistoryLive.Selection
-  alias Monty.Studio.{Artifacts, Duration, Failure, Jobs, Json, Replay, RunHistory, RunLog}
+
+  alias Monty.Studio.{
+    Artifacts,
+    Duration,
+    Failure,
+    Jobs,
+    Json,
+    Panel,
+    Replay,
+    RunHistory,
+    RunLog,
+    Setup
+  }
+
   alias Monty.Studio.Jobs.Reaper
   alias Monty.Studio.Replay.Chart
 
@@ -166,18 +179,32 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # A run has at most one unfinished job, and the latest one is the interesting one.
   defp where_each_run_is(runs), do: Jobs.by_run(Enum.map(runs, & &1.id))
 
+  # What a run says about itself and does not change while it runs: the files it
+  # wrote, and where it is in the queue.
+  defp put_run(socket, run) do
+    assign(socket,
+      run: run,
+      files: Artifacts.files(run.id),
+      queue: where_each_run_is([run])
+    )
+  end
+
+  # Read once, when the run is opened: a record's config and seed are written
+  # when it starts and never change, and reading them back costs a setup.
+  defp put_configuration(socket, run), do: assign(socket, configuration: configuration(run))
+
   defp assign_run(%{"id" => id}, socket) do
     case RunHistory.head(id) do
       nil ->
         {:noreply,
-         assign(socket, run: nil, moment: nil) |> put_flash(:error, "That run is gone.")}
+         assign(socket, run: nil, moment: nil, configuration: [])
+         |> put_flash(:error, "That run is gone.")}
 
       run ->
         {:noreply,
          socket
-         |> assign(run: run)
-         |> assign(files: Artifacts.files(run.id))
-         |> assign(queue: where_each_run_is([run]))
+         |> put_run(run)
+         |> put_configuration(run)
          |> follow(run)
          |> stream(:log, run.log, reset: true)
          |> assign(logged: length(run.log))
@@ -218,7 +245,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
       run ->
         socket
-        |> assign(run: run, files: Artifacts.files(run.id), queue: where_each_run_is([run]))
+        |> put_run(run)
         |> append_log(run)
         |> assign_replay(run, socket.assigns[:step])
     end
@@ -858,6 +885,26 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       </section>
 
       <section :if={@run} class="space-y-1">
+        <h2 class="text-sm font-medium">Configuration</h2>
+        <%!-- The configuration this run was started with, in the words the
+        experiment page promised it in: read back from the record rather than
+        from whatever the experiment says today, so a run of a config that has
+        since changed still reads as the run it was. --%>
+        <dl
+          id="run-configuration"
+          class="grid gap-2 rounded-box border border-base-300 bg-base-100 p-2 text-xs sm:grid-cols-2 lg:grid-cols-3"
+        >
+          <div :for={{label, value} <- @configuration}>
+            <dt class="text-base-content/60">{label}</dt>
+            <dd class="font-mono break-words">{value}</dd>
+          </div>
+        </dl>
+        <p :if={@configuration == []} class="text-xs text-base-content/60">
+          This record kept no config, so there is nothing to read back.
+        </p>
+      </section>
+
+      <section :if={@run} class="space-y-1">
         <h2 class="text-sm font-medium">Config snapshot</h2>
         <pre
           id="run-config"
@@ -1228,6 +1275,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     |> Enum.sort_by(fn {key, _value} -> key end)
     |> Enum.map(fn {key, value} -> {key, format(value)} end)
   end
+
+  # The config the run was started with, read back from its own snapshot: the
+  # same sentences the experiment page promised before it was run, and the seed
+  # the record kept rather than the one the config names. A record whose config
+  # would not read back says nothing instead of guessing.
+  defp configuration(%{config: config} = run) when is_map(config) and config != %{} do
+    config
+    |> Setup.new(name: run.experiment)
+    |> Panel.facts(run.seed)
+  rescue
+    _unreadable -> []
+  end
+
+  defp configuration(_run), do: []
 
   defp summary(%{summary: summary}) when summary in [%{}, nil], do: []
 

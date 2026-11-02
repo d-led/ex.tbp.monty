@@ -466,6 +466,33 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert has_element?(view, "#log-0-1")
     end
 
+    # What the run was started with, read back from its own record: the same
+    # sentences the experiment page promises before a run, so that what was
+    # promised and what was done are the same words — and the seed the record
+    # kept, not the one the config names.
+    test "shows the configuration the record kept, not the experiment's today", %{conn: conn} do
+      {:ok, config} = Monty.Config.Composer.compose("base_config_10distinctobj_dist_agent")
+
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "base_config_10distinctobj_dist_agent",
+          source: "monty",
+          steps: 400,
+          seed: 7,
+          config: config
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      facts = view |> element("#run-configuration") |> render()
+
+      assert facts =~ "episodes, as the config runs them"
+      assert facts =~ "140 eval"
+      assert facts =~ "training · evaluation"
+      assert facts =~ "train no · eval yes"
+      assert facts =~ ~r{seed</dt>\s*<dd[^>]*>7</dd>}
+    end
+
     # A step's clock is the reader's, and only the browser knows their zone. So
     # the page has to hand it the instant and let the hook rewrite the words;
     # printing the server's own clock would show a container's UTC to someone
