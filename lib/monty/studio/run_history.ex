@@ -294,14 +294,19 @@ defmodule Monty.Studio.RunHistory do
     |> Repo.all()
   end
 
-  # A run writes its record on every step, so silence is evidence. Five minutes
-  # without one is a step stuck in the simulator, or a worker waiting on
-  # something that will never answer — not death, which is what
-  # `Monty.Studio.Jobs.Reaper` settles by looking for a process, and not nothing
-  # either, which is why it gets a word of its own. The number is a judgement:
-  # steps on a loaded machine are tens of seconds, so five minutes is an order of
-  # magnitude past slow.
-  @stall_seconds 300
+  # A run writes its record on every step, so silence is evidence. How much
+  # silence is a judgement, and one fixed number cannot make it: steps on a
+  # loaded machine were measured at 35 s each, so a flat minute would call a
+  # working run stuck, and five minutes is long enough that a person has given
+  # up watching before the page agrees with them. Three of the run's own steps,
+  # and never less than a minute — measured from its own pace, so a slow run is
+  # given the time its slow steps need.
+  #
+  # Death is not this: `Monty.Studio.Jobs.Reaper` settles that by looking for a
+  # process. And nothing here cancels a run. A quiet record is the page saying so
+  # and the run left to finish; whoever owns the process decides.
+  @stall_floor_seconds 60
+  @stall_steps 3
 
   @doc """
   How long this run's record has been unchanged, in seconds.
@@ -318,16 +323,27 @@ defmodule Monty.Studio.RunHistory do
   Is this run claiming to be running with nothing to show for it?
 
   Silence is only a fault while a run says it is going: a queued run has no steps
-  yet by definition, and a finished one has nothing left to say.
+  yet by definition, and a finished one has nothing left to say. A run whose own
+  steps have been taking a while is allowed three of them before it is doubted.
   """
   @spec stalled?(Run.t(), DateTime.t()) :: boolean()
   def stalled?(run, now \\ DateTime.utc_now())
 
   def stalled?(%Run{status: "running"} = run, now) do
-    quiet_for(run, now) > @stall_seconds
+    quiet_for(run, now) > stall_after(run)
   end
 
   def stalled?(%Run{}, _now), do: false
+
+  # Three of its own steps, at the pace it has managed so far — and a minute
+  # before any step has landed to measure.
+  defp stall_after(%Run{steps: steps, started_at: %DateTime{} = at} = run)
+       when steps > 0 do
+    pace_ms = DateTime.diff(run.updated_at, at, :millisecond) / steps
+    max(@stall_floor_seconds, ceil(@stall_steps * pace_ms / 1_000))
+  end
+
+  defp stall_after(%Run{}), do: @stall_floor_seconds
 
   defp duration(nil, _finished_at), do: 0
   defp duration(started_at, finished_at), do: DateTime.diff(finished_at, started_at, :microsecond)

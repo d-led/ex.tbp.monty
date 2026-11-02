@@ -163,10 +163,26 @@ defmodule Monty.Studio.RunHistoryTest do
       refute RunHistory.stalled?(run)
     end
 
-    test "is stalled once nothing has been recorded for longer than a slow step" do
+    test "is stalled once nothing has been recorded for a minute" do
       run = %Run{status: "running", updated_at: DateTime.utc_now()}
 
-      assert RunHistory.stalled?(run, DateTime.add(DateTime.utc_now(), 301, :second))
+      assert RunHistory.stalled?(run, DateTime.add(DateTime.utc_now(), 61, :second))
+    end
+
+    test "gives a slow run three of its own steps, not a flat minute" do
+      now = DateTime.utc_now()
+
+      # Twenty-five seconds a step so far, and quiet for 74 s: past a minute,
+      # but not yet three of its own steps.
+      run = %Run{
+        status: "running",
+        steps: 20,
+        started_at: DateTime.add(now, -574, :second),
+        updated_at: DateTime.add(now, -74, :second)
+      }
+
+      refute RunHistory.stalled?(run, now)
+      assert RunHistory.stalled?(run, DateTime.add(now, 2, :second))
     end
 
     test "says how long it has been quiet" do
