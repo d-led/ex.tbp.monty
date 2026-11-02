@@ -310,7 +310,12 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtils do
   difference they would build in between: this runs once per neighbour of every
   hypothesis, which at Monty's own hypothesis counts is millions of times a step.
   """
-  @spec custom_distance(locations(), locations(), SpatialArithmetics.vector(), number()) ::
+  @spec custom_distance(
+          SpatialArithmetics.vector(),
+          SpatialArithmetics.vector(),
+          SpatialArithmetics.vector(),
+          number()
+        ) ::
           float()
   def custom_distance([x, y, z], [sx, sy, sz], [nx, ny, nz], flatness) do
     dx = x - sx

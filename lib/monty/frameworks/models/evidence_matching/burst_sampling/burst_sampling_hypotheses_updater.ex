@@ -32,8 +32,6 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   alias Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker
   alias Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker.HypothesesSelection
 
-  alias Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.DefaultFeatureEvidenceScorer
-
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
@@ -174,11 +172,33 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
       {existing, tracker} = sample_existing(selection, hypotheses, tracker)
 
+      # What each stored node is worth decides two things in this step — where
+      # new hypotheses are put, and what each existing one earns — and it is the
+      # same comparison of the same graph and channel both times.
+      node_evidence =
+        Map.new(input_channels, fn channel ->
+          {channel,
+           HypothesesDisplacer.node_feature_evidence(
+             updater.displacer,
+             graph_id,
+             channel,
+             Map.fetch!(features, channel)
+           )}
+        end)
+
       {new_hypotheses, tracker} =
-        sample_new(updater, features, graph_id, new_per_channel, tracker)
+        sample_new(updater, features, graph_id, new_per_channel, tracker, node_evidence)
 
       {existing, prediction_error} =
-        evidence_for(existing, selection, updater, features, evidence_update_threshold, graph_id)
+        evidence_for(
+          existing,
+          selection,
+          updater,
+          features,
+          evidence_update_threshold,
+          graph_id,
+          node_evidence
+        )
 
       combined = Hypotheses.concatenate([existing, new_hypotheses])
 
@@ -194,7 +214,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     end
   end
 
-  defp evidence_for(hypotheses, selection, updater, features, threshold, graph_id) do
+  defp evidence_for(hypotheses, selection, updater, features, threshold, graph_id, node_evidence) do
     if HypothesesSelection.ids_to_retain(selection) == [] do
       {hypotheses, nil}
     else
@@ -204,7 +224,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
           features,
           threshold,
           graph_id,
-          hypotheses
+          hypotheses,
+          node_feature_evidence: node_evidence
         )
 
       {updated, telemetry.mlh_prediction_error}
@@ -271,12 +292,19 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     end
   end
 
-  defp sample_new(updater, features, graph_id, new_per_channel, tracker) do
+  defp sample_new(updater, features, graph_id, new_per_channel, tracker, node_evidence) do
     sampled =
       new_per_channel
       |> Enum.reject(fn {_channel, count} -> count == 0 end)
       |> Enum.map(fn {channel, count} ->
-        sample_from_channel(updater, Map.fetch!(features, channel), count, graph_id, channel)
+        sample_from_channel(
+          updater,
+          Map.fetch!(features, channel),
+          count,
+          graph_id,
+          channel,
+          Map.fetch!(node_evidence, channel)
+        )
       end)
 
     case sampled do
@@ -289,11 +317,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     end
   end
 
-  defp sample_from_channel(updater, features, count, graph_id, input_channel) do
+  defp sample_from_channel(updater, features, count, graph_id, input_channel, node_evidence) do
     per_node = hyps_per_node(updater, features)
-
-    node_evidence =
-      DefaultFeatureEvidenceScorer.evidence(updater.scorer, graph_id, input_channel, features)
 
     top_indices = top_indices(node_evidence, div(count, per_node))
 

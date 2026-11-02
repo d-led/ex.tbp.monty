@@ -98,13 +98,22 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
   Hypotheses below `evidence_update_threshold` keep their evidence and gain
   nothing from this step: a cheap way to keep the space bounded without throwing
   the alternatives away.
+
+  Options:
+
+    * `:node_feature_evidence` — what each stored node is worth for one channel,
+      from `node_feature_evidence/4`. The same comparison decides which nodes
+      burst sampling draws from and what a hypothesis earns at a node, so the
+      sampler hands its answer over rather than having it computed twice per
+      step. Absent, it is computed here.
   """
   @spec compute_evidence(
           t(),
           %{optional(String.t()) => map()},
           float(),
           String.t(),
-          Hypotheses.t()
+          Hypotheses.t(),
+          keyword()
         ) ::
           {Hypotheses.t(), HypothesisDisplacerTelemetry.t()}
   def compute_evidence(
@@ -112,7 +121,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
         features,
         evidence_update_threshold,
         graph_id,
-        hypotheses
+        hypotheses,
+        options \\ []
       ) do
     to_test =
       for {evidence, index} <- Enum.with_index(hypotheses.evidence),
@@ -132,7 +142,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
           )
 
         to_add =
-          evidence_to_add(displacer, features, graph_id, input_channels, to_test, hypotheses)
+          evidence_to_add(
+            displacer,
+            features,
+            graph_id,
+            input_channels,
+            to_test,
+            hypotheses,
+            Keyword.get(options, :node_feature_evidence, %{})
+          )
 
         mlh_evidence = Enum.at(to_add, argmax(hypotheses.evidence))
         channels = length(input_channels)
@@ -150,7 +168,33 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
     end
   end
 
-  defp evidence_to_add(displacer, features, graph_id, input_channels, to_test, hypotheses) do
+  @doc """
+  What each stored node is worth against the sensed features, for one channel.
+
+  One comparison per node, in the nodes' own order: burst sampling draws from it
+  when it decides where to put new hypotheses, and the evidence kernel reads it
+  when it decides what a hypothesis earns at a node. Both ask the same question
+  of the same graph and channel in the same step, so it is answered once.
+  """
+  @spec node_feature_evidence(t(), String.t(), String.t(), map()) :: [number()]
+  def node_feature_evidence(%__MODULE__{} = displacer, graph_id, input_channel, channel_features) do
+    DefaultFeatureEvidenceScorer.evidence(
+      displacer.feature_evidence_scorer,
+      graph_id,
+      input_channel,
+      channel_features
+    )
+  end
+
+  defp evidence_to_add(
+         displacer,
+         features,
+         graph_id,
+         input_channels,
+         to_test,
+         hypotheses,
+         given_node_evidence
+       ) do
     # Hypotheses are reached by position, so they are turned into tuples once:
     # `Enum.at/2` on a list walks to the index, and asking that of every index
     # is a quadratic pass over the whole hypothesis space, every step.
@@ -168,6 +212,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
                                                                                       totals ->
       channel_features = Map.fetch!(features, channel)
 
+      node_feature_evidence =
+        Map.get_lazy(given_node_evidence, channel, fn ->
+          node_feature_evidence(displacer, graph_id, channel, channel_features)
+        end)
+
       evidence =
         evidence_for_new_locations(
           displacer,
@@ -175,7 +224,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
           channel,
           search_locations,
           tested_poses,
-          channel_features
+          channel_features,
+          node_feature_evidence
         )
         |> List.to_tuple()
 
@@ -199,7 +249,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
          input_channel,
          search_locations,
          poses,
-         channel_features
+         channel_features,
+         node_feature_evidence
        ) do
     graph = GraphMemory.get_graph(displacer.graph_memory, graph_id, input_channel)
 
@@ -216,22 +267,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
       )
 
     # Only the normal and the first curvature direction are ever read off the
-    # rotated pose, so those are the two that get turned.
-    {normals, curvatures} =
-      poses
-      |> Enum.map(&rotate_normal_and_curvature(channel_features["pose_vectors"], &1))
-      |> Enum.unzip()
-
+    # rotated pose, so turning one and judging that hypothesis' neighbours is one
+    # pass: the turned directions are not three more hypothesis-sized lists.
+    channel_feature_vectors = channel_features["pose_vectors"]
     curvature = GraphMatchingUtils.relevant_curvature(channel_features)
 
-    node_feature_evidence =
-      DefaultFeatureEvidenceScorer.evidence(
-        displacer.feature_evidence_scorer,
-        graph_id,
-        input_channel,
-        channel_features
-      )
-      |> List.to_tuple()
+    node_feature_evidence = List.to_tuple(node_feature_evidence)
 
     # Every hypothesis reads the pose features of its neighbours, so they are
     # read once for the whole graph rather than once per hypothesis.
@@ -249,8 +290,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
       max_match_distance: displacer.max_match_distance
     }
 
-    Enum.zip_with([normals, curvatures, nearest, search_locations], fn one ->
-      [normal, curvature_1, node_ids, search_location] = one
+    Enum.zip_with([poses, nearest, search_locations], fn one ->
+      [pose, node_ids, search_location] = one
+      {normal, curvature_1} = rotate_normal_and_curvature(channel_feature_vectors, pose)
       best_of_neighbours(node_ids, search_location, normal, curvature_1, comparison)
     end)
   end

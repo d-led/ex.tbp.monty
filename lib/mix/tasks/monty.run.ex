@@ -237,25 +237,15 @@ defmodule Mix.Tasks.Monty.Run do
       "#{name} (#{opened.source}) — #{class(setup.experiment_class)} on #{class(setup.monty_class)}"
     )
 
-    Mix.shell().info(
-      "  sensors: #{Enum.map_join(setup.sensors, ", ", & &1.id)} → " <>
-        "learning modules: #{Enum.map_join(setup.learning_modules, ", ", & &1.id)}"
-    )
-
-    Mix.shell().info("  epochs: #{epochs_line(setup)} · seed #{setup.seed}")
+    # The list the studio's page shows before it runs the same config, read from
+    # the same function: a terminal and a page that phrase the run separately are
+    # two promises, and only one of them can be kept.
+    for {label, value} <- Monty.Studio.Panel.facts(setup) do
+      Mix.shell().info("  #{label}: #{value}")
+    end
 
     for finding <- setup.findings, finding.level != :info do
       Mix.shell().info("  " <> Monty.Studio.Finding.describe(finding))
-    end
-  end
-
-  # The epochs a run of this config steps, in Monty's order — train first when
-  # the config trains at all. `n_train_epochs` is not the answer: a config can
-  # name three and switch training off.
-  defp epochs_line(setup) do
-    case Monty.Studio.Setup.epoch_plan(setup) do
-      [] -> "none (the config switches both phases off)"
-      plan -> Enum.map_join(plan, " then ", fn {mode, epochs} -> "#{epochs} #{mode}" end)
     end
   end
 

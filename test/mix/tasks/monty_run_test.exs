@@ -32,6 +32,8 @@ defmodule Mix.Tasks.Monty.RunTest do
 
       assert output =~ "base_config_10distinctobj_dist_agent"
       assert output =~ "sensors: patch, view_finder"
+      # The whole experiment, in the words the studio page promises it in.
+      assert output =~ "episodes, as the config runs them: 140 eval"
       # The view finder measures the scene and sends no percept, so the step log
       # names only the sensor that made one.
       assert output =~ "step 0 · percepts patch ·"
@@ -59,7 +61,8 @@ defmodule Mix.Tasks.Monty.RunTest do
       # episodes, which is what a runner that ignored the phases used to do.
       output = run_and_capture(["tutorial/first_experiment", "--steps", "1"])
 
-      assert output =~ "epochs: 1 train"
+      assert output =~ "epochs: train 1 · eval 3"
+      assert output =~ "training · evaluation: train yes · eval no"
       refute output =~ "episode 1/3"
 
       assert [run] = RunHistory.list()
