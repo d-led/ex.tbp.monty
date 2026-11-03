@@ -51,12 +51,13 @@ CI publishes. `--arch amd64|arm64` cross-builds one platform the same way.
 | a push to any other branch | `:<branch>` — `feature/x` becomes `:feature-x` |
 | a tag `v1.2.3`             | `:v1.2.3`                                      |
 
-Every published tag carries amd64 **and** arm64. The arm64 half is compiled
-under QEMU and is the expensive part, and it is not optional either: the amd64
-release does not boot under emulation on Apple Silicon (`{failed_to_start_child,
-user,nouser}` from the kernel), so an amd64-only tag is an image an arm64 laptop
-cannot run. There are no commit-hash tags: the image carries its commit instead,
-in `priv/build_info.json`, and the footer of every page shows it.
+Every published tag carries amd64 **and** arm64, each compiled on a runner of
+its own architecture (`ubuntu-24.04`, `ubuntu-24.04-arm`), so neither half is
+emulated. Both are needed: the amd64 release does not boot under emulation on
+Apple Silicon (`{failed_to_start_child, user,nouser}` from the kernel), so an
+amd64-only tag is an image an arm64 laptop cannot run. There are no commit-hash
+tags: the image carries its commit instead, in `priv/build_info.json`, and the
+footer of every page shows it.
 
 ## What it reports about itself
 

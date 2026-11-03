@@ -13,17 +13,22 @@ name: ci
 #          held to the 85% threshold, the CRAP ranking over that total, and the
 #          parity oracles.
 #   types  dialyzer, against a PLT the cache carries between runs.
-#   image  `docker build`, Trivy on the result, a run as uid 10001, then the
-#          image is published to GHCR under the name of the ref it was built
-#          from: `:main` (and `:latest`) for main, `:<branch>` for any other
-#          branch, `:v1.2.3` for a release tag. Never a commit hash — the image
-#          already carries its commit in `priv/build_info.json`, which the
-#          footer shows. It waits for the three gates above (`needs`), so
-#          nothing is published from a commit that failed them.
+#   image  one build per architecture, each on a runner of its own
+#          architecture — amd64 also runs Trivy on the result and starts it as
+#          uid 10001 — and a last job that makes the tags from the two digests:
+#          `:main` (and `:latest`) for main, `:<branch>` for any other branch,
+#          `:v1.2.3` for a release tag. Never a commit hash — the image already
+#          carries its commit in `priv/build_info.json`, which the footer shows.
+#          They wait for the three gates above (`needs`), so nothing is
+#          published from a commit that failed them.
 #
-# The arm64 half is by far the expensive part — compiled under QEMU — so a
-# branch publishes amd64 only, and the amd64 + arm64 index is what a release
-# tag, or a dispatch that asks for it, pays for:
+# Why two builds rather than one: compiled under QEMU on an x86 runner, the
+# arm64 half took twenty-two minutes where the amd64 half took five, for the
+# same work. Each pushes its manifest by digest, and `image index` makes the
+# tags from the two.
+#
+# A dispatch publishes on demand, for a commit that changed nothing the
+# triggers below watch:
 #
 #   gh workflow run ci --ref main --field image=true
 
@@ -49,7 +54,7 @@ on:
   workflow_dispatch:
     inputs:
       image:
-        description: "Also build and publish the arm64 half of the index (the expensive half)"
+        description: "Also build and publish the image, both architectures"
         type: boolean
         default: false
 
@@ -64,6 +69,17 @@ env:
   MIX_ENV: test
   ELIXIR_VERSION: "1.20.4"
   OTP_VERSION: "29.1.2"
+  # What the admin footer reports about this build. The two architectures are
+  # one release built twice, so they say the same thing about the commit they
+  # came from, and both build jobs read it from here rather than spelling it out
+  # twice.
+  IMAGE_BUILD_ARGS: |
+    VERSION=${{ github.ref_name }}
+    REVISION=${{ github.sha }}
+    CI_PROVIDER=github
+    CI_WORKFLOW=${{ github.workflow }}
+    CI_RUN_NUMBER=${{ github.run_number }}
+    CI_RUN_URL=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
   # No Monty checkout anywhere in this workflow. What the gates need from Monty
   # is data, and the data is checked in: `priv/monty/conf` and
   # `priv/monty/snapshots` (which revision they came from is in
@@ -327,8 +343,8 @@ jobs:
       - run: mix deps.get
       - run: mix dialyzer
 
-  image:
-    name: image, scan, non-root, publish
+  image-amd64:
+    name: image amd64, scan, non-root
     # The point of a gate is that the thing behind it cannot be reached before
     # it opens: the image is built, scanned and pushed only for a commit that
     # passed static analysis, every partition of the suite, the types, and the
@@ -336,12 +352,16 @@ jobs:
     # nothing.
     needs: [lint, test, types, report]
     runs-on: ubuntu-24.04
-    # The arm64 half is built under QEMU, which is the slow part.
-    timeout-minutes: 60
+    timeout-minutes: 30
     if: github.event_name == 'push' || inputs.image
     permissions:
       contents: read
       packages: write
+    # This job's half of the index: the digest `image-index` merges, and the
+    # name it tags.
+    outputs:
+      image: ${{ steps.image.outputs.ref }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -354,64 +374,36 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: image
-        name: Work out the tag
+        name: The image name
         run: |
           set -euo pipefail
-          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          # Where this job pushes its manifest. No tag: a tag names one
+          # architecture, and `image-index` is what turns the two digests into
+          # the tags a deployment follows.
+          echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
-          # Branch or tag name, and nothing else: `:main` moves with the
-          # branch, `:v1.2.3` is the release. A commit tag would leave a new
-          # image behind on every push and still not say which branch it came
-          # from, so there are none — the commit is in the footer instead.
-          tag=$(printf '%s' "${GITHUB_REF_NAME}" \
-            | tr '[:upper:]' '[:lower:]' \
-            | sed 's/[^a-z0-9._-]/-/g')
-
-          echo "ref=${image}:${tag}" >> "$GITHUB_OUTPUT"
-          {
-            echo "tags<<TAGS"
-            echo "${image}:${tag}"
-            # main also answers to `latest`, so a deployment can follow either
-            # the branch's name or the usual one.
-            if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
-              echo "${image}:latest"
-            fi
-            echo "TAGS"
-          } >> "$GITHUB_OUTPUT"
-
-          # Both architectures, every time. The index is what an arm64 machine
-          # pulls natively, and it is not optional there: the amd64 release does
-          # not boot under emulation on Apple Silicon (`{failed_to_start_child,
-          # user,nouser}` from the kernel), so an amd64-only tag is an image an
-          # arm64 laptop cannot run at all.
-          echo "platforms=linux/amd64,linux/arm64" >> "$GITHUB_OUTPUT"
-
-      # Built for the runner's own architecture so Trivy and the uid check read
-      # a real image rather than a manifest list — and so those two checks stay
-      # fast. This is the amd64 half of what is published below.
-      - name: Build linux/amd64 for the checks
+      # Pushed by digest rather than loaded: the two checks below read it back
+      # from the registry by that digest, which is also what the index merges —
+      # so a manifest that fails either of them never stands behind a tag.
+      - id: build
+        name: Build linux/amd64
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64
-          load: true
-          push: false
-          tags: ${{ steps.image.outputs.ref }}
-          build-args: |
-            # The ref, which is also the image tag: `main`, `feature-x`, `v1.2.3`.
-            VERSION=${{ github.ref_name }}
-            REVISION=${{ github.sha }}
-            CI_PROVIDER=github
-            CI_WORKFLOW=${{ github.workflow }}
-            CI_RUN_NUMBER=${{ github.run_number }}
-            CI_RUN_URL=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          cache-from: type=gha,scope=image
-          cache-to: type=gha,mode=max,scope=image
+          outputs: type=image,name=${{ steps.image.outputs.ref }},push-by-digest=true,name-canonical=true,push=true
+          # The commit, which the footer shows; `env.IMAGE_BUILD_ARGS` for both
+          # architectures, so the two say the same thing.
+          build-args: ${{ env.IMAGE_BUILD_ARGS }}
+          # A scope per architecture: the two builds share one cache storage, so
+          # one scope would have them evicting each other's layers.
+          cache-from: type=gha,scope=image-amd64
+          cache-to: type=gha,mode=max,scope=image-amd64
 
       - name: Scan the image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ steps.image.outputs.ref }}
+          image-ref: ${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}
           format: table
           # Only what this project can act on: a fixable OS package or library.
           ignore-unfixed: true
@@ -424,7 +416,7 @@ jobs:
       - name: Run as an unprivileged user
         run: |
           set -euo pipefail
-          image="${{ steps.image.outputs.ref }}"
+          image="${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}"
           uid=$(docker run --rm --entrypoint /usr/bin/id "$image" -u)
           echo "image runs as uid ${uid}"
           test "${uid}" -ne 0
@@ -451,41 +443,122 @@ jobs:
             '
           docker volume rm monty-contract >/dev/null
 
-      # One image per published tag. For a release (or a dispatch) it carries
-      # both architectures: an Apple Silicon laptop or an arm64 VM pulls a
-      # native build, x86 servers pull theirs. arm64 is compiled here, under
-      # QEMU, which is why only that path pays for it.
-      - name: Set up QEMU for the arm64 build
-        if: steps.image.outputs.platforms != 'linux/amd64'
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
-        with:
-          platforms: arm64
+  # The other half, on an arm64 runner: `ubuntu-24.04-arm` is an arm64 machine,
+  # so this compiles arm64 natively, which is the same work the amd64 job above
+  # does in the same time. Nothing is checked here — Trivy and the uid contract
+  # say the same thing about either architecture, so the amd64 job pays for them
+  # once.
+  image-arm64:
+    name: image arm64
+    needs: [lint, test, types, report]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    if: github.event_name == 'push' || inputs.image
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.ref }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - name: Publish ${{ steps.image.outputs.platforms }}
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: image
+        name: The image name
+        run: |
+          set -euo pipefail
+          echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - id: build
+        name: Build linux/arm64
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          platforms: ${{ steps.image.outputs.platforms }}
-          push: true
-          tags: ${{ steps.image.outputs.tags }}
-          build-args: |
-            VERSION=${{ github.ref_name }}
-            REVISION=${{ github.sha }}
-            CI_PROVIDER=github
-            CI_WORKFLOW=${{ github.workflow }}
-            CI_RUN_NUMBER=${{ github.run_number }}
-            CI_RUN_URL=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          cache-from: type=gha,scope=image
-          cache-to: type=gha,scope=image
+          platforms: linux/arm64
+          outputs: type=image,name=${{ steps.image.outputs.ref }},push-by-digest=true,name-canonical=true,push=true
+          build-args: ${{ env.IMAGE_BUILD_ARGS }}
+          cache-from: type=gha,scope=image-arm64
+          cache-to: type=gha,mode=max,scope=image-arm64
+
+  # The tags, made from the two manifests the builds pushed. `imagetools create`
+  # only writes a list that names them, so the two architectures' bytes are
+  # uploaded once, by the jobs that built them.
+  #
+  # Both architectures, every time. The index is what an arm64 machine pulls
+  # natively, and it is not optional there: the amd64 release does not boot under
+  # emulation on Apple Silicon (`{failed_to_start_child,user,nouser}` from the
+  # kernel), so an amd64-only tag is an image an arm64 laptop cannot run at all.
+  image-index:
+    name: image index
+    needs: [image-amd64, image-arm64]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    if: github.event_name == 'push' || inputs.image
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: tag
+        name: Work out the tag
+        run: |
+          set -euo pipefail
+          image="${{ needs.image-amd64.outputs.image }}"
+
+          # Branch or tag name, and nothing else: `:main` moves with the
+          # branch, `:v1.2.3` is the release. A commit tag would leave a new
+          # image behind on every push and still not say which branch it came
+          # from, so there are none — the commit is in the footer instead.
+          tag=$(printf '%s' "${GITHUB_REF_NAME}" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed 's/[^a-z0-9._-]/-/g')
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "ref=${image}:${tag}" >> "$GITHUB_OUTPUT"
+          # main also answers to `latest`, so a deployment can follow either the
+          # branch's name or the usual one.
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            echo "latest=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish the index
+        run: |
+          set -euo pipefail
+          image="${{ needs.image-amd64.outputs.image }}"
+          tags=("${image}:${{ steps.tag.outputs.tag }}")
+          if [ "${{ steps.tag.outputs.latest }}" = "1" ]; then
+            tags+=("${image}:latest")
+          fi
+
+          args=()
+          for tag in "${tags[@]}"; do args+=(--tag "$tag"); done
+          docker buildx imagetools create "${args[@]}" \
+            "${image}@${{ needs.image-amd64.outputs.digest }}" \
+            "${image}@${{ needs.image-arm64.outputs.digest }}"
 
       # "Multi-arch" is checked rather than claimed: a release publishes an
       # index, and the one thing worth proving about it is that both
       # architectures are in it — a tag that quietly carried one platform
       # would only surface on the machine that pulled it.
       - name: The published index carries both architectures
-        if: steps.image.outputs.platforms != 'linux/amd64'
         run: |
           set -euo pipefail
-          docker buildx imagetools inspect "${{ steps.image.outputs.ref }}" | tee /tmp/index.txt
+          docker buildx imagetools inspect "${{ steps.tag.outputs.ref }}" | tee /tmp/index.txt
           grep -q 'linux/amd64' /tmp/index.txt
           grep -q 'linux/arm64' /tmp/index.txt

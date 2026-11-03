@@ -357,12 +357,15 @@ through: the commit is inside the image — `mix build.info` burns it into
 `priv/build_info.json` — and the footer of every page shows it, with the pipeline
 run that produced it linked beside it.
 
-A branch publishes amd64 only. arm64 is compiled under QEMU and is most of the
-job, so it is what a release tag — or `gh workflow run ci --ref main --field
-image=true` — pays for, and only then does the tag carry both architectures.
+A branch publishes amd64 **and** arm64, like every other ref: two jobs build the
+two manifests, each on a runner of its own architecture (`ubuntu-24.04` and
+`ubuntu-24.04-arm`), and a third turns the two digests into the tag. Emulating
+the arm64 half instead made it twenty-two minutes of a thirty-minute run, for
+the work the amd64 half did in five.
 
-The publishing job waits for lint, test and types, scans the result with Trivy,
-and starts it as uid 10001 before pushing. The scan fails on any _fixable_ HIGH
+The building jobs wait for lint, test and types; the amd64 one then scans the
+result with Trivy and starts it as uid 10001, and no tag exists until both
+architectures' jobs have passed. The scan fails on any _fixable_ HIGH
 or CRITICAL finding; a finding this repository cannot fix — one vendored inside a
 third-party wheel, say — is written down in
 [`.trivyignore.yaml`](../.trivyignore.yaml) with the reason and the date the
