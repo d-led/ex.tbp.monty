@@ -926,6 +926,9 @@ def _json_default(value):
     Handed to `json.dumps` rather than walked beforehand: `ndarray.tolist()` is
     where the conversion happens (in C, once per image) instead of a
     walk over fifty thousand Python objects per step.
+
+    Only the spec that comes *in* takes this path: an answer's arrays travel as
+    bytes (`_answer`), never as JSON.
     """
     if isinstance(value, np.ndarray):
         return value.tolist()
@@ -934,6 +937,56 @@ def _json_default(value):
     if isinstance(value, np.floating):
         return float(value)
     raise TypeError(f"{type(value).__name__} does not cross as JSON")
+
+
+_ARRAY = "__array__"
+
+
+def _answer(payload) -> bytes:
+    """An answer, as the BEAM reads it: a JSON header, then the arrays' bytes.
+
+    Everything in an answer is small enough for JSON except what the sensors
+    saw: two 64×64 images and their semantic mask. Written out as nested lists
+    they were a megabyte of decimal text a step — built by `json.dumps` in
+    Python and parsed again by `Jason` in Elixir, to arrive at the same numbers.
+
+    So each array is replaced by its index and its bytes follow the header, in
+    the order the header names them. `Elixir.Monty.Simulators.Mujoco.Answer`
+    puts them back; nothing downstream of it sees a difference.
+    """
+    arrays: list[np.ndarray] = []
+
+    def replaced(value):
+        if isinstance(value, np.ndarray):
+            arrays.append(value)
+            return {_ARRAY: len(arrays) - 1}
+        if isinstance(value, dict):
+            return {key: replaced(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [replaced(item) for item in value]
+        if isinstance(value, np.integer):
+            return int(value)
+        if isinstance(value, np.floating):
+            return float(value)
+        if isinstance(value, np.bool_):
+            return bool(value)
+        return value
+
+    body = replaced(payload)
+    header = json.dumps(
+        {
+            "payload": body,
+            "arrays": [
+                {"dtype": array.dtype.str, "shape": list(array.shape)}
+                for array in arrays
+            ],
+        }
+    ).encode("utf-8")
+
+    # C order, which is the order `tolist()` would have nested them in.
+    blob = b"".join(np.ascontiguousarray(array).tobytes() for array in arrays)
+
+    return header + b"\n" + blob
 
 
 # -- one thread, because a GL context is one thread's ------------------------
@@ -984,8 +1037,9 @@ class World:
     """One scene, built from the JSON an experiment's config names.
 
     `spec` is the scene: the path the meshes load from, the agents that live in
-    it and the objects that are in it. `reset/0` and `step/1` answer JSON, which
-    is what the BEAM reads back.
+    it and the objects that are in it. `reset/0` and `step/1` answer a JSON
+    header with the arrays' bytes behind it (`_answer`), which is what the BEAM
+    reads back.
     """
 
     def __init__(self, spec) -> None:
@@ -1026,13 +1080,13 @@ class World:
 
         return simulator
 
-    def reset(self) -> str:
+    def reset(self) -> bytes:
         """Starts an episode: every agent back at its start pose."""
         return _on_one_thread(self._reset)
 
-    def _reset(self) -> str:
+    def _reset(self) -> bytes:
         observations, states = self._simulator.reset()
-        return json.dumps(
+        return _answer(
             {
                 "observations": observations,
                 "proprioceptive_state": states,
@@ -1040,24 +1094,20 @@ class World:
                 "semantic_id_to_label": {
                     obj["semantic_id"]: obj["object"] for obj in self._objects
                 },
-            },
-            default=_json_default,
+            }
         )
 
-    def step(self, actions) -> str:
+    def step(self, actions) -> bytes:
         """Takes the actions the model chose, and answers what came back."""
         return _on_one_thread(lambda: self._step(actions))
 
-    def _step(self, actions) -> str:
+    def _step(self, actions) -> bytes:
         # Monty's `ActionJSONDecoder` decoded one action, which is why the glue
         # used to decode a list one element at a time. These are our own actions,
         # so the list is decoded once.
         decoded = [Action(action) for action in json.loads(actions)]
         observations, states = self._simulator.step(decoded)
-        return json.dumps(
-            {"observations": observations, "proprioceptive_state": states},
-            default=_json_default,
-        )
+        return _answer({"observations": observations, "proprioceptive_state": states})
 
     def close(self) -> None:
         _on_one_thread(self._simulator.close)

@@ -5,8 +5,9 @@ defmodule Monty.Simulators.Mujoco.Host do
   `priv/monty_py/world.py` is the world: a scene built from a spec, the agents
   that live in it, their cameras and their actuations, written against `mujoco`
   the same way Monty's `MuJoCoSimulator` is (numpy and numpy-quaternion for the
-  arithmetic, and nothing else). It builds a world from JSON and answers JSON
-  back, and `pythonx` is the interpreter — built at compile time by
+  arithmetic, and nothing else). It builds a world from JSON and answers a JSON
+  header with the arrays' bytes behind it (`Monty.Simulators.Mujoco.Answer`),
+  and `pythonx` is the interpreter — built at compile time by
   `config/pythonx.exs`, shipped inside the release. So a run steps Monty's
   world without a Monty checkout and without installing `tbp.monty`: the code
   travels with this application instead.
@@ -25,6 +26,8 @@ defmodule Monty.Simulators.Mujoco.Host do
   """
 
   use GenServer
+
+  alias Monty.Simulators.Mujoco.Answer
 
   @name __MODULE__
 
@@ -121,7 +124,7 @@ defmodule Monty.Simulators.Mujoco.Host do
   defp boot(nil), do: evaluate(@bootstrap, %{"search_path" => Jason.encode!(directory())})
   defp boot(globals), do: {:ok, globals}
 
-  defp answer(globals), do: globals |> Map.fetch!("answer") |> Pythonx.decode() |> Jason.decode!()
+  defp answer(globals), do: globals |> Map.fetch!("answer") |> Pythonx.decode() |> Answer.decode()
 
   defp evaluate(code, variables) do
     {_result, globals} = Pythonx.eval(code, variables)
