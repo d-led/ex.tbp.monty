@@ -223,12 +223,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
     # happens between here and the kernel's answer.
     {search_locations, tested_poses} = Hypotheses.rows_at(hypotheses, to_test)
 
-    # Where each tested hypothesis sits in the full set, so the update can be
-    # spread over every hypothesis without searching for them one at a time.
-    positions = to_test |> Enum.with_index() |> Map.new()
+    # The column this step builds, in the form the kernel writes: every
+    # hypothesis starts at nothing and each channel adds what it earned.
+    totals = :binary.copy(<<0.0::little-float-64>>, Hypotheses.count(hypotheses))
 
-    Enum.reduce(input_channels, List.duplicate(0.0, Hypotheses.count(hypotheses)), fn channel,
-                                                                                      totals ->
+    Enum.reduce(input_channels, totals, fn channel, totals ->
       channel_features = Map.fetch!(features, channel)
 
       node_feature_evidence =
@@ -236,7 +235,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
           node_feature_evidence(displacer, graph_id, channel, channel_features)
         end)
 
-      evidence =
+      earned =
         evidence_for_new_locations(
           displacer,
           graph_id,
@@ -246,20 +245,46 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
           channel_features,
           node_feature_evidence
         )
-        |> List.to_tuple()
 
-      # Untested hypotheses get the worst tested update, floored at zero: being
-      # skipped must not earn evidence, and must not be punished either.
-      skipped_update = evidence |> Tuple.to_list() |> Enum.min() |> max(0.0)
-
-      Enum.with_index(totals)
-      |> Enum.map(fn {total, index} ->
-        case Map.fetch(positions, index) do
-          :error -> total + skipped_update
-          {:ok, position} -> total + elem(evidence, position)
-        end
-      end)
+      spread(totals, to_test, earned)
     end)
+    |> MatcherNif.decode()
+  end
+
+  # Untested hypotheses get the worst tested update, floored at zero: being
+  # skipped must not earn evidence, and must not be punished either.
+  defp spread(totals, to_test, earned) do
+    if MatcherNif.loaded?() do
+      MatcherNif.spread_add(totals, indices_bytes(to_test), earned)
+    else
+      reference_spread(totals, to_test, earned)
+    end
+  end
+
+  # The kernel's arithmetic in Elixir, over the same bytes.
+  defp reference_spread(totals, to_test, earned) do
+    evidence = MatcherNif.decode(earned)
+    skipped_update = evidence |> Enum.min() |> max(0.0)
+    positions = to_test |> Enum.with_index() |> Map.new()
+
+    totals
+    |> MatcherNif.decode()
+    |> Enum.with_index()
+    |> Enum.map(fn {total, index} ->
+      case Map.fetch(positions, index) do
+        :error -> total + skipped_update
+        {:ok, position} -> total + Enum.at(evidence, position)
+      end
+    end)
+    |> encode_floats()
+  end
+
+  defp indices_bytes(indices) do
+    for index <- indices, into: <<>>, do: <<index::unsigned-32-little>>
+  end
+
+  defp encode_floats(values) do
+    for value <- values, into: <<>>, do: <<value * 1.0::little-float-64>>
   end
 
   defp evidence_for_new_locations(
@@ -356,7 +381,6 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
         @min_evidence
       ])
     )
-    |> MatcherNif.decode()
   end
 
   defp reference_evidence(
@@ -414,6 +438,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
       {normal, curvature_1} = rotate_normal_and_curvature(channel_feature_vectors, pose)
       best_of_neighbours(node_ids, search_location, normal, curvature_1, comparison)
     end)
+    |> encode_floats()
   end
 
   # The bytes a kernel reads that this step has to build: the observation's own

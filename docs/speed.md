@@ -38,8 +38,8 @@ and the _step_ is what is open.
 
 ## Where a step's work goes (2026-11-03, ten objects, six steps, dev)
 
-9.1 M reductions and 83 MB of garbage a step, split by the process that did it
-(three runs agreed to within 0.6 %):
+9.0 M reductions and 82 MB of garbage a step, split by the process that did it
+(three runs agreed to within 1 %):
 
 | who                                      | reductions/step | share |
 | ---------------------------------------- | --------------: | ----: |
@@ -64,13 +64,13 @@ Two conclusions follow, and both are arithmetic rather than opinion:
 
 ## What the native kernels have bought
 
-22 M reductions and 212 MB a step before them; 9.1 M and 83 MB now. Six kernels
+22 M reductions and 212 MB a step before them; 8.9 M and 82 MB now. Seven kernels
 in two Rustler crates (`native/kd_tree_nif`, `native/matcher_nif`): feature
 evidence, neighbour evidence, principal curvatures, displaced locations, window
-slopes, plus the graph's flattened arrays and the k-d index. Each has an Elixir
-reference that stays runnable and a parity test that compares the answers
-**exactly**, because the kernel performs the reference's arithmetic in the
-reference's order.
+slopes, spread of one channel's evidence over the whole set, plus the graph's
+flattened arrays and the k-d index. Each has an Elixir reference that stays
+runnable and a parity test that compares the answers **exactly**, because the
+kernel performs the reference's arithmetic in the reference's order.
 
 The hypothesis set's own columns are the same idea without a kernel: `locations`
 (`n*3` f64) and `poses` (`n*9` f64) are held as bytes and read through
@@ -84,6 +84,14 @@ hypothesis and moves the cursor, and `window_slopes` reads the ring in order;
 sliding ten-slot lists a step was the single largest thing the module allocated.
 That change alone: **10.8 M → 9.1 M reductions a step** (−16 %), the learning
 module 6.1 M → 5.2 M, ladder unchanged digit for digit.
+`spread_add` closes the same gap one function further down the step: the
+neighbour kernel's answer used to be decoded into boxed floats and then walked
+once per hypothesis per channel to be spread over the whole set, with a map
+lookup per hypothesis. It now stays bytes from the kernel to the column it adds
+to: **9.1 M → 8.9 M a step**. Smaller than the tracker's win, and honestly
+stated as such — the three runs after it (8.83, 8.87, 8.92 M) all sit below the
+three before (9.08, 9.09, 9.14 M), which is what makes it a result rather than
+noise, but only just.
 
 ## The next change: one crossing
 

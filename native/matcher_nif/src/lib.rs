@@ -520,6 +520,68 @@ fn displaced_locations<'a>(
     output.into()
 }
 
+// -- what one channel's evidence adds to every hypothesis ---------------------
+
+/// One channel's evidence, spread over the whole hypothesis set.
+///
+/// A kernel answers for the hypotheses worth testing; every other hypothesis is
+/// untouched by this observation and must not be rewarded for it either, so it
+/// earns the worst of what was tested, floored at zero. Doing that in Elixir
+/// meant a map lookup and a tuple per hypothesis per channel, on every step.
+///
+/// * `totals` — `m` f64, what each hypothesis has earned from the channels so
+///   far, in hypothesis order.
+/// * `tested` — `k` u32, the indices of the hypotheses a kernel answered for.
+/// * `values` — `k` f64, what it answered for each of them, in the same order.
+///
+/// The answer is `m` f64: `total + value` for a tested hypothesis and
+/// `total + max(min(values), 0)` for the rest — the same sums in the same order
+/// as the reference, which is `HypothesesDisplacer.evidence_to_add/7` in Elixir.
+#[rustler::nif]
+fn spread_add<'a>(env: Env<'a>, totals: Binary, tested: Binary, values: Binary) -> Binary<'a> {
+    let count = totals.len() / 8;
+    let tested_count = tested.len() / 4;
+
+    let mut skipped = f64::INFINITY;
+
+    for index in 0..(values.len() / 8) {
+        skipped = skipped.min(f64_at(values.as_slice(), index * 8));
+    }
+
+    // `Enum.min/1` over an empty answer would raise in Elixir; nothing tested
+    // means nothing was earned, and zero is the floor either way.
+    let skipped = if skipped.is_finite() { skipped.max(0.0) } else { 0.0 };
+
+    let mut row: Vec<f64> = (0..count)
+        .map(|index| f64_at(totals.as_slice(), index * 8))
+        .collect();
+
+    let mut answered = vec![false; count];
+
+    for index in 0..tested_count {
+        let hypothesis = u32_at(tested.as_slice(), index * 4) as usize;
+
+        if hypothesis < count {
+            row[hypothesis] += f64_at(values.as_slice(), index * 8);
+            answered[hypothesis] = true;
+        }
+    }
+
+    for index in 0..count {
+        if !answered[index] {
+            row[index] += skipped;
+        }
+    }
+
+    let mut output = NewBinary::new(env, count * 8);
+
+    for (index, value) in row.iter().enumerate() {
+        write_f64(&mut output, index, *value);
+    }
+
+    output.into()
+}
+
 // -- how fast each hypothesis is learning -------------------------------------
 
 /// The average per-channel slope of every hypothesis' evidence window.

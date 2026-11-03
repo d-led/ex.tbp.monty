@@ -147,4 +147,17 @@ defmodule ExTbpMonty.MatcherNif do
   """
   def window_slopes(_evidence, _channels, _window, _cursor),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  One channel's evidence, spread over the whole hypothesis set.
+
+  `totals` is `hypotheses` f64, what each hypothesis has earned from the channels
+  so far; `tested` is `k` u32, the indices a kernel answered for; `values` is the
+  `k` f64 it answered. The answer is `hypotheses` f64: `total + value` for a
+  tested hypothesis, and `total + max(min(values), 0)` for the rest — an
+  untested hypothesis must not be rewarded for a step it did not take part in.
+
+  `HypothesesDisplacer.evidence_to_add/7` is the reference this is held to.
+  """
+  def spread_add(_totals, _tested, _values), do: :erlang.nif_error(:nif_not_loaded)
 end

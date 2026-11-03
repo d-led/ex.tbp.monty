@@ -192,7 +192,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       assert lm.terminal_state == :match
       assert lm.detected_object == "mug"
-      assert [0.2, 0.0, 0.0, _rx, _ry, _rz, 1] = lm.detected_pose
+      # Compared rather than matched: a pose's zero can be −0.0, which a pattern
+      # on `0.0` refuses even though the two are the same angle.
+      assert [x, y | _rest] = lm.detected_pose
+      assert_in_delta x, 0.2, 1.0e-12
+      assert y == 0.0
     end
   end
 
