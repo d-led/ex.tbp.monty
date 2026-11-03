@@ -520,6 +520,57 @@ fn displaced_locations<'a>(
     output.into()
 }
 
+// -- which nodes are worth a hypothesis ---------------------------------------
+
+/// The nodes whose feature evidence is highest, lowest first among the chosen.
+///
+/// A burst puts its new hypotheses where the stored nodes matched the
+/// observation best, so it needs the top `count` of a column of `m` answers.
+/// Elixir did that by decoding every answer into a boxed float, pairing it with
+/// its index, and sorting the whole column — once per channel per burst — to
+/// keep a few hundred of them.
+///
+/// * `evidence` — `m` f64, one feature-evidence answer per node, NaN where the
+///   node has no features.
+/// * `count` — how many of the highest to name.
+///
+/// The answer is `min(count, m)` u32, in the reference's order: by evidence
+/// ascending and, among equals, by index ascending, taking the last `count` —
+/// which is what `Enum.sort_by(&{evidence, index}) |> Enum.take(-count)` says.
+/// A NaN sorts above every number there, as it does in Elixir, where the same
+/// answer is `nil` and an atom sorts after a float.
+#[rustler::nif]
+fn top_indices<'a>(env: Env<'a>, evidence: Binary, count: u32) -> Binary<'a> {
+    let total = evidence.len() / 8;
+    let count = (count as usize).min(total);
+
+    let mut order: Vec<usize> = (0..total).collect();
+    let value = |index: usize| f64_at(evidence.as_slice(), index * 8);
+
+    // `f64::total_cmp` is not the reference's order (it separates zeroes and
+    // sorts infinities differently); the key is what Elixir compares.
+    let key = |index: usize| {
+        let answer = value(index);
+
+        if answer.is_nan() {
+            (1u8, 0.0)
+        } else {
+            (0u8, answer)
+        }
+    };
+
+    order.sort_by(|left, right| key(*left).partial_cmp(&key(*right)).unwrap().then(left.cmp(right)));
+
+    let mut output = NewBinary::new(env, count * 4);
+
+    for (position, index) in order[total - count..].iter().enumerate() {
+        let bytes = (*index as u32).to_le_bytes();
+        output[position * 4..(position + 1) * 4].copy_from_slice(&bytes);
+    }
+
+    output.into()
+}
+
 // -- what one channel's evidence adds to every hypothesis ---------------------
 
 /// One channel's evidence, spread over the whole hypothesis set.

@@ -35,6 +35,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
 
   @behaviour Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
 
+  alias ExTbpMonty.MatcherNif
   alias Monty.Frameworks.Models.EvidenceMatching.Channels
 
   alias Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.DefaultFeatureEvidenceScorer
@@ -249,10 +250,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   end
 
   # What the first observation already says about each node: hypotheses start
-  # where the features put them, not at zero.
+  # where the features put them, not at zero. This updater builds one hypothesis
+  # per node, so it is the one caller that needs a value each — the column
+  # arrives as bytes.
   defp node_feature_evidence(updater, graph_id, input_channel, features) do
-    DefaultFeatureEvidenceScorer.evidence(updater.scorer, graph_id, input_channel, features)
+    updater.scorer
+    |> DefaultFeatureEvidenceScorer.evidence(graph_id, input_channel, features)
+    |> as_values()
   end
+
+  defp as_values(column) when is_binary(column), do: MatcherNif.decode(column)
+  defp as_values(column), do: column
 
   # One location and one evidence value per rotation, in the order the rotations
   # were built: all nodes for the first direction, then all nodes for the

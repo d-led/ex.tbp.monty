@@ -74,6 +74,11 @@ end
 experiment = List.first(System.argv()) || "base_config_10distinctobj_dist_agent"
 steps = String.to_integer(Enum.at(System.argv(), 1) || "6")
 
+# `--profile` adds one more step under `tprof`, over every process it touches:
+# this is the only probe that drives the world and the real sensor modules, so it
+# is the only one whose profile can say what the sensor side costs.
+profile? = "--profile" in System.argv()
+
 Code.require_file("probe_support.exs", __DIR__)
 opened = ProbeSupport.setup(experiment)
 
@@ -116,5 +121,15 @@ IO.puts("""
   who         reductions/step, largest first
 #{ProbeStepCost.report(work_before, work_after, steps)}
 """)
+
+if profile? do
+  IO.puts("\n== one more step, by function (words allocated) ==")
+
+  :tprof.profile(
+    fn -> Studio.Run.step(run) end,
+    %{type: :call_memory, rootset: :all, report: {:total, {:measurement, :descending}}}
+  )
+  |> IO.puts()
+end
 
 Studio.Run.stop(run)

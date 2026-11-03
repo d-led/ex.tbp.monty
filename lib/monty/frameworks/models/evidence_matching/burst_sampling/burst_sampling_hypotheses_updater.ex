@@ -28,10 +28,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
   @behaviour Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
 
+  alias ExTbpMonty.MatcherNif
   alias Monty.Frameworks.Models.EvidenceMatching.Channels
   alias Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker
   alias Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker.HypothesesSelection
-
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
@@ -330,10 +330,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       |> GraphMemory.get_locations_in_graph(graph_id, input_channel)
       |> List.to_tuple()
 
-    evidence = List.to_tuple(node_evidence)
-
     selected_locations = Enum.map(top_indices, &elem(locations, &1))
-    selected_evidence = Enum.map(top_indices, &elem(evidence, &1))
+
+    # Only the chosen nodes' answers are read out of the column: a few hundred
+    # values, not one per node.
+    selected_evidence = Enum.map(top_indices, &evidence_at(node_evidence, &1))
 
     rotations = rotations(updater, graph_id, input_channel, features, top_indices, per_node)
 
@@ -352,12 +353,38 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   defp top_indices(_node_evidence, 0), do: []
 
   defp top_indices(node_evidence, count) do
+    if MatcherNif.loaded?() and is_binary(node_evidence) do
+      node_evidence
+      |> MatcherNif.top_indices(count)
+      |> then(fn chosen -> for <<index::unsigned-32-little <- chosen>>, do: index end)
+    else
+      reference_top_indices(node_evidence, count)
+    end
+  end
+
+  # The kernel's choice in Elixir, over the same answers.
+  defp reference_top_indices(node_evidence, count) do
     node_evidence
+    |> evidence_column()
     |> Enum.with_index()
     |> Enum.sort_by(fn {evidence, index} -> {evidence, index} end)
     |> Enum.take(-count)
     |> Enum.map(fn {_evidence, index} -> index end)
   end
+
+  defp evidence_column(column) when is_binary(column), do: MatcherNif.decode(column)
+  defp evidence_column(column), do: column
+
+  # Few values, not one per node: the column stays bytes until a caller asks for
+  # a particular node's answer.
+  defp evidence_at(node_evidence, index) when is_binary(node_evidence) do
+    node_evidence
+    |> binary_part(index * 8, 8)
+    |> MatcherNif.decode()
+    |> hd()
+  end
+
+  defp evidence_at(node_evidence, index), do: Enum.at(node_evidence, index)
 
   defp rotations(
          %__MODULE__{initial_possible_poses: nil} = updater,

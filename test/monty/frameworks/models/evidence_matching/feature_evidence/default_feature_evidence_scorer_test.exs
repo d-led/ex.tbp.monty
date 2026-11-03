@@ -1,6 +1,7 @@
 defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.DefaultFeatureEvidenceScorerTest do
   use ExUnit.Case, async: true
 
+  alias ExTbpMonty.MatcherNif
   alias Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.DefaultFeatureEvidenceScorer
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
@@ -41,6 +42,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
     )
   end
 
+  # The scorer answers one value per node as a column of bytes — that is what a
+  # kernel reads next — so these tests read it back to ask what the values are.
+  defp values(column) when is_binary(column), do: MatcherNif.decode(column)
+  defp values(column), do: column
+
   describe "evidence/4" do
     test "a node whose stored value matches the observation is fully supported" do
       evidence =
@@ -49,6 +55,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
         |> DefaultFeatureEvidenceScorer.evidence("mug", "patch", %{
           "principal_curvatures" => [0.2]
         })
+        |> values()
 
       assert [supported, unsupported] = evidence
       assert_in_delta supported, 1.0, 1.0e-9
@@ -60,6 +67,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
         DefaultFeatureEvidenceScorer.evidence(scorer(memory([0.25])), "mug", "patch", %{
           "principal_curvatures" => [0.2]
         })
+        |> values()
 
       assert_in_delta hd(evidence), 0.5, 1.0e-9
     end
@@ -71,6 +79,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
         |> DefaultFeatureEvidenceScorer.evidence("mug", "patch", %{
           "principal_curvatures" => [0.2]
         })
+        |> values()
 
       assert_in_delta hd(scaled), 3.0, 1.0e-9
     end
@@ -83,7 +92,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
       built = scorer(memory([0.2, 0.6]), feature_weights: weights)
 
       refute DefaultFeatureEvidenceScorer.matched_on_features?(built, "patch")
-      assert DefaultFeatureEvidenceScorer.evidence(built, "mug", "patch", %{}) == [0.0, 0.0]
+
+      assert values(DefaultFeatureEvidenceScorer.evidence(built, "mug", "patch", %{})) == [
+               0.0,
+               0.0
+             ]
     end
 
     test "is not used when feature evidence counts for nothing" do
@@ -101,7 +114,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
     test "but the channel's nodes are still hypotheses, one zero each" do
       built = scorer(memory([0.2, 0.6, 0.9]), feature_weights: %{})
 
-      assert DefaultFeatureEvidenceScorer.evidence(built, "mug", "patch", %{}) == [0.0, 0.0, 0.0]
+      assert values(DefaultFeatureEvidenceScorer.evidence(built, "mug", "patch", %{})) == [
+               0.0,
+               0.0,
+               0.0
+             ]
     end
   end
 
@@ -117,9 +134,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
         |> GraphMemory.add_graph_to_memory(%{"patch" => stripped}, "mug")
         |> GraphMemory.initialize_feature_arrays()
 
-      assert DefaultFeatureEvidenceScorer.evidence(scorer(memory), "mug", "patch", %{
-               "principal_curvatures" => [0.2]
-             }) == [nil]
+      assert values(
+               DefaultFeatureEvidenceScorer.evidence(scorer(memory), "mug", "patch", %{
+                 "principal_curvatures" => [0.2]
+               })
+             ) == [nil]
     end
   end
 end

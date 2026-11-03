@@ -415,7 +415,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
     channel_feature_vectors = channel_features["pose_vectors"]
     curvature = GraphMatchingUtils.relevant_curvature(channel_features)
 
-    node_feature_evidence = List.to_tuple(node_feature_evidence)
+    node_feature_evidence = List.to_tuple(evidence_values(node_feature_evidence))
 
     # Every hypothesis reads the pose features of its neighbours, so they are
     # read once for the whole graph rather than once per hypothesis.
@@ -450,6 +450,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
 
   # A node whose features could not be read has no evidence, which a kernel reads
   # as a NaN — the same value a missing feature is written with.
+  defp evidence_bytes(evidence) when is_binary(evidence), do: evidence
+
   defp evidence_bytes(evidence) do
     for value <- evidence, into: <<>> do
       case value do
@@ -458,6 +460,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
       end
     end
   end
+
+  # The reference reads a column as values; the native path above never has to.
+  defp evidence_values(column) when is_binary(column), do: MatcherNif.decode(column)
+  defp evidence_values(column), do: column
 
   defp params_bytes(values) do
     for value <- values, into: <<>>, do: <<value * 1.0::float-64-little>>

@@ -160,4 +160,17 @@ defmodule ExTbpMonty.MatcherNif do
   `HypothesesDisplacer.evidence_to_add/7` is the reference this is held to.
   """
   def spread_add(_totals, _tested, _values), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  The indices of the `count` highest values in a column, lowest first.
+
+  `evidence` is `nodes` f64 — one feature-evidence answer per node, NaN where a
+  node has no features — and the answer is `count` u32 in the order the sampler
+  takes them: evidence ascending, ties by index ascending, which is how
+  `Enum.sort_by(&{evidence, index}) |> Enum.take(-count)` reads the same column.
+
+  `DefaultFeatureEvidenceScorer.evidence/4` is where the column comes from and
+  `BurstSamplingHypothesesUpdater.top_indices/2` is the reference.
+  """
+  def top_indices(_evidence, _count), do: :erlang.nif_error(:nif_not_loaded)
 end

@@ -102,9 +102,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
 
       {specs, params} = DefaultFeatureEvidenceCalculator.encode_columns(columns)
 
+      # Bytes, not values: what asks for this column next is a kernel (the
+      # evidence kernel itself, and the sampler's choice of nodes), and decoding
+      # a value per node only to encode it again was the largest single thing a
+      # step allocated.
       rows
       |> MatcherNif.feature_evidence(width, specs, params, scorer.increment)
-      |> DefaultFeatureEvidenceCalculator.decode_answers()
     else
       _not_flat_or_not_loaded -> calculate_with(scorer, graph_id, input_channel, query_features)
     end
@@ -126,11 +129,21 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
       nil -> nil
       value -> value * scorer.increment
     end)
+    |> encode_answers()
   end
 
   defp nodewise_zeros(%__MODULE__{} = scorer, graph_id, input_channel) do
     scorer.graph_memory
     |> GraphMemory.get_num_nodes_in_graph(graph_id, input_channel)
-    |> then(fn count -> List.duplicate(0.0, count) end)
+    |> then(fn count -> :binary.copy(<<0.0::little-float-64>>, count) end)
+  end
+
+  defp encode_answers(answers) do
+    for answer <- answers, into: <<>> do
+      case answer do
+        nil -> MatcherNif.not_a_number()
+        value -> <<value * 1.0::little-float-64>>
+      end
+    end
   end
 end
