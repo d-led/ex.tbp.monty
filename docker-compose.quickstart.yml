@@ -1,0 +1,50 @@
+# Download and run: the published image and a Postgres of its own.
+#
+#   docker compose -f docker-compose.quickstart.yml up
+#
+# Then http://localhost:6401. The release migrates itself as it boots, so there
+# is nothing to run first. The image carries no data: the first page says which
+# bundles a run needs, and `/prerequisites` downloads them.
+#
+# The port is this project's own (`APP_PORT`, 6401) for the same reason the
+# development database has one — a stack on the usual 8000/4000 range is how two
+# projects end up answering on the same address.
+#
+# `TAG=v1.2.3 docker compose -f docker-compose.quickstart.yml up` runs a release
+# instead of `:latest`; the tags are in docs/container.md, which also has every
+# variable the image reads.
+
+name: ex-tbp-monty
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: monty
+      POSTGRES_USER: monty
+      POSTGRES_PASSWORD: monty
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U monty -d monty
+      interval: 2s
+
+  app:
+    image: ghcr.io/d-led/ex.tbp.monty:${TAG:-latest}
+    ports:
+      - "${APP_PORT:-6401}:4000"
+    environment:
+      DATABASE_URL: ecto://monty:monty@db:5432/monty
+      # Not a secret: this is a local look, and the same for everybody.
+      SECRET_KEY_BASE: local-look-only-2f8d1c6a9e4b7d0f3a6c9e2b5d8f1a4c7e0b3d6f9a2c5e8b1d4f7a0c3e6b9d2f5a8c1e4b7d0f3a6c9e2b5d8f1a4c7e0b3d6f9a2c5e8b
+      PHX_HOST: localhost
+    volumes:
+      # `~/tbp` inside the container, and the downloads that land there.
+      - prerequisites:/app/priv/tbp
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db:
+  prerequisites:

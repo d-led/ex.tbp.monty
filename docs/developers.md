@@ -140,7 +140,7 @@ scripts/run-dev.sh     # http://localhost:4000
 ```
 
 [`scripts/init-dev.sh`](../scripts/init-dev.sh) needs node/npm for the asset
-bundle and Docker for the Postgres [`docker-compose.dev.yml`](../docker-compose.dev.yml)
+bundle and Docker for the Postgres [`docker-compose.yml`](../docker-compose.yml)
 publishes on 6432 — this project's own port, so that a second project's
 database on the default one cannot be mistaken for it. The application reads it
 from [`config/runtime.exs`](../config/runtime.exs), which defaults to 6432: **no
@@ -167,8 +167,8 @@ two toolchains itself when the machine has neither:
 
 Running the app needs neither — the release carries the compiled shared object.
 The script itself runs
-`docker compose -f docker-compose.dev.yml up -d` and `mix setup`, and is worth
-running again after a pull that moves a dependency or a migration.
+`docker compose up -d` and `mix setup`, and is worth running again after a pull
+that moves a dependency or a migration.
 [`scripts/run-dev.sh`](../scripts/run-dev.sh)
 is `mix phx.server` with the code reloader — `PORT=4001 scripts/run-dev.sh` moves
 it. A run needs no interpreter configured: the world is `priv/monty_py/world.py`

@@ -96,6 +96,16 @@ defmodule Monty.Prerequisites do
   def downloaded?(prerequisite), do: File.exists?(target_path(prerequisite))
 
   @doc """
+  The bundles the manifest names that are not on this machine yet.
+
+  A release starts without them — the UI comes up first and the download is a
+  decision, not a boot step — so every page that can say "a run needs this" asks
+  here rather than assuming a prepared volume.
+  """
+  @spec missing() :: [prerequisite()]
+  def missing, do: Enum.reject(all(), &present?/1)
+
+  @doc """
   Downloads one prerequisite and waits for it, answering how it ended.
 
   The download runs in a process of its own and reports on

@@ -1,84 +1,35 @@
-# The published image and a Postgres of its own:
+# Postgres and Adminer for a development checkout. The application runs on this
+# machine, not here:
 #
-#   docker compose up
+#   docker compose up -d
+#   scripts/init-dev.sh
+#   scripts/run-dev.sh          # http://localhost:4000
 #
-# Then http://localhost:4001. Two named volumes keep what costs something to
-# make — the run history in Postgres, and the data and model bundles
-# `/prerequisites` downloads — so `docker compose down` followed by `up` is a
-# restart, not a re-download and a re-run. `docker compose down -v` deletes both.
-# Postgres is on the compose network only: no port of its own on the host.
-#
-# The image carries no data, so the first `up` downloads it: `prerequisites`
-# runs before `app` and the server waits for it, which is what stops a fresh
-# stack from offering runs whose model is not there yet. It fetches nothing once
-# the volume has the bundles.
-#
-# `TAG=v1.2.3 docker compose up` runs a release instead of `:latest`; the tags
-# are in docs/container.md, which also has every variable the image reads.
-
-name: ex-tbp-monty
+# The ports are this project's own — `DB_PORT` (6432) and `ADMINER_PORT` (6433) —
+# so a second project's database on 5432 is never mistaken for this one.
+# `config/runtime.exs` reads `DB_PORT`, so nothing has to be exported.
 
 services:
-  db:
+  postgres:
     image: postgres:17
-    environment:
-      POSTGRES_DB: monty
-      POSTGRES_USER: monty
-      POSTGRES_PASSWORD: monty
-    volumes:
-      - db:/var/lib/postgresql/data
-    healthcheck:
-      test: pg_isready -U monty -d monty
-      interval: 2s
-
-  # Once per `up`: the migration a deploy runs, before the server starts, so the
-  # release never boots against a schema it does not know.
-  migrate:
-    image: &image ghcr.io/d-led/ex.tbp.monty:${TAG:-latest}
-    entrypoint: ["/app/bin/migrate"]
-    environment: &environment
-      DATABASE_URL: ecto://monty:monty@db:5432/monty
-      # Not a secret: this is a local look, and the same for everybody.
-      SECRET_KEY_BASE: local-look-only-2f8d1c6a9e4b7d0f3a6c9e2b5d8f1a4c7e0b3d6f9a2c5e8b1d4f7a0c3e6b9d2f5a8c1e4b7d0f3a6c9e2b5d8f1a4c7e0b3d6f9a2c5e8b
-    depends_on:
-      db:
-        condition: service_healthy
-
-  # The datasets and pretrained model bundles a run reads, downloaded before
-  # anything serves. Idempotent by construction: it asks what is on the volume
-  # and fetches only what is not.
-  prerequisites:
-    image: *image
-    entrypoint: ["/app/bin/prerequisites"]
-    environment: *environment
-    volumes:
-      # `~/tbp` inside the container, and the same volume `app` mounts.
-      - prerequisites:/app/priv/tbp
-    depends_on:
-      db:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-
-  app:
-    image: *image
     ports:
-      - 4001:4000
+      - "${DB_PORT:-6432}:5432"
     environment:
-      <<: *environment
-      PHX_HOST: localhost
+      - POSTGRES_DB=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
-      # `~/tbp` inside the container: the datasets and model bundles
-      # `/prerequisites` downloads. Named, so they outlive `docker compose down`.
-      - prerequisites:/app/priv/tbp
-    depends_on:
-      db:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-      prerequisites:
-        condition: service_completed_successfully
+      - data-postgres:/var/lib/postgresql/data
+
+  # http://localhost:6433/?pgsql=postgres&username=postgres&db=postgres&ns=public
+  adminer:
+    image: adminer:latest
+    links:
+      - postgres
+    ports:
+      - "${ADMINER_PORT:-6433}:8080"
 
 volumes:
-  db:
-  prerequisites:
+  data-postgres:
+

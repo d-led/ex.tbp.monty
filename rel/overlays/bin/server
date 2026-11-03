@@ -21,4 +21,14 @@ if [ -n "${WANDB_DIR:-}" ] && ! mkdir -p "$WANDB_DIR"; then
   echo "the release cannot write ${WANDB_DIR} (uid $(id -u)); wandb will use the system temp directory" >&2
 fi
 
+# The schema comes up with the release, in its own VM and before anything else
+# starts: starting the container is then the whole of a deploy, with no
+# migration step to forget and nothing serving against tables that are not
+# there yet. Ecto takes the migration lock, so several nodes booting at once
+# migrate once. `/app/bin/migrate` is the same call for an operator who wants to
+# migrate without starting a server.
+if [ "${MIGRATE_ON_BOOT:-true}" != "false" ]; then
+  ./ex_tbp_monty eval "ExTbpMonty.Release.migrate"
+fi
+
 PHX_SERVER=true exec ./ex_tbp_monty start

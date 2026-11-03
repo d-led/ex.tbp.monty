@@ -12,11 +12,11 @@ differences are listed in [docs/monty-differences.md](docs/monty-differences.md)
 ## Run it
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/docker-compose.yml
-docker compose up
+curl -fsSLO https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/docker-compose.quickstart.yml
+docker compose -f docker-compose.quickstart.yml up
 ```
 
-→ <http://localhost:4001>
+→ <http://localhost:6401>
 
 The image is `ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64); the compose
 file adds the Postgres it needs and runs the migration. The database and

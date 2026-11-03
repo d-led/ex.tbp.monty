@@ -22,6 +22,7 @@ defmodule ExTbpMontyWeb.WelcomeLive do
   # vocabulary rather than a second copy of it.
   alias ExTbpMontyWeb.ExperimentsLive
   alias Monty.ModuleMap
+  alias Monty.Prerequisites
   alias Monty.Studio.Catalog
 
   # Monty's own tutorial: the experiment its documentation walks a first-timer
@@ -37,8 +38,16 @@ defmodule ExTbpMontyWeb.WelcomeLive do
        experiments: length(Catalog.experiments()),
        first_experiment: String.split(@first_experiment, "/"),
        ported: ported.implemented,
-       mapped: ported.classes
+       mapped: ported.classes,
+       # Three `stat`s, not a download: the page says what is missing without
+       # asking the machine for anything it has not already got.
+       missing: Prerequisites.missing()
      )}
+  end
+
+  defp missing_headline(missing) do
+    bundles = if length(missing) == 1, do: "bundle", else: "bundles"
+    "#{length(missing)} #{bundles} a run needs are not on this machine yet."
   end
 
   @impl true
@@ -57,6 +66,32 @@ defmodule ExTbpMontyWeb.WelcomeLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
+      <%!-- The studio starts before its data does, so the first thing a visitor
+      needs to know is what a run would not find yet. --%>
+      <section
+        :if={@missing != []}
+        id="welcome-prerequisites"
+        class="rounded-box border border-warning/40 bg-warning/10 px-4 py-3"
+      >
+        <p class="text-sm font-medium">
+          {missing_headline(@missing)}
+        </p>
+        <p class="mt-1 max-w-2xl text-sm text-base-content/70">
+          A run reads its object meshes and its pretrained memory from this machine, and
+          neither travels in the image. Downloading them takes a while, so it is a click rather
+          than a wait in front of the page — until it is done, an experiment cannot recognise
+          anything.
+        </p>
+        <p class="mt-2 flex flex-wrap items-center gap-2">
+          <.link navigate={~p"/prerequisites"} id="welcome-prerequisites-download" class="btn btn-sm">
+            <.icon name="hero-arrow-down-tray-mini" class="size-4" /> Prerequisites
+          </.link>
+          <span class="text-xs text-base-content/60">
+            {Enum.map_join(@missing, ", ", & &1.title)}
+          </span>
+        </p>
+      </section>
+
       <header id="welcome-hero">
         <p class="text-[11px] font-semibold tracking-[0.18em] text-primary uppercase">
           Thousand Brains Project · Elixir

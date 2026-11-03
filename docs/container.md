@@ -9,35 +9,18 @@ pages.
 ```bash
 docker pull ghcr.io/d-led/ex.tbp.monty:latest
 
-# Once per deploy: the release expects its tables to exist.
-docker run --rm \
-  -e DATABASE_URL=ecto://user:pass@host:5432/monty \
-  -e SECRET_KEY_BASE="$(mix phx.gen.secret)" \
-  ghcr.io/d-led/ex.tbp.monty:latest /app/bin/migrate
-
-# …and once per volume: the data a run reads. The image carries none, so this
-# downloads it — and does nothing on a volume that already has it.
-docker run --rm \
-  -v monty-priv:/app/priv \
-  -e DATABASE_URL=ecto://user:pass@host:5432/monty \
-  -e SECRET_KEY_BASE="$(mix phx.gen.secret)" \
-  ghcr.io/d-led/ex.tbp.monty:latest /app/bin/prerequisites
-
-# …and then the app, with the one writable directory on a volume.
-docker run --rm -p 4000:4000 \
-  --read-only --tmpfs /tmp \
-  -v monty-priv:/app/priv \
+docker run --rm -p 6401:4000 \
   -e DATABASE_URL=ecto://user:pass@host:5432/monty \
   -e SECRET_KEY_BASE="$(mix phx.gen.secret)" \
   ghcr.io/d-led/ex.tbp.monty:latest
 ```
 
-Then <http://localhost:4000> — every experiment Monty ships, and a run you can
-start from any of them.
+Then <http://localhost:6401>. The release migrates itself as it boots, so there
+is no migration step in front of the server — `/app/bin/migrate` is there for an
+operator who wants to migrate without starting one.
 
-`docker compose up` in this repository is those three steps in that order: it
-runs `migrate`, then `prerequisites`, and starts the server only once both have
-finished, so a fresh stack never offers a run whose model is still arriving.
+`docker compose -f docker-compose.quickstart.yml up` in this repository is that
+same thing with a Postgres of its own beside it.
 
 ## The script, if you have the checkout
 
@@ -191,17 +174,17 @@ Three ways to have them:
 
 | Where they come from          | How                                                                                                                                                                                                                                              |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| fetched before the server     | `/app/bin/prerequisites` — what `docker compose up` runs before `app`. It fetches what is missing, waits for it, exports the libraries, and exits; a second run on the same volume does nothing                                             |
+| fetched from a terminal      | `docker run --rm -v monty-priv:/app/priv … /app/bin/prerequisites` — the page's fetch, for a deployment that would rather script it. It fetches what is missing, waits, exports the libraries and exits; on a volume that has them it does nothing |
 | downloaded by the running app | open `/prerequisites` in the UI and press download per entry. Each file streams to a `.part` name on the volume and is moved into place only when its size and checksum match                                                                     |
 | a Monty tree you already have | `-v /path/to/tbp:/app/priv/tbp:ro` — the defaults hang off `HOME`, which is `/app/priv`, so the directory you mount is the one those defaults already point at. `scripts/image.sh run --data /path/to/tbp` is this row with the flag spelled out |
 | anywhere else                 | `-e MONTY_DATA=… -e MONTY_MODELS=… -e MONTY_LOGS=…` — the variables Monty's own documentation uses — each pointing at a mounted path                                                                                                             |
 
-The volume to mount for downloads is `/app/priv/tbp`, and that is what the
-`docker-compose.yml` at the root of the repository names — beside a second one
-for Postgres, so `docker compose down` keeps both the database and the
-downloaded bundles (`down -v` deletes them). Mounting `/app/priv` itself also
-works but hides the prerequisites the image carries; mounting `/app/priv/tbp`
-leaves them alone.
+The volume to mount for downloads is `/app/priv/tbp`, and that is what
+[`docker-compose.quickstart.yml`](../docker-compose.quickstart.yml) names —
+beside a second one for Postgres, so `docker compose down` keeps both the
+database and the downloaded bundles (`down -v` deletes them). Mounting
+`/app/priv` itself also works but hides the prerequisites the image carries;
+mounting `/app/priv/tbp` leaves them alone.
 
 A read-only mount is enough to _run_ against data you already have. Downloading
 into it needs write access, so leave the mount out (or make it writable) when the
