@@ -11,12 +11,15 @@
 #
 # Both are counted over the whole VM rather than over one process, because a step
 # is not one process: the coordinator, every sensor module and every learning
-# module each do part of it.
+# module each do part of it. Which of them did the most is the question that
+# decides what to optimise, so the largest movers are listed too.
 #
-# Measured this way on 2026-11-02, base_config_10distinctobj_dist_agent, six
-# steps from a fresh run: about 22 M reductions and 212 MB of reclaimed words per
-# step, of which the learning module's matching step was 15 M and 123 MB, the
-# sensor modules 4 M and 52 MB, and the neighbour pass 2 M and 34 MB.
+# Measured this way on 2026-11-03, base_config_10distinctobj_dist_agent, six
+# steps from a fresh run: 10.8 M reductions and 81 MB of reclaimed words per
+# step, of which the learning module's server is 6.0 M, the two sensor modules
+# 1.4 M, the caller's own process 1.2 M and the MuJoCo host 0.5 M. The same
+# script read 22 M and 212 MB before the native kernels and the flat hypothesis
+# set; those are the numbers to beat, not a promise.
 
 alias Monty.Studio
 
