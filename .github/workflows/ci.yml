@@ -127,6 +127,10 @@ jobs:
     env:
       MIX_TEST_PARTITION: ${{ matrix.partition }}
       COVERAGE_THRESHOLD: "0"
+      # The application dials `DB_PORT`, which defaults to the development
+      # stack's own port. The service below is a plain 5432, so this job says so
+      # rather than depending on which default a checkout happens to carry.
+      DB_PORT: "5432"
     services:
       postgres:
         image: postgres:17

@@ -9,8 +9,11 @@
 # `mix setup` decides what that costs; everything it writes stays local — a
 # Docker volume for Postgres, deps/ and _build/, the development database.
 #
-# Needs node/npm for the asset bundle and Docker for the Postgres config/dev.exs
-# expects on port 6432. Elixir 1.20 and a Rust toolchain are installed for you
+# Needs node/npm for the asset bundle and Docker for the Postgres the dev stack
+# publishes on 6432 — this project's port, so a second project's database on the
+# default one is never mistaken for it. The application reads that port from
+# config/runtime.exs and defaults to it, so nothing has to be exported here.
+# Elixir 1.20 and a Rust toolchain are installed for you
 # when this machine has neither.
 
 set -euo pipefail

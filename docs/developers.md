@@ -140,8 +140,15 @@ scripts/run-dev.sh     # http://localhost:4000
 ```
 
 [`scripts/init-dev.sh`](../scripts/init-dev.sh) needs node/npm for the asset
-bundle and Docker for the Postgres
-[`config/dev.exs`](../config/dev.exs) expects on port 6432, and it installs the
+bundle and Docker for the Postgres [`docker-compose.dev.yml`](../docker-compose.dev.yml)
+publishes on 6432 — this project's own port, so that a second project's
+database on the default one cannot be mistaken for it. The application reads it
+from [`config/runtime.exs`](../config/runtime.exs), which defaults to 6432: **no
+`MIX_ENV`, no exported variable and no flags are needed for `mix ecto.*`,
+`mix test` or `mix phx.server`**. Two checkouts at once are the one case that
+needs a `DB_PORT`, and it moves the mapping and the application together.
+
+The script also installs the
 two toolchains itself when the machine has neither:
 
 - [`scripts/install-elixir.sh`](../scripts/install-elixir.sh) leaves an Elixir

@@ -23,6 +23,20 @@ end
 config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# Which port a development or test run dials Postgres on. The development stack
+# (`docker-compose.dev.yml`) publishes it on a port of this project's own rather
+# than the default one, because the default belongs to whichever container
+# started first — on a machine with more than one project running, that is
+# somebody else's database, and a `mix ecto.create` would land in it.
+#
+# `DB_PORT` moves both ends together when two checkouts of this one run at the
+# same time. CI has no dev stack and its service is on the default port, so the
+# test job sets `DB_PORT=5432` rather than relying on a default.
+if config_env() in [:dev, :test] do
+  config :ex_tbp_monty, ExTbpMonty.Repo,
+    port: String.to_integer(System.get_env("DB_PORT", "6432"))
+end
+
 # Which world a run steps is the run's own choice: the run page's world
 # selector, or `world` on `monty_run_experiment`. A run that says nothing steps
 # the simulator in an external process, the way an experiment is meant to run;
