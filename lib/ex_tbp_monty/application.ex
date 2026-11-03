@@ -50,11 +50,24 @@ defmodule ExTbpMonty.Application do
         # restarts takes those jobs with it: whatever was `running` a moment ago
         # is not running now.
         Monty.Studio.Jobs.Reaper.sweep()
+        warm_catalogue()
         {:ok, pid}
 
       error ->
         error
     end
+  end
+
+  # The experiments list reads 210 YAML files the first time it is asked for
+  # (`Monty.Studio.Catalog` caches them after that). Paying it while the first
+  # page loads makes that page the slowest a new deployment has, so it is paid
+  # here, in a process of its own, before anybody asks.
+  defp warm_catalogue do
+    if Application.get_env(:ex_tbp_monty, :precompute, true) do
+      Task.start(fn -> Monty.Studio.Catalog.experiments() end)
+    end
+
+    :ok
   end
 
   # Tell Phoenix to update the endpoint configuration

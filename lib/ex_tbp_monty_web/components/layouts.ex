@@ -337,7 +337,7 @@ defmodule ExTbpMontyWeb.Layouts do
       <.flash
         id="client-error"
         kind={:error}
-        title="We can't find the internet"
+        title="Lost connection to the server"
         phx-disconnected={
           show(".phx-client-error #client-error")
           |> JS.remove_attribute("hidden", to: ".phx-client-error #client-error")
@@ -345,7 +345,7 @@ defmodule ExTbpMontyWeb.Layouts do
         phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
         hidden
       >
-        Attempting to reconnect
+        Trying to reconnect.
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
 
@@ -360,7 +360,7 @@ defmodule ExTbpMontyWeb.Layouts do
         phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
         hidden
       >
-        Attempting to reconnect
+        Trying to reconnect.
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
     </div>

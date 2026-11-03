@@ -62,15 +62,52 @@ defmodule Monty.Studio.Catalog do
   Reading the file rather than composing it means a name that fails to compose
   still appears here, and that listing a hundred experiments is a hundred small
   reads; composing is what the setup view does, one experiment at a time.
+
+  Those reads cost 210 YAML parses, and a LiveView mounts twice for one page —
+  the static render, then the socket join — so the list is answered from a
+  cache. It is a snapshot of a Monty checkout: the only thing that changes it is
+  `mix monty.inputs`, which moves the stamp below.
   """
   @spec experiments(keyword()) :: [experiment()]
   def experiments(opts \\ []) do
     conf_dir = conf_dir(opts)
 
+    case stamp(conf_dir) do
+      nil -> read(conf_dir)
+      stamp -> cached({__MODULE__, :experiments, stamp}, fn -> read(conf_dir) end)
+    end
+  end
+
+  defp read(conf_dir) do
     conf_dir
     |> Source.experiments()
     |> Enum.map(&experiment_from(&1, conf_dir))
     |> Enum.reject(&is_nil/1)
+  end
+
+  # When the directory was last written, and how many configs it holds: a copy
+  # that is replaced, added to or trimmed moves one of the two.
+  defp stamp(conf_dir) do
+    directory = Path.join(conf_dir, "experiment")
+
+    with {:ok, %File.Stat{mtime: mtime}} <- File.stat(directory, time: :posix),
+         names when names != [] <- Path.wildcard(Path.join(directory, "*.yaml")) do
+      {mtime, length(names)}
+    else
+      _missing -> nil
+    end
+  end
+
+  defp cached(key, fun) do
+    case :persistent_term.get(key, nil) do
+      nil ->
+        value = fun.()
+        :persistent_term.put(key, value)
+        value
+
+      value ->
+        value
+    end
   end
 
   @doc "One experiment's choices, or `nil` when the file cannot be read."

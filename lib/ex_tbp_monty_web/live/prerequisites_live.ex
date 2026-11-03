@@ -26,13 +26,24 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
     {:ok,
      assign(socket,
        prerequisites: prerequisites,
-       statuses: Map.new(prerequisites, &{&1.id, nil}),
+       # Asked, not assumed: a download that finished while the socket was down
+       # has nothing left to announce, and a page that started every row at
+       # "nothing happening" would show a stale badge until a refresh.
+       statuses: Map.new(prerequisites, &{&1.id, current_status(&1.id)}),
        present: Map.new(prerequisites, &{&1.id, Prerequisites.present?(&1)}),
        python: EmbeddedPython.version(),
        wandb: EmbeddedPython.wandb_mode(),
        engines: Prerequisites.engines(),
        storage: Storage.usage(Prerequisites.root_path("MONTY_DATA"))
      )}
+  end
+
+  # What the downloader says about this id right now, if there is one.
+  defp current_status(id) do
+    case Download.lookup(id) do
+      nil -> nil
+      server -> Download.status(server)
+    end
   end
 
   @impl true
