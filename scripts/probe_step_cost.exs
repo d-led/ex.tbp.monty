@@ -20,6 +20,54 @@
 
 alias Monty.Studio
 
+defmodule ProbeStepCost do
+  @moduledoc """
+  Reductions per process, so a step's total can be attributed to the processes
+  that did it rather than guessed at.
+
+  A step is the coordinator, every sensor module, every learning module and
+  whatever they hand work to; only the largest of those is worth a kernel. A pid
+  that lived only during the step is not in both snapshots and is skipped.
+  """
+
+  def work do
+    for pid <- Process.list(), into: %{} do
+      {pid, :erlang.process_info(pid, [:reductions, :dictionary, :current_function])}
+    end
+  end
+
+  def report(before, after_work, steps) do
+    before
+    |> Enum.flat_map(fn {pid, old} -> moved(pid, old, Map.get(after_work, pid), steps) end)
+    |> Enum.sort(:desc)
+    |> Enum.take(8)
+    |> Enum.map_join("\n", fn {per_step, label} ->
+      "    #{String.pad_leading("#{per_step}", 10)}  #{label}"
+    end)
+  end
+
+  defp moved(_pid, _old, nil, _steps), do: []
+
+  defp moved(_pid, old, new, steps) do
+    [
+      {div(Keyword.fetch!(new, :reductions) - Keyword.fetch!(old, :reductions), steps),
+       label(new)}
+    ]
+  end
+
+  # What a process *is*, not what it was doing: a GenServer between calls is
+  # suspended in `gen_server:loop/7` and its `initial_call` is `proc_lib`, so
+  # neither names it. OTP records the callback module in the process dictionary
+  # as `"$initial_call"`; a plain spawn has no such entry and is named by the
+  # module it was running instead.
+  defp label(info) do
+    case List.keyfind(Keyword.fetch!(info, :dictionary), :"$initial_call", 0) do
+      {_key, {module, _function, _arity}} -> inspect(module)
+      nil -> inspect(elem(Keyword.fetch!(info, :current_function), 0))
+    end
+  end
+end
+
 experiment = List.first(System.argv()) || "base_config_10distinctobj_dist_agent"
 steps = String.to_integer(Enum.at(System.argv(), 1) || "6")
 
@@ -37,6 +85,11 @@ end
 {collections_before, words_before} = gc.()
 reductions = fn -> :erlang.statistics(:reductions) |> elem(0) end
 reductions_before = reductions.()
+
+# Reductions per process, so the total can be attributed: a step is the
+# coordinator, every sensor module, every learning module and whatever they
+# hand work to, and only one of those is worth writing a kernel for.
+work_before = ProbeStepCost.work()
 started = System.monotonic_time()
 
 run =
@@ -48,6 +101,7 @@ run =
 elapsed = System.monotonic_time() - started
 reductions_after = reductions.()
 {collections_after, words_after} = gc.()
+work_after = ProbeStepCost.work()
 
 IO.puts("""
 #{experiment}: #{steps} steps
@@ -55,6 +109,9 @@ IO.puts("""
   work        #{div(reductions_after - reductions_before, steps)} reductions/step
   garbage     #{div(words_after - words_before, steps * 125_000)} MB/step, \
 #{collections_after - collections_before} collections
+
+  who         reductions/step, largest first
+#{ProbeStepCost.report(work_before, work_after, steps)}
 """)
 
 Studio.Run.stop(run)
