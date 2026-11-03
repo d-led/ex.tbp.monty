@@ -101,7 +101,7 @@ Monty's documentation and roadmap from the project's published site instead.
 | How does a timestep run, and where is Python involved? | [`architecture.md`](architecture.md) — and [what is Python here](#what-is-python-here-and-what-it-does) below                                                             |
 | What does the world boundary allow?                    | [`simulator-port.md`](simulator-port.md)                                                                                                                                  |
 | Which files are Monty's, copied, and which are ours?   | [`from-monty.md`](from-monty.md) — every path, glob and the task that writes it; [`architecture.md`](architecture.md#what-comes-from-monty) for why the boundary is there |
-| How do I refresh Monty's YAML, snapshots or memories?  | `mix monty.inputs`, `mix monty.prerequisites.fetch`                                                                         |
+| How do I refresh Monty's YAML, snapshots or memories?  | `mix monty.inputs`, `mix monty.prerequisites.fetch`                                                                                                                       |
 | Why does this disagree with Python?                    | [`monty-differences.md`](monty-differences.md)                                                                                                                            |
 | What is actually proven?                               | [`validation.md`](validation.md) and [`test/fixtures/`](../test/fixtures)                                                                                                 |
 | What is not built yet?                                 | [`roadmap.md`](roadmap.md), [`open-ends.md`](open-ends.md)                                                                                                                |
@@ -195,7 +195,7 @@ priv/prerequisites.yaml  what a run downloads, checksummed
 scripts/                 the gates, the dev scripts, and every Python file this project has
 mix_tasks/               Mix tasks compiled outside `:test` (assets, build info)
 THIRD-PARTY.md           what this project did not write, and under which terms
-docs/                    architecture, config compatibility, module map, MCP, validation
+docs/                    architecture, config compatibility, module map, MCP, validation, speed
 ```
 
 The one directory that is not code is [`priv/monty`](../priv/monty): it is
@@ -208,11 +208,11 @@ that comes from Monty, including what is generated or started rather than copied
 
 Only the world and the recorders. Nothing of Monty's own source is vendored:
 
-| Python                                                                                                                                                     | What it is                                                                                                                                         | Needs                                                        |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py)                                                                                    | Habitat-Sim behind the port's protocol — not a world a run chooses; the world a run steps is `priv/monty_py/world.py` | `MONTY_PYTHON` naming an interpreter with `tbp.monty` and `habitat_sim` |
-| [`scripts/record_monty_*.py`](../scripts)                                                                                                                  | produce the fixtures the parity tests replay; run Monty once, offline, and write what it answered                                                  | `$MONTY_PYTHON` with the modules each recorder touches       |
-| [`scripts/classify_monty_classes.py`](../scripts/classify_monty_classes.py)                                                                                | behind `mix monty.port_census`                                                                                                                     | plain `ast`                                                  |
+| Python                                                                      | What it is                                                                                                            | Needs                                                                   |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py)     | Habitat-Sim behind the port's protocol — not a world a run chooses; the world a run steps is `priv/monty_py/world.py` | `MONTY_PYTHON` naming an interpreter with `tbp.monty` and `habitat_sim` |
+| [`scripts/record_monty_*.py`](../scripts)                                   | produce the fixtures the parity tests replay; run Monty once, offline, and write what it answered                     | `$MONTY_PYTHON` with the modules each recorder touches                  |
+| [`scripts/classify_monty_classes.py`](../scripts/classify_monty_classes.py) | behind `mix monty.port_census`                                                                                        | plain `ast`                                                             |
 
 Monty's pretrained memory is not in that table because reading it needs no
 Python: `Monty.Studio.Pretrained.Torch` opens the torch save itself, and the
