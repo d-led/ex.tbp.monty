@@ -214,7 +214,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
         row = binary_part(tracker.evidence, index * row_size, row_size)
 
         if predicate.(index, row),
-          do: {[parts | row], [age | ages]},
+          do: {[parts, row], [age | ages]},
           else: {parts, ages}
       end)
 
@@ -230,7 +230,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
     write_slot(evidence, values, offset, stride, [])
   end
 
-  defp write_slot(rest, [], _offset, _stride, parts), do: IO.iodata_to_binary([parts | rest])
+  defp write_slot(rest, [], _offset, _stride, parts), do: IO.iodata_to_binary([parts, rest])
 
   defp write_slot(evidence, [value | values], offset, stride, parts) do
     <<skipped::binary-size(^offset), _slot::binary-size(8), rest::binary>> = evidence
@@ -240,7 +240,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
       values,
       stride - 8,
       stride,
-      [parts | <<skipped::binary, value * 1.0::little-float-64>>]
+      [parts, <<skipped::binary, value * 1.0::little-float-64>>]
     )
   end
 
