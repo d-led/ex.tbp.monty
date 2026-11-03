@@ -119,6 +119,25 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                   progress(@statuses, prerequisite.id).total
                 )}
               </p>
+              <%!--
+                Reading the memory out of the pickles is the one phase with no
+                bytes to count: the archive has arrived, and what is left is the
+                exporter working through the models in it.
+              --%>
+              <%= case reading(progress(@statuses, prerequisite.id)) do %>
+                <% nil -> %>
+                <% reading -> %>
+                  <div id={"reading-#{prerequisite.id}"} class="space-y-1 pt-1">
+                    <progress
+                      class="progress progress-secondary w-full"
+                      value={reading.index}
+                      max={reading.total}
+                    ></progress>
+                    <p class="font-mono text-xs text-base-content/60">
+                      reading memory {reading.index}/{reading.total} · {reading.model}
+                    </p>
+                  </div>
+              <% end %>
               <p
                 :if={unread_libraries(progress(@statuses, prerequisite.id)) != []}
                 class="text-xs text-error"
@@ -243,6 +262,11 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
     do: status(statuses, id) in [:downloading, :extracting, :exporting]
 
   defp progress(statuses, id), do: Map.get(statuses, id)
+
+  # What the exporter is reading right now: a model by name, and where it is in
+  # the list of models this archive holds.
+  defp reading(%{status: :exporting, export: %{} = export}), do: export
+  defp reading(_progress), do: nil
 
   # Which of the archive's memories could not be read, by `release/model`. The
   # archive is untouched and can be fetched again; what the person needs is the

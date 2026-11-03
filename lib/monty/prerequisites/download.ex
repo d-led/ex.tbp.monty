@@ -32,6 +32,7 @@ defmodule Monty.Prerequisites.Download do
           path: Path.t(),
           extracted: non_neg_integer() | nil,
           libraries: map() | nil,
+          export: %{model: String.t(), index: pos_integer(), total: pos_integer()} | nil,
           error: term() | nil,
           started_at: integer() | nil,
           finished_at: integer() | nil
@@ -172,6 +173,8 @@ defmodule Monty.Prerequisites.Download do
       total: nil,
       extracted: nil,
       libraries: nil,
+      # Which model the export is reading, once it has started on one.
+      export: nil,
       error: nil,
       # The destination is decided once, when the download starts: a change to
       # the environment variable afterwards must not move the file elsewhere.
@@ -283,6 +286,16 @@ defmodule Monty.Prerequisites.Download do
     {:noreply, done(%{state | libraries: libraries})}
   end
 
+  def handle_info({:exporting, progress}, %{status: :exporting} = state) do
+    state = %{state | export: progress}
+    broadcast(state)
+    {:noreply, state}
+  end
+
+  # Progress that arrives after the phase it belongs to, or before it, is not
+  # this download's state to change.
+  def handle_info({:exporting, _progress}, state), do: {:noreply, state}
+
   def handle_info({:DOWN, reference, :process, pid, reason}, %{task: {pid, reference}} = state) do
     # The finished message arrives first in the normal case; an exit without
     # one is the downloader itself dying.
@@ -337,8 +350,15 @@ defmodule Monty.Prerequisites.Download do
   defp start_exporting(state) do
     parent = self()
 
+    # The export is the one phase with nothing on the wire to measure. The
+    # exporter says which model it is reading, and the page shows how far
+    # through the list it is.
+    on_progress = fn progress -> send(parent, {:exporting, progress}) end
+
     {pid, reference} =
-      spawn_monitor(fn -> send(parent, {:exported, Monty.Studio.Pretrained.sync()}) end)
+      spawn_monitor(fn ->
+        send(parent, {:exported, Monty.Studio.Pretrained.sync(on_progress: on_progress)})
+      end)
 
     state = %{state | status: :exporting, task: {pid, reference}}
     broadcast(state)
@@ -399,6 +419,7 @@ defmodule Monty.Prerequisites.Download do
       path: state.path,
       extracted: state.extracted,
       libraries: state.libraries,
+      export: state.export,
       error: state.error,
       started_at: state.started_at,
       finished_at: state.finished_at

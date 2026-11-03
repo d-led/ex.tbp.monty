@@ -67,6 +67,21 @@ defmodule Monty.Studio.PretrainedTest do
       assert Pretrained.sync(Tmp.dir("models"), Tmp.dir("libraries")) ==
                %{exported: [], current: [], failed: []}
     end
+
+    test "names each model as it starts reading it" do
+      root = Tmp.dir("models")
+      libraries = Tmp.dir("libraries")
+      # Not a pickle, so the export fails — but a model that cannot be read is
+      # still a model the exporter reached, which is what a page showing progress
+      # needs to hear about.
+      write!(root, "not a torch save")
+
+      parent = self()
+
+      Pretrained.sync(root, libraries, on_progress: &send(parent, {:reading, &1}))
+
+      assert_received {:reading, %{model: @label, index: 1, total: 1}}
+    end
   end
 
   describe "a graph as another torch version writes it" do

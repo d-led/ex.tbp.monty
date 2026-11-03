@@ -149,6 +149,37 @@ defmodule Monty.Prerequisites.DownloadTest do
       assert_receive {:download, %{id: "tiny_unpacked", status: :failed, error: reason}}, 1_000
       assert {:cannot_extract, _path, _why} = reason
     end
+
+    test "says which model it is reading while it reads the memory", %{tmp: tmp} do
+      prerequisite = Prerequisites.get("tiny_unpacked")
+      Monty.Test.PrerequisiteRoots.plant(prerequisite)
+
+      # Reading the memory is minutes with nothing on the wire to measure, so the
+      # phase reports the model it is on. This one cannot be read, which is
+      # enough: it is still the model the exporter reached.
+      model =
+        Path.join([
+          tmp,
+          "models",
+          "pretrained_ycb_v13",
+          "surf_agent_1lm",
+          "pretrained",
+          "model.pt"
+        ])
+
+      File.mkdir_p!(Path.dirname(model))
+      File.write!(model, "not a torch save")
+
+      {:ok, _pid} = Download.start(prerequisite)
+
+      assert_receive {:download,
+                      %{
+                        id: "tiny_unpacked",
+                        status: :exporting,
+                        export: %{model: "pretrained_ycb_v13/surf_agent_1lm", index: 1, total: 1}
+                      }},
+                     5_000
+    end
   end
 
   describe "a download that cannot be trusted" do

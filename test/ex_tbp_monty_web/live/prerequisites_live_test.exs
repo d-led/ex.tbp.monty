@@ -39,6 +39,36 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert render(view) =~ "not downloaded"
   end
 
+  # Reading the memory out of an archive's pickles has no bytes to count, so the
+  # row says which model the exporter is on and how many there are — otherwise
+  # the badge says "reading memory" for minutes and looks stuck.
+  test "says which model it is reading while it reads the memory", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    Phoenix.PubSub.broadcast(
+      ExTbpMonty.PubSub,
+      Download.topic(),
+      {:download,
+       %{
+         id: "tiny",
+         status: :exporting,
+         bytes: 10,
+         total: 10,
+         export: %{
+           model: "pretrained_ycb_v10/surf_agent_1lm_10distinctobj",
+           index: 2,
+           total: 5
+         },
+         libraries: nil
+       }}
+    )
+
+    reading = view |> element("#reading-tiny") |> render()
+
+    assert reading =~ "reading memory 2/5"
+    assert reading =~ "pretrained_ycb_v10/surf_agent_1lm_10distinctobj"
+  end
+
   # "What is available here?" is the question the page is open for, so the
   # answer comes before the list of what has to be downloaded — and it names the
   # engine each world would step, not just "Python is installed".

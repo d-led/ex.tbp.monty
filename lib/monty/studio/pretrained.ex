@@ -69,14 +69,44 @@ defmodule Monty.Studio.Pretrained do
   this installation reads. A model whose library is newer than the pickle it
   came from is left alone: a second sync does nothing, which is what makes it
   safe to run on every visit to `/prerequisites`.
+
+  `:on_progress` is called once per model, before that model is read, with
+  `%{model: "release/name", index: n, total: m}` — the export is minutes of
+  reading with nothing on the wire to measure, and this is what a page can show
+  while it runs.
   """
+  @spec sync() :: outcome
+  def sync, do: sync(models_root(), Memory.libraries_dir())
+
+  # Options on their own, as their own arity: with defaults on all three
+  # parameters `sync(on_progress: fun)` would fill the *first* one, and read a
+  # keyword list as a models root.
+  @spec sync(keyword()) :: outcome
+  def sync(opts) when is_list(opts), do: sync(models_root(), Memory.libraries_dir(), opts)
+
   @spec sync(Path.t(), Path.t()) :: outcome
-  def sync(root \\ models_root(), libraries \\ Memory.libraries_dir()) do
-    root
-    |> models()
-    |> Enum.map(&one(&1, libraries))
+  def sync(root, libraries), do: sync(root, libraries, [])
+
+  @spec sync(Path.t(), Path.t(), keyword()) :: outcome
+  def sync(root, libraries, opts) do
+    on_progress = Keyword.get(opts, :on_progress)
+    models = models(root)
+    total = length(models)
+
+    models
+    |> Enum.with_index(1)
+    |> Enum.map(fn {model, index} ->
+      announce(on_progress, model, index, total)
+      one(model, libraries)
+    end)
     |> Enum.reduce(%{exported: [], current: [], failed: []}, &collect/2)
     |> Map.new(fn {kind, values} -> {kind, Enum.reverse(values)} end)
+  end
+
+  defp announce(nil, _model, _index, _total), do: :ok
+
+  defp announce(on_progress, {release, name, _pickle}, index, total) do
+    on_progress.(%{model: label(release, name), index: index, total: total})
   end
 
   # One model: left alone when its library is newer than the pickle, written
