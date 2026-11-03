@@ -150,13 +150,31 @@ defmodule Monty.Studio.Pretrained do
   # sobelow_skip ["Traversal.FileModule"]
   # Same path as `export/2` hands over: a library path, not a request.
   defp write(pickle, partial) do
-    lines =
+    # Written one record at a time into a gzip stream. Building the list of
+    # records, then a binary per record, then one `:zlib.gzip/1` over all of
+    # them holds the model four times over — hundreds of megabytes for a release
+    # of ten objects — and a machine that starts swapping makes every open page
+    # crawl while it does. Streaming keeps one record at a time.
+    file = File.open!(partial, [:write, :binary, :raw])
+    gzip = :zlib.open()
+
+    try do
+      :ok = :zlib.deflateInit(gzip, :default, :deflated, 31, 8, :default)
+
       pickle
       |> Torch.load!()
-      |> records()
-      |> Enum.map(&[Jason.encode!(&1), "\n"])
+      |> stream_records()
+      |> Enum.each(fn record ->
+        IO.binwrite(file, :zlib.deflate(gzip, [Jason.encode!(record), "\n"]))
+      end)
 
-    File.write(partial, :zlib.gzip(lines))
+      IO.binwrite(file, :zlib.deflate(gzip, [], :finish))
+      :ok
+    after
+      :zlib.deflateEnd(gzip)
+      :zlib.close(gzip)
+      File.close(file)
+    end
   end
 
   @doc """
@@ -169,22 +187,39 @@ defmodule Monty.Studio.Pretrained do
   graphs of the first are the memory a single-module run recognises with.
   """
   @spec records(term()) :: [map()]
-  def records(term) do
-    for {object_id, channels} <- Enum.sort(module_memory(term)),
-        {channel, model} <- Enum.sort(channels) do
-      graph = graph_of(model)
+  def records(term), do: term |> stream_records() |> Enum.to_list()
 
-      %{
-        "object_id" => object_id,
-        "input_channel" => channel,
-        "positions" => graph |> Map.fetch!("pos") |> Tensor.rows(),
-        "features" =>
-          Map.new(@features, fn name ->
-            [first, last] = graph |> Map.fetch!("feature_mapping") |> Map.fetch!(name)
-            {name, Tensor.columns(Map.fetch!(graph, "x"), first, last)}
-          end)
-      }
-    end
+  @doc """
+  The same records, produced one at a time.
+
+  The export writes each of them as it arrives, so a model is never held as a
+  list of records, a list of encodings and a gzip of both.
+  """
+  @spec stream_records(term()) :: Enumerable.t()
+  def stream_records(term) do
+    term
+    |> module_memory()
+    |> Enum.sort()
+    |> Stream.flat_map(fn {object_id, channels} ->
+      channels
+      |> Enum.sort()
+      |> Stream.map(fn {channel, model} -> record(object_id, channel, model) end)
+    end)
+  end
+
+  defp record(object_id, channel, model) do
+    graph = graph_of(model)
+
+    %{
+      "object_id" => object_id,
+      "input_channel" => channel,
+      "positions" => graph |> Map.fetch!("pos") |> Tensor.rows(),
+      "features" =>
+        Map.new(@features, fn name ->
+          [first, last] = graph |> Map.fetch!("feature_mapping") |> Map.fetch!(name)
+          {name, Tensor.columns(Map.fetch!(graph, "x"), first, last)}
+        end)
+    }
   end
 
   defp module_memory(%{"lm_dict" => modules}) when is_list(modules),
