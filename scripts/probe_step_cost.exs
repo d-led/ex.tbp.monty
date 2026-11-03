@@ -15,11 +15,11 @@
 # decides what to optimise, so the largest movers are listed too.
 #
 # Measured this way on 2026-11-03, base_config_10distinctobj_dist_agent, six
-# steps from a fresh run: 10.8 M reductions and 81 MB of reclaimed words per
-# step, of which the learning module's server is 6.0 M, the two sensor modules
-# 1.4 M, the caller's own process 1.2 M and the MuJoCo host 0.5 M. The same
-# script read 22 M and 212 MB before the native kernels and the flat hypothesis
-# set; those are the numbers to beat, not a promise.
+# steps from a fresh run: 9.1 M reductions and 83 MB of reclaimed words per step,
+# of which the learning module's server is 5.2 M, the two sensor modules 1.4 M,
+# the caller's own process 1.2 M and the MuJoCo host 0.5 M. The same script read
+# 22 M and 212 MB before the native kernels and the flat hypothesis set; those
+# are the numbers to beat, not a promise.
 
 alias Monty.Studio
 

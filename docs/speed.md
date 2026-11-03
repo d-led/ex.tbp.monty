@@ -38,13 +38,14 @@ and the _step_ is what is open.
 
 ## Where a step's work goes (2026-11-03, ten objects, six steps, dev)
 
-10.8 M reductions and 81 MB of garbage a step, split by the process that did it:
+9.1 M reductions and 83 MB of garbage a step, split by the process that did it
+(three runs agreed to within 0.6 %):
 
 | who                                      | reductions/step | share |
 | ---------------------------------------- | --------------: | ----: |
-| `Monty.Runtime.LearningModuleServer`     |           6.0 M |   56% |
-| the two `SensorModuleServer`s            |           1.4 M |   13% |
-| the caller's own process (orchestration) |           1.2 M |   11% |
+| `Monty.Runtime.LearningModuleServer`     |           5.2 M |   57% |
+| the two `SensorModuleServer`s            |           1.4 M |   15% |
+| the caller's own process (orchestration) |           1.2 M |   13% |
 | `Monty.Simulators.Mujoco.Host`           |           0.5 M |    5% |
 | `Monty.Random.Stream`                    |           0.1 M |    1% |
 
@@ -63,17 +64,26 @@ Two conclusions follow, and both are arithmetic rather than opinion:
 
 ## What the native kernels have bought
 
-22 M reductions and 212 MB a step before them; 10.8 M and 81 MB now. Six kernels
+22 M reductions and 212 MB a step before them; 9.1 M and 83 MB now. Six kernels
 in two Rustler crates (`native/kd_tree_nif`, `native/matcher_nif`): feature
-evidence, neighbour evidence, principal curvatures, displaced locations, plus the
-graph's flattened arrays and the k-d index. Each has an Elixir reference that
-stays runnable and a parity test that compares the answers **exactly**, because
-the kernel performs the reference's arithmetic in the reference's order.
+evidence, neighbour evidence, principal curvatures, displaced locations, window
+slopes, plus the graph's flattened arrays and the k-d index. Each has an Elixir
+reference that stays runnable and a parity test that compares the answers
+**exactly**, because the kernel performs the reference's arithmetic in the
+reference's order.
 
 The hypothesis set's own columns are the same idea without a kernel: `locations`
 (`n*3` f64) and `poses` (`n*9` f64) are held as bytes and read through
 `Hypotheses.locations/1`, `location/2`, `poses/1`, `pose/2`, so a step no longer
 builds three and nine boxed floats per hypothesis to hand to a kernel.
+
+`EvidenceSlopeTracker` is the same idea applied to a _state_: its windows are a
+ring of `hypotheses * window` f64 with one shared cursor, because every window
+slides by one slot on the same update. Recording a step writes one value per
+hypothesis and moves the cursor, and `window_slopes` reads the ring in order;
+sliding ten-slot lists a step was the single largest thing the module allocated.
+That change alone: **10.8 M → 9.1 M reductions a step** (−16 %), the learning
+module 6.1 M → 5.2 M, ladder unchanged digit for digit.
 
 ## The next change: one crossing
 
@@ -123,6 +133,12 @@ the code.
   13 k and 19 k calls a step, arithmetic identical — and no measurable change
   (10.81 → 10.88 M reductions, 81 → 78 MB). Reverted: below the noise floor, so
   the code stays the simple version.
+- **Nesting binary concatenation to rewrite one column of a ring.** The first cut
+  of the slope tracker wrote each row with `<<skipped, value, rest::binary>>`,
+  which copies the remaining tail at every row — quadratic in the hypotheses. It
+  cost more than the list shifting it replaced (11.6 M and 5 168 GCs a step
+  against 10.8 M and 500) until the pieces were gathered and joined once with
+  `IO.iodata_to_binary/1`, which is when the win appeared (9.1 M).
 - **A full sort of the graph to take a few hundred nodes** (`top_indices/2`) is
   still there. A bounded selection returns the same indices and is worth trying
   when it can be measured on its own.

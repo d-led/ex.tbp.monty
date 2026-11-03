@@ -131,4 +131,20 @@ defmodule ExTbpMonty.MatcherNif do
   """
   def displaced_locations(_poses, _locations, _displacement),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  The average per-channel slope of every hypothesis' evidence window.
+
+  `evidence` is `hypotheses * window` f64 in ring order — one row a hypothesis,
+  NaN for a slot that has not been filled — and `cursor` is the slot the next
+  update overwrites, which is also the oldest value every window holds.
+  `channels` is the channel count at the later slot of each consecutive pair.
+
+  The answer is one f64 per hypothesis: the mean of the steps that have two
+  observations, NaN where the window has none. `EvidenceSlopeTracker` is the
+  reference this is held to, and it reads the same bytes when the kernels are
+  off.
+  """
+  def window_slopes(_evidence, _channels, _window, _cursor),
+    do: :erlang.nif_error(:nif_not_loaded)
 end

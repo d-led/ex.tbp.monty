@@ -30,8 +30,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTrackerTest do
       tracker = EvidenceSlopeTracker.add_hyp(tracker(), 2)
 
       assert EvidenceSlopeTracker.total_size(tracker) == 2
-      assert tracker.evidence == [[nil, nil, nil], [nil, nil, nil]]
       assert EvidenceSlopeTracker.hyp_ages(tracker) == [0, 0]
+      assert EvidenceSlopeTracker.calculate_slopes(tracker) == [nil, nil]
     end
 
     test "a hypothesis that has never been updated has no slope to report" do
@@ -50,8 +50,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTrackerTest do
         |> update!([2.0, 3.0])
         |> update!([3.0, 4.0])
 
-      assert tracker.evidence == [[1.0, 2.0, 3.0], [2.0, 3.0, 4.0]]
       assert EvidenceSlopeTracker.hyp_ages(tracker) == [3, 3]
+
+      # Both hypotheses rose one unit a step over the three values they were
+      # given — which is a window that slid to hold the last three, not the first.
+      assert [first, second] = EvidenceSlopeTracker.calculate_slopes(tracker)
+      assert_in_delta first, 1.0, 1.0e-12
+      assert_in_delta second, 1.0, 1.0e-12
     end
 
     test "keeps only the most recent values in the window" do
@@ -64,9 +69,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTrackerTest do
         |> update!([4.0])
         |> update!([3.0])
 
-      assert tracker.evidence == [[5.0, 4.0, 3.0]]
-
-      # (−1 + −1) / 2: the slope is falling one unit per step.
+      # (−1 + −1) / 2: the slope is falling one unit per step. Had the window
+      # kept all five values, the mean step would be −0.25.
       assert [slope] = EvidenceSlopeTracker.calculate_slopes(tracker)
       assert_in_delta slope, -1.0, 1.0e-9
     end
@@ -109,14 +113,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTrackerTest do
 
   describe "removing hypotheses" do
     test "removes exactly the named ones, keeping the rest in order" do
+      # Three hypotheses learning at one, two and three units a step, so which
+      # two survive is visible in what they answer.
       tracker =
         tracker()
         |> EvidenceSlopeTracker.add_hyp(3)
+        |> update!([0.0, 0.0, 0.0])
         |> update!([1.0, 2.0, 3.0])
+        |> update!([2.0, 4.0, 6.0])
         |> EvidenceSlopeTracker.remove_hyp([1])
 
       assert EvidenceSlopeTracker.total_size(tracker) == 2
-      assert tracker.evidence == [[nil, nil, 1.0], [nil, nil, 3.0]]
+      assert [first, third] = EvidenceSlopeTracker.calculate_slopes(tracker)
+      assert_in_delta first, 1.0, 1.0e-12
+      assert_in_delta third, 3.0, 1.0e-12
     end
 
     test "clearing forgets every hypothesis but not the tracker's settings" do
@@ -127,8 +137,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTrackerTest do
         |> EvidenceSlopeTracker.clear_hyp()
 
       assert EvidenceSlopeTracker.total_size(tracker) == 0
-      assert tracker.evidence == []
-      assert tracker.ages == []
+      assert EvidenceSlopeTracker.calculate_slopes(tracker) == []
+      assert EvidenceSlopeTracker.hyp_ages(tracker) == []
       assert tracker.window_size == 3
     end
   end

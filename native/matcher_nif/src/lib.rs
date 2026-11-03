@@ -520,6 +520,82 @@ fn displaced_locations<'a>(
     output.into()
 }
 
+// -- how fast each hypothesis is learning -------------------------------------
+
+/// The average per-channel slope of every hypothesis' evidence window.
+///
+/// A learning module drops hypotheses whose evidence is not merely low but
+/// *falling*, and "falling" has to be comparable between a step fed by one
+/// sensor and a step fed by three: each step's difference is divided by the
+/// number of channels that contributed at the later slot of the pair.
+///
+/// The windows are a ring, because every hypothesis' window slides by one slot
+/// on the same update: `cursor` names the slot the next update overwrites, which
+/// is also the oldest value in every window, and the window in order is
+/// `cursor, cursor + 1, … wrap`. Sliding therefore costs one write per
+/// hypothesis and no rebuilding of windows at all.
+///
+/// * `evidence` — `m * window` f64, one row per hypothesis, NaN for a slot that
+///   has not been filled yet.
+/// * `channels` — `window - 1` f64, the channel count at the later slot of each
+///   consecutive pair, oldest first.
+/// * `window` — how many slots a window has.
+/// * `cursor` — the slot the next update writes, and the oldest value now.
+///
+/// The answer is `m` f64: the mean of the steps that have two observations, or
+/// NaN for a window that has none — the reference's `nil`, which a slope of zero
+/// must not be mistaken for.
+#[rustler::nif]
+fn window_slopes<'a>(
+    env: Env<'a>,
+    evidence: Binary,
+    channels: Binary,
+    window: u32,
+    cursor: u32,
+) -> Binary<'a> {
+    let window = window as usize;
+    let cursor = cursor as usize;
+    let count = if window == 0 { 0 } else { evidence.len() / (window * 8) };
+
+    let mut output = NewBinary::new(env, count * 8);
+
+    for hypothesis in 0..count {
+        let row = hypothesis * window * 8;
+        let mut sum = 0.0;
+        let mut observed = 0;
+
+        for slot in 0..window.saturating_sub(1) {
+            let older = f64_at(evidence.as_slice(), row + ((cursor + slot) % window) * 8);
+            let newer = f64_at(evidence.as_slice(), row + ((cursor + slot + 1) % window) * 8);
+
+            // A slot that was never filled, or a pair that spans the fill
+            // boundary, contributes nothing — Monty's NaN-skipping mean.
+            if older.is_nan() || newer.is_nan() {
+                continue;
+            }
+
+            let channels_here = f64_at(channels.as_slice(), slot * 8);
+
+            if channels_here.is_nan() {
+                continue;
+            }
+
+            sum += (newer - older) / channels_here;
+            observed += 1;
+        }
+
+        let slope = if observed == 0 {
+            f64::NAN
+        } else {
+            sum / observed as f64
+        };
+
+        write_f64(&mut output, hypothesis, slope);
+    }
+
+    output.into()
+}
+
 // -- the patch's surface -----------------------------------------------------
 
 /// The principal curvatures at the middle of a patch, and their directions.

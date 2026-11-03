@@ -13,30 +13,51 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   accumulates evidence three times as fast, and a slope that ignored it would
   make hypotheses look better simply because more sensors were on them.
 
-  The evidence is a list of sliding windows, one per hypothesis, oldest first,
-  with `nil` where a slot has not been filled yet — Monty's NaN.
+  The evidence is a ring of bytes shared by every hypothesis: `evidence` is
+  `hypotheses * window_size` f64, `cursor` names the slot the next update
+  overwrites — which is also the oldest value in every window — and a window in
+  order is `cursor, cursor + 1, … wrap`. Every hypothesis' window slides by one
+  slot on the same update, so recording a step writes one value per hypothesis
+  and moves the cursor; no window is rebuilt. Sliding ten-slot lists a step was
+  the single largest thing a matching step allocated.
+
+  An unfilled slot is a NaN — Monty's `nil`, which a flat window's slope of zero
+  must not be mistaken for — so a window cannot be read as floats directly, and
+  `calculate_slopes/1` is a kernel over these bytes.
   """
 
+  alias ExTbpMonty.MatcherNif
   alias Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker.HypothesesSelection
 
   @default_window_size 10
   @default_min_age 5
 
+  # Erlang has no NaN, so this is the one way to write the value both sides
+  # agree means "no observation at this slot".
+  @not_a_number MatcherNif.not_a_number()
+
   @enforce_keys [:window_size, :min_age]
   defstruct window_size: @default_window_size,
             min_age: @default_min_age,
-            evidence: [],
+            evidence: <<>>,
             ages: [],
-            channels: []
+            channels: [],
+            cursor: 0
 
   @type value :: float() | nil
 
+  @typedoc """
+  `evidence` is `hypotheses * window_size` f64 in ring order, `channels` the
+  channel count at each window slot oldest first, and `cursor` the slot the next
+  update writes.
+  """
   @type t :: %__MODULE__{
           window_size: pos_integer(),
           min_age: non_neg_integer(),
-          evidence: [[value()]],
+          evidence: binary(),
           ages: [non_neg_integer()],
-          channels: [pos_integer()]
+          channels: [pos_integer()],
+          cursor: non_neg_integer()
         }
 
   @doc """
@@ -51,15 +72,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
     %__MODULE__{
       window_size: window_size,
       min_age: min_age,
-      evidence: [],
+      evidence: <<>>,
       ages: [],
-      channels: List.duplicate(1, window_size)
+      channels: List.duplicate(1, window_size),
+      cursor: 0
     }
   end
 
   @doc "How many hypotheses are tracked."
   @spec total_size(t()) :: non_neg_integer()
-  def total_size(%__MODULE__{evidence: evidence}), do: length(evidence)
+  def total_size(%__MODULE__{evidence: evidence, window_size: window_size}),
+    do: div(byte_size(evidence), window_size * 8)
 
   @doc "Which hypotheses are old enough to be considered for removal."
   @spec removable_indices_mask(t()) :: [boolean()]
@@ -75,11 +98,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   """
   @spec add_hyp(t(), non_neg_integer()) :: t()
   def add_hyp(%__MODULE__{} = tracker, count) do
-    empty = List.duplicate(nil, tracker.window_size)
+    empty = :binary.copy(@not_a_number, tracker.window_size)
 
     %{
       tracker
-      | evidence: tracker.evidence ++ List.duplicate(empty, count),
+      | evidence: <<tracker.evidence::binary, :binary.copy(empty, count)::binary>>,
         ages: tracker.ages ++ List.duplicate(0, count)
     }
   end
@@ -89,7 +112,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   def hyp_ages(%__MODULE__{ages: ages}), do: ages
 
   @doc """
-  Slides every window by one step and records this step's evidence.
+  Records this step's evidence and moves every window on by one slot.
 
   `values` is one evidence value per hypothesis — all of them, every step:
   a hypothesis that skipped a step would have a slope over a different number of
@@ -108,17 +131,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
 
       %{
         tracker
-        | evidence: shift_in(tracker.evidence, values),
-          channels: shift_in([tracker.channels], [channels]) |> hd(),
-          ages: Enum.map(tracker.ages, &(&1 + 1))
+        | evidence:
+            write_slot(tracker.evidence, values, tracker.cursor * 8, tracker.window_size * 8),
+          # Every window shifts by one slot, so the oldest channel count is the
+          # one whose evidence the update just overwrote.
+          channels: tl(tracker.channels) ++ [channels],
+          ages: Enum.map(tracker.ages, &(&1 + 1)),
+          cursor: rem(tracker.cursor + 1, tracker.window_size)
       }
       |> then(&{:ok, &1})
     end
-  end
-
-  # Slide one window: drop the oldest slot, append the new value.
-  defp shift_in(rows, values) do
-    Enum.zip_with(rows, values, fn window, value -> tl(window) ++ [value] end)
   end
 
   @doc """
@@ -130,35 +152,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   """
   @spec calculate_slopes(t()) :: [float() | nil]
   def calculate_slopes(%__MODULE__{} = tracker) do
-    # Each window is walked once, adding up the steps that have two observations
-    # as it goes. A 77-object memory tracks a few hundred thousand windows, and
-    # building the per-step difference list for every one of them — then
-    # rejecting the nils back out of it — is most of what a step allocates.
-    channel_counts = tl(tracker.channels)
+    channels = tl(tracker.channels)
 
-    Enum.map(tracker.evidence, &window_slope(&1, channel_counts))
+    if MatcherNif.loaded?() do
+      MatcherNif.window_slopes(
+        tracker.evidence,
+        channels_bytes(channels),
+        tracker.window_size,
+        tracker.cursor
+      )
+      |> MatcherNif.decode()
+    else
+      reference_slopes(tracker.evidence, channels, tracker.window_size, tracker.cursor)
+    end
   end
-
-  # Monty's `np.nanmean(np.diff(window) / channels)`: the mean of the steps that
-  # have two observations, and `nil` for a window that has none.
-  defp window_slope(window, channel_counts), do: sum_and_count(window, channel_counts, 0.0, 0)
-
-  defp sum_and_count([], _channels, sum, count), do: mean(sum, count)
-  defp sum_and_count([_single], _channels, sum, count), do: mean(sum, count)
-
-  defp sum_and_count([older, newer | rest], [channels | more_channels], sum, count) do
-    {sum, count} =
-      if is_nil(older) or is_nil(newer) do
-        {sum, count}
-      else
-        {sum + (newer - older) / channels, count + 1}
-      end
-
-    sum_and_count([newer | rest], more_channels, sum, count)
-  end
-
-  defp mean(_sum, 0), do: nil
-  defp mean(sum, count), do: sum / count
 
   @doc "Removes the hypotheses at the given indices, keeping the rest in order."
   @spec remove_hyp(t(), [non_neg_integer()]) :: t()
@@ -172,7 +179,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   @doc "Forgets every hypothesis, keeping the window size and minimum age."
   @spec clear_hyp(t()) :: t()
   def clear_hyp(%__MODULE__{} = tracker) do
-    %{tracker | evidence: [], ages: []}
+    %{tracker | evidence: <<>>, ages: []}
   end
 
   @doc """
@@ -198,16 +205,104 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   end
 
   defp keep_where(%__MODULE__{} = tracker, predicate) do
-    {evidence, ages} =
-      tracker.evidence
-      |> Enum.zip(tracker.ages)
+    row_size = tracker.window_size * 8
+
+    {parts, ages} =
+      tracker.ages
       |> Enum.with_index()
-      |> Enum.reduce({[], []}, fn {{window, age}, index}, {evidence, ages} ->
-        if predicate.(index, window),
-          do: {[window | evidence], [age | ages]},
-          else: {evidence, ages}
+      |> Enum.reduce({[], []}, fn {age, index}, {parts, ages} ->
+        row = binary_part(tracker.evidence, index * row_size, row_size)
+
+        if predicate.(index, row),
+          do: {[parts | row], [age | ages]},
+          else: {parts, ages}
       end)
 
-    %{tracker | evidence: Enum.reverse(evidence), ages: Enum.reverse(ages)}
+    %{tracker | evidence: IO.iodata_to_binary(parts), ages: Enum.reverse(ages)}
   end
+
+  # One value per row, all at the same slot: the rows stay hypothesis-major and
+  # nothing else in the binary moves. The pieces are gathered and joined once —
+  # nesting the concatenation would copy the remaining tail at every row, which
+  # is quadratic in the number of hypotheses and was measurably slower than the
+  # list shifting this replaced.
+  defp write_slot(evidence, values, offset, stride) do
+    write_slot(evidence, values, offset, stride, [])
+  end
+
+  defp write_slot(rest, [], _offset, _stride, parts), do: IO.iodata_to_binary([parts | rest])
+
+  defp write_slot(evidence, [value | values], offset, stride, parts) do
+    <<skipped::binary-size(^offset), _slot::binary-size(8), rest::binary>> = evidence
+
+    write_slot(
+      rest,
+      values,
+      stride - 8,
+      stride,
+      [parts | <<skipped::binary, value * 1.0::little-float-64>>]
+    )
+  end
+
+  defp channels_bytes(channels) do
+    for channels_here <- channels, into: <<>>, do: <<channels_here * 1.0::little-float-64>>
+  end
+
+  # The kernel's arithmetic in Elixir, over the same bytes: each window read in
+  # ring order, the steps with two observations added up, the window's mean.
+  defp reference_slopes(evidence, channels, window_size, cursor) do
+    row_size = window_size * 8
+    count = div(byte_size(evidence), row_size)
+
+    for index <- 0..(count - 1)//1 do
+      evidence
+      |> binary_part(index * row_size, row_size)
+      |> window_values(window_size, cursor)
+      |> mean_step(channels)
+    end
+  end
+
+  # The window's slots in the order the hypothesis observed them.
+  defp window_values(row, window_size, cursor) do
+    for slot <- 0..(window_size - 1)//1 do
+      row |> binary_part(rem(cursor + slot, window_size) * 8, 8) |> read_slot()
+    end
+  end
+
+  defp read_slot(<<bits::unsigned-64-little>>) do
+    if not_a_number?(bits) do
+      nil
+    else
+      <<value::float-64-little>> = <<bits::unsigned-64-little>>
+      value
+    end
+  end
+
+  defp not_a_number?(bits) do
+    Bitwise.band(bits, 0x7FF0_0000_0000_0000) == 0x7FF0_0000_0000_0000 and
+      Bitwise.band(bits, 0x000F_FFFF_FFFF_FFFF) != 0
+  end
+
+  # Monty's `np.nanmean(np.diff(window) / channels)`: the mean of the steps that
+  # have two observations, and `nil` for a window that has none.
+  defp mean_step([_last], _channels), do: nil
+  defp mean_step([], _channels), do: nil
+
+  defp mean_step([older | rest], channels), do: mean_step(rest, channels, older, 0.0, 0)
+
+  defp mean_step([], _channels, _older, sum, observed), do: mean(sum, observed)
+
+  defp mean_step([newer | rest], [channels_here | channels], older, sum, observed) do
+    {sum, observed} =
+      if is_nil(older) or is_nil(newer) do
+        {sum, observed}
+      else
+        {sum + (newer - older) / channels_here, observed + 1}
+      end
+
+    mean_step(rest, channels, newer, sum, observed)
+  end
+
+  defp mean(_sum, 0), do: nil
+  defp mean(sum, count), do: sum / count
 end
