@@ -15,9 +15,10 @@ config :ex_tbp_monty,
 # own name — `priv/<last word, underscored>/migrations`, which is why this
 # project's migrations sit in `priv/repo`: the module was called `Repo`. The
 # repos are `Repo.Postgres` and `Repo.SQLite` now, so the directory is named
-# rather than inherited from a module name.
-config :ex_tbp_monty, ExTbpMonty.Repo.Postgres, priv: "repo"
-config :ex_tbp_monty, ExTbpMonty.Repo.SQLite, priv: "repo"
+# rather than inherited from a module name — with the `priv/` prefix, which is
+# what that option is expected to carry (its default is `priv/repo`).
+config :ex_tbp_monty, ExTbpMonty.Repo.Postgres, priv: "priv/repo"
+config :ex_tbp_monty, ExTbpMonty.Repo.SQLite, priv: "priv/repo"
 
 # Where this software lives: the footer links to it with the octocat. A fork
 # that does not want the upstream link drops the key, and the link goes with it.
