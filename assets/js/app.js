@@ -34,7 +34,8 @@ const csrfToken = document
   .querySelector("meta[name='csrf-token']")
   .getAttribute("content");
 const liveSocket = new LiveSocket("/live", Socket, {
-  longPollFallbackMs: 2500,
+  // No `longPollFallbackMs`: the WebSocket is the transport, and a fallback
+  // would turn a blocked or broken upgrade into a page that merely looks slow.
   params: { _csrf_token: csrfToken },
   hooks: { ...colocatedHooks, StudioTour },
 });
