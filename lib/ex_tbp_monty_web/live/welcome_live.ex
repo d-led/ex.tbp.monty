@@ -70,7 +70,7 @@ defmodule ExTbpMontyWeb.WelcomeLive do
       needs to know is what a run would not find yet. --%>
       <section
         :if={@missing != []}
-        id="welcome-prerequisites"
+        id="welcome-missing-data"
         class="rounded-box border border-warning/40 bg-warning/10 px-4 py-3"
       >
         <p class="text-sm font-medium">
@@ -83,7 +83,7 @@ defmodule ExTbpMontyWeb.WelcomeLive do
           anything.
         </p>
         <p class="mt-2 flex flex-wrap items-center gap-2">
-          <.link navigate={~p"/prerequisites"} id="welcome-prerequisites-download" class="btn btn-sm">
+          <.link navigate={~p"/prerequisites"} id="welcome-missing-data-link" class="btn btn-sm">
             <.icon name="hero-arrow-down-tray-mini" class="size-4" /> Prerequisites
           </.link>
           <span class="text-xs text-base-content/60">

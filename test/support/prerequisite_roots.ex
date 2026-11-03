@@ -42,16 +42,15 @@ defmodule Monty.Test.PrerequisiteRoots do
   @doc """
   One prerequisite as it looks after a fetch: where the manifest says it belongs.
 
-  An archive is a directory, anything else is a file, which is how
-  `Prerequisites.present?/1` answers.
+  Both shapes are written — the directory an archive fills and the archive's own
+  path — because `present?/1` asks for the first and `downloaded?/1` for the
+  second, and a fixture that satisfied one of them would be a fixture that lies.
   """
   def plant(prerequisite) do
-    if prerequisite[:extract] do
-      File.mkdir_p!(Prerequisites.where_it_lands(prerequisite))
-    else
-      path = Prerequisites.target_path(prerequisite)
-      File.mkdir_p!(Path.dirname(path))
-      File.write!(path, "")
-    end
+    File.mkdir_p!(Prerequisites.where_it_lands(prerequisite))
+
+    path = Prerequisites.target_path(prerequisite)
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, "")
   end
 end

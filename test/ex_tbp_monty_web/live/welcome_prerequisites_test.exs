@@ -17,10 +17,10 @@ defmodule ExTbpMontyWeb.WelcomePrerequisitesTest do
       PrerequisiteRoots.with_roots(tmp_dir, fn ->
         {:ok, view, _html} = live(conn, ~p"/")
 
-        assert has_element?(view, "#welcome-prerequisites")
-        assert has_element?(view, "#welcome-prerequisites-download")
+        assert has_element?(view, "#welcome-missing-data")
+        assert has_element?(view, "#welcome-missing-data-link")
 
-        said = view |> element("#welcome-prerequisites") |> render()
+        said = view |> element("#welcome-missing-data") |> render()
 
         assert said =~ "not on this machine yet"
         # The page names the bundles, so a reader knows what is being asked of
@@ -36,7 +36,7 @@ defmodule ExTbpMontyWeb.WelcomePrerequisitesTest do
 
         {:ok, view, _html} = live(conn, ~p"/")
 
-        refute has_element?(view, "#welcome-prerequisites")
+        refute has_element?(view, "#welcome-missing-data")
       end)
     end
   end
