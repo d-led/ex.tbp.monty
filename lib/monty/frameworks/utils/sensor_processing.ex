@@ -49,6 +49,8 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
       iex> Monty.Frameworks.Utils.SensorProcessing.log_sign(-1.0)
       -0.6931471805599453
   """
+  alias ExTbpMonty.MatcherNif
+
   alias Monty.Frameworks.Utils.SpatialArithmetics
   alias Monty.Geometry.LinearAlgebra
   alias Monty.Geometry.Rotation
@@ -220,6 +222,44 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
   @spec principal_curvatures([[float()]], non_neg_integer(), [float()], keyword()) ::
           {float(), float(), [float()], [float()], boolean()}
   def principal_curvatures(point_cloud, center_id, normal, options \\ []) do
+    case native_curvatures(point_cloud, center_id, normal, options) do
+      {:ok, curvatures} -> curvatures
+      :read_the_reference -> reference_curvatures(point_cloud, center_id, normal, options)
+    end
+  end
+
+  # The same fit, one native call for the whole patch.
+  #
+  # The patch is four numbers a pixel — where it is and whether it is on the
+  # object — and the answer is the two curvatures and their directions. What a
+  # step pays in Elixir for this is a list per point and a list per row of the
+  # design matrix; what it pays here is the bytes it was read from.
+  defp native_curvatures(point_cloud, center_id, normal, options) do
+    with true <- MatcherNif.loaded?(),
+         {points, stride} when is_binary(points) <- cloud_bytes(point_cloud) do
+      width = patch_width(length(point_cloud))
+
+      answer =
+        MatcherNif.principal_curvatures(
+          points,
+          stride,
+          width,
+          center_id,
+          params_bytes(normal),
+          params_bytes([
+            Keyword.get(options, :neighbor_patch_frac, @curvature_patch_frac),
+            if(Keyword.get(options, :weighted, true), do: 1.0, else: 0.0),
+            if(Keyword.get(options, :fit_intercept, true), do: 1.0, else: 0.0)
+          ])
+        )
+
+      {:ok, read_curvatures(answer)}
+    else
+      _read_the_reference -> :read_the_reference
+    end
+  end
+
+  defp reference_curvatures(point_cloud, center_id, normal, options) do
     if on_object?(point_cloud, center_id) do
       case curvature_fit(point_cloud, center_id, normal, options) do
         {:ok, k1, k2, direction_1, direction_2} -> {k1, k2, direction_1, direction_2, true}
@@ -228,6 +268,36 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
     else
       undefined_curvatures()
     end
+  end
+
+  # The patch as the bytes a kernel reads, or `nil` when its rows are not all the
+  # same length — a kernel reads one row after another, and rows of different
+  # widths would have it read one pixel's numbers as another's.
+  defp cloud_bytes([]), do: nil
+
+  defp cloud_bytes([first | _rest] = point_cloud) do
+    stride = length(first)
+
+    if Enum.all?(point_cloud, &(length(&1) == stride)) do
+      binary =
+        for row <- point_cloud, value <- row, into: <<>>, do: <<value * 1.0::float-64-little>>
+
+      {binary, stride}
+    else
+      nil
+    end
+  end
+
+  defp params_bytes(values) do
+    for value <- values, into: <<>>, do: <<value * 1.0::float-64-little>>
+  end
+
+  defp read_curvatures(
+         <<k1::float-64-little, k2::float-64-little, d1x::float-64-little, d1y::float-64-little,
+           d1z::float-64-little, d2x::float-64-little, d2y::float-64-little, d2z::float-64-little,
+           valid::float-64-little>>
+       ) do
+    {k1, k2, [d1x, d1y, d1z], [d2x, d2y, d2z], valid != 0.0}
   end
 
   defp undefined_curvatures, do: {0.0, 0.0, [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], false}

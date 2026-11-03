@@ -106,4 +106,16 @@ defmodule ExTbpMonty.MatcherNif do
   """
   def neighbour_evidence(_ids, _k, _hypotheses, _graph, _params),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  A patch's principal curvatures at its middle pixel, computed natively.
+
+  `points` is the patch as one flat binary of ``count * stride`` f64 — three
+  coordinates and, last of all, the on-surface mask — and `params` is the width of
+  the Gaussian that weights the fit, whether to weight it, and whether to fit an
+  intercept. The answer is nine f64: the two curvatures, their directions (three
+  values each) and whether they were defined.
+  """
+  def principal_curvatures(_points, _stride, _width, _center_id, _normal, _params),
+    do: :erlang.nif_error(:nif_not_loaded)
 end
