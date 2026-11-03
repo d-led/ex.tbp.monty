@@ -814,9 +814,12 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     # Only the downloads are directories to create: the interpreter and the
     # engine are packages inside it, and their path is the interpreter itself.
+    # A directory that holds nothing is not data — the page says so, and that is
+    # the check this fixture exists to satisfy — so each one is left with a file.
     for %{kind: kind, path: path} <- Prerequisites.for_setup(opened.setup),
         kind in [:data, :models] do
       File.mkdir_p!(path)
+      File.write!(Path.join(path, "downloaded-by-the-test"), "")
     end
   end
 

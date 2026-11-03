@@ -309,21 +309,25 @@ defmodule Monty.Studio.RunHistory do
         |> where([run], run.id == ^uuid)
         |> select(
           [run],
-          # `->` with an integer indexes a JSON array, on both databases — a
-          # Postgres array is 1-based and a JSON one is 0-based, and the
-          # timeline is a JSON array now that it is one document.
-          type(fragment("? -> ?", run.timeline, ^position), :map)
+          # `->` with an integer indexes a JSON array on both databases. Not
+          # wrapped in `type(..., :map)`: that would plan the *index* as jsonb too,
+          # and `jsonb -> jsonb` is not an operator. The value comes back decoded
+          # on Postgres and as text on SQLite, which `json/1` settles.
+          fragment("? -> ?", run.timeline, ^position)
         )
         |> Repo.one()
         |> case do
           nil -> nil
-          entry -> Map.get(entry, "sensors", %{})
+          entry -> entry |> json() |> Map.get("sensors", %{})
         end
 
       :error ->
         nil
     end
   end
+
+  defp json(value) when is_binary(value), do: Jason.decode!(value)
+  defp json(value), do: value
 
   @doc """
   Forgets every run the filter matches, and answers how many it forgot.
