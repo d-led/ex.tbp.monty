@@ -86,7 +86,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
 
   @doc "Every hypothesis' location, as the three values each one is."
   @spec locations(t()) :: [location()]
-  def locations(%__MODULE__{locations: bytes}), do: rows(bytes, @location_width, &decode_location/1)
+  def locations(%__MODULE__{locations: bytes}),
+    do: rows(bytes, @location_width, &decode_location/1)
 
   @doc "One hypothesis' location."
   @spec location(t(), non_neg_integer()) :: location()

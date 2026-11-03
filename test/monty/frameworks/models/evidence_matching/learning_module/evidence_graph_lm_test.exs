@@ -206,6 +206,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       assert Hypotheses.locations(after_move.hypotheses["mug"]) !=
                Hypotheses.locations(before.hypotheses["mug"])
+
       assert after_move.hypotheses["mug"].evidence == before.hypotheses["mug"].evidence
       assert after_move.buffer.last_location == [0.25, 0.0, 0.0]
     end
@@ -333,12 +334,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   describe "symmetry" do
     defp with_hypotheses(lm, possible) do
-      hypotheses = Hypotheses.new(
-        evidence: List.duplicate(1.0, length(possible)),
-        locations: List.duplicate([0.0, 0.0, 0.0], length(possible)),
-        poses: List.duplicate(@identity, length(possible)),
-        possible: possible
-      )
+      hypotheses =
+        Hypotheses.new(
+          evidence: List.duplicate(1.0, length(possible)),
+          locations: List.duplicate([0.0, 0.0, 0.0], length(possible)),
+          poses: List.duplicate(@identity, length(possible)),
+          possible: possible
+        )
 
       %{lm | hypotheses: %{"mug" => hypotheses}}
     end

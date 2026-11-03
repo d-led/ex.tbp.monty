@@ -6,6 +6,11 @@
 # 44 MB pretrained state, and that one `Model.state/1` copy costs ~200 ms, but
 # a step costs 0.75-1.9 s. This profiles the processes one step touches, so the
 # seconds can be attributed instead of guessed at.
+#
+# `tprof` rather than `eprof`: a step hands work to processes the caller never
+# names — the sensor modules' bursts, the graph's own passes — and eprof only
+# sees the processes it was told about, which is why this used to print an empty
+# table. `rootset: :all` sees every process the step spawns.
 
 alias Monty.Runtime.{Model, Registry}
 alias Monty.Simulators.Recording
@@ -49,26 +54,25 @@ spec =
 {:ok, _pid} = DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {Model, spec})
 :ok = Model.set_experiment_mode(id, :eval)
 
-servers = [
-  GenServer.whereis(Registry.via({:step, id})),
-  GenServer.whereis(Registry.via({:learning_module, id, module_id})),
-  GenServer.whereis(Registry.via({:sensor_module, id, "patch"}))
-]
+run = fn -> Model.step(id, %{}, %{}, Monty.Context.new(0)) end
 
-{wall, info} =
-  :timer.tc(fn ->
-    :eprof.start()
-    :eprof.start_profiling(servers)
-    {:ok, _actions, info} = Model.step(id, %{}, %{}, Monty.Context.new(0))
-    :eprof.stop_profiling()
-    info
-  end)
+# One unprofiled step first: the first one loads code and warms the caches, and
+# attributing its cost to the algorithms would be a lie. The profiled step is
+# the second, so both report numbers a third step would repeat.
+{:ok, _actions, _info} = run.()
 
-IO.puts(
-  "step 0 took #{div(wall, 1000)} ms with profiling on; it timed itself at #{info.duration_us} us"
-)
+{wall, {:ok, _actions, info}} = :timer.tc(run)
 
-IO.puts("\n== where the time went ==")
-:eprof.analyze(:total_time, sort: :time)
+IO.puts("one step: #{div(wall, 1000)} ms, as it timed itself #{div(info.duration_us, 1000)} ms")
+
+profile = fn type ->
+  :tprof.profile(run, %{type: type, rootset: :all, report: {:total, {:measurement, :descending}}})
+end
+
+IO.puts("\n== where the memory went (words allocated) ==")
+IO.puts(profile.(:call_memory))
+
+IO.puts("\n== where the time went (scheduler time) ==")
+IO.puts(profile.(:call_time))
 
 Model.stop(id)

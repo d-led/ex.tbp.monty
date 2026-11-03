@@ -106,9 +106,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
   end
 
   defp reference_moved(%Hypotheses{} = hypotheses, displacement) do
-    positions = Enum.zip_with(Hypotheses.poses(hypotheses), Hypotheses.locations(hypotheses),
-      fn pose, location -> SpatialArithmetics.add(location, Geometry.apply(pose, displacement)) end
-    )
+    positions =
+      Enum.zip_with(Hypotheses.poses(hypotheses), Hypotheses.locations(hypotheses), fn pose,
+                                                                                       location ->
+        SpatialArithmetics.add(location, Geometry.apply(pose, displacement))
+      end)
 
     for location <- positions, into: <<>>, do: Hypotheses.location_bytes(location)
   end

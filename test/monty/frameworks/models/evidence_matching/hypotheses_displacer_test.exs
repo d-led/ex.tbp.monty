@@ -79,12 +79,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
       {:ok, turn} = Rotation.from_axis_angle([0.0, 0.0, 1.0], :math.pi() / 2)
       pose = Rotation.to_matrix(turn)
 
-      turned = Hypotheses.new(
-        evidence: [1.0],
-        locations: [[0.0, 0.0, 0.0]],
-        poses: [pose],
-        possible: [true]
-      )
+      turned =
+        Hypotheses.new(
+          evidence: [1.0],
+          locations: [[0.0, 0.0, 0.0]],
+          poses: [pose],
+          possible: [true]
+        )
 
       assert [location] =
                displacer()

@@ -166,12 +166,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
 
   describe "displacing" do
     test "with no movement nothing moves" do
-      hypotheses = Hypotheses.new(
-        evidence: [0.0],
-        locations: [[0.0, 0.0, 0.0]],
-        poses: [@identity],
-        possible: [true]
-      )
+      hypotheses =
+        Hypotheses.new(
+          evidence: [0.0],
+          locations: [[0.0, 0.0, 0.0]],
+          poses: [@identity],
+          possible: [true]
+        )
 
       assert DefaultHypothesesUpdater.displace_hypotheses(updater(), hypotheses, nil) ==
                hypotheses

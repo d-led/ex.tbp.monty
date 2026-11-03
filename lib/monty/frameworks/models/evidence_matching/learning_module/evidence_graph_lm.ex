@@ -1496,7 +1496,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     neighbours = min(3, length(votes))
 
     evidence =
-      Enum.zip_with(hypotheses.evidence, Hypotheses.locations(hypotheses), fn evidence, location ->
+      Enum.zip_with(hypotheses.evidence, Hypotheses.locations(hypotheses), fn evidence,
+                                                                              location ->
         case best_vote_within_reach(lm, location, vote_locations, vote_confidences, neighbours) do
           nil -> evidence
           vote -> weigh_vote(lm, evidence, vote)
