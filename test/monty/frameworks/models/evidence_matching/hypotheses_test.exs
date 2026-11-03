@@ -17,7 +17,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
       empty = Hypotheses.empty()
 
       assert Hypotheses.count(empty) == 0
-      assert empty.evidence == []
+      assert Hypotheses.evidence(empty) == []
       assert Hypotheses.locations(empty) == []
       assert Hypotheses.poses(empty) == []
       assert empty.possible == []
@@ -41,7 +41,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
 
       set = Hypotheses.concatenate([voted, own])
 
-      assert set.evidence == [0.2, 0.9]
+      assert Hypotheses.evidence(set) == [0.2, 0.9]
       assert Hypotheses.locations(set) == [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]
       assert set.possible == [true, false]
       assert length(Hypotheses.poses(set)) == 2
@@ -76,7 +76,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
 
       subset = Hypotheses.take(set, [2, 0])
 
-      assert subset.evidence == [0.3, 0.1]
+      assert Hypotheses.evidence(subset) == [0.3, 0.1]
       assert Hypotheses.locations(subset) == [[2.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
       assert subset.possible == [true, true]
     end

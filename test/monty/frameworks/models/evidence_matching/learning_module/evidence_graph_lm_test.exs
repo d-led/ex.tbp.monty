@@ -113,7 +113,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   end
 
   defp best_evidence(lm, graph_id) do
-    lm.hypotheses |> Map.fetch!(graph_id) |> Map.fetch!(:evidence) |> Enum.max()
+    lm.hypotheses
+    |> Map.fetch!(graph_id)
+    |> Hypotheses.evidence()
+    |> Enum.max()
   end
 
   describe "the first observation" do
@@ -125,7 +128,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       # Every node starts at what its stored features are worth against this
       # observation, and the node at the sensed location is the one that fits.
-      assert lm.hypotheses["mug"].evidence == [0.0, 0.0, 1.0, 0.0, 0.0, 1.0]
+      assert Hypotheses.evidence(lm.hypotheses["mug"]) == [0.0, 0.0, 1.0, 0.0, 0.0, 1.0]
     end
 
     test "leaves the object possible, because nothing has ruled it out" do
@@ -211,7 +214,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert Hypotheses.locations(after_move.hypotheses["mug"]) !=
                Hypotheses.locations(before.hypotheses["mug"])
 
-      assert after_move.hypotheses["mug"].evidence == before.hypotheses["mug"].evidence
+      assert Hypotheses.evidence(after_move.hypotheses["mug"]) ==
+               Hypotheses.evidence(before.hypotheses["mug"])
+
       assert after_move.buffer.last_location == [0.25, 0.0, 0.0]
     end
 
@@ -285,7 +290,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         |> step([percept([0.2, 0.0, 0.0], [0.2])])
         |> step([percept([0.2, 0.0, 0.0], [0.2])])
 
-      before = Enum.max(lm.hypotheses["mug"].evidence)
+      before = Enum.max(Hypotheses.evidence(lm.hypotheses["mug"]))
 
       {:ok, vote} =
         Message.new(
@@ -304,7 +309,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       {:ok, lm} = EvidenceGraphLM.receive_votes(%{"mug" => [vote]}, lm)
 
-      assert Enum.max(lm.hypotheses["mug"].evidence) > before
+      assert Enum.max(Hypotheses.evidence(lm.hypotheses["mug"])) > before
     end
 
     test "leaves a hypothesis alone when the vote is for somewhere else" do
@@ -313,7 +318,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         |> step([percept([0.2, 0.0, 0.0], [0.2])])
         |> step([percept([0.2, 0.0, 0.0], [0.2])])
 
-      before = lm.hypotheses["mug"].evidence
+      before = Hypotheses.evidence(lm.hypotheses["mug"])
 
       {:ok, vote} =
         Message.new(
@@ -332,7 +337,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       {:ok, lm} = EvidenceGraphLM.receive_votes(%{"mug" => [vote]}, lm)
 
-      assert lm.hypotheses["mug"].evidence == before
+      assert Hypotheses.evidence(lm.hypotheses["mug"]) == before
     end
   end
 

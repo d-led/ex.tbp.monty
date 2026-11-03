@@ -34,6 +34,7 @@ defmodule Monty.PretrainedReplayTest do
 
   alias Monty.Context
   alias Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHypothesesUpdater
+  alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Test.MontyRecording
 
@@ -107,7 +108,7 @@ defmodule Monty.PretrainedReplayTest do
   end
 
   defp hypotheses(lm),
-    do: Map.new(lm.hypotheses, fn {id, hypotheses} -> {id, length(hypotheses.evidence)} end)
+    do: Map.new(lm.hypotheses, fn {id, hypotheses} -> {id, Hypotheses.count(hypotheses)} end)
 
   defp steps_with_evidence(replay), do: replay.steps
 

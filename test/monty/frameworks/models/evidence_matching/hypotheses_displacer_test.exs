@@ -100,7 +100,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
       before = hypotheses([0.7], [[0.0, 0.0, 0.0]])
       after_move = HypothesesDisplacer.displace_hypotheses(displacer(), before, [1.0, 0.0, 0.0])
 
-      assert after_move.evidence == before.evidence
+      assert Hypotheses.evidence(after_move) == Hypotheses.evidence(before)
       assert Hypotheses.poses(after_move) == Hypotheses.poses(before)
     end
   end
@@ -116,7 +116,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
           hypotheses([1.0], [[0.0, 0.0, 0.0]])
         )
 
-      assert [evidence] = updated.evidence
+      assert [evidence] = Hypotheses.evidence(updated)
       assert evidence > 1.0
       assert is_float(telemetry.mlh_prediction_error)
     end
@@ -136,7 +136,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
           hypotheses([0.0], [[0.0, 0.0, 0.0]])
         )
 
-      assert [evidence] = updated.evidence
+      assert [evidence] = Hypotheses.evidence(updated)
       assert_in_delta evidence, 2.0, 1.0e-12
     end
 
@@ -155,7 +155,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
           hypotheses([0.0], [[0.0, 0.0, 0.0]])
         )
 
-      assert [evidence] = updated.evidence
+      assert [evidence] = Hypotheses.evidence(updated)
       assert_in_delta evidence, 2.0, 1.0e-12
     end
 
@@ -178,7 +178,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
           hypotheses([1.0], [[0.0, 0.0, 0.0]])
         )
 
-      assert hd(half.evidence) < hd(full.evidence)
+      assert hd(Hypotheses.evidence(half)) < hd(Hypotheses.evidence(full))
     end
 
     test "a hypothesis with no node in range scores the worst possible evidence" do
@@ -191,7 +191,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
           hypotheses([0.0], [[9.0, 0.0, 0.0]])
         )
 
-      assert_in_delta hd(updated.evidence), -1.0, 1.0e-9
+      assert_in_delta hd(Hypotheses.evidence(updated)), -1.0, 1.0e-9
     end
 
     test "a hypothesis below the threshold is not tested and gains nothing" do
@@ -204,7 +204,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
           hypotheses([0.1], [[9.0, 0.0, 0.0]])
         )
 
-      assert updated.evidence == [0.1]
+      assert Hypotheses.evidence(updated) == [0.1]
       assert telemetry.mlh_prediction_error == nil
     end
 

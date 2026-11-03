@@ -118,7 +118,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerNativePari
         hypotheses
       )
 
-    updated.evidence
+    Hypotheses.evidence(updated)
   end
 
   defp with_reference(fun) do

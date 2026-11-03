@@ -20,6 +20,12 @@
 # the caller's own process 1.2 M and the MuJoCo host 0.5 M. The same script read
 # 22 M and 212 MB before the native kernels and the flat hypothesis set; those
 # are the numbers to beat, not a promise.
+#
+# It read 9.0 M and 85 MB on 2026-11-04 with the learning module's server at
+# 4.5 M. Both days are quoted rather than the better one, because the reductions
+# of a busy machine drift: run the tree before and the tree after **interleaved**
+# and quote the pairs, or the difference between two afternoons is read as the
+# difference between two commits.
 
 alias Monty.Studio
 

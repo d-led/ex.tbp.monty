@@ -9,19 +9,22 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   learning module selects, masks and weights whole columns of them with one
   operation.
 
-  In Elixir `evidence` and `possible` are lists, one entry per hypothesis, and
-  `locations` and `poses` are the same rows as **bytes**: three little-endian
-  f64 of location and nine of rotation each, in the order the hypothesis index
-  names them. That is the form a step needs them in — it displaces every
-  hypothesis, then asks the k-d index about every location and a kernel for the
-  evidence at each — so holding them this way stops a step from rebuilding a
-  list, and three or nine boxed floats a hypothesis, once per pass. `locations/1`,
-  `location/2`, `poses/1` and `pose/2` read them back, one hypothesis at a time
-  where that is all a caller wants.
+  In Elixir `possible` is a list, one flag per hypothesis, and `evidence`,
+  `locations` and `poses` are the same rows as **bytes**: eight little-endian
+  f64 of evidence, then three of location and nine of rotation each, in the
+  order the hypothesis index names them. That is the form a step needs them in —
+  it displaces every hypothesis, blends what each earned into a column, then
+  asks the k-d index about every location and a kernel for the evidence at each
+  — so holding them this way stops a step from rebuilding a list, and eight or
+  three or nine boxed floats a hypothesis, once per pass. `evidence/1`,
+  `evidence_at/2`, `locations/1`, `location/2`, `poses/1` and `pose/2` read them
+  back, one hypothesis at a time where that is all a caller wants.
 
   `empty/0` is the identity for `concatenate/1`, which is what lets a learning
   module build a step's hypotheses from however many sources voted.
   """
+
+  alias ExTbpMonty.MatcherNif
 
   @enforce_keys [:evidence, :locations, :poses, :possible]
   defstruct [:evidence, :locations, :poses, :possible]
@@ -33,11 +36,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   @type pose :: [[float()]]
 
   @typedoc """
-  `locations` is `hypotheses * 3` f64 and `poses` `hypotheses * 9` f64, both in
-  the hypothesis's own order; `evidence` and `possible` have one entry each.
+  `evidence` is `hypotheses` f64, `locations` `hypotheses * 3` f64 and `poses`
+  `hypotheses * 9` f64, all in the hypothesis's own order; `possible` has one
+  entry each.
   """
   @type t :: %__MODULE__{
-          evidence: [float()],
+          evidence: binary(),
           locations: binary(),
           poses: binary(),
           possible: [boolean()]
@@ -45,18 +49,19 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
 
   @doc "The hypotheses of nothing: the identity for `concatenate/1`."
   @spec empty() :: t()
-  def empty, do: %__MODULE__{evidence: [], locations: <<>>, poses: <<>>, possible: []}
+  def empty, do: %__MODULE__{evidence: <<>>, locations: <<>>, poses: <<>>, possible: []}
 
   @doc """
   One set of hypotheses from the rows of each, in order.
 
-  The caller speaks in the shapes it has — a location as `[x, y, z]`, a pose as
-  three rows — and this is the one place those become the bytes a step reads.
+  The caller speaks in the shapes it has — evidence as a number, a location as
+  `[x, y, z]`, a pose as three rows — and this is the one place those become the
+  bytes a step reads.
   """
   @spec new(keyword()) :: t()
   def new(fields) do
     %__MODULE__{
-      evidence: Enum.map(Keyword.fetch!(fields, :evidence), &(&1 * 1.0)),
+      evidence: values_bytes(Keyword.fetch!(fields, :evidence)),
       locations: bytes(Keyword.fetch!(fields, :locations), &location_bytes/1),
       poses: bytes(Keyword.fetch!(fields, :poses), &pose_bytes/1),
       possible: Keyword.fetch!(fields, :possible)
@@ -73,7 +78,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   @spec concatenate([t()]) :: t()
   def concatenate(hyps) do
     %__MODULE__{
-      evidence: Enum.flat_map(hyps, & &1.evidence),
+      evidence: for(hypotheses <- hyps, into: <<>>, do: hypotheses.evidence),
       locations: for(hypotheses <- hyps, into: <<>>, do: hypotheses.locations),
       poses: for(hypotheses <- hyps, into: <<>>, do: hypotheses.poses),
       possible: Enum.flat_map(hyps, & &1.possible)
@@ -82,7 +87,72 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
 
   @doc "How many hypotheses the set holds."
   @spec count(t()) :: non_neg_integer()
-  def count(%__MODULE__{evidence: evidence}), do: length(evidence)
+  def count(%__MODULE__{evidence: evidence}), do: div(byte_size(evidence), 8)
+
+  @doc "Every hypothesis' evidence, as the numbers they are."
+  @spec evidence(t()) :: [float() | nil]
+  def evidence(%__MODULE__{evidence: bytes}), do: MatcherNif.decode(bytes)
+
+  @doc "One hypothesis' evidence."
+  @spec evidence_at(t(), non_neg_integer()) :: float() | nil
+  def evidence_at(%__MODULE__{evidence: bytes}, index) do
+    bytes
+    |> binary_part(index * 8, 8)
+    |> MatcherNif.decode()
+    |> hd()
+  end
+
+  @doc """
+  The evidence column as a step holds it: one f64 per hypothesis.
+
+  What a kernel reads, where `evidence/1` is what a reporter or an argmax wants.
+  """
+  @spec evidence_bytes(t()) :: binary()
+  def evidence_bytes(%__MODULE__{evidence: bytes}), do: bytes
+
+  @doc "The same hypotheses with a new evidence column, given as numbers."
+  @spec put_evidence(t(), [float()]) :: t()
+  def put_evidence(%__MODULE__{} = hypotheses, values),
+    do: %__MODULE__{hypotheses | evidence: values_bytes(values)}
+
+  @doc """
+  The index of the most likely hypothesis — the first of several equal maxima.
+
+  Asked far more often than any other question of the column, so it is asked of
+  the bytes: a kernel when they are loaded, and the same walk in Elixir otherwise.
+  """
+  @spec argmax_evidence(t()) :: non_neg_integer()
+  def argmax_evidence(%__MODULE__{} = hypotheses) do
+    if MatcherNif.loaded?() do
+      MatcherNif.argmax_index(evidence_bytes(hypotheses))
+    else
+      hypotheses |> evidence() |> argmax()
+    end
+  end
+
+  @doc "The highest evidence any hypothesis holds."
+  @spec max_evidence(t()) :: float() | nil
+  def max_evidence(%__MODULE__{evidence: <<>>}), do: nil
+
+  def max_evidence(%__MODULE__{} = hypotheses),
+    do: evidence_at(hypotheses, argmax_evidence(hypotheses))
+
+  # numpy's `argmax`: the first index holding the highest value.
+  defp argmax([]), do: 0
+
+  defp argmax([first | rest]) do
+    rest
+    |> Enum.with_index(1)
+    |> Enum.reduce({first, 0}, fn {value, index}, {best, best_index} ->
+      if value > best, do: {value, index}, else: {best, best_index}
+    end)
+    |> elem(1)
+  end
+
+  @doc "The same hypotheses with a new evidence column a kernel has written."
+  @spec put_evidence_bytes(t(), binary()) :: t()
+  def put_evidence_bytes(%__MODULE__{} = hypotheses, bytes),
+    do: %__MODULE__{hypotheses | evidence: bytes}
 
   @doc "Every hypothesis' location, as the three values each one is."
   @spec locations(t()) :: [location()]
@@ -118,14 +188,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   """
   @spec take(t(), [non_neg_integer()]) :: t()
   def take(%__MODULE__{} = hypotheses, indices) do
-    # One pass to tuples, then a constant-time lookup per index: reading them
+    # One pass to a tuple, then a constant-time lookup per index: reading them
     # out of lists by index walks the list every time, which over a hypothesis
     # space of thousands turns a selection into tens of millions of steps.
-    evidence = List.to_tuple(hypotheses.evidence)
     possible = List.to_tuple(hypotheses.possible)
 
     %__MODULE__{
-      evidence: Enum.map(indices, &elem(evidence, &1)),
+      evidence: gather(hypotheses.evidence, indices, 1),
       possible: Enum.map(indices, &elem(possible, &1)),
       locations: gather(hypotheses.locations, indices, @location_width),
       poses: gather(hypotheses.poses, indices, @pose_width)
@@ -167,6 +236,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   end
 
   defp bytes(rows, encode), do: for(row <- rows, into: <<>>, do: encode.(row))
+
+  defp values_bytes(values) do
+    for value <- values, into: <<>>, do: <<value * 1.0::little-float-64>>
+  end
 
   defp rows(bytes, width, decode), do: rows(bytes, width * 8, decode, [])
 

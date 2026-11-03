@@ -18,6 +18,7 @@ defmodule Monty.Studio.Belief do
   one.
   """
 
+  alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Runtime.{LearningModuleServer, Registry}
 
@@ -161,8 +162,8 @@ defmodule Monty.Studio.Belief do
 
   defp graphs(module) do
     module.hypotheses
-    |> Enum.reject(fn {_graph_id, space} -> space.evidence == [] end)
-    |> Map.new(fn {graph_id, space} -> {graph_id, graph(space.evidence, module)} end)
+    |> Enum.reject(fn {_graph_id, space} -> Hypotheses.count(space) == 0 end)
+    |> Map.new(fn {graph_id, space} -> {graph_id, graph(Hypotheses.evidence(space), module)} end)
   end
 
   # The four numbers a conclusion turns on, computed once for both the chart and

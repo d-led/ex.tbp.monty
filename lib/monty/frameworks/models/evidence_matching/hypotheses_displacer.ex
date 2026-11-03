@@ -148,9 +148,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
         options \\ []
       ) do
     to_test =
-      for {evidence, index} <- Enum.with_index(hypotheses.evidence),
-          evidence >= evidence_update_threshold,
-          do: index
+      if MatcherNif.loaded?() do
+        hypotheses
+        |> Hypotheses.evidence_bytes()
+        |> MatcherNif.indices_at_least(evidence_update_threshold)
+        |> then(fn chosen -> for <<index::unsigned-32-little <- chosen>>, do: index end)
+      else
+        for {evidence, index} <- Enum.with_index(Hypotheses.evidence(hypotheses)),
+            evidence >= evidence_update_threshold,
+            do: index
+      end
 
     case to_test do
       [] ->
@@ -175,15 +182,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
             Keyword.get(options, :node_feature_evidence, %{})
           )
 
-        mlh_evidence = Enum.at(to_add, argmax(hypotheses.evidence))
         channels = length(input_channels)
 
-        evidence =
-          Enum.zip_with(hypotheses.evidence, to_add, fn past, present ->
-            past * displacer.past_weight + present * displacer.present_weight
-          end)
+        {evidence, mlh_evidence} = blended(hypotheses, to_add, displacer)
 
-        {%Hypotheses{hypotheses | evidence: evidence},
+        {Hypotheses.put_evidence_bytes(hypotheses, evidence),
          %HypothesisDisplacerTelemetry{
            mlh_prediction_error:
              (@max_evidence * channels - mlh_evidence) / (@evidence_range * channels)
@@ -248,7 +251,38 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
 
       spread(totals, to_test, earned)
     end)
-    |> MatcherNif.decode()
+  end
+
+  # The column after this step, and what its most likely hypothesis earned: the
+  # two answers come from the same two columns, so they are one pass.
+  defp blended(hypotheses, to_add, displacer) do
+    past = Hypotheses.evidence_bytes(hypotheses)
+    present = values_bytes(to_add)
+
+    if MatcherNif.loaded?() do
+      MatcherNif.blend_evidence(past, present, displacer.past_weight, displacer.present_weight)
+    else
+      reference_blended(past, present, displacer)
+    end
+  end
+
+  # The kernel's arithmetic in Elixir, over the same bytes.
+  defp reference_blended(past_bytes, present_bytes, displacer) do
+    past = MatcherNif.decode(past_bytes)
+    present = MatcherNif.decode(present_bytes)
+
+    evidence =
+      Enum.zip_with(past, present, fn before, earned ->
+        before * displacer.past_weight + earned * displacer.present_weight
+      end)
+
+    {values_bytes(evidence), Enum.at(present, argmax(past))}
+  end
+
+  defp values_bytes(values) when is_binary(values), do: values
+
+  defp values_bytes(values) do
+    for value <- values, into: <<>>, do: <<value * 1.0::little-float-64>>
   end
 
   # Untested hypotheses get the worst tested update, floored at zero: being

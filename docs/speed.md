@@ -64,7 +64,8 @@ Two conclusions follow, and both are arithmetic rather than opinion:
 
 ## What the native kernels have bought
 
-22 M reductions and 212 MB a step before them; 8.9 M and 82 MB now. Seven kernels
+22 M reductions and 212 MB a step before them; 9 M and 85 MB now — from the
+probe, whole VM, 2026-11-04. Seven kernels
 in two Rustler crates (`native/kd_tree_nif`, `native/matcher_nif`): feature
 evidence, neighbour evidence, principal curvatures, displaced locations, window
 slopes, spread of one channel's evidence over the whole set, plus the graph's
@@ -92,6 +93,30 @@ to: **9.1 M → 8.9 M a step**. Smaller than the tracker's win, and honestly
 stated as such — the three runs after it (8.83, 8.87, 8.92 M) all sit below the
 three before (9.08, 9.09, 9.14 M), which is what makes it a result rather than
 noise, but only just.
+
+The evidence column itself is the last of the four, and it is the one that
+teaches the lesson. Holding it as bytes was **worse** than holding it as a list
+until every read that needs no per-value work had a kernel of its own: the
+displacer's threshold test, the blend of past and present evidence, and the
+argmax that says where the past was largest. Written in that order the change
+goes **+39 %, not −4 %** — 11.6 M to 16.1 M call-memory words a step, 372 k
+decodes of a column nobody was going to read value by value. With
+`indices_at_least`, `blend_evidence` and `argmax_index` in place and the readers
+decoding one row instead of the column, the same probe reads 11.1 M.
+
+Measured the way the acceptance section asks, interleaved against the tree
+before it — three pairs, alternating, so the machine's load is shared:
+
+| pair | before | after |
+| ---- | ------ | ----- |
+| 1    | 11.25 M reductions, 87 MB | 9.60 M reductions, 85 MB |
+| 2    | 9.58 M, 87 MB | 8.91 M, 85 MB |
+| 3    | 10.21 M, 87 MB | 9.03 M, 85 MB |
+
+The megabytes do not move between runs; the reductions move with the load, which
+is why three pairs beat one number. −2.3 % of a step's garbage for a column that
+used to be decoded 108 679 times a step, and −1 % to −12 % of its reductions,
+read as a range rather than a figure.
 
 ## The next change: one crossing
 

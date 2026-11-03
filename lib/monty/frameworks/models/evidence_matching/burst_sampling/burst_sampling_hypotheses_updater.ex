@@ -203,7 +203,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       combined = Hypotheses.concatenate([existing, new_hypotheses])
 
       {:ok, tracker} =
-        EvidenceSlopeTracker.update(tracker, combined.evidence,
+        EvidenceSlopeTracker.update(tracker, Hypotheses.evidence_bytes(combined),
           num_channels: length(input_channels)
         )
 

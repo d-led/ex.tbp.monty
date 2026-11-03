@@ -190,10 +190,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
 
         # A newcomer starts where the others already are, so it is not beaten
         # before its second observation.
-        lifted = %Hypotheses{
-          hypotheses
-          | evidence: Enum.map(hypotheses.evidence, &(&1 + mean_evidence(updated)))
-        }
+        lifted =
+          Hypotheses.put_evidence(
+            hypotheses,
+            Enum.map(Hypotheses.evidence(hypotheses), &(&1 + mean_evidence(updated)))
+          )
 
         {mark_initialised(updater, graph_id, channel), Hypotheses.concatenate([updated, lifted])}
       end)
@@ -292,7 +293,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   end
 
   defp mean_evidence(hypotheses) do
-    case hypotheses.evidence do
+    case Hypotheses.evidence(hypotheses) do
       [] -> 0.0
       evidence -> Enum.sum(evidence) / length(evidence)
     end

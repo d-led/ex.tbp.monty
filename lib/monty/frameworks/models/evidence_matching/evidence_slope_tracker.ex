@@ -122,9 +122,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   caller is a learning module mid-episode: Monty raises `ValueError`, and the
   reason is the same either way.
   """
-  @spec update(t(), [float()], keyword()) :: {:ok, t()} | {:error, :wrong_number_of_values}
+  @spec update(t(), [float()] | binary(), keyword()) ::
+          {:ok, t()} | {:error, :wrong_number_of_values}
   def update(%__MODULE__{} = tracker, values, opts \\ []) do
-    if length(values) != total_size(tracker) do
+    values = values_bytes(values)
+
+    if div(byte_size(values), 8) != total_size(tracker) do
       {:error, :wrong_number_of_values}
     else
       channels = Keyword.get(opts, :num_channels, 1)
@@ -230,18 +233,18 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
     write_slot(evidence, values, offset, stride, [])
   end
 
-  defp write_slot(rest, [], _offset, _stride, parts), do: IO.iodata_to_binary([parts, rest])
+  defp write_slot(rest, <<>>, _offset, _stride, parts), do: IO.iodata_to_binary([parts, rest])
 
-  defp write_slot(evidence, [value | values], offset, stride, parts) do
+  defp write_slot(evidence, <<value::binary-size(8), values::binary>>, offset, stride, parts) do
     <<skipped::binary-size(^offset), _slot::binary-size(8), rest::binary>> = evidence
 
-    write_slot(
-      rest,
-      values,
-      stride - 8,
-      stride,
-      [parts, <<skipped::binary, value * 1.0::little-float-64>>]
-    )
+    write_slot(rest, values, stride - 8, stride, [parts, skipped, value])
+  end
+
+  defp values_bytes(values) when is_binary(values), do: values
+
+  defp values_bytes(values) do
+    for value <- values, into: <<>>, do: <<value * 1.0::little-float-64>>
   end
 
   defp channels_bytes(channels) do

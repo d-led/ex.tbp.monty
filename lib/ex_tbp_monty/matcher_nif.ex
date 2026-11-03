@@ -173,4 +173,31 @@ defmodule ExTbpMonty.MatcherNif do
   `BurstSamplingHypothesesUpdater.top_indices/2` is the reference.
   """
   def top_indices(_evidence, _count), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  The hypotheses whose evidence has reached `threshold`, in index order.
+
+  `evidence` is `hypotheses` f64; the answer is `k` u32. The reference is the
+  comprehension `for {evidence, index} <- Enum.with_index(column), evidence >= threshold`.
+  """
+  def indices_at_least(_evidence, _threshold), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  The first index holding the highest value of a column — numpy's `argmax`.
+
+  `column` is `n` f64; the answer is one u32. The reference is
+  `EvidenceGraphLM`'s `argmax/1`, which reports the first of several equal maxima.
+  """
+  def argmax_index(_column), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  The evidence column after a step, and what its most likely hypothesis earned.
+
+  `past · past_weight + present · present_weight` for every hypothesis, and
+  `present` at the first index holding the highest `past` — numpy's `argmax`,
+  which reports the first of several equal maxima. The reference is
+  `HypothesesDisplacer.compute_evidence/6`'s two passes in Elixir.
+  """
+  def blend_evidence(_past, _present, _past_weight, _present_weight),
+    do: :erlang.nif_error(:nif_not_loaded)
 end

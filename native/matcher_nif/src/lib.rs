@@ -520,6 +520,113 @@ fn displaced_locations<'a>(
     output.into()
 }
 
+/// The first index holding the highest value — numpy's `argmax`.
+///
+/// A learning module asks this of its evidence column more often than it asks
+/// anything else: once for the most likely hypothesis, again for the second,
+/// again when a goal is proposed, again when a vote is weighed. Each answer used
+/// to be a decoded column.
+///
+/// * `column` — `m` f64.
+///
+/// The answer is one u32: the first of several equal maxima, and `0` for a NaN
+/// column, as `Enum.max_by(&{value, index})` reads `nil` values last.
+#[rustler::nif]
+fn argmax_index(column: Binary) -> u32 {
+    let count = column.len() / 8;
+    let mut best_index = 0;
+    let mut best = f64::NEG_INFINITY;
+
+    for index in 0..count {
+        let value = f64_at(column.as_slice(), index * 8);
+
+        if value.is_nan() {
+            continue;
+        }
+
+        if value > best {
+            best = value;
+            best_index = index;
+        }
+    }
+
+    best_index as u32
+}
+
+// -- what a step does with the evidence column ---------------------------------
+
+/// The hypotheses whose evidence has reached `threshold`, in index order.
+///
+/// Which hypotheses an observation is worth testing is a comparison per
+/// hypothesis, and a step asks it once per burst. Read out of the column as
+/// bytes rather than through a decoded list.
+///
+/// * `evidence` — `m` f64, one value per hypothesis.
+/// * `threshold` — the least evidence worth testing.
+///
+/// The answer is `k` u32. A NaN answer — `nil` in Elixir — fails the comparison,
+/// exactly as `nil >= threshold` fails it.
+#[rustler::nif]
+fn indices_at_least<'a>(env: Env<'a>, evidence: Binary, threshold: f64) -> Binary<'a> {
+    let count = evidence.len() / 8;
+
+    let chosen: Vec<u32> = (0..count)
+        .filter(|index| f64_at(evidence.as_slice(), index * 8) >= threshold)
+        .map(|index| index as u32)
+        .collect();
+
+    let mut output = NewBinary::new(env, chosen.len() * 4);
+
+    for (position, index) in chosen.iter().enumerate() {
+        output[position * 4..(position + 1) * 4].copy_from_slice(&index.to_le_bytes());
+    }
+
+    output.into()
+}
+
+/// The evidence column after this step: `past · past_weight + present · present_weight`.
+///
+/// It also answers what the most likely hypothesis earned this step, because the
+/// two answers come from the same two columns and splitting them meant walking
+/// each column twice more.
+///
+/// * `past` — `m` f64, the evidence before this step.
+/// * `present` — `m` f64, what each hypothesis earned from this step's channel.
+/// * `past_weight`, `present_weight` — how the two are blended.
+///
+/// The answer is `{m f64, f64}`: the blended column, and `present` at the first
+/// index holding the highest `past` — numpy's `argmax`, which reports the first
+/// of several equal maxima.
+#[rustler::nif]
+fn blend_evidence<'a>(
+    env: Env<'a>,
+    past: Binary,
+    present: Binary,
+    past_weight: f64,
+    present_weight: f64,
+) -> (Binary<'a>, f64) {
+    let count = past.len() / 8;
+    let mut output = NewBinary::new(env, count * 8);
+    let mut best_index = 0;
+    let mut best = f64::NEG_INFINITY;
+
+    for index in 0..count {
+        let before = f64_at(past.as_slice(), index * 8);
+
+        // NaN is the reference's `nil`, which never wins a comparison.
+        if !before.is_nan() && before > best {
+            best = before;
+            best_index = index;
+        }
+
+        let blended = before * past_weight + f64_at(present.as_slice(), index * 8) * present_weight;
+
+        write_f64(&mut output, index, blended);
+    }
+
+    (output.into(), f64_at(present.as_slice(), best_index * 8))
+}
+
 // -- which nodes are worth a hypothesis ---------------------------------------
 
 /// The nodes whose feature evidence is highest, lowest first among the chosen.

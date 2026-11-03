@@ -89,7 +89,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
       # The nodes hold rgba 0.0, 0.1 and 0.2 and the sensor saw 0.2, so only the
       # third node starts with anything — once for each of the two poses a
       # defined surface pose allows.
-      assert started.evidence == [0.0, 0.0, 1.0, 0.0, 0.0, 1.0]
+      assert Hypotheses.evidence(started) == [0.0, 0.0, 1.0, 0.0, 0.0, 1.0]
     end
 
     test "fixed poses put every node under each configured rotation" do
@@ -138,7 +138,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
         DefaultHypothesesUpdater.update_evidence(updater, started, features(), "mug", 0.0)
 
       assert Hypotheses.count(updated) == Hypotheses.count(started)
-      assert Enum.any?(updated.evidence, &(&1 > 0.0))
+      assert Enum.any?(Hypotheses.evidence(updated), &(&1 > 0.0))
       assert is_float(telemetry.mlh_prediction_error)
     end
 
@@ -158,7 +158,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
       {_updater, joined, _telemetry} =
         DefaultHypothesesUpdater.update_evidence(updater, started, features(), "mug", 0.0)
 
-      late = Enum.drop(joined.evidence, Hypotheses.count(started))
+      late = Enum.drop(Hypotheses.evidence(joined), Hypotheses.count(started))
       assert late != []
       assert Enum.all?(late, &(&1 > 0.0))
     end

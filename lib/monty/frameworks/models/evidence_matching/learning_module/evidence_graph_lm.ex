@@ -627,7 +627,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       LearningModule.evidence_update_threshold(
         lm.threshold_config,
         current_mlh(lm).evidence,
-        hypotheses.evidence
+        Hypotheses.evidence(hypotheses)
       )
 
     {lm, displaced} = displace(lm, hypotheses, displacement)
@@ -785,8 +785,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       graph_ids
       |> Enum.flat_map(fn graph_id ->
         case Map.get(lm.hypotheses, graph_id) do
-          %Hypotheses{evidence: []} -> []
-          %Hypotheses{evidence: evidence} -> [{graph_id, Enum.max(evidence)}]
+          %Hypotheses{evidence: <<>>} -> []
+          %Hypotheses{} = hypotheses -> [{graph_id, Hypotheses.max_evidence(hypotheses)}]
           nil -> []
         end
       end)
@@ -863,18 +863,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   defp best_of(%__MODULE__{} = lm, graph_id) do
     case Map.get(lm.hypotheses, graph_id) do
-      %Hypotheses{evidence: []} -> nil
-      %Hypotheses{} = hypotheses -> mlh_from_id(lm, graph_id, argmax(hypotheses.evidence))
-      nil -> nil
-    end
-  end
+      %Hypotheses{evidence: <<>>} ->
+        nil
 
-  # numpy's `argmax`, which reports the first of several equal maxima.
-  defp argmax(values) do
-    values
-    |> Enum.with_index()
-    |> Enum.max_by(fn {value, index} -> {value, -index} end)
-    |> elem(1)
+      %Hypotheses{} = hypotheses ->
+        mlh_from_id(lm, graph_id, Hypotheses.argmax_evidence(hypotheses))
+
+      nil ->
+        nil
+    end
   end
 
   # The index of the second highest value, or `nil` when there is no second.
@@ -915,7 +912,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   @spec num_hypotheses(t(), graph_id()) :: non_neg_integer()
   def num_hypotheses(%__MODULE__{} = lm, graph_id) do
     case Map.get(lm.hypotheses, graph_id) do
-      %Hypotheses{evidence: evidence} -> length(evidence)
+      %Hypotheses{} = hypotheses -> Hypotheses.count(hypotheses)
       nil -> 0
     end
   end
@@ -929,7 +926,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       location: Hypotheses.location(hypotheses, id),
       rotation: rotation_of(Hypotheses.pose(hypotheses, id)),
       scale: get_object_scale(lm, graph_id),
-      evidence: Enum.at(hypotheses.evidence, id)
+      evidence: Hypotheses.evidence_at(hypotheses, id)
     }
   end
 
@@ -999,7 +996,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   def get_top_two_pose_hypotheses_for_graph_id(%__MODULE__{} = lm, graph_id) do
     best = most_likely_hypothesis(lm, graph_id)
 
-    case second_argmax(Map.fetch!(lm.hypotheses, graph_id).evidence) do
+    case second_argmax(Hypotheses.evidence(Map.fetch!(lm.hypotheses, graph_id))) do
       nil -> {best, nil}
       id -> {best, mlh_from_id(lm, graph_id, id)}
     end
@@ -1015,7 +1012,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   """
   @spec get_possible_hypothesis_ids(t(), graph_id()) :: [non_neg_integer()]
   def get_possible_hypothesis_ids(%__MODULE__{} = lm, object_id) do
-    evidence = Map.fetch!(lm.hypotheses, object_id).evidence
+    evidence = Hypotheses.evidence(Map.fetch!(lm.hypotheses, object_id))
     max_evidence = Enum.max(evidence)
 
     if max_evidence > lm.object_evidence_threshold do
@@ -1414,7 +1411,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   defp possible_states(%__MODULE__{} = lm) do
     evidences =
-      Map.new(lm.hypotheses, fn {graph_id, hypotheses} -> {graph_id, hypotheses.evidence} end)
+      Map.new(lm.hypotheses, fn {graph_id, hypotheses} ->
+        {graph_id, Hypotheses.evidence(hypotheses)}
+      end)
 
     evidences
     |> GraphMatchingUtils.scaled_evidences()
@@ -1496,15 +1495,18 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     neighbours = min(3, length(votes))
 
     evidence =
-      Enum.zip_with(hypotheses.evidence, Hypotheses.locations(hypotheses), fn evidence,
-                                                                              location ->
-        case best_vote_within_reach(lm, location, vote_locations, vote_confidences, neighbours) do
-          nil -> evidence
-          vote -> weigh_vote(lm, evidence, vote)
+      Enum.zip_with(
+        Hypotheses.evidence(hypotheses),
+        Hypotheses.locations(hypotheses),
+        fn evidence, location ->
+          case best_vote_within_reach(lm, location, vote_locations, vote_confidences, neighbours) do
+            nil -> evidence
+            vote -> weigh_vote(lm, evidence, vote)
+          end
         end
-      end)
+      )
 
-    %Hypotheses{hypotheses | evidence: evidence}
+    Hypotheses.put_evidence(hypotheses, evidence)
   end
 
   defp best_vote_within_reach(
@@ -1663,7 +1665,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   defp detailed_stats(%__MODULE__{} = lm, stats) do
     stats
     |> Map.put("possible_locations", Map.new(lm.hypotheses, fn {id, h} -> {id, h.locations} end))
-    |> Map.put("evidences", Map.new(lm.hypotheses, fn {id, h} -> {id, h.evidence} end))
+    |> Map.put(
+      "evidences",
+      Map.new(lm.hypotheses, fn {id, h} -> {id, Hypotheses.evidence(h)} end)
+    )
     |> Map.put("symmetry_evidence", lm.symmetry_evidence)
     |> then(fn stats ->
       if Map.has_key?(lm.buffer.stats, "possible_rotations"),
