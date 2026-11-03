@@ -96,7 +96,9 @@ defmodule ExTbpMonty.Release do
   end
 
   defp repos do
-    Application.fetch_env!(@app, :ecto_repos)
+    # The module the instance was started with, not the compile-time list: in a
+    # release that can be the SQLite repo, whose migrations are the same files.
+    [ExTbpMonty.Database.repo_module()]
   end
 
   defp load_app do

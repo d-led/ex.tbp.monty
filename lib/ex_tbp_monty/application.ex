@@ -11,7 +11,9 @@ defmodule ExTbpMonty.Application do
   def start(_type, _args) do
     children = [
       ExTbpMontyWeb.Telemetry,
-      ExTbpMonty.Repo,
+      # The repo this instance was started with: Postgres when `DATABASE_URL`
+      # names one, SQLite in a file otherwise.
+      ExTbpMonty.Database.repo_module(),
       {DNSCluster, query: Application.get_env(:ex_tbp_monty, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: ExTbpMonty.PubSub},
       # Every sensor and learning module registers here, so the step
@@ -51,6 +53,7 @@ defmodule ExTbpMonty.Application do
         # is not running now.
         Monty.Studio.Jobs.Reaper.sweep()
         warm_catalogue()
+        prefetch()
         {:ok, pid}
 
       error ->
@@ -65,6 +68,24 @@ defmodule ExTbpMonty.Application do
   defp warm_catalogue do
     if Application.get_env(:ex_tbp_monty, :precompute, true) do
       Task.start(fn -> Monty.Studio.Catalog.experiments() end)
+    end
+
+    :ok
+  end
+
+  # A first start has no data and a run cannot use what is not there, so the
+  # bundles are fetched here — in the background, never in front of the server:
+  # the page answers while a gigabyte arrives, and `/prerequisites` shows every
+  # download as it happens. A download already running is left to its own
+  # subscriber rather than started twice.
+  defp prefetch do
+    if Application.get_env(:ex_tbp_monty, :prefetch, false) do
+      Task.start(fn ->
+        for prerequisite <- Monty.Prerequisites.missing(),
+            is_nil(Monty.Prerequisites.Download.lookup(prerequisite.id)) do
+          Monty.Prerequisites.fetch(prerequisite)
+        end
+      end)
     end
 
     :ok

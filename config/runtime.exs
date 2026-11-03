@@ -59,6 +59,18 @@ if config_env() == :dev do
 end
 
 if config_env() == :prod do
+  # The database, decided here rather than at build time: Postgres when
+  # `DATABASE_URL` names one, SQLite in a file otherwise, so the image runs as
+  # one container and a deployment that has a database server says where it is.
+  # Ecto binds an adapter to a repo when the repo is compiled, so the choice is
+  # between two compiled repos and everything that needs one — the app, Oban,
+  # the migrator — is given the same answer here.
+  repo = ExTbpMonty.Database.repo_module()
+
+  config :ex_tbp_monty, :repo, repo
+  config :ex_tbp_monty, repo, ExTbpMonty.Database.repo()
+  config :ex_tbp_monty, Oban, repo: repo, engine: ExTbpMonty.Database.oban_engine()
+
   # Where the memory a run recognises with is kept. It is written at run time —
   # it is this application's export of Monty's pickles — so it belongs where a
   # container keeps things: on the same volume as the data the pickles came
@@ -69,17 +81,11 @@ if config_env() == :prod do
          System.get_env("MONTY_LIBRARIES") ||
            Path.join(Monty.Prerequisites.root_path("MONTY_DATA"), "libraries")
 
-  database_url =
-    System.get_env("DATABASE_URL") ||
-      raise """
-      environment variable DATABASE_URL is missing.
-      For example: ecto://USER:PASS@HOST/DATABASE
-      """
-
-  config :ex_tbp_monty, ExTbpMonty.Repo,
-    url: database_url,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-    socket_options: if(System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: [])
+  # What a first start needs and does not have is fetched in the background, not
+  # in front of the server: the page stays responsive while a gigabyte arrives
+  # and `/prerequisites` shows it. `PREFETCH=0` turns it off, for a deployment
+  # that would rather fetch deliberately.
+  config :ex_tbp_monty, prefetch: System.get_env("PREFETCH", "true") in ~w(true 1)
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

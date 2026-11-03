@@ -234,7 +234,18 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   @impl true
   def handle_info({:download, %{id: id} = progress}, socket) do
-    {:noreply, assign(socket, statuses: Map.put(socket.assigns.statuses, id, progress))}
+    {:noreply,
+     assign(socket,
+       statuses: Map.put(socket.assigns.statuses, id, progress),
+       # A finished download is the moment a bundle *is* here: the page asked
+       # once, at mount, and a green badge that waited for the next visit was
+       # how a finished fetch still read as missing.
+       present:
+         if(progress.status == :done,
+           do: Map.put(socket.assigns.present, id, true),
+           else: socket.assigns.present
+         )
+     )}
   end
 
   defp start(socket, prerequisite) do

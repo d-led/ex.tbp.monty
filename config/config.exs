@@ -8,7 +8,7 @@
 import Config
 
 config :ex_tbp_monty,
-  ecto_repos: [ExTbpMonty.Repo],
+  ecto_repos: [ExTbpMonty.Repo.Postgres],
   generators: [timestamp_type: :utc_datetime]
 
 # Where this software lives: the footer links to it with the octocat. A fork
@@ -108,9 +108,14 @@ config :phoenix, :json_library, Jason
 # Experiment runs are jobs: a run that is queued survives the page that queued
 # it, and what it did lives in `studio_runs` rather than in a LiveView's memory.
 # Two at a time is a person's attention span, not a throughput decision.
+# Nothing is fetched in front of the server, so a first start can be asked for a
+# run before its data has arrived; the production runtime turns the background
+# fetch on (`PREFETCH`), and a development machine fetches by hand.
+config :ex_tbp_monty, prefetch: false
+
 config :ex_tbp_monty, Oban,
   engine: Oban.Engines.Basic,
-  repo: ExTbpMonty.Repo,
+  repo: ExTbpMonty.Repo.Postgres,
   queues: [studio: 2]
 
 # Import environment specific config. This must remain at the bottom

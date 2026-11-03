@@ -10,8 +10,8 @@ pages.
 docker pull ghcr.io/d-led/ex.tbp.monty:latest
 
 docker run --rm -p 6401:4000 \
-  -e DATABASE_URL=ecto://user:pass@host:5432/monty \
   -e SECRET_KEY_BASE="$(mix phx.gen.secret)" \
+  -v monty-runs:/app/priv \
   ghcr.io/d-led/ex.tbp.monty:latest
 ```
 
@@ -81,16 +81,41 @@ writes under `WANDB_DIR` (below).
 
 ## Environment
 
-`DATABASE_URL` and `SECRET_KEY_BASE` have no default; the rest can be left
-alone. Everything below is read by the release at boot, so it is an environment
-variable, not a config file.
+`SECRET_KEY_BASE` has no default; the rest can be left alone. Everything below
+is read by the release at boot, so it is an environment variable, not a config
+file.
+
+### The database
+
+The runs live in one of two places, decided when the instance starts:
+
+| Variable       | Default                 | Meaning                                                                                                              |
+| -------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` | unset → SQLite          | Postgres, `ecto://user:pass@host:5432/database`. Setting it is the whole switch: the same image then uses the server. |
+| `SQLITE_PATH`  | `$HOME/ex_tbp_monty.db` | Where the file goes when there is no `DATABASE_URL`. In the image `$HOME` is `/app/priv`, so it lands on the volume.  |
+
+Both drivers are in the release, and the queue follows the choice: Oban's own
+engine on SQLite, its locking one on Postgres. A fresh file gets the schema by
+running `/app/bin/migrate` — or by booting, which migrates first.
+
+### The memory
+
+The memory a run recognises with is an export of the pretrained pickles, written
+at run time, so it is kept beside the data rather than inside the release:
+`MONTY_LIBRARIES`, which defaults to `$MONTY_DATA/libraries`. On a volume the
+first fetch exports it once; inside the image's own filesystem it is thrown away
+with the container, and every start reads every model again.
+
+Nothing blocks on any of this. A missing bundle is fetched in the background as
+the server starts (`PREFETCH=0` turns that off), `/prerequisites` shows each
+download as it happens, and a run whose data has not arrived yet says so —
+rather than failing inside the simulator.
 
 ### Required
 
-| Variable          | Meaning                                                                                   |
-| ----------------- | ----------------------------------------------------------------------------------------- |
-| `DATABASE_URL`    | Postgres, `ecto://user:pass@host:5432/database`. The release refuses to start without it. |
-| `SECRET_KEY_BASE` | Signs cookies and sessions (`mix phx.gen.secret`). Refuses to start without it.           |
+| Variable          | Meaning                                                                         |
+| ----------------- | ------------------------------------------------------------------------------- |
+| `SECRET_KEY_BASE` | Signs cookies and sessions (`mix phx.gen.secret`). Refuses to start without it. |
 
 ### HTTP
 

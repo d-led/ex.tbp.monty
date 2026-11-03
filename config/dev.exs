@@ -1,7 +1,7 @@
 import Config
 
 # Configure your database
-config :ex_tbp_monty, ExTbpMonty.Repo,
+config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",

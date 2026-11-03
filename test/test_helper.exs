@@ -20,4 +20,4 @@ if System.get_env("CI") do
 end
 
 ExUnit.start()
-Ecto.Adapters.SQL.Sandbox.mode(ExTbpMonty.Repo, :manual)
+Ecto.Adapters.SQL.Sandbox.mode(ExTbpMonty.Repo.Postgres, :manual)
