@@ -163,12 +163,17 @@ site that cannot be reached is reported in words rather than failing a call.
 
 ## Data and models: the prerequisites
 
-The image carries the software and Monty's own config tree, pretrained
-libraries included (`/app/priv/monty/libraries`, ready for a run to read). The
-datasets and the larger model bundles are not in it: they are big, they change
-on their own schedule, and a pull that shipped them would be a pull nobody
-wants. `/prerequisites` lists what an experiment
-needs, the path each file goes to, and which of them are already there.
+The image carries the software and Monty's own config tree — every config it
+ships, the snapshots they are held to, the worlds and the Python that steps
+them. What it does not carry is the memory those configs read:
+`/app/priv/monty/libraries` is derived data, exported from the pretrained model
+bundle, so an image built from a checkout has the directory and nothing in it,
+and the first `/prerequisites` download fills it (that fetch ends by exporting
+the libraries, and a later visit exports nothing). The datasets and the model
+bundles themselves are not in it either: they are big, they change on their own
+schedule, and a pull that shipped them would be a pull nobody wants.
+`/prerequisites` lists what an experiment needs, the path each file goes to, and
+which of them are already there.
 
 Three ways to have them:
 
@@ -191,7 +196,11 @@ app should fetch them itself; either way they land on the volume and survive a
 restart.
 
 Nothing is fetched at boot: an offline container runs any experiment whose files
-are in place, and `/prerequisites` is what says which ones are missing.
+are in place, and `/prerequisites` is what says which ones are missing. From a
+fresh volume a MuJoCo run needs two downloads on that page — the YCB meshes it
+renders and the pretrained release its config names — after which the first
+experiment has its memory and starts. The third entry there, the older release
+the recorded parity episodes were made with, is not one of them.
 
 ### The world needs nothing installed
 

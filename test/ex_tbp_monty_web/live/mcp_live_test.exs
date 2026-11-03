@@ -28,6 +28,28 @@ defmodule ExTbpMontyWeb.McpLiveTest do
       assert server["url"] == "http://www.example.com/mcp"
     end
 
+    test "names the mapped port a container's address bar carries, not the one it listens on",
+         %{conn: conn} do
+      # `docker compose` publishes 4001 for a server that listens on 4000. The
+      # configuration has to name the first of those: it is what an editor
+      # outside the container can reach, and the second one reaches nothing.
+      conn = %{conn | host: "localhost", port: 4001}
+
+      {:ok, view, _html} = live(conn, ~p"/mcp/config")
+
+      assert view |> element("#mcp-url") |> render() =~ "http://localhost:4001/mcp"
+
+      config =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#mcp-config-text")
+        |> LazyHTML.text()
+        |> Jason.decode!()
+
+      assert get_in(config, ["servers", "monty-studio", "url"]) == "http://localhost:4001/mcp"
+    end
+
     test "offers to copy the endpoint and the configuration", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/mcp/config")
 
