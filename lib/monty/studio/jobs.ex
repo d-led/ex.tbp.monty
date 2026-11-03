@@ -115,7 +115,9 @@ defmodule Monty.Studio.Jobs do
 
   def by_run(run_ids) do
     Oban.Job
-    |> where([job], fragment("?->>'run_id' = ANY(?)", job.args, ^run_ids))
+    # The `run_id` as JSON, compared against a list: `= ANY(?)` is Postgres's way
+    # and `IN` is both of theirs.
+    |> where([job], fragment("?->>'run_id'", job.args) in ^run_ids)
     |> order_by([job], desc: job.id)
     |> Repo.all()
     |> Enum.uniq_by(&run_id/1)

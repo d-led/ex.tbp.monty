@@ -86,6 +86,10 @@ defmodule ExTbpMonty.MixProject do
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},
       {:postgrex, ">= 0.0.0"},
+      # The image runs with either: Postgres when `DATABASE_URL` names one,
+      # SQLite in a file otherwise. Both drivers are compiled into the release,
+      # so which one is used is decided when the instance starts.
+      {:ecto_sqlite3, "~> 0.26"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.0"},

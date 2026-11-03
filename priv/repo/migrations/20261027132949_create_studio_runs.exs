@@ -20,7 +20,9 @@ defmodule ExTbpMonty.Repo.Migrations.CreateStudioRuns do
       add :config, :map, null: false, default: %{}
       add :inputs, :map, null: false, default: %{}
       add :summary, :map, null: false, default: %{}
-      add :log, {:array, :map}, null: false, default: []
+      # A run's log is an array of lines. One JSON document holds it on either
+      # database this runs on; see `Monty.Studio.RunHistory.Json`.
+      add :log, Monty.Studio.RunHistory.Json, null: false, default: []
       add :started_at, :utc_datetime_usec
       add :finished_at, :utc_datetime_usec
       add :duration_us, :bigint, null: false, default: 0

@@ -27,8 +27,8 @@ defmodule Monty.Studio.RunHistory.Run do
     field :config, :map, default: %{}
     field :inputs, :map, default: %{}
     field :summary, :map, default: %{}
-    field :log, {:array, :map}, default: []
-    field :timeline, {:array, :map}, default: []
+    field :log, Monty.Studio.RunHistory.Json, default: []
+    field :timeline, Monty.Studio.RunHistory.Json, default: []
     field :log_path, :string
     field :started_at, :utc_datetime_usec
     field :finished_at, :utc_datetime_usec

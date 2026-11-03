@@ -228,7 +228,11 @@ COPY --from=builder --chown=10001:10001 /app/priv /app/priv
 # `/app/priv/tbp` has to exist here even though it starts empty: a named volume
 # mounts root-owned unless the image has something at that path to inherit the
 # owner from, and uid 10001 would then have nowhere to download to.
-RUN mkdir -p /app/priv/wandb /app/priv/tbp \
+# The one directory the running studio writes to, on a volume: the SQLite file
+# the runs live in (unless `DATABASE_URL` names a Postgres), the downloads, and
+# wandb's own directory. It exists in the image rather than in a mount so that a
+# fresh named volume inherits this ownership instead of arriving owned by root.
+RUN mkdir -p /app/priv/data /app/priv/wandb /app/priv/tbp \
   && ln -s /app/priv /app/bin/priv \
   && chown -R 10001:10001 /app/priv
 

@@ -221,12 +221,17 @@ defmodule Monty.Studio.RunHistory do
 
   # Every word is its own condition, so the conditions narrow each other. What a
   # word may not do is act as a wildcard: `%` and `_` are characters a person
-  # typed, not patterns.
+  # typed, not patterns. `lower` on both sides rather than `ILIKE`, which SQLite
+  # does not have.
   defp by_text(query, text) do
     text
     |> String.split(~r/\s+/, trim: true)
     |> Enum.reduce(query, fn word, narrowed ->
-      where(narrowed, [run], fragment("? ILIKE ?", run.experiment, ^"%#{escape(word)}%"))
+      where(
+        narrowed,
+        [run],
+        fragment("lower(?) LIKE lower(?)", run.experiment, ^"%#{escape(word)}%")
+      )
     end)
   end
 
@@ -304,7 +309,10 @@ defmodule Monty.Studio.RunHistory do
         |> where([run], run.id == ^uuid)
         |> select(
           [run],
-          type(fragment("(?)[CAST(? AS int)]", run.timeline, ^(position + 1)), :map)
+          # `->` with an integer indexes a JSON array, on both databases — a
+          # Postgres array is 1-based and a JSON one is 0-based, and the
+          # timeline is a JSON array now that it is one document.
+          type(fragment("? -> ?", run.timeline, ^position), :map)
         )
         |> Repo.one()
         |> case do

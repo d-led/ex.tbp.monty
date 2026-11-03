@@ -7,7 +7,7 @@ defmodule ExTbpMonty.Repo.Migrations.AddTimelineToStudioRuns do
   # so they belong beside the config snapshot rather than on disk.
   def change do
     alter table(:studio_runs) do
-      add :timeline, {:array, :map}, null: false, default: []
+      add :timeline, Monty.Studio.RunHistory.Json, null: false, default: []
     end
   end
 end
