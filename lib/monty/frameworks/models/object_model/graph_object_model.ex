@@ -231,6 +231,22 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
     end
   end
 
+  @doc """
+  The ids of the `count` nodes nearest each of `search_locations`, as bytes.
+
+  See `Monty.Frameworks.Models.ObjectModel.find_nearest_neighbor_ids/3`: this is
+  `find_nearest_neighbors/4` with the decoding left to the reader, for a kernel
+  that wanted the raw answers.
+  """
+  @impl true
+  def find_nearest_neighbor_ids(
+        %__MODULE__{graph: %{pos: positions}} = model,
+        search_locations,
+        count
+      ) do
+    KdTree.nearest_many_ids(location_tree(model), search_locations, min(count, length(positions)))
+  end
+
   # The index over the graph's positions, built once with the graph rather than
   # once per query: displacing asks it something for every hypothesis of every
   # step, and the positions do not move while an episode is being matched.

@@ -23,7 +23,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.De
 
   @behaviour Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.FeatureEvidenceCalculator
 
-  import Bitwise, only: [&&&: 2]
+  alias ExTbpMonty.MatcherNif
 
   @skip_features MapSet.new(["pose_vectors", "pose_fully_defined"])
   @circular_features MapSet.new(["hsv"])
@@ -112,29 +112,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.De
   defp kind_code(:circular), do: 1
   defp kind_code(:categorical), do: 2
 
-  @exponent_mask 0x7FF0_0000_0000_0000
-  @significand_mask 0x000F_FFFF_FFFF_FFFF
-
   @doc """
   A native kernel's answers, as this module's: a NaN is `nil`.
 
-  Erlang has no NaN — the pattern is not a float the syntax can build, so a
-  segment of NaN bits does not even end a comprehension cleanly — so the bytes
-  are read as the integers they are and only the ones that *are* numbers become
-  floats. A kernel writes NaN for a node with no evidence, which is this module's
-  `nil`.
+  The answers cross as bytes; `ExTbpMonty.MatcherNif.decode/1` is the one place
+  that turns them back into values, because a NaN there means the same thing for
+  every kernel: no answer for this row.
   """
   @spec decode_answers(binary()) :: [float() | nil]
-  def decode_answers(binary) do
-    for <<bits::unsigned-64-little <- binary>> do
-      if (bits &&& @exponent_mask) == @exponent_mask and (bits &&& @significand_mask) != 0 do
-        nil
-      else
-        <<value::float-64-little>> = <<bits::unsigned-64-little>>
-        value
-      end
-    end
-  end
+  def decode_answers(binary), do: MatcherNif.decode(binary)
 
   defp kinds(feature, length) do
     cond do

@@ -91,4 +91,19 @@ defmodule Monty.Frameworks.Models.ObjectModel do
   """
   @callback find_nearest_neighbors(model(), [location()], pos_integer(), keyword()) ::
               [[non_neg_integer()]] | [[{float(), non_neg_integer()}]]
+
+  @doc """
+  The same ids, left as the bytes the index wrote, for a native kernel to read.
+
+  `{ids, count}`: `locations * count` little-endian u32 ids, row after row, with
+  `4_294_967_295` where a query found fewer than `count`. The decoded form above
+  is what the rest of the port compares and reports; this one exists because
+  decoding twenty thousand of them into lists of lists cost more than the search
+  did, and the evidence kernel can read the marker itself.
+
+  `nil` when this model's index has no bytes to offer — a model that walks
+  distances instead of a tree, or one whose index is the Elixir tree.
+  """
+  @callback find_nearest_neighbor_ids(model(), [location()], pos_integer()) ::
+              {binary(), pos_integer()} | nil
 end

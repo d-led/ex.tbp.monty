@@ -223,6 +223,12 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
     end
   end
 
+  @doc """
+  A grid model has no index to read bytes from: its search compares distances.
+  """
+  @impl true
+  def find_nearest_neighbor_ids(%__MODULE__{}, _search_locations, _count), do: nil
+
   # The index over this model's node positions, kept with the graph it belongs
   # to: the positions only change when the model is rebuilt.
   defp location_tree(%__MODULE__{location_tree: tree}) when not is_nil(tree), do: tree

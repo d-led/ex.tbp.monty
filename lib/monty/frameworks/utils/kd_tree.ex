@@ -105,13 +105,44 @@ defmodule Monty.Frameworks.Utils.KdTree do
 
   def nearest_many({:nif, index}, queries, count) do
     index
-    |> ExTbpMonty.KdTreeNif.nearest_many(queries_bytes(queries), count)
+    |> ExTbpMonty.KdTreeNif.nearest_many(points_bytes(queries), count)
     |> ids_in()
     |> Enum.chunk_every(count)
     |> Enum.map(fn ids -> Enum.reject(ids, &(&1 == @no_neighbour)) end)
   end
 
   def nearest_many(tree, queries, count), do: Enum.map(queries, &nearest(tree, &1, count))
+
+  @doc """
+  The same answers as `nearest_many/3`, left as the bytes the index wrote.
+
+  Nothing is decoded, rejected or grouped: the answer is `{ids, count}` —
+  `queries * count` little-endian u32 ids, row after row, with
+  `4_294_967_295` where a query found fewer than `count` — because the caller is
+  a native kernel that reads them there. Decoding twenty thousand ids into lists
+  of lists was a fifth of what the answers cost, and the kernel can skip the
+  marker itself.
+
+  `nil` for a tree that is not the native index: the Elixir tree has no such
+  bytes, and a caller that needs them keeps the decoded path.
+  """
+  @spec nearest_many_ids(t(), [point()], pos_integer()) :: {binary(), pos_integer()} | nil
+  def nearest_many_ids({:nif, index}, queries, count) do
+    {ExTbpMonty.KdTreeNif.nearest_many(index, points_bytes(queries), count), count}
+  end
+
+  def nearest_many_ids(_tree, _queries, _count), do: nil
+
+  @doc """
+  Points as the bytes an index or a kernel reads: three little-endian f64 each.
+
+  Public so that a caller which asks two native things about the same points
+  encodes them once, and so that both see exactly the same numbers.
+  """
+  @spec points_bytes([point()]) :: binary()
+  def points_bytes(points) do
+    for point <- points, into: <<>>, do: point_bytes(point)
+  end
 
   @doc """
   The same answer as `nearest/3`, and how many nodes finding it took.
@@ -143,7 +174,7 @@ defmodule Monty.Frameworks.Utils.KdTree do
 
   def nearest_with_distances({:nif, index}, query, count) do
     {ids, distances} =
-      ExTbpMonty.KdTreeNif.nearest_many_with_distances(index, queries_bytes([query]), count)
+      ExTbpMonty.KdTreeNif.nearest_many_with_distances(index, points_bytes([query]), count)
 
     ids
     |> ids_in()
@@ -276,10 +307,6 @@ defmodule Monty.Frameworks.Utils.KdTree do
 
   defp positions(points) do
     for {point, _id} <- points, into: <<>>, do: point_bytes(point)
-  end
-
-  defp queries_bytes(queries) do
-    for query <- queries, into: <<>>, do: point_bytes(query)
   end
 
   defp point_bytes(point) do
