@@ -11,10 +11,14 @@ queue.
 
 ## Green right now
 
-`main` is `578ba03`. CI on it: `lint`, `types`, all four test partitions, and
-`coverage, CRAP and parity` pass; the `image` job was still building when this
-was written (it builds amd64, scans it, then publishes amd64 + arm64 under QEMU),
-so confirm that one before quoting the day as green.
+`main` is `578ba03`. CI on it is **green in every job**: `lint`, `types`, all four
+test partitions, `coverage, CRAP and parity`, and `image, scan, non-root,
+publish` (30m9s, both architectures).
+
+The one annotation on that run is not ours: `xref: [exclude: …]` is deprecated in
+Elixir 1.20 in favour of `elixirc_options: [no_warn_undefined: …]`, and the two
+`mix.exs` files it names are `deps/phoenix_ecto` and `deps/postgrex`. It goes
+away when those two release; nothing here to change.
 
 What is _not_ usable as a local signal: the whole suite on a loaded machine. A
 full run today ended with ten failures, **every one of them
