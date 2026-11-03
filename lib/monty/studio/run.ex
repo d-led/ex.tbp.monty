@@ -18,6 +18,7 @@ defmodule Monty.Studio.Run do
   alias Monty.Experiment.RecognitionPolicy.{RecognitionCounter, RecognitionResult}
   alias Monty.Frameworks.Experiments.Seed
   alias Monty.Runtime.Positioning
+  alias Monty.Prerequisites
   alias Monty.Studio.{Belief, Setup}
 
   # How many steps an episode may take when the caller names no number. Not a
@@ -86,7 +87,8 @@ defmodule Monty.Studio.Run do
 
     model = Setup.model_class(setup)
 
-    with {:ok, factories} <- Setup.positioning_procedures(setup),
+    with :ok <- inputs_present(setup),
+         {:ok, factories} <- Setup.positioning_procedures(setup),
          {:ok, policy} <- Setup.recognition_policy(setup),
          {:ok, interface, positioning} <- position(setup, factories, episode) do
       case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {model, spec}) do
@@ -167,6 +169,22 @@ defmodule Monty.Studio.Run do
   # done the positioning inside that reset, with Monty's random stream; stepping
   # the procedures again would move an agent Monty had placed and make the episode
   # a different one.
+  # What this run reads before it steps, asked before anything is built. The
+  # dataset and the memory are the world's own inputs; a run whose dataset is
+  # missing otherwise reaches the simulator, which reports an unknown *object*
+  # when the truth is that a bundle was never fetched.
+  defp inputs_present(setup) do
+    case setup |> Prerequisites.for_setup() |> Enum.reject(& &1.present?) do
+      [] ->
+        :ok
+
+      missing ->
+        paths = missing |> Enum.map(& &1.path) |> Enum.join(", ")
+
+        {:error, "this run needs data that is not here: #{paths} — fetch it on /prerequisites"}
+    end
+  end
+
   defp position(%Setup{} = setup, factories, episode) do
     # The episode's own object: Monty's interface shows one object per episode and
     # walks the list, so the world a run builds is about *this* episode's target.

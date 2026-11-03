@@ -88,8 +88,23 @@ defmodule Monty.Prerequisites do
   telling a reader their data is there when no run can read it.
   """
   @spec present?(prerequisite()) :: boolean()
-  def present?(%{extract: true} = prerequisite), do: File.dir?(where_it_lands(prerequisite))
+  def present?(%{extract: true} = prerequisite),
+    do: holds_something?(where_it_lands(prerequisite))
+
   def present?(prerequisite), do: File.exists?(target_path(prerequisite))
+
+  # A directory that exists and holds nothing is not data: it is the `mkdir` on
+  # the way to some, or an unpack that was interrupted. Counting it as present is
+  # how a page says "ready" and the world then answers "Unknown object type:
+  # mug" — a sentence about an object, when the truth is about the bundle nobody
+  # fetched.
+  defp holds_something?(path) do
+    case File.ls(path) do
+      {:ok, []} -> false
+      {:ok, _entries} -> true
+      {:error, _reason} -> false
+    end
+  end
 
   @doc "Whether the file itself is on disk, unpacked or not."
   @spec downloaded?(prerequisite()) :: boolean()
@@ -389,7 +404,7 @@ defmodule Monty.Prerequisites do
         kind: :data,
         what: "the objects this environment loads",
         path: path,
-        present?: File.dir?(path)
+        present?: holds_something?(path)
       }
     ]
   end

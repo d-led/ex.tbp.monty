@@ -59,6 +59,16 @@ if config_env() == :dev do
 end
 
 if config_env() == :prod do
+  # Where the memory a run recognises with is kept. It is written at run time —
+  # it is this application's export of Monty's pickles — so it belongs where a
+  # container keeps things: on the same volume as the data the pickles came
+  # from. Inside the release's own `priv` it is discarded with the container,
+  # and every start exports every model again for nothing.
+  config :ex_tbp_monty,
+         :monty_libraries_dir,
+         System.get_env("MONTY_LIBRARIES") ||
+           Path.join(Monty.Prerequisites.root_path("MONTY_DATA"), "libraries")
+
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """
@@ -66,15 +76,10 @@ if config_env() == :prod do
       For example: ecto://USER:PASS@HOST/DATABASE
       """
 
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
-
   config :ex_tbp_monty, ExTbpMonty.Repo,
-    # ssl: true,
     url: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-    # For machines with several cores, consider starting multiple pools of `pool_size`
-    # pool_count: 4,
-    socket_options: maybe_ipv6
+    socket_options: if(System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: [])
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
