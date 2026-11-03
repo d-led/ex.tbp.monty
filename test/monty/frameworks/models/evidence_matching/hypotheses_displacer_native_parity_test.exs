@@ -41,20 +41,21 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerNativePari
   test "every hypothesis earns the same evidence either way" do
     built = displacer()
 
-    given = %Hypotheses{
-      evidence: [1.0, 1.0, 1.0, 1.0, 1.0],
-      locations: [
-        # on the first node, on a turned node, between two nodes, off the object
-        # entirely, and on the node whose pose was not fully defined.
-        [0.0, 0.0, 0.0],
-        [0.1, 0.0, 0.0],
-        [0.05, 0.0, 0.02],
-        [0.0, 0.0, 5.0],
-        [0.0, 0.1, 0.0]
-      ],
-      poses: [@identity, turned(), @identity, @identity, turned()],
-      possible: [true, true, true, true, true]
-    }
+    given =
+      Hypotheses.new(
+        evidence: [1.0, 1.0, 1.0, 1.0, 1.0],
+        locations: [
+          # on the first node, on a turned node, between two nodes, off the object
+          # entirely, and on the node whose pose was not fully defined.
+          [0.0, 0.0, 0.0],
+          [0.1, 0.0, 0.0],
+          [0.05, 0.0, 0.02],
+          [0.0, 0.0, 5.0],
+          [0.0, 0.1, 0.0]
+        ],
+        poses: [@identity, turned(), @identity, @identity, turned()],
+        possible: [true, true, true, true, true]
+      )
 
     native = evidence(built, given)
 
@@ -87,6 +88,24 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerNativePari
 
     assert evidence(built, given) == evidence(built, given)
     assert MatcherNif.loaded?() == false
+  end
+
+  test "every hypothesis is displaced to the same place either way" do
+    built = displacer()
+    given = hypotheses([1.0, 1.0], [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]], [@identity, turned()])
+
+    native = HypothesesDisplacer.displace_hypotheses(built, given, [0.2, -0.1, 0.05])
+
+    reference =
+      with_reference(fn ->
+        HypothesesDisplacer.displace_hypotheses(built, given, [0.2, -0.1, 0.05])
+      end)
+
+    assert Hypotheses.locations(native) == Hypotheses.locations(reference)
+    # The first hypothesis asks no rotation of the step, so it moves by it.
+    assert [moved, _turned] = Hypotheses.locations(native)
+    assert_in_delta Enum.at(moved, 0), 0.2, 1.0e-12
+    assert_in_delta Enum.at(moved, 1), -0.1, 1.0e-12
   end
 
   defp evidence(displacer, hypotheses) do
@@ -165,11 +184,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerNativePari
   end
 
   defp hypotheses(evidence, locations, poses \\ nil) do
-    %Hypotheses{
+    Hypotheses.new(
       evidence: evidence,
       locations: locations,
       poses: poses || List.duplicate(@identity, length(evidence)),
       possible: List.duplicate(true, length(evidence))
-    }
+    )
   end
 end

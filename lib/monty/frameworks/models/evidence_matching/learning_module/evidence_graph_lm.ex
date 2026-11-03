@@ -832,7 +832,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   def current_mlh(%__MODULE__{current_mlh: mlh} = lm) do
     with id when not is_nil(id) <- mlh.mlh_id,
          %Hypotheses{} = hypotheses <- Map.get(lm.hypotheses, mlh.graph_id) do
-      %{mlh | location: Enum.at(hypotheses.locations, id)}
+      %{mlh | location: Hypotheses.location(hypotheses, id)}
     else
       _not_a_live_hypothesis -> mlh
     end
@@ -926,8 +926,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     %{
       graph_id: graph_id,
       mlh_id: id,
-      location: Enum.at(hypotheses.locations, id),
-      rotation: rotation_of(Enum.at(hypotheses.poses, id)),
+      location: Hypotheses.location(hypotheses, id),
+      rotation: rotation_of(Hypotheses.pose(hypotheses, id)),
       scale: get_object_scale(lm, graph_id),
       evidence: Enum.at(hypotheses.evidence, id)
     }
@@ -1039,14 +1039,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     Map.new(lm.hypotheses, fn {graph_id, hypotheses} ->
       poses =
         if as_euler do
-          Enum.map(hypotheses.poses, fn pose ->
+          Enum.map(Hypotheses.poses(hypotheses), fn pose ->
             pose
             |> rotation_of()
             |> Rotation.invert()
             |> Rotation.to_euler_degrees(5)
           end)
         else
-          hypotheses.poses
+          Hypotheses.poses(hypotheses)
         end
 
       {graph_id, poses}
@@ -1244,7 +1244,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   end
 
   defp unique_pose?(%__MODULE__{} = lm, hypotheses, ids, most_likely_rotation) do
-    locations = Enum.map(ids, &Enum.at(hypotheses.locations, &1))
+    locations = Enum.map(ids, &Hypotheses.location(hypotheses, &1))
     center = centroid(locations)
     distances = Enum.map(locations, &norm(Geometry.subtract(&1, center)))
 
@@ -1254,7 +1254,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
     turns =
       Enum.map(ids, fn id ->
-        pose = Enum.at(hypotheses.poses, id)
+        pose = Hypotheses.pose(hypotheses, id)
         cosine = (trace(Geometry.mul(Geometry.transpose(most_likely_matrix), pose)) - 1) / 2
         :math.acos(Monty.Math.clip(cosine, -1.0, 1.0))
       end)
@@ -1310,8 +1310,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         hypotheses = Map.fetch!(lm.hypotheses, object_id)
 
         Map.merge(stats, %{
-          "symmetric_rotations" => Enum.map(possible_ids, &Enum.at(hypotheses.poses, &1)),
-          "symmetric_locations" => Enum.map(possible_ids, &Enum.at(hypotheses.locations, &1))
+          "symmetric_rotations" => Enum.map(possible_ids, &Hypotheses.pose(hypotheses, &1)),
+          "symmetric_locations" => Enum.map(possible_ids, &Hypotheses.location(hypotheses, &1))
         })
       else
         stats
@@ -1431,10 +1431,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   defp vote_message(%__MODULE__{} = lm, hypotheses, id, evidence) do
     {:ok, message} =
       Message.new(
-        location: Enum.at(hypotheses.locations, id),
+        location: Hypotheses.location(hypotheses, id),
         morphological_features: %{
           "pose_vectors" => %OrientationMatrix{
-            value: Geometry.transpose(Enum.at(hypotheses.poses, id))
+            value: Geometry.transpose(Hypotheses.pose(hypotheses, id))
           },
           "pose_fully_defined" => true
         },
@@ -1496,7 +1496,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     neighbours = min(3, length(votes))
 
     evidence =
-      Enum.zip_with(hypotheses.evidence, hypotheses.locations, fn evidence, location ->
+      Enum.zip_with(hypotheses.evidence, Hypotheses.locations(hypotheses), fn evidence, location ->
         case best_vote_within_reach(lm, location, vote_locations, vote_confidences, neighbours) do
           nil -> evidence
           vote -> weigh_vote(lm, evidence, vote)

@@ -339,13 +339,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
     # One hypothesis per (rotation, node), rotation-major: the order the
     # rotations were built in, so each location keeps the pose it was given.
-    %Hypotheses{
+    Hypotheses.new(
       locations: selected_locations |> List.duplicate(per_node) |> Enum.concat(),
       poses: rotations,
-      evidence:
-        selected_evidence |> List.duplicate(per_node) |> Enum.concat() |> Enum.map(&(&1 * 1.0)),
+      evidence: selected_evidence |> List.duplicate(per_node) |> Enum.concat(),
       possible: List.duplicate(false, length(rotations))
-    }
+    )
   end
 
   # The ids of the nodes whose evidence is highest, lowest first among the

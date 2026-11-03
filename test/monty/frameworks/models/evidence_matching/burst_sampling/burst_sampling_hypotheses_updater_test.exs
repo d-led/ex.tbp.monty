@@ -92,12 +92,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   end
 
   defp hypotheses do
-    %Hypotheses{
+    Hypotheses.new(
       evidence: [1.0, 0.5],
       locations: [[0.0, 0.0, 0.0], [0.3, 0.0, 0.0]],
       poses: [@identity, @identity],
       possible: [true, true]
-    }
+    )
   end
 
   describe "starting and ending a burst" do
@@ -146,7 +146,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
           0.0
         ])
 
-      assert Enum.at(Enum.at(moved.locations, 0), 0) |> Float.round(6) == 0.1
+      assert Enum.at(Enum.at(Hypotheses.locations(moved), 0), 0) |> Float.round(6) == 0.1
     end
   end
 
@@ -203,8 +203,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
       # Nothing in the tracker yet means nothing is retained: Monty rebuilds the
       # space from the observation, and evidence starts accumulating from there.
-      refute Enum.take(updated.locations, 2) == hypotheses().locations
-      assert Enum.all?(updated.locations, fn [x | _] -> x <= 0.3 end)
+      refute Enum.take(Hypotheses.locations(updated), 2) == Hypotheses.locations(hypotheses())
+      assert Enum.all?(Hypotheses.locations(updated), fn [x | _] -> x <= 0.3 end)
     end
 
     test "the slope tracker follows the hypotheses from one step to the next" do
@@ -253,9 +253,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       stored_normal = [0.195_484, 0.098_572, 0.975_740]
       sensed_normal = Enum.take(@pose, 3)
 
-      assert sampled.poses != []
+      assert Hypotheses.poses(sampled) != []
 
-      assert Enum.all?(sampled.poses, fn pose ->
+      assert Enum.all?(Hypotheses.poses(sampled), fn pose ->
                Geometry.apply(pose, sensed_normal) == stored_normal
              end)
     end

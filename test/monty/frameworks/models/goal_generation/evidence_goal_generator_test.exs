@@ -66,12 +66,12 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGeneratorTest do
     hypotheses =
       Map.new(evidences_by_object, fn {object_id, evidences} ->
         {object_id,
-         %Hypotheses{
+         Hypotheses.new(
            evidence: evidences,
            locations: List.duplicate([0.0, 0.0, 0.0], length(evidences)),
            poses: List.duplicate(@identity, length(evidences)),
            possible: List.duplicate(true, length(evidences))
-         }}
+         )}
       end)
 
     lm = %{lm | hypotheses: hypotheses}

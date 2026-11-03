@@ -126,7 +126,12 @@ defmodule Monty.Frameworks.Utils.KdTree do
   `nil` for a tree that is not the native index: the Elixir tree has no such
   bytes, and a caller that needs them keeps the decoded path.
   """
-  @spec nearest_many_ids(t(), [point()], pos_integer()) :: {binary(), pos_integer()} | nil
+  @spec nearest_many_ids(t(), [point()] | binary(), pos_integer()) ::
+          {binary(), pos_integer()} | nil
+  def nearest_many_ids({:nif, index}, queries, count) when is_binary(queries) do
+    {ExTbpMonty.KdTreeNif.nearest_many(index, queries, count), count}
+  end
+
   def nearest_many_ids({:nif, index}, queries, count) do
     {ExTbpMonty.KdTreeNif.nearest_many(index, points_bytes(queries), count), count}
   end

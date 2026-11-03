@@ -33,7 +33,6 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer.HypothesisDisplacerTelemetry
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Utils.GraphMatchingUtils
-  alias Monty.Frameworks.Utils.KdTree
   alias Monty.Frameworks.Utils.SpatialArithmetics
   alias Monty.Geometry
 
@@ -84,15 +83,34 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
 
   @doc """
   Move every hypothesis by `displacement`, as its own object orientation sees it.
+
+  The locations stay in the form they are held in: a kernel writes the moved
+  rows straight into the bytes a step keeps, where the reference builds a list
+  and three boxed floats for every hypothesis and then throws them away.
   """
   @spec displace_hypotheses(t(), Hypotheses.t(), [number()]) :: Hypotheses.t()
   def displace_hypotheses(%__MODULE__{}, %Hypotheses{} = hypotheses, displacement) do
-    search_locations =
-      Enum.zip_with(hypotheses.poses, hypotheses.locations, fn pose, location ->
-        SpatialArithmetics.add(location, Geometry.apply(pose, displacement))
-      end)
+    %Hypotheses{hypotheses | locations: moved_locations(hypotheses, displacement)}
+  end
 
-    %Hypotheses{hypotheses | locations: search_locations}
+  defp moved_locations(%Hypotheses{} = hypotheses, displacement) do
+    if MatcherNif.loaded?() do
+      MatcherNif.displaced_locations(
+        hypotheses.poses,
+        hypotheses.locations,
+        Hypotheses.location_bytes(displacement)
+      )
+    else
+      reference_moved(hypotheses, displacement)
+    end
+  end
+
+  defp reference_moved(%Hypotheses{} = hypotheses, displacement) do
+    positions = Enum.zip_with(Hypotheses.poses(hypotheses), Hypotheses.locations(hypotheses),
+      fn pose, location -> SpatialArithmetics.add(location, Geometry.apply(pose, displacement)) end
+    )
+
+    for location <- positions, into: <<>>, do: Hypotheses.location_bytes(location)
   end
 
   @doc """
@@ -198,14 +216,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
          hypotheses,
          given_node_evidence
        ) do
-    # Hypotheses are reached by position, so they are turned into tuples once:
-    # `Enum.at/2` on a list walks to the index, and asking that of every index
-    # is a quadratic pass over the whole hypothesis space, every step.
-    locations = List.to_tuple(hypotheses.locations)
-    poses = List.to_tuple(hypotheses.poses)
-
-    search_locations = Enum.map(to_test, &elem(locations, &1))
-    tested_poses = Enum.map(to_test, &elem(poses, &1))
+    # The hypotheses worth testing, as the rows a kernel reads: no list of
+    # locations or matrices is built for them, and no per-hypothesis encode
+    # happens between here and the kernel's answer.
+    {search_locations, tested_poses} = Hypotheses.rows_at(hypotheses, to_test)
 
     # Where each tested hypothesis sits in the full set, so the update can be
     # spread over every hypothesis without searching for them one at a time.
@@ -326,8 +340,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
       ids,
       k,
       [
-        KdTree.points_bytes(search_locations),
-        hypothesis_poses_bytes(poses),
+        search_locations,
+        poses,
         sensed_pose_bytes(channel_features["pose_vectors"])
       ],
       [nodes, node_poses, node_defined, evidence_bytes(node_feature_evidence)],
@@ -352,6 +366,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
          channel_features,
          node_feature_evidence
        ) do
+    # The reference reads the rows as values; the native path above reads the
+    # same bytes without this.
+    search_locations = Hypotheses.locations_of(search_locations)
+    poses = Hypotheses.poses_of(poses)
+
     channel_locations =
       displacer.graph_memory
       |> GraphMemory.get_locations_in_graph(graph_id, input_channel)
@@ -395,20 +414,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
     end)
   end
 
-  # The bytes a kernel reads that this step has to build: the hypotheses' own
-  # rotations, one after another, and what each stored node is worth on its
-  # features. The graph's own arrays are not here — they are read from memory,
-  # flattened once when the graph was built.
-  defp hypothesis_poses_bytes(poses) do
-    poses
-    |> Enum.map(fn [[p, q, r], [s, t, u], [v, w, x]] ->
-      <<p * 1.0::float-64-little, q * 1.0::float-64-little, r * 1.0::float-64-little,
-        s * 1.0::float-64-little, t * 1.0::float-64-little, u * 1.0::float-64-little,
-        v * 1.0::float-64-little, w * 1.0::float-64-little, x * 1.0::float-64-little>>
-    end)
-    |> IO.iodata_to_binary()
-  end
-
+  # The bytes a kernel reads that this step has to build: the observation's own
+  # surface normal and first curvature direction. The graph's arrays and the
+  # hypotheses' rows are not here — they are already bytes when they arrive.
   defp sensed_pose_bytes([n1, n2, n3, d1, d2, d3 | _unread]) do
     params_bytes([n1, n2, n3, d1, d2, d3])
   end

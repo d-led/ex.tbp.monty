@@ -4,12 +4,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
 
   defp hypothesis(evidence, location, possible \\ true) do
-    %Hypotheses{
+    Hypotheses.new(
       evidence: [evidence],
       locations: [location],
       poses: [[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]],
       possible: [possible]
-    }
+    )
   end
 
   describe "a set of hypotheses" do
@@ -18,8 +18,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
 
       assert Hypotheses.count(empty) == 0
       assert empty.evidence == []
-      assert empty.locations == []
-      assert empty.poses == []
+      assert Hypotheses.locations(empty) == []
+      assert Hypotheses.poses(empty) == []
       assert empty.possible == []
     end
 
@@ -42,9 +42,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
       set = Hypotheses.concatenate([voted, own])
 
       assert set.evidence == [0.2, 0.9]
-      assert set.locations == [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]
+      assert Hypotheses.locations(set) == [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]
       assert set.possible == [true, false]
-      assert length(set.poses) == 2
+      assert length(Hypotheses.poses(set)) == 2
     end
 
     test "an empty set contributes nothing" do
@@ -77,7 +77,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
       subset = Hypotheses.take(set, [2, 0])
 
       assert subset.evidence == [0.3, 0.1]
-      assert subset.locations == [[2.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+      assert Hypotheses.locations(subset) == [[2.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
       assert subset.possible == [true, true]
     end
   end

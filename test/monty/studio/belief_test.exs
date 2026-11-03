@@ -45,12 +45,12 @@ defmodule Monty.Studio.BeliefTest do
   end
 
   defp hypotheses(evidence, locations) do
-    %Hypotheses{
+    Hypotheses.new(
       evidence: evidence,
       locations: locations,
       poses: List.duplicate(Rotation.to_matrix(Rotation.identity()), length(evidence)),
       possible: List.duplicate(true, length(evidence))
-    }
+    )
   end
 
   # A module that has concluded: one object is possible, its best hypothesis is

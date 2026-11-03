@@ -50,12 +50,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
   end
 
   defp hypotheses(evidence, locations) do
-    %Hypotheses{
+    Hypotheses.new(
       evidence: evidence,
       locations: locations,
       poses: List.duplicate(@identity, length(evidence)),
       possible: List.duplicate(true, length(evidence))
-    }
+    )
   end
 
   defp features do
@@ -71,7 +71,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
           [0.2, 0.0, 0.0]
         )
 
-      assert [location] = moved.locations
+      assert [location] = Hypotheses.locations(moved)
       assert_in_delta Enum.at(location, 0), 0.2, 1.0e-9
     end
 
@@ -79,15 +79,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
       {:ok, turn} = Rotation.from_axis_angle([0.0, 0.0, 1.0], :math.pi() / 2)
       pose = Rotation.to_matrix(turn)
 
-      turned = %Hypotheses{
+      turned = Hypotheses.new(
         evidence: [1.0],
         locations: [[0.0, 0.0, 0.0]],
         poses: [pose],
         possible: [true]
-      }
+      )
 
       assert [location] =
-               HypothesesDisplacer.displace_hypotheses(displacer(), turned, [0.2, 0.0, 0.0]).locations
+               displacer()
+               |> HypothesesDisplacer.displace_hypotheses(turned, [0.2, 0.0, 0.0])
+               |> Hypotheses.locations()
 
       assert_in_delta Enum.at(location, 0), 0.0, 1.0e-9
       assert_in_delta Enum.at(location, 1), 0.2, 1.0e-9
@@ -98,7 +100,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
       after_move = HypothesesDisplacer.displace_hypotheses(displacer(), before, [1.0, 0.0, 0.0])
 
       assert after_move.evidence == before.evidence
-      assert after_move.poses == before.poses
+      assert Hypotheses.poses(after_move) == Hypotheses.poses(before)
     end
   end
 

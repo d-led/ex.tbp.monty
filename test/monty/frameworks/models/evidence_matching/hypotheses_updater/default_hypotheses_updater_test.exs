@@ -105,7 +105,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
         )
 
       assert Hypotheses.count(started) == 3
-      assert Enum.all?(started.poses, &(&1 == @identity))
+      assert Enum.all?(Hypotheses.poses(started), &(&1 == @identity))
     end
 
     test "an observation no stored channel carries starts nothing" do
@@ -166,12 +166,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
 
   describe "displacing" do
     test "with no movement nothing moves" do
-      hypotheses = %Hypotheses{
+      hypotheses = Hypotheses.new(
         evidence: [0.0],
         locations: [[0.0, 0.0, 0.0]],
         poses: [@identity],
         possible: [true]
-      }
+      )
 
       assert DefaultHypothesesUpdater.displace_hypotheses(updater(), hypotheses, nil) ==
                hypotheses

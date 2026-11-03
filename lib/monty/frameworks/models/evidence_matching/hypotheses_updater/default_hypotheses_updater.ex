@@ -260,12 +260,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   defp all_hypotheses(locations, rotations, node_evidence) do
     repeats = div(length(rotations), length(locations))
 
-    %Hypotheses{
+    Hypotheses.new(
       locations: locations |> List.duplicate(repeats) |> Enum.concat(),
       poses: rotations,
       evidence: node_evidence |> List.duplicate(repeats) |> Enum.concat(),
       possible: List.duplicate(true, length(rotations))
-    }
+    )
   end
 
   defp sensed_pose_vectors(features) do
