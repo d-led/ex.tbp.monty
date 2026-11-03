@@ -85,16 +85,23 @@ defmodule Monty.Simulators.Mujoco.Answer do
     end
   end
 
-  # `tolist()` nests by the trailing dimensions: a row at a time.
+  # `tolist()` nests by the trailing dimensions: a row at a time. The split is
+  # by leading dimension, into the list's own tail — `Enum.chunk_every/2` here
+  # cost more than the JSON it replaced (a stream and a chunk accumulator per
+  # image), which is why this is written out.
   defp nest([value], []), do: value
   defp nest(values, [_only]), do: values
 
-  defp nest(values, [_rows, columns | rest]) do
-    per_row = Enum.product([columns | rest])
+  defp nest(values, [_rows, columns | rest] = shape) do
+    rows(values, Enum.product([columns | rest]), shape)
+  end
 
-    values
-    |> Enum.chunk_every(per_row)
-    |> Enum.map(&nest(&1, [columns | rest]))
+  defp rows([], _per_row, _shape), do: []
+
+  defp rows(values, per_row, shape) do
+    {row, rest} = Enum.split(values, per_row)
+
+    [nest(row, tl(shape)) | rows(rest, per_row, shape)]
   end
 
   # The one place that decides what can cross: an array of any other dtype is
