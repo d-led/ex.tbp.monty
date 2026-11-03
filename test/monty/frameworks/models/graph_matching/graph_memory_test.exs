@@ -143,6 +143,31 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemoryTest do
                [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
              ]
     end
+
+    test "the rows are also kept as the flat binary a native kernel reads" do
+      memory = loaded(%{"mug" => model("mug", 3)})
+
+      assert {binary, 1} = GraphMemory.get_feature_rows(memory, "mug", "patch")
+      assert for(<<value::float-64-little <- binary>>, do: value) == [0.0, 0.1, 0.2]
+    end
+
+    test "a row with no values is not a row to read flat" do
+      # A node whose features could not be read is a node with no evidence, which
+      # the comparison says node by node: there is no rectangle here to hand to
+      # something that reads one row after another.
+      memory = loaded(%{"mug" => model("mug", 1)})
+
+      graph = GraphMemory.get_graph(memory, "mug", "patch")
+      {:ok, stripped} = GraphObjectModel.set_graph(graph, %{graph.graph | x: [[0.0]]})
+
+      memory =
+        memory
+        |> GraphMemory.add_graph_to_memory(%{"patch" => stripped}, "mug")
+        |> GraphMemory.initialize_feature_arrays()
+
+      assert GraphMemory.get_feature_array(memory, "mug", "patch") == [[]]
+      assert GraphMemory.get_feature_rows(memory, "mug", "patch") == nil
+    end
   end
 
   describe "learning from observations" do

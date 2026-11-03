@@ -21,6 +21,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
 
   @behaviour Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.FeatureEvidenceScorer
 
+  alias ExTbpMonty.MatcherNif
+
   alias Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.DefaultFeatureEvidenceCalculator
 
   alias Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.Selector.DefaultFeaturesForMatchingSelector
@@ -77,7 +79,42 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
     Map.get(by_channel, input_channel, false)
   end
 
+  # The default calculator's arithmetic, when the graph's rows are flat and the
+  # native kernel is loaded. It is the same columns compared in the same order,
+  # so the answers are the same ones; a calculator an experiment injected through
+  # `:calculator` has its own arithmetic and keeps its own path.
+  defp calculate(
+         %__MODULE__{calculator: DefaultFeatureEvidenceCalculator} = scorer,
+         graph_id,
+         input_channel,
+         query_features
+       ) do
+    with true <- MatcherNif.loaded?(),
+         {rows, width} when is_binary(rows) <-
+           GraphMemory.get_feature_rows(scorer.graph_memory, graph_id, input_channel) do
+      columns =
+        DefaultFeatureEvidenceCalculator.columns(
+          GraphMemory.get_feature_order(scorer.graph_memory, graph_id, input_channel),
+          Map.fetch!(scorer.feature_weights, input_channel),
+          query_features,
+          Map.fetch!(scorer.tolerances, input_channel)
+        )
+
+      {specs, params} = DefaultFeatureEvidenceCalculator.encode_columns(columns)
+
+      rows
+      |> MatcherNif.feature_evidence(width, specs, params, scorer.increment)
+      |> DefaultFeatureEvidenceCalculator.decode_answers()
+    else
+      _not_flat_or_not_loaded -> calculate_with(scorer, graph_id, input_channel, query_features)
+    end
+  end
+
   defp calculate(%__MODULE__{} = scorer, graph_id, input_channel, query_features) do
+    calculate_with(scorer, graph_id, input_channel, query_features)
+  end
+
+  defp calculate_with(%__MODULE__{} = scorer, graph_id, input_channel, query_features) do
     scorer.calculator.calculate(
       GraphMemory.get_feature_array(scorer.graph_memory, graph_id, input_channel),
       GraphMemory.get_feature_order(scorer.graph_memory, graph_id, input_channel),

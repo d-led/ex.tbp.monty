@@ -23,6 +23,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.De
 
   @behaviour Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.FeatureEvidenceCalculator
 
+  import Bitwise, only: [&&&: 2]
+
   @skip_features MapSet.new(["pose_vectors", "pose_fully_defined"])
   @circular_features MapSet.new(["hsv"])
   @categorical_features MapSet.new(["object_id"])
@@ -35,7 +37,31 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.De
     Enum.map(rows, &node_evidence(&1, columns))
   end
 
-  defp columns(feature_order, feature_weights, query_features, tolerances) do
+  @typedoc """
+  One comparison: which value of a row it reads, how, and what the answer is
+  worth.
+
+  The index counts positions in the row, so the columns of a call are numbered
+  `0, 1, 2, ...` as a whole: a three-valued feature after a one-valued one starts
+  at one.
+  """
+  @type column :: %{
+          index: non_neg_integer(),
+          kind: :numeric | :circular | :categorical,
+          value: float(),
+          tolerance: float(),
+          weight: float()
+        }
+
+  @doc """
+  The comparisons one observation makes against every row.
+
+  Public because it is the whole description of the arithmetic: the rows are
+  compared column by column and there is nothing else to say about it. A native
+  kernel is handed these columns rather than deciding for itself what to compare.
+  """
+  @spec columns([String.t()], map(), map(), map()) :: [column()]
+  def columns(feature_order, feature_weights, query_features, tolerances) do
     feature_order
     |> Enum.reject(&MapSet.member?(@skip_features, &1))
     |> Enum.reduce({[], 0}, fn feature, {columns, start} ->
@@ -56,6 +82,58 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.De
       {columns ++ segment, start + length(values)}
     end)
     |> elem(0)
+  end
+
+  @doc """
+  The columns as the two binaries a native kernel reads.
+
+  `specs` carries each column's row index and what kind of comparison applies
+  (two u32); `params` carries its observed value, tolerance and weight (three
+  f64). Split in two because a kind is a small integer and the rest are doubles,
+  and because the kernel reads both in the same order the weights are summed in.
+  """
+  @spec encode_columns([column()]) :: {binary(), binary()}
+  def encode_columns(columns) do
+    specs =
+      for column <- columns, into: <<>> do
+        <<column.index::little-32, kind_code(column.kind)::little-32>>
+      end
+
+    params =
+      for column <- columns, into: <<>> do
+        <<column.value::float-64-little, column.tolerance::float-64-little,
+          column.weight::float-64-little>>
+      end
+
+    {specs, params}
+  end
+
+  defp kind_code(:numeric), do: 0
+  defp kind_code(:circular), do: 1
+  defp kind_code(:categorical), do: 2
+
+  @exponent_mask 0x7FF0_0000_0000_0000
+  @significand_mask 0x000F_FFFF_FFFF_FFFF
+
+  @doc """
+  A native kernel's answers, as this module's: a NaN is `nil`.
+
+  Erlang has no NaN — the pattern is not a float the syntax can build, so a
+  segment of NaN bits does not even end a comprehension cleanly — so the bytes
+  are read as the integers they are and only the ones that *are* numbers become
+  floats. A kernel writes NaN for a node with no evidence, which is this module's
+  `nil`.
+  """
+  @spec decode_answers(binary()) :: [float() | nil]
+  def decode_answers(binary) do
+    for <<bits::unsigned-64-little <- binary>> do
+      if (bits &&& @exponent_mask) == @exponent_mask and (bits &&& @significand_mask) != 0 do
+        nil
+      else
+        <<value::float-64-little>> = <<bits::unsigned-64-little>>
+        value
+      end
+    end
   end
 
   defp kinds(feature, length) do

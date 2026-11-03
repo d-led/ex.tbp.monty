@@ -237,11 +237,11 @@ priv/build_info.json
 # database dumps taken by scripts/fly-pg-backup.sh
 backups/
 
-# Dialyzer PLTs are built locally and cached in CI
-# The native index, built by rustler from native/kd_tree_nif during compile: a
-# shared object is this machine's, not the repository's.
+# The native kernels, built by rustler from `native/*` during compile: a shared
+# object is this machine's, not the repository's.
 /priv/native/
 
+# Dialyzer PLTs are built locally and cached in CI
 /priv/plts/
 
 # Studio runs write their logs here; they are not source.

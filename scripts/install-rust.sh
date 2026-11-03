@@ -3,11 +3,11 @@
 #
 #   scripts/install-rust.sh
 #
-# No arguments, and safe to run at any point: the nearest-neighbour index is a
-# NIF (`native/kd_tree_nif`) and rustler builds it while the application compiles,
-# so without `cargo` the build stops. A machine that already has one is left
-# alone, which is what makes this usable from a developer's shell, a container
-# build and a CI job that may or may not ship Rust already.
+# No arguments, and safe to run at any point: the native kernels are NIFs
+# (`native/kd_tree_nif`, `native/matcher_nif`) and rustler builds them while the
+# application compiles, so without `cargo` the build stops. A machine that already
+# has one is left alone, which is what makes this usable from a developer's shell,
+# a container build and a CI job that may or may not ship Rust already.
 set -euo pipefail
 
 if command -v cargo >/dev/null 2>&1; then

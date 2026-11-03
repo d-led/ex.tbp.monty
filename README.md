@@ -57,9 +57,9 @@ scripts/install-rust.sh      # the Rust toolchain
 ```
 
 Both take no arguments and do nothing where their toolchain is already there.
-Rust is a _build_ requirement: the nearest-neighbour index is a NIF
-(`native/kd_tree_nif`) that rustler compiles with the application. Running the
-app needs none of it — the release carries the compiled shared object.
+Rust is a _build_ requirement: the native kernels are NIFs (`native/kd_tree_nif`,
+`native/matcher_nif`) that rustler compiles with the application. Running the
+app needs none of it — the release carries the compiled shared objects.
 [docs/developers.md](docs/developers.md) has the tests, the gates CI runs and how
 a module is added.
 

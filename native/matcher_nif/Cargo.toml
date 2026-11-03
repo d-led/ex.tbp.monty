@@ -1,0 +1,17 @@
+[package]
+name = "matcher_nif"
+version = "0.1.0"
+authors = []
+edition = "2021"
+
+[lib]
+name = "matcher_nif"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+rustler = "0.38"
+
+[profile.release]
+opt-level = 3
+lto = true

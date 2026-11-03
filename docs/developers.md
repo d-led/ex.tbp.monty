@@ -154,7 +154,9 @@ two toolchains itself when the machine has neither:
   `cargo`, and is also what the `Dockerfile` and the CI jobs call. Rust is a
   _build_ requirement: the nearest-neighbour index is a NIF
   (`native/kd_tree_nif`) that rustler compiles with the application, so without
-  it `mix compile` stops with "Could not cd to native/kd_tree_nif".
+  it `mix compile` stops with "Could not cd to native/kd_tree_nif". The matching
+  arithmetic is a second crate beside it (`native/matcher_nif`), built the same
+  way, and each keeps an Elixir reference that its parity test holds it to.
 
 Running the app needs neither — the release carries the compiled shared object.
 The script itself runs

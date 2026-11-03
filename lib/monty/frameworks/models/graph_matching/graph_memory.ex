@@ -45,6 +45,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
             models_in_memory: %{},
             feature_array: %{},
             feature_order: %{},
+            feature_rows: %{},
             features_to_use: %{}
 
   @type graph_id :: String.t()
@@ -172,9 +173,64 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
       %{
         memory
         | feature_array: put_channel(memory.feature_array, graph_id, input_channel, rows),
-          feature_order: put_channel(memory.feature_order, graph_id, input_channel, order)
+          feature_order: put_channel(memory.feature_order, graph_id, input_channel, order),
+          feature_rows:
+            put_channel(
+              memory.feature_rows,
+              graph_id,
+              input_channel,
+              cacheable_rows(rows)
+            )
       }
     end
+  end
+
+  # The flat rows are read as a rectangle of values, so only a rectangle of
+  # values is cached: rows of different widths would have the kernel read one
+  # node's values as another's, and rows of no width at all are not a rectangle
+  # of nothing — they are nodes whose features could not be read, and the
+  # reference answers `nil` for each of them. A graph that is either keeps the
+  # rows it has and the comparison it has always done.
+  defp cacheable_rows([]), do: flatten_rows([])
+
+  defp cacheable_rows(rows) do
+    widths = rows |> Enum.map(&length/1) |> Enum.uniq()
+
+    case widths do
+      [width] when width > 0 -> {elem(flatten_rows(rows), 0), width}
+      _ragged_or_empty -> nil
+    end
+  end
+
+  @doc """
+  The rows as one flat binary of little-endian f64, with the width of a row.
+
+  The same bytes a native kernel reads: one row after another, with a NaN where
+  a node has no value — Monty pre-fills a missing feature with NaN, which is what
+  `nil` means here. `{<<>>, 0}` for no rows. Rows are written where they are
+  built, which is why a reader never rebuilds them: a step reads the same bytes
+  once per node, and the rows do not change while an episode is being matched.
+  """
+  @spec flatten_rows([[number() | nil]]) :: {binary(), non_neg_integer()}
+  def flatten_rows([]), do: {<<>>, 0}
+
+  # A missing value is the IEEE quiet NaN, byte for byte. It is written as bits
+  # rather than as a float because Erlang has no NaN: the pattern is not a value
+  # the syntax can build, only bytes a kernel can read.
+  @missing <<0x7FF8_0000_0000_0000::little-64>>
+
+  def flatten_rows([first | _rest] = rows) do
+    width = length(first)
+
+    binary =
+      for row <- rows, value <- row, into: <<>> do
+        case value do
+          nil -> @missing
+          number -> <<number * 1.0::float-64-little>>
+        end
+      end
+
+    {binary, width}
   end
 
   defp put_channel(by_graph, graph_id, input_channel, value) do
@@ -192,7 +248,8 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
     %{
       memory
       | feature_array: drop_channel(memory.feature_array, graph_id, input_channel),
-        feature_order: drop_channel(memory.feature_order, graph_id, input_channel)
+        feature_order: drop_channel(memory.feature_order, graph_id, input_channel),
+        feature_rows: drop_channel(memory.feature_rows, graph_id, input_channel)
     }
   end
 
@@ -200,7 +257,8 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
     %{
       memory
       | feature_array: Map.delete(memory.feature_array, graph_id),
-        feature_order: Map.delete(memory.feature_order, graph_id)
+        feature_order: Map.delete(memory.feature_order, graph_id),
+        feature_rows: Map.delete(memory.feature_rows, graph_id)
     }
   end
 
@@ -245,6 +303,19 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   @spec get_feature_order(t(), graph_id(), input_channel()) :: [String.t()]
   def get_feature_order(%__MODULE__{feature_order: orders}, graph_id, input_channel) do
     orders |> Map.fetch!(graph_id) |> Map.fetch!(input_channel)
+  end
+
+  @doc """
+  The same rows as one flat binary of little-endian f64, with the width of a row.
+
+  `nil` is a NaN, which is the missing value Monty pre-fills with. `nil` when no
+  rows have been built for the graph yet, which is a graph that has never been
+  asked for its features.
+  """
+  @spec get_feature_rows(t(), graph_id(), input_channel()) ::
+          {binary(), non_neg_integer()} | nil
+  def get_feature_rows(%__MODULE__{feature_rows: rows}, graph_id, input_channel) do
+    rows |> Map.get(graph_id, %{}) |> Map.get(input_channel)
   end
 
   @doc "The node locations of a graph."
