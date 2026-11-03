@@ -92,6 +92,38 @@ defmodule Monty.Config.InputsTest do
     end
   end
 
+  # The manifest is the pin: `docs/developers.md`, `docs/from-monty.md` and
+  # `docs/validation.md` all answer "which Monty is this repo pinned to?" by
+  # pointing at it. Nothing reads it at run time and the gate has no checkout to
+  # compare against, so this is what keeps it from describing a tree that is no
+  # longer here.
+  describe "the committed manifest" do
+    test "counts the files the copy actually holds" do
+      manifest =
+        Path.join([File.cwd!(), "priv", "monty", "inputs.json"])
+        |> File.read!()
+        |> Jason.decode!()
+
+      assert manifest["conf_files"] == yaml_count("conf")
+      assert manifest["snapshot_files"] == yaml_count("snapshots")
+    end
+
+    test "names a revision, not a branch or a range" do
+      manifest =
+        Path.join([File.cwd!(), "priv", "monty", "inputs.json"])
+        |> File.read!()
+        |> Jason.decode!()
+
+      assert manifest["monty"] =~ ~r/\A[0-9a-f]{7,40}\z/
+    end
+  end
+
+  defp yaml_count(directory) do
+    Path.join([File.cwd!(), "priv", "monty", directory, "**", "*.yaml"])
+    |> Path.wildcard()
+    |> length()
+  end
+
   defp yaml!(root, relative, content) do
     path = Path.join(root, relative)
     File.mkdir_p!(Path.dirname(path))
