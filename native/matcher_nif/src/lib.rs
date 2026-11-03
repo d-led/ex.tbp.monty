@@ -469,6 +469,57 @@ fn write_f64(binary: &mut NewBinary, index: usize, value: f64) {
     binary[index * 8..(index + 1) * 8].copy_from_slice(&value.to_le_bytes());
 }
 
+// -- where a hypothesis moves to ---------------------------------------------
+
+/// Every hypothesis' search location after the sensor moved by `displacement`.
+///
+/// A hypothesis says "the sensor is here, and the object is turned this way", so
+/// when the sensor moves by `d` the hypothesis moves to `pose · d` away from
+/// where it was. Every hypothesis is moved, not just the likely ones: dropping
+/// one would lose the path information it carries.
+///
+/// * `poses` — `m * 9` f64, each hypothesis' rotation row by row.
+/// * `locations` — `m * 3` f64, where each hypothesis says the sensor is now.
+/// * `displacement` — 3 f64, how far the sensor moved, in its own frame.
+///
+/// The answer is `m * 3` f64: `location + pose · displacement`, row by row.
+/// This is `SpatialArithmetics.add(location, Geometry.apply(pose, displacement))`
+/// in Elixir — the same three dot products, in the same order, so a test can
+/// hold the two answers equal rather than close.
+#[rustler::nif]
+fn displaced_locations<'a>(
+    env: Env<'a>,
+    poses: Binary,
+    locations: Binary,
+    displacement: Binary,
+) -> Binary<'a> {
+    let count = locations.len() / 24;
+    let moved = [
+        f64_at(displacement.as_slice(), 0),
+        f64_at(displacement.as_slice(), 8),
+        f64_at(displacement.as_slice(), 16),
+    ];
+
+    let mut output = NewBinary::new(env, count * 24);
+
+    for index in 0..count {
+        let pose_at = index * 72;
+
+        for row in 0..3 {
+            let row_at = pose_at + row * 24;
+            let turned = f64_at(poses.as_slice(), row_at) * moved[0]
+                + f64_at(poses.as_slice(), row_at + 8) * moved[1]
+                + f64_at(poses.as_slice(), row_at + 16) * moved[2];
+
+            let ahead = f64_at(locations.as_slice(), index * 24 + row * 8) + turned;
+
+            write_f64(&mut output, index * 3 + row, ahead);
+        }
+    }
+
+    output.into()
+}
+
 // -- the patch's surface -----------------------------------------------------
 
 /// The principal curvatures at the middle of a patch, and their directions.

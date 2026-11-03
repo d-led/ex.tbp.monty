@@ -118,4 +118,17 @@ defmodule ExTbpMonty.MatcherNif do
   """
   def principal_curvatures(_points, _stride, _width, _center_id, _normal, _params),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Where every hypothesis' search location moves to, computed natively.
+
+  `poses` is `hypotheses * 9` f64, each rotation row by row; `locations` is the
+  search location each hypothesis claims (`hypotheses * 3` f64); `displacement`
+  is the three f64 the sensor moved by. The answer is `hypotheses * 3` f64:
+  `location + pose · displacement`, the same three dot products in the same order
+  as `SpatialArithmetics.add/2` over `Geometry.apply/2`, which is the reference
+  the parity test holds this to.
+  """
+  def displaced_locations(_poses, _locations, _displacement),
+    do: :erlang.nif_error(:nif_not_loaded)
 end
