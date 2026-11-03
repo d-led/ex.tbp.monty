@@ -263,7 +263,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
         GraphMemory.get_num_nodes_in_graph(displacer.graph_memory, graph_id, input_channel)
       )
 
+    # The graph's own arrays are read from memory rather than rebuilt: where every
+    # node is, how its frame sits and whether that frame was defined are what the
+    # graph holds when an episode starts, and they are flattened once with its
+    # feature rows rather than once a step.
     with true <- MatcherNif.loaded?(),
+         {nodes, node_poses, node_defined} when is_binary(nodes) <-
+           GraphMemory.get_node_arrays(displacer.graph_memory, graph_id, input_channel),
          {ids, k} when is_binary(ids) and k > 0 <-
            displacer.graph_memory.object_model.find_nearest_neighbor_ids(
              graph,
@@ -272,13 +278,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
            ) do
       native_evidence(
         displacer,
-        graph_id,
         input_channel,
         search_locations,
         poses,
         channel_features,
         node_feature_evidence,
-        {ids, k}
+        {ids, k},
+        {nodes, node_poses, node_defined}
       )
     else
       _read_the_reference ->
@@ -302,19 +308,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
   # list of lists per graph is now the bytes it was built from.
   defp native_evidence(
          displacer,
-         graph_id,
          input_channel,
          search_locations,
          poses,
          channel_features,
          node_feature_evidence,
-         {ids, k}
+         {ids, k},
+         {nodes, node_poses, node_defined}
        ) do
-    memory = displacer.graph_memory
-    node_count = GraphMemory.get_num_nodes_in_graph(memory, graph_id, input_channel)
-
-    {node_poses, node_defined} = node_pose_bytes(displacer, graph_id, input_channel, node_count)
-
     {normal_weight, curvature_weight} =
       pose_weights(displacer, input_channel, channel_features["pose_fully_defined"])
 
@@ -329,12 +330,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
         hypothesis_poses_bytes(poses),
         sensed_pose_bytes(channel_features["pose_vectors"])
       ],
-      [
-        KdTree.points_bytes(GraphMemory.get_locations_in_graph(memory, graph_id, input_channel)),
-        node_poses,
-        node_defined,
-        evidence_bytes(node_feature_evidence)
-      ],
+      [nodes, node_poses, node_defined, evidence_bytes(node_feature_evidence)],
       params_bytes([
         flatness,
         displacer.max_match_distance,
@@ -399,9 +395,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
     end)
   end
 
-  # The bytes a kernel reads, each built once per graph and channel rather than
-  # once per hypothesis: a rotation as nine numbers row by row, a node's pose as
-  # its normal and first curvature direction, a missing value as a NaN.
+  # The bytes a kernel reads that this step has to build: the hypotheses' own
+  # rotations, one after another, and what each stored node is worth on its
+  # features. The graph's own arrays are not here — they are read from memory,
+  # flattened once when the graph was built.
   defp hypothesis_poses_bytes(poses) do
     poses
     |> Enum.map(fn [[p, q, r], [s, t, u], [v, w, x]] ->
@@ -414,35 +411,6 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
 
   defp sensed_pose_bytes([n1, n2, n3, d1, d2, d3 | _unread]) do
     params_bytes([n1, n2, n3, d1, d2, d3])
-  end
-
-  # The same two arrays `node_poses/4` builds tuples for, read straight into the
-  # bytes a kernel reads: no tuple, no pair of lists and no second pass over the
-  # graph, because nothing here indexes them.
-  defp node_pose_bytes(displacer, graph_id, input_channel, node_count) do
-    features =
-      GraphMemory.get_features_at_node(
-        displacer.graph_memory,
-        graph_id,
-        input_channel,
-        Enum.to_list(0..(node_count - 1)//1),
-        ["pose_vectors", "pose_fully_defined"]
-      )
-
-    node_poses =
-      features
-      |> Map.fetch!("pose_vectors")
-      |> Enum.map(&sensed_pose_bytes/1)
-      |> IO.iodata_to_binary()
-
-    node_defined =
-      features |> Map.fetch!("pose_fully_defined") |> Enum.map(&hd/1) |> floats_bytes()
-
-    {node_poses, node_defined}
-  end
-
-  defp floats_bytes(floats) do
-    for float <- floats, into: <<>>, do: <<float * 1.0::float-64-little>>
   end
 
   # A node whose features could not be read has no evidence, which a kernel reads

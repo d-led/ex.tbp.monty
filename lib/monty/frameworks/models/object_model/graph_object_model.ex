@@ -232,6 +232,15 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   end
 
   @doc """
+  Whether this graph stores a value for `feature` at every node.
+  """
+  @impl true
+  def has_feature?(%__MODULE__{graph: %{feature_mapping: mapping}}, feature),
+    do: Map.has_key?(mapping, feature)
+
+  def has_feature?(%__MODULE__{}, _feature), do: false
+
+  @doc """
   The ids of the `count` nodes nearest each of `search_locations`, as bytes.
 
   See `Monty.Frameworks.Models.ObjectModel.find_nearest_neighbor_ids/3`: this is

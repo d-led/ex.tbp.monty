@@ -229,6 +229,12 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   @impl true
   def find_nearest_neighbor_ids(%__MODULE__{}, _search_locations, _count), do: nil
 
+  @doc """
+  A grid model's values are compared rather than stored as columns.
+  """
+  @impl true
+  def has_feature?(%__MODULE__{}, _feature), do: false
+
   # The index over this model's node positions, kept with the graph it belongs
   # to: the positions only change when the model is rebuilt.
   defp location_tree(%__MODULE__{location_tree: tree}) when not is_nil(tree), do: tree

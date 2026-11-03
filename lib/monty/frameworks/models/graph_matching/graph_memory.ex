@@ -46,6 +46,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
             feature_array: %{},
             feature_order: %{},
             feature_rows: %{},
+            node_arrays: %{},
             features_to_use: %{}
 
   @type graph_id :: String.t()
@@ -180,9 +181,93 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
               graph_id,
               input_channel,
               cacheable_rows(rows)
+            ),
+          node_arrays:
+            put_channel(
+              memory.node_arrays,
+              graph_id,
+              input_channel,
+              node_arrays(memory, graph_id, input_channel)
             )
       }
     end
+  end
+
+  @doc """
+  Where every node is, how its frame sits, and whether that frame was defined —
+  as the bytes a kernel reads.
+
+  `{locations, poses, defined}`, each a binary: three f64 a node for its
+  position, six for its normal and first curvature direction, one for whether the
+  pose was fully defined. `nil` when a graph has no frames to read, which is a
+  graph the evidence kernel cannot be handed at all.
+
+  Written where the feature rows are written, and forgotten where they are
+  forgotten: all of it is what the graphs hold when an episode starts, and none of
+  it changes while one is being matched.
+  """
+  @spec get_node_arrays(t(), graph_id(), input_channel()) ::
+          {binary(), binary(), binary()} | nil
+  def get_node_arrays(%__MODULE__{node_arrays: arrays}, graph_id, input_channel) do
+    arrays |> Map.get(graph_id, %{}) |> Map.get(input_channel)
+  end
+
+  # A graph that does not store both halves of a frame has no arrays to read, and
+  # keeps the reference path — a model built from a fixture with only some of the
+  # features is exactly that.
+  defp node_arrays(%__MODULE__{} = memory, graph_id, input_channel) do
+    graph = get_graph(memory, graph_id, input_channel)
+
+    read? =
+      memory.object_model.has_feature?(graph, "pose_vectors") and
+        memory.object_model.has_feature?(graph, "pose_fully_defined")
+
+    if read?, do: frame_arrays(memory, graph)
+  end
+
+  defp frame_arrays(memory, graph) do
+    positions = memory.object_model.positions(graph)
+    poses = memory.object_model.get_values_for_feature(graph, "pose_vectors")
+    defined = memory.object_model.get_values_for_feature(graph, "pose_fully_defined")
+
+    with [_ | _] <- positions,
+         true <- Enum.all?(positions, &match?([_, _, _], &1)),
+         true <- length(poses) == length(positions),
+         true <- Enum.all?(poses, &match?([_, _, _, _, _, _ | _], &1)),
+         true <- length(defined) == length(positions) do
+      {flatten(positions, 3), pose_bytes(poses), defined_bytes(defined)}
+    else
+      _nothing_to_read -> nil
+    end
+  end
+
+  defp pose_bytes(poses) do
+    poses
+    |> Enum.map(fn [n1, n2, n3, d1, d2, d3 | _unread] ->
+      <<n1 * 1.0::float-64-little, n2 * 1.0::float-64-little, n3 * 1.0::float-64-little,
+        d1 * 1.0::float-64-little, d2 * 1.0::float-64-little, d3 * 1.0::float-64-little>>
+    end)
+    |> IO.iodata_to_binary()
+  end
+
+  # `0.0` is a pose that was not defined, and anything else — including the `nil`
+  # a recording may carry — is one that was, which is how the comparison reads a
+  # stored flag (`elem(flags, id) != 0.0`).
+  defp defined_bytes(defined) do
+    defined
+    |> Enum.map(fn [flag | _rest] ->
+      if flag == 0.0, do: <<0.0::float-64-little>>, else: <<1.0::float-64-little>>
+    end)
+    |> IO.iodata_to_binary()
+  end
+
+  defp flatten(rows, width) do
+    values =
+      for row <- rows, value <- Enum.take(row, width), into: <<>> do
+        <<value * 1.0::float-64-little>>
+      end
+
+    values
   end
 
   # The flat rows are read as a rectangle of values, so only a rectangle of
@@ -249,7 +334,8 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
       memory
       | feature_array: drop_channel(memory.feature_array, graph_id, input_channel),
         feature_order: drop_channel(memory.feature_order, graph_id, input_channel),
-        feature_rows: drop_channel(memory.feature_rows, graph_id, input_channel)
+        feature_rows: drop_channel(memory.feature_rows, graph_id, input_channel),
+        node_arrays: drop_channel(memory.node_arrays, graph_id, input_channel)
     }
   end
 
@@ -258,7 +344,8 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
       memory
       | feature_array: Map.delete(memory.feature_array, graph_id),
         feature_order: Map.delete(memory.feature_order, graph_id),
-        feature_rows: Map.delete(memory.feature_rows, graph_id)
+        feature_rows: Map.delete(memory.feature_rows, graph_id),
+        node_arrays: Map.delete(memory.node_arrays, graph_id)
     }
   end
 

@@ -106,4 +106,13 @@ defmodule Monty.Frameworks.Models.ObjectModel do
   """
   @callback find_nearest_neighbor_ids(model(), [location()], pos_integer()) ::
               {binary(), pos_integer()} | nil
+
+  @doc """
+  Whether the model stores a value for `feature` at every node.
+
+  A caller that reads a whole column has to know whether there is one: a graph
+  built from a recording that carried only some of the features has no column to
+  read, and asking for it is an error rather than an empty answer.
+  """
+  @callback has_feature?(model(), String.t()) :: boolean()
 end
