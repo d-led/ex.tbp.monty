@@ -14,6 +14,8 @@ defmodule Monty.Prerequisites do
 
   @manifest "priv/prerequisites.yaml"
 
+  alias Monty.Prerequisites.Download
+
   # Where `engine_installed?/1` keeps its one answer per interpreter and package.
   @engine_memo {__MODULE__, :engine}
 
@@ -92,6 +94,40 @@ defmodule Monty.Prerequisites do
   @doc "Whether the file itself is on disk, unpacked or not."
   @spec downloaded?(prerequisite()) :: boolean()
   def downloaded?(prerequisite), do: File.exists?(target_path(prerequisite))
+
+  @doc """
+  Downloads one prerequisite and waits for it, answering how it ended.
+
+  The download runs in a process of its own and reports on
+  `Monty.Prerequisites.Download.topic()`; this is the waiting half, so the page,
+  `mix monty.prerequisites.fetch` and the release command that fetches before a
+  container serves all see the same download rather than three of them.
+
+  A download that is already running is joined, not started twice.
+  """
+  @spec fetch(prerequisite()) :: {:ok, Download.progress()} | {:error, term()}
+  def fetch(prerequisite) do
+    Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Download.topic())
+    {:ok, _pid} = Download.start(prerequisite)
+
+    await(prerequisite)
+  end
+
+  defp await(prerequisite) do
+    receive do
+      {:download, %{id: id, status: :done} = progress} when id == prerequisite.id ->
+        {:ok, progress}
+
+      {:download, %{id: id, status: status} = progress}
+      when id == prerequisite.id and status in [:failed, :cancelled] ->
+        {:error, Map.get(progress, :error) || status}
+
+      {:download, %{id: id}} when id == prerequisite.id ->
+        await(prerequisite)
+    after
+      :timer.minutes(30) -> {:error, :timeout}
+    end
+  end
 
   # Where an archive unpacks to. An entry says so when the archive's name is not
   # the directory it fills (`ycb_objects_1.0.tgz` fills `ycb/`); otherwise the

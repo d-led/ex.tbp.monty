@@ -8,6 +8,11 @@
 # restart, not a re-download and a re-run. `docker compose down -v` deletes both.
 # Postgres is on the compose network only: no port of its own on the host.
 #
+# The image carries no data, so the first `up` downloads it: `prerequisites`
+# runs before `app` and the server waits for it, which is what stops a fresh
+# stack from offering runs whose model is not there yet. It fetches nothing once
+# the volume has the bundles.
+#
 # `TAG=v1.2.3 docker compose up` runs a release instead of `:latest`; the tags
 # are in docs/container.md, which also has every variable the image reads.
 
@@ -39,6 +44,22 @@ services:
       db:
         condition: service_healthy
 
+  # The datasets and pretrained model bundles a run reads, downloaded before
+  # anything serves. Idempotent by construction: it asks what is on the volume
+  # and fetches only what is not.
+  prerequisites:
+    image: *image
+    entrypoint: ["/app/bin/prerequisites"]
+    environment: *environment
+    volumes:
+      # `~/tbp` inside the container, and the same volume `app` mounts.
+      - prerequisites:/app/priv/tbp
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   app:
     image: *image
     ports:
@@ -54,6 +75,8 @@ services:
       db:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      prerequisites:
         condition: service_completed_successfully
 
 volumes:

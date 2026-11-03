@@ -15,6 +15,14 @@ docker run --rm \
   -e SECRET_KEY_BASE="$(mix phx.gen.secret)" \
   ghcr.io/d-led/ex.tbp.monty:latest /app/bin/migrate
 
+# …and once per volume: the data a run reads. The image carries none, so this
+# downloads it — and does nothing on a volume that already has it.
+docker run --rm \
+  -v monty-priv:/app/priv \
+  -e DATABASE_URL=ecto://user:pass@host:5432/monty \
+  -e SECRET_KEY_BASE="$(mix phx.gen.secret)" \
+  ghcr.io/d-led/ex.tbp.monty:latest /app/bin/prerequisites
+
 # …and then the app, with the one writable directory on a volume.
 docker run --rm -p 4000:4000 \
   --read-only --tmpfs /tmp \
@@ -26,6 +34,10 @@ docker run --rm -p 4000:4000 \
 
 Then <http://localhost:4000> — every experiment Monty ships, and a run you can
 start from any of them.
+
+`docker compose up` in this repository is those three steps in that order: it
+runs `migrate`, then `prerequisites`, and starts the server only once both have
+finished, so a fresh stack never offers a run whose model is still arriving.
 
 ## The script, if you have the checkout
 
@@ -179,7 +191,8 @@ Three ways to have them:
 
 | Where they come from          | How                                                                                                                                                                                                                                              |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| downloaded by the running app | open `/prerequisites` and press download. Each file streams to a `.part` name on the volume and is moved into place only when its size and checksum match                                                                                        |
+| fetched before the server     | `/app/bin/prerequisites` — what `docker compose up` runs before `app`. It fetches what is missing, waits for it, exports the libraries, and exits; a second run on the same volume does nothing                                             |
+| downloaded by the running app | open `/prerequisites` in the UI and press download per entry. Each file streams to a `.part` name on the volume and is moved into place only when its size and checksum match                                                                     |
 | a Monty tree you already have | `-v /path/to/tbp:/app/priv/tbp:ro` — the defaults hang off `HOME`, which is `/app/priv`, so the directory you mount is the one those defaults already point at. `scripts/image.sh run --data /path/to/tbp` is this row with the flag spelled out |
 | anywhere else                 | `-e MONTY_DATA=… -e MONTY_MODELS=… -e MONTY_LOGS=…` — the variables Monty's own documentation uses — each pointing at a mounted path                                                                                                             |
 

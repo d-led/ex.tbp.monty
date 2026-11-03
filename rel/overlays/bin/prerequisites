@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# The data a run reads, as a step before the server: the image carries the
+# software and Monty's config tree and no datasets, so a first start downloads
+# them here. Compose runs it as a one-off container that the server waits for;
+# every start after the first finds the bundles on the volume and does nothing.
+#
+# It exits non-zero when a download does not arrive, which is deliberate: a
+# server that started anyway would offer runs whose model is missing.
+set -eu
+
+cd -P -- "$(dirname -- "$0")"
+exec ./ex_tbp_monty eval "ExTbpMonty.Release.fetch_prerequisites"

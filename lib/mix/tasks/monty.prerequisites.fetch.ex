@@ -52,37 +52,21 @@ defmodule Mix.Tasks.Monty.Prerequisites.Fetch do
 
   # The downloader runs in a process of its own from the moment it starts, so
   # waiting is a subscription rather than a call — the same messages the page
-  # gets, which is what makes this the same fetch a person would see.
+  # gets, which is what makes this the same fetch a person would see. The
+  # waiting itself is `Monty.Prerequisites.fetch/1`, so the release command
+  # that fetches before a container serves waits the same way.
   defp fetch(prerequisite) do
-    Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Monty.Prerequisites.Download.topic())
-    {:ok, _pid} = Monty.Prerequisites.Download.start(prerequisite)
-
     Mix.shell().info("#{prerequisite.id}: fetching")
-    await(prerequisite)
-  end
 
-  defp await(prerequisite) do
-    receive do
-      {:download, %{id: id, status: :done} = progress} when id == prerequisite.id ->
-        said(prerequisite, progress)
+    case Prerequisites.fetch(prerequisite) do
+      {:ok, progress} ->
+        Mix.shell().info("#{prerequisite.id}: #{describe(progress)}")
         :ok
 
-      {:download, %{id: id, status: status} = progress}
-      when id == prerequisite.id and status in [:failed, :cancelled] ->
-        Mix.shell().error("#{prerequisite.id}: #{status} (#{inspect(progress.error)})")
-        {:error, status}
-
-      {:download, %{id: id}} when id == prerequisite.id ->
-        await(prerequisite)
-    after
-      :timer.minutes(30) ->
-        Mix.shell().error("#{prerequisite.id}: nothing happened for half an hour")
-        {:error, :timeout}
+      {:error, reason} ->
+        Mix.shell().error("#{prerequisite.id}: #{inspect(reason)}")
+        {:error, reason}
     end
-  end
-
-  defp said(prerequisite, progress) do
-    Mix.shell().info("#{prerequisite.id}: #{describe(progress)}")
   end
 
   defp describe(%{libraries: %{exported: exported, current: current}}) do

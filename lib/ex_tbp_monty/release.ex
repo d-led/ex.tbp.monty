@@ -1,6 +1,7 @@
 defmodule ExTbpMonty.Release do
   @moduledoc """
-  Migration entry points for a release.
+  The entry points a release is driven from: migrations, and the data a run
+  reads.
 
   Migrations live in two directories:
 
@@ -18,10 +19,17 @@ defmodule ExTbpMonty.Release do
 
   In development and test both directories are applied together
   (`mix ecto.migrate_all`), so nobody has to remember the second one.
+
+  `fetch_prerequisites/0` is the other half of a first start: the image ships
+  the software and Monty's config tree, and no data, so the datasets and the
+  pretrained model bundles are fetched here — before the server serves, so a
+  run cannot be asked for an experiment whose files are still arriving.
   """
 
   @app :ex_tbp_monty
   @manual_migrations "manual_migrations"
+
+  alias Monty.Prerequisites
 
   @doc """
   Applies the migrations that are safe to run automatically on deploy.
@@ -36,6 +44,36 @@ defmodule ExTbpMonty.Release do
     end
 
     :ok
+  end
+
+  @doc """
+  Downloads whatever an experiment needs that is not on disk yet, and waits.
+
+  Nothing is fetched when everything is already there, which is the case on
+  every start after the first: the bundles land on a volume. A download that
+  does not arrive raises, so a container that runs this before serving stops
+  rather than serving runs that cannot read their model.
+  """
+  @spec fetch_prerequisites() :: :ok
+  def fetch_prerequisites do
+    {:ok, _apps} = Application.ensure_all_started(@app)
+
+    fetched =
+      Prerequisites.all()
+      |> Enum.reject(&Prerequisites.present?/1)
+      |> Enum.map(&fetch_prerequisite/1)
+
+    case Enum.reject(fetched, &(&1 == :ok)) do
+      [] -> :ok
+      failures -> raise "#{length(failures)} prerequisite(s) did not arrive: #{inspect(failures)}"
+    end
+  end
+
+  defp fetch_prerequisite(prerequisite) do
+    case Prerequisites.fetch(prerequisite) do
+      {:ok, _progress} -> :ok
+      {:error, reason} -> {prerequisite.id, reason}
+    end
   end
 
   @doc """
