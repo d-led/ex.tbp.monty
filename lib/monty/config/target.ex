@@ -34,6 +34,9 @@ defmodule Monty.Config.Target do
 
     case ModuleMap.resolve(python) do
       {:ok, %{status: :implemented, elixir: elixir}} ->
+        # The name is the map's own `elixir` field, read from a checked-in file,
+        # so the atoms this can create are bounded by
+        # `lib/monty/module_map/data.ex` rather than by anything a request says.
         Module.concat([elixir])
 
       {:ok, %{status: :unknown}} ->

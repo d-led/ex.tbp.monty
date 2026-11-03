@@ -77,6 +77,8 @@ defmodule Monty.ModuleMap do
       |> Enum.map(&camelize/1)
       |> collapse_repeats()
 
+    # The module the generator is about to write down, named from a Python path
+    # in the map it is generating.
     Module.concat([namespace | segments]) |> inspect()
   end
 
@@ -334,6 +336,8 @@ defmodule Monty.ModuleMap do
   defp unexplained?(map), do: Map.get(map, :reason) in [nil, ""]
 
   defp exists?(module) do
+    # A name from the map, asked of the code loader: the answer is whether it
+    # is there, and nothing here came from a request.
     module |> String.split(".") |> Module.concat() |> Code.ensure_loaded?()
   end
 

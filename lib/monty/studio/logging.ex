@@ -239,6 +239,8 @@ defmodule Monty.Studio.Logging do
   # module it points at is there. Asking both keeps a stale map from becoming a
   # crash in the middle of a run, and a note instead.
   defp described_module(%{status: :implemented, elixir: elixir}) do
+    # The map's own `elixir` field, and the loader check below is what decides
+    # whether the module is used at all.
     module = Module.concat([elixir])
 
     if Code.ensure_loaded?(module),
