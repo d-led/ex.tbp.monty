@@ -52,14 +52,14 @@ defmodule ExTbpMonty.Database do
   end
 
   @doc "The SQLite file, when SQLite is the database in use."
-  @spec sqlite_path() :: Path.t()
+  @spec sqlite_path() :: String.t()
   def sqlite_path do
     case System.get_env("SQLITE_PATH") do
       path when path in [nil, ""] ->
         Path.join(System.get_env("HOME") || File.cwd!(), @sqlite_file)
 
       path ->
-        path
+        to_string(path)
     end
   end
 

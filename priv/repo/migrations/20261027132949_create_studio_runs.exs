@@ -20,9 +20,12 @@ defmodule ExTbpMonty.Repo.Migrations.CreateStudioRuns do
       add :config, :map, null: false, default: %{}
       add :inputs, :map, null: false, default: %{}
       add :summary, :map, null: false, default: %{}
-      # A run's log is an array of lines. One JSON document holds it on either
-      # database this runs on; see `Monty.Studio.RunHistory.Json`.
-      add :log, Monty.Studio.RunHistory.Json, null: false, default: []
+      # A run's log is an array of lines, kept as one JSON document: `jsonb` on
+      # Postgres, `TEXT` on SQLite. The schema reads and writes it as a list
+      # through `Monty.Studio.RunHistory.Json` — a migration only takes the
+      # storage type, and a `:map` column takes no list for a default, so the
+      # empty log is the schema's default rather than the column's.
+      add :log, :map, null: false
       add :started_at, :utc_datetime_usec
       add :finished_at, :utc_datetime_usec
       add :duration_us, :bigint, null: false, default: 0

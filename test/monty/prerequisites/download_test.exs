@@ -152,7 +152,12 @@ defmodule Monty.Prerequisites.DownloadTest do
 
     test "says which model it is reading while it reads the memory", %{tmp: tmp} do
       prerequisite = Prerequisites.get("tiny_unpacked")
-      Monty.Test.PrerequisiteRoots.plant(prerequisite)
+
+      # Already here: the directory the archive fills holds something, which is
+      # what "present" now means, so the fetch goes straight to its last phase.
+      land = Prerequisites.where_it_lands(prerequisite)
+      File.mkdir_p!(land)
+      File.write!(Path.join(land, "unpacked.txt"), "")
 
       # Reading the memory is minutes with nothing on the wire to measure, so the
       # phase reports the model it is on. This one cannot be read, which is

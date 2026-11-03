@@ -17,8 +17,8 @@ defmodule Monty.Studio.Run do
   alias Monty.Experiment.RecognitionPolicy
   alias Monty.Experiment.RecognitionPolicy.{RecognitionCounter, RecognitionResult}
   alias Monty.Frameworks.Experiments.Seed
-  alias Monty.Runtime.Positioning
   alias Monty.Prerequisites
+  alias Monty.Runtime.Positioning
   alias Monty.Studio.{Belief, Setup}
 
   # How many steps an episode may take when the caller names no number. Not a
@@ -179,7 +179,7 @@ defmodule Monty.Studio.Run do
         :ok
 
       missing ->
-        paths = missing |> Enum.map(& &1.path) |> Enum.join(", ")
+        paths = Enum.map_join(missing, ", ", & &1.path)
 
         {:error, "this run needs data that is not here: #{paths} — fetch it on /prerequisites"}
     end

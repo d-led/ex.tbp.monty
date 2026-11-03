@@ -24,7 +24,8 @@ defmodule ExTbpMonty.Repo.Migrations.WrapRunJsonColumns do
 
   defp postgres?, do: adapter() == Ecto.Adapters.Postgres
 
-  defp adapter do
-    :ex_tbp_monty |> Application.get_env(ExTbpMonty.Repo) |> Keyword.get(:adapter)
-  end
+  # The repo this instance was started with — the migration may be running
+  # against either, and asking a module name that no longer exists would answer
+  # "not Postgres" and skip the rewrite on the database that needs it.
+  defp adapter, do: ExTbpMonty.Database.repo_module().config()[:adapter]
 end

@@ -11,6 +11,14 @@ config :ex_tbp_monty,
   ecto_repos: [ExTbpMonty.Repo.Postgres],
   generators: [timestamp_type: :utc_datetime]
 
+# `Ecto.Migrator.migrations_path/2` builds the directory from the repo module's
+# own name — `priv/<last word, underscored>/migrations`, which is why this
+# project's migrations sit in `priv/repo`: the module was called `Repo`. The
+# repos are `Repo.Postgres` and `Repo.SQLite` now, so the directory is named
+# rather than inherited from a module name.
+config :ex_tbp_monty, ExTbpMonty.Repo.Postgres, priv: "repo"
+config :ex_tbp_monty, ExTbpMonty.Repo.SQLite, priv: "repo"
+
 # Where this software lives: the footer links to it with the octocat. A fork
 # that does not want the upstream link drops the key, and the link goes with it.
 config :ex_tbp_monty, :source, repo: "https://github.com/d-led/ex.tbp.monty"
