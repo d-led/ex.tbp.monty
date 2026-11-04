@@ -17,8 +17,29 @@ erl_crash.dump
 # A memory is Monty's pretrained model, exported to the format this application
 # reads — a hundred megabytes of it, and the same kind of thing as the YCB
 # meshes: it arrives through `/prerequisites`, which exports it, and it never
-# comes through `git`. The `README.md` that explains the layout stays.
-/priv/monty/libraries/*/*.jsonl.gz
+# comes through `git`. Everything under `libraries/` goes, at any depth, and the
+# `README.md` that explains the layout stays.
+/priv/monty/libraries/*
+!/priv/monty/libraries/README.md
+
+# The file a fetch streams into before its checksum matches and it is renamed
+# into place. A killed download left one in the tree once and `git status`
+# offered it up.
+*.part
+
+# The roots a downloader is pointed at when they are inside the checkout
+# (`MONTY_DATA`, `MONTY_MODELS`, `MONTY_LOGS`), the drafts the builder saves, and
+# the wandb directory a run writes beside whatever started it.
+/priv/tbp/
+/priv/data/
+/priv/experiments/
+/priv/wandb/
+
+# A database kept in a file, with the two sidecars SQLite writes beside it.
+*.db
+*.db-wal
+*.db-shm
+
 /tmp/
 
 ### Elixir Patch ###
