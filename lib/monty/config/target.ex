@@ -29,6 +29,7 @@ defmodule Monty.Config.Target do
   @spec class!(map() | String.t()) :: module()
   def class!(%{"_target_" => target}), do: class!(target)
 
+  # sobelow_skip ["DOS.ModuleConcat"]
   def class!(dotted) when is_binary(dotted) do
     python = unwrap(dotted)
 

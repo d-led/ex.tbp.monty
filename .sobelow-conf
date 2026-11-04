@@ -3,6 +3,13 @@
 # - `skip: true` honours `# sobelow_skip [...]` comments and the reviewed
 #   findings recorded in `.sobelow-skips` (regenerate with
 #   `mix sobelow --config --mark-skip-all` after a deliberate review).
+# - The comment is a *definition-level* marker on 0.18.1: directly above the
+#   `def`, it suppresses the finding; inside the function body it does not (0.16
+#   honoured that placement, 0.18.1 does not). Every reviewed
+#   `DOS.ModuleConcat` site therefore carries it above its own definition.
+#   `.sobelow-skips` is empty because its entries are `file:line:fingerprint`,
+#   and one inserted line above a flagged one silently drops the entry — the
+#   markers cannot be broken that way.
 # - `exit: :low` fails the build on any finding at low confidence or above.
 # - `private: true` skips the update check, so no `.sobelow` cache is written.
 [

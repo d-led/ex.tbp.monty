@@ -180,14 +180,32 @@ one reference before it checks the count, and the config keeps Monty's own text:
 a draft must still compose to the experiment it came from, and composition leaves
 interpolation to `Monty.Config.Resolvers` at setup time.
 
+## The skip that a shifted line could drop (2026-11-04)
+
+`.sobelow-skips` records a reviewed finding as `file:line:fingerprint`, so a line
+inserted above a flagged one drops the entry and the scan fails on a change that
+touched nothing about it. Inserting one line above
+`Monty.Studio.Logging.described_module/1` did exactly that: the finding came back
+with the line number moved past the entry.
+
+The comment form was recorded as unreliable across versions, and half of that is
+right. `# sobelow_skip ["DOS.ModuleConcat"]` *inside the function body* is
+ignored by 0.18.1 — 0.16 honoured that placement — while directly above the `def`
+it suppresses the finding. All four sites now carry it there; each already said,
+three lines below, why the atoms are bounded by `lib/monty/module_map/data.ex`
+rather than by anything a request says. `.sobelow-skips` is empty, and the scan
+was re-run with a line inserted above one of the markers: nothing came back.
+What the two placements do is written in `.sobelow-conf`, so the experiment does
+not have to be repeated.
+
 ## Open points and bugs
 
 | #   | What                                                                                                                                                                                                                                                                                                                       | Done means                                                                                                                    |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | 1   | **Benchmark against Monty on a quiet machine** — nothing else on this list should come first                                                                                                                                                                                                                               | The table from step 1 and step 2 above, side by side, with the ratio stated                                                   |
 | 2   | **`lazy_html` is one patch behind**: 0.1.14 needs `fine ~> 0.2.0`, and `pythonx 0.4.11` pins `fine ~> 0.1.2`. Verified in a scratch project that it resolves without pythonx, so this is pythonx's constraint                                                                                                              | `pythonx` allows `fine 0.2`, then `mix deps.update lazy_html`. Nothing to do before that                                      |
-| 3   | **`.sobelow-skips` is line-anchored.** The four reviewed `DOS.ModuleConcat` entries record `file:line:fingerprint`; inserting a line above a flagged one makes lint fail again                                                                                                                                             | Either accept the re-record (`.sobelow-conf` says how) or decide the marker comments are the better mechanism — see #4        |
-| 4   | **`# sobelow_skip` comments did not hold across sobelow versions.** Placed in the function body, 0.16 honoured them and 0.18.1 did not; only the skip file suppressed the findings in both                                                                                                                                 | A short note in `.sobelow-conf` so the next person does not repeat the experiment, or a marker form verified on both versions |
+| 3   | ~~**`.sobelow-skips` is line-anchored.**~~ — **done 2026-11-04.** The four reviewed `DOS.ModuleConcat` findings are marked above their own definitions, which a shifted line cannot drop, and the fingerprint file is empty | The marker survives a line inserted above it; `.sobelow-conf` says which placement works |
+| 4   | ~~**`# sobelow_skip` comments did not hold across sobelow versions.**~~ — **done 2026-11-04.** Placement, not the version: inside a function body 0.18.1 ignores the comment, above the `def` it honours it | A short note in `.sobelow-conf`, and four markers verified against 0.18.1 |
 | 5   | **`mix complexity` locally can report ~196 functions above CRAP 20** after a subset `--export-coverage` run — a poisoned `cover/default.coverdata`, not a regression. CI merges four partitions and is green                                                                                                               | Delete `cover/*.coverdata`, re-run `scripts/quality.sh`; the history is in `docs/speed.md`'s acceptance section               |
 | 6   | **Heavy tests time out on a loaded machine** — three files, all `ExUnit.TimeoutError`, all green in CI. The current limits (300 s / 60 s) cannot tell "slow machine" from "hung"                                                                                                                                           | Decide whether that is acceptable; if not, the tests need a liveness check (a progress assertion) rather than a bigger number |
 | 7   | **`scripts/image.sh run` and `smoke` do not fetch prerequisites.** Deliberate — a smoke test must not download ~700 MB — so `run` needs `--data DIR` or a manual `/app/bin/prerequisites`                                                                                                                                  | A `--fetch` flag on `run`, or leave it and keep the sentence in `docs/container.md`                                           |

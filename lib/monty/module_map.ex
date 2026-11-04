@@ -69,6 +69,7 @@ defmodule Monty.ModuleMap do
 
   @doc "The Elixir module a Python file maps to, within a package namespace."
   @spec module_for(String.t(), String.t()) :: String.t()
+  # sobelow_skip ["DOS.ModuleConcat"]
   def module_for(namespace, relative_python_path) do
     segments =
       relative_python_path
@@ -335,6 +336,7 @@ defmodule Monty.ModuleMap do
 
   defp unexplained?(map), do: Map.get(map, :reason) in [nil, ""]
 
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp exists?(module) do
     # A name from the map, asked of the code loader: the answer is whether it
     # is there, and nothing here came from a request.
