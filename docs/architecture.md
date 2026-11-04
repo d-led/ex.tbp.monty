@@ -147,11 +147,11 @@ diffed against a checkout, a generated file is a map _of_ Monty rather than a
 copy of it, and the world is a re-implementation against the same library Monty
 uses — and only the last of the three is code this repository owns.
 
-| Kind      | What                                                                                | Handles it                                                                     |
-| --------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| copied    | Monty's config tree, the snapshots it was composed into, and its licence            | `mix monty.inputs`                                                             |
-| derived   | Monty's pretrained memories, exported to a format this port reads                   | the prerequisite fetch (`/prerequisites`, `mix monty.prerequisites.fetch`) |
-| generated | the module contract (`lib/monty/module_map/data.ex`) and the two census files       | `mix monty.module_map.gen`, `mix monty.port_census`, `mix monty.target_census` |
+| Kind         | What                                                                                   | Handles it                                                                             |
+| ------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| copied       | Monty's config tree, the snapshots it was composed into, and its licence               | `mix monty.inputs`                                                                     |
+| derived      | Monty's pretrained memories, exported to a format this port reads                      | the prerequisite fetch (`/prerequisites`, `mix monty.prerequisites.fetch`)             |
+| generated    | the module contract (`lib/monty/module_map/data.ex`) and the two census files          | `mix monty.module_map.gen`, `mix monty.port_census`, `mix monty.target_census`         |
 | written here | the world — MuJoCo's scene, agents and cameras, mirroring Monty's `simulators/mujoco/` | [`priv/monty_py/world.py`](../priv/monty_py/world.py), run by the embedded interpreter |
 
 Every path, glob, writer and the command that checks it is in

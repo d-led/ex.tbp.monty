@@ -107,11 +107,11 @@ decoding one row instead of the column, the same probe reads 11.1 M.
 Measured the way the acceptance section asks, interleaved against the tree
 before it — three pairs, alternating, so the machine's load is shared:
 
-| pair | before | after |
-| ---- | ------ | ----- |
+| pair | before                    | after                    |
+| ---- | ------------------------- | ------------------------ |
 | 1    | 11.25 M reductions, 87 MB | 9.60 M reductions, 85 MB |
-| 2    | 9.58 M, 87 MB | 8.91 M, 85 MB |
-| 3    | 10.21 M, 87 MB | 9.03 M, 85 MB |
+| 2    | 9.58 M, 87 MB             | 8.91 M, 85 MB            |
+| 3    | 10.21 M, 87 MB            | 9.03 M, 85 MB            |
 
 The megabytes do not move between runs; the reductions move with the load, which
 is why three pairs beat one number. −2.3 % of a step's garbage for a column that
