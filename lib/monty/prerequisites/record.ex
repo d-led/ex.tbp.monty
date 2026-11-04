@@ -62,9 +62,10 @@ defmodule Monty.Prerequisites.Record do
     part = path <> ".part"
 
     with :ok <- File.mkdir_p(Path.dirname(path)),
-         :ok <- File.write(part, Jason.encode!(Map.put(record, "updated_at", now()))),
-         :ok <- File.rename(part, path) do
-      :ok
+         :ok <- File.write(part, Jason.encode!(Map.put(record, "updated_at", now()))) do
+      # The rename is the answer: `:ok` when the record is in place, the reason
+      # when it is not.
+      File.rename(part, path)
     end
   end
 
