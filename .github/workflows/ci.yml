@@ -70,7 +70,14 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A branch's run is a step on the way to a commit, so a newer push replaces
+  # it. main's is not: its desktop jobs compile a release three times over and
+  # take forty minutes, and a commit that lands while they are building used to
+  # cancel them — which is how the only proof that the Windows and Linux bundles
+  # build can be thrown away by a one-line follow-up. main's runs finish; the
+  # newest pending one replaces an older *pending* one, which GitHub does for
+  # `false` as well.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   MIX_ENV: test
