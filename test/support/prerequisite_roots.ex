@@ -46,8 +46,13 @@ defmodule Monty.Test.PrerequisiteRoots do
   path — because `present?/1` asks for the first and `downloaded?/1` for the
   second, and a fixture that satisfied one of them would be a fixture that lies.
   """
+  # A bundle that has been fetched holds something. A directory on its own is
+  # what the page refuses to call "here", so a fixture that plants one leaves a
+  # file where the bundle lands.
   def plant(prerequisite) do
-    File.mkdir_p!(Prerequisites.where_it_lands(prerequisite))
+    lands = Prerequisites.where_it_lands(prerequisite)
+    File.mkdir_p!(lands)
+    File.write!(Path.join(lands, "planted-by-the-test"), "")
 
     path = Prerequisites.target_path(prerequisite)
     File.mkdir_p!(Path.dirname(path))

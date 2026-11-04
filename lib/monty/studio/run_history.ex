@@ -309,11 +309,12 @@ defmodule Monty.Studio.RunHistory do
         |> where([run], run.id == ^uuid)
         |> select(
           [run],
-          # `->` with an integer indexes a JSON array on both databases. Not
-          # wrapped in `type(..., :map)`: that would plan the *index* as jsonb too,
-          # and `jsonb -> jsonb` is not an operator. The value comes back decoded
-          # on Postgres and as text on SQLite, which `json/1` settles.
-          fragment("? -> ?", run.timeline, ^position)
+          # `->` with an integer indexes a JSON array on both databases — a
+          # Postgres array is 1-based and a JSON one is 0-based, and the timeline
+          # is a JSON array now that it is one document. The index is typed as an
+          # integer on purpose: left to itself Ecto plans the parameter as text,
+          # which selects the `jsonb -> text` overload rather than the element.
+          fragment("? -> ?", run.timeline, type(^position, :integer))
         )
         |> Repo.one()
         |> case do
@@ -326,6 +327,7 @@ defmodule Monty.Studio.RunHistory do
     end
   end
 
+  # Postgres hands the element back decoded; SQLite hands back its text.
   defp json(value) when is_binary(value), do: Jason.decode!(value)
   defp json(value), do: value
 

@@ -108,7 +108,11 @@ defmodule Monty.PrerequisitesTest do
         model_name_or_path: "pretrained_ycb_v13"
       }
 
-      File.mkdir_p!(setup.environment.data_path)
+      # An object bundle holds an object; an empty directory is the state this
+      # check exists to tell apart from a download.
+      object = Path.join(setup.environment.data_path, "mug")
+      File.mkdir_p!(object)
+      File.write!(Path.join(object, "textured.obj"), "")
       File.mkdir_p!(Path.join(models, "pretrained_ycb_v13"))
 
       needs = Prerequisites.for_setup(setup)
