@@ -102,6 +102,15 @@ run "compiling the desktop build" \
 run "checking the asset toolchain (installs it once, then finds it)" \
   env MIX_ENV=desktop mix assets.install --if-missing
 
+# Two halves, and only the second is optional on a machine that has built
+# before: `assets.install` fetches the esbuild and tailwind *binaries*, while the
+# packages the scripts import — driver.js among them — come from npm. A laptop
+# with `assets/node_modules` already there made this look unnecessary; a fresh
+# runner failed at esbuild with "Can't resolve 'driver.js/dist/driver.css'".
+# `assets.build` and `assets.deploy` both start with this same line.
+run "installing the packages the scripts import" \
+  env MIX_ENV=desktop mix cmd --cd assets npm ci
+
 # The screens are the server's, so the bundle has to be the server's too: CSS,
 # the LiveView client, and the colocated hooks each screen carries. A release
 # ships whatever `priv/static` holds and never builds it.
