@@ -318,14 +318,15 @@ Two things had to exist before a Windows build could start its own server:
   (`…\Monty on the BEAM\…`). Both are `#[cfg(windows)]` in
   `src-tauri/src/main.rs`, so the macOS path is the same code it was.
 
-**Not verified, and so not claimed: nothing here has been compiled or run on
-Windows.** The release has to be built there (the embedded Python and the two
-NIFs do not cross-compile), the machine needs the MSVC build tools and WebView2,
-`mix release` must lay down `bin\ex_tbp_monty.bat`, and MuJoCo defaults to WGL on
-Windows — `rel/env.sh.eex` sets `MUJOCO_GL=osmesa` for Linux and
-`rel/env.bat.eex` has no equivalent, so a MuJoCo experiment is the first thing to
-watch there. A `windows-2022` row in the `desktop` job is what would answer all
-of it, and that is one `include:`.
+**Compiled by CI, never launched.** A `windows-2022` row builds it — the platform
+needs MSVC and WebView2, which the image ships — and the job's first run found a
+defect that only Windows has: `npm` is `npm.cmd` there, and `mix cmd` cannot
+start one (it failed with `:eacces`), so the packages go through `cmd /C npm ci`.
+What no runner can answer is what happens after launch: `mix release` laying down
+`bin\ex_tbp_monty.bat`, and MuJoCo, which defaults to WGL on Windows —
+`rel/env.sh.eex` sets `MUJOCO_GL=osmesa` for Linux and `rel/env.bat.eex` has no
+equivalent, so a MuJoCo experiment is the first thing to watch there. Nobody has
+started the window on Windows yet.
 
 ## What is still open
 
@@ -334,9 +335,17 @@ of it, and that is one `include:`.
   makes that possible at all). `ElixirKit.Release.codesign/1` plus Tauri's
   `APPLE_SIGNING_IDENTITY`/`APPLE_ID`/`APPLE_TEAM_ID` is the path; neither can be
   done without a paid Apple Developer certificate.
-- **Only macOS arm64 is built.** Linux needs `libwebkit2gtk-4.1-dev` and friends
-  on the runner, Windows needs MSVC and WebView2, and neither has been tried — so
-  neither is claimed. Each is one `include:` in the `desktop` job when it is.
+- **Three platforms, and how far each is proven.** The `desktop` job builds
+  macOS arm64 (`.app`, `.pkg`, `.dmg`), Linux x64 (a `.deb` and a tarball of the
+  window with its release beside it) and Windows x64 (an NSIS setup and the same
+  portable folder, zipped). The macOS app has been built and opened from a
+  checkout by a person; the Linux bundle has been built by CI and not yet
+  launched; the Windows one is compiled and never started. `docs/status.md`'s
+  own rule applies — nothing is claimed beyond what was run. Linux needs
+  `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`,
+  `librsvg2-dev` and `patchelf` on the runner, which the job installs; an
+  AppImage is one more target in `src-tauri/tauri.bundle.linux.json` and has not
+  been tried.
 - **The prerequisites download** is on by default in the window (`prefetch: true`)
   and lands under the folder above. Nothing has been run end to end from a
   _fresh_ folder yet: a first launch downloads ~543 MB and then exports the

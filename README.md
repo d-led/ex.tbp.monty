@@ -59,18 +59,24 @@ Docker, no Elixir, nothing to install but the app:
 curl -fsSL https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/install-desktop.sh | bash
 ```
 
-What it installs is the newest build of `main` (`~/Applications`, overridable);
-a tagged release keeps the same file in the releases page. Prefer to take the
-file yourself? This link always gives the latest build:
+That line works on macOS (Apple Silicon and Intel) and on Linux (x86-64 and
+arm64). What it installs is the newest build of `main` — `~/Applications` on
+macOS, `~/.local/opt` on Linux, both overridable; a tagged release keeps the
+same file in the releases page. Prefer to take the file yourself? These links
+always give the latest build:
 
 | Platform    | Download                                                                                                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------- |
 | macOS arm64 | [ex-tbp-monty-osx-arm64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-osx-arm64.zip) |
+| Linux x64   | [ex-tbp-monty-linux-x64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-linux-x64.zip) |
 
-It is unsigned, so the first launch is right-click → Open. Where it keeps its
+The macOS app is unsigned, so its first launch is right-click → Open. The Linux
+download holds a tarball of the window with its release beside it — and a `.deb`,
+for whoever would rather their package manager tracked it. Where it keeps its
 data, what is built for which platform, and why the download is about 300 MB
 while the app is 550 MB on disk: [docs/desktop.md](docs/desktop.md). A checkout
-opens it with `scripts/start-desktop.sh`.
+opens it with `scripts/start-desktop.sh`, or `scripts\start-desktop.ps1` on
+Windows.
 
 ## From source
 
