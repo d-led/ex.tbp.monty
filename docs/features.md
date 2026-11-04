@@ -181,7 +181,7 @@ what CI runs.
   project's own ports; `docker-compose.quickstart.yml` is the published image
   and a Postgres of its own, which is what works with every published tag.
   ([dev compose](../docker-compose.yml), [quickstart](../docker-compose.quickstart.yml))
-- 2,148 `test` declarations in the suite.
+- 2,154 `test` declarations in the suite.
 
 ## Not built — do not assume these
 
