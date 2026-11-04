@@ -6,10 +6,10 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
   alias Monty.Studio.RunHistory
   alias Monty.Test.Tmp
 
-  @experiment "tutorial/first_experiment"
+  @experiment "base_config_10distinctobj_dist_agent"
 
   @run_attributes %{
-    experiment: "tutorial/first_experiment",
+    experiment: "base_config_10distinctobj_dist_agent",
     source: "monty",
     steps: 3,
     seed: 42,
@@ -93,7 +93,7 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
 
     test "can be narrowed by a word in what they say about themselves" do
       index = Experiments.list(query: "first_experiment")
-      assert @experiment in Enum.map(index.experiments, & &1.name)
+      assert "tutorial/first_experiment" in Enum.map(index.experiments, & &1.name)
     end
 
     test "is a page, so a caller is never handed two hundred rows" do
@@ -126,13 +126,17 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
   end
 
   describe "a preview" do
-    test "composes the experiment you described, and nothing stops it running" do
+    test "composes the experiment you described, and says what would stop it" do
       assert {:ok, preview} = Experiments.preview(%{"name" => "mcp_preview", "seed" => 7})
 
       assert preview.name == "mcp_preview"
       assert preview.yaml =~ "mcp_preview"
       assert preview.setup.seed == 7
-      refute Enum.any?(preview.findings, &(&1.level == :error))
+
+      # The default base is Monty's first tutorial: over `DisplacementGraphLM`
+      # and a training experiment class, neither written here. A preview says so
+      # rather than composing a run this application would refuse.
+      assert Enum.any?(preview.findings, &(&1.code == :modules_not_ported))
     end
 
     test "reports an option that does not exist instead of silently ignoring it" do

@@ -34,6 +34,11 @@ defmodule Monty.Studio.Blueprint do
           groups: %{optional(String.t()) => String.t()}
         }
 
+  # Still Monty's first tutorial, which is what a person starting from nothing
+  # should be shown: a draft written from it composes like any other, and this
+  # application says on the draft's own page that it cannot run here
+  # (`DisplacementGraphLM` and the pretraining experiment class are not written).
+  # `Catalog.templates/0` is the list of experiments that *do* run.
   @default_base "tutorial/first_experiment"
 
   # The `experiment.config` values a builder owns. Everything else in that map

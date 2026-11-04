@@ -19,24 +19,55 @@ defmodule Mix.Tasks.Monty.BenchTest do
 
   describe "a benchmark" do
     test "reports a row per experiment shape" do
-      output = capture(["tutorial/first_experiment", "--steps", "2", "--repeat", "1"])
+      output = capture(["base_config_10distinctobj_dist_agent", "--steps", "2", "--repeat", "1"])
 
-      assert output =~ "tutorial/first_experiment"
+      assert output =~ "base_config_10distinctobj_dist_agent"
       assert output =~ "µs/step"
     end
 
     test "leaves no processes and no history behind" do
-      capture(["tutorial/first_experiment", "--steps", "2", "--repeat", "2"])
+      capture(["base_config_10distinctobj_dist_agent", "--steps", "2", "--repeat", "2"])
 
       assert DynamicSupervisor.which_children(ExTbpMonty.ModelSupervisor) == []
       assert RunHistory.list() == []
     end
 
     test "can be read by a machine" do
-      output = capture(["tutorial/first_experiment", "--steps", "2", "--repeat", "1", "--json"])
+      output =
+        capture([
+          "base_config_10distinctobj_dist_agent",
+          "--steps",
+          "2",
+          "--repeat",
+          "1",
+          "--json"
+        ])
 
-      assert [%{"experiment" => "tutorial/first_experiment", "steps" => 2, "runnable?" => true}] =
-               Jason.decode!(output)
+      assert [
+               %{
+                 "experiment" => "base_config_10distinctobj_dist_agent",
+                 "steps" => 2,
+                 "runnable?" => true
+               }
+             ] = Jason.decode!(output)
+    end
+
+    test "a refused experiment is a row, not a crash" do
+      assert_raise Mix.Error, ~r/cannot run here/, fn ->
+        Mix.Tasks.Monty.Bench.run([
+          "tutorial/first_experiment",
+          "--steps",
+          "2",
+          "--repeat",
+          "1",
+          "--json"
+        ])
+      end
+
+      # The row is written before the task gives up: a caller scripting the
+      # benchmark reads the same answer the table has.
+      assert [%{"experiment" => "tutorial/first_experiment", "runnable?" => false}] =
+               collect([]) |> Jason.decode!()
     end
   end
 

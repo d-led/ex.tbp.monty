@@ -198,8 +198,8 @@ defmodule Monty.Studio.SetupTest do
       assert setup.cameras == %{}
     end
 
-    test "a config Monty ships is not reported as broken" do
-      setup = setup_for("tutorial/first_experiment")
+    test "a config Monty ships and this port can run has no errors" do
+      setup = setup_for("base_config_10distinctobj_dist_agent")
 
       assert Setup.valid?(setup), "expected no errors, got #{inspect(errors(setup))}"
     end
@@ -325,17 +325,31 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "what is ported" do
-    test "one line says which classes a run still stands in for" do
+    test "an experiment built from classes this port has not written is refused" do
       setup = setup_for("tutorial/first_experiment")
 
       assert [stand_ins] =
                for(%{code: :modules_not_ported} = finding <- setup.findings, do: finding)
 
-      # Not MuJoCo's simulator: this build carries Monty's code for it, so it is
-      # not a stand-in — see the finding below, and the world's own warning.
-      assert stand_ins.level == :info
+      # An error, not an info: no stand-in runs in place of a class this port
+      # has not written, so the page disables the run and the task refuses it.
+      assert stand_ins.level == :error
+      assert stand_ins.message =~ "cannot run here"
       assert stand_ins.message =~ "DisplacementGraphLM"
       refute stand_ins.message =~ "MuJoCoSimulator"
+
+      refute Setup.valid?(setup)
+    end
+
+    test "an experiment that trains is refused for the same reason" do
+      setup = setup_for("surf_agent_unsupervised_10distinctobj")
+
+      assert [training] =
+               for(%{code: :training_not_implemented} = finding <- setup.findings, do: finding)
+
+      assert training.level == :error
+      assert training.message =~ "no training loop"
+      refute Setup.valid?(setup)
     end
 
     test "and does not explain itself where Monty's code is what runs" do

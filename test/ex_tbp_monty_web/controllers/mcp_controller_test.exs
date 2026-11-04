@@ -92,11 +92,15 @@ defmodule ExTbpMontyWeb.McpControllerTest do
     end
 
     test "a run is answered with a link on the address the caller used", %{conn: conn} do
+      # The experiment has to be one this port runs: a run of an experiment
+      # built from classes that are not written here is refused, and a refusal
+      # has no link to answer with.
       body =
         conn
         |> call_tool("monty_run_experiment", %{
-          "name" => "tutorial/first_experiment",
-          "steps" => 2
+          "name" => "base_config_10distinctobj_dist_agent",
+          "steps" => 2,
+          "world" => "synthetic"
         })
         |> json_response(200)
 

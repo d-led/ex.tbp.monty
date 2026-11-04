@@ -419,8 +419,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           </div>
         </div>
 
+        <%!-- Two kinds of error reach this line — the config's own, which Monty
+        would refuse too, and one this port makes ("no implementation here") —
+        so it must not claim a cause of its own. --%>
         <p :if={not config_runnable?(assigns)} id="run-blocked" class="text-sm text-error">
-          Fix the errors above before running: this config would not start in Monty either.
+          Fix the errors above before running.
         </p>
 
         <%!-- The runs this experiment already has, newest first, between the
