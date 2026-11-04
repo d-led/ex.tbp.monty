@@ -1,17 +1,17 @@
-# Download and run: the published image and a Postgres of its own.
+# Download and run: the published image, and nothing else.
 #
 #   docker compose -f docker-compose.quickstart.yml up
 #
 # Then http://localhost:6401. The release migrates itself as it boots, so there
 # is nothing to run first. The image carries no data: the first page says which
-# bundles a run needs, and `/prerequisites` downloads them as the server runs.
+# bundles a run needs, and `/prerequisites` downloads them — and reads the memory
+# a run recognises with out of their pickles — while the server serves.
 #
-# The database is a service of its own, because that is what works with *every*
-# published tag — including the ones built before the image could keep its state
-# in a file. An image that has the file-backed database needs no `db` service at
-# all: set `SQLITE_PATH` to a path on a volume, drop `db`, and the same image
-# uses that instead. `DATABASE_URL`, and nothing else, is the switch;
-# `docs/container.md` has both shapes.
+# The database is a file on a volume, not a second service. `DATABASE_URL` is the
+# whole switch: a deployment that has Postgres sets it and the same image uses
+# that instead, and `docs/container.md` has both shapes. (An image built before
+# the file-backed database — `:latest` before `3296e41` — needs the Postgres
+# form, which is why this file used to carry a `db` service of its own.)
 #
 # The port is this project's own (`APP_PORT`, 6401) for the same reason the
 # development database has one — a stack on the usual 8000/4000 range is how two
@@ -24,37 +24,21 @@
 name: ex-tbp-monty
 
 services:
-  db:
-    image: postgres:17
-    environment:
-      POSTGRES_DB: monty
-      POSTGRES_USER: monty
-      POSTGRES_PASSWORD: monty
-    volumes:
-      - db:/var/lib/postgresql/data
-    healthcheck:
-      test: pg_isready -U monty -d monty
-      interval: 2s
-
   app:
     image: ghcr.io/d-led/ex.tbp.monty:${TAG:-latest}
     ports:
       - "${APP_PORT:-6401}:4000"
     environment:
-      DATABASE_URL: ecto://monty:monty@db:5432/monty
       # Not a secret: this is a local look, and the same for everybody.
       SECRET_KEY_BASE: local-look-only-2f8d1c6a9e4b7d0f3a6c9e2b5d8f1a4c7e0b3d6f9a2c5e8b1d4f7a0c3e6b9d2f5a8c1e4b7d0f3a6c9e2b5d8f1a4c7e0b3d6f9a2c5e8b
       PHX_HOST: localhost
+      # The runs, in a file on the volume below; `MONTY_DATA` hangs off `HOME`,
+      # so the datasets, the pickles and the exported memory land on it too.
+      SQLITE_PATH: /app/priv/data/ex_tbp_monty.db
     volumes:
-      # `~/tbp` inside the container, the downloads that land there, and the
-      # artefacts a run leaves beside its record.
-      - prerequisites:/app/priv/tbp
       - runs:/app/priv/data
-    depends_on:
-      db:
-        condition: service_healthy
+      - prerequisites:/app/priv/tbp
 
 volumes:
-  db:
-  prerequisites:
   runs:
+  prerequisites:
