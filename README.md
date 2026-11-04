@@ -59,9 +59,9 @@ file yourself? This link always gives the latest build:
 | macOS arm64 | [ex-tbp-monty-osx-arm64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-osx-arm64.zip) |
 
 It is unsigned, so the first launch is right-click → Open. Where it keeps its
-data, what is built for which platform, and why it is 550 MB:
-[docs/desktop.md](docs/desktop.md). A checkout opens it with
-`scripts/start-desktop.sh`.
+data, what is built for which platform, and why the download is about 300 MB
+while the app is 550 MB on disk: [docs/desktop.md](docs/desktop.md). A checkout
+opens it with `scripts/start-desktop.sh`.
 
 ## From source
 

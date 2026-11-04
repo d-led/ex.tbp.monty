@@ -182,6 +182,14 @@ what CI runs.
   alone, with the database in a file on a volume (`DATABASE_URL` names a Postgres
   instead, for a release older than the one that picks SQLite).
   ([dev compose](../docker-compose.yml), [quickstart](../docker-compose.quickstart.yml))
+- **A desktop app from this tree:** `MIX_ENV=desktop` compiles `lib_desktop/` (a
+  loopback port, the one line on stdout that names it, and the delegation to the
+  ordinary application, unchanged) and a Tauri window supervises it; the app keeps
+  its database, models, logs and runs under the OS application-data folder, not next
+  to the release. `scripts/package.sh` makes the `.app`, a zip, a dmg and an unsigned
+  `.pkg` whose payload arrives without the quarantine flag, and CI builds that on
+  macOS arm64 for `main`, a dispatch and a tag, uploading it to the release on a tag.
+  ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
 - 2,162 `test` declarations in the suite.
 
 ## Not built — do not assume these
@@ -191,10 +199,12 @@ what CI runs.
   and the rest — is `planned` in the map: `priv/monty_py/world.py` mirrors that
   Python rather than mapping onto it, so the map has nothing to point at. A change
   there is a change in two languages. ([from-monty.md](from-monty.md))
-- **A desktop application.** Designed, not built: the file-backed database is what
-  makes it possible, and what is missing is one module (`Monty.Paths`) that puts the
-  database, the artefacts and Monty's data roots under the OS's application-data
-  directory, plus a Python interpreter per platform. ([desktop.md](desktop.md))
+- **A desktop build for another platform, or a signed one.** `scripts/package.sh`
+  refuses a platform other than the machine it runs on rather than faking it, so what
+  exists is macOS arm64; the `.app` and the `.pkg` are unsigned, so the first launch
+  is right-click → Open. Linux needs `libwebkit2gtk-4.1-dev` and its neighbours on
+  the runner, Windows needs MSVC and WebView2, and neither has been tried.
+  ([desktop.md](desktop.md))
 - wandb: the five stats handlers and `mark_obs` frame marking.
 - Parallel episodes: the run page queues one run per episode and sets the
   `:studio` queue's limit to the same number, which is Monty's `run_parallel.py`
