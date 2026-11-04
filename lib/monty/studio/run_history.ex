@@ -311,10 +311,12 @@ defmodule Monty.Studio.RunHistory do
           [run],
           # `->` with an integer indexes a JSON array on both databases — a
           # Postgres array is 1-based and a JSON one is 0-based, and the timeline
-          # is a JSON array now that it is one document. The index is typed as an
-          # integer on purpose: left to itself Ecto plans the parameter as text,
-          # which selects the `jsonb -> text` overload rather than the element.
-          fragment("? -> ?", run.timeline, type(^position, :integer))
+          # is a JSON array now that it is one document. The cast is not optional:
+          # `jsonb -> int4` is the only integer overload Postgres has, and an
+          # Elixir integer is bound as int8 ("operator does not exist: jsonb ->
+          # bigint"). `CAST(... AS int)` is how both databases spell int4, where
+          # `::` would be Postgres-only.
+          fragment("? -> CAST(? AS int)", run.timeline, ^position)
         )
         |> Repo.one()
         |> case do
