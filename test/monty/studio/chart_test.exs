@@ -31,6 +31,31 @@ defmodule Monty.Studio.ChartTest do
     }
   end
 
+  describe "the vertical axis" do
+    # Evidence is a sum that can fall: a hypothesis is penalised as well as
+    # rewarded. The axis used to be pinned at zero whatever the data did, so
+    # those points were projected below the plot area and the lines drew across
+    # the x axis labels.
+    test "follows the data below zero instead of drawing through the labels" do
+      chart =
+        Chart.new([
+          {0, 1, belief(%{"mug" => 2.0})},
+          {0, 2, belief(%{"mug" => -0.6})},
+          {0, 3, belief(%{"mug" => -3.4})}
+        ])
+
+      assert chart.y_min <= -3.4
+      assert chart.y_min == -4.0
+      assert Enum.any?(chart.ticks, &(&1.value < 0)), "no tick names the part below zero"
+    end
+
+    test "still starts at zero when nothing is negative" do
+      chart = Chart.new([{0, 1, belief(%{"mug" => 1.2})}, {0, 2, belief(%{"mug" => 2.4})}])
+
+      assert chart.y_min == 0.0
+    end
+  end
+
   describe "an object's line" do
     test "runs through the steps it was reported in, oldest first" do
       chart =
