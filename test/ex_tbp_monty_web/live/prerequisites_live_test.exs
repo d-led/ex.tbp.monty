@@ -148,8 +148,30 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
   test "the page says how much room is left where the downloads land", %{conn: conn, tmp: tmp} do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 
-    assert view |> element("#free-space") |> render() =~
-             ~r/\d+(\.\d+)? (B|KiB|MiB|GiB|TiB) free of \d+(\.\d+)? (B|KiB|MiB|GiB|TiB) where they land \(#{Regex.escape(tmp)}/
+    assert view |> element("#occupied-MONTY_DATA") |> render() =~
+             "nothing in #{Path.join(tmp, "data")} yet"
+
+    assert view |> element("#free-space-volume") |> render() =~
+             ~r/\d+(\.\d+)? (B|KiB|MiB|GiB|TiB) free of \d+(\.\d+)? (B|KiB|MiB|GiB|TiB) on \/.*, \d+% used/
+  end
+
+  # The header's figure belongs to the directory, not to the rows. A root holds
+  # releases this page does not list, and a reader who reads its total as "what
+  # the entries below cost" is owed the sentence that says so.
+  test "the page says what the directory the downloads land in already holds", %{
+    conn: conn,
+    tmp: tmp
+  } do
+    data = Path.join(tmp, "data")
+    File.mkdir_p!(data)
+    File.write!(Path.join(data, "an-older-release.tgz"), :binary.copy("x", 2048))
+
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    occupied = view |> element("#occupied-MONTY_DATA") |> render()
+
+    assert occupied =~ "2.0 KiB in #{data}"
+    assert occupied =~ "not only the entries below"
   end
 
   test "a click downloads, and the row then says what is on the disk", %{conn: conn} do

@@ -143,7 +143,22 @@ defmodule Monty.Prerequisites do
     end
   end
 
-  defp directory_size(path) do
+  @doc """
+  What a directory holds, in bytes: every regular file under it, a link neither
+  followed nor counted.
+
+  `nil` when there is no such directory — the difference a page needs between
+  "nothing has landed here yet" and "nothing landed here". A directory's own
+  entry is the size of its name rather than of what it holds, so the answer is
+  the tree's.
+
+  Asked of a root as well as of a bundle: a root keeps releases this
+  application does not list (an older one, an archive unpacked by hand), and a
+  reader deciding what to delete needs that figure to be the directory's rather
+  than the sum of the rows on the page.
+  """
+  @spec directory_size(Path.t()) :: non_neg_integer() | nil
+  def directory_size(path) do
     case File.ls(path) do
       {:ok, entries} ->
         entries

@@ -292,6 +292,27 @@ defmodule Monty.PrerequisitesTest do
     end
   end
 
+  # The page asks this of a *root*, not of a bundle: `pretrained_models` holds
+  # several releases beside the one a run reads. A root is also where links
+  # live (`pretrained_ycb_v12 -> pretrained_ycb_v11`), and a walk that followed
+  # them would count a release twice — or, with a link pointing back, not finish
+  # at all.
+  describe "directory_size/1" do
+    test "counts the files under a directory, and a link inside it is not a second copy" do
+      tmp = Tmp.dir("directory-size")
+
+      assert Prerequisites.directory_size(Path.join(tmp, "absent")) == nil
+
+      tree = Path.join(tmp, "present")
+      File.mkdir_p!(Path.join(tree, "nested"))
+      File.write!(Path.join(tree, "one.txt"), :binary.copy("a", 40))
+      File.write!(Path.join([tree, "nested", "two.txt"]), :binary.copy("b", 60))
+      File.ln_s!(tree, Path.join(tree, "back"))
+
+      assert Prerequisites.directory_size(tree) == 100
+    end
+  end
+
   # One entry, under a manifest of its own, so a test names only what it needs.
   defp manifest_entry(tmp, target, extract?) do
     manifest = Path.join(tmp, "size.yaml")

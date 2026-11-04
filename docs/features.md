@@ -96,7 +96,10 @@ not recalled — run it after anything lands that can move one.
   [`priv/prerequisites.yaml`](../priv/prerequisites.yaml). A memory is exported by
   reading the pickles, and the page says which model it is reading while it does
   (`reading memory 3/15 · pretrained_ycb_v13/…`), so a first start shows progress
-  rather than a spinner.
+  rather than a spinner. The header says what each root already holds — the whole
+  directory, and it says so, because a root keeps releases this page does not list —
+  and what is free on the volume behind them. The rows say one archive and what it
+  unpacked to; nothing adds them up.
 - `/health` answers 200 and nothing else; a CSP header is set for the browser scope;
   there is no authentication. ([`router.ex`](../lib/ex_tbp_monty_web/router.ex))
 

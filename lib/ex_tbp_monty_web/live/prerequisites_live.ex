@@ -42,9 +42,36 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
        python: EmbeddedPython.version(),
        wandb: EmbeddedPython.wandb_mode(),
        engines: Prerequisites.engines(),
-       storage: Storage.usage(Prerequisites.root_path("MONTY_DATA"))
+       storage: storage(prerequisites)
      )}
   end
+
+  # Where these downloads land: what each directory already holds, and what is
+  # left on the volumes behind them. The two are different facts — the first
+  # belongs to a directory, the second to a filesystem, and both roots usually
+  # sit on one filesystem — so the room is said once rather than twice.
+  #
+  # The figure for a directory is the *directory's*, because a root keeps more
+  # than this page lists: releases an older config named, archives someone
+  # unpacked by hand. A number that read as "what the entries below cost" would
+  # be the page hiding gigabytes it has no row for.
+  defp storage(prerequisites) do
+    roots =
+      prerequisites
+      |> Enum.map(& &1.root)
+      |> Enum.uniq()
+      |> Enum.map(&root_usage/1)
+
+    %{roots: roots, volumes: roots |> Enum.map(& &1.device) |> Enum.uniq_by(&device_key/1)}
+  end
+
+  defp root_usage(root) do
+    path = Prerequisites.root_path(root)
+    Map.merge(Storage.usage(path), %{root: root, occupied: Prerequisites.directory_size(path)})
+  end
+
+  defp device_key(nil), do: nil
+  defp device_key(device), do: {device.filesystem, device.mount}
 
   # What the downloader says about this id right now, if there is one.
   #
@@ -77,9 +104,18 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
             environment variables point at. Downloads stream to <code>.part</code> files
             and move into place only when they are complete.
           </p>
-          <p id="free-space" class="text-sm text-base-content/70">
-            {free_space(@storage)}
-          </p>
+          <div id="free-space" class="space-y-1">
+            <p
+              :for={root <- @storage.roots}
+              id={"occupied-#{root.root}"}
+              class="text-sm text-base-content/70"
+            >
+              {occupied_label(root)}
+            </p>
+            <p id="free-space-volume" class="text-sm text-base-content/70">
+              {room_label(@storage.volumes)}
+            </p>
+          </div>
         </header>
 
         <div class="space-y-3">
@@ -407,15 +443,29 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp bytes(nil), do: "—"
   defp bytes(value), do: Humanizer.bytes(value, system: :binary)
 
-  # The room these downloads land in: a download that fills the disk is the
-  # failure this page exists to make visible, so "is there room for the next
-  # one" is answered before the click rather than by an error afterwards.
-  defp free_space(%{device: nil, path: path}),
-    do: "#{path} is where they land; the operating system did not say how much room is left."
+  # What a root already holds. A download that fills the disk is the failure
+  # this page exists to make visible, so "is there room for another" is answered
+  # before the click rather than by an error afterwards; and "what is already
+  # there" is answered about the whole directory, not only about the rows below.
+  defp occupied_label(%{path: path, occupied: occupied}) when occupied in [nil, 0],
+    do: "nothing in #{path} yet"
 
-  defp free_space(%{device: device, path: path}) do
-    "#{bytes(device.free_bytes)} free of #{bytes(device.total_bytes)} where they land " <>
-      "(#{path}) — #{device.percent}% of #{device.mount} used."
+  # Said out loud, because a directory that holds 3.4 GiB while the rows add up
+  # to 1 GiB is not a contradiction: the rest is releases this page does not
+  # offer, and the number is about the directory.
+  defp occupied_label(%{path: path, occupied: occupied}),
+    do: "#{bytes(occupied)} in #{path} (everything in that directory, not only the entries below)"
+
+  defp room_label(volumes) do
+    case Enum.reject(volumes, &is_nil/1) do
+      [] -> "the operating system did not say how much room is left where they land."
+      answered -> Enum.map_join(answered, " ", &volume_label/1)
+    end
+  end
+
+  defp volume_label(device) do
+    "#{bytes(device.free_bytes)} free of #{bytes(device.total_bytes)} on #{device.mount}, " <>
+      "#{device.percent}% used."
   end
 
   defp engine_label(:mujoco), do: "MuJoCo"
