@@ -70,6 +70,11 @@ scripts/init-dev.sh    # Postgres on 6432, dependencies, database, assets
 scripts/run-dev.sh     # http://localhost:4000
 ```
 
+A development run keeps its data in that Postgres; a release and the desktop app
+keep theirs in a SQLite file unless `DATABASE_URL` names a server. `mix
+ecto.migrate` creates the file on first run and `mix ecto.drop` deletes it —
+[docs/developers.md](docs/developers.md#a-file-instead-of-a-server).
+
 Needs Elixir 1.20, node/npm, Docker, and a Rust toolchain — and installs the
 first and the last itself when the machine has neither:
 
