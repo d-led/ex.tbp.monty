@@ -427,6 +427,9 @@ defmodule Monty.Prerequisites.Saga do
   The partial file is removed rather than left to look like progress: a `.part`
   is not a prerequisite, and the next attempt starts from bytes it can trust.
   """
+  # The partial file this machine itself wrote, at a name built from the
+  # manifest — never a path a request hands in.
+  # sobelow_skip ["Traversal.FileModule"]
   def failed(:enter, _old, data) do
     File.rm(data.part)
     data = persist(%{data | task: nil, finished_at: now()}, :failed)
@@ -437,6 +440,9 @@ defmodule Monty.Prerequisites.Saga do
   def failed(type, event, data), do: common(:failed, type, event, data)
 
   @doc "A person stopped it. Nothing of the fetch is left behind."
+  # The partial file of the fetch this machine was doing, named from the
+  # prerequisite it belongs to.
+  # sobelow_skip ["Traversal.FileModule"]
   def cancelled(:enter, _old, data) do
     if data.task, do: stop_task(data.task)
     File.rm(data.part)
@@ -454,29 +460,29 @@ defmodule Monty.Prerequisites.Saga do
     {:keep_state, data, [{:reply, from, public(data)}]}
   end
 
-  defp common(state, {:call, from}, :cancel, data) do
-    if state in [:done, :failed, :cancelled] do
-      {:keep_state, data, [{:reply, from, :ok}]}
-    else
-      {:next_state, :cancelled, data, [{:reply, from, :ok}]}
-    end
+  defp common(state, {:call, from}, :cancel, data), do: cancel(state, from, data)
+
+  defp common(state, :info, message, data), do: unexpected(state, message, data)
+
+  # Cancelling is a person changing their mind. A machine that has already
+  # finished has nothing to stop, so it answers and stays where it is; anything
+  # else enters `:cancelled`, whose entry cleans up.
+  defp cancel(state, from, data) do
+    if state in [:done, :failed, :cancelled],
+      do: {:keep_state, data, [{:reply, from, :ok}]},
+      else: {:next_state, :cancelled, data, [{:reply, from, :ok}]}
   end
 
-  # Progress that arrives after the phase it belongs to is not this machine's
-  # state to change.
-  defp common(_state, :info, {:chunk, _size}, data), do: {:keep_state, data}
-  defp common(_state, :info, {:total, _total}, data), do: {:keep_state, data}
-  defp common(_state, :info, {:exporting, _progress}, data), do: {:keep_state, data}
-
-  # A phase's process dying without a result is the phase failing — the finished
-  # message arrives first in the normal case.
-  defp common(state, :info, {:DOWN, reference, :process, pid, reason}, data) do
+  # A phase's process dying without a result is that phase failing — the finished
+  # message arrives first in the normal case. Progress that arrives after the
+  # phase it belongs to is not this machine's state to change.
+  defp unexpected(state, {:DOWN, reference, :process, pid, reason}, data) do
     if state in [:downloading, :extracting, :exporting] and data.task == {pid, reference},
       do: {:next_state, :failed, blamed(data, reason)},
       else: {:keep_state, data}
   end
 
-  defp common(_state, :info, _message, data), do: {:keep_state, data}
+  defp unexpected(_state, _message, data), do: {:keep_state, data}
 
   # -- moving on ------------------------------------------------------------
 

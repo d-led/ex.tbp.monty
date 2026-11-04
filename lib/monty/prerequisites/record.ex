@@ -40,6 +40,9 @@ defmodule Monty.Prerequisites.Record do
   idempotent, so the cost of forgetting is doing it again.
   """
   @spec read(Prerequisites.prerequisite()) :: map() | nil
+  # The record of a prerequisite the manifest names, at a path this module
+  # builds from it; no request chooses it.
+  # sobelow_skip ["Traversal.FileModule"]
   def read(prerequisite) do
     with {:ok, text} <- File.read(path(prerequisite)),
          {:ok, record} when is_map(record) <- Jason.decode(text) do
@@ -57,6 +60,9 @@ defmodule Monty.Prerequisites.Record do
   the prerequisites page.
   """
   @spec write(Prerequisites.prerequisite(), map()) :: :ok | {:error, term()}
+  # The same file, written beside the archive the manifest names; the `.part`
+  # beside it is that path with a fixed suffix.
+  # sobelow_skip ["Traversal.FileModule"]
   def write(prerequisite, record) do
     path = path(prerequisite)
     part = path <> ".part"
