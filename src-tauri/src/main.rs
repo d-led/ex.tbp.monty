@@ -7,10 +7,20 @@
 //! and cannot drift from the server.
 
 use std::io::{BufRead, BufReader};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+/// The release's web-server entry point, in the form `mix release` lays it down
+/// on this platform: a shell script on Unix, and `bin\server.bat` on Windows —
+/// the same overlay, written twice, because Windows has no shebang.
+const SERVER: &str = if cfg!(windows) {
+    "bin/server.bat"
+} else {
+    "bin/server"
+};
 
 /// The sidecar, kept so it can be stopped when the window goes away. A window
 /// closed over a running server is a port nobody can find again, holding a
@@ -48,7 +58,7 @@ fn main() {
 fn start_sidecar(app: &tauri::App) -> Result<(Child, String), Box<dyn std::error::Error>> {
     let path = sidecar_path(app);
 
-    let mut child = Command::new(&path)
+    let mut child = command(&path)
         // `bin/server` is the release's own web-server entry point: it runs the
         // migrations this application keeps in two directories and then starts
         // the endpoint, in that order, in one VM.
@@ -107,12 +117,35 @@ fn sidecar_path(app: &tauri::App) -> std::path::PathBuf {
     // a window double-clicked from /Applications must not be able to disagree
     // about which release is behind them.
     if let Ok(resources) = app.path().resource_dir() {
-        let bundled = resources.join("rel/ex_tbp_monty/bin/server");
+        let bundled = resources.join("rel/ex_tbp_monty").join(SERVER);
         if bundled.exists() {
             return bundled;
         }
     }
 
     // Development: the release inside the checkout.
-    "../_build/desktop/rel/ex_tbp_monty/bin/server".into()
+    Path::new("../_build/desktop/rel/ex_tbp_monty")
+        .join(SERVER)
+        .to_path_buf()
+}
+
+/// The command that runs the entry point.
+///
+/// On Unix it is the script itself. On Windows it is a `.bat`, which is not a
+/// program: it is text that `cmd.exe` reads, so `Command::new` on it fails with
+/// "not a valid Win32 application". The `call` is not decoration either — a
+/// quoted path with a space in it (`…\Monty on the BEAM\…`) is what the bundle
+/// hands over, and `cmd` alone splits it at the first space.
+fn command(path: &Path) -> Command {
+    #[cfg(windows)]
+    {
+        let mut command = Command::new("cmd");
+        command.arg("/C").arg("call").arg(path);
+        command
+    }
+
+    #[cfg(not(windows))]
+    {
+        Command::new(path)
+    }
 }

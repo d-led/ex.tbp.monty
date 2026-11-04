@@ -292,6 +292,41 @@ What was deliberately not taken:
   CI and for `--in-browser`, and a missing asset is a script error naming the
   step rather than a Tauri error.
 
+## Windows
+
+The same jobs exist as PowerShell, because a Windows machine has no `bash` and a
+`.ps1` is what a person there can run — with the usual caveat that an unsigned
+script needs `powershell -ExecutionPolicy Bypass -File scripts\package.ps1`:
+
+| piece                                              | where                                               |
+| -------------------------------------------------- | --------------------------------------------------- |
+| build both halves, open one                        | `scripts/start-desktop.ps1`                         |
+| what a person can install: folder, zip, NSIS setup | `scripts/package.ps1`                               |
+| the release's entry point, in batch                | `rel/overlays/bin/server.bat`, and its two siblings |
+| the bundle Tauri builds there (`nsis`, not `app`)  | `src-tauri/tauri.bundle.windows.json`               |
+
+Two things had to exist before a Windows build could start its own server:
+
+- **`bin\server.bat`.** The overlays are shell scripts, Windows has no shebang,
+  and the release's own launcher there is `bin\ex_tbp_monty.bat`. The batch files
+  do what their shell twins do, in the same order: create `WANDB_DIR`, migrate
+  unless `MIGRATE_ON_BOOT=false`, then `PHX_SERVER=true` and start.
+- **`cmd /C call "…\bin\server.bat"`.** The window starts a `.bat`, which is a
+  file `cmd.exe` reads rather than a program: `Command::new` on it fails with
+  "not a valid Win32 application". The `call` is not decoration either — `cmd`
+  alone splits a quoted path at its first space, and the bundle's path has one
+  (`…\Monty on the BEAM\…`). Both are `#[cfg(windows)]` in
+  `src-tauri/src/main.rs`, so the macOS path is the same code it was.
+
+**Not verified, and so not claimed: nothing here has been compiled or run on
+Windows.** The release has to be built there (the embedded Python and the two
+NIFs do not cross-compile), the machine needs the MSVC build tools and WebView2,
+`mix release` must lay down `bin\ex_tbp_monty.bat`, and MuJoCo defaults to WGL on
+Windows — `rel/env.sh.eex` sets `MUJOCO_GL=osmesa` for Linux and
+`rel/env.bat.eex` has no equivalent, so a MuJoCo experiment is the first thing to
+watch there. A `windows-2022` row in the `desktop` job is what would answer all
+of it, and that is one `include:`.
+
 ## What is still open
 
 - **Signing and notarisation.** The `.app` is unsigned, so the first launch needs
