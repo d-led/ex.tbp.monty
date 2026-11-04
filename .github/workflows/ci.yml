@@ -21,7 +21,7 @@ name: ci
 #          carries its commit in `priv/build_info.json`, which the footer shows.
 #          They wait for the three gates above (`needs`), so nothing is
 #          published from a commit that failed them.
-#   desktop  what `scripts/install-desktop.sh` and `scripts\install-desktop.ps1`
+#   desktop  what `scripts/run-desktop.sh` and `scripts\run-desktop.ps1`
 #          download: the window with its own server inside, built on a runner of
 #          the architecture it ships to, zipped by `ditto` on macOS and by `tar`
 #          on Windows so executable modes and directory entries survive,
@@ -739,7 +739,7 @@ jobs:
             artifacts/${{ matrix.rid }}/*.exe
             artifacts/${{ matrix.rid }}/*.deb
             artifacts/${{ matrix.rid }}/*.tar.gz
-          # `install-desktop.sh` points at nightly.link, which serves the newest
+          # `run-desktop.sh` points at nightly.link, which serves the newest
           # artefact of this workflow; a week is not long enough for that
           # promise.
           retention-days: 90

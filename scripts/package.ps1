@@ -10,7 +10,7 @@
                    release beside it. Runs from anywhere, no installer, no
                    administrator. This is what CI uploads as
                    `ex-tbp-monty-win-x64.zip`, so it is also what
-                   `scripts\install-desktop.ps1` would download.
+                   `scripts\run-desktop.ps1` would download.
         .zip       that folder, zipped (`-NoZip` skips it)
         setup      the NSIS installer Tauri makes (`-NoInstaller` skips it):
                    double-click, app appears under %LOCALAPPDATA%\Programs

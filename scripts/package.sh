@@ -6,7 +6,7 @@
 #
 # The three are not the same offer:
 #
-#   .zip   what CI uploads and `scripts/install-desktop.sh` downloads — the one
+#   .zip   what CI uploads and `scripts/run-desktop.sh` downloads — the one
 #          that needs no release to exist first
 #   .pkg   double-click, app appears in /Applications, and it arrives without the
 #          quarantine flag (see `installer_package`)

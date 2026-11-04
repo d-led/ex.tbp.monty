@@ -207,7 +207,7 @@ if [[ "$mode" == browser ]]; then
 fi
 
 # The bundle is the same window with the release carried inside it, so it runs
-# where this checkout is not: what `scripts/install-desktop.sh` puts on a machine
+# where this checkout is not: what `scripts/run-desktop.sh` puts on a machine
 # and what CI uploads. `--bundle` is the build half alone, for a machine with no
 # window to open; `--app` adds the opening. `open -W` waits for the app to quit,
 # which is what makes this the last step of a script rather than a process left

@@ -56,14 +56,17 @@ The same application in a native window, with its own server inside — no
 Docker, no Elixir, nothing to install but the app:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/install-desktop.sh | bash
+curl -fsSL https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run-desktop.sh | bash
 ```
 
-That line works on macOS (Apple Silicon and Intel) and on Linux (x86-64 and
-arm64). What it installs is the newest build of `main` — `~/Applications` on
-macOS, `~/.local/opt` on Linux, both overridable; a tagged release keeps the
-same file in the releases page. Prefer to take the file yourself? These links
-always give the latest build:
+That line runs on macOS (Apple Silicon and Intel) and on Linux (x86-64 and
+arm64). It takes the newest build of `main` into `./ex-tbp-monty-<platform>/`,
+unpacks it there and opens it: nothing is installed, nothing is registered, and
+deleting that folder is the whole of uninstalling it. Running it again opens what
+is there; `--update` takes the newest build first. A tagged release keeps the
+same file in the releases page, which is what to use for a version that has to
+stay put. Prefer to take the file yourself? These links always give the latest
+build:
 
 | Platform    | Download                                                                                                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------- |
@@ -74,9 +77,9 @@ The macOS app is unsigned, so its first launch is right-click → Open. The Linu
 download holds a tarball of the window with its release beside it — and a `.deb`,
 for whoever would rather their package manager tracked it. Where it keeps its
 data, what is built for which platform, and why the download is about 300 MB
-while the app is 550 MB on disk: [docs/desktop.md](docs/desktop.md). A checkout
-opens it with `scripts/start-desktop.sh`, or `scripts\start-desktop.ps1` on
-Windows.
+while the app is 550 MB on disk — most of it the Python interpreter the release
+carries: [docs/desktop.md](docs/desktop.md). A checkout builds and opens it with
+`scripts/start-desktop.sh`, or `scripts\start-desktop.ps1` on Windows.
 
 ## From source
 

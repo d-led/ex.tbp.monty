@@ -184,7 +184,7 @@ ecto.*` reads the repository list before `runtime.exs` has run.)
 6. `scripts/start-desktop.sh --bundle` — a 518 MiB `Monty on the BEAM.app`, and
    `Contents/Resources/rel/ex_tbp_monty/bin/server` inside it starts and answers
    `/health` 200.
-7. `scripts/install-desktop.sh` with `EX_TBP_MONTY_BASE_URL` pointed at that
+7. `scripts/run-desktop.sh` with `EX_TBP_MONTY_BASE_URL` pointed at that
    artefact — it unzips both layers and puts the app where it says. The
    installed copy, run from `/tmp`, launches its **own** server out of
    `Contents/Resources`: the bundle carries everything it runs.
@@ -214,18 +214,18 @@ ecto.*` reads the repository list before `runtime.exs` has run.)
 ## Shipping: what a person downloads
 
 The shape is the one `worksheet.net` uses — a packaging script that produces the
-installable thing, CI that uploads it, and an installer that fetches it — because
-it needs no release to exist before somebody can try the app:
+installable thing, CI that uploads it, and a script that fetches and runs it —
+because it needs no release to exist before somebody can try the app:
 
 1. `scripts/package.sh` builds what a person can install, for one platform at a
    time, into `artifacts/<platform>/`:
 
-   | file                          | what it is for                                                                                                                                       |
-   | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | `Monty on the BEAM.app`       | the bundle itself                                                                                                                                    |
-   | `ex-tbp-monty-osx-arm64.zip`  | what `install-desktop.sh` downloads and CI uploads; made by `ditto`, because an `.app` holds symlinks and executable modes that a plain zip flattens |
-   | `monty-on-the-beam-0.1.0.pkg` | double-click, app appears in `/Applications` (see below)                                                                                             |
-   | `monty-on-the-beam-0.1.0.dmg` | the by-hand form: drag it into `/Applications`                                                                                                       |
+   | file                          | what it is for                                                                                                                                   |
+   | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+   | `Monty on the BEAM.app`       | the bundle itself                                                                                                                                |
+   | `ex-tbp-monty-osx-arm64.zip`  | what `run-desktop.sh` downloads and CI uploads; made by `ditto`, because an `.app` holds symlinks and executable modes that a plain zip flattens |
+   | `monty-on-the-beam-0.1.0.pkg` | double-click, app appears in `/Applications` (see below)                                                                                         |
+   | `monty-on-the-beam-0.1.0.dmg` | the by-hand form: drag it into `/Applications`                                                                                                   |
 
    `--no-dmg`, `--no-zip` and `--no-pkg` skip any of them; `all` means "the
    platform this machine is", and a platform it is not is refused rather than
@@ -243,13 +243,19 @@ it needs no release to exist before somebody can try the app:
    usual form does not even run: macOS `xattr` takes `-c -d -l -p -w -s -x` and
    **no `-r`**, so `xattr -rd com.apple.quarantine` fails with "option -r not
    recognized". Stripping the flag from an app that a person unpacked themselves
-   is a different thing, and that is what `install-desktop.sh` does — at their own
+   is a different thing, and that is what `run-desktop.sh` does — at their own
    privilege, on a file they chose to install.
 
 2. CI's `desktop` job runs it on a runner of the architecture it ships to and
    uploads the zip as `ex-tbp-monty-osx-arm64`, for ninety days.
-3. `scripts/install-desktop.sh` downloads the newest build of `main` from
-   `nightly.link`, expands it, and puts the app in `~/Applications`.
+3. `scripts/run-desktop.sh` (`run-desktop.ps1` on Windows) takes the newest build
+   of `main` from `nightly.link`, expands it into `./ex-tbp-monty-<platform>/`
+   beside the download, and opens it. Nothing is installed and nothing is
+   registered: the folder is the installation, and deleting it is the whole of
+   uninstalling. Running the script again opens what is there; `--update`
+   (`-Update`) takes the newest build first. The `.pkg` and the NSIS setup in the
+   same download are for a person who wants an entry in `/Applications` or under
+   "Apps & features" and would rather the OS tracked it.
 4. A `v*` tag runs `desktop-release`, which attaches the same zip to a GitHub
    release — an artefact expires, a release does not.
 
@@ -257,6 +263,15 @@ The app is 550 MB uncompressed (324 MB zipped, 404 MB as a disk image) and that
 is not a mistake: it carries the Elixir release, the BEAM, the embedded Python
 and the wheels a MuJoCo world renders with. Nothing is downloaded on first launch
 except Monty's own data.
+
+Where the interpreter is, since it is more than half of that: the release carries
+`lib/pythonx-0.4.11/priv/uv/` — `python/` is the CPython 3.13 build uv fetched
+(47 MB) and `project/` is the environment it built from `config/pythonx.exs`
+(250 MB: MuJoCo, NumPy, `numpy-quaternion` for the `wxyz` rotations, and wandb).
+uv builds it at **compile** time, once per platform, which is the real reason a
+release does not cross-compile: the desktop bundle carries the same tree at
+`Contents/Resources/rel/ex_tbp_monty/lib/…` on macOS, beside the window on Linux,
+and under `rel\` on Windows.
 
 ## ElixirKit, and what its guide settled
 

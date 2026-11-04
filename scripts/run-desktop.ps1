@@ -1,28 +1,31 @@
 <#
 .SYNOPSIS
-    Installs the desktop window on Windows: one folder, nothing to install, no
+    Runs the desktop window on Windows: one folder, nothing installed, no
     administrator.
 
 .DESCRIPTION
-    The Windows form of `scripts/install-desktop.sh`, and what
-    `scripts\package.ps1` names as the thing that downloads its zip:
+    The Windows form of `scripts/run-desktop.sh`, and what `scripts\package.ps1`
+    names as the thing that downloads its zip:
 
-        powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/install-desktop.ps1 | iex"
+        powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run-desktop.ps1 | iex"
 
-    What it installs is the newest build of `main` — there is no release to wait
-    for. A tagged release keeps the same file in the releases page, which is what
-    to use for a version that has to stay put.
+    The download lands in the folder this is run from, in a directory of its
+    own — nothing is installed, nothing is registered, and deleting the folder is
+    the whole of uninstalling it. Run it again and it opens what is already
+    there; -Update takes the newest build of `main` first. A tagged release keeps
+    the same file in the releases page, which is what to use for a version that
+    has to stay put.
 
-        EX_TBP_MONTY_APP_DIR   where to put it (default: %LOCALAPPDATA%\Programs)
+        -Update                download the newest build even if one is here
+
+        EX_TBP_MONTY_DIR       where it lands (default: .\ex-tbp-monty-win-x64)
         EX_TBP_MONTY_REPO      owner/repo to download from (default: d-led/ex.tbp.monty)
         EX_TBP_MONTY_BRANCH    which branch's build to take (default: main)
         EX_TBP_MONTY_WORKFLOW  the workflow that builds it (default: ci)
         EX_TBP_MONTY_BASE_URL  a folder holding ex-tbp-monty-win-x64.zip itself,
                                which skips nightly.link
 
-    Nothing is written outside the target folder, and nothing is registered: the
-    folder runs from anywhere, which is the same offer `package.ps1` makes with
-    its portable folder. The NSIS setup is for a person who wants a Start Menu
+    The NSIS setup in the same download is for a person who wants a Start Menu
     entry and an entry under "Apps & features"; this script does not need one.
 
 .NOTES
@@ -30,11 +33,15 @@
     Windows — `docs/desktop.md` says what is verified and what is claimed.
 #>
 
+param(
+    [switch]$Update
+)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 if ($env:OS -ne 'Windows_NT') {
-    Write-Host 'The desktop window is built for Windows here, and this is not Windows: there is nothing to install.'
+    Write-Host 'The desktop window runs on Windows here, and this is not Windows: there is nothing to run.'
     Write-Host 'What exists, and what is missing, is in docs/desktop.md. A checkout can build its own copy:'
     Write-Host '  scripts\start-desktop.ps1'
     exit 1
@@ -43,14 +50,18 @@ if ($env:OS -ne 'Windows_NT') {
 $repo = if ($env:EX_TBP_MONTY_REPO) { $env:EX_TBP_MONTY_REPO } else { 'd-led/ex.tbp.monty' }
 $branch = if ($env:EX_TBP_MONTY_BRANCH) { $env:EX_TBP_MONTY_BRANCH } else { 'main' }
 $workflow = if ($env:EX_TBP_MONTY_WORKFLOW) { $env:EX_TBP_MONTY_WORKFLOW } else { 'ci' }
-$appDir = if ($env:EX_TBP_MONTY_APP_DIR) { $env:EX_TBP_MONTY_APP_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs' }
 $asset = 'ex-tbp-monty-win-x64'
+$dir = if ($env:EX_TBP_MONTY_DIR) { $env:EX_TBP_MONTY_DIR } else { Join-Path $PWD $asset }
+$instance = Join-Path $dir $asset
+$exe = Join-Path $instance 'ex-tbp-monty-desktop.exe'
 
-$work = Join-Path ([System.IO.Path]::GetTempPath()) ("ex-tbp-monty-" + [guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Force -Path $work | Out-Null
-
-try {
-    $zip = Join-Path $work "$asset.zip"
+if (-not $Update -and (Test-Path $exe)) {
+    Write-Host "$exe is already here."
+}
+else {
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $zip = Join-Path $dir "$asset.zip"
+    $work = Join-Path $dir '.unpacked'
 
     if ($env:EX_TBP_MONTY_BASE_URL) {
         # A folder on this machine is how the packaging is tried without a
@@ -78,7 +89,7 @@ try {
     New-Item -ItemType Directory -Force -Path $unpacked | Out-Null
     tar -x -f $zip -C $unpacked
     if ($LASTEXITCODE -ne 0) {
-        Write-Host 'The download could not be unpacked. Nothing was installed.'
+        Write-Host 'The download could not be unpacked. Nothing was run.'
         exit 1
     }
 
@@ -89,42 +100,35 @@ try {
         New-Item -ItemType Directory -Force -Path $unpacked | Out-Null
         tar -x -f $bundle.FullName -C $unpacked
         if ($LASTEXITCODE -ne 0) {
-            Write-Host 'The application could not be expanded. Nothing was installed.'
+            Write-Host 'The application could not be expanded. Nothing was run.'
             exit 1
         }
     }
 
     # Found rather than assumed: the folder's name is the runtime the build was
     # for, and what makes it the application is the window inside it.
-    $exe = Get-ChildItem -Path $unpacked -Recurse -Filter 'ex-tbp-monty-desktop.exe' -File |
+    $found = Get-ChildItem -Path $unpacked -Recurse -Filter 'ex-tbp-monty-desktop.exe' -File |
         Select-Object -First 1
-    if ($null -eq $exe) {
-        Write-Host 'The download did not contain the application. Nothing was installed.'
+    if ($null -eq $found) {
+        Write-Host 'The download did not contain the application. Nothing was run.'
         exit 1
     }
 
-    $name = $exe.Directory.Name
-    $target = Join-Path $appDir $name
-    New-Item -ItemType Directory -Force -Path $appDir | Out-Null
-    Remove-Item -Recurse -Force $target -ErrorAction SilentlyContinue
-    Move-Item -Path $exe.Directory.FullName -Destination $target
-
-    $installed = Join-Path $target $exe.Name
+    Remove-Item -Recurse -Force $instance -ErrorAction SilentlyContinue
+    Move-Item -Path $found.Directory.FullName -Destination $instance
 
     # A file that arrived through `Invoke-WebRequest` can carry a zone identifier,
     # and Windows then asks before running it. Ask once and only when one is
     # there: walking fifteen thousand files to delete a marker none of them has
     # is a minute spent on nothing.
-    if ($null -ne (Get-Item $installed -Stream Zone.Identifier -ErrorAction SilentlyContinue)) {
+    if ($null -ne (Get-Item $exe -Stream Zone.Identifier -ErrorAction SilentlyContinue)) {
         Write-Host 'Clearing the download marker ...'
-        Get-ChildItem -Path $target -Recurse -File | Unblock-File
+        Get-ChildItem -Path $instance -Recurse -File | Unblock-File
     }
 
-    Write-Host ''
-    Write-Host "Installed $installed"
-    Write-Host "Open it with:  $installed"
-    Write-Host "Where it keeps its data:  $env:APPDATA\ex-tbp-monty"
-}
-finally {
     Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
 }
+
+Write-Host "Running $exe"
+Start-Process -FilePath $exe -WorkingDirectory $instance
+Write-Host "Where it keeps its data:  $env:APPDATA\ex-tbp-monty"
