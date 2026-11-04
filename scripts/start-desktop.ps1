@@ -113,6 +113,20 @@ try {
 
     Invoke-Step 'fetching the dependencies' { mix deps.get }
 
+    # Before the stylesheet, and that is the whole point: the app's compiler is
+    # what writes `_build/desktop/phoenix-colocated/ex_tbp_monty/colocated.css`,
+    # and `assets/css/app.css` imports it by name. A fresh runner had no such
+    # file and tailwind said "Can't resolve 'phoenix-colocated/…'" — the shell
+    # twin has compiled here since it was written, which is why only this one
+    # failed.
+    Invoke-Step 'compiling the desktop build (it writes the colocated CSS the stylesheet imports)' {
+        mix compile
+    }
+
+    Invoke-Step 'checking the asset toolchain (installs it once, then finds it)' {
+        mix assets.install --if-missing
+    }
+
     # `npm` is `npm.cmd` on Windows, and `mix cmd` starts the program it is
     # given directly — which a `.cmd` is not: Elixir's `System.cmd` fails on one
     # with `:eacces`, the same reason the window launches its sidecar through

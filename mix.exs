@@ -205,6 +205,9 @@ defmodule ExTbpMonty.MixProject do
       ],
       "assets.deploy": [
         "cmd --cd assets npm ci",
+        # The stylesheet imports the colocated CSS the application's compiler
+        # writes, so a clean tree has to compile before tailwind runs.
+        "compile",
         "tailwind ex_tbp_monty --minify",
         "esbuild ex_tbp_monty --minify",
         "phx.digest"
