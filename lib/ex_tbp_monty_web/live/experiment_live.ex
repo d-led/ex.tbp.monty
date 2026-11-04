@@ -413,6 +413,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               Point <code>MONTY_PYTHON</code> at an interpreter with <code>tbp.monty</code> in
               it — <code>scripts/run-dev.sh</code> passes it through — and reload this page.
             </p>
+            <%!-- Whatever the reason, the prerequisites page is where the answer is
+            written down: which file is missing, where it belongs, what the last fetch of
+            it did. A person who has to guess which page to go to is the bug. --%>
+            <p>
+              <.link id="prerequisites-page" navigate={~p"/prerequisites"} class="link">
+                What this needs, and how to get it
+              </.link>
+            </p>
             <p>
               Or step this port's stand-in scene instead, which reads nothing from disk.
             </p>

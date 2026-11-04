@@ -14,13 +14,13 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   alias ExTbpMonty.EmbeddedPython
   alias Monty.Prerequisites
-  alias Monty.Prerequisites.Download
+  alias Monty.Prerequisites.Saga
   alias Monty.Studio.Pretrained
   alias Monty.Studio.Storage
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Download.topic())
+    if connected?(socket), do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Saga.topic())
 
     prerequisites = Prerequisites.all()
 
@@ -36,6 +36,9 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
        # arrived, the libraries a run reads did not. That is not "present" to a
        # reader whose run needs the memory.
        pending: Map.new(prerequisites, &{&1.id, memory_pending?(&1)}),
+       # Read off the disk rather than out of a download's counters: a bundle that
+       # was here before this page existed still has a size worth knowing.
+       sizes: Map.new(prerequisites, &{&1.id, Prerequisites.size(&1)}),
        python: EmbeddedPython.version(),
        wandb: EmbeddedPython.wandb_mode(),
        engines: Prerequisites.engines(),
@@ -44,10 +47,21 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   end
 
   # What the downloader says about this id right now, if there is one.
+  #
+  # A fetch that has finished is *history*: what is true now is what is on the
+  # disk, and the row says so from the bundle's own state. Answering "done" for
+  # a machine that ended ten minutes ago was a badge that only changed when the
+  # page was reloaded.
   defp current_status(id) do
-    case Download.lookup(id) do
-      nil -> nil
-      server -> Download.status(server)
+    case Saga.lookup(id) do
+      nil ->
+        nil
+
+      server ->
+        with %{status: status} = progress <- Saga.status(server),
+             true <- status in [:queued, :downloading, :extracting, :exporting],
+             do: progress,
+             else: (_ -> nil)
     end
   end
 
@@ -82,6 +96,12 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                 </p>
                 <p class="font-mono text-xs break-all text-base-content/60">
                   {Prerequisites.target_path(prerequisite)}
+                </p>
+                <p
+                  id={"size-#{prerequisite.id}"}
+                  class="font-mono text-xs text-base-content/50"
+                >
+                  {size_label(@sizes[prerequisite.id])}
                 </p>
               </div>
 
@@ -135,7 +155,17 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                 value={progress(@statuses, prerequisite.id).bytes}
                 max={max_bytes(progress(@statuses, prerequisite.id))}
               ></progress>
-              <p class="font-mono text-xs text-base-content/60">
+              <%!--
+                Bytes belong to the transfer, and only to it. Unpacking and
+                reading the memory move no bytes through this page, so a row that
+                kept the counter showed "0 B / —" for a fetch that had finished —
+                a number about a download that was not happening. What the row is
+                worth knowing after that is on the disk: the sizes above.
+              --%>
+              <p
+                :if={status(@statuses, prerequisite.id) == :downloading}
+                class="font-mono text-xs text-base-content/60"
+              >
                 {bytes(progress(@statuses, prerequisite.id).bytes)} / {bytes(
                   progress(@statuses, prerequisite.id).total
                 )}
@@ -243,34 +273,50 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   end
 
   def handle_event("cancel", %{"id" => id}, socket) do
-    case Download.lookup(id) do
+    case Saga.lookup(id) do
       nil ->
         {:noreply, socket}
 
       server ->
-        Download.cancel(server)
+        Saga.cancel(server)
         {:noreply, socket}
     end
   end
 
   @impl true
   def handle_info({:download, %{id: id} = progress}, socket) do
-    {:noreply,
-     assign(socket,
-       statuses: Map.put(socket.assigns.statuses, id, progress),
-       # A finished download is the moment a bundle *is* here: the page asked
-       # once, at mount, and a green badge that waited for the next visit was
-       # how a finished fetch still read as missing.
-       present:
-         if(progress.status == :done,
-           do: Map.put(socket.assigns.present, id, true),
-           else: socket.assigns.present
-         )
-     )}
+    # A finished fetch is the moment a bundle *is* here — and the moment the row
+    # stops being about a download and becomes about a bundle. Everything the row
+    # says from then on is re-read from the disk: present, whether the memory was
+    # read, and how much room it takes. Leaving the machine's "done" on screen
+    # was a badge that did not change until the next visit.
+    if progress.status == :done do
+      {:noreply, settled(socket, id)}
+    else
+      {:noreply, assign(socket, statuses: Map.put(socket.assigns.statuses, id, progress))}
+    end
+  end
+
+  # The row after a fetch finished: nothing is happening to it any more, so what
+  # it says is read off the disk — present, whether the memory was read, and how
+  # much room it takes.
+  defp settled(socket, id) do
+    case Enum.find(socket.assigns.prerequisites, &(&1.id == id)) do
+      nil ->
+        socket
+
+      prerequisite ->
+        assign(socket,
+          statuses: Map.delete(socket.assigns.statuses, id),
+          present: Map.put(socket.assigns.present, id, Prerequisites.present?(prerequisite)),
+          pending: Map.put(socket.assigns.pending, id, memory_pending?(prerequisite)),
+          sizes: Map.put(socket.assigns.sizes, id, Prerequisites.size(prerequisite))
+        )
+    end
   end
 
   defp start(socket, prerequisite) do
-    case Download.start(prerequisite) do
+    case Saga.start(prerequisite) do
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, start_error(reason))}
 
@@ -347,6 +393,16 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   defp max_bytes(%{total: nil, bytes: bytes}), do: max(bytes, 1)
   defp max_bytes(%{total: total}), do: total
+
+  # What is on the disk, said in the two things it can be: the archive that
+  # arrived, and what it unpacked to. A prerequisite that is not here yet says
+  # so rather than showing zero bytes, which reads like an empty bundle.
+  defp size_label(%{archive: nil, unpacked: nil}), do: "nothing on disk yet"
+  defp size_label(%{archive: archive, unpacked: nil}), do: "#{bytes(archive)} archive"
+  defp size_label(%{archive: nil, unpacked: unpacked}), do: "#{bytes(unpacked)} unpacked"
+
+  defp size_label(%{archive: archive, unpacked: unpacked}),
+    do: "#{bytes(archive)} archive · #{bytes(unpacked)} unpacked"
 
   defp bytes(nil), do: "—"
   defp bytes(value), do: Humanizer.bytes(value, system: :binary)

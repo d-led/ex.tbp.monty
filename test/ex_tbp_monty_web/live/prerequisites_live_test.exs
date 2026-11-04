@@ -4,7 +4,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
   import Phoenix.LiveViewTest
 
   alias Monty.Prerequisites
-  alias Monty.Prerequisites.Download
+  alias Monty.Prerequisites.Saga
   alias Monty.Test.Tmp
 
   setup do
@@ -24,7 +24,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     Tmp.app_env(:prerequisites_manifest, manifest)
     Tmp.app_env(:prerequisite_fetcher, Monty.Test.FakeFetcher)
 
-    Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Download.topic())
+    Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Saga.topic())
 
     on_exit(fn -> Monty.Test.PrerequisiteDownloads.stop_all() end)
 
@@ -47,7 +47,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
 
     Phoenix.PubSub.broadcast(
       ExTbpMonty.PubSub,
-      Download.topic(),
+      Saga.topic(),
       {:download,
        %{
          id: "tiny",
@@ -152,7 +152,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
              ~r/\d+(\.\d+)? (B|KiB|MiB|GiB|TiB) free of \d+(\.\d+)? (B|KiB|MiB|GiB|TiB) where they land \(#{Regex.escape(tmp)}/
   end
 
-  test "a click downloads and the row reports the result", %{conn: conn} do
+  test "a click downloads, and the row then says what is on the disk", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 
     view |> element("#download-tiny") |> render_click()
@@ -160,7 +160,11 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert_receive {:download, %{id: "tiny", status: :done}}, 1_000
     _ = :sys.get_state(view.pid)
 
-    assert render(view) =~ "done"
+    # A finished fetch is a bundle, not a download: the row re-reads the disk, so
+    # it says "present" and how big the thing is. "done" on a machine that has
+    # ended was a badge that only changed on the next visit.
+    assert view |> element("#prereq-tiny") |> render() =~ "present"
+    assert view |> element("#size-tiny") |> render() =~ ~r/11 B archive/
     assert File.read!(Prerequisites.target_path(Prerequisites.get("tiny"))) == "hello world"
   end
 

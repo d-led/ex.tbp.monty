@@ -76,23 +76,24 @@ defmodule ExTbpMonty.Application do
   # A first start has no data and a run cannot use what is not there, so the
   # bundles are fetched here — in the background, never in front of the server:
   # the page answers while a gigabyte arrives, and `/prerequisites` shows every
-  # download as it happens. A download already running is left to its own
-  # subscriber rather than started twice.
+  # download as it happens.
+  #
+  # Every prerequisite with work left is started, not only the ones that are
+  # absent: an archive that is here with its memory unread is as unusable as one
+  # that never arrived, and which of the two it is cannot be told by looking for
+  # a file. `Prerequisites.unfinished/0` is the one that answers that, from the
+  # manifest and from the machines that did the earlier work.
+  #
+  # Started one at a time, on purpose: several gigabyte downloads at once share
+  # one connection, and each saga outlives this process — a person can watch
+  # them, cancel them, and close the tab. `PREFETCH=0` turns it off.
   defp prefetch do
     if Application.get_env(:ex_tbp_monty, :prefetch, false) do
       Task.start(fn ->
-        for prerequisite <- Monty.Prerequisites.missing(),
-            is_nil(Monty.Prerequisites.Download.lookup(prerequisite.id)) do
+        for prerequisite <- Monty.Prerequisites.unfinished(),
+            is_nil(Monty.Prerequisites.Saga.lookup(prerequisite.id)) do
           Monty.Prerequisites.fetch(prerequisite)
         end
-
-        # Then the half a download does not answer: a run recognises with a
-        # memory this application exports from the pickles, and a release can
-        # be on disk with nothing exported beside it — a volume restored from a
-        # backup, or archives that arrived by other means. `sync/0` reads only
-        # what is missing or older than its pickle, so a machine that is
-        # already whole pays a walk of the models directory.
-        Monty.Studio.Pretrained.sync()
       end)
     end
 
