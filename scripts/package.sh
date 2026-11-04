@@ -28,6 +28,11 @@
 # this machine's is refused rather than faked — `docs/desktop.md` says what Linux
 # and Windows still need.
 #
+# The build asks for what it needs before it starts: `scripts/start-desktop.sh`
+# names the tools that are missing and installs the four that can install
+# themselves — Hex, rebar, the npm packages and the Tauri CLI — and fetches the
+# dependencies before the first step that reads them.
+#
 # Everything lands in `artifacts/`, which is not committed.
 
 set -euo pipefail

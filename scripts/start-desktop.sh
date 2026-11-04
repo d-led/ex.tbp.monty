@@ -17,6 +17,12 @@
 # Nothing here is captured, backgrounded or piped: every command writes to this
 # terminal as it runs, and the first one that fails stops the script with that
 # command's status and that command's own complaint.
+#
+# A machine that has never built this asks for four things and is given the rest:
+# `mix`, `cargo`, `npm` and the Xcode command line tools are named if they are
+# absent, while Hex, rebar, the dependencies and the Tauri CLI install themselves.
+# The first message a fresh checkout prints should be what to install, not a build
+# that dies at its last step.
 
 set -euo pipefail
 
@@ -83,6 +89,28 @@ run() {
 # `cargo build`), so an Elixir-only change that skipped the release step would
 # leave the window starting the copy it made hours earlier.
 
+# What a build cannot happen without, asked once here rather than discovered
+# fifteen steps in as "no such file". `npm` is as load-bearing as the other two:
+# `assets/js` imports packages, and esbuild resolves them from
+# `assets/node_modules`.
+require() {
+  command -v "$1" >/dev/null 2>&1 && return 0
+  echo "missing: $1 — $2"
+  exit 69
+}
+
+require mix "Elixir and Mix — https://elixir-lang.org/install.html"
+require cargo "the Rust toolchain — https://rustup.rs"
+require npm "Node.js — https://nodejs.org (the scripts import npm packages)"
+
+# rustler compiles this project's two NIFs with the system toolchain, and a Mac
+# without the command line tools fails deep inside `mix release` with a linker
+# error rather than a message about what is missing.
+if [[ "$(uname -s)" == Darwin ]] && ! xcode-select -p >/dev/null 2>&1; then
+  echo "missing: the Xcode command line tools — xcode-select --install"
+  exit 69
+fi
+
 print_where() {
   "$binary" eval '
     alias Monty.Paths
@@ -95,6 +123,19 @@ print_where() {
     IO.puts("runs:        #{Paths.artifacts()}")
   '
 }
+
+# Hex and rebar are what `mix deps.get` runs on, and a machine that has never
+# built an Elixir project has neither — the fetch then stops to ask whether to
+# install them, and a prompt inside a script is a hang. `--if-missing` installs
+# them once and leaves an offline machine that has them alone.
+run "the Hex package manager (a fresh machine has none)" mix local.hex --if-missing
+
+run "rebar, for the dependencies that build with it" mix local.rebar --if-missing
+
+# First, because everything after it reads the dependencies: a fresh clone has
+# none, and `mix compile` — the next step — cannot start without them.
+run "fetching the dependencies (a fresh clone has none)" \
+  env MIX_ENV=desktop mix deps.get
 
 run "compiling the desktop build" \
   env MIX_ENV=desktop mix compile
@@ -154,6 +195,13 @@ fi
 # which is what makes this the last step of a script rather than a process left
 # behind.
 if [[ "$mode" == bundle || "$mode" == app ]]; then
+  # `cargo tauri` is the Tauri CLI, a cargo subcommand of its own. Installing it
+  # takes a few minutes once per machine; failing at the last step with "no such
+  # command" throws away the build that came before it.
+  if ! cargo tauri --version >/dev/null 2>&1; then
+    run "installing the Tauri CLI (a fresh machine has none)" \
+      cargo install tauri-cli --version "^2" --locked
+  fi
   # The release is copied into the bundle by tauri-build, and it copies *over*
   # whatever is there: the previous copy keeps the release's own modes (a
   # launcher script is 0555, the `COOKIE` is 0400), so the copy fails with

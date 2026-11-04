@@ -31,17 +31,18 @@ symptom was a migration that never ran and an image that never became healthy.
 
 ## What exists now
 
-| piece                                                                       | where                                                                       |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| the folder, and the names Monty's tooling reads underneath it               | `lib/monty/paths.ex`                                                        |
-| the build: a `:desktop` env with its own supervision start                  | `mix.exs` (`elixirc_paths/1`, `application_module/1`), `config/desktop.exs` |
-| what a launch decides — paths, the repo, the salt, loopback                 | `config/runtime.exs` (the `:desktop` block)                                 |
-| the port it prefers, how to change it, and the line on stdout that names it | `lib_desktop/desktop/server.ex`                                             |
-| the start itself: the server's tree, announced                              | `lib_desktop/desktop/application.ex`                                        |
-| what stops it: the window's pipe, and the process that ran it               | `lib_desktop/desktop/parent_watch.ex`                                       |
-| the window: a process supervisor with a webview                             | `src-tauri/src/main.rs`, `src-tauri/tauri.conf.json`                        |
-| build both halves, open one                                                 | `scripts/start-desktop.sh`                                                  |
-| the icons, from the two SVG masters, and the favicon                        | `scripts/make-icons.sh`                                                     |
+| piece                                                                       | where                                                                                   |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| the folder, and the names Monty's tooling reads underneath it               | `lib/monty/paths.ex`                                                                    |
+| the build: a `:desktop` env with its own supervision start                  | `mix.exs` (`elixirc_paths/1`, `application_module/1`), `config/desktop.exs`             |
+| what a launch decides — paths, the repo, the salt, loopback                 | `config/runtime.exs` (the `:desktop` block)                                             |
+| the port it prefers, how to change it, and the line on stdout that names it | `lib_desktop/desktop/server.ex`                                                         |
+| the start itself: the server's tree, announced                              | `lib_desktop/desktop/application.ex`                                                    |
+| what stops it: the window's pipe, and the process that ran it               | `lib_desktop/desktop/parent_watch.ex`                                                   |
+| the window: a process supervisor with a webview                             | `src-tauri/src/main.rs`, `src-tauri/tauri.conf.json`                                    |
+| build both halves, open one                                                 | `scripts/start-desktop.sh`                                                              |
+| the tools the build asks for, and installs the ones it can                  | `scripts/start-desktop.sh` (`require`, Hex, rebar, `npm ci`, `cargo install tauri-cli`) |
+| the icons, from the two SVG masters, and the favicon                        | `scripts/make-icons.sh`                                                                 |
 
 The two drawings in `src-tauri/icons/` are the only icon sources. The detailed
 one carries circuit traces and is used from 64 px up; at 16 and 32 px those
