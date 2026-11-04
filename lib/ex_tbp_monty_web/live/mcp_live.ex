@@ -50,10 +50,10 @@ defmodule ExTbpMontyWeb.McpLive do
           Taken from the address you are reading this on, because that is the port this
           instance answers on: <code class="font-mono text-xs">4001</code>
           in a workspace, <code class="font-mono text-xs">4000</code>
-          in the container, and in the desktop
-          app whichever free port the operating system handed it at launch. That one is
-          picked afresh each time the app starts, so a client pointed at it needs the new
-          address after a restart.
+          in the container, and <code class="font-mono text-xs">42_800</code>
+          in the desktop app — so a client configured here keeps working across launches.
+          If something else already holds that port, the app announces a different one and
+          the address below is still the right one to paste.
         </p>
         <p class="flex flex-wrap items-center gap-2">
           <code id="mcp-url" class="rounded-field bg-base-200 px-2 py-1 font-mono text-sm">

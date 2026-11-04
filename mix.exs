@@ -45,10 +45,11 @@ defmodule ExTbpMonty.MixProject do
   # Build-only Mix tasks live outside lib/ so the test environment (and the
   # types job) never sees them: they shell out to asset tooling that is only
   # present when an image is being built.
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:test), do: ["lib", "test/support", "lib_desktop"]
   # `:desktop` is the window's sidecar: the same `lib/`, plus the shell that
-  # picks a loopback port and says where it listens. Dev, test and prod never
-  # compile that path, so the code the server ships contains none of it.
+  # picks a loopback port and says where it listens. Dev and prod never compile
+  # that path, so the code the server ships contains none of it; `:test` compiles
+  # it to specify the port it chooses.
   defp elixirc_paths(:desktop), do: ["lib", "mix_tasks", "lib_desktop"]
   defp elixirc_paths(_), do: ["lib", "mix_tasks"]
 

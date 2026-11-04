@@ -31,16 +31,16 @@ symptom was a migration that never ran and an image that never became healthy.
 
 ## What exists now
 
-| piece                                                         | where                                                                       |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| the folder, and the names Monty's tooling reads underneath it | `lib/monty/paths.ex`                                                        |
-| the build: a `:desktop` env with its own supervision start    | `mix.exs` (`elixirc_paths/1`, `application_module/1`), `config/desktop.exs` |
-| what a launch decides — paths, the repo, the salt, loopback   | `config/runtime.exs` (the `:desktop` block)                                 |
-| the port, and the line on stdout that names it                | `lib_desktop/desktop/server.ex`                                             |
-| the start itself: the server's tree, announced                | `lib_desktop/desktop/application.ex`                                        |
-| the window: a process supervisor with a webview               | `src-tauri/src/main.rs`, `src-tauri/tauri.conf.json`                        |
-| build both halves, open one                                   | `scripts/start-desktop.sh`                                                  |
-| the icons, from the two SVG masters, and the favicon          | `scripts/make-icons.sh`                                                     |
+| piece                                                                       | where                                                                       |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| the folder, and the names Monty's tooling reads underneath it               | `lib/monty/paths.ex`                                                        |
+| the build: a `:desktop` env with its own supervision start                  | `mix.exs` (`elixirc_paths/1`, `application_module/1`), `config/desktop.exs` |
+| what a launch decides — paths, the repo, the salt, loopback                 | `config/runtime.exs` (the `:desktop` block)                                 |
+| the port it prefers, how to change it, and the line on stdout that names it | `lib_desktop/desktop/server.ex`                                             |
+| the start itself: the server's tree, announced                              | `lib_desktop/desktop/application.ex`                                        |
+| the window: a process supervisor with a webview                             | `src-tauri/src/main.rs`, `src-tauri/tauri.conf.json`                        |
+| build both halves, open one                                                 | `scripts/start-desktop.sh`                                                  |
+| the icons, from the two SVG masters, and the favicon                        | `scripts/make-icons.sh`                                                     |
 
 The two drawings in `src-tauri/icons/` are the only icon sources. The detailed
 one carries circuit traces and is used from 64 px up; at 16 and 32 px those
@@ -51,8 +51,26 @@ a run that changes nothing leaves the working tree alone; a different ImageMagic
 build re-encodes the same pixels to different bytes, which shows up in `git`
 without any change to the picture.
 
-`lib_desktop/` is compiled only for `MIX_ENV=desktop`, so `lib/` never names a
-`Desktop.*` module and nothing dev, test or prod ships contains this code.
+`lib_desktop/` is compiled for `MIX_ENV=desktop` and for the tests, so `lib/`
+never names a `Desktop.*` module and nothing dev or prod ships contains this
+code.
+
+## The port
+
+The app answers on **42_800**, the same number every launch, because the MCP
+endpoint on `/mcp/config` is a URL a person pastes into a client once and a
+client that has to be re-pointed is not configured. Two ways to move it, neither
+of which needs a rebuild:
+
+- `MONTY_DESKTOP_PORT=42_900 …/bin/server` for a script or a service.
+- one line in `~/Library/Application Support/ex-tbp-monty/desktop_port` for the
+  person who double-clicks the app and has no shell to export anything from.
+
+A setting that is not a port is logged and ignored — refusing to start over a
+typo in a file nobody asked you to write would be the worse trade. And when the
+port itself is taken, by a second copy of the app or by anything else, the
+operating system picks one instead and the announcement carries it: a fixed port
+alone would make the second copy the one that fails.
 
 ## The template that was copied
 
@@ -142,9 +160,10 @@ An exported variable still wins; `Monty.Paths` is where that is decided.
 
 ## What was verified, and how
 
-The desktop path is checked by starting it, not by a unit test: the `:desktop`
-environment has no `test/support`, and what matters is that the release boots
-with nothing configured.
+The desktop path is checked by starting it, because what matters is that the
+release boots with nothing configured. The one decision with alternatives in it
+— which port — is specified by tests instead, which is why `:test` compiles
+`lib_desktop`.
 
 1. `MIX_ENV=desktop mix compile --warnings-as-errors` — clean.
 2. `MIX_ENV=desktop mix ecto.migrate` — created
@@ -174,6 +193,12 @@ ecto.*` reads the repository list before `runtime.exs` has run.)
    closing is the window being gone, and the server stops. Checked by killing a
    window and watching its sidecar's port go from `200` to connection refused —
    `RunEvent::Exit` alone left it listening.
+9. The port: `test/desktop/server_test.exs` pins the preferred number, both
+   overrides, a setting that is not a number, and the fallback when the port is
+   held. Then two releases started at once: the first announced 42_800, the
+   second said the port was taken and announced one the operating system picked,
+   and both answered `/health` 200. Setting `MONTY_DESKTOP_PORT` and writing
+   `desktop_port` were each checked by watching the announcement change.
 
 ## Shipping: what a person downloads
 
