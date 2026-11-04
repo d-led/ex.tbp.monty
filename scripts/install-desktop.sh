@@ -71,11 +71,16 @@ fi
 # its own (`BASE_URL` skips that wrapper), and the artefact is a bundle zip,
 # because an `.app` keeps its symlinks and executable modes only in one. `ditto`
 # expands both with those intact.
+#
+# Said out loud, because both steps take a while and a script that prints
+# nothing for a minute reads as one that has hung.
+echo "Unpacking the download ..."
 mkdir -p "$work/unpacked"
 ditto -x -k "$work/$asset.zip" "$work/unpacked"
 
 bundle_zip="$(find "$work/unpacked" -maxdepth 1 -name '*.zip' -print -quit)"
 if [ -n "$bundle_zip" ]; then
+    echo "Expanding the application (about 550 MB) ..."
     mkdir -p "$work/app"
     ditto -x -k "$bundle_zip" "$work/app"
 else
@@ -92,10 +97,20 @@ name="$(basename "$app")"
 rm -rf "${app_dir:?}/$name"
 mv "$app" "$app_dir/$name"
 
-# A downloaded bundle carries the quarantine flag, which stops it from starting.
-# `xattr` has no recursive form, and this *is* a directory, so every file gets
-# asked — including the window's own binary, which is what Gatekeeper looks at.
-find "$app_dir/$name" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
+# A bundle that a *browser* downloaded carries the quarantine flag, which stops
+# it from starting. `curl` does not set one, so the usual run has nothing to
+# clear: ask the bundle once and say so, rather than walking fifteen thousand
+# files to delete an attribute none of them has.
+#
+# Where there is one, the deletion is batched (`{} +`) instead of one process a
+# file (`{} \;`). A shell with per-binary shims — pyenv, rbenv, asdf put one in
+# front of every program on the PATH — turns each of those into a launcher of
+# its own, and the walk then spends twenty minutes on what takes a second, with
+# nothing on screen to say why.
+if xattr -p com.apple.quarantine "$app_dir/$name" >/dev/null 2>&1; then
+    echo "Clearing the quarantine flag ..."
+    find "$app_dir/$name" -exec xattr -d com.apple.quarantine {} + 2>/dev/null || true
+fi
 
 echo "Installed $app_dir/$name"
 echo "Open it with:  open -a \"$app_dir/$name\""
