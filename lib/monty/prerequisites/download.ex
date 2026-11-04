@@ -355,9 +355,20 @@ defmodule Monty.Prerequisites.Download do
     # through the list it is.
     on_progress = fn progress -> send(parent, {:exporting, progress}) end
 
+    # This archive's own models, not every model on the machine. The global
+    # `sync/0` walked `MONTY_MODELS/*` — every release anyone had ever
+    # downloaded — so fetching one archive exported forty models across six
+    # releases, minutes of work that had nothing to do with the download. A run
+    # that stopped part way left libraries missing for models in *this* archive
+    # while the row said it was done, and the page then had to admit that some of
+    # the memory was not read. Exporting the archive that just arrived is both
+    # the honest unit of work and the cheap one.
+    root = Monty.Prerequisites.where_it_lands(state.prerequisite)
+    libraries = Monty.Studio.Memory.libraries_dir()
+
     {pid, reference} =
       spawn_monitor(fn ->
-        send(parent, {:exported, Monty.Studio.Pretrained.sync(on_progress: on_progress)})
+        send(parent, {:exported, Monty.Studio.Pretrained.sync(root, libraries, on_progress: on_progress)})
       end)
 
     state = %{state | status: :exporting, task: {pid, reference}}
