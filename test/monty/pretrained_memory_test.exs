@@ -22,6 +22,11 @@ defmodule Monty.PretrainedMemoryTest do
   # Ten models and sixteen thousand nodes: slow enough on a cold runner that
   # ExUnit's minute is not enough, and there is no reason to build it once per
   # test.
+  # `:heavy` is the machine's question, not the test's: this one exports a real
+  # model's memory, and on a box that is compiling something else it can take
+  # longer than the limit says. `mix test --exclude heavy` leaves it out on a
+  # loaded laptop; CI runs everything.
+  @moduletag :heavy
   @moduletag timeout: 300_000
 
   setup_all do

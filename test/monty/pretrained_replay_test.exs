@@ -30,6 +30,9 @@ defmodule Monty.PretrainedReplayTest do
   # Loading the exported library and replaying a hundred steps of Monty's own
   # episode is minutes of work on a cold runner, not the one minute ExUnit
   # allows by default.
+  # See `test/monty/pretrained_memory_test.exs`: `:heavy` is the machine's
+  # question, not the test's.
+  @moduletag :heavy
   @moduletag timeout: 300_000
 
   alias Monty.Context

@@ -21,6 +21,9 @@ defmodule Monty.RecordingEpisodeTest do
   # The episode runs to its own conclusion over a hundred recorded steps, which
   # takes about forty seconds here and over a minute on a CI runner. Trimming
   # the episode would trim the claim, so the test gets the room it needs.
+  # See `test/monty/pretrained_memory_test.exs`: `:heavy` is the machine's
+  # question, not the test's.
+  @moduletag :heavy
   @moduletag timeout: 300_000
 
   alias Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHypothesesUpdater
