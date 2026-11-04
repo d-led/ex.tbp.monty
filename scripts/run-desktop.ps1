@@ -37,6 +37,10 @@ param(
     [switch]$Update
 )
 
+# `irm … | iex` cannot pass a switch: the one-liner's form of -Update is the
+# environment, `$env:EX_TBP_MONTY_UPDATE = 1`.
+if ($env:EX_TBP_MONTY_UPDATE -in @('1', 'true', 'yes')) { $Update = $true }
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -63,17 +67,32 @@ else {
     $zip = Join-Path $dir "$asset.zip"
     $work = Join-Path $dir '.unpacked'
 
-    if ($env:EX_TBP_MONTY_BASE_URL) {
+    $folder = $env:EX_TBP_MONTY_BASE_URL
+    if ($folder) {
         # A folder on this machine is how the packaging is tried without a
         # network round trip, which is what the shell twin does too.
-        $source = Join-Path $env:EX_TBP_MONTY_BASE_URL "$asset.zip"
-        Write-Host "Downloading $asset from $env:EX_TBP_MONTY_BASE_URL ..."
-        if (Test-Path $source) { Copy-Item $source $zip } else { Invoke-WebRequest -Uri $source -OutFile $zip }
+        $source = Join-Path $folder "$asset.zip"
+        Write-Host "Taking $source ..."
+        Copy-Item -LiteralPath $source -Destination $zip
     }
     else {
-        $url = "https://nightly.link/$repo/workflows/$workflow/$branch/$asset.zip"
-        Write-Host "Downloading the newest $branch build: $url"
-        Invoke-WebRequest -Uri $url -OutFile $zip
+        $source = "https://nightly.link/$repo/workflows/$workflow/$branch/$asset.zip"
+        Write-Host "Downloading the newest $branch build: $source"
+        # The progress bar is why a 230 MB download takes minutes in Windows
+        # PowerShell: it redraws the console for every block it receives.
+        $ProgressPreference = 'SilentlyContinue'
+        try {
+            Invoke-WebRequest -Uri $source -OutFile $zip
+        }
+        catch {
+            # Said as a sentence instead of thrown, because an artefact that is
+            # not there yet is the expected answer while a platform's build is
+            # red.
+            Write-Host "Nothing came from $source — $($_.Exception.Message)"
+            Write-Host 'Nothing was run. Whether that build exists is on the workflow page:'
+            Write-Host "  https://github.com/$repo/actions/workflows/$workflow.yml"
+            exit 1
+        }
     }
 
     # Two layers, because two tools zip: nightly.link wraps the artefact in a zip

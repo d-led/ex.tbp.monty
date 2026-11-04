@@ -253,9 +253,23 @@ because it needs no release to exist before somebody can try the app:
    beside the download, and opens it. Nothing is installed and nothing is
    registered: the folder is the installation, and deleting it is the whole of
    uninstalling. Running the script again opens what is there; `--update`
-   (`-Update`) takes the newest build first. The `.pkg` and the NSIS setup in the
-   same download are for a person who wants an entry in `/Applications` or under
-   "Apps & features" and would rather the OS tracked it.
+   (`-Update`, or `$env:EX_TBP_MONTY_UPDATE = 1` through the one-liner) takes the
+   newest build first. The `.pkg` and the NSIS setup in the same download are for
+   a person who wants an entry in `/Applications` or under "Apps & features" and
+   would rather the OS tracked it.
+
+   The two forms of the one command:
+
+   ```bash
+   # macOS and Linux
+   curl -fsSL https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run-desktop.sh | bash
+   ```
+
+   ```powershell
+   # Windows
+   powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run-desktop.ps1 | iex"
+   ```
+
 4. A `v*` tag runs `desktop-release`, which attaches the same zip to a GitHub
    release — an artefact expires, a release does not.
 

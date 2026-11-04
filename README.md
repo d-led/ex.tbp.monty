@@ -56,16 +56,23 @@ The same application in a native window, with its own server inside — no
 Docker, no Elixir, nothing to install but the app:
 
 ```bash
+# macOS (Apple Silicon or Intel) and Linux (x86-64 or arm64)
 curl -fsSL https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run-desktop.sh | bash
 ```
 
-That line runs on macOS (Apple Silicon and Intel) and on Linux (x86-64 and
-arm64). It takes the newest build of `main` into `./ex-tbp-monty-<platform>/`,
-unpacks it there and opens it: nothing is installed, nothing is registered, and
-deleting that folder is the whole of uninstalling it. Running it again opens what
-is there; `--update` takes the newest build first. A tagged release keeps the
-same file in the releases page, which is what to use for a version that has to
-stay put. Prefer to take the file yourself? These links always give the latest
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run-desktop.ps1 | iex"
+```
+
+The script works out the platform itself. It takes the newest build of `main`
+into `./ex-tbp-monty-<platform>/`, unpacks it there and opens this: nothing is
+installed, nothing is registered, and deleting that folder is the whole of
+uninstalling it. Running it again opens what is there; for the newest build
+again, `| bash -s -- --update` on macOS and Linux, and
+`$env:EX_TBP_MONTY_UPDATE = 1` before the Windows line. A tagged release keeps
+the same file in the releases page, which is what to use for a version that has
+to stay put. Prefer to take the file yourself? These links always give the latest
 build:
 
 | Platform    | Download                                                                                                       |
