@@ -318,15 +318,16 @@ Two things had to exist before a Windows build could start its own server:
   (`…\Monty on the BEAM\…`). Both are `#[cfg(windows)]` in
   `src-tauri/src/main.rs`, so the macOS path is the same code it was.
 
-**Compiled by CI, never launched.** A `windows-2022` row builds it — the platform
-needs MSVC and WebView2, which the image ships — and the job's first run found a
-defect that only Windows has: `npm` is `npm.cmd` there, and `mix cmd` cannot
-start one (it failed with `:eacces`), so the packages go through `cmd /C npm ci`.
-What no runner can answer is what happens after launch: `mix release` laying down
-`bin\ex_tbp_monty.bat`, and MuJoCo, which defaults to WGL on Windows —
-`rel/env.sh.eex` sets `MUJOCO_GL=osmesa` for Linux and `rel/env.bat.eex` has no
-equivalent, so a MuJoCo experiment is the first thing to watch there. Nobody has
-started the window on Windows yet.
+**Built by CI, and no artefact yet.** A `windows-2022` row runs it, and every
+attempt so far has failed on a defect only Windows has — first `npm` being
+`npm.cmd` (Elixir's `System.cmd` cannot start one; it failed with `:eacces`), then
+the stylesheet being built before anything compiled the application, so the
+colocated CSS it imports did not exist yet. Both are fixed, and the second was
+reproduced without Windows at all. What no runner can answer is what happens
+after launch: `mix release` laying down `bin\ex_tbp_monty.bat`, and MuJoCo, which
+defaults to WGL on Windows — `rel/env.sh.eex` sets `MUJOCO_GL=osmesa` for Linux
+and `rel/env.bat.eex` has no equivalent, so a MuJoCo experiment is the first
+thing to watch there. Nobody has started the window on Windows yet.
 
 ## What is still open
 
