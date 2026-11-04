@@ -44,7 +44,7 @@ Composition and interpolation are two steps on purpose.
 | ----------------------------------------- | --------------------------------------------------------------- |
 | `${constants.min_eval_steps}`             | the referenced value, type preserved                            |
 | `${oc.env:VAR}` / `${oc.env:VAR,default}` | the environment variable, or its default, or an error naming it |
-| `${monty.class:a.b.C}`                    | the dotted path as a string, for `Monty.Config.Registry`        |
+| `${monty.class:a.b.C}`                    | the dotted path as a string, for `Monty.Config.Target`          |
 | `${np.array:[2, 0.5, 0.5]}`               | `[2.0, 0.5, 0.5]`                                               |
 | `${np.ones:3}`                            | `[1.0, 1.0, 1.0]`                                               |
 | `${np.list_eval:[np.pi / 8, np.pi * 2]}`  | arithmetic via `Monty.Config.Expression`                        |
@@ -73,8 +73,9 @@ and in CI against a pinned Monty revision.
 ## Deliberate differences
 
 - `monty.class` yields the class path, not a class object: an Elixir process
-  cannot hold a Python class. `Monty.Config.Registry` maps the path to a module
-  and reports paths it does not know yet.
+  cannot hold a Python class. `Monty.Config.Target` turns the path into a module
+  through `Monty.ModuleMap`, and a class this port has not written is an error
+  rather than a stand-in.
 - `np.array`/`np.ones` yield lists, not tensors. Nx tensors appear at the
   numeric core's boundary, not in the config.
 - The top-level `hydra` group is dropped: it configures Hydra's run directory,

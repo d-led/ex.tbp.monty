@@ -103,7 +103,9 @@ a module is added.
 
 - **MCP.** `/mcp` answers an assistant about Monty's theory, roadmap and code, and
   previews, saves and runs experiments. `http://localhost:4001/mcp` is already in
-  [`.vscode/mcp.json`](.vscode/mcp.json) — [docs/mcp.md](docs/mcp.md).
+  [`.vscode/mcp.json`](.vscode/mcp.json) — start the server with `PORT=4001
+scripts/run-dev.sh` (4000 is the default, and then the URL to copy is the one
+  `/mcp/config` prints) — [docs/mcp.md](docs/mcp.md).
 - **Headless.** `mix monty.run tutorial/first_experiment --steps 20` is the same
   run record without the browser; flags and `mix monty.bench` in
   [docs/features.md](docs/features.md).
