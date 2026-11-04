@@ -288,14 +288,29 @@ defmodule Monty.Studio.Jobs.Run do
   # order matters — the episode is logged *before* the memory a training episode
   # writes, because that write rewrites the episode's ground truth and an episode
   # logged afterwards would look confused about the object it just recognised.
-  defp end_episode(run_id, %{run: run} = state, _outcome, infos) do
-    log_statistics(run_id, state.logging, run)
-    conclusion = Run.conclusion(run)
+  defp end_episode(run_id, %{run: run} = state, outcome, infos) do
+    conclusion =
+      if crashed?(outcome) do
+        # The crash took the model with it: a module's failure stopped the step
+        # the model is, and both the statistics and the conclusion are read off
+        # that model. The reason this run ends is the crash, said once with its
+        # own traceback — asking a dead process for the rest would replace it
+        # with "a process the run was waiting on exited".
+        say(run_id, "the episode crashed, so its statistics were not read")
+        %{}
+      else
+        log_statistics(run_id, state.logging, run)
+        Run.conclusion(run)
+      end
+
     stop_run(run)
 
     # `infos` arrive newest first; a page reads an epoch oldest first.
     %{state | run: nil, infos: state.infos ++ Enum.reverse(infos), conclusion: conclusion}
   end
+
+  defp crashed?({:crashed, _step, _reason}), do: true
+  defp crashed?(_outcome), do: false
 
   defp stop_run(nil), do: :ok
 

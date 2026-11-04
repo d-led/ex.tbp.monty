@@ -623,10 +623,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   defp update_evidence(%__MODULE__{} = lm, features, displacement, graph_id) do
     hypotheses = Map.get(lm.hypotheses, graph_id, Hypotheses.empty())
 
+    # The stored evidence, not `current_mlh/1`: that one refreshes the MLH's
+    # location by indexing its graph's space, and this loop replaces those
+    # spaces one object at a time — so an object already behind us has been
+    # pruned and the index the MLH was found at may no longer be in it. Monty
+    # reads `self.current_mlh["evidence"]` here, which is the stored number.
     update_threshold =
       LearningModule.evidence_update_threshold(
         lm.threshold_config,
-        current_mlh(lm).evidence,
+        lm.current_mlh.evidence,
         Hypotheses.evidence(hypotheses)
       )
 

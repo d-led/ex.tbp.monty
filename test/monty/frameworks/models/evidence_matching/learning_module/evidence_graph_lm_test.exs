@@ -145,6 +145,39 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     end
   end
 
+  describe "a hypothesis space the most likely hypothesis has left" do
+    # One observation, two objects in memory: the same steps, twice, so that the
+    # space of one is updated while the other's index is still the one the last
+    # step found.
+    defp two_objects do
+      memory(%{"mug" => [0.0, 0.1, 0.2], "plate" => [0.0, 0.1, 0.2]})
+      |> learning_module()
+    end
+
+    # Burst sampling prunes a space between steps and keeps a subset of it, so
+    # the index the most likely hypothesis was found at can be past the end of
+    # the pruned space. That is what a space pruned to nothing looks like.
+    defp pruned_to_first_row(lm) do
+      %{graph_id: graph_id} = lm.current_mlh
+      remaining = Hypotheses.take(Map.fetch!(lm.hypotheses, graph_id), [0])
+
+      %{lm | hypotheses: Map.put(lm.hypotheses, graph_id, remaining)}
+    end
+
+    test "does not stop the step that reads its evidence" do
+      lm = two_objects() |> step([percept([0.2, 0.0, 0.0], [0.2])])
+      # One row is not where the most likely hypothesis was found, so the step
+      # below reads an index the space no longer holds.
+      assert lm.current_mlh.mlh_id > 0
+
+      lm = lm |> pruned_to_first_row() |> step([percept([0.3, 0.0, 0.0], [0.3])])
+
+      # The step ran to its end, and the pruned object is still one memory holds.
+      assert Map.has_key?(lm.hypotheses, "mug")
+      assert EvidenceGraphLM.current_mlh(lm).graph_id in ["mug", "plate"]
+    end
+  end
+
   describe "matching an observation" do
     test "earns evidence for the hypothesis that explains it" do
       lm =
