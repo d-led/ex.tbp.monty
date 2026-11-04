@@ -15,6 +15,7 @@ defmodule ExTbpMonty.Desktop.Application do
 
   use Application
 
+  alias ExTbpMonty.Desktop.ParentWatch
   alias ExTbpMonty.Desktop.Server
 
   @impl true
@@ -25,6 +26,7 @@ defmodule ExTbpMonty.Desktop.Application do
     port = Server.choose_port()
     Server.configure_endpoint(port)
     exit_with_the_window()
+    ParentWatch.start_link()
 
     case ExTbpMonty.Application.start(type, args) do
       {:ok, pid} ->
@@ -44,7 +46,8 @@ defmodule ExTbpMonty.Desktop.Application do
   # find again.
   #
   # Only when the window says so (`EX_TBP_MONTY_WINDOW`): a container's standard
-  # input is not a pipe to a supervisor, and `/dev/null` closes at once.
+  # input is not a pipe to a supervisor, and `/dev/null` closes at once. Starting
+  # the release by hand is covered by `ParentWatch`, which needs no pipe.
   defp exit_with_the_window do
     if System.get_env("EX_TBP_MONTY_WINDOW") == "1" do
       Task.start(fn ->

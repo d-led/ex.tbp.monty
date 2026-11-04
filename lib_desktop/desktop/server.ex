@@ -50,12 +50,24 @@ defmodule ExTbpMonty.Desktop.Server do
   """
   @spec preferred_port(Path.t()) :: :inet.port_number()
   def preferred_port(path) do
-    from_env() || from_file(path) || @preferred_port
+    case asked_for(path) do
+      {:ok, port} -> port
+      :error -> @preferred_port
+    end
   end
 
   @doc "Where the port setting is read from: one line in the application's folder."
   @spec settings_file() :: Path.t()
   def settings_file, do: Path.join(Monty.Paths.root(), @settings_name)
+
+  # The first place that names a port is the answer, and a place that names
+  # something which is not one is passed over rather than obeyed.
+  defp asked_for(path) do
+    case from_env() do
+      {:ok, _port} = found -> found
+      :error -> from_file(path)
+    end
+  end
 
   # A second copy has to start somewhere, and the port it wanted is the one thing
   # it cannot have.
@@ -90,7 +102,7 @@ defmodule ExTbpMonty.Desktop.Server do
 
   defp from_env do
     case System.get_env(@env_var) do
-      nil -> nil
+      nil -> :error
       value -> parse(value, "#{@env_var} is #{inspect(value)}")
     end
   end
@@ -104,7 +116,7 @@ defmodule ExTbpMonty.Desktop.Server do
       # No file, or one this process may not read: neither is a reason to refuse
       # to start.
       {:error, _reason} ->
-        nil
+        :error
     end
   end
 
@@ -112,14 +124,14 @@ defmodule ExTbpMonty.Desktop.Server do
     # Underscores are allowed because that is how the notes beside this code write
     # a port, and a person copying one should not be told it is not a number.
     case Integer.parse(String.replace(value, "_", "")) do
-      {port, ""} when port in 1..65_535 -> port
+      {port, ""} when port in 1..65_535 -> {:ok, port}
       _ -> ignored(complaint)
     end
   end
 
   defp ignored(complaint) do
     Logger.warning(complaint <> ", which is not a port number; ignoring it")
-    nil
+    :error
   end
 
   @doc """

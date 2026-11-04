@@ -38,6 +38,7 @@ symptom was a migration that never ran and an image that never became healthy.
 | what a launch decides — paths, the repo, the salt, loopback                 | `config/runtime.exs` (the `:desktop` block)                                 |
 | the port it prefers, how to change it, and the line on stdout that names it | `lib_desktop/desktop/server.ex`                                             |
 | the start itself: the server's tree, announced                              | `lib_desktop/desktop/application.ex`                                        |
+| what stops it: the window's pipe, and the process that ran it               | `lib_desktop/desktop/parent_watch.ex`                                       |
 | the window: a process supervisor with a webview                             | `src-tauri/src/main.rs`, `src-tauri/tauri.conf.json`                        |
 | build both halves, open one                                                 | `scripts/start-desktop.sh`                                                  |
 | the icons, from the two SVG masters, and the favicon                        | `scripts/make-icons.sh`                                                     |
@@ -199,6 +200,15 @@ ecto.*` reads the repository list before `runtime.exs` has run.)
    second said the port was taken and announced one the operating system picked,
    and both answered `/health` 200. Setting `MONTY_DESKTOP_PORT` and writing
    `desktop_port` were each checked by watching the announcement change.
+10. Nothing is left behind. The window holds its server's standard input open, so
+    the pipe closing stops it, and `RunEvent::Exit` stops it on the tidy path.
+    The case those two miss is a server started by hand — four of them once ran
+    for hours after their shells had gone, holding port 42800 and the database,
+    with no tray icon to reveal them. `ExTbpMonty.Desktop.ParentWatch` polls the
+    pid that started the server and stops the VM when it is gone: checked by
+    starting the release under `sh`, killing `sh` with `kill -9`, and watching
+    the server answer `/health` 200 and then exit about two seconds later.
+    `test/desktop/parent_watch_test.exs` covers the same decision.
 
 ## Shipping: what a person downloads
 
