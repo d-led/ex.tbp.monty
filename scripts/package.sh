@@ -104,9 +104,39 @@ register() {
 build_app() {
   ./scripts/start-desktop.sh --bundle
 
-  if [ ! -d "$bundle" ]; then
-    echo "the build said it finished and there is no $bundle" >&2
-    exit 1
+  # macOS answers with the one product this script knows the name of; Linux
+  # leaves the window and its release beside each other, which is what the
+  # tarball below packs.
+  if [ -d "$bundle" ] || [ -x "src-tauri/target/release/ex-tbp-monty-desktop" ]; then
+    return 0
+  fi
+
+  echo "the build said it finished and there is neither $bundle nor the window" >&2
+  exit 1
+}
+
+# What a Linux person gets: a tarball holding the window with its release beside
+# it, which runs from anywhere, and the `.deb` the bundle step made, which a
+# distribution's package manager installs. `tar`, not `zip`: the release's own
+# launchers are 0555 and a zip that loses that produces an application that
+# cannot start its server.
+linux_bundle() {
+  local rid=$1 folder="$artifacts/$1/ex-tbp-monty-$1" target="$artifacts/$1/ex-tbp-monty-$1.tar.gz" deb
+
+  rm -rf "$folder" "$target"
+  mkdir -p "$folder"
+  cp src-tauri/target/release/ex-tbp-monty-desktop "$folder/"
+  cp -R src-tauri/target/release/rel "$folder/"
+
+  tar czf "$target" -C "$artifacts/$1" "ex-tbp-monty-$1"
+  echo "  $target"
+
+  deb=$(find src-tauri/target/release/bundle/deb -name '*.deb' -print -quit 2>/dev/null || true)
+  if [ -n "$deb" ]; then
+    cp "$deb" "$artifacts/$1/"
+    echo "  $artifacts/$1/$(basename "$deb")"
+  else
+    echo "  no .deb: the bundle step made none. See docs/desktop.md." >&2
   fi
 }
 
@@ -202,32 +232,40 @@ for rid in "${rids[@]}"; do
     exit 1
   fi
 
-  if [ "$rid" != "osx-arm64" ] && [ "$rid" != "osx-x64" ]; then
-    echo "no $rid bundle exists yet: only macOS is built. See docs/desktop.md." >&2
-    exit 1
-  fi
-
   echo "$rid"
 
   rm -rf "$artifacts/$rid"
   mkdir -p "$artifacts/$rid"
 
-  build_app
-  cp -R "$bundle" "$artifacts/$rid/"
-  register "$artifacts/$rid/$product.app"
-  echo "  $artifacts/$rid/$product.app"
+  case "$rid" in
+    osx-*)
+      build_app
+      cp -R "$bundle" "$artifacts/$rid/"
+      register "$artifacts/$rid/$product.app"
+      echo "  $artifacts/$rid/$product.app"
 
-  if [ "$make_zip" = true ]; then
-    zip_app "$rid"
-  fi
+      if [ "$make_zip" = true ]; then
+        zip_app "$rid"
+      fi
 
-  if [ "$make_pkg" = true ]; then
-    installer_package "$rid"
-  fi
+      if [ "$make_pkg" = true ]; then
+        installer_package "$rid"
+      fi
 
-  if [ "$make_dmg" = true ]; then
-    disk_image "$rid"
-  fi
+      if [ "$make_dmg" = true ]; then
+        disk_image "$rid"
+      fi
+      ;;
+    linux-*)
+      build_app
+      linux_bundle "$rid"
+      ;;
+    *)
+      echo "no $rid packaging here: this script makes macOS and Linux bundles." >&2
+      echo "Windows has its own: scripts/package.ps1. See docs/desktop.md." >&2
+      exit 1
+      ;;
+  esac
 done
 
 echo "done: $(find "$artifacts" -mindepth 2 -maxdepth 2 | wc -l | tr -d ' ') artifacts in $artifacts/<platform>/"

@@ -35,13 +35,31 @@ sidecar="$PWD/$release/bin/server"
 window="src-tauri/target/debug/ex-tbp-monty-desktop"
 
 # The double-clickable app: the window plus a copy of the release inside it, so
-# it runs without this checkout and without this script.
+# it runs without this checkout and without this script. macOS has one file to
+# name; Linux has a directory of bundles, one per format Tauri can make.
 bundle="src-tauri/target/release/bundle/macos/Monty on the BEAM.app"
 
 # Bundling is a separate config, merged only for `--app`: `bundle.active` in the
 # main config makes `cargo build` — the debug window this script opens every run
 # — fail in tauri-build's resource phase, and the debug window has no use for a
-# bundle.
+# bundle. The targets are what a person on that platform can install: an `.app`
+# on macOS, a `.deb` on Linux (an AppImage is one more target in that file, and
+# a package that needs nothing installed to run).
+case "$(uname -s)" in
+  Darwin)
+    bundle_config="$PWD/src-tauri/tauri.bundle.conf.json"
+    bundle_targets=app
+    ;;
+  Linux)
+    bundle_config="$PWD/src-tauri/tauri.bundle.linux.json"
+    bundle_targets=deb
+    ;;
+  *)
+    echo "scripts/start-desktop.sh bundles macOS and Linux; this is $(uname -s)." >&2
+    echo "Windows has its own: scripts/start-desktop.ps1 -Bundle." >&2
+    exit 69
+    ;;
+esac
 
 mode=open
 
@@ -211,11 +229,17 @@ if [[ "$mode" == bundle || "$mode" == app ]]; then
   rm -rf src-tauri/target/release/rel src-tauri/target/release/bundle
 
   run "building the app bundle (a minute warm, six cold — the window is rebuilt in release)" \
-    cargo tauri build --bundles app --config "$PWD/src-tauri/tauri.bundle.conf.json"
+    cargo tauri build --bundles "$bundle_targets" --config "$bundle_config"
 
   if [[ "$mode" == bundle ]]; then
     echo
-    echo "$bundle"
+    # macOS has one product to name; Linux has a directory, and naming it is
+    # better than naming a file whose name carries the version.
+    if [[ -d "$bundle" ]]; then
+      echo "$bundle"
+    else
+      echo "$PWD/src-tauri/target/release/bundle"
+    fi
     exit 0
   fi
 
