@@ -179,7 +179,8 @@ what CI runs.
   ([mix.exs](../mix.exs))
 - `docker compose up -d` gives development Postgres 17 and adminer on this
   project's own ports; `docker-compose.quickstart.yml` is the published image
-  and a Postgres of its own, which is what works with every published tag.
+  alone, with the database in a file on a volume (`DATABASE_URL` names a Postgres
+  instead, for a release older than the one that picks SQLite).
   ([dev compose](../docker-compose.yml), [quickstart](../docker-compose.quickstart.yml))
 - 2,154 `test` declarations in the suite.
 
