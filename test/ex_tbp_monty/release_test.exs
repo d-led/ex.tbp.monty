@@ -5,6 +5,7 @@ defmodule ExTbpMonty.ReleaseTest do
 
   alias ExTbpMonty.Release
   alias Monty.Prerequisites
+  alias Monty.Test.PrerequisiteRoots
 
   describe "the data a run reads, as a release step" do
     @tag :tmp_dir
@@ -37,40 +38,11 @@ defmodule ExTbpMonty.ReleaseTest do
   end
 
   # One prerequisite as it looks after a first start: where the manifest says it
-  # belongs, so `present?/1` answers yes and the step has nothing to fetch.
-  defp plant(prerequisite) do
-    if prerequisite[:extract] do
-      File.mkdir_p!(Prerequisites.where_it_lands(prerequisite))
-    else
-      path = Prerequisites.target_path(prerequisite)
-      File.mkdir_p!(Path.dirname(path))
-      File.write!(path, "")
-    end
-  end
+  # belongs. `PrerequisiteRoots` is the one place that knows what a fetched
+  # bundle looks like, including that a directory holding nothing is not one.
+  defp plant(prerequisite), do: PrerequisiteRoots.plant(prerequisite)
 
   # Monty's own variables, pointed at a directory of this test's own and put back
   # afterwards — a run in another test must not read this one's tree.
-  defp in_data_root(root, fun) do
-    variables = [
-      {"MONTY_DATA", Path.join(root, "data")},
-      {"MONTY_MODELS", Path.join(root, "models")},
-      {"MONTY_LOGS", Path.join(root, "logs")}
-    ]
-
-    previous = Enum.map(variables, fn {name, _} -> {name, System.get_env(name)} end)
-
-    Enum.each(variables, fn {name, value} ->
-      File.mkdir_p!(value)
-      System.put_env(name, value)
-    end)
-
-    try do
-      fun.()
-    after
-      Enum.each(previous, fn
-        {name, nil} -> System.delete_env(name)
-        {name, value} -> System.put_env(name, value)
-      end)
-    end
-  end
+  defp in_data_root(root, fun), do: PrerequisiteRoots.with_roots(root, fun)
 end
