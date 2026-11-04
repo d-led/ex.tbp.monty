@@ -46,8 +46,10 @@ The two drawings in `src-tauri/icons/` are the only icon sources. The detailed
 one carries circuit traces and is used from 64 px up; at 16 and 32 px those
 traces collapse into a smudge, so the smaller sizes come from the simplified
 drawing. `scripts/make-icons.sh` renders the `.icns`, the `.ico`, the PNGs and
-`priv/static/favicon.ico`, and two runs produce the same bytes, so a run that
-changes nothing leaves the working tree alone.
+`priv/static/favicon.ico`. Two runs with the same tools write the same bytes, so
+a run that changes nothing leaves the working tree alone; a different ImageMagick
+build re-encodes the same pixels to different bytes, which shows up in `git`
+without any change to the picture.
 
 `lib_desktop/` is compiled only for `MIX_ENV=desktop`, so `lib/` never names a
 `Desktop.*` module and nothing dev, test or prod ships contains this code.

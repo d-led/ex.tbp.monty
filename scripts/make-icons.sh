@@ -6,8 +6,10 @@
 # sizes come from the simplified drawing: the same hexagon and brain, no traces.
 #
 # Writes src-tauri/icons/* (the app icon set) and priv/static/favicon.ico.
-# The output is byte-for-byte reproducible, so a run that changes nothing leaves
-# the working tree alone.
+# Two runs with the same tools write the same bytes, so a run that changes
+# nothing leaves the working tree alone. A different ImageMagick build (this
+# machine has two, arm64 and x86_64) re-encodes the same pixels to other bytes;
+# the pictures are the same, and only then does a rerun show up in git.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
