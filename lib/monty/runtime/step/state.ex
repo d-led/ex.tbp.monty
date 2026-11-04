@@ -20,6 +20,7 @@ defmodule Monty.Runtime.Step.State do
   """
 
   alias Monty.Experiment.MatchCriteria
+  alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
 
   @default_timeout 5_000
 
@@ -138,13 +139,12 @@ defmodule Monty.Runtime.Step.State do
 
   @doc """
   Monty's default vote routing: a receiver gets the votes of the modules wired
-  to it by `lm_to_lm_vote_matrix`.
+  to it by `lm_to_lm_vote_matrix`, moved into the frame of its own sensor —
+  `EvidenceGraphModel._combine_votes`, which is where that arithmetic lives.
   """
   @spec combine_votes(map(), t()) :: map()
   def combine_votes(votes, %__MODULE__{lm_to_lm_vote: lm_to_lm_vote}) do
-    Map.new(lm_to_lm_vote, fn {receiver, sources} ->
-      {receiver, Enum.map(sources, &Map.fetch!(votes, &1))}
-    end)
+    MontyForEvidenceGraphMatching.combine_votes(votes, lm_to_lm_vote)
   end
 
   @doc "Monty's `NoopAttentionSystem`: every proposed goal passes."

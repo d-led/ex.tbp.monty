@@ -11,9 +11,10 @@ queue.
 
 ## Green right now
 
-`main` is `578ba03`. CI on it is **green in every job**: `lint`, `types`, all four
-test partitions, `coverage, CRAP and parity`, and `image, scan, non-root,
-publish` (30m9s, both architectures).
+`main` is `523b733` (PR #9, the prerequisites saga). CI on it is **green in
+every job**: `lint`, `types`, all four test partitions, `coverage, CRAP and
+parity`, and `image, scan, non-root, publish`. Before it, `578ba03` was green in
+every job too, in 30m9s on both architectures.
 
 The one annotation on that run is not ours: `xref: [exclude: …]` is deprecated in
 Elixir 1.20 in favour of `elixirc_options: [no_warn_undefined: …]`, and the two
@@ -124,9 +125,13 @@ here would explore and conclude nothing.
   JSON logger encoded a hypothesis set's raw f64 binary and crashed on
   `Jason.encode!` — **fixed**, it now reads through `Hypotheses.locations/1`;
   and a vote shaped like a sensor module's (`possible_states`,
-  `sensed_pose_rel_body`) has no clause in `EvidenceGraphLM.apply_votes/2` —
-  **open**, and `tutorial/dist_agent_5lm_2obj_eval` reaches it at its first
-  vote round.
+  `sensed_pose_rel_body`) had no clause in `EvidenceGraphLM.apply_votes/2` —
+  **fixed** (2026-11-04). The clause was not what was missing: the model's
+  `_combine_votes` was, so the runtime handed each receiver the raw vote of each
+  source instead of the object-keyed messages `receive_votes/2` reads, and no
+  vote was ever moved out of the sender's sensor frame.
+  `Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching.combine_votes/2`
+  now does that arithmetic and `Monty.Runtime.Step.State` routes through it.
 
 ## Open points and bugs
 
@@ -143,7 +148,7 @@ here would explore and conclude nothing.
 | 9   | **MCP config from the address bar**: done in `ex.tbp.monty` (`/mcp/config` uses `socket.host_uri`, test pins a mapped port) and in `ex_gocd` (`ExGoCDWeb.Mcp.BaseUrl.url/1`). **`confluence_phx_mirror` is the one exception** — the token `curl` on `/profile` uses `Sites.host()` from configuration                     | A request-derived base URL there, the way `ex_gocd` does it, plus a test                                                      |
 | 10  | **`ex_gocd` lint**: the 2026-11-02 hand-over recorded `mix credo --strict` failing on the MCP code (`lib/ex_gocd/mcp/tools/*.ex`, `lib/ex_gocd_web/controllers/mcp/oauth_controller.ex`). Not checked today                                                                                                                | Run its gate and confirm; fix or record                                                                                       |
 | 11  | **The builder's default base cannot run**: `Blueprint` starts from `tutorial/first_experiment`, so a new draft inherits the refusal. The acceptance config is not a substitute yet — its `n_eval_epochs: ${constants.rotations_all_count}` trips `:epochs_not_a_count`, because `Blueprint` validates the unresolved value | Resolve the base's epoch counts before validating, then default the builder to an experiment this port can run                |
-| 12  | **`EvidenceGraphLM.apply_votes/2` has no clause for a sensor module's vote** (`possible_states` and `sensed_pose_rel_body`). Monty weighs those into the evidence as well; here the call crashes and takes the episode with it (`tutorial/dist_agent_5lm_2obj_eval`, at its first vote round)                              | Port Monty's sensor-module vote branch, with a test that votes from an SM rather than from another learning module            |
+| 12  | ~~**`EvidenceGraphLM.apply_votes/2` has no clause for a sensor module's vote**~~ — **done 2026-11-04.** The payload `receive_votes/2` was handed was never the shape it reads, because `_combine_votes` had not been ported: votes now reach a module keyed by object and moved into its own sensor's frame                | `MontyForEvidenceGraphMatching.combine_votes/2` plus two tests that specify the move; `apply_votes/2` is unchanged            |
 
 ## Where the work stands, in one paragraph
 

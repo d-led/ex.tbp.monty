@@ -113,7 +113,7 @@ first fetch exports it once; inside the image's own filesystem it is thrown away
 with the container, and every start reads every model again.
 
 Nothing blocks on any of this. Every prerequisite with work left in it — the ones
-that are absent *and* the ones that arrived without the memory a run reads — is
+that are absent _and_ the ones that arrived without the memory a run reads — is
 fetched in the background as the server starts (`PREFETCH=0` turns that off),
 `/prerequisites` shows each download as it happens, and a run whose data has not
 arrived yet says so — rather than failing inside the simulator.

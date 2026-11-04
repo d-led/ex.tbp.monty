@@ -6,6 +6,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
@@ -371,6 +372,36 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       {:ok, lm} = EvidenceGraphLM.receive_votes(%{"mug" => [vote]}, lm)
 
       assert Hypotheses.evidence(lm.hypotheses["mug"]) == before
+    end
+
+    test "hears an agreeing module's vote once the model has routed it" do
+      # This is the pair the model makes: every module votes, the model moves
+      # each vote into the frame of the module that receives it, and only then
+      # does it arrive. A module two sensors' widths away could not use the
+      # sender's own frame, which is why the vote is not delivered raw.
+      sender =
+        learning_module(mug())
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+
+      receiver =
+        learning_module(mug())
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+
+      {sender_vote, _sender} = EvidenceGraphLM.send_out_vote(sender)
+      {receiver_vote, _receiver} = EvidenceGraphLM.send_out_vote(receiver)
+      before = best_evidence(receiver, "mug")
+
+      %{receiver: heard} =
+        MontyForEvidenceGraphMatching.combine_votes(
+          %{sender: sender_vote, receiver: receiver_vote},
+          %{receiver: [:sender]}
+        )
+
+      {:ok, lm} = EvidenceGraphLM.receive_votes(heard, receiver)
+
+      assert best_evidence(lm, "mug") > before
     end
   end
 

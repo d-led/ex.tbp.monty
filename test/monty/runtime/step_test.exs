@@ -3,10 +3,12 @@ defmodule Monty.Runtime.StepTest do
 
   alias Monty.Cmp
   alias Monty.Context
+  alias Monty.Geometry.{OrientationMatrix, Rotation}
   alias Monty.Runtime.{Model, Registry, Step}
   alias Monty.Test.{Messages, RecordingLearningModule, RecordingMotor, RecordingSensorModule}
 
   @agent "agent_id_0"
+  @identity Rotation.to_matrix(Rotation.identity())
 
   defp sensor_module(id, opts \\ []) do
     %{
@@ -50,6 +52,27 @@ defmodule Monty.Runtime.StepTest do
 
   defp observations do
     %{@agent => %{patch: %{"location" => [0.0, 0.0, 0.0]}}}
+  end
+
+  # A vote shaped as `send_out_vote` answers it: one place on one object, from a
+  # sensor standing at `location` in the body and looking straight forward.
+  defp vote_from(location) do
+    {:ok, message} =
+      Cmp.Message.new(
+        location: [0.0, 0.0, 0.0],
+        morphological_features: %{
+          "pose_vectors" => %OrientationMatrix{value: @identity},
+          "pose_fully_defined" => true
+        },
+        non_morphological_features: %{},
+        confidence: 0.7,
+        pass_message: true,
+        process_features_in_lm: true,
+        sender_id: "learning_module",
+        sender_type: :lm
+      )
+
+    %{possible_states: %{"mug" => [message]}, sensed_pose_rel_body: [location | @identity]}
   end
 
   describe "the order of a step" do
@@ -179,7 +202,10 @@ defmodule Monty.Runtime.StepTest do
     test "every module votes before any module hears the result" do
       model_id =
         start_model(
-          learning_modules: [learning_module(:lm_0), learning_module(:lm_1)],
+          learning_modules: [
+            learning_module(:lm_0, vote: vote_from([0.0, 0.0, 0.0])),
+            learning_module(:lm_1, vote: vote_from([0.1, 0.0, 0.0]))
+          ],
           sm_to_lm: %{lm_0: [:patch], lm_1: [:patch]},
           lm_to_lm_vote: %{lm_0: [:lm_1], lm_1: [:lm_0]}
         )
@@ -189,8 +215,18 @@ defmodule Monty.Runtime.StepTest do
       votes = [assert_receive({:send_vote, _}), assert_receive({:send_vote, _})]
       assert Enum.sort(Enum.map(votes, &elem(&1, 1))) == [:lm_0, :lm_1]
 
-      assert_receive {:receive_votes, :lm_0, [:lm_1]}
-      assert_receive {:receive_votes, :lm_1, [:lm_0]}
+      # Each module hears the other's vote moved out of the sender's sensor and
+      # into its own: the two sensors are a hand's width apart along x, so the
+      # same place on the object is a different vector from each of them.
+      assert_receive {:receive_votes, :lm_0,
+                      %{"mug" => [%Cmp.Message{location: [heard_by_lm_0, _, _]}]}}
+
+      assert_receive {:receive_votes, :lm_1,
+                      %{"mug" => [%Cmp.Message{location: [heard_by_lm_1, _, _]}]}}
+
+      assert_in_delta heard_by_lm_0, -0.1, 1.0e-12
+      assert_in_delta heard_by_lm_1, 0.1, 1.0e-12
+
       assert %{sent: 2, used: 2, deadline_hit?: false} = info.votes
     end
 

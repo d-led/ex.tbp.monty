@@ -16,12 +16,116 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
   This module is the name a run uses for that model, which is what makes the
   class in a config the class a run actually starts.
 
+  What the model does rather than owns is here: `combine_votes/2`, the one piece
+  of `_combine_votes` that is arithmetic rather than message passing.
+  `Monty.Runtime.Step.State` routes votes and calls it.
+
   A config that names a model this port has not written is not run through this
   one: `Monty.Studio.Setup.model_class/1` answers what a config resolves to, and
   says plainly when the answer is this port's own runtime instead.
   """
 
+  alias Monty.Cmp.Message
+  alias Monty.Frameworks.Utils.SpatialArithmetics
+  alias Monty.Geometry
+  alias Monty.Geometry.OrientationMatrix
   alias Monty.Runtime.Model
+
+  @typedoc """
+  What a learning module says when it is asked to vote.
+
+  `possible_states` holds the hypotheses that stood out above the module's vote
+  threshold, one list per object; `sensed_pose_rel_body` is the pose of the
+  sensor that fed it — the location, then its three pose vectors. `nil` is a
+  module with nothing to say this step.
+  """
+  @type vote ::
+          nil
+          | %{
+              possible_states: %{optional(term()) => [Message.t()]},
+              sensed_pose_rel_body: [[float()]]
+            }
+
+  @doc """
+  `EvidenceGraphModel._combine_votes`: what a module hears, in the frame of its
+  own sensor.
+
+  Two learning modules look at the object through different sensors, so a vote
+  for a place on it only means something once it has been moved between them:
+  *"if I am here, you should be there."* The displacement between the sending
+  and the receiving sensor moves the vote's location, and the rotation that
+  takes the sending sensor's pose vectors to the receiving one's turns the
+  vote's own pose — vote rotations are not read yet, in Monty either.
+
+  The answer is keyed by receiver, then by object, which is the shape
+  `EvidenceGraphLM.receive_votes/2` reads. A module that did not vote this step
+  hears nothing, and neither does one whose sources were all silent: a module
+  with no opinion of its own is not a place to put other modules' opinions.
+  """
+  @spec combine_votes(%{optional(term()) => vote()}, %{optional(term()) => [term()]}) ::
+          %{optional(term()) => %{optional(term()) => [Message.t()]}}
+  def combine_votes(votes, lm_to_lm_vote) do
+    Map.new(lm_to_lm_vote, fn {receiver, sources} ->
+      {receiver, heard(votes, receiver, sources)}
+    end)
+  end
+
+  defp heard(votes, receiver, sources) do
+    case Map.get(votes, receiver) do
+      nil ->
+        %{}
+
+      %{sensed_pose_rel_body: receiving_pose} ->
+        sources
+        |> Enum.map(&Map.get(votes, &1))
+        |> Enum.reject(&is_nil/1)
+        |> Enum.reduce(%{}, &merge_vote(&1, receiving_pose, &2))
+    end
+  end
+
+  # One source's vote, object by object: its messages moved into the receiving
+  # sensor's frame and added to what this receiver has already heard about that
+  # object, so two sources agree on the same object rather than replacing each
+  # other.
+  defp merge_vote(vote, receiving_pose, heard) do
+    vote.possible_states
+    |> Enum.map(fn {graph_id, messages} ->
+      {graph_id, Enum.map(messages, &move(&1, vote.sensed_pose_rel_body, receiving_pose))}
+    end)
+    |> Enum.reduce(heard, fn {graph_id, moved}, acc ->
+      Map.update(acc, graph_id, moved, &(&1 ++ moved))
+    end)
+  end
+
+  # Monty copies a vote before moving it, because one vote can reach several
+  # receivers and be moved differently in each; a value that cannot change
+  # gives that for free.
+  defp move(%Message{} = message, sending_pose, receiving_pose) do
+    [sending_location | sending_frame] = sending_pose
+    [receiving_location | receiving_frame] = receiving_pose
+
+    {:ok, moved} =
+      Message.transform_morphological_features(
+        message,
+        Geometry.apply(
+          vote_frame(message),
+          Geometry.subtract(receiving_location, sending_location)
+        ),
+        SpatialArithmetics.align_orthonormal_vectors_as_matrix(sending_frame, receiving_frame)
+      )
+
+    moved
+  end
+
+  # The frame stays a matrix rather than a `Rotation`: a stored frame is only
+  # approximately orthonormal, and rounding the product to the nearest rotation
+  # moves the displacement it turns by millimetres (`SpatialArithmetics` says
+  # why that matters). A vote carrying anything but an `OrientationMatrix`
+  # cannot be turned at all, which is Monty's `TypeError` here.
+  defp vote_frame(%Message{} = message) do
+    {:ok, %OrientationMatrix{value: value}} = Message.feature(message, "pose_vectors")
+    value
+  end
 
   @doc """
   The model as something a supervisor can start.
