@@ -53,7 +53,7 @@ defmodule Mix.Tasks.Monty.RunTest do
       assert output =~ "episode 1/2"
       assert output =~ "episode 2/2"
 
-      assert [run] = RunHistory.list()
+      run = recorded_run()
       assert run.inputs["episodes"] == 2
       assert run.log |> Enum.map(& &1["episode"]) |> Enum.uniq() |> length() == 2
     end
@@ -77,7 +77,7 @@ defmodule Mix.Tasks.Monty.RunTest do
     test "--episodes is a slice, and the record keeps the slice it ran" do
       run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "1", "--episodes", "2"])
 
-      assert [run] = RunHistory.list()
+      run = recorded_run()
       assert run.inputs["episodes"] == 2
       assert run.log |> Enum.map(& &1["episode"]) |> Enum.uniq() == [0, 1]
     end
@@ -92,7 +92,7 @@ defmodule Mix.Tasks.Monty.RunTest do
           "1"
         ])
 
-      assert [run] = RunHistory.list()
+      run = recorded_run()
       assert run.experiment == "base_config_10distinctobj_dist_agent"
       assert run.status == "finished"
       assert length(run.log) == 2
@@ -180,6 +180,13 @@ defmodule Mix.Tasks.Monty.RunTest do
 
     {:ok, _draft} = Monty.Studio.Drafts.import("two_object_eval", yaml, overwrite: true)
     "two_object_eval"
+  end
+
+  # A list row is the table's projection and carries no steps, so what a test
+  # reads the steps off is the record they were written to.
+  defp recorded_run do
+    assert [row] = RunHistory.list()
+    RunHistory.get(row.id)
   end
 
   # The shell writes to this process; collect what the run said before
