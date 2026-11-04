@@ -21,6 +21,12 @@ name: ci
 #          carries its commit in `priv/build_info.json`, which the footer shows.
 #          They wait for the three gates above (`needs`), so nothing is
 #          published from a commit that failed them.
+#   desktop what `scripts/install-desktop.sh` downloads: the window with its own
+#          server inside, built on a runner of the architecture it ships to,
+#          zipped by `ditto` so executable modes survive, uploaded for ninety
+#          days — and attached to a `v*` tag as a GitHub release. Only on main,
+#          tags and a dispatch: it is the longest job here and nothing about a
+#          feature branch needs an app.
 #
 # Why two builds rather than one: compiled under QEMU on an x86 runner, the
 # arm64 half took twenty-two minutes where the amd64 half took five, for the
@@ -601,3 +607,121 @@ jobs:
           docker buildx imagetools inspect "${{ steps.tag.outputs.ref }}" | tee /tmp/index.txt
           grep -q 'linux/amd64' /tmp/index.txt
           grep -q 'linux/arm64' /tmp/index.txt
+
+  # The window, on a runner of the architecture it ships to: the app carries a
+  # compiled Python, two Rust NIFs and a webview shell, and none of them
+  # cross-compile cheaply. macOS arm64 is the platform this is developed on and
+  # the one whose build has been run end to end; a second platform is one
+  # `include:` here plus the packages its runner needs — `docs/desktop.md` says
+  # what is missing for Linux and Windows, and why they are not claimed yet.
+  desktop:
+    name: desktop (${{ matrix.asset }})
+    needs: [lint, test, types, report]
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/tags/v')
+    runs-on: ${{ matrix.os }}
+    # The release takes half of it; a cold Rust build of the window takes the
+    # rest. Cached, a no-change run is under five minutes.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            rid: osx-arm64
+            asset: ex-tbp-monty-osx-arm64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Erlang/Elixir
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Cache deps, the desktop build and the window
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            deps
+            _build
+            src-tauri/target
+          key: ${{ runner.os }}-desktop-${{ hashFiles('mix.lock', 'src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-desktop-
+
+      - run: scripts/install-rust.sh
+
+      # A fresh runner has no `deps/`: every other job gets them from `mix lint`
+      # or `mix test`, and this one compiles a different `MIX_ENV` first.
+      - run: mix deps.get
+
+      # The bundler. `cargo install` because there is no prebuilt binary, and the
+      # cache keeps it from being rebuilt on every run — five minutes of Rust for
+      # a tool whose output changes when the Tauri version does.
+      - name: Cache the Tauri CLI
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-tauri
+          key: ${{ runner.os }}-tauri-cli-v2
+
+      - name: Install the Tauri CLI
+        run: command -v cargo-tauri >/dev/null || cargo install tauri-cli --version '^2' --locked
+
+      # One command: the stylesheet, the scripts, `mix release`, the window with
+      # that release copied inside it, and the zip and disk image of the result
+      # in `artifacts/<platform>/`. The steps are in the script so that a laptop
+      # and a runner cannot package differently — see docs/desktop.md.
+      - name: Package the application
+        run: ./scripts/package.sh
+
+      # `ditto` inside the script, not `upload-artifact`'s own zip: an app bundle
+      # holds symlinks and executable modes, and the artefact zip flattens both —
+      # the download would open and then fail to start its server.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.asset }}
+          # The zip is what `install-desktop.sh` fetches; the package is what a
+          # person double-clicks. The disk image is for a checkout, and would be
+          # a third copy of 550 MB in every run.
+          path: |
+            artifacts/${{ matrix.rid }}/*.zip
+            artifacts/${{ matrix.rid }}/*.pkg
+          # `install-desktop.sh` points at nightly.link, which serves the newest
+          # artefact of this workflow; a week is not long enough for that
+          # promise.
+          retention-days: 90
+          if-no-files-found: error
+
+  # A tag is a promise that the file stays: an artefact expires, a release does
+  # not. One release per tag, with every asset of every tag inside it.
+  desktop-release:
+    name: desktop release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [desktop]
+    runs-on: ubuntu-24.04
+    # The workflow's `contents: read` is for the gates; this job writes the
+    # release.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Attach the application to the tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ls -lh artifacts
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" artifacts/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "ex.tbp.monty $GITHUB_REF_NAME" \
+              --generate-notes
+          fi

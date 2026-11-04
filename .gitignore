@@ -290,3 +290,14 @@ MUJOCO_LOG.TXT
 
 # JUnit reports written when `CI` is set, for the Checks tab to read.
 /junit/
+
+# The window crate is built locally, not committed.
+/src-tauri/target/
+/src-tauri/gen/schemas/
+
+# What `scripts/package.sh` produces: an app, a zip and a disk image of it.
+/artifacts/
+
+# The window wants a `frontendDist` directory to exist; this one is a fallback
+# page that is never shown and is committed on purpose.
+!/src-tauri/dist/

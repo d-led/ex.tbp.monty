@@ -150,3 +150,72 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 end
+
+# The window's sidecar: the same application as the image, with the storage one
+# machine can have and one reader on loopback. Nothing here is a property of the
+# build — it is what this launch decided, which is why it is not in
+# `config/desktop.exs`.
+if config_env() == :desktop do
+  # One folder on one machine. Monty's own variable names are the mechanism —
+  # this application, Monty's YAML resolvers (`${oc.env:MONTY_DATA}`) and the
+  # embedded Python world all read them — so the folder is named once, here, and
+  # nothing downstream needs a second answer. A variable somebody exported still
+  # wins: `Monty.Paths` decides, and this writes back what it decided.
+  for {variable, path} <- [
+        {"MONTY_DATA", Monty.Paths.data()},
+        {"MONTY_MODELS", Monty.Paths.models()},
+        {"MONTY_LOGS", Monty.Paths.logs()},
+        {"MONTY_LIBRARIES", Monty.Paths.libraries()},
+        {"SQLITE_PATH", Monty.Paths.database()},
+        {"WANDB_DIR", Monty.Paths.wandb()}
+      ] do
+    System.put_env(variable, path)
+  end
+
+  # Every directory the folders above name, made once. A download, a migration
+  # and a run all expect their directory to exist and none of them owns making
+  # it; `bin/server` makes `WANDB_DIR` before this VM starts, which is too early
+  # to know where it is.
+  for directory <- [
+        Monty.Paths.root(),
+        Monty.Paths.data(),
+        Monty.Paths.models(),
+        Monty.Paths.logs(),
+        Monty.Paths.libraries(),
+        Monty.Paths.artifacts(),
+        Monty.Paths.wandb(),
+        Path.dirname(Monty.Paths.database())
+      ] do
+    File.mkdir_p!(directory)
+  end
+
+  # The database is a file this launch just named, so the same predicate that
+  # answers "which repo" answers "which engine" for Oban.
+  repo = ExTbpMonty.Database.repo_module()
+
+  config :ex_tbp_monty, :repo, repo
+  config :ex_tbp_monty, ecto_repos: [repo]
+  config :ex_tbp_monty, repo, ExTbpMonty.Database.repo()
+  config :ex_tbp_monty, Oban, repo: repo, engine: ExTbpMonty.Database.oban_engine()
+
+  # What a run leaves beside its record belongs beside the database, not inside
+  # the release, which an installed application cannot write.
+  config :ex_tbp_monty, :studio_artifacts_dir, Monty.Paths.artifacts()
+
+  # A first start has no data, and nothing is fetched in front of the window:
+  # `/prerequisites` shows the download while it happens.
+  config :ex_tbp_monty, prefetch: System.get_env("PREFETCH", "true") in ~w(true 1)
+
+  # The window is one reader on loopback, so the signing salt is generated per
+  # launch: a constant here would be a secret in a repository, and this
+  # deployment has no place to fetch one from. Nothing is lost — the session it
+  # signs belongs to the process serving it, and a cookie from the last launch
+  # being unreadable changes nothing. The port is chosen as the application
+  # starts (`ExTbpMonty.Desktop.Server`), because a fixed one belongs to whoever
+  # bound it first.
+  config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
+    server: true,
+    url: [host: "127.0.0.1", scheme: "http"],
+    http: [ip: {127, 0, 0, 1}],
+    secret_key_base: Base.encode64(:crypto.strong_rand_bytes(48))
+end

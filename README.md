@@ -41,6 +41,28 @@ docker run -d -p 4001:4000 \
 Tags, every variable, the one writable directory:
 [docs/container.md](docs/container.md).
 
+## As an app
+
+The same application in a native window, with its own server inside — no
+Docker, no Elixir, nothing to install but the app:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/install-desktop.sh | bash
+```
+
+What it installs is the newest build of `main` (`~/Applications`, overridable);
+a tagged release keeps the same file in the releases page. Prefer to take the
+file yourself? This link always gives the latest build:
+
+| Platform    | Download                                                                                                       |
+| ----------- | -------------------------------------------------------------------------------------------------------------- |
+| macOS arm64 | [ex-tbp-monty-osx-arm64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-osx-arm64.zip) |
+
+It is unsigned, so the first launch is right-click → Open. Where it keeps its
+data, what is built for which platform, and why it is 550 MB:
+[docs/desktop.md](docs/desktop.md). A checkout opens it with
+`scripts/start-desktop.sh`.
+
 ## From source
 
 ```bash
@@ -124,6 +146,7 @@ follows from that is argued in [docs/monty-differences.md](docs/monty-difference
 | [docs/simulator-port.md](docs/simulator-port.md)             | where the world lives, and what is still Python                      |
 | [docs/developers.md](docs/developers.md)                     | how do I work on this?                                               |
 | [docs/container.md](docs/container.md)                       | how do I run the image? every variable, the volumes, what it reports |
+| [docs/desktop.md](docs/desktop.md)                           | how do I open this as an app? the window, the folder it writes to    |
 | [docs/mcp.md](docs/mcp.md)                                   | `POST /mcp` — ask this app about Monty's docs, roadmap and code      |
 | [docs/roadmap.md](docs/roadmap.md)                           | the order the rest of Monty arrives in                               |
 

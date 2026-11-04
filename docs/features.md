@@ -182,7 +182,7 @@ what CI runs.
   alone, with the database in a file on a volume (`DATABASE_URL` names a Postgres
   instead, for a release older than the one that picks SQLite).
   ([dev compose](../docker-compose.yml), [quickstart](../docker-compose.quickstart.yml))
-- 2,154 `test` declarations in the suite.
+- 2,162 `test` declarations in the suite.
 
 ## Not built — do not assume these
 
