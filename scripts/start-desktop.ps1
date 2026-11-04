@@ -113,7 +113,14 @@ try {
 
     Invoke-Step 'fetching the dependencies' { mix deps.get }
 
-    Invoke-Step 'installing the packages the scripts import' { mix cmd --cd assets npm ci }
+    # `npm` is `npm.cmd` on Windows, and `mix cmd` starts the program it is
+    # given directly — which a `.cmd` is not: Elixir's `System.cmd` fails on one
+    # with `:eacces`, the same reason the window launches its sidecar through
+    # `cmd /C call`. Going through `cmd` is what makes it a program to start.
+    Invoke-Step 'installing the packages the scripts import' {
+        Push-Location assets
+        try { cmd /C npm ci } finally { Pop-Location }
+    }
 
     # The screens are the server's, so the bundle has to be the server's too:
     # CSS, the LiveView client, and the colocated hooks each screen carries. A

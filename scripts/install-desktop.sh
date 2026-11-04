@@ -51,7 +51,17 @@ fetch() {
     case "$1" in
         # A `BASE_URL` may be a directory on this machine (`/mnt/builds`), which
         # is how the packaging is tried without a network round trip.
-        *://*) curl -fL --progress-bar "$1" -o "$2" ;;
+        #
+        # The timeouts are the difference between a slow download and a script
+        # that never returns: a connection nightly.link accepts and then leaves
+        # idle would otherwise sit there for as long as the machine is on, which
+        # reads as an infinite loop. 300 MB on a slow line is minutes; half an
+        # hour is not a download any more.
+        *://*)
+            curl -fL --progress-bar \
+                --connect-timeout 15 --retry 3 --retry-delay 2 \
+                --max-time 1800 "$1" -o "$2"
+            ;;
         *) cp "$1" "$2" ;;
     esac
 }
@@ -76,7 +86,12 @@ fi
 # nothing for a minute reads as one that has hung.
 echo "Unpacking the download ..."
 mkdir -p "$work/unpacked"
-ditto -x -k "$work/$asset.zip" "$work/unpacked"
+if ! ditto -x -k "$work/$asset.zip" "$work/unpacked"; then
+    echo "The download is not a zip this machine can open, so nothing was installed." >&2
+    echo "The likeliest reason is that the build does not exist yet: " >&2
+    echo "  https://github.com/$repo/actions/workflows/$workflow" >&2
+    exit 1
+fi
 
 bundle_zip="$(find "$work/unpacked" -maxdepth 1 -name '*.zip' -print -quit)"
 if [ -n "$bundle_zip" ]; then

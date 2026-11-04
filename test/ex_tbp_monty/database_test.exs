@@ -38,4 +38,22 @@ defmodule ExTbpMonty.DatabaseTest do
       assert Database.repo_module() == ExTbpMonty.Repo.Postgres
     end
   end
+
+  describe "the file's journal" do
+    # The default journal mode takes an exclusive lock for the length of a
+    # write, so the page listing runs waits behind every row the queue beside it
+    # writes — under load that is a wait long enough to be a page that hangs.
+    # Asked of a real file rather than of the options list: the option is only
+    # worth anything if the database applies it.
+    test "lets a reader read while a writer writes" do
+      Tmp.without_app_env(:repo)
+      Tmp.without_env("DATABASE_URL")
+      path = Path.join(Tmp.dir("sqlite-journal"), "runs.db")
+
+      options = Database.repo() |> Keyword.merge(database: path, name: nil)
+      {:ok, repo} = start_supervised({ExTbpMonty.Repo.SQLite, options})
+
+      assert %{rows: [["wal"]]} = Ecto.Adapters.SQL.query!(repo, "PRAGMA journal_mode")
+    end
+  end
 end

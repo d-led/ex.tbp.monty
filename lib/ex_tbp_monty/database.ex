@@ -81,6 +81,16 @@ defmodule ExTbpMonty.Database do
       adapter: Ecto.Adapters.SQLite3,
       database: sqlite_path(),
       pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
+      # The default journal takes an exclusive lock for the length of a write,
+      # so a page reading the run list waits for every row the queue beside it
+      # writes. WAL lets a reader keep reading while one writer commits, which
+      # is exactly this studio's traffic: a page per reader, a row per run.
+      #
+      # The cost is two files beside the database (`-wal`, `-shm`) and a
+      # dependency on shared memory, which a network filesystem may not offer —
+      # this file lives in the per-user application-data directory or on a
+      # container's own volume, so it does.
+      journal_mode: :wal,
       # SQLite writes one transaction at a time, and the studio's own writes —
       # a row per run — share the file with the Oban queue beside them. Waiting
       # for the writer is right; failing with "database is locked" is not.
