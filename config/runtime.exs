@@ -68,6 +68,10 @@ if config_env() == :prod do
   repo = ExTbpMonty.Database.repo_module()
 
   config :ex_tbp_monty, :repo, repo
+  # What `mix ecto.*` would migrate if it were run inside the release: the same
+  # answer the boot gives, rather than the Postgres this application was written
+  # around.
+  config :ex_tbp_monty, ecto_repos: [repo]
   config :ex_tbp_monty, repo, ExTbpMonty.Database.repo()
   config :ex_tbp_monty, Oban, repo: repo, engine: ExTbpMonty.Database.oban_engine()
 

@@ -6,6 +6,11 @@ import Config
 # round — see `Monty.Studio.Setup.configured_world/0`.
 config :ex_tbp_monty, world_simulator: :synthetic
 
+# The suite runs on the Postgres of the CI service, partitioned by
+# `MIX_TEST_PARTITION`. `ExTbpMonty.Database.repo_module/0` follows
+# `DATABASE_URL` when nothing names a repo, which in a test would be a file.
+config :ex_tbp_monty, :repo, ExTbpMonty.Repo.Postgres
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used

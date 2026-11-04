@@ -1,5 +1,10 @@
 import Config
 
+# The repo this machine runs. `ExTbpMonty.Database.repo_module/0` asks the
+# environment when nothing is configured, and a development machine has a
+# Postgres of its own rather than a file — say so here, once.
+config :ex_tbp_monty, :repo, ExTbpMonty.Repo.Postgres
+
 # Configure your database
 config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
   username: "postgres",

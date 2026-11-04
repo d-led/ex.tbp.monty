@@ -25,14 +25,35 @@ defmodule ExTbpMonty.Database do
   """
   @spec repo_module() :: module()
   def repo_module do
-    Application.get_env(:ex_tbp_monty, :repo, ExTbpMonty.Repo.Postgres)
+    # A configured answer wins — `dev` and `test` name the Postgres they have —
+    # and nothing else is configured, so an installation that does not know this
+    # application gets the question asked of the environment rather than of a
+    # default that was written when Postgres was the only answer.
+    Application.get_env(:ex_tbp_monty, :repo) || from_environment()
+  end
+
+  defp from_environment do
+    case postgres_url() do
+      nil -> ExTbpMonty.Repo.SQLite
+      _url -> ExTbpMonty.Repo.Postgres
+    end
+  end
+
+  # `nil` for a database server that was not named, which is also the question
+  # `repo/0` and `oban_engine/0` ask: one predicate, so the module that is
+  # started and the configuration it is started with cannot disagree.
+  defp postgres_url do
+    case System.get_env("DATABASE_URL") do
+      url when url in [nil, ""] -> nil
+      url -> url
+    end
   end
 
   @doc "The `ExTbpMonty.Repo` configuration for this instance."
   @spec repo() :: keyword()
   def repo do
-    case System.get_env("DATABASE_URL") do
-      url when url in [nil, ""] -> sqlite()
+    case postgres_url() do
+      nil -> sqlite()
       url -> postgres(url)
     end
   end
@@ -45,8 +66,8 @@ defmodule ExTbpMonty.Database do
   """
   @spec oban_engine() :: module()
   def oban_engine do
-    case System.get_env("DATABASE_URL") do
-      url when url in [nil, ""] -> Oban.Engines.Lite
+    case postgres_url() do
+      nil -> Oban.Engines.Lite
       _url -> Oban.Engines.Basic
     end
   end

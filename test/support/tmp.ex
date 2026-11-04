@@ -87,6 +87,21 @@ defmodule Monty.Test.Tmp do
     ExUnit.Callbacks.on_exit(fn -> restore_system_env(name, previous) end)
   end
 
+  @doc """
+  An application setting unset for this test, and put back as it was.
+
+  The counterpart of `without_env/1`: a key that is absent is what a release
+  that configures nothing looks like, and that is the state some decisions are
+  only correct in.
+  """
+  @spec without_app_env(atom()) :: :ok
+  def without_app_env(key) do
+    previous = Application.fetch_env(:ex_tbp_monty, key)
+    Application.delete_env(:ex_tbp_monty, key)
+
+    ExUnit.Callbacks.on_exit(fn -> restore_app_env(key, previous) end)
+  end
+
   defp restore_app_env(key, {:ok, value}), do: Application.put_env(:ex_tbp_monty, key, value)
   defp restore_app_env(key, :error), do: Application.delete_env(:ex_tbp_monty, key)
 
