@@ -27,6 +27,18 @@ defmodule Monty.Studio.PretrainedTest do
 
       assert Pretrained.models(root) == []
     end
+
+    # An archive unpacks to a *release directory*, not to a root of releases: a
+    # fetch of `pretrained_ycb_v14` has `pretrained_ycb_v14/surf_agent_1lm/
+    # pretrained/model.pt` under the directory it filled. Asked about that
+    # directory, this walked one level too deep, found no models, and reported a
+    # memory exported by exporting nothing.
+    test "is the same answer for the release directory it unpacked to" do
+      root = Tmp.dir("release")
+      pickle = write!(root, "pretrained")
+
+      assert Pretrained.models(Path.join(root, @release)) == [{@release, @name, pickle}]
+    end
   end
 
   describe "keeping the libraries current" do

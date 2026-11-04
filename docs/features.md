@@ -196,7 +196,7 @@ what CI runs.
   `.pkg` whose payload arrives without the quarantine flag, and CI builds that on
   macOS arm64 for `main`, a dispatch and a tag, uploading it to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
-- 2,173 `test` declarations in the suite.
+- 2,178 `test` declarations in the suite.
 
 ## Not built — do not assume these
 

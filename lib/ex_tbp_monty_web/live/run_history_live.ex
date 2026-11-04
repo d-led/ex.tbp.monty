@@ -769,6 +769,16 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           </summary>
           <pre class="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-base-content/70">{failure(@run).technical}</pre>
         </details>
+        <%!-- A run can stop because a file it reads before it steps is not
+        here. The prerequisites page is where each of those files, where it
+        belongs and what the last fetch of it did are written down, so it is
+        offered from every failure rather than only from the ones this page can
+        recognise. --%>
+        <p class="text-xs">
+          <.link id="run-failure-prerequisites" navigate={~p"/prerequisites"} class="link">
+            What this experiment needs before it can run
+          </.link>
+        </p>
       </section>
 
       <section :if={@run == nil} class="text-base-content/70">

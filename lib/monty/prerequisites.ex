@@ -14,7 +14,7 @@ defmodule Monty.Prerequisites do
 
   @manifest "priv/prerequisites.yaml"
 
-  alias Monty.Prerequisites.Download
+  alias Monty.Prerequisites.Saga
 
   # Where `engine_installed?/1` keeps its one answer per interpreter and package.
   @engine_memo {__MODULE__, :engine}
@@ -110,6 +110,61 @@ defmodule Monty.Prerequisites do
   @spec downloaded?(prerequisite()) :: boolean()
   def downloaded?(prerequisite), do: File.exists?(target_path(prerequisite))
 
+  @typedoc """
+  What a prerequisite takes up: the archive as it arrived, and what it unpacked
+  to.
+
+  `nil` where the thing is not there, which a page shows as "not yet" rather
+  than as zero: an archive that is absent and one that is empty are different
+  answers, and `0 B` for both is the shape of a page lying about a download.
+  """
+  @type size :: %{archive: non_neg_integer() | nil, unpacked: non_neg_integer() | nil}
+
+  @doc """
+  How much disk this prerequisite takes.
+
+  Read off the filesystem, so it answers for a machine that has just started and
+  for one prepared by hand — a saga need not be running, or ever have run, for a
+  person to ask "how big is this?". Costs one walk of the directory an archive
+  fills; a release of ten objects is a few hundred files.
+  """
+  @spec size(prerequisite()) :: size()
+  def size(prerequisite) do
+    %{
+      archive: file_size(target_path(prerequisite)),
+      unpacked: if(prerequisite[:extract], do: directory_size(where_it_lands(prerequisite)))
+    }
+  end
+
+  defp file_size(path) do
+    case File.lstat(path) do
+      {:ok, %File.Stat{type: :regular, size: size}} -> size
+      _absent_or_a_directory -> nil
+    end
+  end
+
+  defp directory_size(path) do
+    case File.ls(path) do
+      {:ok, entries} ->
+        entries
+        |> Enum.map(&Path.join(path, &1))
+        |> Enum.reduce(0, fn entry, total -> total + entry_size(entry) end)
+
+      {:error, _absent} ->
+        nil
+    end
+  end
+
+  # `lstat`, not `stat`: a link is followed by the page that opens it, and a
+  # walk that follows links is a walk that can circle.
+  defp entry_size(path) do
+    case File.lstat(path) do
+      {:ok, %File.Stat{type: :directory}} -> directory_size(path) || 0
+      {:ok, %File.Stat{type: :regular, size: size}} -> size
+      _a_link_or_unreadable -> 0
+    end
+  end
+
   @doc """
   The bundles the manifest names that are not on this machine yet.
 
@@ -121,21 +176,44 @@ defmodule Monty.Prerequisites do
   def missing, do: Enum.reject(all(), &present?/1)
 
   @doc """
+  The bundles with work left in them: not here at all, or here without what a
+  run reads.
+
+  Wider than `missing/0` on purpose. An archive that arrived and was unpacked
+  has a *memory* a run reads, exported from its pickles — and an archive whose
+  pickles are on disk and whose libraries are not is not missing, it is
+  unfinished. That difference is what let a machine report every prerequisite
+  as downloaded while a run still had nothing to recognise with.
+
+  The judgement is `Saga.ready?/1`, the same derivation the machine itself uses,
+  so the boot and the page cannot disagree about what is left.
+  """
+  @spec unfinished() :: [prerequisite()]
+  def unfinished, do: Enum.reject(all(), &Saga.ready?/1)
+
+  @doc """
   Downloads one prerequisite and waits for it, answering how it ended.
 
   The download runs in a process of its own and reports on
-  `Monty.Prerequisites.Download.topic()`; this is the waiting half, so the page,
+  `Monty.Prerequisites.Saga.topic()`; this is the waiting half, so the page,
   `mix monty.prerequisites.fetch` and the release command that fetches before a
   container serves all see the same download rather than three of them.
 
-  A download that is already running is joined, not started twice.
+  A download that is already running is joined, not started twice. A fetch that
+  cannot be started is answered with the reason rather than raised: a boot
+  fetches several in a row, and the one that cannot start is no reason for the
+  others not to.
   """
-  @spec fetch(prerequisite()) :: {:ok, Download.progress()} | {:error, term()}
+  @spec fetch(prerequisite()) :: {:ok, Saga.progress()} | {:error, term()}
   def fetch(prerequisite) do
-    Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Download.topic())
-    {:ok, _pid} = Download.start(prerequisite)
+    Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Saga.topic())
 
-    await(prerequisite)
+    case Saga.start(prerequisite) do
+      {:ok, _pid} -> await(prerequisite)
+      {:ok, _pid, _value} -> await(prerequisite)
+      {:error, reason} -> {:error, reason}
+      :ignore -> {:error, :not_started}
+    end
   end
 
   defp await(prerequisite) do

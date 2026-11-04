@@ -129,22 +129,39 @@ defmodule Monty.Studio.Pretrained do
   @doc """
   The models under a root, as `{release, name, pickle}`.
 
-  A Monty release is a directory of models and each model keeps its pickle under
-  `pretrained/`; anything else in the tree is not a model and is not exported.
+  Two layouts are asked about, and both mean "the models here":
+
+    * a **root of releases** — `pretrained_models/<release>/<name>/pretrained/model.pt`
+      — which is what `MONTY_MODELS` is, and what `sync/0` walks;
+    * a **release directory** — `pretrained_ycb_v14/<name>/pretrained/model.pt` —
+      which is what an archive unpacks to, and therefore what a fetch of that
+      archive should export.
+
+  The second one was missing, and it failed silently: a scoped export looked one
+  directory deeper than the archive had unpacked, found no models, and reported
+  a memory "exported" by exporting nothing. A released archive's own name is the
+  release its libraries belong under.
   """
   @spec models(Path.t()) :: [{String.t(), String.t(), Path.t()}]
   def models(root) do
-    root
-    |> Path.join("*/*/" <> @model_file)
-    |> Path.wildcard()
-    |> Enum.map(fn pickle ->
-      # …/<release>/<name>/pretrained/model.pt, read backwards from the file.
-      [_file, "pretrained", name, release | _rest] =
-        pickle |> Path.relative_to(root) |> Path.split() |> Enum.reverse()
-
-      {release, name, pickle}
-    end)
+    (Path.wildcard(Path.join(root, "*/*/" <> @model_file)) ++
+       Path.wildcard(Path.join(root, "*/" <> @model_file)))
+    |> Enum.uniq()
+    |> Enum.map(&describe(&1, root))
     |> Enum.sort()
+  end
+
+  defp describe(pickle, root) do
+    case pickle |> Path.relative_to(root) |> Path.split() |> Enum.reverse() do
+      [_file, "pretrained", name, release | _rest] ->
+        {release, name, pickle}
+
+      [_file, "pretrained", name] ->
+        {Path.basename(root), name, pickle}
+
+      _not_a_model ->
+        {Path.basename(root), Path.basename(Path.dirname(Path.dirname(pickle))), pickle}
+    end
   end
 
   @doc """

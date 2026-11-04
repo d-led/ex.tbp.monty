@@ -1,5 +1,14 @@
 # What an experiment needs before it can run.
 #
+# THIS FILE IS THE ONE PLACE. Every archive this application knows about is an
+# entry here, with its URL here: nothing else in the source names one. Adding a
+# prerequisite is an edit to this list — an `id`, a `title`, a `url`, the `root`
+# it belongs under and a `target` under that root — and then it appears on
+# `/prerequisites`, is fetched by a boot that finds it unfinished, and is
+# reported by the saga like every other entry. `test/monty/prerequisites_test.exs`
+# holds the shape of an entry, so a typo fails there rather than at a person's
+# first download.
+#
 # `root` names the environment variable Monty itself uses, and `target` is
 # relative to it — the same places `docs/how-to-use-monty/getting-started.md`
 # tells a Python user to put these files:
@@ -10,6 +19,9 @@
 #
 # Entries are downloaded by /prerequisites in the UI, streamed to
 # `<target>.part` and moved into place only when the bytes and checksum match.
+# An entry that is an archive unpacks where it lands and is not finished until
+# its memory has been exported — see `Monty.Prerequisites.Saga` for the phases
+# and `Monty.Prerequisites.Record` for what is remembered between starts.
 prerequisites:
 
 

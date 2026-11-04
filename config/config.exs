@@ -117,10 +117,14 @@ config :phoenix, :json_library, Jason
 # Experiment runs are jobs: a run that is queued survives the page that queued
 # it, and what it did lives in `studio_runs` rather than in a LiveView's memory.
 # Two at a time is a person's attention span, not a throughput decision.
-# Nothing is fetched in front of the server, so a first start can be asked for a
-# run before its data has arrived; the production runtime turns the background
-# fetch on (`PREFETCH`), and a development machine fetches by hand.
-config :ex_tbp_monty, prefetch: false
+#
+# A start fetches, in the background, every prerequisite with work left in it:
+# the pages answer while bytes arrive, `/prerequisites` shows each one, and a
+# machine that is already whole only re-checks its memory. `PREFETCH=0` (or
+# `false` here) turns it off for a deployment that would rather fetch
+# deliberately; the suite turns it off because a test that downloads is not a
+# test.
+config :ex_tbp_monty, prefetch: true
 
 config :ex_tbp_monty, Oban,
   engine: Oban.Engines.Basic,

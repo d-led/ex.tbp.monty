@@ -56,10 +56,11 @@ trained with the older feature-graph learning module and store
 (`use_original_graph`), which is why the stored graph is exported rather than a
 rebuilt one.
 
-The archives Monty publishes, for reference:
-<https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v14.tgz>,
-and Monty's own instructions, "Download Pretrained Models", in
-`docs/how-to-use-monty/getting-started.md`.
+The archives Monty publishes are listed in one place in this application —
+[`priv/prerequisites.yaml`](../../prerequisites.yaml), which is what
+`/prerequisites` offers and what a boot fetches. The URLs are there and nowhere
+else, so adding a release is an edit to that file. Monty's own instructions,
+"Download Pretrained Models", are in `docs/how-to-use-monty/getting-started.md`.
 
 ## How they are made, without torch
 

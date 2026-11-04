@@ -59,3 +59,8 @@ config :ex_tbp_monty, studio_replay_tick_ms: 5_000
 # No catalogue parsing behind the suite's back: a test that lists experiments
 # asks for them itself, and a warm-up racing it would only make both slower.
 config :ex_tbp_monty, precompute: false
+
+# Nor a download behind the suite's back: the boot fetch is on by default, and a
+# suite that started one would spend a gigabyte and write outside its temporary
+# directories. A test that fetches starts the machine itself.
+config :ex_tbp_monty, prefetch: false

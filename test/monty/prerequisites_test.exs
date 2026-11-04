@@ -56,6 +56,103 @@ defmodule Monty.PrerequisitesTest do
                  String.starts_with?(entry.target, "pretrained_ycb_v14")
              end)
     end
+
+    # The manifest is the one place an archive is declared, so the list has to
+    # be safe to extend: an entry that forgets where it goes, or points at a root
+    # this application does not define, is a download that fails at a person's
+    # click rather than at the edit.
+    test "every entry names what a download needs, and only roots Monty defines" do
+      for entry <- Prerequisites.all() do
+        assert is_binary(entry.id) and entry.id != "", "an entry has no id: #{inspect(entry)}"
+        assert is_binary(entry.title) and entry.title != "", "#{entry.id} has no title"
+        assert String.starts_with?(entry[:url] || "", "https://"), "#{entry.id} has no https url"
+        assert is_binary(entry.target) and entry.target != "", "#{entry.id} has no target"
+        assert entry.root in ~w(MONTY_DATA MONTY_MODELS MONTY_LOGS), "#{entry.id}: #{entry.root}"
+      end
+    end
+
+    test "gives each entry its own id, so two archives cannot be one file" do
+      ids = Enum.map(Prerequisites.all(), & &1.id)
+
+      assert ids == Enum.uniq(ids)
+    end
+  end
+
+  describe "unfinished/0" do
+    # A file that is here is finished; one that never arrived is not. The third
+    # case is the one that used to be reported as finished: an archive on disk,
+    # unpacked or not, whose memory no run has read.
+    test "names what is absent, and what arrived without being finished" do
+      tmp = Tmp.dir("unfinished")
+      Tmp.system_env("MONTY_DATA", Path.join(tmp, "data"))
+      File.mkdir_p!(Path.join(tmp, "data"))
+
+      manifest = Tmp.file("unfinished.yaml")
+
+      File.write!(manifest, """
+      prerequisites:
+        - id: absent
+          title: Not here
+          url: https://example.test/a.tgz
+          root: MONTY_DATA
+          target: absent.txt
+        - id: here
+          title: Here as a file
+          url: https://example.test/b.tgz
+          root: MONTY_DATA
+          target: here.txt
+        - id: archive
+          title: An archive
+          url: https://example.test/c.tgz
+          root: MONTY_DATA
+          target: archive.tgz
+          extract: true
+      """)
+
+      Tmp.app_env(:prerequisites_manifest, manifest)
+      File.write!(Path.join([tmp, "data", "here.txt"]), "here")
+      File.write!(Path.join([tmp, "data", "archive.tgz"]), "bytes")
+
+      assert Enum.map(Prerequisites.unfinished(), & &1.id) == ["absent", "archive"]
+    end
+
+    # An unpacked archive is not finished while a model inside it has no library:
+    # a run reads the libraries, and verifying them is the work. Which is why a
+    # boot asks this rather than "is the file there".
+    test "an unpacked archive with memory still to read is unfinished" do
+      tmp = Tmp.dir("unfinished-unpacked")
+      Tmp.system_env("MONTY_DATA", Path.join(tmp, "data"))
+      Tmp.system_env("MONTY_MODELS", Path.join(tmp, "models"))
+      land = Path.join([tmp, "data", "archive"])
+
+      manifest = Tmp.file("unpacked.yaml")
+
+      File.write!(manifest, """
+      prerequisites:
+        - id: archive
+          title: An archive
+          url: https://example.test/c.tgz
+          root: MONTY_DATA
+          target: archive.tgz
+          extract: true
+      """)
+
+      Tmp.app_env(:prerequisites_manifest, manifest)
+      Tmp.app_env(:monty_libraries_dir, Path.join(tmp, "libraries"))
+
+      # The archive's own bytes and its unpacked model, with no library beside
+      # them: whatever a run would need, it would not find it.
+      File.mkdir_p!(land)
+      File.write!(Path.join([tmp, "data", "archive.tgz"]), "bytes")
+      model = Path.join([land, "surf_agent_1lm", "pretrained", "model.pt"])
+      File.mkdir_p!(Path.dirname(model))
+      File.write!(model, "not a torch save")
+
+      prerequisite = Prerequisites.get("archive")
+      Monty.Prerequisites.Record.write(prerequisite, %{"id" => "archive", "unpacked" => true})
+
+      assert Enum.map(Prerequisites.unfinished(), & &1.id) == ["archive"]
+    end
   end
 
   describe "target_path/1" do
@@ -165,6 +262,52 @@ defmodule Monty.PrerequisitesTest do
       assert Prerequisites.engine(%{environment: %{module: %{class: "SomethingElse"}}}) == nil
       assert Prerequisites.engine(%{}) == nil
     end
+  end
+
+  describe "size/1" do
+    test "says nothing is there rather than zero bytes" do
+      tmp = Tmp.dir("size-absent")
+      Tmp.system_env("MONTY_DATA", Path.join(tmp, "data"))
+      prerequisite = manifest_entry(tmp, "absent.txt", false)
+
+      assert Prerequisites.size(prerequisite) == %{archive: nil, unpacked: nil}
+    end
+
+    test "counts the archive and everything it unpacked to" do
+      tmp = Tmp.dir("size-here")
+      Tmp.system_env("MONTY_DATA", Path.join(tmp, "data"))
+      prerequisite = manifest_entry(tmp, "archive.tgz", true)
+
+      File.mkdir_p!(Path.join(tmp, "data"))
+      File.write!(Prerequisites.target_path(prerequisite), :binary.copy("a", 100))
+
+      # A directory's own entry is the size of its name, not of what is in it:
+      # the answer a person wants is what the unpacked tree takes.
+      land = Path.join([tmp, "data", "archive", "nested"])
+      File.mkdir_p!(land)
+      File.write!(Path.join([tmp, "data", "archive", "one.txt"]), :binary.copy("b", 40))
+      File.write!(Path.join(land, "two.txt"), :binary.copy("c", 60))
+
+      assert Prerequisites.size(prerequisite) == %{archive: 100, unpacked: 100}
+    end
+  end
+
+  # One entry, under a manifest of its own, so a test names only what it needs.
+  defp manifest_entry(tmp, target, extract?) do
+    manifest = Path.join(tmp, "size.yaml")
+
+    File.write!(manifest, """
+    prerequisites:
+      - id: sized
+        title: Sized
+        url: https://example.test/sized.tgz
+        root: MONTY_DATA
+        target: #{target}
+        extract: #{extract?}
+    """)
+
+    Tmp.app_env(:prerequisites_manifest, manifest)
+    Prerequisites.get("sized")
   end
 
   describe "engine_installed?/1" do
