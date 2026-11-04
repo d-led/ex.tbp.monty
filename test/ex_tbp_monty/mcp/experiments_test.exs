@@ -126,16 +126,28 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
   end
 
   describe "a preview" do
-    test "composes the experiment you described, and says what would stop it" do
+    test "composes the experiment you described" do
       assert {:ok, preview} = Experiments.preview(%{"name" => "mcp_preview", "seed" => 7})
 
       assert preview.name == "mcp_preview"
       assert preview.yaml =~ "mcp_preview"
       assert preview.setup.seed == 7
 
-      # The default base is Monty's first tutorial: over `DisplacementGraphLM`
-      # and a training experiment class, neither written here. A preview says so
-      # rather than composing a run this application would refuse.
+      # No base named, so it starts from a template — an experiment this
+      # application runs, and therefore nothing refuses it.
+      assert Enum.reject(preview.findings, &(&1.level == :warning)) == []
+    end
+
+    test "says what would stop a base this application cannot run" do
+      assert {:ok, preview} =
+               Experiments.preview(%{
+                 "name" => "mcp_preview",
+                 "base" => "tutorial/first_experiment"
+               })
+
+      # Over `DisplacementGraphLM` and a training experiment class, neither
+      # written here. A preview says so rather than composing a run this
+      # application would refuse.
       assert Enum.any?(preview.findings, &(&1.code == :modules_not_ported))
     end
 

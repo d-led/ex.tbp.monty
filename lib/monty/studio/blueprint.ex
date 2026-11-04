@@ -34,12 +34,14 @@ defmodule Monty.Studio.Blueprint do
           groups: %{optional(String.t()) => String.t()}
         }
 
-  # Still Monty's first tutorial, which is what a person starting from nothing
-  # should be shown: a draft written from it composes like any other, and this
-  # application says on the draft's own page that it cannot run here
-  # (`DisplacementGraphLM` and the pretraining experiment class are not written).
-  # `Catalog.templates/0` is the list of experiments that *do* run.
-  @default_base "tutorial/first_experiment"
+  # What a person starting from nothing is shown. It used to be
+  # `tutorial/first_experiment`, which is Monty's first tutorial and composes
+  # like any other — and which this application refuses to run
+  # (`DisplacementGraphLM` and the pretraining experiment class are not
+  # written), so a new draft was born unable to start. A starting point is a
+  # template, and the catalogue is the list of templates that run, so the two
+  # cannot drift apart.
+  defp default_base, do: Catalog.templates() |> hd()
 
   # The `experiment.config` values a builder owns. Everything else in that map
   # (measured constants, logging handlers, match criterion) belongs to the base
@@ -56,7 +58,7 @@ defmodule Monty.Studio.Blueprint do
   @spec new(map()) :: t()
   def new(attributes) do
     attributes = normalize_keys(attributes)
-    base = Map.get(attributes, "base") || @default_base
+    base = Map.get(attributes, "base") || default_base()
     experiment = experiment(base)
 
     %__MODULE__{
@@ -132,7 +134,7 @@ defmodule Monty.Studio.Blueprint do
     name_findings(blueprint) ++
       base_findings(blueprint, conf_dir) ++
       group_findings(blueprint, conf_dir) ++
-      config_findings(blueprint)
+      config_findings(blueprint, conf_dir)
   end
 
   @doc "The config as text, ready to be a file in Monty's `conf/experiment/`."
@@ -218,9 +220,37 @@ defmodule Monty.Studio.Blueprint do
     end
   end
 
-  defp config_findings(%__MODULE__{config: config}) do
-    epoch_findings(config) ++ seed_findings(config) ++ run_name_findings(config)
+  defp config_findings(%__MODULE__{} = blueprint, conf_dir) do
+    epoch_findings(readable_config(blueprint.config, conf_dir)) ++
+      seed_findings(blueprint.config) ++
+      run_name_findings(blueprint.config)
   end
+
+  # What a run will read, for the two values that are checked: `n_eval_epochs:
+  # ${constants.rotations_all_count}` is 14 by the time `Setup` builds the
+  # experiment, so a builder that validated the text refused a base this port
+  # runs — `base_config_10distinctobj_dist_agent` among them (`docs/status.md`
+  # #11). The config itself keeps Monty's own text, because a draft must compose
+  # to the experiment it came from.
+  defp readable_config(config, conf_dir) do
+    constants = constants(conf_dir)
+
+    for key <- ~w(n_train_epochs n_eval_epochs), into: config do
+      {key, resolve_reference(Map.get(config, key), constants)}
+    end
+  end
+
+  # A value that *is* one `${constants.name}` reference takes what the constants
+  # group says; anything else — a number, a path built around a reference — is
+  # left as Monty wrote it.
+  defp resolve_reference("${constants." <> rest, constants) do
+    case String.split(rest, "}", parts: 2) do
+      [name, ""] -> Map.get(constants, name, "${constants." <> rest)
+      _text_around_it -> "${constants." <> rest
+    end
+  end
+
+  defp resolve_reference(value, _constants), do: value
 
   defp epoch_findings(config) do
     for key <- ~w(n_train_epochs n_eval_epochs),
@@ -297,7 +327,7 @@ defmodule Monty.Studio.Blueprint do
         {:error, _reason} ->
           # An unknown base is a finding, not a crash: the blueprint is built
           # from the default so the page can say what is wrong.
-          {:ok, fallback} = Source.load(conf_dir, "experiment", @default_base)
+          {:ok, fallback} = Source.load(conf_dir, "experiment", default_base())
           fallback
       end
 
@@ -313,6 +343,15 @@ defmodule Monty.Studio.Blueprint do
       experiment_class: Map.get(experiment_body, "_target_", ""),
       config: Map.get(experiment_body, "config", %{})
     }
+  end
+
+  # Hydra's `${constants.name}` is how a config reuses a value it gave once, and
+  # the constants live in their own group rather than in the experiment file.
+  defp constants(conf_dir) do
+    case Source.load(conf_dir, "constants", "defaults") do
+      {:ok, %{body: body}} when is_map(body) -> body
+      _not_here -> %{}
+    end
   end
 
   defp group_choices(defaults) do

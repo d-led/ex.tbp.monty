@@ -163,6 +163,23 @@ so the page sat silent until it was over. The label now says `Delete all 77
 matching`, the work happens in a task that renders "Deleting 25 of 77 runs…" as
 it goes, and the rows go with `delete_all` in chunks.
 
+## A starting point that starts (2026-11-04)
+
+The builder opened on `tutorial/first_experiment`, so a draft saved without
+touching anything inherited that tutorial's refusal: it is a training experiment
+over `DisplacementGraphLM`, and neither is written here. It now opens on the
+first of `Catalog.templates/0`, `base_config_10distinctobj_dist_agent` — the
+experiment the acceptance ladder runs — and taking the name from the catalogue is
+what stops the default and the list of experiments that run from drifting apart.
+
+The acceptance config could not be offered as it stood. It writes
+`n_eval_epochs: ${constants.rotations_all_count}`, and `Blueprint` was checking
+that text, so the number a run reads — 14, from `conf/constants/defaults.yaml` —
+was validated as a string and refused. `Blueprint.findings/2` now resolves that
+one reference before it checks the count, and the config keeps Monty's own text:
+a draft must still compose to the experiment it came from, and composition leaves
+interpolation to `Monty.Config.Resolvers` at setup time.
+
 ## Open points and bugs
 
 | #   | What                                                                                                                                                                                                                                                                                                                       | Done means                                                                                                                    |
@@ -177,7 +194,7 @@ it goes, and the rows go with `delete_all` in chunks.
 | 8   | **Fly: `release_command` runs only `/app/bin/migrate`.** Prerequisites are not fetched at deploy; a Machine with an empty volume serves a studio whose runs cannot read their model                                                                                                                                        | Decide: run `/app/bin/prerequisites` as a second release command, fetch into a mounted volume once, or refuse to start        |
 | 9   | **MCP config from the address bar**: done in `ex.tbp.monty` (`/mcp/config` uses `socket.host_uri`, test pins a mapped port) and in `ex_gocd` (`ExGoCDWeb.Mcp.BaseUrl.url/1`). **`confluence_phx_mirror` is the one exception** — the token `curl` on `/profile` uses `Sites.host()` from configuration                     | A request-derived base URL there, the way `ex_gocd` does it, plus a test                                                      |
 | 10  | **`ex_gocd` lint**: the 2026-11-02 hand-over recorded `mix credo --strict` failing on the MCP code (`lib/ex_gocd/mcp/tools/*.ex`, `lib/ex_gocd_web/controllers/mcp/oauth_controller.ex`). Not checked today                                                                                                                | Run its gate and confirm; fix or record                                                                                       |
-| 11  | **The builder's default base cannot run**: `Blueprint` starts from `tutorial/first_experiment`, so a new draft inherits the refusal. The acceptance config is not a substitute yet — its `n_eval_epochs: ${constants.rotations_all_count}` trips `:epochs_not_a_count`, because `Blueprint` validates the unresolved value | Resolve the base's epoch counts before validating, then default the builder to an experiment this port can run                |
+| 11  | ~~**The builder's default base cannot run**~~ — **done 2026-11-04.** `Blueprint` starts from `tutorial/first_experiment`, so a new draft inherited the refusal, and the obvious replacement was refused too because `n_eval_epochs: ${constants.rotations_all_count}` was checked as text. It now starts from the first template and resolves that reference before checking the count | `Blueprint.new/1` with a name alone composes into a setup `Setup.valid?/1` accepts |
 | 12  | ~~**`EvidenceGraphLM.apply_votes/2` has no clause for a sensor module's vote**~~ — **done 2026-11-04.** The payload `receive_votes/2` was handed was never the shape it reads, because `_combine_votes` had not been ported: votes now reach a module keyed by object and moved into its own sensor's frame                | `MontyForEvidenceGraphMatching.combine_votes/2` plus two tests that specify the move; `apply_votes/2` is unchanged            |
 
 ## Where the work stands, in one paragraph

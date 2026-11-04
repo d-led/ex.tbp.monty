@@ -49,8 +49,8 @@ defmodule ExTbpMonty.Mcp.Tools do
   @attributes %{
     "type" => "object",
     "description" =>
-      "What the experiment should be: `name`, `base` (an experiment to start from, " <>
-        "`tutorial/first_experiment` by default), any group of " <>
+      "What the experiment should be: `name`, `base` (an experiment to start from; " <>
+        "when omitted, a template — one of the experiments this studio can run), any group of " <>
         "`monty_experiment_options` as a key (`monty/learning_module`, `monty/sensor_module`, " <>
         "`environment`, `monty/connectivity`, `termination`, `telemetry`, " <>
         "`monty/motor_system_config`), and the config values `seed`, `n_train_epochs`, " <>

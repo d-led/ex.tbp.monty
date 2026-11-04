@@ -2,19 +2,43 @@ defmodule Monty.Studio.BlueprintTest do
   use ExUnit.Case, async: true
 
   alias Monty.Config.Composer
-  alias Monty.Studio.{Blueprint, Catalog}
+  alias Monty.Studio.{Blueprint, Catalog, Setup}
 
   describe "the least a person has to say" do
-    test "a name is enough for a complete experiment" do
+    test "a name is enough for an experiment the port can start" do
       blueprint = Blueprint.new(%{"name" => "my_experiment"})
 
       assert Blueprint.findings(blueprint) == []
       assert {:ok, tree} = Blueprint.compose(blueprint)
       assert tree["experiment"]["config"]["monty_config"]["sensor_modules"] != %{}
+
+      # The promise the builder makes: save without touching anything and the
+      # draft is one a run accepts. It was not — the default base names classes
+      # this port has not written (`docs/status.md` #11).
+      assert {:ok, setup} = Setup.from_text(Blueprint.to_yaml(blueprint), name: "my_experiment")
+      assert Setup.valid?(setup)
     end
 
-    test "the default base is one of Monty's own experiments" do
-      assert Blueprint.new(%{"name" => "my_experiment"}).base == "tutorial/first_experiment"
+    test "the default base is a template, which is an experiment this port runs" do
+      blueprint = Blueprint.new(%{"name" => "my_experiment"})
+
+      assert blueprint.base in Catalog.templates()
+      assert blueprint.base == "base_config_10distinctobj_dist_agent"
+    end
+
+    test "a base that states its epochs as a constant is not refused for it" do
+      # `n_eval_epochs: ${constants.rotations_all_count}` is 14 by the time a run
+      # is built; validating the text refused the experiment the acceptance
+      # ladder runs. The text is kept all the same, because a draft has to
+      # compose to the experiment it came from.
+      blueprint = Blueprint.from_experiment("base_config_10distinctobj_dist_agent")
+
+      assert blueprint.config["n_eval_epochs"] == "${constants.rotations_all_count}"
+      assert Blueprint.findings(blueprint) == []
+      assert {:ok, tree} = Blueprint.compose(blueprint)
+
+      assert get_in(tree, ["experiment", "config", "n_eval_epochs"]) ==
+               "${constants.rotations_all_count}"
     end
 
     test "the run name follows the experiment name" do

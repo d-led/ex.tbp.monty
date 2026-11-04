@@ -20,7 +20,12 @@ defmodule ExTbpMontyWeb.BuildLiveTest do
 
       assert has_element?(view, "#blueprint-form")
       assert has_element?(view, "#blueprint-diagram")
-      assert render(view) =~ "displacement_1lm"
+
+      # The starting point is a template, so the diagram and the config already
+      # describe an experiment a run accepts, rather than `tutorial/first_experiment`
+      # and its `DisplacementGraphLM`.
+      assert render(view) =~ "base_config_10distinctobj_dist_agent"
+      assert render(view) =~ "EvidenceGraphLM"
     end
 
     test "the choices are the components Monty ships", %{conn: conn} do

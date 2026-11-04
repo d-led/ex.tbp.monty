@@ -161,7 +161,7 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
   end
 
   describe "previewing and creating" do
-    test "a preview composes the experiment you described, warnings and all" do
+    test "a preview composes the experiment you described" do
       assert {:ok, %{text: text, structured: preview}} =
                Tools.call(
                  "monty_preview_experiment",
@@ -169,15 +169,32 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                  @ctx
                )
 
-      assert text =~ "`mcp_preview` from `tutorial/first_experiment`"
+      # No base named, so it starts from a template — an experiment this
+      # application runs.
+      assert text =~ "`mcp_preview` from `base_config_10distinctobj_dist_agent`"
       assert text =~ "```yaml"
       assert preview.yaml =~ "mcp_preview"
+      refute text =~ "modules_not_ported"
+    end
 
-      # A finding is part of the answer, not a reason to refuse the preview —
-      # and the builder's default base is Monty's first tutorial, which this
-      # application cannot run. The preview is where a caller finds that out,
-      # in the same words the page uses.
+    test "a finding is part of the preview, not a reason to refuse it" do
+      assert {:ok, %{text: text, structured: preview}} =
+               Tools.call(
+                 "monty_preview_experiment",
+                 %{
+                   "attributes" => %{
+                     "name" => "mcp_preview",
+                     "base" => "tutorial/first_experiment"
+                   }
+                 },
+                 @ctx
+               )
+
+      # Monty's first tutorial is over `DisplacementGraphLM` and a training
+      # experiment class, neither written here. The preview is where a caller
+      # finds that out, in the same words the page uses.
       assert text =~ "- error modules_not_ported"
+      assert preview.yaml =~ "mcp_preview"
     end
 
     test "a preview reports the option that does not exist rather than ignoring it" do

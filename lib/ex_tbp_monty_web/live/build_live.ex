@@ -328,8 +328,9 @@ defmodule ExTbpMontyWeb.BuildLive do
   # different question from whether it can be written: `Setup.valid?/1` is the
   # second one, and it now refuses an experiment built from classes this port has
   # not written. Blocking the save on that would mean the builder could not write
-  # a draft from Monty's own first tutorial — the default base — and the draft's
-  # page is where "this cannot run here" belongs, said in the same words as
-  # everywhere else. What does block it is a config that would not compose.
+  # a draft from any experiment Monty ships, including the refused tutorials the
+  # catalogue still lists — and the draft's page is where "this cannot run here"
+  # belongs, said in the same words as everywhere else. What does block it is a
+  # config that would not compose.
   defp saveable?(%{setup: setup}), do: setup != nil
 end
