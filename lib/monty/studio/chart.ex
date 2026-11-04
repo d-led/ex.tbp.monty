@@ -155,12 +155,17 @@ defmodule Monty.Studio.Chart do
     points_by_object = Map.new(ranked)
     objects = Keyword.get(options, :objects) || Enum.map(ranked, &elem(&1, 0))
 
+    # Every value the chart will draw, flattened once: the floor and the ceiling
+    # are the same list, and computing it twice is how they drift.
+    evidence_values = Enum.map(ranked, fn {_id, points} -> Enum.map(points, &elem(&1, 2)) end)
+
     chart = %__MODULE__{
       width: width,
       height: height,
       x_min: from,
       x_max: to,
-      y_max: ceiling(Enum.map(ranked, fn {_id, points} -> Enum.map(points, &elem(&1, 2)) end))
+      y_min: y_floor(evidence_values),
+      y_max: ceiling(evidence_values)
     }
 
     # Where the episodes begin, in the SVG's own units: a boundary line for every
@@ -334,6 +339,19 @@ defmodule Monty.Studio.Chart do
     max(Float.ceil(best), 1.0)
   end
 
+  # Zero, unless the evidence went below it. A hypothesis is penalised as well as
+  # rewarded, so a run's evidence really can fall under zero, and an axis pinned
+  # at zero projected those points below the plot area — the lines then drew
+  # themselves across the x axis labels, which is a chart lying about its own
+  # scale. The floor is a whole number at or below the lowest point, so ticks
+  # stay round and the baseline is still named.
+  defp y_floor([]), do: 0.0
+
+  defp y_floor(all_evidence) do
+    worst = all_evidence |> List.flatten() |> Enum.min(fn -> 0.0 end)
+    min(Float.floor(worst), 0.0)
+  end
+
   # A segment per contiguous run of steps: an object reported on 1, 2 and 4 has
   # two polylines, and the missing step 3 stays missing. An episode boundary is
   # always a break, even though the run's x carries on: the evidence did start
@@ -384,7 +402,10 @@ defmodule Monty.Studio.Chart do
   # One tick per whole unit of evidence, which is the resolution a reader needs:
   # evidence is a sum of increments around one, so halves would be noise.
   defp ticks(chart) do
-    for value <- 0..trunc(chart.y_max)//1 do
+    # From the floor, which is zero unless the data went below it: labelling
+    # from zero whatever the range was left the part under zero unnamed, so a
+    # reader could not tell how far down a line had gone.
+    for value <- trunc(chart.y_min)..trunc(chart.y_max)//1 do
       %{value: value * 1.0, y: rounded(y(value * 1.0, chart)), label: "#{value}"}
     end
   end
