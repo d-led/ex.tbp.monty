@@ -376,5 +376,44 @@ defmodule Monty.Studio.RunHistoryTest do
       assert Enum.all?(page ++ RunHistory.list(), &(&1.timeline == []))
       assert %Run{timeline: [], log: [_step]} = Enum.find(page, &(&1.id == run.id))
     end
+
+    test "a table's row carries neither the pictures nor the transcript" do
+      # What a list draws is which run it is, how it ended and what it cost. The
+      # transcript is read when somebody opens the run, and fifty of them is
+      # fifty logs nobody asked for.
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, _stepped} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+
+      row = Enum.find(RunHistory.list(), &(&1.id == run.id))
+
+      assert row.status == "running"
+      assert row.steps == run.steps
+      assert row.log == []
+      assert row.timeline == []
+    end
+
+    test "the run a page should watch comes without its pictures, and with its log" do
+      # `running_for/2` is asked on every poll of a page that is not watching a
+      # run, so it is the one read that must never carry the observations; the
+      # progress it reports is counted from the log.
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, _stepped} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+
+      watched = RunHistory.running_for(run.experiment)
+
+      assert watched.id == run.id
+      assert length(watched.log) == 1
+      assert watched.timeline == []
+      assert watched.inputs == run.inputs
+    end
+
+    test "whether a run is there is answered without reading it" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      assert RunHistory.exists?(run.id)
+      refute RunHistory.exists?(Ecto.UUID.generate())
+      # Neither is a run at all, and neither is worth an error page.
+      refute RunHistory.exists?("not-an-id")
+    end
   end
 end

@@ -561,9 +561,12 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       # The run is history now: its record, its steps, its summary, what each
       # step saw, and the log file it wrote are all off the page.
-      assert [run] = RunHistory.list()
-      assert run.status == "finished"
-      assert run.experiment == "base_config_10distinctobj_dist_agent"
+      assert [row] = RunHistory.list()
+      assert row.status == "finished"
+      assert row.experiment == "base_config_10distinctobj_dist_agent"
+      # The list's row is the table's — no transcript. What the run said step by
+      # step is read by the page that opens it, which is `head/1`.
+      run = RunHistory.head(row.id)
       assert length(run.log) == 2
       # What each step saw is read a step at a time: a row of the list carries
       # no pictures, which is what makes a page of them cheap.

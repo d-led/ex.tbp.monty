@@ -24,6 +24,11 @@ defmodule Monty.Studio.RunHistory do
   # added later is read by default rather than silently left behind.
   @without_pictures Run.__schema__(:fields) -- [:timeline]
 
+  # What a table draws. Neither the pictures nor the transcript: a row of a list
+  # says which run it is, how it ended and what it cost, and 50 of them carrying
+  # a log each is 50 transcripts nobody reads to render one page.
+  @table_fields @without_pictures -- [:log]
+
   @doc """
   Records a run that is starting.
 
@@ -204,17 +209,26 @@ defmodule Monty.Studio.RunHistory do
       |> order_by(desc: :inserted_at)
       |> limit(^per_page)
       |> offset(^((page - 1) * per_page))
-      |> rows()
+      |> pictures_less()
 
     %{runs: runs, total: total, page: page, per_page: per_page, pages: pages(total, per_page)}
   end
 
-  # A list of runs is a list of *rows*: every column but the pictures. One
-  # record's `timeline` is 11 kB a step — 53 MB for a run of 4 789 steps — and a
-  # page of twenty-five of them is what made `/runs` wait out the 15 s a
-  # connection may be checked out for. `head/1` reads the same columns; a page
-  # that wants a run's pictures asks for one step at a time (`sensors_at/2`).
+  # A list of runs is a list of *rows*: every column but the pictures and the
+  # log. One record's `timeline` is 11 kB a step — 53 MB for a run of 4 789
+  # steps — and a page of twenty-five of them is what made `/runs` wait out the
+  # 15 s a connection may be checked out for. `head/1` reads the same columns as
+  # a page that draws one run needs (the log, not the pictures); a page that
+  # wants a run's pictures asks for one step at a time (`sensors_at/2`).
   defp rows(query) do
+    query
+    |> select([run], map(run, @table_fields))
+    |> Repo.all()
+    |> Enum.map(&struct(Run, &1))
+  end
+
+  # The row a page draws from: its log, without the pictures.
+  defp pictures_less(query) do
     query
     |> select([run], map(run, @without_pictures))
     |> Repo.all()
@@ -303,15 +317,26 @@ defmodule Monty.Studio.RunHistory do
       {:ok, uuid} ->
         Run
         |> where([run], run.id == ^uuid)
-        |> select([run], map(run, @without_pictures))
-        |> Repo.one()
-        |> case do
-          nil -> nil
-          row -> struct(Run, row)
-        end
+        |> pictures_less()
+        |> List.first()
 
       :error ->
         nil
+    end
+  end
+
+  @doc """
+  Whether a run with this id exists at all.
+
+  What a controller that is about to serve one of a run's files asks — and the
+  only thing it asks. A row would carry that run's transcript across the wire to
+  answer a yes.
+  """
+  @spec exists?(binary()) :: boolean()
+  def exists?(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} -> Repo.exists?(where(Run, [run], run.id == ^uuid))
+      :error -> false
     end
   end
 
@@ -454,7 +479,12 @@ defmodule Monty.Studio.RunHistory do
     end)
     |> order_by(desc: :inserted_at)
     |> limit(1)
-    |> Repo.one()
+    # Read on every poll of a page that is not watching a run, and what the
+    # callers do with it is start watching: the id, the status, where its log is
+    # and how far the last episode got. The pictures are the run's heaviest
+    # column and none of them is asked for.
+    |> pictures_less()
+    |> List.first()
   end
 
   @doc """
