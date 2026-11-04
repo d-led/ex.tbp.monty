@@ -85,7 +85,7 @@ notices, unchanged by this project.
 
 ## YCB object models
 
-Runs in the Habitat world use object models from the
-[YCB benchmark](https://www.ycb-benchmark.org) suite, distributed with Monty's
+Runs use object models from the
+[YCB benchmark](https://www.ycbbenchmark.org) suite, distributed with Monty's
 data rather than with this project: they are a prerequisite a deployment
 supplies (see `docs/container.md`), not something the image ships.

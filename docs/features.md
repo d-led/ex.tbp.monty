@@ -64,11 +64,13 @@ not recalled — run it after anything lands that can move one.
   (`Setup.configured_world/0`), and a run records which world it stepped.
   ([`mujoco/environment.ex`](../lib/monty/simulators/mujoco/environment.ex),
   [from-monty.md](from-monty.md))
-- **Monty's real world through a Python peer:**
+- **Habitat, as a handle this build cannot step:**
   `Monty.Simulators.Habitat.Environment.HabitatEnvironment` is `implemented` in the
-  map and runs [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py);
-  a run steps it unless it chooses this port's stand-in, and the choice is
-  recorded on the run.
+  map and owns [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py),
+  which runs Monty's own `HabitatEnvironment` in an interpreter carrying
+  `habitat_sim`. Habitat-Sim is a conda package for another Python and is not
+  carried here, so a Habitat config is refused as a world this build does not
+  have, rather than given MuJoCo's scene.
 - **Port contract:** 4-byte big-endian length + UTF-8 JSON, one request in flight, a
   timeout is an error, actions in Monty's own JSON shape.
   ([`port/protocol.ex`](../lib/monty/simulators/port/protocol.ex))

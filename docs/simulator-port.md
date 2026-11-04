@@ -29,18 +29,20 @@ and `base_config_10distinctobj_dist_agent` among them) and the `habitat_*` ones
 name `HabitatEnvironment`, Habitat-Sim. The page's world selector names the
 engine it finds there, so "via Monty's Python" names the engine rather than a
 guess. `Monty.Simulators.Habitat.Environment.HabitatEnvironment`
-is the handle a run holds and the name in the module map, and a run that
-does not choose otherwise makes `Monty.Studio.Setup` build it — per run, from
-the page's world selector or `world` on `monty_run_experiment`. Under test the
+is that peer's handle and the name in the module map, and no run holds it: a
+config naming Habitat is refused as a world this build does not have, with the
+words a page shows rather than a crash, and the setup page says which engine it
+found. Under test the
 peer is [`test/support/probe_world.py`](../test/support/probe_world.py) — a probe,
 not a world: it answers from what it was sent, which is exactly what a test of
 the framing wants — and
 [`test/support/broken_world.py`](../test/support/broken_world.py), which refuses
 to start the way a simulator with a missing dependency does.
 
-Not done: **MuJoCo**, the same bridge with a heavier far side
-([`roadmap.md`](roadmap.md) phase 2). And a camera, which is the live-episode
-case in [`parallel-and-live.md`](parallel-and-live.md), not this one.
+MuJoCo is not this page's business any more: it runs in this application's own
+interpreter ([architecture](architecture.md#where-python-is)), which is why no
+run reaches the peer at all. What is still not done is a camera, which is the
+live-episode case in [`parallel-and-live.md`](parallel-and-live.md), not this one.
 
 ## The world the runtime develops against
 

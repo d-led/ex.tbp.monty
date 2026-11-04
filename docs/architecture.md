@@ -107,7 +107,8 @@ inputs: plain data in, plain data out, no processes and no side effects of its
 own. The two
 standing exceptions are named rather than hidden — a draw from the episode's
 stream (`Monty.Context.rng`, a call to a process) and a world
-(`Monty.Simulators.Habitat.Environment.HabitatEnvironment` holds a port). The
+(`Monty.Simulators.Mujoco.Environment` holds the interpreter it steps in, and
+`Monty.Simulators.Habitat.Environment.HabitatEnvironment` would hold a port). The
 actor layer is thin by design — routing, state holding, telemetry — and is the
 only place that knows about GenServers. This is what lets a contributor port a
 Python class and test it directly against Monty numbers, and what keeps the port
@@ -134,9 +135,12 @@ resolves through the module map, and each class's `from_config/1` reads the
 parameters it knows (`Monty.Config.Target`). A class the port has not written is
 an error, never a stand-in, so a run built from a config is a run of that config.
 
-The environment boundary is a port: `Monty.Simulators.Port.Protocol` is the
-contract and `Monty.Simulators.Port.Environment` owns the process, so the world
-can be MuJoCo, Habitat or a camera without touching the model. See
+The environment boundary for a world outside this release is a port:
+`Monty.Simulators.Port.Protocol` is the contract and
+`Monty.Simulators.Port.Environment` owns the process, so such a world could be
+Habitat or a camera without touching the model. The world a run steps today is
+not one of those: MuJoCo runs in the interpreter this application carries, behind
+the same `Monty.Simulators.Environment` behaviour. See
 [`simulator-port.md`](simulator-port.md).
 
 ## What comes from Monty
@@ -193,12 +197,12 @@ run time by `ExTbpMonty.EmbeddedPython.version/0`, so a page cannot say
 ### One step across the port
 
 The peer is [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py). `Monty.Simulators.Habitat.Environment.HabitatEnvironment`
-is the handle a run holds — `new/1` starts nothing, because a run may never step
-— and the first step starts the peer as an OS process (`Port.open` with
+is the handle that would own it — `new/1` starts nothing, because a run may never
+step — and the first step starts the peer as an OS process (`Port.open` with
 `{:packet, 4}`). It speaks length-prefixed JSON and knows nothing about Elixir
-except the framing. A run steps this world unless it chooses otherwise —
-`world: "synthetic"` on `monty_run_experiment`, or the run page's selector — and
-which world a run stepped is recorded on the run.
+except the framing. No run holds that handle: a config naming Habitat is refused
+as a world this build does not carry, and which world a run stepped is recorded
+on the run.
 
 ```mermaid
 ---
