@@ -151,6 +151,25 @@ defmodule Monty.Studio.SetupTest do
              |> length() == 20
     end
 
+    test "a config that declares no vote matrix has no vote round" do
+      # `lm_to_lm_vote_matrix: null` is what most single-module configs say, and
+      # Monty skips `_vote` entirely for them: no vote, and nothing written about
+      # votes in the step's report.
+      setup = setup_for("base_config_10distinctobj_dist_agent")
+
+      assert Map.get(setup, :vote_round?) == false
+      assert Setup.model_spec(setup, :model).lm_to_lm_vote == nil
+    end
+
+    test "a hierarchy's votes reach the runtime as one entry per module" do
+      setup = setup_for("randrot_noise_10distinctobj_5lms_dist_agent")
+
+      assert %{"learning_module_0" => sources} =
+               Setup.model_spec(setup, :model).lm_to_lm_vote
+
+      assert length(sources) == 4
+    end
+
     test "the environment is the simulator plus the interface that makes episodes" do
       setup = setup_for("tutorial/first_experiment")
 

@@ -146,6 +146,21 @@ defmodule Monty.Studio.RunHistoryTest do
 
       assert run.status == "failed"
     end
+
+    test "tells a watching page the row, not the pictures the run kept" do
+      # Every subscriber takes its own copy, and a settled run of thousands of
+      # steps carries tens of megabytes of timeline that no row looks at.
+      :ok = RunHistory.subscribe()
+
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+      {:ok, run} = RunHistory.finish(run, %{"steps" => 1})
+
+      assert_receive {:settled, %Run{} = told}
+      assert told.status == "finished"
+      assert told.log == run.log
+      assert told.timeline == []
+    end
   end
 
   describe "the list" do
@@ -166,7 +181,7 @@ defmodule Monty.Studio.RunHistoryTest do
     end
   end
 
-  describe "forgetting a run" do
+  describe "deleting a run" do
     test "deletes the record and nothing else" do
       {:ok, run} = RunHistory.start(@attributes)
 
@@ -184,6 +199,19 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.get(first.id) == nil
       assert RunHistory.get(second.id) == nil
       assert RunHistory.get(kept.id) != nil
+    end
+
+    test "says how far it has got, so a page can show the deletion happening" do
+      {:ok, first} = RunHistory.start(%{@attributes | experiment: "one"})
+      {:ok, second} = RunHistory.start(%{@attributes | experiment: "two"})
+
+      test_process = self()
+
+      RunHistory.delete_ids([first.id, second.id],
+        on_progress: fn progress -> send(test_process, {:deleted, progress}) end
+      )
+
+      assert_receive {:deleted, %{deleted: 2, total: 2}}
     end
 
     test "every run a filter shows, and no others" do
@@ -313,7 +341,6 @@ defmodule Monty.Studio.RunHistoryTest do
       {:ok, run} = RunHistory.start(@attributes)
       {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
       {:ok, run} = RunHistory.record_step(run, %{"step" => 1, "goals" => 0}, moment(1))
-
       head = RunHistory.head(run.id)
 
       # The log is what a page reads on every step and the observations are what
@@ -335,6 +362,19 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.sensors_at(run.id, 2) == nil
       assert RunHistory.sensors_at("not-an-id", 0) == nil
       assert RunHistory.head("not-an-id") == nil
+    end
+
+    test "and neither does a page of them" do
+      # The list is what `/runs` asks for, and one page of twenty-five runs
+      # used to be every picture of every one of them: 156 MB across this
+      # machine's seventy-seven runs, and a page that timed out its connection.
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, _stepped} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+
+      page = RunHistory.search().runs
+
+      assert Enum.all?(page ++ RunHistory.list(), &(&1.timeline == []))
+      assert %Run{timeline: [], log: [_step]} = Enum.find(page, &(&1.id == run.id))
     end
   end
 end

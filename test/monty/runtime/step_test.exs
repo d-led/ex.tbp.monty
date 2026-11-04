@@ -230,6 +230,29 @@ defmodule Monty.Runtime.StepTest do
       assert %{sent: 2, used: 2, deadline_hit?: false} = info.votes
     end
 
+    test "every module is asked what the round left it believing, heard or not" do
+      # The module that heard nothing is the one that can have nothing possible:
+      # the round concludes `:no_match` for it, or lets it back out of one.
+      model_id =
+        start_model(
+          learning_modules: [
+            learning_module(:lm_0, vote: vote_from([0.0, 0.0, 0.0])),
+            learning_module(:lm_1, vote: vote_from([0.0, 0.0, 0.0]))
+          ],
+          sm_to_lm: %{lm_0: [:patch], lm_1: [:patch]},
+          lm_to_lm_vote: %{lm_0: [], lm_1: [:lm_0]}
+        )
+
+      assert {:ok, _, _info} = step(model_id)
+
+      # The module with no sources is still part of the round, and hears nothing.
+      assert_receive {:receive_votes, :lm_1, %{"mug" => [_heard]}}
+      assert_receive {:receive_votes, :lm_0, %{}}
+
+      assert_receive {:update_stats_after_vote, :lm_0}
+      assert_receive {:update_stats_after_vote, :lm_1}
+    end
+
     test "no vote matrix means no vote round at all" do
       model_id = start_model()
 

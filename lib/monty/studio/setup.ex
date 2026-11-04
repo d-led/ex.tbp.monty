@@ -54,6 +54,10 @@ defmodule Monty.Studio.Setup do
             sensors: [],
             learning_modules: [],
             connections: [],
+            # Whether this config has a vote matrix at all. Monty's `null` is not
+            # "every module wired to nothing": `_vote` is skipped, and a
+            # one-module config never votes.
+            vote_round?: true,
             epochs: %{},
             phases: %{train: false, eval: true},
             termination: %{},
@@ -182,6 +186,7 @@ defmodule Monty.Studio.Setup do
       sensors: sensors,
       learning_modules: learning_modules,
       connections: connections,
+      vote_round?: Map.get(monty_config, "lm_to_lm_vote_matrix") != nil,
       epochs: %{
         train: Map.get(config, "n_train_epochs"),
         eval: Map.get(config, "n_eval_epochs")
@@ -427,7 +432,7 @@ defmodule Monty.Studio.Setup do
           ),
         sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
         lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
-        lm_to_lm_vote: inputs_by_learning_module(setup, :vote),
+        lm_to_lm_vote: vote_wiring(setup),
         motor: motor_spec(setup),
         # A step waits for its modules for as long as they take. Monty's round
         # is synchronous, and the vote round — which does have a deadline, on
@@ -1611,6 +1616,13 @@ defmodule Monty.Studio.Setup do
       {lm.id, sources}
     end
   end
+
+  # Monty's `lm_to_lm_vote_matrix: null` means there is no vote round at all, not
+  # that every module is wired to nothing: `_vote` is skipped, so a one-module
+  # config never votes and a report of one says so. The runtime tells the two
+  # apart by `nil`.
+  defp vote_wiring(%__MODULE__{vote_round?: false}), do: nil
+  defp vote_wiring(setup), do: inputs_by_learning_module(setup, :vote)
 
   # -- targets --------------------------------------------------------------
 

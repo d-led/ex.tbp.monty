@@ -147,9 +147,17 @@ defmodule Monty.Studio.RunHistory do
   @spec subscribe() :: :ok | {:error, term()}
   def subscribe, do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, @topic)
 
+  # A page is told what a page of runs reads: the row, not its pictures. Every
+  # subscriber takes its own copy, and a settled run of 4 789 steps carries
+  # 53 MB of `timeline` that no table row looks at.
   defp broadcast(message) do
-    Phoenix.PubSub.broadcast(ExTbpMonty.PubSub, @topic, message)
+    Phoenix.PubSub.broadcast(ExTbpMonty.PubSub, @topic, payload(message))
   end
+
+  defp payload({tag, %Run{} = run}) when tag in [:recorded, :settled],
+    do: {tag, %{run | timeline: []}}
+
+  defp payload(message), do: message
 
   @doc "Runs, newest first."
   @spec list(keyword()) :: [Run.t()]
@@ -159,7 +167,7 @@ defmodule Monty.Studio.RunHistory do
     Run
     |> order_by(desc: :inserted_at)
     |> limit(^limit)
-    |> Repo.all()
+    |> rows()
   end
 
   @per_page 25
@@ -196,9 +204,21 @@ defmodule Monty.Studio.RunHistory do
       |> order_by(desc: :inserted_at)
       |> limit(^per_page)
       |> offset(^((page - 1) * per_page))
-      |> Repo.all()
+      |> rows()
 
     %{runs: runs, total: total, page: page, per_page: per_page, pages: pages(total, per_page)}
+  end
+
+  # A list of runs is a list of *rows*: every column but the pictures. One
+  # record's `timeline` is 11 kB a step — 53 MB for a run of 4 789 steps — and a
+  # page of twenty-five of them is what made `/runs` wait out the 15 s a
+  # connection may be checked out for. `head/1` reads the same columns; a page
+  # that wants a run's pictures asks for one step at a time (`sensors_at/2`).
+  defp rows(query) do
+    query
+    |> select([run], map(run, @without_pictures))
+    |> Repo.all()
+    |> Enum.map(&struct(Run, &1))
   end
 
   defp pages(0, _per_page), do: 1
@@ -246,7 +266,7 @@ defmodule Monty.Studio.RunHistory do
     |> where([run], run.experiment == ^experiment)
     |> order_by(desc: :inserted_at)
     |> limit(^limit)
-    |> Repo.all()
+    |> rows()
   end
 
   @doc """
@@ -334,14 +354,20 @@ defmodule Monty.Studio.RunHistory do
   defp json(value), do: value
 
   @doc """
-  Forgets every run the filter matches, and answers how many it forgot.
+  Deletes every run the filter matches, and answers how many it deleted.
 
   The filter is the same one the list uses, so "delete all failed runs" is a
   statement about the list a person is looking at, not about the page of it they
   can see.
   """
-  @spec delete_matching(keyword()) :: non_neg_integer()
-  def delete_matching(options) do
+  @spec delete_matching(keyword(), keyword()) :: non_neg_integer()
+  def delete_matching(options, opts \\ []) do
+    options |> ids_matching() |> delete_ids(opts)
+  end
+
+  @doc "The ids of every run a filter matches — the same filter the list takes."
+  @spec ids_matching(keyword()) :: [binary()]
+  def ids_matching(options) do
     state = Keyword.get(options, :state, "all")
     text = Keyword.get(options, :text, "")
 
@@ -350,19 +376,46 @@ defmodule Monty.Studio.RunHistory do
     |> by_text(text)
     |> select([run], run.id)
     |> Repo.all()
-    |> delete_ids()
   end
 
-  @doc "Forgets the runs with these ids, and answers how many it forgot."
-  @spec delete_ids([binary()]) :: non_neg_integer()
-  def delete_ids(ids) do
+  # How many runs one statement deletes. Small enough that a page hears about a
+  # long delete while it is happening, large enough that the round trips are not
+  # the cost.
+  @delete_chunk 50
+
+  @doc """
+  Deletes the runs with these ids, and answers how many it deleted.
+
+  Deleted in chunks with `delete_all`, not a `get` and a `delete` a run: fetching
+  each record first read every picture the row held — 156 MB for this machine's
+  seventy-seven runs — only to throw it away, which is what made "delete all"
+  take long enough to look like nothing was happening.
+
+  `:on_progress` is called after each chunk with `%{deleted: n, total: total}`,
+  which is what a page shows while the rest of the list is going.
+  """
+  @spec delete_ids([binary()], keyword()) :: non_neg_integer()
+  def delete_ids(ids, opts \\ []) do
+    on_progress = Keyword.get(opts, :on_progress)
+
+    # An id that cannot be a run's is not a run, so it is not an error either:
+    # the query would refuse to compare a malformed uuid at all.
+    ids = Enum.filter(ids, &match?({:ok, _uuid}, Ecto.UUID.cast(&1)))
+    total = length(ids)
+
     ids
-    |> Enum.map(&get/1)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.count(fn run -> match?({:ok, _deleted}, delete(run)) end)
+    |> Enum.chunk_every(@delete_chunk)
+    |> Enum.reduce(0, fn chunk, deleted ->
+      {count, _rows} = Repo.delete_all(from(run in Run, where: run.id in ^chunk))
+      Enum.each(chunk, &Monty.Studio.Artifacts.forget/1)
+
+      deleted = deleted + count
+      if on_progress, do: on_progress.(%{deleted: deleted, total: total})
+      deleted
+    end)
   end
 
-  @doc "Forgets a run, and the files it wrote. Monty's artifacts are not ours to delete."
+  @doc "Deletes a run, and the files it wrote. Monty's artifacts are not ours to delete."
   @spec delete(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
   def delete(%Run{} = run) do
     deleted = Repo.delete(run)
@@ -416,7 +469,7 @@ defmodule Monty.Studio.RunHistory do
     Run
     |> where([run], run.status == "running")
     |> order_by(asc: :inserted_at)
-    |> Repo.all()
+    |> rows()
   end
 
   # A run writes its record while it is working — a step's results, or the

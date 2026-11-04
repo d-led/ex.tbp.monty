@@ -67,7 +67,7 @@ defmodule Monty.Studio.Artifacts do
   # lined up with anything else a person did that afternoon.
   defp stamped(line), do: "#{Monty.Studio.LocalClock.now().clock} #{line}"
 
-  @doc "Forgets a run's directory, if it has one."
+  @doc "Deletes a run's directory, if it has one."
   # A run's own directory, named by a UUID `dir/1` has checked; a recursive
   # delete of anything else never gets this far.
   # sobelow_skip ["Traversal.FileModule"]

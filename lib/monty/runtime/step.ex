@@ -464,6 +464,19 @@ defmodule Monty.Runtime.Step do
       end)
 
     Barrier.run(requests, state.call_timeout)
+
+    # Then every module is asked what the round left it believing — not only the
+    # ones that heard something: a module that heard nothing is exactly the one
+    # that can have nothing possible, and Monty's `update_stats_after_vote`
+    # concludes `:no_match` for it, or lets it back out of `:no_match` when the
+    # votes brought possibilities.
+    settle =
+      Enum.map(state.learning_modules, fn %{id: id} ->
+        server = Registry.via({:learning_module, model_id, id})
+        {id, fn -> LearningModuleServer.update_stats_after_vote(server) end}
+      end)
+
+    Barrier.run(settle, state.call_timeout)
   end
 
   defp propose_goals(%State{model_id: model_id} = state) do

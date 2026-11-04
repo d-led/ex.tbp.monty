@@ -73,7 +73,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
     {:ok,
      socket
-     |> assign(confirming: nil, confirming_bulk: nil, selected: MapSet.new())
+     |> assign(confirming: nil, confirming_bulk: nil, selected: MapSet.new(), deleting: nil)
      |> stream_configure(:log, dom_id: &log_id/1)
      |> stream_configure(:runs, dom_id: &"run-#{&1.id}")
      |> stream(:runs, [])
@@ -135,7 +135,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp selection(event, params, socket) do
     case Selection.handle(event, params, socket.assigns) do
       {:assign, assigns} -> socket |> assign(assigns) |> redraw_rows()
-      {:forget, scope} -> forget_every(socket, scope)
+      {:delete, scope} -> delete_every(socket, scope)
     end
   end
 
@@ -148,17 +148,26 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   # Deleting happens inside the filter the person is looking at, so the list stays
   # the list they were reading — all of a narrowed list, not all of everything.
-  defp forget_every(socket, scope) do
-    forgotten =
+  #
+  # The rows go in a task, not in the event handler: a filter over a year of runs
+  # is thousands of rows and tens of megabytes of pictures each, and a page that
+  # did it inline froze until the last one was gone, which is the same as saying
+  # nothing. The task reports every chunk, so the page can say how far it got.
+  defp delete_every(socket, scope) do
+    ids =
       case scope do
-        {:ids, ids} -> RunHistory.delete_ids(ids)
-        {:matching, filter} -> RunHistory.delete_matching(filter)
+        {:ids, ids} -> ids
+        {:matching, filter} -> RunHistory.ids_matching(filter)
       end
+
+    page = self()
 
     socket
     |> assign(confirming_bulk: nil, selected: MapSet.new())
-    |> put_flash(:info, forgot(forgotten))
-    |> load_runs(here_is_where_we_are(socket))
+    |> assign(deleting: %{deleted: 0, total: length(ids)})
+    |> start_async(:delete, fn ->
+      RunHistory.delete_ids(ids, on_progress: &send(page, {:delete_progress, &1}))
+    end)
   end
 
   defp here_is_where_we_are(socket) do
@@ -441,6 +450,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           :if={MapSet.size(@selected) > 0}
           id="delete-selected"
           phx-click="ask_delete_selected"
+          disabled={@deleting != nil}
           class="btn btn-ghost btn-xs text-error"
         >
           Delete selected
@@ -465,11 +475,18 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           :if={@total > 0}
           id="delete-matching"
           phx-click="ask_delete_matching"
+          disabled={@deleting != nil}
           class="btn btn-ghost btn-xs text-error ms-auto"
+          title="Every run the filter matches, not only this page"
         >
-          Delete all {showing(@page, @per_page, @total)} shown
+          {matching_delete_label(@state, @text, @total)}
         </button>
       </div>
+
+      <p :if={@deleting} id="deleting" class="flex items-center gap-2 text-xs text-base-content/60">
+        <span class="loading loading-spinner loading-xs"></span>
+        Deleting {@deleting.deleted} of {@deleting.total} runs…
+      </p>
 
       <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
         <table id="runs-table" phx-hook={ExTbpMontyWeb.LocalTime.hook_name()} class="table table-sm">
@@ -770,11 +787,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           <pre class="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-base-content/70">{failure(@run).technical}</pre>
         </details>
         <%!-- A run can stop because a file it reads before it steps is not
-        here. The prerequisites page is where each of those files, where it
-        belongs and what the last fetch of it did are written down, so it is
-        offered from every failure rather than only from the ones this page can
-        recognise. --%>
-        <p class="text-xs">
+        here, and the prerequisites page is where each of those files, where it
+        belongs and what the last fetch of it did are written down. Offered only
+        when the explanation says so: a run whose process was killed has nothing
+        to do there. --%>
+        <p :if={failure(@run).prerequisites} class="text-xs">
           <.link id="run-failure-prerequisites" navigate={~p"/prerequisites"} class="link">
             What this experiment needs before it can run
           </.link>
@@ -941,7 +958,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   def handle_event("ask_delete", %{"id" => id}, socket) do
-    {:noreply, assign(socket, confirming: RunHistory.get(id))}
+    {:noreply, assign(socket, confirming: RunHistory.head(id))}
   end
 
   def handle_event("cancel_delete", _params, socket) do
@@ -949,9 +966,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
-    with %{} = run <- RunHistory.get(id),
+    with %{} = run <- RunHistory.head(id),
          {:ok, _deleted} <- RunHistory.delete(run) do
-      forget(socket, run)
+      delete_run(socket, run)
     else
       _already_gone -> {:noreply, assign(socket, confirming: nil)}
     end
@@ -1073,9 +1090,35 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   def handle_info({:recorded, run}, socket), do: recorded(socket, run)
   def handle_info({:settled, run}, socket), do: settled(socket, run)
 
+  # How far a delete has got. A chunk that finishes after the last one has been
+  # reported is a message from a delete that is over, and not news.
+  def handle_info({:delete_progress, _progress}, %{assigns: %{deleting: nil}} = socket),
+    do: {:noreply, socket}
+
+  def handle_info({:delete_progress, progress}, socket),
+    do: {:noreply, assign(socket, deleting: progress)}
+
   # A page can outlive the thing that was talking to it: a message for another
   # page, or one that arrived after the run was closed. It is not news.
   def handle_info(_late_message, socket), do: {:noreply, socket}
+
+  # The delete is over: say how many went, and read the list again — the rows
+  # are a stream, and deleting is the one change a stream cannot be told about
+  # one row at a time when a filter took them all.
+  @impl true
+  def handle_async(:delete, {:ok, count}, socket) do
+    socket = assign(socket, deleting: nil)
+
+    {:noreply,
+     socket |> put_flash(:info, deleted(count)) |> load_runs(here_is_where_we_are(socket))}
+  end
+
+  def handle_async(:delete, {:exit, reason}, socket) do
+    {:noreply,
+     socket
+     |> assign(deleting: nil)
+     |> put_flash(:error, "The runs could not all be deleted: #{inspect(reason)}")}
+  end
 
   # Stamped when the read is finished, not when it started: the window is the
   # time between two reads, so a page cannot read faster than it can rebuild —
@@ -1202,11 +1245,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   # From the list, the row simply goes; from one run's page there is nothing
   # left to look at, so the reader is taken back to the list.
-  defp forget(%{assigns: %{live_action: :index}} = socket, run) do
+  defp delete_run(%{assigns: %{live_action: :index}} = socket, run) do
     {:noreply, socket |> assign(confirming: nil) |> stream_delete(:runs, run)}
   end
 
-  defp forget(socket, _run) do
+  defp delete_run(socket, _run) do
     {:noreply, push_navigate(socket, to: ~p"/runs")}
   end
 
@@ -1243,7 +1286,17 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp confirming_what(%{scope: {:ids, _ids}}), do: "the selected runs"
-  defp confirming_what(%{scope: {:matching, _filter}}), do: "every run shown"
+
+  defp confirming_what(%{scope: {:matching, _filter}}),
+    do: "every run this filter matches"
+
+  # What the filter matches, said as what the button does: it deletes every run
+  # the filter matches, not the page of them on screen, and the label has to say
+  # so — "delete all 1–25 of 77 shown" read as "these twenty-five".
+  defp matching_delete_label("all", "", total), do: "Delete all #{total} runs"
+
+  defp matching_delete_label(_state, _text, total),
+    do: "Delete all #{total} matching"
 
   attr :run, :map, required: true
 
@@ -1259,7 +1312,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         <h2 class="font-semibold">Delete this run?</h2>
         <p class="text-sm text-base-content/70">
           <span class="font-mono">{@run.experiment}</span>
-          and its config snapshot, inputs and log will be forgotten. Files the run
+          and its config snapshot, inputs and log will be deleted. Files the run
           produced stay where they are.
         </p>
         <div class="flex justify-end gap-2">
@@ -1432,6 +1485,6 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp showing(_page, _per_page, 1), do: "1 run"
   defp showing(_page, _per_page, total), do: "#{total} runs"
 
-  defp forgot(1), do: "Forgot one run."
-  defp forgot(count), do: "Forgot #{count} runs."
+  defp deleted(1), do: "Deleted one run."
+  defp deleted(count), do: "Deleted #{count} runs."
 end

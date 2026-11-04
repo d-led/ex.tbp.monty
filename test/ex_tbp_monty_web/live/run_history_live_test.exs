@@ -609,6 +609,30 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert RunHistory.get(abandoned.id).status == "failed"
       assert view |> element("#run-failure") |> render() =~ "stopped before it finished"
+
+      # Nothing about a killed process is a missing file, so the page does not
+      # send the reader to the prerequisites for it.
+      refute has_element?(view, "#run-failure-prerequisites")
+    end
+
+    test "a run stopped by a memory that is not here points at where it is fetched", %{
+      conn: conn,
+      run: run
+    } do
+      {:ok, failed} =
+        RunHistory.finish(
+          run,
+          %{
+            "reason" =>
+              "No memory this application can read for pretrained_ycb_v14, and a run " <>
+                "without one cannot recognise any object. Fetch it at /prerequisites."
+          },
+          "failed"
+        )
+
+      {:ok, view, _html} = live(conn, ~p'/runs/#{failed.id}')
+
+      assert has_element?(view, "#run-failure-prerequisites")
     end
 
     test "a crash is said in a sentence, with the trace folded away", %{conn: conn, run: run} do
@@ -908,7 +932,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   end
 
   describe "deleting a run" do
-    test "asks before it forgets anything", %{conn: conn, run: run} do
+    test "asks before it deletes anything", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs")
 
       refute has_element?(view, "#confirm-delete")
@@ -929,7 +953,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert RunHistory.get(run.id) != nil
     end
 
-    test "confirming forgets it", %{conn: conn, run: run} do
+    test "confirming deletes it", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs")
 
       view |> element("#delete-#{run.id}") |> render_click()
@@ -941,23 +965,31 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   end
 
   describe "deleting many runs" do
-    test "one filter and one confirmation forget every run it shows", %{conn: conn, run: run} do
+    test "one filter and one confirmation delete every run it matches", %{conn: conn, run: run} do
       first = insert_run(%{experiment: "base_a", status: "failed"})
       second = insert_run(%{experiment: "base_b", status: "failed"})
 
       {:ok, view, _html} = live(conn, ~p"/runs?#{[state: "failed", q: ""]}")
 
+      # The button says what the click does: every run the filter matches, not
+      # the page of them on screen.
+      assert view |> element("#delete-matching") |> render() =~ "Delete all 2 matching"
+
       view |> element("#delete-matching") |> render_click()
 
       dialog = view |> element("#confirm-bulk-delete") |> render()
-      assert dialog =~ "Delete every run shown?"
+      assert dialog =~ "Delete every run this filter matches?"
       assert dialog =~ "2 run(s)"
 
+      # The rows go in a task, so the page is answered twice: once when the
+      # deletion starts, once when it is over. Only the second is a state this
+      # test can wait for — the first is gone the moment a fast delete finishes.
       view |> element("#confirm-bulk-delete-button") |> render_click()
+
+      assert render_async(view) =~ "Deleted 2 runs."
 
       assert RunHistory.get(first.id) == nil
       assert RunHistory.get(second.id) == nil
-      assert render(view) =~ "Forgot 2 runs."
 
       # The runs that were not shown are still there, and so is the filter.
       assert RunHistory.get(run.id) != nil
@@ -976,7 +1008,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert RunHistory.get(failed.id) != nil
     end
 
-    test "picking rows forgets just the rows picked", %{conn: conn, run: run} do
+    test "picking rows deletes just the rows picked", %{conn: conn, run: run} do
       first = insert_run(%{experiment: "base_a", status: "failed"})
       second = insert_run(%{experiment: "base_b", status: "finished"})
 

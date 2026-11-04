@@ -132,6 +132,36 @@ here would explore and conclude nothing.
   vote was ever moved out of the sender's sensor frame.
   `Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching.combine_votes/2`
   now does that arithmetic and `Monty.Runtime.Step.State` routes through it.
+  Two more holes in the same round were closed with it: **`update_stats_after_vote`**
+  was not ported, so a round never settled a module's own conclusion (`:no_match`
+  when nothing is possible, and the *recovery* out of it when votes bring
+  possibilities back — the terminal check never clears `:no_match`); and
+  **`lm_to_lm_vote_matrix: null`** — what most single-module configs say — was
+  read as "every module wired to nothing", so a round ran where Monty skips
+  `_vote` altogether. A run of `base_config_10distinctobj_dist_agent` now reports
+  `votes 0/0`, which is what Monty does, and the acceptance ladder is unchanged.
+
+## A page of runs is a page of rows (2026-11-04)
+
+`/runs` read every column of twenty-five runs, `timeline` included — 156 MB
+across this machine's seventy-seven runs and 53 MB in the worst one — and the
+page timed out its database connection after 15 s. `RunHistory.search/1` and
+`list/1` now read what `head/1` reads, every field but the pictures, and a
+`:recorded`/`:settled` broadcast carries the same row instead of a record with
+tens of megabytes of `timeline` that no table row looks at.
+
+The run page's "What this experiment needs before it can run" link was offered
+from every failure, including one whose process had merely been killed. It is
+now offered only when the explanation says the prerequisites page is where to
+look — a missing file, or a model with no exported memory.
+
+Deleting runs was the same defect wearing different clothes. The button said
+"Delete all 1–25 of 77 shown", which reads as *this page*, while it deleted
+every run the filter matched; and it deleted them one `get` and one `delete` at
+a time, reading each row's pictures first — 156 MB re-read to be thrown away —
+so the page sat silent until it was over. The label now says `Delete all 77
+matching`, the work happens in a task that renders "Deleting 25 of 77 runs…" as
+it goes, and the rows go with `delete_all` in chunks.
 
 ## Open points and bugs
 

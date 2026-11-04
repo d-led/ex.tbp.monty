@@ -18,12 +18,15 @@ defmodule Monty.Studio.Failure do
   A reason, explained.
 
   `technical` is `nil` when there was nothing to expand: a sentence we wrote, or
-  a detail a newer record keeps in its own key instead.
+  a detail a newer record keeps in its own key instead. `prerequisites` says
+  whether the prerequisites page is where a person would look next — a run that
+  stopped because a file it reads is not here.
   """
   @type explained :: %{
           what: String.t(),
           hint: String.t() | nil,
-          technical: String.t() | nil
+          technical: String.t() | nil,
+          prerequisites: boolean()
         }
 
   @simulator_hint "The simulator is the first thing to check: the run needs a world it can step."
@@ -47,13 +50,19 @@ defmodule Monty.Studio.Failure do
   about the run rather than about Elixir.
   """
   @spec explain(String.t() | nil) :: explained()
-  def explain(nil), do: %{what: "It stopped without saying why.", hint: nil, technical: nil}
+  def explain(nil),
+    do: %{what: "It stopped without saying why.", hint: nil, technical: nil, prerequisites: false}
 
   def explain(reason) when is_binary(reason) do
-    case banner(reason) do
-      {kind, message} -> translated(kind, message, reason)
-      nil -> bare(reason)
-    end
+    explained =
+      case banner(reason) do
+        {kind, message} -> translated(kind, message, reason)
+        nil -> bare(reason)
+      end
+
+    # Where to look next is a property of the answer rather than of the branch
+    # that produced it, so it is decided once, here.
+    Map.put(explained, :prerequisites, points_at_prerequisites?(explained))
   end
 
   @doc """
@@ -117,6 +126,16 @@ defmodule Monty.Studio.Failure do
     end
   end
 
+  # The page is offered where an explanation already says to look there: a
+  # missing file's hint names it, and a setup finding that a model has no memory
+  # says so in its own sentence. A killed process and an abandoned record say
+  # nothing about files, and a link from every failure sent people to a page
+  # with nothing on it for them.
+  defp points_at_prerequisites?(%{what: what, hint: hint}),
+    do: names_the_page?(what) or names_the_page?(hint)
+
+  defp names_the_page?(nil), do: false
+  defp names_the_page?(text), do: String.contains?(text, "prerequisites")
   # A sentence never opens the way a term does.
   defp dump?(text), do: String.match?(text, ~r/^\s*(#|%|\{|\[|:")/)
 

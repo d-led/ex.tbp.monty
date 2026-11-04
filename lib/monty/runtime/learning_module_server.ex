@@ -67,6 +67,16 @@ defmodule Monty.Runtime.LearningModuleServer do
   @spec receive_votes(server(), [vote()]) :: :ok
   def receive_votes(server, votes), do: GenServer.call(server, {:receive_votes, votes}, :infinity)
 
+  @doc """
+  Settles what the vote round left this module believing.
+
+  Monty's `update_stats_after_vote`, asked of every module after a round — the
+  module that heard nothing is exactly the one that can have nothing possible.
+  """
+  @spec update_stats_after_vote(server()) :: :ok
+  def update_stats_after_vote(server),
+    do: GenServer.call(server, :update_stats_after_vote, :infinity)
+
   @spec propose_goals(server()) :: [Goal.t()]
   def propose_goals(server), do: GenServer.call(server, :propose_goals, :infinity)
 
@@ -174,6 +184,10 @@ defmodule Monty.Runtime.LearningModuleServer do
   def handle_call({:receive_votes, votes}, _from, server) do
     {:ok, state} = server.module.receive_votes(votes, server.state)
     {:reply, :ok, %{server | state: state}}
+  end
+
+  def handle_call(:update_stats_after_vote, _from, server) do
+    {:reply, :ok, %{server | state: server.module.update_stats_after_vote(server.state)}}
   end
 
   def handle_call(:propose_goals, _from, server) do

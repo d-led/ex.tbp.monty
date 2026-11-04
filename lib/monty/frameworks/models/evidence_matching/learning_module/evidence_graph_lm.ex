@@ -1544,6 +1544,31 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     end
   end
 
+  @doc """
+  What the vote round left this module believing.
+
+  Monty's `update_stats_after_vote`: the step's statistics are written into the
+  last entry the buffer holds, and then the module's own conclusion is settled.
+  Nothing possible is `:no_match`; a module that was `:no_match` is let back
+  when other modules' votes have given it possibilities again.
+
+  The second half is the one that cannot be left to the terminal check: that
+  check clears `:match` when a module loses its object, never `:no_match`, so a
+  module that lost its hypotheses once would stay concluded for the episode.
+  """
+  @impl true
+  @spec update_stats_after_vote(t()) :: t()
+  def update_stats_after_vote(%__MODULE__{} = lm) do
+    {lm, stats} = collect_stats_to_save(lm)
+    lm = %{lm | buffer: FeatureAtLocationBuffer.update_last_stats_entry(lm.buffer, stats)}
+
+    cond do
+      lm.possible_matches == [] -> set_individual_ts(lm, :no_match)
+      lm.terminal_state == :no_match -> set_individual_ts(lm, nil)
+      true -> lm
+    end
+  end
+
   # -- what the module above hears -----------------------------------------
 
   @doc """

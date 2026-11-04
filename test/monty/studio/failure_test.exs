@@ -38,6 +38,7 @@ defmodule Monty.Studio.FailureTest do
 
       assert explained.what == "A file the run needs is not there."
       assert explained.hint =~ "prerequisites"
+      assert explained.prerequisites
     end
 
     test "any other exception keeps its own first line, without the trace" do
@@ -61,6 +62,23 @@ defmodule Monty.Studio.FailureTest do
       assert explained.what == "it was stopped before it finished"
       assert explained.hint == nil
       assert explained.technical == nil
+    end
+
+    test "an abandoned record points at nothing, because no file would have kept it running" do
+      explained =
+        Failure.explain("it stopped before it finished — nothing was working on it any more")
+
+      refute explained.prerequisites
+    end
+
+    test "a memory that was never exported points at the page that exports it" do
+      explained =
+        Failure.explain(
+          "No memory this application can read for pretrained_ycb_v14, and a run " <>
+            "without one cannot recognise any object. Fetch it at /prerequisites."
+        )
+
+      assert explained.prerequisites
     end
 
     test "a run that stopped without a reason says so" do

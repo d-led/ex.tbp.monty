@@ -32,9 +32,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive.Selection do
   What an event does.
 
   Answers `{:assign, assigns}` for the events that only move the selection, and
-  `{:forget, scope}` for the one that deletes, which is the page's to carry out.
+  `{:delete, scope}` for the one that deletes, which is the page's to carry out.
   """
-  @spec handle(String.t(), map(), map()) :: {:assign, keyword()} | {:forget, scope()}
+  @spec handle(String.t(), map(), map()) :: {:assign, keyword()} | {:delete, scope()}
   def handle("toggle", %{"id" => id}, %{selected: selected}),
     do: {:assign, selected: toggle(selected, id)}
 
@@ -52,7 +52,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive.Selection do
   def handle("cancel_bulk_delete", _params, _assigns), do: {:assign, confirming_bulk: nil}
 
   def handle("bulk_delete", _params, %{confirming_bulk: %{scope: scope}}),
-    do: {:forget, scope}
+    do: {:delete, scope}
 
   defp toggle(picked, id) do
     if MapSet.member?(picked, id), do: MapSet.delete(picked, id), else: MapSet.put(picked, id)

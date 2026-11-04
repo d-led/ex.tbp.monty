@@ -40,6 +40,19 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
   """
   @callback receive_votes(vote(), state) :: {:ok, state}
 
+  @doc """
+  Monty's `update_stats_after_vote`: what a vote round left this module
+  believing.
+
+  Asked after every round, for every module, whether or not it heard anything.
+  Monty uses it to settle the module's own conclusion: nothing possible is
+  `:no_match`, and a module that was `:no_match` is let back when other modules'
+  votes have given it possibilities again — the terminal check never clears
+  `:no_match`, so without this a module that lost its hypotheses once could
+  never recover in the same episode.
+  """
+  @callback update_stats_after_vote(state) :: state
+
   @doc "A goal this module wants pursued (usually a hypothesis test)."
   @callback propose_goals(state) :: {[Goal.t()], state}
 
@@ -151,7 +164,7 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
 
   @doc """
   Defaults for the parts not every learning module has: no goals, no region,
-  no output. `use` this behaviour and override what applies.
+  no output, and no bookkeeping of its own after a vote.
   """
   defmacro __using__(_opts) do
     quote do
@@ -166,7 +179,13 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
       @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
       def get_output(state), do: {nil, state}
 
-      defoverridable propose_goals: 1, propose_region: 1, get_output: 1
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+      def update_stats_after_vote(state), do: state
+
+      defoverridable propose_goals: 1,
+                     propose_region: 1,
+                     get_output: 1,
+                     update_stats_after_vote: 1
     end
   end
 end

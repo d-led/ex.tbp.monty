@@ -542,7 +542,10 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert run.status == "finished"
       assert run.experiment == "base_config_10distinctobj_dist_agent"
       assert length(run.log) == 2
-      assert length(run.timeline) == 2
+      # What each step saw is read a step at a time: a row of the list carries
+      # no pictures, which is what makes a page of them cheap.
+      assert %{"location" => _} = RunHistory.sensors_at(run.id, 0)["patch"]
+      assert %{"location" => _} = RunHistory.sensors_at(run.id, 1)["patch"]
       assert run.summary["steps"] == 2
       assert is_map(run.config)
       assert File.exists?(run.log_path)

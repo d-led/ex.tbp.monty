@@ -83,10 +83,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive.SelectionTest do
                {:assign, confirming_bulk: nil}
     end
 
-    test "answering it forgets what the question was about" do
+    test "answering it deletes what the question was about" do
       assigns = %{confirming_bulk: %{count: 2, scope: {:ids, ["a", "b"]}}}
 
-      assert Selection.handle("bulk_delete", %{}, assigns) == {:forget, {:ids, ["a", "b"]}}
+      assert Selection.handle("bulk_delete", %{}, assigns) == {:delete, {:ids, ["a", "b"]}}
     end
   end
 end

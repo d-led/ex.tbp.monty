@@ -374,8 +374,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert Hypotheses.evidence(lm.hypotheses["mug"]) == before
     end
 
+    # This is the pair the model makes: every module votes, the model moves
     test "hears an agreeing module's vote once the model has routed it" do
-      # This is the pair the model makes: every module votes, the model moves
       # each vote into the frame of the module that receives it, and only then
       # does it arrive. A module two sensors' widths away could not use the
       # sender's own frame, which is why the vote is not delivered raw.
@@ -402,6 +402,52 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       {:ok, lm} = EvidenceGraphLM.receive_votes(heard, receiver)
 
       assert best_evidence(lm, "mug") > before
+    end
+
+    test "concludes no match when a round leaves it with nothing possible" do
+      # A round with no vote in reach leaves the hypotheses standing and none of
+      # them possible, and Monty concludes on that: the module has seen enough to
+      # say nothing in memory explains it.
+      lm =
+        learning_module(mug())
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+
+      concluded = EvidenceGraphLM.update_stats_after_vote(%{lm | possible_matches: []})
+
+      assert concluded.terminal_state == :no_match
+    end
+
+    test "is let back out of no match when a vote brings possibilities back" do
+      # Nothing else clears `no_match` — the terminal check only ever clears
+      # `match` — so this is the one path by which a module that lost its
+      # hypotheses recovers within the episode.
+      lm =
+        learning_module(mug())
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+
+      concluded = %{lm | possible_matches: [], terminal_state: :no_match}
+
+      {:ok, vote} =
+        Message.new(
+          location: [0.2, 0.0, 0.0],
+          morphological_features: %{
+            "pose_vectors" => %OrientationMatrix{value: @identity},
+            "pose_fully_defined" => true
+          },
+          non_morphological_features: %{},
+          confidence: 0.9,
+          pass_message: true,
+          process_features_in_lm: true,
+          sender_id: "LM_1",
+          sender_type: :lm
+        )
+
+      {:ok, heard} = EvidenceGraphLM.receive_votes(%{"mug" => [vote]}, concluded)
+      assert heard.possible_matches != []
+
+      assert EvidenceGraphLM.update_stats_after_vote(heard).terminal_state == nil
     end
   end
 

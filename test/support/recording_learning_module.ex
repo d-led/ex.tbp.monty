@@ -50,6 +50,12 @@ defmodule Monty.Test.RecordingLearningModule do
   end
 
   @impl true
+  def update_stats_after_vote(state) do
+    send(state.notify, {:update_stats_after_vote, state.id})
+    state
+  end
+
+  @impl true
   def propose_goals(state) do
     send(state.notify, {:propose_goals, state.id})
     {state.goals, state}
