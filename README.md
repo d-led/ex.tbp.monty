@@ -172,6 +172,15 @@ follows from that is argued in [docs/monty-differences.md](docs/monty-difference
 MPL-2.0 — see [LICENSE](LICENSE). Monty itself is MIT-licensed, and this project
 ships a verbatim copy of its config tree and of the snapshots our composer is
 checked against: those files stay Monty's, with its licence beside them in
-[priv/monty/LICENSE](priv/monty/LICENSE). Everything else the repository and the
-image carry that this project did not write is listed in
-[THIRD-PARTY.md](THIRD-PARTY.md).
+[priv/monty/LICENSE](priv/monty/LICENSE).
+
+The rest of what is third-party here is a dependency rather than a copy, so the
+build's own files are the list — each fetched package keeps its licence:
+
+| What                       | Where it is declared                                                |
+| -------------------------- | ------------------------------------------------------------------- |
+| Elixir libraries           | [`mix.exs`](mix.exs), pinned in [`mix.lock`](mix.lock)              |
+| browser packages           | [`assets/package.json`](assets/package.json)                        |
+| Python, in our interpreter | the `pyproject_toml` in [`config/pythonx.exs`](config/pythonx.exs)  |
+| the NIFs, the desktop app  | [`native/`](native), [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml) |
+| the image's base images    | [`Dockerfile`](Dockerfile)                                          |

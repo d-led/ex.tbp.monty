@@ -58,5 +58,3 @@ here rather than restating the table:
   timestep, and why the boundary falls where it does.
 - [`priv/monty/README.md`](../priv/monty/README.md) — that directory's own change
   process, and whose licence it is under.
-- [`THIRD-PARTY.md`](../THIRD-PARTY.md) — the licences, for this and for
-  everything else this project ships that it did not write.

@@ -226,7 +226,6 @@ priv/studio_runs/        what each run wrote: run.log, frames, logs (ignored by 
 priv/prerequisites.yaml  what a run downloads, checksummed
 scripts/                 the gates, the dev scripts, and every Python file this project has
 mix_tasks/               Mix tasks compiled outside `:test` (assets, build info)
-THIRD-PARTY.md           what this project did not write, and under which terms
 docs/                    architecture, config compatibility, module map, MCP, validation, speed
 ```
 

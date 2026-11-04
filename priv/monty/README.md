@@ -50,6 +50,3 @@ commit this copy was taken from is in `inputs.json`.
 The pretrained models in [`libraries/`](libraries) are published by the Thousand
 Brains Project as part of Monty's prerequisites; [`libraries/README.md`](libraries/README.md)
 records which archive each file came from and how it was exported.
-
-See [`THIRD-PARTY.md`](../../THIRD-PARTY.md) at the root for everything else this
-project ships that it did not write.
