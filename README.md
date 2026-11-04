@@ -123,10 +123,11 @@ scripts/run-dev.sh` (4000 is the default, and then the URL to copy is the one
 - **Processes, not a loop.** A step is a barrier over processes: sensor modules,
   learning modules and the motor system exchange CMP messages, and a vote is a
   round with a deadline — [docs/architecture.md](docs/architecture.md).
-- **The experiment's own engine, unless the run chooses otherwise.** A run steps
-  MuJoCo or Habitat-Sim through Monty's Python, in an external process that
-  imports Monty; the Elixir stand-in scene is the alternative —
-  [docs/simulator-port.md](docs/simulator-port.md).
+- **MuJoCo is the world a run steps.** Monty's own simulator, copied into
+  `priv/monty_py` rather than ported, driven in the interpreter the release
+  carries; the Elixir stand-in scene is the alternative. Habitat is not carried —
+  a Habitat config is refused rather than given MuJoCo's scene and allowed to look
+  as if it ran — [docs/simulator-port.md](docs/simulator-port.md).
 - **Checked against Monty.** What was compared, with which numbers, is
   [docs/validation.md](docs/validation.md); what is ported is measured in
   [docs/features.md](docs/features.md).

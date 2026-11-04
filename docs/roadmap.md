@@ -99,40 +99,41 @@ and a run of it is the ported pipeline, not stand-ins.
 Accuracy cannot be compared before the world is real, so this comes before
 benchmarks rather than after.
 
-- **Done, for Habitat.** `Monty.Simulators.Port` is the boundary and
-  [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) is
-  Monty's own `HabitatEnvironment` and eval
-  interface on the far side of it, running in Monty's pinned conda environment.
-  `Monty.Simulators.Habitat.Environment.HabitatEnvironment` is that world under
-  Monty's own name — it owns no scene and starts the peer on its first step — and
-  `world_simulator: :habitat` is what a run of the studio steps it with; without
-  it a run steps this port's synthetic scene, and the setup page says so.
-  Units and quirks are preserved on the way across: metres, `wxyz` quaternions
-  decoded into `Monty.Geometry.Rotation`, sensor positions relative to the agent.
-  A config's own model runs against it
-  ([`scripts/probe_world_episodes.exs`](../scripts/probe_world_episodes.exs)), and
-  what that comparison shows — objects agree, step counts do not, because of the
+- **Done, and MuJoCo is what a run steps.** MuJoCo is the default world
+  (`config/config.exs`): Monty's own simulator, copied file for file into
+  `priv/monty_py` and driven in the interpreter the release carries
+  (`Monty.Simulators.Mujoco.{Host,Environment}`), so a step is Monty's own
+  `MuJoCoSimulator`, its agents, cameras and actuations, with no checkout and
+  nothing from PyPI. Its classes stay `:planned` in the map on purpose: the code
+  is copied rather than ported, so there is no Elixir module per class to point
+  at. Units and quirks cross unchanged — metres, `wxyz` quaternions decoded into
+  `Monty.Geometry.Rotation`, sensor positions relative to the agent — and a
+  config's own model runs against it
+  ([`scripts/probe_world_episodes.exs`](../scripts/probe_world_episodes.exs)).
+  What that comparison shows — objects agree, step counts do not, because of the
   random-stream deviation of §2.1 in [`monty-differences.md`](monty-differences.md) — is in
   [`validation.md`](validation.md).
-- **Next: MuJoCo — the same bridge, with a heavier far side.** All 17 classes of
-  `simulators/mujoco/` are `:planned`: `agents.py` (`Axis`, `Embodiment`, `Agent`,
-  `NoopAgent`, `DistantAgent`, `SurfaceAgent`), `objects.py` (`ObjectMetadata`,
-  `ObjectMetadataDecoder` and the two errors a bad YCB entry raises) and
-  `simulator.py` (`MuJoCoSimulator`, `MuJoCoAgentFactory`, `ModelMetadata`,
-  `UnknownObjectType` and the three configuration errors). The Elixir half is
-  nearly free — `Monty.Simulators.Port.Protocol` already carries actions and
-  observations, `Synthetic.Kinematics` already follows MuJoCo's action
-  conventions, and `pythonx` runs Python in-process, so the peer is a module here
-  rather than a conda environment somewhere else. The far half is not free: the
-  `mujoco` wheel and its EGL/OSMesa off-screen rendering, the MJCF scenes, the YCB
-  object models under `MONTY_DATA`, `MuJoCoAgentFactory`'s choice of body per
-  `embodiment`, and depth and colour a sensor can be checked against. Habitat has
-  already shown where the difficulty is not: the wiring, which is shared, but the
-  random stream in the middle of an episode ([`monty-differences.md`](monty-differences.md) §2.1).
-  MuJoCo puts
-  physics on top of that, so the comparison is the work, not the bridge.
-  **Done when**: `world_simulator: :mujoco` steps Monty's own physics world through
-  the studio, and the setup page stops calling the scene synthetic.
+- **The port, and what it is still for.** `Monty.Simulators.Port` is the boundary
+  a world outside this release would come through, tested in both directions:
+  [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) is
+  Monty's own `HabitatEnvironment` and eval interface in Monty's pinned conda
+  environment, and
+  `Monty.Simulators.Habitat.Environment.HabitatEnvironment` is the handle that
+  would own it. Habitat-Sim is not carried — a conda package for another Python,
+  and on its way out of Monty — so a Habitat config is refused as a world this
+  build does not have rather than silently given MuJoCo's scene.
+- **The MuJoCo classes themselves are still `:planned`, and that is not a gap in
+  what runs.** All 17 of `simulators/mujoco/` — `agents.py` (`Axis`, `Embodiment`,
+  `Agent`, `NoopAgent`, `DistantAgent`, `SurfaceAgent`), `objects.py`
+  (`ObjectMetadata`, `ObjectMetadataDecoder` and the two errors a bad YCB entry
+  raises) and `simulator.py` (`MuJoCoSimulator`, `MuJoCoAgentFactory`,
+  `ModelMetadata`, `UnknownObjectType` and the three configuration errors) — are
+  Monty's Python, carried as it is. Porting them to Elixir would be a rewrite of a
+  physics front end for no gain: the same code runs a step today, inside the
+  interpreter the release already ships. The map keeps them `planned` so that
+  "ported" keeps meaning "there is an Elixir module to read", and
+  [`from-monty.md`](from-monty.md) records the copy the same way it records the
+  config tree.
 - **Done: the observation transforms**, in Elixir — `DepthTo3DLocations`,
   `MissingToMaxDepth`, `AddNoiseToRawDepthImage`, `GaussianBlurRGB`,
   `GaussianSmoothing`, `NoDepthSensorPresent` under
