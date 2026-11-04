@@ -229,7 +229,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
   @doc "What a run did, and what it is doing."
   @spec report(String.t()) :: {:ok, map()} | {:error, String.t()}
   def report(run_id) do
-    case RunHistory.get(run_id) do
+    case RunHistory.head(run_id) do
       nil -> {:error, "No run `#{run_id}`. See monty_list_runs."}
       run -> {:ok, report_of(run)}
     end

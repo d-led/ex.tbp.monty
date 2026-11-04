@@ -519,6 +519,29 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert current_run_id(reopened) == run_id
       assert has_element?(reopened, "#open-history")
     end
+
+    test "a page opened on a run that has already stepped draws its replay", %{conn: conn} do
+      record = running_run()
+
+      # The row carries the steps a page draws: `reconcile/1` seeds the frames
+      # out of the record, so it reads the whole row. A row read without its
+      # pictures (`head/1`) keeps the log but not the pictures, and the page then
+      # draws a run that stepped and saw nothing.
+      {:ok, _stepped} =
+        RunHistory.record_step(record, entry(0), %{
+          "step" => 0,
+          "sensors" => %{"patch" => %{"location" => [0.0, 0.0, 0.1], "depth" => [[1.0, 2.0]]}}
+        })
+
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      assert current_run_id(view) == record.id
+
+      poll(view)
+
+      assert has_element?(view, "#frames figure")
+    end
   end
 
   describe "after the run" do

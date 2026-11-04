@@ -1006,6 +1006,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp reconcile(%{assigns: %{run_id: nil}} = socket), do: socket
 
   defp reconcile(%{assigns: %{run_id: run_id}} = socket) do
+    # The whole row, not `head/1`: the page merges the timeline out of it below
+    # (`Replay.at/2`), and a run without the pictures is a `timeline` of `nil`
+    # rather than an empty one — which the replay walks. Asking for the row
+    # without them is for the callers that only want to know it exists.
     case RunHistory.get(run_id) do
       nil ->
         socket
@@ -1244,7 +1248,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # was killed. Waiting for news that will never come is the worst state a page
   # can be in, so say it happened.
   defp settle(socket, run_id) do
-    case RunHistory.get(run_id) do
+    case RunHistory.head(run_id) do
       %{status: "running"} = record ->
         {:ok, _} =
           RunHistory.finish(record, %{"reason" => "nothing was running it any more"}, "failed")

@@ -24,7 +24,7 @@ defmodule ExTbpMontyWeb.RunFileController do
   # sobelow_skip ["Traversal.SendFile", "XSS.ContentType"]
   @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def show(conn, %{"id" => id, "name" => name}) do
-    with %{} = _run <- RunHistory.get(id),
+    with %{} = _run <- RunHistory.head(id),
          {:ok, path} <- Artifacts.file_path(id, name) do
       conn
       |> put_resp_content_type(content_type(name))
