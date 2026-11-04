@@ -148,6 +148,31 @@ from [`config/runtime.exs`](../config/runtime.exs), which defaults to 6432: **no
 `mix test` or `mix phx.server`**. Two checkouts at once are the one case that
 needs a `DB_PORT`, and it moves the mapping and the application together.
 
+### A file instead of a server
+
+`mix ecto.*` above is Postgres because `config/dev.exs` and `config/test.exs`
+name it. A process that has nobody to configure it — a release, and the desktop
+app — asks the environment instead: `DATABASE_URL` names a Postgres, and with no
+`DATABASE_URL` the runs live in a SQLite file, `ex_tbp_monty.db` under
+`Monty.Paths.database()` (`SQLITE_PATH` moves it). Both drivers are in the
+release, so one artifact serves either.
+
+Two things worth knowing before you touch a file-backed database:
+
+- **`mix ecto.migrate` creates it.** Checked against a path that did not exist:
+  the task made a 40 KB file and applied every migration. `mix ecto.create` is
+  not a separate step for SQLite, and it is not needed before the first run.
+- **`mix ecto.drop` deletes it** — `File.rm/1` on the file plus `-wal` and
+  `-shm`, in the adapter's `storage_down/1`. `mix ecto.reset`, which is a drop,
+  therefore throws away every run in that file, and there is no dump to restore
+  from. Postgres has the same shape of danger with a smaller blast radius,
+  because a cluster usually holds other databases too.
+
+A development run on a file is one line away — replace the `:repo` in
+`config/dev.exs` with `ExTbpMonty.Repo.SQLite` — but the tests stay on Postgres:
+four partitions of the suite run against a service in CI, and some of the schema
+under test (`jsonb` in the run columns) is Postgres's.
+
 The script also installs the
 two toolchains itself when the machine has neither:
 

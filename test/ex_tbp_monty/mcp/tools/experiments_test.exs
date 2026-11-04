@@ -19,7 +19,7 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
   alias Monty.Test.Tmp
 
   @ctx %{base_url: "http://studio.test"}
-  @experiment "tutorial/first_experiment"
+  @experiment "base_config_10distinctobj_dist_agent"
 
   describe "the catalog" do
     test "leads with how many experiments there are, not with two hundred rows" do
@@ -71,7 +71,7 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       assert text =~ @experiment
       # The same sentences the studio page shows and the CLI prints.
       assert text =~ "sensors: patch, view_finder"
-      assert text =~ "episodes, as the config runs them: 1 train"
+      assert text =~ "episodes, as the config runs them: 140 eval"
       assert text =~ "ported here: #{summary.ported.implemented}/#{summary.ported.total}"
     end
 
@@ -173,10 +173,11 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       assert text =~ "```yaml"
       assert preview.yaml =~ "mcp_preview"
 
-      # A finding is part of the answer, not a reason to refuse: this base
-      # experiment runs against the stand-in world, and the preview says so.
-      assert text =~ "- warning world_is_a_stand_in"
-      refute text =~ "- error "
+      # A finding is part of the answer, not a reason to refuse the preview —
+      # and the builder's default base is Monty's first tutorial, which this
+      # application cannot run. The preview is where a caller finds that out,
+      # in the same words the page uses.
+      assert text =~ "- error modules_not_ported"
     end
 
     test "a preview reports the option that does not exist rather than ignoring it" do
@@ -217,8 +218,8 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                Tools.call("monty_export_experiment", %{"name" => @experiment}, @ctx)
 
       assert exported.source == :monty
-      assert exported.filename == "tutorial_first_experiment.yaml"
-      assert text =~ "as `tutorial_first_experiment.yaml`"
+      assert exported.filename == "base_config_10distinctobj_dist_agent.yaml"
+      assert text =~ "as `base_config_10distinctobj_dist_agent.yaml`"
       assert text =~ "```yaml"
     end
 
@@ -294,12 +295,13 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
     end
 
     test "the world is the caller's choice, and the record keeps it" do
-      download_prerequisites()
+      experiment = draft_without_memory()
+      download_prerequisites(experiment)
 
       assert {:ok, %{text: text, structured: run}} =
                Tools.call(
                  "monty_run_experiment",
-                 %{"name" => @experiment, "steps" => 1, "world" => "monty"},
+                 %{"name" => experiment, "steps" => 1, "world" => "monty"},
                  @ctx
                )
 
@@ -430,12 +432,12 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
   # Every file a run of the test experiment reads, created where this port looks
   # for it: the refusal above is about files, so a test about the world must not
   # be a test about files.
-  defp download_prerequisites do
+  defp download_prerequisites(experiment) do
     Tmp.system_env("MONTY_PYTHON", interpreter())
     Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
     Tmp.system_env("MONTY_MODELS", Tmp.dir("monty-models"))
 
-    {:ok, opened} = Studio.open(@experiment, world_simulator: :habitat)
+    {:ok, opened} = Studio.open(experiment, world_simulator: :habitat)
 
     # Only the downloads are directories to create: the interpreter and the
     # engine are packages inside it, and their path is the interpreter itself.
@@ -445,6 +447,26 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       File.mkdir_p!(path)
       File.write!(Path.join(path, "downloaded-by-the-test"), "")
     end
+  end
+
+  # The acceptance config with its memory taken out: a config whose prerequisites
+  # are directories, so a test about which world a run records does not have to
+  # fabricate a pretrained library. An empty `.jsonl.gz` is a corrupt library,
+  # and one written into the shipped directory poisons every later test in this
+  # node — which is exactly what happened once.
+  defp draft_without_memory do
+    Tmp.env_dir("mcp-tool-drafts", :experiments_dir)
+
+    yaml =
+      Path.join([:code.priv_dir(:ex_tbp_monty), "monty/conf/experiment/#{@experiment}.yaml"])
+      |> File.read!()
+      |> String.replace(
+        "model_name_or_path: ${constants.pretrained_dir}/surf_agent_1lm_10distinctobj/pretrained/",
+        "model_name_or_path: \"\""
+      )
+
+    {:ok, _draft} = Drafts.import("world_choice_eval", yaml, overwrite: true)
+    "world_choice_eval"
   end
 
   # An interpreter that answers every import with success. These tests are about

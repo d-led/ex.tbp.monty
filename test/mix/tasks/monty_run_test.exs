@@ -2,6 +2,7 @@ defmodule Mix.Tasks.Monty.RunTest do
   use ExTbpMonty.DataCase, async: false
 
   alias Monty.Studio.RunHistory
+  alias Monty.Test.Tmp
 
   setup do
     Mix.shell(Mix.Shell.Process)
@@ -42,31 +43,35 @@ defmodule Mix.Tasks.Monty.RunTest do
     end
 
     test "covers the whole experiment by default, not one episode of it" do
-      # Two objects in fourteen training epochs, which is twenty-eight episodes —
-      # and all of them have to happen: a single episode is a smoke test that
-      # would sit in the history looking like a result.
-      output = run_and_capture(["tutorial/dist_agent_5lm_2obj_train", "--steps", "1"])
+      # Two objects in one evaluation epoch, which is two episodes — and both of
+      # them have to happen: a single episode is a smoke test that would sit in
+      # the history looking like a result. The draft is the acceptance config
+      # with its object list and epochs narrowed, because ten objects in
+      # fourteen rotations is two minutes of work this test does not need.
+      output = run_and_capture([draft_of_two_objects(), "--steps", "1"])
 
-      assert output =~ "episode 1/28"
-      assert output =~ "episode 28/28"
+      assert output =~ "episode 1/2"
+      assert output =~ "episode 2/2"
 
       assert [run] = RunHistory.list()
-      assert run.inputs["episodes"] == 28
-      assert run.log |> Enum.map(& &1["episode"]) |> Enum.uniq() |> length() == 28
+      assert run.inputs["episodes"] == 2
+      assert run.log |> Enum.map(& &1["episode"]) |> Enum.uniq() |> length() == 2
     end
 
-    test "steps the epochs the config asks for, in Monty's order" do
-      # The tutorial names three train epochs, switches training on and
-      # evaluation off, so its one object is one episode — not three eval
-      # episodes, which is what a runner that ignored the phases used to do.
-      output = run_and_capture(["tutorial/first_experiment", "--steps", "1"])
+    test "an evaluation experiment steps only its eval epochs" do
+      # The config names three train epochs and switches training off; what it
+      # runs is the fourteen evaluation ones, and nothing here trains.
+      output =
+        run_and_capture([
+          "base_config_10distinctobj_dist_agent",
+          "--steps",
+          "1",
+          "--episodes",
+          "1"
+        ])
 
-      assert output =~ "epochs: train 1 · eval 3"
-      assert output =~ "training · evaluation: train yes · eval no"
-      refute output =~ "episode 1/3"
-
-      assert [run] = RunHistory.list()
-      assert run.inputs["episodes"] == 1
+      assert output =~ "epochs: train 3 · eval 14"
+      refute output =~ "training · evaluation: train yes"
     end
 
     test "--episodes is a slice, and the record keeps the slice it ran" do
@@ -139,9 +144,42 @@ defmodule Mix.Tasks.Monty.RunTest do
       end
     end
 
+    test "an experiment built from classes this port has not written" do
+      # Monty's first tutorial names `DisplacementGraphLM` and a training
+      # experiment class, and neither is written here. A stand-in would run and
+      # conclude nothing, so the run is refused and nothing is recorded.
+      assert_raise Mix.Error, ~r/would not start/, fn ->
+        Mix.Tasks.Monty.Run.run(["tutorial/first_experiment", "--steps", "1"])
+      end
+
+      assert RunHistory.list() == []
+    end
+
     test "no experiment at all" do
       assert_raise Mix.Error, ~r/which experiment/, fn -> Mix.Tasks.Monty.Run.run([]) end
     end
+  end
+
+  # The acceptance config, narrowed to two objects in one evaluation epoch. A
+  # draft, because that is what the studio's builder writes: the same
+  # composition with two choices changed.
+  defp draft_of_two_objects do
+    Tmp.env_dir("run-task-drafts", :experiments_dir)
+
+    yaml =
+      Path.join([
+        :code.priv_dir(:ex_tbp_monty),
+        "monty/conf/experiment/base_config_10distinctobj_dist_agent.yaml"
+      ])
+      |> File.read!()
+      |> String.replace(
+        "/env_interface: eval_distinctobj_predefined",
+        "/env_interface: test_eval_2obj_predefined"
+      )
+      |> String.replace("n_eval_epochs: ${constants.rotations_all_count}", "n_eval_epochs: 1")
+
+    {:ok, _draft} = Monty.Studio.Drafts.import("two_object_eval", yaml, overwrite: true)
+    "two_object_eval"
   end
 
   # The shell writes to this process; collect what the run said before

@@ -19,8 +19,14 @@ Then <http://localhost:6401>. The release migrates itself as it boots, so there
 is no migration step in front of the server — `/app/bin/migrate` is there for an
 operator who wants to migrate without starting one.
 
-`docker compose -f docker-compose.quickstart.yml up` in this repository is that
-same thing with a Postgres of its own beside it.
+`docker compose -f docker-compose.quickstart.yml up` in this repository runs
+that same thing with the database in a file on a volume.
+[`docker-compose.postgres.yml`](../docker-compose.postgres.yml) beside it is the
+same stack with a Postgres service of its own: same image, same port, same
+volumes, and `DATABASE_URL` the only difference between them. Both were checked
+by starting them: the file shape writes `ex_tbp_monty.db` on the volume, and the
+server shape puts `studio_runs`, `schema_migrations` and Oban's two tables in
+Postgres with no file in the container at all.
 
 ## The script, if you have the checkout
 
@@ -89,8 +95,8 @@ file.
 
 The runs live in one of two places, decided when the instance starts:
 
-| Variable       | Default                 | Meaning                                                                                                              |
-| -------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Variable       | Default                 | Meaning                                                                                                               |
+| -------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL` | unset → SQLite          | Postgres, `ecto://user:pass@host:5432/database`. Setting it is the whole switch: the same image then uses the server. |
 | `SQLITE_PATH`  | `$HOME/ex_tbp_monty.db` | Where the file goes when there is no `DATABASE_URL`. In the image `$HOME` is `/app/priv`, so it lands on the volume.  |
 
@@ -155,19 +161,19 @@ a wheel when the image is built (`config/pythonx.exs`), the scene is
 `priv/monty_py/world.py`, and there is nothing for an operator to install. The
 other choice is this port's stand-in scene, which the setup page names.
 
-| Variable          | Default | Meaning                                                                                                  |
-| ----------------- | ------- | -------------------------------------------------------------------------------------------------------- |
-| `MONTY_OVERRIDES` | unset   | Hydra overrides for a config composed from a checkout, space separated as on Monty's own command line.    |
+| Variable          | Default | Meaning                                                                                                |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------ |
+| `MONTY_OVERRIDES` | unset   | Hydra overrides for a config composed from a checkout, space separated as on Monty's own command line. |
 
 ### This image's own choices
 
-| Variable         | Image value             | Why                                                                                                                                                                                               |
-| ---------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WANDB_MODE`     | `disabled`              | No wandb from a container. `online` plus `WANDB_API_KEY` (and any other `WANDB_*`) turns it back on; the client forwards them into the interpreter.                                               |
-| `WANDB_DIR`      | `/app/priv/wandb`       | Where a wandb run would write. It has to exist — wandb silently uses the system temp directory otherwise — so `bin/server` creates it at boot.                                                    |
-| `HOME`           | `/app/priv`             | A run's downloads and pretrained models go under `$HOME/tbp`, i.e. `/app/priv/tbp`; the image gives the unprivileged user a writable home on the volume.                                          |
-| `LANG`, `LC_ALL` | `en_US.UTF-8`           | Experiment names sort and log as written.                                                                                                                                                         |
-| `MIX_ENV`        | `prod`                  | The release is a prod build; this is only informational at run time.                                                                                                                              |
+| Variable         | Image value       | Why                                                                                                                                                      |
+| ---------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WANDB_MODE`     | `disabled`        | No wandb from a container. `online` plus `WANDB_API_KEY` (and any other `WANDB_*`) turns it back on; the client forwards them into the interpreter.      |
+| `WANDB_DIR`      | `/app/priv/wandb` | Where a wandb run would write. It has to exist — wandb silently uses the system temp directory otherwise — so `bin/server` creates it at boot.           |
+| `HOME`           | `/app/priv`       | A run's downloads and pretrained models go under `$HOME/tbp`, i.e. `/app/priv/tbp`; the image gives the unprivileged user a writable home on the volume. |
+| `LANG`, `LC_ALL` | `en_US.UTF-8`     | Experiment names sort and log as written.                                                                                                                |
+| `MIX_ENV`        | `prod`            | The release is a prod build; this is only informational at run time.                                                                                     |
 
 Not used by the image: `MONTY_SOURCE` and `TELEOP_SOURCE` (only the tasks that
 regenerate from upstream read a checkout), `PYTHON` (one Mix task),
@@ -198,12 +204,12 @@ which of them are already there.
 
 Three ways to have them:
 
-| Where they come from          | How                                                                                                                                                                                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| fetched from a terminal      | `docker run --rm -v monty-priv:/app/priv … /app/bin/prerequisites` — the page's fetch, for a deployment that would rather script it. It fetches what is missing, waits, exports the libraries and exits; on a volume that has them it does nothing |
-| downloaded by the running app | open `/prerequisites` in the UI and press download per entry. Each file streams to a `.part` name on the volume and is moved into place only when its size and checksum match                                                                     |
-| a Monty tree you already have | `-v /path/to/tbp:/app/priv/tbp:ro` — the defaults hang off `HOME`, which is `/app/priv`, so the directory you mount is the one those defaults already point at. `scripts/image.sh run --data /path/to/tbp` is this row with the flag spelled out |
-| anywhere else                 | `-e MONTY_DATA=… -e MONTY_MODELS=… -e MONTY_LOGS=…` — the variables Monty's own documentation uses — each pointing at a mounted path                                                                                                             |
+| Where they come from          | How                                                                                                                                                                                                                                                |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| fetched from a terminal       | `docker run --rm -v monty-priv:/app/priv … /app/bin/prerequisites` — the page's fetch, for a deployment that would rather script it. It fetches what is missing, waits, exports the libraries and exits; on a volume that has them it does nothing |
+| downloaded by the running app | open `/prerequisites` in the UI and press download per entry. Each file streams to a `.part` name on the volume and is moved into place only when its size and checksum match                                                                      |
+| a Monty tree you already have | `-v /path/to/tbp:/app/priv/tbp:ro` — the defaults hang off `HOME`, which is `/app/priv`, so the directory you mount is the one those defaults already point at. `scripts/image.sh run --data /path/to/tbp` is this row with the flag spelled out   |
+| anywhere else                 | `-e MONTY_DATA=… -e MONTY_MODELS=… -e MONTY_LOGS=…` — the variables Monty's own documentation uses — each pointing at a mounted path                                                                                                               |
 
 The volume to mount for downloads is `/app/priv/tbp`, and that is what
 [`docker-compose.quickstart.yml`](../docker-compose.quickstart.yml) names —

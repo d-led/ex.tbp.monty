@@ -9,7 +9,10 @@ defmodule ExTbpMonty.MixProject do
       version: @version,
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
-      start_permanent: Mix.env() == :prod,
+      # A desktop window has to die with its server: a tree that stopped without
+      # taking the VM with it leaves a window pointed at nothing, which is worse
+      # than a window that closes.
+      start_permanent: Mix.env() in [:prod, :desktop],
       aliases: aliases(),
       deps: deps(),
       dialyzer: dialyzer(),
@@ -23,7 +26,7 @@ defmodule ExTbpMonty.MixProject do
 
   def application do
     [
-      mod: {ExTbpMonty.Application, []},
+      mod: {application_module(Mix.env()), []},
       # os_mon answers "how much memory is left" and raises disk/memory alarms
       # for the runtime page: the same numbers the BEAM dashboard shows next to
       # the app's own heap.
@@ -42,8 +45,18 @@ defmodule ExTbpMonty.MixProject do
   # Build-only Mix tasks live outside lib/ so the test environment (and the
   # types job) never sees them: they shell out to asset tooling that is only
   # present when an image is being built.
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:test), do: ["lib", "test/support", "lib_desktop"]
+  # `:desktop` is the window's sidecar: the same `lib/`, plus the shell that
+  # picks a loopback port and says where it listens. Dev and prod never compile
+  # that path, so the code the server ships contains none of it; `:test` compiles
+  # it to specify the port it chooses.
+  defp elixirc_paths(:desktop), do: ["lib", "mix_tasks", "lib_desktop"]
   defp elixirc_paths(_), do: ["lib", "mix_tasks"]
+
+  # The desktop build starts the server's own tree and adds an address to it,
+  # rather than a second tree that could drift from the first.
+  defp application_module(:desktop), do: ExTbpMonty.Desktop.Application
+  defp application_module(_), do: ExTbpMonty.Application
 
   # One run of the whole suite sees every line the suite can reach, so 85 is a
   # total. CI splits the suite across partitions and each sees a slice of it —

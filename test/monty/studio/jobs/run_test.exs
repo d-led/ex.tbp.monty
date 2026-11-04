@@ -1,8 +1,12 @@
 defmodule Monty.Studio.Jobs.RunTest do
   use ExTbpMontyWeb.ConnCase, async: false
 
-  alias Monty.Studio.{Artifacts, Jobs, RunHistory, RunLog}
+  alias Monty.Studio.{Artifacts, Drafts, Jobs, RunHistory, RunLog}
   alias Monty.Test.Tmp
+
+  # The experiment a run of this file steps: an evaluation config whose classes
+  # this port has written, and the experiment the port is judged by.
+  @experiment "base_config_10distinctobj_dist_agent"
 
   # The queue runs jobs by hand here: what is under test is the run, not Oban's
   # scheduler.
@@ -12,7 +16,21 @@ defmodule Monty.Studio.Jobs.RunTest do
     {:ok, root: root}
   end
 
-  defp start_run(steps), do: start_run("tutorial/first_experiment", steps)
+  defp start_run(steps), do: start_run(@experiment, steps)
+
+  # The silent and detailed logging groups belong to experiments this port
+  # cannot run, because they train. The group itself is ordinary, so it is put
+  # on a config that does run: a draft is that composition with one choice
+  # changed, which is what the studio's builder writes.
+  defp draft_with_logging(name, group) do
+    yaml =
+      Path.join([:code.priv_dir(:ex_tbp_monty), "monty/conf/experiment/#{@experiment}.yaml"])
+      |> File.read!()
+      |> String.replace("/logging: basic_warning_wandb_monty_runs", "/logging: #{group}")
+
+    {:ok, _draft} = Drafts.import(name, yaml, overwrite: true)
+    name
+  end
 
   # One episode: what is under test is the job — its record, its log, what it
   # broadcasts — and an experiment's own run is every object in every rotation,
@@ -57,31 +75,21 @@ defmodule Monty.Studio.Jobs.RunTest do
 
       assert closed.status == "finished"
 
-      # The tutorial trains and does not evaluate, and a training episode
-      # explores: its policy is
-      # `MinEvalMaxTotalSteps(max_total_steps: 5, wrapped: StepLimit(num_exploring_steps: 3,
-      # max_train_steps: 1, max_eval_steps: 1))`, so the three steps are the
-      # exploring allowance and not the page's cap. The run used to take one,
-      # because it was stepped in the mode the config does not run.
+      # An episode in evaluation ends when its module recognises the object,
+      # which takes about twenty steps: three is fewer than that, so the steps
+      # are the ones asked for and there is no conclusion to report — and none
+      # invented.
       assert closed.summary["steps"] == 3
       assert Enum.map(closed.timeline, & &1["step"]) == [0, 1, 2]
-
-      # A training episode recognises nothing, so there is no conclusion to
-      # report — and none invented.
       assert closed.summary["outcome"] == %{}
     end
 
-    test "steps the epochs the config asks for, train before eval" do
-      # Monty's `run()` is `train()` and then `evaluate()`, each with its own
-      # mode. The tutorial is train-only; the config that only evaluates must
-      # not train, even though it names `n_train_epochs: 3`.
-      {:ok, tutorial} = start_run("tutorial/first_experiment", 3)
-      assert {:ok, trained} = perform(tutorial)
-
-      assert File.read!(trained.log_path) =~ "1 train epoch(s)"
-      refute File.read!(trained.log_path) =~ "eval epoch(s)"
-
-      {:ok, opened} = Monty.Studio.open("base_config_10distinctobj_dist_agent")
+    test "steps the epochs the config asks for, and only those" do
+      # The config names three train epochs and switches training off, so what
+      # it runs is the fourteen evaluation ones — and nothing here trains. A
+      # config that asks to train is refused rather than stood in for, because a
+      # training episode would explore and conclude nothing.
+      {:ok, opened} = Monty.Studio.open(@experiment)
       {:ok, one_episode} = RunHistory.start(RunLog.attributes(opened, 1, 0, 1, 1))
       assert {:ok, evaluated} = perform(one_episode)
 
@@ -204,7 +212,8 @@ defmodule Monty.Studio.Jobs.RunTest do
     end
 
     test "a config that asks for silent logging writes no statistics, and says so" do
-      {:ok, record} = start_run(2)
+      {:ok, record} =
+        start_run(draft_with_logging("silent_logging_eval", "silent_warning_monty_runs"), 2)
 
       assert {:ok, closed} = perform(record)
 
@@ -216,7 +225,8 @@ defmodule Monty.Studio.Jobs.RunTest do
       # Monty's detailed logging group pairs `DetailedGraphMatchingLogger` with
       # `DetailedJSONHandler`: the BASIC stats and, in the same file, each module's
       # buffer as the episode left it.
-      {:ok, record} = start_run("test/hierarchy/two_lms_eval", 2)
+      {:ok, record} =
+        start_run(draft_with_logging("detailed_logging_eval", "detailed_info_monty_runs"), 2)
 
       assert {:ok, closed} = perform(record)
 

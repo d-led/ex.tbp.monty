@@ -9,11 +9,11 @@ defmodule ExTbpMonty.Database do
   either.
 
   `SQLITE_PATH` moves the file, for a deployment that mounts a volume where it
-  wants the runs kept. Without it the file is `ex_tbp_monty.db` in `$HOME`,
-  which in the image is the writable volume the release already has.
+  wants the runs kept. Without it the file is `ex_tbp_monty.db` in the folder
+  `Monty.Paths` names — the operating system's per-user application-data
+  directory, which in the image is under `HOME=/app/priv`, the writable volume
+  the release already has.
   """
-
-  @sqlite_file "ex_tbp_monty.db"
 
   @doc """
   The repo module this instance starts and calls.
@@ -74,15 +74,7 @@ defmodule ExTbpMonty.Database do
 
   @doc "The SQLite file, when SQLite is the database in use."
   @spec sqlite_path() :: String.t()
-  def sqlite_path do
-    case System.get_env("SQLITE_PATH") do
-      path when path in [nil, ""] ->
-        Path.join(System.get_env("HOME") || File.cwd!(), @sqlite_file)
-
-      path ->
-        to_string(path)
-    end
-  end
+  def sqlite_path, do: Monty.Paths.database()
 
   defp sqlite do
     [

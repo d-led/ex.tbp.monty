@@ -34,8 +34,12 @@ defmodule Monty.Studio.Catalog do
   # Anything else — "the shape most benchmarks use", "the simplest one" — is this
   # studio's opinion, and it has no business being on a page about Monty's own
   # configurations.
+  # Every name here has to run in this application: a template is a suggestion,
+  # and suggesting one whose classes are not written would be suggesting a run
+  # that is refused. `tutorial/first_experiment` is Monty's own first tutorial
+  # and is not here for that reason — it is a training experiment over
+  # `DisplacementGraphLM`, and neither is written here yet.
   @templates [
-    "tutorial/first_experiment",
     "base_config_10distinctobj_dist_agent",
     "randrot_noise_10distinctobj_5lms_dist_agent"
   ]

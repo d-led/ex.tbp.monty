@@ -16,7 +16,7 @@ defmodule ExTbpMontyWeb.BuildLive do
   use ExTbpMontyWeb, :live_view
 
   alias Monty.Studio
-  alias Monty.Studio.{Blueprint, Catalog, Drafts, Setup}
+  alias Monty.Studio.{Blueprint, Catalog, Drafts}
 
   # The groups worth exposing: they change what the experiment *is*. Monty's
   # env_interface, positioning and logging groups are plumbing the base
@@ -324,7 +324,12 @@ defmodule ExTbpMontyWeb.BuildLive do
     templates |> Enum.map(&{&1, &1}) |> Enum.concat(others) |> Enum.uniq()
   end
 
-  defp saveable?(%{setup: setup, findings: findings}) do
-    setup != nil and Setup.valid?(%{setup | findings: findings})
-  end
+  # A draft is a config file, and whether this application can *run* it is a
+  # different question from whether it can be written: `Setup.valid?/1` is the
+  # second one, and it now refuses an experiment built from classes this port has
+  # not written. Blocking the save on that would mean the builder could not write
+  # a draft from Monty's own first tutorial — the default base — and the draft's
+  # page is where "this cannot run here" belongs, said in the same words as
+  # everywhere else. What does block it is a config that would not compose.
+  defp saveable?(%{setup: setup}), do: setup != nil
 end

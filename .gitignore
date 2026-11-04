@@ -200,7 +200,10 @@ dist
 # Since we are building assets from web/static,
 # we ignore priv/static. You may want to comment
 # this depending on your deployment strategy.
-/priv/static/
+# The favicon is the exception: no build step produces it, so
+# scripts/make-icons.sh renders it and git keeps it.
+/priv/static/*
+!/priv/static/favicon.ico
 
 # Installer-related files
 /installer/_build
@@ -290,3 +293,14 @@ MUJOCO_LOG.TXT
 
 # JUnit reports written when `CI` is set, for the Checks tab to read.
 /junit/
+
+# The window crate is built locally, not committed.
+/src-tauri/target/
+/src-tauri/gen/schemas/
+
+# What `scripts/package.sh` produces: an app, a zip and a disk image of it.
+/artifacts/
+
+# The window wants a `frontendDist` directory to exist; this one is a fallback
+# page that is never shown and is committed on purpose.
+!/src-tauri/dist/

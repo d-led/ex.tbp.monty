@@ -73,6 +73,16 @@ defmodule Monty.Studio.Run do
   """
   @spec start(Setup.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def start(%Setup{} = setup, opts \\ []) do
+    # No run is built from stand-ins: a setup whose classes this port has not
+    # written is refused here too, not only on the page that offered it.
+    if Setup.valid?(setup) do
+      do_start(setup, opts)
+    else
+      {:error, {:not_runnable, Enum.map(Setup.findings(setup, :error), & &1.message)}}
+    end
+  end
+
+  defp do_start(%Setup{} = setup, opts) do
     model_id =
       Keyword.get_lazy(opts, :model_id, fn -> "studio-#{System.unique_integer([:positive])}" end)
 

@@ -10,10 +10,11 @@ defmodule Mix.Tasks.Monty.Run do
       mix monty.run base_config_10distinctobj_dist_agent --no-record --quiet
 
   What runs is the experiment's own topology: every sensor and learning module
-  is a supervised process, wired as its config wires them, with synthetic
-  stand-ins for the modules this port has not written yet. The config is
-  composed from Monty's own Hydra groups and checked before anything starts, so
-  a config that would not start in Monty fails here too.
+  is a supervised process, wired as its config wires them. A config that names a
+  class this port has not written is refused rather than stood in for — a run of
+  something else would wear the experiment's name — and the config is composed
+  from Monty's own Hydra groups and checked before anything starts, so a config
+  that would not start in Monty fails here too.
 
   A run is the whole experiment, as Monty's `evaluate` is: every object in every
   rotation the config names, each episode ending on its own recognition policy —
@@ -273,13 +274,16 @@ defmodule Mix.Tasks.Monty.Run do
     end
   end
 
+  # The findings are the reason, and they have just been printed, so the closing
+  # sentence must not claim one of its own: a config naming a class this port has
+  # not written starts in Monty and does not start here.
   @spec refuse([Monty.Studio.Finding.t()]) :: no_return()
   defp refuse(findings) do
     findings
     |> Enum.reject(&(&1.level == :info))
     |> Enum.each(&Mix.shell().error(Monty.Studio.Finding.describe(&1)))
 
-    Mix.raise("this config would not start in Monty either")
+    Mix.raise("this run would not start: the findings above say why")
   end
 
   defp class(nil), do: "unknown"

@@ -1667,9 +1667,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # The whole hypothesis space, for the charts and the replays: locations and
   # evidences every step, rotations once because they never change in an
   # episode.
+  #
+  # Read through `Hypotheses.locations/1`, not the field: a hypothesis set holds
+  # its rows as one f64 binary, and a binary that is not text is not JSON — it
+  # took a run with a ported learning module and the detailed logger to find,
+  # because until then every run of it was a stand-in with no hypotheses at all.
   defp detailed_stats(%__MODULE__{} = lm, stats) do
     stats
-    |> Map.put("possible_locations", Map.new(lm.hypotheses, fn {id, h} -> {id, h.locations} end))
+    |> Map.put(
+      "possible_locations",
+      Map.new(lm.hypotheses, fn {id, h} -> {id, Hypotheses.locations(h)} end)
+    )
     |> Map.put(
       "evidences",
       Map.new(lm.hypotheses, fn {id, h} -> {id, Hypotheses.evidence(h)} end)

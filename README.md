@@ -18,10 +18,19 @@ docker compose -f docker-compose.quickstart.yml up
 
 → <http://localhost:6401>
 
-The image is `ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64); the compose
-file adds the Postgres it needs and runs the migration. The database and
-`/prerequisites` downloads are named volumes, so `docker compose down` keeps
-them and `docker compose down -v` deletes them.
+The image is `ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64). That compose
+file runs the image alone: the database is a file on a named volume, and the
+release migrates itself as it boots. The volume and the `/prerequisites`
+downloads are named, so `docker compose down` keeps them and `down -v` deletes
+them.
+
+Want a database server rather than the file? The same stack with Postgres beside
+it — same image, same port, `DATABASE_URL` the only difference:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/docker-compose.postgres.yml
+docker compose -f docker-compose.postgres.yml up
+```
 
 The image alone, against a Postgres you already have:
 
@@ -41,12 +50,39 @@ docker run -d -p 4001:4000 \
 Tags, every variable, the one writable directory:
 [docs/container.md](docs/container.md).
 
+## As an app
+
+The same application in a native window, with its own server inside — no
+Docker, no Elixir, nothing to install but the app:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/install-desktop.sh | bash
+```
+
+What it installs is the newest build of `main` (`~/Applications`, overridable);
+a tagged release keeps the same file in the releases page. Prefer to take the
+file yourself? This link always gives the latest build:
+
+| Platform    | Download                                                                                                       |
+| ----------- | -------------------------------------------------------------------------------------------------------------- |
+| macOS arm64 | [ex-tbp-monty-osx-arm64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-osx-arm64.zip) |
+
+It is unsigned, so the first launch is right-click → Open. Where it keeps its
+data, what is built for which platform, and why the download is about 300 MB
+while the app is 550 MB on disk: [docs/desktop.md](docs/desktop.md). A checkout
+opens it with `scripts/start-desktop.sh`.
+
 ## From source
 
 ```bash
 scripts/init-dev.sh    # Postgres on 6432, dependencies, database, assets
 scripts/run-dev.sh     # http://localhost:4000
 ```
+
+A development run keeps its data in that Postgres; a release and the desktop app
+keep theirs in a SQLite file unless `DATABASE_URL` names a server. `mix
+ecto.migrate` creates the file on first run and `mix ecto.drop` deletes it —
+[docs/developers.md](docs/developers.md#a-file-instead-of-a-server).
 
 Needs Elixir 1.20, node/npm, Docker, and a Rust toolchain — and installs the
 first and the last itself when the machine has neither:
@@ -67,7 +103,9 @@ a module is added.
 
 - **MCP.** `/mcp` answers an assistant about Monty's theory, roadmap and code, and
   previews, saves and runs experiments. `http://localhost:4001/mcp` is already in
-  [`.vscode/mcp.json`](.vscode/mcp.json) — [docs/mcp.md](docs/mcp.md).
+  [`.vscode/mcp.json`](.vscode/mcp.json) — start the server with `PORT=4001
+scripts/run-dev.sh` (4000 is the default, and then the URL to copy is the one
+  `/mcp/config` prints) — [docs/mcp.md](docs/mcp.md).
 - **Headless.** `mix monty.run tutorial/first_experiment --steps 20` is the same
   run record without the browser; flags and `mix monty.bench` in
   [docs/features.md](docs/features.md).
@@ -124,6 +162,7 @@ follows from that is argued in [docs/monty-differences.md](docs/monty-difference
 | [docs/simulator-port.md](docs/simulator-port.md)             | where the world lives, and what is still Python                      |
 | [docs/developers.md](docs/developers.md)                     | how do I work on this?                                               |
 | [docs/container.md](docs/container.md)                       | how do I run the image? every variable, the volumes, what it reports |
+| [docs/desktop.md](docs/desktop.md)                           | how do I open this as an app? the window, the folder it writes to    |
 | [docs/mcp.md](docs/mcp.md)                                   | `POST /mcp` — ask this app about Monty's docs, roadmap and code      |
 | [docs/roadmap.md](docs/roadmap.md)                           | the order the rest of Monty arrives in                               |
 

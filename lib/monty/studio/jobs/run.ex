@@ -85,8 +85,19 @@ defmodule Monty.Studio.Jobs.Run do
   @spec opened_for(RunHistory.Run.t()) :: {:ok, Studio.opened()} | {:error, term()}
   def opened_for(%RunHistory.Run{experiment: name, inputs: inputs, seed: seed}) do
     case Studio.open(name, world_simulator: world_of(inputs)) do
-      {:ok, opened} -> {:ok, %{opened | setup: Setup.with_seed(opened.setup, seed)}}
+      {:ok, opened} -> runnable(%{opened | setup: Setup.with_seed(opened.setup, seed)})
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # The queue refuses what the page refuses. A config built from classes this
+  # port has not written cannot run here, and a record marked `failed` with the
+  # reason is a truer record than a run that stands a module in and reports
+  # nothing about the experiment.
+  defp runnable(opened) do
+    case Setup.findings(opened.setup, :error) do
+      [] -> {:ok, opened}
+      [first | _rest] -> {:error, first.message}
     end
   end
 

@@ -1673,11 +1673,31 @@ defmodule Monty.Studio.Setup do
 
   defp findings(setup, monty_config, config) do
     module_findings(setup) ++
+      phase_findings(setup) ++
       connectivity_findings(setup, monty_config) ++
       wiring_findings(setup) ++
       memory_findings(setup) ++
       settings_findings(config)
   end
+
+  # A training epoch has no counterpart here: this application steps a model, and
+  # the loop Monty wraps around it (`train()`) is not written. Such a config is
+  # refused for the same reason an unported class is — it would be stepped in
+  # `:train` mode, explore, and conclude nothing, which looks like the experiment
+  # and answers none of it. Evaluation is the half this port has.
+  defp phase_findings(%__MODULE__{phases: %{train: true}}) do
+    [
+      Finding.new(
+        :error,
+        :training_not_implemented,
+        "This experiment trains, and this application has no training loop: a run of it " <>
+          "here would explore and never conclude. Run one that only evaluates.",
+        "experiment.config.do_train"
+      )
+    ]
+  end
+
+  defp phase_findings(%__MODULE__{}), do: []
 
   # A run with no memory cannot recognise anything, so it does not start rather
   # than reporting "no conclusion" after sixty steps: an empty memory gives the
@@ -1853,13 +1873,19 @@ defmodule Monty.Studio.Setup do
 
   defp not_ported_finding([], _total), do: []
 
+  # An error, not an info: a class this port has not written is not stood in for
+  # any more. A run built from one would be a run of something else wearing the
+  # experiment's name, and every entry point — the page's buttons, the queue,
+  # `mix monty.run`, the MCP tools — asks `valid?/1` before it starts.
   defp not_ported_finding(classes, _total) do
     [
       Finding.new(
-        :info,
+        :error,
         :modules_not_ported,
-        "#{length(classes)} class(es) this experiment uses have no implementation here, so a " <>
-          "stand-in runs in their place: #{Enum.join(Enum.sort(classes), ", ")}.",
+        "This experiment cannot run here. It is built from classes this application has not " <>
+          "written — #{Enum.join(Enum.sort(classes), ", ")} — and a stand-in in their place " <>
+          "would be a different experiment. Run one whose classes the module map lists as " <>
+          "implemented.",
         "monty_config"
       )
     ]

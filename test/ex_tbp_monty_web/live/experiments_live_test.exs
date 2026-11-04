@@ -20,7 +20,8 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
       assert html =~ "Monty experiments"
       assert has_element?(view, "#facet-agent")
       assert has_element?(view, "#experiments")
-      assert render(view) =~ "tutorial/first_experiment"
+      # One of the experiments the studio suggests, and one that runs here.
+      assert render(view) =~ "base_config_10distinctobj_dist_agent"
     end
 
     test "the count says how many there are", %{conn: conn} do

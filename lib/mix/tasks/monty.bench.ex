@@ -87,7 +87,10 @@ defmodule Mix.Tasks.Monty.Bench do
     end
 
     if Enum.any?(results, &(&1.runnable? == false)) do
-      Mix.raise("some experiments would not start; fix their configs before benchmarking")
+      Mix.raise(
+        "some experiments cannot run here — the table above says which, and each row's " <>
+          "findings say why"
+      )
     end
   end
 
