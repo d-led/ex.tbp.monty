@@ -19,8 +19,14 @@ Then <http://localhost:6401>. The release migrates itself as it boots, so there
 is no migration step in front of the server — `/app/bin/migrate` is there for an
 operator who wants to migrate without starting one.
 
-`docker compose -f docker-compose.quickstart.yml up` in this repository is that
-same thing with a Postgres of its own beside it.
+`docker compose -f docker-compose.quickstart.yml up` in this repository runs
+that same thing with the database in a file on a volume.
+[`docker-compose.postgres.yml`](../docker-compose.postgres.yml) beside it is the
+same stack with a Postgres service of its own: same image, same port, same
+volumes, and `DATABASE_URL` the only difference between them. Both were checked
+by starting them: the file shape writes `ex_tbp_monty.db` on the volume, and the
+server shape puts `studio_runs`, `schema_migrations` and Oban's two tables in
+Postgres with no file in the container at all.
 
 ## The script, if you have the checkout
 

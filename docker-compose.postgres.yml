@@ -1,0 +1,65 @@
+# The published image with a database server: the same release as the
+# quickstart, pointed at Postgres instead of a file.
+#
+#   docker compose -f docker-compose.postgres.yml up
+#
+# Then http://localhost:6401. Like the file-backed form, the release migrates
+# itself as it boots, so there is nothing to run first.
+#
+# `DATABASE_URL` is the whole switch — the image carries both drivers and picks
+# the one this names. Everything else here is the quickstart's, so the two files
+# differ in the database and nothing else: same image, same port, same volumes,
+# same throwaway secret.
+#
+# Postgres is not published on the host. The app reaches it over the compose
+# network by service name, which is what a deployment does too; add a `ports:`
+# line under `postgres` if you want `psql` from the host, and `docker-compose.yml`
+# is the file for a development checkout, where the database is the point.
+#
+# `TAG=v1.2.3 docker compose -f docker-compose.postgres.yml up` runs a release
+# instead of `:latest`. An image built before the file-backed database
+# (`:latest` before `3296e41`) needs this shape to run at all.
+
+name: ex-tbp-monty
+
+services:
+  app:
+    image: ghcr.io/d-led/ex.tbp.monty:${TAG:-latest}
+    ports:
+      - "${APP_PORT:-6401}:4000"
+    environment:
+      # Not a secret: this is a local look, and the same for everybody.
+      SECRET_KEY_BASE: local-look-only-2f8d1c6a9e4b7d0f3a6c9e2b5d8f1a4c7e0b3d6f9a2c5e8b1d4f7a0c3e6b9d2f5a8c1e4b7d0f3a6c9e2b5d8f1a4c7e0b3d6f9a2c5e8b
+      PHX_HOST: localhost
+      # The whole switch from a file to a server.
+      DATABASE_URL: ecto://postgres:postgres@postgres:5432/ex_tbp_monty
+    volumes:
+      # The runs are in Postgres now; the datasets, the pretrained pickles and
+      # the memory exported from them are still files, and still here.
+      - runs:/app/priv/data
+      - prerequisites:/app/priv/tbp
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17
+    environment:
+      - POSTGRES_DB=ex_tbp_monty
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # The app migrates on boot and would fail against a database that is not
+    # accepting connections yet, so this is what makes `up` enough.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ex_tbp_monty"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  pgdata:
+  runs:
+  prerequisites:

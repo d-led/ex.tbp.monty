@@ -156,10 +156,12 @@ what CI runs.
   runner of its own architecture and merged into one index. No commit-hash tags — the
   commit is in `priv/build_info.json` and the page footer.
 - **One image, either store:** with no `DATABASE_URL` it keeps its runs in a SQLite
-  file on a volume, and a deployment that has Postgres points it there instead;
-  `docker-compose.quickstart.yml` brings a Postgres of its own so it works with every
-  published tag. (Amd64 CI boots the image with no database server and waits for
-  `/health`; arm64 CI builds the other half of the index.)
+  file on a volume, and a deployment that has Postgres points it there instead.
+  `docker-compose.quickstart.yml` is the file shape;
+  [`docker-compose.postgres.yml`](../docker-compose.postgres.yml) is the same stack
+  with a Postgres service beside it, which is also what a tag older than the
+  file-backed database needs. (Amd64 CI boots the image with no database server and
+  waits for `/health`; arm64 CI builds the other half of the index.)
   ([`database.ex`](../lib/ex_tbp_monty/database.ex),
   [quickstart](../docker-compose.quickstart.yml))
 - Trivy (CRITICAL/HIGH, fixable only) runs before the push, and CI asserts the image
@@ -179,9 +181,11 @@ what CI runs.
   ([mix.exs](../mix.exs))
 - `docker compose up -d` gives development Postgres 17 and adminer on this
   project's own ports; `docker-compose.quickstart.yml` is the published image
-  alone, with the database in a file on a volume (`DATABASE_URL` names a Postgres
-  instead, for a release older than the one that picks SQLite).
-  ([dev compose](../docker-compose.yml), [quickstart](../docker-compose.quickstart.yml))
+  alone, with the database in a file on a volume, and
+  `docker-compose.postgres.yml` the same image with a server (`DATABASE_URL` names
+  it; neither file needs one for a release that can pick SQLite).
+  ([dev compose](../docker-compose.yml), [quickstart](../docker-compose.quickstart.yml),
+  [postgres](../docker-compose.postgres.yml))
 - **A desktop app from this tree:** `MIX_ENV=desktop` compiles `lib_desktop/` (a
   loopback port, the one line on stdout that names it, and the delegation to the
   ordinary application, unchanged) and a Tauri window supervises it; the app keeps

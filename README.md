@@ -18,10 +18,19 @@ docker compose -f docker-compose.quickstart.yml up
 
 → <http://localhost:6401>
 
-The image is `ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64); the compose
-file adds the Postgres it needs and runs the migration. The database and
-`/prerequisites` downloads are named volumes, so `docker compose down` keeps
-them and `docker compose down -v` deletes them.
+The image is `ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64). That compose
+file runs the image alone: the database is a file on a named volume, and the
+release migrates itself as it boots. The volume and the `/prerequisites`
+downloads are named, so `docker compose down` keeps them and `down -v` deletes
+them.
+
+Want a database server rather than the file? The same stack with Postgres beside
+it — same image, same port, `DATABASE_URL` the only difference:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/docker-compose.postgres.yml
+docker compose -f docker-compose.postgres.yml up
+```
 
 The image alone, against a Postgres you already have:
 
