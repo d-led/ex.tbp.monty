@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # The quality report: static analysis, the suite with coverage, and the CRAP
-# ranking, in the order that fails fastest. Read-only — it never formats, never
-# rewrites the lockfile, and never leaves a file behind.
+# ranking, in the order that fails fastest. Read-only — it never formats and
+# never rewrites the lockfile; the only file it removes is the coverage export
+# the suite is about to replace.
 #
 #   scripts/quality.sh              everything CI runs on a push
 #   scripts/quality.sh --fast       static analysis only: no database, no tests
@@ -102,6 +103,12 @@ fi
 
 if [[ $tests -eq 1 ]]; then
   banner "cover"
+  # ExCoveralls exports to `cover/default.coverdata`, the same name a bare
+  # `mix test --cover` on one file uses, so a subset run leaves an export behind
+  # that says every module it never loaded is uncovered — and the next ranking
+  # reads it and reports a hundred functions above the threshold that are not
+  # (`docs/status.md` #5). This step replaces the file it is about to rank.
+  rm -f cover/*.coverdata
   if mix cover >"$report" 2>&1; then
     record cover 0 "$(grep -E '^Result:' "$report" | tail -1)"
   else
@@ -116,6 +123,18 @@ fi
 # ---------------------------------------------------------------------------
 
 banner "complexity"
+
+# With `--no-tests` the ranking is only as good as the export lying in `cover/`,
+# so it says which one that is rather than leaving a partial export looking like
+# a regression.
+if [[ $tests -eq 0 ]]; then
+  if [[ -f cover/default.coverdata ]]; then
+    echo "ranking the export written $(date -r cover/default.coverdata '+%Y-%m-%d %H:%M'), not a new one (--no-tests)"
+  else
+    echo "no cover/default.coverdata to rank: run without --no-tests, or merge the partitions with mix cover.merge"
+  fi
+fi
+
 crap_status=0
 mix complexity >"$report" 2>&1 || crap_status=$?
 
