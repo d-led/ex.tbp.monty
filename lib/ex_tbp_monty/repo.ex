@@ -59,7 +59,11 @@ defmodule ExTbpMonty.Repo do
   def update_all(queryable, updates, opts \\ []),
     do: current().update_all(queryable, updates, opts)
 
-  @spec delete_all(Ecto.Queryable.t(), keyword()) :: non_neg_integer()
+  # Ecto answers a deletion with the rows it could not leave to the database —
+  # nil, or the deleted structs when a query returns them — and the count. The
+  # spec said `non_neg_integer()`, so a caller matching the count and the rows
+  # (which is what the function does return) was a dialyzer error.
+  @spec delete_all(Ecto.Queryable.t(), keyword()) :: {non_neg_integer(), nil | [term()]}
   def delete_all(queryable, opts \\ []), do: current().delete_all(queryable, opts)
 
   @spec aggregate(Ecto.Queryable.t(), :count | :avg | :sum | :max | :min, term(), keyword()) ::
