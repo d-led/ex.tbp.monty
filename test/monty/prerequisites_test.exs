@@ -98,9 +98,11 @@ defmodule Monty.PrerequisitesTest do
     test "Monty's own world names the data and the memory its config names" do
       data = Tmp.dir("monty-data")
       models = Tmp.dir("monty-models")
+      libraries = Tmp.dir("monty-libraries")
       Tmp.system_env("MONTY_DATA", data)
       Tmp.system_env("MONTY_MODELS", models)
       Tmp.system_env("MONTY_PYTHON", interpreter())
+      Tmp.app_env(:monty_libraries_dir, libraries)
 
       setup = %{
         world: :habitat,
@@ -113,7 +115,11 @@ defmodule Monty.PrerequisitesTest do
       object = Path.join(setup.environment.data_path, "mug")
       File.mkdir_p!(object)
       File.write!(Path.join(object, "textured.obj"), "")
-      File.mkdir_p!(Path.join(models, "pretrained_ycb_v13"))
+      # And the memory is the library a run reads, not the model it was exported
+      # from: a config can sit beside pickles that were never read.
+      library = Monty.Studio.Memory.path_for("pretrained_ycb_v13", "pretrained_ycb_v13")
+      File.mkdir_p!(Path.dirname(library))
+      File.write!(library, "")
 
       needs = Prerequisites.for_setup(setup)
 

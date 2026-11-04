@@ -283,6 +283,23 @@ defmodule Monty.Studio.Pretrained do
   @spec label(String.t(), String.t()) :: String.t()
   def label(release, name), do: release <> "/" <> name
 
+  @doc """
+  Whether anything under `root` still has to be read.
+
+  The question a page asks before it offers the work again, and a boot asks
+  before it spends a minute exporting nothing: an extracted release whose
+  libraries are here and newer than their pickles has nothing to do. A volume
+  restored from a backup, or an archive unpacked by an older version of this
+  application, is the case this exists for — the pickles are there and the
+  memory a run reads is not, and nothing about the download said so.
+  """
+  @spec pending?(Path.t(), Path.t()) :: boolean()
+  def pending?(root \\ models_root(), libraries \\ Memory.libraries_dir()) do
+    Enum.any?(models(root), fn {release, name, pickle} ->
+      not current?(Memory.path_for(name, release, libraries), pickle)
+    end)
+  end
+
   defp current?(out, pickle) do
     with {:ok, %File.Stat{mtime: written}} <- File.stat(out, time: :posix),
          {:ok, %File.Stat{mtime: exported}} <- File.stat(pickle, time: :posix) do

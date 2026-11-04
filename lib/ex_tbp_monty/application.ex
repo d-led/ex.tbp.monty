@@ -85,6 +85,14 @@ defmodule ExTbpMonty.Application do
             is_nil(Monty.Prerequisites.Download.lookup(prerequisite.id)) do
           Monty.Prerequisites.fetch(prerequisite)
         end
+
+        # Then the half a download does not answer: a run recognises with a
+        # memory this application exports from the pickles, and a release can
+        # be on disk with nothing exported beside it — a volume restored from a
+        # backup, or archives that arrived by other means. `sync/0` reads only
+        # what is missing or older than its pickle, so a machine that is
+        # already whole pays a walk of the models directory.
+        Monty.Studio.Pretrained.sync()
       end)
     end
 

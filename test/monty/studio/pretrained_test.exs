@@ -84,6 +84,32 @@ defmodule Monty.Studio.PretrainedTest do
     end
   end
 
+  describe "whether anything is left to read" do
+    # The failure this pins: a volume came back with the pickles and without the
+    # libraries, the prerequisites page said "present", and the first step said
+    # there was no memory. Nothing asked the question this answers.
+    test "is yes for a model whose library was never written" do
+      root = Tmp.dir("models")
+      libraries = Tmp.dir("libraries")
+      write!(root, "not a torch save")
+
+      assert Pretrained.pending?(root, libraries)
+    end
+
+    test "is no once the library is there and newer than its pickle" do
+      root = Tmp.dir("models")
+      libraries = Tmp.dir("libraries")
+      write!(root, "not a torch save")
+      write_library!(libraries, "already exported")
+
+      refute Pretrained.pending?(root, libraries)
+    end
+
+    test "is no when the models directory is empty or absent" do
+      refute Pretrained.pending?(Tmp.dir("models"), Tmp.dir("libraries"))
+    end
+  end
+
   describe "a graph as another torch version writes it" do
     test "is the same records whether the graph is wrapped or is the state itself" do
       graph = graph_mapping()

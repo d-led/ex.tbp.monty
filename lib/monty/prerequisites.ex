@@ -413,15 +413,44 @@ defmodule Monty.Prerequisites do
   # over a pretrained memory does not touch the disk for them.
   defp data_need(_setup), do: []
 
-  defp models_need(%{model_name_or_path: name}) when is_binary(name) and name != "" do
-    [
-      %{
-        kind: :models,
-        what: "the pretrained memory this config names",
-        path: memory_path(name),
-        present?: File.exists?(memory_path(name))
-      }
-    ]
+  # What a run reads is the library this application exports, not the archive it
+  # was exported from. Asking about the model's directory answered a different
+  # question — "are the pickles here?" — and said yes on a volume where nothing
+  # had ever been exported, so the page showed a run as possible and the first
+  # step failed with "no memory this application can read".
+  defp models_need(%{model_name_or_path: path}) when is_binary(path) and path != "" do
+    name = Monty.Studio.Memory.name_of(path)
+    release = Monty.Studio.Memory.release_of(path)
+
+    cond do
+      name == nil ->
+        []
+
+      release == nil ->
+        # A config that names a model but not the release it was trained from:
+        # a library from any release satisfies it, and the path worth naming is
+        # the directory the memory would be exported from.
+        [
+          %{
+            kind: :models,
+            what: "the pretrained memory this config names",
+            path: memory_path(path),
+            present?: Monty.Studio.Memory.releases_for(name) != []
+          }
+        ]
+
+      true ->
+        memory = Monty.Studio.Memory.path_for(name, release)
+
+        [
+          %{
+            kind: :models,
+            what: "the pretrained memory this config names",
+            path: memory,
+            present?: File.exists?(memory)
+          }
+        ]
+    end
   end
 
   defp models_need(_setup), do: []

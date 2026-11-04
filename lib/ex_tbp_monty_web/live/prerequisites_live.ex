@@ -15,6 +15,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   alias ExTbpMonty.EmbeddedPython
   alias Monty.Prerequisites
   alias Monty.Prerequisites.Download
+  alias Monty.Studio.Pretrained
   alias Monty.Studio.Storage
 
   @impl true
@@ -31,6 +32,10 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
        # "nothing happening" would show a stale badge until a refresh.
        statuses: Map.new(prerequisites, &{&1.id, current_status(&1.id)}),
        present: Map.new(prerequisites, &{&1.id, Prerequisites.present?(&1)}),
+       # An archive can be here with nothing to read beside it: the pickles
+       # arrived, the libraries a run reads did not. That is not "present" to a
+       # reader whose run needs the memory.
+       pending: Map.new(prerequisites, &{&1.id, memory_pending?(&1)}),
        python: EmbeddedPython.version(),
        wandb: EmbeddedPython.wandb_mode(),
        engines: Prerequisites.engines(),
@@ -83,18 +88,34 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
               <div class="flex items-center gap-2">
                 <span class={[
                   "badge",
-                  badge_class(status(@statuses, prerequisite.id), @present[prerequisite.id])
+                  badge_class(
+                    status(@statuses, prerequisite.id),
+                    @present[prerequisite.id],
+                    @pending[prerequisite.id]
+                  )
                 ]}>
-                  {status_label(status(@statuses, prerequisite.id), @present[prerequisite.id])}
+                  {status_label(
+                    status(@statuses, prerequisite.id),
+                    @present[prerequisite.id],
+                    @pending[prerequisite.id]
+                  )}
                 </span>
                 <button
-                  :if={downloadable?(@statuses, prerequisite.id)}
+                  :if={
+                    downloadable?(
+                      @statuses,
+                      prerequisite.id,
+                      @present[prerequisite.id],
+                      @pending[prerequisite.id]
+                    )
+                  }
                   id={"download-#{prerequisite.id}"}
                   phx-click="download"
                   phx-value-id={prerequisite.id}
                   class="btn btn-primary btn-sm"
                 >
-                  <.icon name="hero-arrow-down-tray-mini" class="size-4" /> Download
+                  <.icon name="hero-arrow-down-tray-mini" class="size-4" />
+                  {if @present[prerequisite.id], do: "Export memory", else: "Download"}
                 </button>
                 <button
                   :if={downloading?(@statuses, prerequisite.id)}
@@ -287,28 +308,42 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   defp unread_libraries(_progress), do: []
 
-  defp downloadable?(statuses, id) do
-    status(statuses, id) not in [:downloading, :extracting, :exporting, :done]
+  # A row is clickable when nothing is happening to it and there is work: either
+  # it is not here, or its memories were never read. The second is the state a
+  # restored volume is in, and the one a reader with a run to start cannot see
+  # from the badge alone.
+  defp downloadable?(statuses, id, present?, pending?) do
+    status(statuses, id) not in [:downloading, :extracting, :exporting, :done] and
+      (not present? or pending?)
   end
 
-  defp status_label(nil, true), do: "present"
-  defp status_label(nil, false), do: "not downloaded"
-  defp status_label(:queued, _present), do: "queued"
-  defp status_label(:downloading, _present), do: "downloading"
-  defp status_label(:extracting, _present), do: "unpacking"
-  defp status_label(:exporting, _present), do: "reading memory"
-  defp status_label(:done, _present), do: "done"
-  defp status_label(:failed, _present), do: "failed"
-  defp status_label(:cancelled, _present), do: "cancelled"
+  defp memory_pending?(%{extract: true} = prerequisite) do
+    Prerequisites.present?(prerequisite) and
+      Pretrained.pending?(Prerequisites.where_it_lands(prerequisite))
+  end
 
-  defp badge_class(nil, true), do: "badge-success"
-  defp badge_class(nil, false), do: "badge-ghost"
-  defp badge_class(:done, _present), do: "badge-success"
-  defp badge_class(:failed, _present), do: "badge-error"
-  defp badge_class(:downloading, _present), do: "badge-info"
-  defp badge_class(:extracting, _present), do: "badge-info"
-  defp badge_class(:exporting, _present), do: "badge-info"
-  defp badge_class(_other, _present), do: "badge-ghost"
+  defp memory_pending?(_prerequisite), do: false
+
+  defp status_label(nil, true, true), do: "memory not read"
+  defp status_label(nil, true, false), do: "present"
+  defp status_label(nil, false, _pending?), do: "not downloaded"
+  defp status_label(:queued, _present, _pending?), do: "queued"
+  defp status_label(:downloading, _present, _pending?), do: "downloading"
+  defp status_label(:extracting, _present, _pending?), do: "unpacking"
+  defp status_label(:exporting, _present, _pending?), do: "reading memory"
+  defp status_label(:done, _present, _pending?), do: "done"
+  defp status_label(:failed, _present, _pending?), do: "failed"
+  defp status_label(:cancelled, _present, _pending?), do: "cancelled"
+
+  defp badge_class(nil, true, true), do: "badge-warning"
+  defp badge_class(nil, true, false), do: "badge-success"
+  defp badge_class(nil, false, _pending?), do: "badge-ghost"
+  defp badge_class(:done, _present, _pending?), do: "badge-success"
+  defp badge_class(:failed, _present, _pending?), do: "badge-error"
+  defp badge_class(:downloading, _present, _pending?), do: "badge-info"
+  defp badge_class(:extracting, _present, _pending?), do: "badge-info"
+  defp badge_class(:exporting, _present, _pending?), do: "badge-info"
+  defp badge_class(_other, _present, _pending?), do: "badge-ghost"
 
   defp max_bytes(%{total: nil, bytes: bytes}), do: max(bytes, 1)
   defp max_bytes(%{total: total}), do: total

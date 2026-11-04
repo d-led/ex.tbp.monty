@@ -1696,6 +1696,14 @@ defmodule Monty.Studio.Setup do
   the reader can act on, where to fetch the memory.
   """
   @spec memory_findings(t()) :: [Finding.t()]
+  # A stand-in run loads whatever memory is exported and, with none, runs on an
+  # empty one (`memory_for/1` answers `:none`) — that is what "reads nothing from
+  # disk" means, and it is why the stand-in is the way to see the runtime work
+  # before any download. The stand-in's own warning already says its results are
+  # not the experiment's; refusing it for want of a memory would take the one
+  # thing on a fresh machine that works.
+  def memory_findings(%__MODULE__{world: :synthetic}), do: []
+
   def memory_findings(%__MODULE__{model_name_or_path: path}) when path in [nil, ""], do: []
 
   def memory_findings(%__MODULE__{model_name_or_path: path}) do

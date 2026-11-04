@@ -73,6 +73,9 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     test "a run whose files are not here yet cannot be started, and says why", %{conn: conn} do
       Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
       Tmp.system_env("MONTY_MODELS", Tmp.dir("monty-models"))
+      # A checkout that has exported a library for this model would otherwise
+      # satisfy the need the test is about.
+      Tmp.env_dir("libraries", :monty_libraries_dir)
 
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
 
@@ -809,17 +812,25 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     Tmp.system_env("MONTY_PYTHON", interpreter())
     Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
     Tmp.system_env("MONTY_MODELS", Tmp.dir("monty-models"))
+    Tmp.env_dir("libraries", :monty_libraries_dir)
 
     {:ok, opened} = Studio.open(experiment, world_simulator: :habitat)
 
-    # Only the downloads are directories to create: the interpreter and the
-    # engine are packages inside it, and their path is the interpreter itself.
-    # A directory that holds nothing is not data — the page says so, and that is
-    # the check this fixture exists to satisfy — so each one is left with a file.
+    # The objects are a directory to create, and a directory that holds nothing
+    # is not data — the page says so, and that is the check this fixture exists
+    # to satisfy. The memory is one file, the library a run reads, so it is
+    # written where it is named.
     for %{kind: kind, path: path} <- Prerequisites.for_setup(opened.setup),
         kind in [:data, :models] do
-      File.mkdir_p!(path)
-      File.write!(Path.join(path, "downloaded-by-the-test"), "")
+      case kind do
+        :data ->
+          File.mkdir_p!(path)
+          File.write!(Path.join(path, "downloaded-by-the-test"), "")
+
+        :models ->
+          File.mkdir_p!(Path.dirname(path))
+          File.write!(path, "")
+      end
     end
   end
 

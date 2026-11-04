@@ -69,6 +69,55 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert reading =~ "pretrained_ycb_v10/surf_agent_1lm_10distinctobj"
   end
 
+  # The state a restored volume is in: the archive is unpacked and the memory a
+  # run reads was never exported. Saying "present" here is the page saying a run
+  # can go, and the first step answering that there is no memory.
+  describe "an archive whose memory was never read" do
+    setup %{tmp: tmp} do
+      manifest = Path.join(tmp, "bundles.yaml")
+
+      File.write!(manifest, """
+      prerequisites:
+        - id: bundles
+          title: Pretrained models
+          url: https://example.test/models.tgz
+          root: MONTY_MODELS
+          target: models.tgz
+          extract: true
+      """)
+
+      Tmp.system_env("MONTY_MODELS", Path.join(tmp, "models"))
+      Tmp.app_env(:monty_libraries_dir, Path.join(tmp, "libraries"))
+      Tmp.app_env(:prerequisites_manifest, manifest)
+
+      land = Prerequisites.where_it_lands(Prerequisites.get("bundles", manifest))
+      pickle = Path.join([land, "pretrained_ycb_v14", "mug", "pretrained", "model.pt"])
+      File.mkdir_p!(Path.dirname(pickle))
+      File.write!(pickle, "not a torch save")
+
+      {:ok, land: land}
+    end
+
+    test "says so, and offers to read it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+      assert render(view) =~ "memory not read"
+      assert view |> element("#download-bundles") |> render() =~ "Export memory"
+    end
+
+    test "has nothing to offer once its libraries are here", %{conn: conn, land: land} do
+      library = Monty.Studio.Memory.path_for("mug", "pretrained_ycb_v14")
+      File.mkdir_p!(Path.dirname(library))
+      File.write!(library, "")
+
+      {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+      refute has_element?(view, "#download-bundles")
+      assert render(view) =~ "present"
+      assert land =~ "models"
+    end
+  end
+
   # "What is available here?" is the question the page is open for, so the
   # answer comes before the list of what has to be downloaded — and it names the
   # engine each world would step, not just "Python is installed".

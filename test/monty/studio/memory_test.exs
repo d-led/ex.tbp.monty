@@ -104,8 +104,14 @@ defmodule Monty.Studio.MemoryTest do
 
     test "gets the newest export of that model when the named release has none, and says so" do
       # A release nobody exported: the run still works, with the graphs that are
-      # here, and the page says which ones those are.
-      {:ok, opened} = Monty.Studio.open(@experiment, pretrained_dir: "/models/pretrained_ycb_v99")
+      # here, and the page says which ones those are. The world is named because
+      # a stand-in run is the one that needs no memory at all, and this is not
+      # about that one.
+      {:ok, opened} =
+        Monty.Studio.open(@experiment,
+          pretrained_dir: "/models/pretrained_ycb_v99",
+          world_simulator: :mujoco
+        )
 
       assert [%{code: :memory_from_another_release, message: message}] =
                Setup.memory_findings(opened.setup)
@@ -125,8 +131,22 @@ defmodule Monty.Studio.MemoryTest do
       assert Setup.memory_findings(%Setup{}) == []
     end
 
+    # The stand-in is the one thing that works on a fresh volume: it loads a
+    # memory when one is exported and runs on an empty one when none is, so a
+    # page that refused it for want of a download would be refusing the way in.
+    test "says nothing for a stand-in run, even when no release exports the model" do
+      setup = %Setup{
+        world: :synthetic,
+        model_name_or_path: monty_path("pretrained_ycb_v13", "a_model_nobody_exported")
+      }
+
+      assert Setup.memory_findings(setup) == []
+      assert Setup.valid?(%{setup | findings: Setup.memory_findings(setup)})
+    end
+
     test "warns when the memory is only exported from another release, and the run still starts" do
       setup = %Setup{
+        world: :mujoco,
         model_name_or_path: monty_path("pretrained_ycb_v99", "surf_agent_1lm_10distinctobj")
       }
 
@@ -141,6 +161,7 @@ defmodule Monty.Studio.MemoryTest do
 
     test "refuses a run when no release exports the model, and says where to fetch it" do
       setup = %Setup{
+        world: :mujoco,
         model_name_or_path: monty_path("pretrained_ycb_v13", "a_model_nobody_exported")
       }
 
