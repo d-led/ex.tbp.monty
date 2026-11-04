@@ -40,6 +40,14 @@ symptom was a migration that never ran and an image that never became healthy.
 | the start itself: the server's tree, announced                | `lib_desktop/desktop/application.ex`                                        |
 | the window: a process supervisor with a webview               | `src-tauri/src/main.rs`, `src-tauri/tauri.conf.json`                        |
 | build both halves, open one                                   | `scripts/start-desktop.sh`                                                  |
+| the icons, from the two SVG masters, and the favicon          | `scripts/make-icons.sh`                                                     |
+
+The two drawings in `src-tauri/icons/` are the only icon sources. The detailed
+one carries circuit traces and is used from 64 px up; at 16 and 32 px those
+traces collapse into a smudge, so the smaller sizes come from the simplified
+drawing. `scripts/make-icons.sh` renders the `.icns`, the `.ico`, the PNGs and
+`priv/static/favicon.ico`, and two runs produce the same bytes, so a run that
+changes nothing leaves the working tree alone.
 
 `lib_desktop/` is compiled only for `MIX_ENV=desktop`, so `lib/` never names a
 `Desktop.*` module and nothing dev, test or prod ships contains this code.

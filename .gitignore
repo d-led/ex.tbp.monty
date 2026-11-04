@@ -200,7 +200,10 @@ dist
 # Since we are building assets from web/static,
 # we ignore priv/static. You may want to comment
 # this depending on your deployment strategy.
-/priv/static/
+# The favicon is the exception: no build step produces it, so
+# scripts/make-icons.sh renders it and git keeps it.
+/priv/static/*
+!/priv/static/favicon.ico
 
 # Installer-related files
 /installer/_build
