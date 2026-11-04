@@ -21,12 +21,13 @@ name: ci
 #          carries its commit in `priv/build_info.json`, which the footer shows.
 #          They wait for the three gates above (`needs`), so nothing is
 #          published from a commit that failed them.
-#   desktop what `scripts/install-desktop.sh` downloads: the window with its own
-#          server inside, built on a runner of the architecture it ships to,
-#          zipped by `ditto` so executable modes survive, uploaded for ninety
-#          days — and attached to a `v*` tag as a GitHub release. Only on main,
-#          tags and a dispatch: it is the longest job here and nothing about a
-#          feature branch needs an app.
+#   desktop  what `scripts/install-desktop.sh` and `scripts\install-desktop.ps1`
+#          download: the window with its own server inside, built on a runner of
+#          the architecture it ships to, zipped by `ditto` on macOS and by `tar`
+#          on Windows so executable modes and directory entries survive,
+#          uploaded for ninety days — and attached to a `v*` tag as a GitHub
+#          release. Only on main, tags and a dispatch: it is the longest job
+#          here and nothing about a feature branch needs an app.
 #
 # Why two builds rather than one: compiled under QEMU on an x86 runner, the
 # arm64 half took twenty-two minutes where the amd64 half took five, for the
@@ -613,7 +614,11 @@ jobs:
   # cross-compile cheaply. macOS arm64 is the platform this is developed on and
   # the one whose build has been run end to end; a second platform is one
   # `include:` here plus the packages its runner needs — `docs/desktop.md` says
-  # what is missing for Linux and Windows, and why they are not claimed yet.
+  # where Linux stands. Two platforms: each is built on a runner of its own
+  # architecture, because the release carries a compiled Python, two Rust NIFs
+  # and a webview shell, and none of them cross-compile cheaply. macOS is the
+  # platform this is developed on; Windows is built and uploaded so that the
+  # PowerShell scripts are answered by a runner rather than by reading them.
   desktop:
     name: desktop (${{ matrix.asset }})
     needs: [lint, test, types, report]
@@ -632,6 +637,19 @@ jobs:
           - os: macos-14
             rid: osx-arm64
             asset: ex-tbp-monty-osx-arm64
+            # The Tauri CLI is built from source and cached here; the images
+            # ship Rust itself, so only the CLI is ever installed.
+            tauri_cli: ~/.cargo/bin/cargo-tauri
+            rust: scripts/install-rust.sh
+            package: ./scripts/package.sh
+          - os: windows-2022
+            rid: win-x64
+            asset: ex-tbp-monty-win-x64
+            tauri_cli: ~\.cargo\bin\cargo-tauri.exe
+            # The image ships Rust and the MSVC build tools; saying so fails
+            # here, in one line, rather than inside `cargo build`.
+            rust: cargo --version
+            package: powershell -ExecutionPolicy Bypass -File scripts\package.ps1 win-x64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -651,7 +669,8 @@ jobs:
           key: ${{ runner.os }}-desktop-${{ hashFiles('mix.lock', 'src-tauri/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-desktop-
 
-      - run: scripts/install-rust.sh
+      - name: Rust toolchain
+        run: ${{ matrix.rust }}
 
       # A fresh runner has no `deps/`: every other job gets them from `mix lint`
       # or `mix test`, and this one compiles a different `MIX_ENV` first.
@@ -663,31 +682,35 @@ jobs:
       - name: Cache the Tauri CLI
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cargo/bin/cargo-tauri
+          path: ${{ matrix.tauri_cli }}
           key: ${{ runner.os }}-tauri-cli-v2
 
       - name: Install the Tauri CLI
+        shell: bash
         run: command -v cargo-tauri >/dev/null || cargo install tauri-cli --version '^2' --locked
 
       # One command: the stylesheet, the scripts, `mix release`, the window with
-      # that release copied inside it, and the zip and disk image of the result
-      # in `artifacts/<platform>/`. The steps are in the script so that a laptop
-      # and a runner cannot package differently — see docs/desktop.md.
+      # that release beside it, and the zip (and the installer) of the result in
+      # `artifacts/<platform>/`. The steps are in the script so that a laptop and
+      # a runner cannot package differently — see docs/desktop.md.
       - name: Package the application
-        run: ./scripts/package.sh
+        run: ${{ matrix.package }}
 
-      # `ditto` inside the script, not `upload-artifact`'s own zip: an app bundle
-      # holds symlinks and executable modes, and the artefact zip flattens both —
-      # the download would open and then fail to start its server.
+      # `ditto` and `tar` inside the scripts, not `upload-artifact`'s own zip: an
+      # app bundle holds symlinks and executable modes and a release holds its
+      # directory entries, and the artefact zip flattens both — the download
+      # would open and then fail to start its server.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.asset }}
-          # The zip is what `install-desktop.sh` fetches; the package is what a
-          # person double-clicks. The disk image is for a checkout, and would be
-          # a third copy of 550 MB in every run.
+          # The zip is what the installers fetch; the package is what a person
+          # double-clicks (`.pkg` on macOS, the NSIS setup `.exe` on Windows).
+          # The disk image is for a checkout, and would be a third copy of
+          # 550 MB in every run.
           path: |
             artifacts/${{ matrix.rid }}/*.zip
             artifacts/${{ matrix.rid }}/*.pkg
+            artifacts/${{ matrix.rid }}/*.exe
           # `install-desktop.sh` points at nightly.link, which serves the newest
           # artefact of this workflow; a week is not long enough for that
           # promise.
