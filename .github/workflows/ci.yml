@@ -451,25 +451,36 @@ jobs:
         run: |
           set -euo pipefail
           image="${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}"
+          # No `--rm`: a container that exits takes its logs with it, and the
+          # logs are the whole answer to "why did it not become healthy".
           docker volume create monty-quickstart >/dev/null
-          docker run --rm -d --name monty-quickstart -p 14001:4000 \
+          docker run -d --name monty-quickstart -p 14001:4000 \
             -e SECRET_KEY_BASE="$(head -c 96 /dev/zero | tr '\0' x)" \
             -e SQLITE_PATH=/app/priv/data/ex_tbp_monty.db \
             -v monty-quickstart:/app/priv/data \
             "$image"
+          healthy=""
           for _ in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:14001/health >/dev/null; then
-              docker rm -f monty-quickstart >/dev/null
-              docker volume rm monty-quickstart >/dev/null
-              exit 0
+              healthy=yes
+              break
+            fi
+            if [ -z "$(docker ps -q -f name=monty-quickstart)" ]; then
+              break
             fi
             sleep 2
           done
-          echo "the image did not become healthy on SQLite" >&2
-          docker logs monty-quickstart 2>&1 | tail -40 || true
+          echo "--- the image's own log:"
+          docker logs monty-quickstart 2>&1 | tail -60 || true
+          echo "--- SQLite file on the volume:"
+          docker run --rm -v monty-quickstart:/data --entrypoint /bin/ls \
+            "$image" -la /data || true
           docker rm -f monty-quickstart >/dev/null || true
           docker volume rm monty-quickstart >/dev/null || true
-          exit 1
+          if [ -z "$healthy" ]; then
+            echo "the image did not become healthy on SQLite" >&2
+            exit 1
+          fi
 
   # The other half, on an arm64 runner: `ubuntu-24.04-arm` is an arm64 machine,
   # so this compiles arm64 natively, which is the same work the amd64 job above
