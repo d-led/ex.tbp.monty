@@ -7,15 +7,21 @@ module that has to come first.
 ## Why it is possible now
 
 Until `f0ed29b` the application needed a database server to boot, which a
-desktop app cannot ask of a user. The database is now a file by default:
+desktop app cannot ask of a user. The database is now a file by default — and
+that only became *true* in `3296e41`, which is worth knowing before trusting it:
+until then `repo_module/0` answered a written-in default of Postgres and
+`runtime.exs` set `:repo` from `repo_module/0`, so the default echoed itself and
+a release with no `DATABASE_URL` started Postgres against a file path. The
+symptom was a migration that never ran and an image that never became healthy.
 
 | piece | where |
 | --- | --- |
 | the file's path — `SQLITE_PATH`, else `$HOME/ex_tbp_monty.db` | `lib/ex_tbp_monty/database.ex:56` |
-| `repo_module/0`, `repo/0`, `oban_engine/0` — Postgres when `DATABASE_URL` is set, SQLite otherwise | `lib/ex_tbp_monty/database.ex:27,33,47` |
-| the SQLite branch — `pool_size: POOL_SIZE` or 5, `busy_timeout: 30_000`, no `journal_mode` (so the default rollback journal, not WAL) | `lib/ex_tbp_monty/database.ex:66` |
+| `repo_module/0` — a configured `:repo` wins (`dev` and `test` name Postgres), else `DATABASE_URL` decides | `lib/ex_tbp_monty/database.ex:27` |
+| `repo/0`, `oban_engine/0` — the same predicate, so the module and its configuration cannot disagree | `lib/ex_tbp_monty/database.ex:33,47` |
+| the SQLite branch — `pool_size: POOL_SIZE` or 5, `busy_timeout: 30_000`, no `journal_mode` (exqlite's default is WAL, so the sidecars appear anyway) | `lib/ex_tbp_monty/database.ex:87` |
 | two repos and one delegating `ExTbpMonty.Repo`, because `Ecto.Repo`'s adapter is fixed at compile time | `lib/ex_tbp_monty/repo/*.ex` |
-| `migrate/0` migrates whichever store the release was given | `lib/ex_tbp_monty/release.ex` |
+| `migrate/0` migrates whichever store the release was given, and `ecto_repos` is set to it | `lib/ex_tbp_monty/release.ex`, `config/runtime.exs:74` |
 
 ## The template to copy
 
@@ -124,3 +130,9 @@ migrates a fresh `ex-tbp-monty.db` under the OS's application-data directory,
 answers `/health`, and one tutorial run reaches its conclusion — with nothing
 written outside that directory. Then the same binary, with `SQLITE_PATH` and
 `MONTY_DATA` set, behaves exactly as it does today.
+
+Half of that is now checked by hand and in CI: a release with only `SQLITE_PATH`
+migrates a fresh file and answers `/health` 200 (`3296e41`), and the CI step
+that boots the image with no database server runs the same thing in a container.
+The other half — the application-data directory as the default root — is what
+`Monty.Paths` is for.
