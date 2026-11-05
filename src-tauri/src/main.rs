@@ -126,7 +126,10 @@ fn start_sidecar(app: &tauri::App) -> Result<(Child, String), Box<dyn std::error
         std::thread::spawn(move || {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                 log_line(&log, &line);
-                println!("{line}");
+                // `writeln!` and not `println!`: a release build on Windows has
+                // no console, and `println!` panics when the write fails — one
+                // panic per line, each one showing the failure box.
+                let _ = writeln!(std::io::stdout(), "{line}");
 
                 let mut said = said.lock().unwrap();
                 said.push(line);
@@ -168,7 +171,7 @@ fn start_sidecar(app: &tauri::App) -> Result<(Child, String), Box<dyn std::error
             // drains fills up and blocks the process writing to it.
             std::thread::spawn(move || {
                 for line in reader.lines().map_while(Result::ok) {
-                    println!("{line}");
+                    let _ = writeln!(std::io::stdout(), "{line}");
                 }
             });
 
@@ -313,5 +316,5 @@ fn show_failure(message: &str) {
 
 #[cfg(not(all(windows, not(debug_assertions))))]
 fn show_failure(message: &str) {
-    eprintln!("{message}");
+    let _ = writeln!(std::io::stderr(), "{message}");
 }

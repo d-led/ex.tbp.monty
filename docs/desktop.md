@@ -364,11 +364,15 @@ program (`windows_subsystem` unset), and a startup failure then takes its own
 sentence with it. Two changes:
 
 - The window is a window. `#![cfg_attr(not(debug_assertions), windows_subsystem =
-"windows")]`, and what a failure says goes to `%APPDATA%\ex-tbp-monty\window.log`
-  and to a message box — otherwise the release build has no console at all, and
-  `stderr` goes nowhere. The sidecar's own `stderr` is drained by a thread and the
-  last lines are appended to the failure, so "the sidecar stopped before it said
-  where it listens" now arrives with the reason underneath it.
+"windows")]`, and what a failure says goes to
+  `<application data>/ex-tbp-monty/window.log` — `%APPDATA%` on Windows,
+  `~/Library/Application Support` on macOS, `$XDG_DATA_HOME` or `~/.local/share`
+  on Linux — and on Windows to a message box as well, because that release build
+  has no console at all and `stderr` goes nowhere. (A macOS `.app` launched from
+  the Finder has no terminal either, so there the log is the only trace.) The
+  sidecar's own `stderr` is drained by a thread and the last lines are appended to
+  the failure, so "the sidecar stopped before it said where it listens" now
+  arrives with the reason underneath it.
 - **A path handed to `cmd` must not mix separators.** `resources.join("rel/ex_tbp_monty").join("bin/server.bat")`
   produced `…\rel/ex_tbp_monty\bin/server.bat`; Windows accepts it, but `%~dp0`
   inside the batch file inherits those slashes, so the launcher's `%~dp0..` became
