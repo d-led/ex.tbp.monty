@@ -344,8 +344,10 @@ Two things had to exist before a Windows build could start its own server:
   file `cmd.exe` reads rather than a program: `Command::new` on it fails with
   "not a valid Win32 application". The `call` is not decoration either — `cmd`
   alone splits a quoted path at its first space, and the bundle's path has one
-  (`…\Monty on the BEAM\…`). Both are `#[cfg(windows)]` in
-  `src-tauri/src/main.rs`, so the macOS path is the same code it was.
+  (`…\Monty on the BEAM\…`). `CREATE_NO_WINDOW` is the third part: a GUI-subsystem
+  program that spawns `cmd` draws a console for it, which is the black flash. All
+  three are `#[cfg(windows)]` in `src-tauri/src/main.rs`, so the macOS path is
+  the same code it was.
 
 **Built by CI, and not yet started.** A `windows-2022` row builds it, and the run
 at `ae325a1` is the first to upload `ex-tbp-monty-win-x64.zip` (264 MB) — after

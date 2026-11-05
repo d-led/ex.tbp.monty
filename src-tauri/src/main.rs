@@ -233,8 +233,22 @@ fn native(path: PathBuf) -> PathBuf {
 fn command(path: &Path) -> Command {
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
+
+        // `CREATE_NO_WINDOW`, or the child gets a console window of its own: the
+        // window process is now a GUI-subsystem program, and anything it spawns
+        // from a console program's family tree is given a console. That black
+        // flash was this as much as it was the window's own subsystem. The
+        // sidecar has no use for a console — what it says is read from the pipe
+        // and written to the log.
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
         let mut command = Command::new("cmd");
-        command.arg("/C").arg("call").arg(path);
+        command
+            .arg("/C")
+            .arg("call")
+            .arg(path)
+            .creation_flags(CREATE_NO_WINDOW);
         command
     }
 
