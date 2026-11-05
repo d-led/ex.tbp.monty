@@ -121,7 +121,7 @@ build_app() {
 # launchers are 0555 and a zip that loses that produces an application that
 # cannot start its server.
 linux_bundle() {
-  local rid=$1 folder="$artifacts/$1/ex-tbp-monty-$1" target="$artifacts/$1/ex-tbp-monty-$1.tar.gz" deb
+  local rid=$1 folder="$artifacts/$1/ex-tbp-monty-$1" target="$artifacts/$1/ex-tbp-monty-$1.tar.gz"
 
   rm -rf "$folder" "$target"
   mkdir -p "$folder"
@@ -131,12 +131,27 @@ linux_bundle() {
   tar czf "$target" -C "$artifacts/$1" "ex-tbp-monty-$1"
   echo "  $target"
 
-  deb=$(find src-tauri/target/release/bundle/deb -name '*.deb' -print -quit 2>/dev/null || true)
-  if [ -n "$deb" ]; then
-    cp "$deb" "$artifacts/$1/"
-    echo "  $artifacts/$1/$(basename "$deb")"
+  # Two installable shapes beside the folder: the `.deb` a package manager
+  # tracks, and the AppImage that runs where nothing is installed at all. The
+  # AppImage is the release squeezed into one executable, so it needs no
+  # unpacking step — it is the only artefact a person can download and run.
+  bundle_one src-tauri/target/release/bundle/deb '*.deb' "$1"
+  bundle_one src-tauri/target/release/bundle/appimage '*.AppImage' "$1"
+}
+
+# One file the bundle step made, moved beside the folder this platform ships.
+# Missing is not a failure here and is not silent either: the sentence names the
+# shape and where the reason is.
+bundle_one() {
+  local from=$1 pattern=$2 rid=$3 file
+
+  file=$(find "$from" -name "$pattern" -print -quit 2>/dev/null || true)
+
+  if [ -n "$file" ]; then
+    cp "$file" "$artifacts/$rid/"
+    echo "  $artifacts/$rid/$(basename "$file")"
   else
-    echo "  no .deb: the bundle step made none. See docs/desktop.md." >&2
+    echo "  no ${pattern#\*}: the bundle step made none. See docs/desktop.md." >&2
   fi
 }
 
