@@ -18,11 +18,14 @@
 #                          trip)
 #   --rid RID              another platform's build (`osx-arm64`, `linux-x64`),
 #                          which is how the Linux bundle is tried from a Mac
+#   --no-launch            unpack and say where the window is, do not open it
+#                          (what CI runs to test this script)
 #
 #   EX_TBP_MONTY_DIR       where it lands (default: ./ex-tbp-monty-<rid>)
 #   EX_TBP_MONTY_REPO      owner/repo to download from (default: d-led/ex.tbp.monty)
 #   EX_TBP_MONTY_BRANCH    which branch's build to take (default: main)
 #   EX_TBP_MONTY_WORKFLOW  the workflow that builds it (default: ci)
+#   EX_TBP_MONTY_NO_LAUNCH 1 does what `--no-launch` does
 #
 # The macOS app is not signed or notarised yet (docs/desktop.md), so the first
 # launch asks once: right-click, Open, Open. Everything after that is a normal
@@ -36,14 +39,19 @@ workflow="${EX_TBP_MONTY_WORKFLOW:-ci}"
 base_url="${EX_TBP_MONTY_BASE_URL:-}"
 rid="${EX_TBP_MONTY_RID:-}"
 update=0
+launch_it=1
+[ "${EX_TBP_MONTY_NO_LAUNCH:-}" = 1 ] && launch_it=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --update) update=1; shift ;;
+        --no-launch) launch_it=0; shift ;;
         --base-url) base_url="${2:?--base-url needs a URL or a directory}"; shift 2 ;;
         --rid) rid="${2:?--rid needs a runtime id such as linux-x64}"; shift 2 ;;
         -h | --help)
-            sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+            # Everything above the first blank line, so the range cannot go stale
+            # when a flag is added.
+            sed -n '2,/^$/{/^$/d;p;}' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -167,27 +175,43 @@ else
     work="$dir/.unpacked"
     rm -rf "$work"
     mkdir -p "$work"
-    if ! unpack "$dir/$asset.zip" "$work"; then
-        echo "The download is not a zip this machine can open, so nothing was run." >&2
-        echo "The likeliest reason is that the build does not exist yet: " >&2
+
+    # The unpacker's exit code is not the gate — what the application needs is.
+    # A zip of sixteen thousand files can carry an entry its tool cannot read
+    # (ERTS ships `.pdb` debug symbols, one of which fails) and still hand over
+    # everything, and a build that does not exist yet unpacks into an empty
+    # directory. Both are answered by looking for the application below, and the
+    # unpacker's own words are kept for the case where it is not there.
+    unpack "$dir/$asset.zip" "$work" 2>"$work/unpack.log" || true
+
+    # What the download held, said only when something the application needs is
+    # missing: the top of the tree, and the unpacker's last words.
+    say_what_it_held() {
+        echo "The download did not contain an application. Nothing was run." >&2
+        echo "What it does hold:" >&2
+        find "$work" -maxdepth 2 -print 2>/dev/null | head -12 >&2
+        if [ -s "$work/unpack.log" ]; then
+            echo "The unpacker said:" >&2
+            tail -5 "$work/unpack.log" >&2
+        fi
+        echo "Whether that build exists is on the workflow page:" >&2
         echo "  https://github.com/$repo/actions/workflows/$workflow" >&2
-        exit 1
-    fi
+    }
 
     case "$rid" in
         osx-*)
-            bundle_zip="$(find "$work" -maxdepth 1 -name '*.zip' -print -quit)"
+            bundle_zip="$(find "$work" -maxdepth 2 -name '*.zip' -print -quit)"
             if [ -n "$bundle_zip" ]; then
                 echo "Expanding the application (about 550 MB) ..."
                 mkdir -p "$work/app"
-                unpack "$bundle_zip" "$work/app"
-                found="$(find "$work/app" -maxdepth 1 -name '*.app' -print -quit)"
+                unpack "$bundle_zip" "$work/app" 2>>"$work/unpack.log" || true
+                found="$(find "$work/app" -maxdepth 2 -name '*.app' -print -quit)"
             else
-                found="$(find "$work" -maxdepth 1 -name '*.app' -print -quit)"
+                found="$(find "$work" -maxdepth 2 -name '*.app' -print -quit)"
             fi
 
             if [ -z "$found" ]; then
-                echo "The download did not contain an application. Nothing was run." >&2
+                say_what_it_held
                 exit 1
             fi
 
@@ -217,7 +241,7 @@ else
             # whoever wants that instead.
             tarball="$(find "$work" -maxdepth 2 -name '*.tar.gz' -print -quit)"
             if [ -z "$tarball" ]; then
-                echo "The download did not contain an application. Nothing was run." >&2
+                say_what_it_held
                 exit 1
             fi
 
@@ -237,8 +261,12 @@ fi
 
 # The macOS `.app` is still kept out of the zip's own directory: nothing is
 # registered with LaunchServices, so `open -a` on the path is the whole of it.
-echo "Running $instance"
-launch
+if [ "$launch_it" -eq 0 ]; then
+    echo "Not launching: $instance"
+else
+    echo "Running $instance"
+    launch
+fi
 
 case "$rid" in
     osx-*) echo "Where it keeps its data:  ~/Library/Application Support/ex-tbp-monty" ;;

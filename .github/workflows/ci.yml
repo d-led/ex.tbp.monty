@@ -726,6 +726,68 @@ jobs:
       - name: Package the application
         run: ${{ matrix.package }}
 
+      # The one command a person runs, run here: the script the README offers,
+      # pointed at the artefacts this job has just made, stopping before it opens
+      # a window. It is the only thing that tests the script's own assumptions —
+      # how `nightly.link` lays the download out (two zips: the artefact, and the
+      # folder zipped inside it), what the platform's unpacker does with sixteen
+      # thousand files, and where the window ends up — on the platform it runs on.
+      # A `.pdb` entry that bsdtar could not read made the whole download look
+      # broken while everything needed had unpacked: that is the bug this catches.
+      - name: The one-line download unpacks what this job built
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p smoke
+          # The wrapper nightly.link serves is the artefact the upload step
+          # declares — the zip, the packages, the tarball — and not the whole of
+          # `artifacts/`, which also holds the unpacked bundles that upload leaves
+          # out. Python's zipfile, because GNU tar cannot write a zip at all and
+          # whether an image ships `zip` is not worth betting a gate on.
+          python3 - <<'PY'
+          import glob, os, sys, zipfile
+
+          root = "artifacts/${{ matrix.rid }}"
+          target = os.path.join("smoke", "${{ matrix.asset }}.zip")
+          uploaded = ("*.zip", "*.pkg", "*.exe", "*.deb", "*.AppImage", "*.tar.gz")
+          files = [full for pattern in uploaded for full in sorted(glob.glob(os.path.join(root, pattern)))]
+
+          if not files:
+              sys.exit(f"nothing in {root} that the upload step would take")
+
+          with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+              for full in files:
+                  archive.write(full, os.path.basename(full))
+
+          print("the wrapper holds: " + ", ".join(os.path.basename(f) for f in files))
+          PY
+          EX_TBP_MONTY_BASE_URL="$GITHUB_WORKSPACE/smoke" \
+          EX_TBP_MONTY_DIR="$GITHUB_WORKSPACE/smoke/landing" \
+          EX_TBP_MONTY_NO_LAUNCH=1 \
+            scripts/run-desktop.sh
+          echo "the one-line download put the application in smoke/landing:"
+          find smoke/landing -maxdepth 2 | head -10
+
+      - name: The one-line download unpacks what this job built (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force smoke | Out-Null
+          # Files only: the folder beside them is the unpacked bundle the upload
+          # step leaves out, so the wrapper holds what a person downloads.
+          Push-Location "artifacts/${{ matrix.rid }}"
+          tar -a -c -f "$env:GITHUB_WORKSPACE/smoke/${{ matrix.asset }}.zip" `
+            (Get-ChildItem -File | Select-Object -ExpandProperty Name)
+          if ($LASTEXITCODE -ne 0) { throw 'the wrapper zip could not be made' }
+          Pop-Location
+          $env:EX_TBP_MONTY_BASE_URL = "$env:GITHUB_WORKSPACE/smoke"
+          $env:EX_TBP_MONTY_DIR = "$env:GITHUB_WORKSPACE/smoke/landing"
+          $env:EX_TBP_MONTY_NO_LAUNCH = '1'
+          powershell -ExecutionPolicy Bypass -File scripts/run-desktop.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'the one-line download failed' }
+          $window = "smoke/landing/${{ matrix.asset }}/ex-tbp-monty-desktop.exe"
+          if (-not (Test-Path $window)) { throw "no window at $window" }
+          Write-Host "the one-line download put the window at $window"
+
       # `ditto` and `tar` inside the scripts, not `upload-artifact`'s own zip: an
       # app bundle holds symlinks and executable modes and a release holds its
       # directory entries, and the artefact zip flattens both — the download

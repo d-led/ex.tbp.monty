@@ -18,6 +18,8 @@
 
         -Update                download the newest build even if one is here
 
+        EX_TBP_MONTY_NO_LAUNCH stop after unpacking, print where the window is
+                               (what CI runs to test this script)
         EX_TBP_MONTY_DIR       where it lands (default: .\ex-tbp-monty-win-x64)
         EX_TBP_MONTY_REPO      owner/repo to download from (default: d-led/ex.tbp.monty)
         EX_TBP_MONTY_BRANCH    which branch's build to take (default: main)
@@ -101,35 +103,52 @@ else {
     # would hold half a gigabyte of file table in memory doing it. `tar` reads
     # both: Windows ships bsdtar, which understands zip.
     #
+    # Neither layer's exit code is the gate. A zip of sixteen thousand files can
+    # carry an entry this tar cannot read — ERTS ships `.pdb` debug symbols, and
+    # one of them fails to extract — while handing over everything the
+    # application needs; the packaging excludes them now, and this still does not
+    # trust the code, because the question is "is the application here", and that
+    # is answered by looking. The unpacker's own words are kept for the case
+    # where the answer is no.
+    #
     # Said out loud, because both steps take a while and a script that prints
     # nothing for a minute reads as one that has hung.
     Write-Host 'Unpacking the download ...'
+    $log = Join-Path $work 'unpack.log'
     $unpacked = Join-Path $work 'unpacked'
     New-Item -ItemType Directory -Force -Path $unpacked | Out-Null
-    tar -x -f $zip -C $unpacked
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host 'The download could not be unpacked. Nothing was run.'
-        exit 1
-    }
+    tar -x -f $zip -C $unpacked 2>$log
 
-    $bundle = Get-ChildItem -Path $unpacked -Filter '*.zip' -File | Select-Object -First 1
+    # The inner zip is looked for two levels down, not only at the top: a wrapper
+    # directory around it is a packaging detail, and the search should not care.
+    $bundle = Get-ChildItem -Path $unpacked -Recurse -Depth 1 -Filter '*.zip' -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
     if ($null -ne $bundle) {
         Write-Host 'Expanding the application (about 550 MB) ...'
         $unpacked = Join-Path $work 'app'
         New-Item -ItemType Directory -Force -Path $unpacked | Out-Null
-        tar -x -f $bundle.FullName -C $unpacked
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host 'The application could not be expanded. Nothing was run.'
-            exit 1
-        }
+        tar -x -f $bundle.FullName -C $unpacked 2>>$log
     }
 
     # Found rather than assumed: the folder's name is the runtime the build was
     # for, and what makes it the application is the window inside it.
-    $found = Get-ChildItem -Path $unpacked -Recurse -Filter 'ex-tbp-monty-desktop.exe' -File |
+    $found = Get-ChildItem -Path $unpacked -Recurse -Filter 'ex-tbp-monty-desktop.exe' -File -ErrorAction SilentlyContinue |
         Select-Object -First 1
     if ($null -eq $found) {
         Write-Host 'The download did not contain the application. Nothing was run.'
+        Write-Host 'What it does hold:'
+        Get-ChildItem -Path $unpacked -ErrorAction SilentlyContinue |
+            Select-Object -First 10 |
+            ForEach-Object { Write-Host "  $($_.Name)" }
+        if ((Test-Path $log) -and (Get-Item $log).Length -gt 0) {
+            Write-Host 'The unpacker said:'
+            Get-Content $log -ErrorAction SilentlyContinue |
+                Select-Object -Last 10 |
+                ForEach-Object { Write-Host "  $_" }
+        }
+        Write-Host 'The NSIS setup in the same download installs the same application,'
+        Write-Host 'and does not go through this script:'
+        Write-Host '  docs/desktop.md'
         exit 1
     }
 
@@ -140,12 +159,23 @@ else {
     # and Windows then asks before running it. Ask once and only when one is
     # there: walking fifteen thousand files to delete a marker none of them has
     # is a minute spent on nothing.
-    if ($null -ne (Get-Item $exe -Stream Zone.Identifier -ErrorAction SilentlyContinue)) {
+    #
+    # `-Stream` belongs to Windows' filesystem provider alone, so it is only asked
+    # for where it exists — and a backslash separator is how this script tells,
+    # because `$IsWindows` does not exist in Windows PowerShell 5.1. (Which also
+    # makes the whole unpack path testable on a machine that is not Windows.)
+    if ([System.IO.Path]::DirectorySeparatorChar -eq '\' -and
+        $null -ne (Get-Item $exe -Stream Zone.Identifier -ErrorAction SilentlyContinue)) {
         Write-Host 'Clearing the download marker ...'
         Get-ChildItem -Path $instance -Recurse -File | Unblock-File
     }
 
     Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
+}
+
+if ($env:EX_TBP_MONTY_NO_LAUNCH -in @('1', 'true', 'yes')) {
+    Write-Host "Not launching: $exe"
+    exit 0
 }
 
 Write-Host "Running $exe"

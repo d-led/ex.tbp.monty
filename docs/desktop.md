@@ -271,6 +271,19 @@ because it needs no release to exist before somebody can try the app:
    powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run-desktop.ps1 | iex"
    ```
 
+   **The one-liner is tested by CI, on the platform it runs on.** Each `desktop`
+   job wraps its own artefacts the way `nightly.link` does, runs the script
+   against that wrapper with `EX_TBP_MONTY_NO_LAUNCH` (`--no-launch`) — unpack,
+   find the window, stop — and fails if the window is not where it says. That
+   came from a real failure: the download is two zips (the artefact, and the
+   folder zipped inside it), one `.pdb` entry in the inner one fails to extract
+   with the `tar` that ships on Windows and macOS, and the script treated the
+   unpacker's non-zero status as fatal while everything it needed was already on
+   disk. It now judges the result — is the window there — and reports what the
+   download held and what the unpacker said when it is not. The `.pdb` files are
+   not shipped any more either: nineteen debug symbols, ~90 MB of the download
+   for a binary nobody debugs here.
+
 4. A `v*` tag runs `desktop-release`, which attaches the same zip to a GitHub
    release — an artefact expires, a release does not.
 

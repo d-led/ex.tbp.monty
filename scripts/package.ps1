@@ -123,9 +123,15 @@ try {
         # `tar`, not `Compress-Archive`: Windows ships bsdtar, it keeps the
         # directory entries a release expects, and it does not try to hold half a
         # gigabyte of file table in memory. The extension is what asks for zip.
+        #
+        # `.pdb` and not shipped: ERTS carries nineteen of them, ~90 MB of this
+        # download, and they are debug symbols for a binary nobody debugs here.
+        # One of them (`beam.debug.smp.pdb`) also fails to extract with the
+        # bsdtar that ships on Windows and macOS, which made the download look
+        # broken to `run-desktop.ps1` while everything it needed had unpacked.
         Push-Location (Split-Path -Parent $Source)
         try {
-            tar -a -c -f $target (Split-Path -Leaf $Source)
+            tar -a -c -f $target --exclude '*.pdb' (Split-Path -Leaf $Source)
         }
         finally {
             Pop-Location
