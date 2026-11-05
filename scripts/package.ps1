@@ -6,7 +6,7 @@
     The Windows form of `scripts/package.sh`. Two things come out of it, and they
     are not the same offer:
 
-        folder     `artifacts\win-x64\ex-tbp-monty-win-x64\` — the window with the
+        folder     `artifacts\win-x64\ex-tbp-monty-win-x64\` - the window with the
                    release beside it. Runs from anywhere, no installer, no
                    administrator. This is what CI uploads as
                    `ex-tbp-monty-win-x64.zip`, so it is also what
@@ -15,8 +15,8 @@
         setup      the NSIS installer Tauri makes (`-NoInstaller` skips it):
                    double-click, app appears under %LOCALAPPDATA%\Programs
 
-    All of them carry the same bundle — the window, the Elixir release, the BEAM,
-    the embedded Python — so the only difference is how a person picks it up.
+    All of them carry the same bundle - the window, the Elixir release, the BEAM,
+    the embedded Python - so the only difference is how a person picks it up.
 
         scripts\package.ps1                  # the platform this machine is
         scripts\package.ps1 win-x64          # one named runtime
@@ -32,7 +32,7 @@
     Everything lands in `artifacts\`, which is not committed.
 
 .NOTES
-    Not yet built or run on a Windows machine — `docs/desktop.md` says what is
+    Not yet built or run on a Windows machine - `docs/desktop.md` says what is
     verified and what is claimed.
 #>
 
@@ -83,7 +83,7 @@ try {
     New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
 
     # One bundle: the stylesheet, the scripts, `mix release`, and the window with
-    # that release copied beside it. `start-desktop.ps1` owns those steps — this
+    # that release copied beside it. `start-desktop.ps1` owns those steps - this
     # script must not have a second version of them.
     function Build-App {
         & (Join-Path $PSScriptRoot 'start-desktop.ps1') -Bundle

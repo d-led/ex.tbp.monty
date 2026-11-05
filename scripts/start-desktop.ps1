@@ -15,7 +15,7 @@
 
     What it opens is the native window: `src-tauri`, which starts the Elixir
     release as its sidecar, reads the address that release prints, and points a
-    webview at it. The window adds no behaviour — every screen is the sidecar's,
+    webview at it. The window adds no behaviour - every screen is the sidecar's,
     which is also what `-InBrowser` runs, so the desktop and the server cannot
     drift apart.
 
@@ -28,7 +28,7 @@
     dependencies install themselves.
 
 .NOTES
-    Not yet built or run on a Windows machine — `docs/desktop.md` says what is
+    Not yet built or run on a Windows machine - `docs/desktop.md` says what is
     verified and what is claimed. The parts most likely to need work are the
     NSIS bundle and MuJoCo's renderer, which defaults to WGL here and has no
     `MUJOCO_GL` equivalent in `rel/env.bat.eex`.
@@ -52,14 +52,14 @@ try {
     # Two components, not `bin/server.bat`: `Join-Path` keeps the forward slash
     # inside its second argument, and a batch file started that way hands its own
     # `%~dp0` - slashes and all - to the release's launcher, whose `%~dp0..` then
-    # reads `…\bin/..` and `erl` answers "cannot get boot file".
+    # reads `...\bin/..` and `erl` answers "cannot get boot file".
     $launcher = Join-Path $release "bin\$name.bat"
     $sidecar = Join-Path $release 'bin\server.bat'
     $window = 'src-tauri/target/debug/ex-tbp-monty-desktop.exe'
 
     # Bundling is a separate config, merged only for `-Bundle`/`-App`:
-    # `bundle.active` in the main config makes `cargo build` — the debug window
-    # this script opens every run — fail in tauri-build's resource phase, and
+    # `bundle.active` in the main config makes `cargo build` - the debug window
+    # this script opens every run - fail in tauri-build's resource phase, and
     # the debug window has no use for a bundle. Windows has its own file because
     # the target is `nsis` where macOS asks for `app`.
     $bundleConfig = Join-Path $PWD 'src-tauri/tauri.bundle.windows.json'
@@ -108,7 +108,7 @@ try {
     $env:MIX_ENV = 'desktop'
 
     # Hex and rebar are what `mix deps.get` runs on, and a machine that has never
-    # built an Elixir project has neither — the fetch then stops to ask whether
+    # built an Elixir project has neither - the fetch then stops to ask whether
     # to install them, and a prompt inside a script is a hang.
     Invoke-Step 'installing Hex and rebar (a fresh machine has neither)' {
         mix local.hex --force --if-missing
@@ -120,7 +120,7 @@ try {
     # Before the stylesheet, and that is the whole point: the app's compiler is
     # what writes `_build/desktop/phoenix-colocated/ex_tbp_monty/colocated.css`,
     # and `assets/css/app.css` imports it by name. A fresh runner had no such
-    # file and tailwind said "Can't resolve 'phoenix-colocated/…'" — the shell
+    # file and tailwind said "Can't resolve 'phoenix-colocated/...'" - the shell
     # twin has compiled here since it was written, which is why only this one
     # failed.
     Invoke-Step 'compiling the desktop build (it writes the colocated CSS the stylesheet imports)' {
@@ -132,7 +132,7 @@ try {
     # restored from CI's cache can carry up-to-date beams and an empty
     # `priv/native`, and the release is then assembled without them: it starts and
     # dies at `KdTreeNif` with "Failed to load NIF library". Forced only when they
-    # are missing, and `priv/native` is deliberately not cached — a stale copy that
+    # are missing, and `priv/native` is deliberately not cached - a stale copy that
     # disagrees with the beams is how that happened.
     #
     # Rustler writes `kd_tree_nif.so` everywhere but Windows, where a shared
@@ -148,7 +148,7 @@ try {
     }
 
     # `npm` is `npm.cmd` on Windows, and `mix cmd` starts the program it is
-    # given directly — which a `.cmd` is not: Elixir's `System.cmd` fails on one
+    # given directly - which a `.cmd` is not: Elixir's `System.cmd` fails on one
     # with `:eacces`, the same reason the window launches its sidecar through
     # `cmd /C call`. Going through `cmd` is what makes it a program to start.
     Invoke-Step 'installing the packages the scripts import' {
@@ -177,12 +177,12 @@ try {
     $kernels = Get-ChildItem "$release/lib" -Recurse -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Extension -in '.so', '.dll' -and $_.Directory.Name -eq 'native' -and $_.Directory.Parent.Name -eq 'priv' }
     if (-not $kernels) {
-        throw "the release carries no native kernels: $release has no priv/native/*.so and no *.dll — see docs/desktop.md"
+        throw "the release carries no native kernels: $release has no priv/native/*.so and no *.dll - see docs/desktop.md"
     }
 
     # No peers to cluster with: a distributed release has a fixed node name, so a
     # second launch fails with "the name ... is in use by another Erlang node"
-    # and dies before it says where it listens — which the window reports as
+    # and dies before it says where it listens - which the window reports as
     # "the sidecar stopped before it said where it listens".
     $env:RELEASE_DISTRIBUTION = 'none'
 
@@ -226,12 +226,12 @@ IO.puts("runs:        #{Paths.artifacts()}")
         # *over* whatever is there: the previous copy keeps the release's own
         # modes, so the copy fails with "Permission denied (os error 13)" on
         # every run after the first. Removing the copy is cheaper than making
-        # thousands of files writable, and nothing is lost — it is a copy of
+        # thousands of files writable, and nothing is lost - it is a copy of
         # `_build/desktop/rel`.
         Remove-Item -Recurse -Force 'src-tauri/target/release/rel' -ErrorAction SilentlyContinue
         Remove-Item -Recurse -Force 'src-tauri/target/release/bundle' -ErrorAction SilentlyContinue
 
-        Invoke-Step 'building the installer bundle (a minute warm, six cold — the window is rebuilt in release)' {
+        Invoke-Step 'building the installer bundle (a minute warm, six cold - the window is rebuilt in release)' {
             cargo tauri build --config $bundleConfig
         }
 
