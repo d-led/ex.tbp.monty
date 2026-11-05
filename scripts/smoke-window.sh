@@ -13,7 +13,14 @@
 # one.
 #
 #   scripts/smoke-window.sh [--window PATH] [--port N] [--expect-mark ID]
-#                           [--up-seconds N] [--seconds N]
+#                           [--up-seconds N] [--seconds N] [--crash PATH]
+#
+# `--crash` asks the other half of the same question: start the window pointed
+# at a release that is not there, and require the crash screen for it. The page
+# is drawn inside a webview and nothing outside can read it, so what is checked
+# is the window's own log, where `announce_failure` says which headline it put
+# up. Without that, "the window explains itself" is a claim about code nobody
+# has seen run.
 #
 # It asserts structure, not pixels: a screenshot of a person's desktop is not
 # something a test should take, and a runner with no graphics session has no
@@ -54,6 +61,7 @@ expect_mark=welcome-hero
 port=${MONTY_DESKTOP_PORT:-43997}
 up_seconds=90
 seconds=60
+crash=
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -62,6 +70,7 @@ while [[ $# -gt 0 ]]; do
     --expect-mark) expect_mark=$2; shift 2 ;;
     --up-seconds) up_seconds=$2; shift 2 ;;
     --seconds) seconds=$2; shift 2 ;;
+    --crash) crash=$2; shift 2 ;;
     -h | --help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -75,7 +84,7 @@ fi
 
 # The release steps around a port that is taken, and a launch that answered on
 # some other number would leave this script polling nothing.
-if curl -s -m 1 -o /dev/null "http://127.0.0.1:$port/health"; then
+if [[ -z $crash ]] && curl -s -m 1 -o /dev/null "http://127.0.0.1:$port/health"; then
   echo "something already answers on 127.0.0.1:$port - pass --port with a free one" >&2
   exit 1
 fi
@@ -99,6 +108,7 @@ launch=(
   env HOME="$home" MONTY_DESKTOP_PORT="$port"
   WEBKIT_DISABLE_COMPOSITING_MODE=1 NO_AT_BRIDGE=1
 )
+[[ -n $crash ]] && launch+=(EX_TBP_MONTY_SIDECAR="$crash")
 [[ ${#runner[@]} -gt 0 ]] && launch+=("${runner[@]}")
 launch+=("$window")
 
@@ -118,6 +128,30 @@ fail() {
   stop
   exit 1
 }
+
+# The window's own log, for the platform and the scratch `HOME` above. On
+# Windows the folder is `%APPDATA%`, which no variable here moves.
+case $platform in
+  macos) tool_log="$home/Library/Application Support/ex-tbp-monty/window.log" ;;
+  windows) tool_log="$(cygpath -u "${APPDATA:-$HOME/AppData/Roaming}")/ex-tbp-monty/window.log" ;;
+  *) tool_log="$home/.local/share/ex-tbp-monty/window.log" ;;
+esac
+
+if [[ -n $crash ]]; then
+  wanted="showing the crash screen: This copy of the app is incomplete"
+
+  for _ in $(seq 1 "$seconds"); do
+    if [[ -f $tool_log ]] && grep -qF "$wanted" "$tool_log"; then
+      echo "the window showed its crash screen: ${wanted#showing the crash screen: }"
+      stop
+      exit 0
+    fi
+
+    sleep 1
+  done
+
+  fail "the window never showed the crash screen for a missing release"
+fi
 
 up=
 for i in $(seq 1 "$up_seconds"); do

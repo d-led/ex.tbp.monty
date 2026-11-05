@@ -19,7 +19,16 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+
+mod crash;
+
+use crash::{Failure, Shared, SharedState, Sink, Trouble};
+
+/// The scheme the window's own pages are served from: a spinner while the
+/// release starts, and the crash screen if it does not - a page that exists
+/// before there is any server to point a webview at.
+const SPLASH: &str = "splash";
 
 /// The release's web-server entry point, in the form `mix release` lays it down
 /// on this platform: a shell script on Unix, and `bin\server.bat` on Windows —
@@ -47,47 +56,281 @@ fn main() {
     let log = log_path();
     install_panic_log(&log);
 
-    if let Err(error) = run() {
-        // A window that dies here would otherwise leave nothing behind: the
-        // release build has no console, so stderr goes nowhere and the process
-        // is gone before anyone can read a sentence about why.
-        let text = format!(
-            "The window could not start.\n\n{error}\n\nWritten to {}",
-            log.display()
-        );
-        log_line(&log, &text);
-        show_failure(&text);
-        std::process::exit(1);
-    }
-}
+    let shared: SharedState = Arc::new(Mutex::new(Shared::default()));
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let app = tauri::Builder::default()
+    let built = tauri::Builder::default()
         .manage(Sidecar(Mutex::new(None)))
-        .setup(|app| {
-            let (child, url) = start_sidecar(app)?;
-            app.state::<Sidecar>().0.lock().unwrap().replace(child);
+        // The window's own pages, served before there is a server: what it is
+        // doing while it starts, and what went wrong if it does not. Without
+        // this the first thing a person sees on a failure is the webview's own
+        // error page — a blank window about a refused connection.
+        .register_uri_scheme_protocol(SPLASH, {
+            let shared = Arc::clone(&shared);
 
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url.parse()?))
-                .title("Monty on the BEAM")
-                .inner_size(1280.0, 860.0)
-                .min_inner_size(900.0, 600.0)
-                .build()?;
+            move |_app, request| {
+                let page = if wants_the_log(request.uri().path()) {
+                    log_page(shared.lock().unwrap().failed.as_ref())
+                } else {
+                    crash::startup_page(&shared.lock().unwrap())
+                };
+
+                tauri::http::Response::builder()
+                    .header("Content-Type", "text/html; charset=utf-8")
+                    .body(std::borrow::Cow::Owned(page.into_bytes()))
+                    .expect("a page built here is a valid response")
+            }
+        })
+        .setup(move |app| {
+            // The window first, and pointed at the waiting page: this used to
+            // block until the release had spoken, so a slow boot was a window
+            // that did not exist and a failed one was no window at all.
+            let window = splash_window(app)?;
+            let handle = app.handle().clone();
+            let shared = Arc::clone(&shared);
+
+            std::thread::spawn(move || match start_sidecar(&handle, &shared) {
+                Ok((child, url)) => {
+                    handle.state::<Sidecar>().0.lock().unwrap().replace(child);
+                    navigate(&window, &shared, &url);
+
+                    // From here on the server is somebody else's process, and a
+                    // window pointed at a server that has ended is a blank tab:
+                    // every screen this app has is the server's.
+                    watch_sidecar(handle.clone(), window.clone(), Arc::clone(&shared));
+                }
+
+                Err(failure) => announce_failure(&window, &shared, failure),
+            });
 
             Ok(())
         })
-        .build(tauri::generate_context!())?;
+        .build(tauri::generate_context!());
 
-    app.run(|app, event| {
-        if let tauri::RunEvent::Exit = event {
+    let app = match built {
+        Ok(app) => app,
+        Err(error) => {
+            // Before there is a window there is nowhere to draw a page, so this
+            // is the one failure a person reads as text: the log, and a box on
+            // the platform whose release build has no console.
+            let text = format!(
+                "The window could not start.\n\n{error}\n\nWritten to {}",
+                log.display()
+            );
+            log_line(&log, &text);
+            show_failure(&text);
+            std::process::exit(1);
+        }
+    };
+
+    app.run(|app, event| match event {
+        // There is no tray icon and no menu of ours: a window nobody can see is
+        // an app nobody can quit, still holding the port and the database the
+        // next launch wants.
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Destroyed,
+            ..
+        } if label == "main" => app.exit(0),
+
+        tauri::RunEvent::Exit => {
             if let Some(mut child) = app.state::<Sidecar>().0.lock().unwrap().take() {
                 let _ = child.kill();
                 let _ = child.wait();
             }
         }
-    });
 
-    Ok(())
+        _ => {}
+    });
+}
+
+/// The window the app opens with: the waiting page, in the shape this platform
+/// can load.
+fn splash_window(app: &tauri::App) -> Result<WebviewWindow, Box<dyn std::error::Error>> {
+    Ok(
+        WebviewWindowBuilder::new(app, "main", WebviewUrl::External(splash_url("").parse()?))
+            .title("Monty on the BEAM")
+            .inner_size(1280.0, 860.0)
+            .min_inner_size(900.0, 600.0)
+            .build()?,
+    )
+}
+
+/// The splash page in the shape the platform can load: a custom scheme where
+/// there are custom schemes, and the `*.localhost` form WebView2 needs on
+/// Windows.
+fn splash_url(suffix: &str) -> String {
+    if cfg!(target_os = "windows") {
+        format!("http://{SPLASH}.localhost/{suffix}")
+    } else {
+        format!("{SPLASH}://localhost/{suffix}")
+    }
+}
+
+/// Points the window at the app - once the address it announced accepts a
+/// connection.
+///
+/// Navigating before that hands the person the webview's own error page: the
+/// release says where it listens from inside its listener, so this normally
+/// succeeds at once, and the wait is for the microseconds in which it died
+/// between the line and the request.
+fn navigate(window: &WebviewWindow, shared: &SharedState, url: &str) {
+    if answering_within(url, ANSWER_DEADLINE).is_err() {
+        announce_failure(
+            window,
+            shared,
+            Failure {
+                trouble: Trouble::NotAnswering,
+                log: Some(log_path()),
+            },
+        );
+        return;
+    }
+
+    let _ = window.navigate(url.parse().expect("the release announced a URL"));
+    let _ = window.set_title("Monty on the BEAM");
+}
+
+/// Whether the announced address accepts a connection, within `within`.
+fn answering_within(url: &str, within: Duration) -> Result<(), ()> {
+    let address = url
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap_or_default()
+        .to_string();
+
+    let deadline = std::time::Instant::now() + within;
+
+    loop {
+        if std::net::TcpStream::connect(&address).is_ok() {
+            return Ok(());
+        }
+
+        if std::time::Instant::now() > deadline {
+            return Err(());
+        }
+
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// Puts a failure in front of the person: the page, and the title bar.
+///
+/// The title matters because a webview that will not paint - or a window whose
+/// page has been replaced by a blank error - still has a title bar, and it is
+/// then the only place left to say that the app has stopped.
+fn announce_failure(window: &WebviewWindow, shared: &SharedState, failure: Failure) {
+    let trouble = failure.trouble;
+
+    // Said in the log too, which is the only witness a headless check has: the
+    // page itself is drawn inside a webview, and nothing outside it can read a
+    // page that was never given an address.
+    log_line(
+        &log_path(),
+        &format!("showing the crash screen: {}", trouble.title()),
+    );
+
+    if let Ok(mut state) = shared.lock() {
+        state.failed = Some(failure);
+    }
+
+    let _ = window.set_title(&crash::failure_title(trouble));
+
+    // The same page, asked for again: what it serves is read from the state
+    // above, so this swap is the whole redraw.
+    let _ = window.navigate(splash_url("?failed=1").parse().expect("a splash URL"));
+}
+
+/// Watches the sidecar for as long as the window is open.
+///
+/// A server that ends after it said where it listens is a window showing a
+/// browser error nobody can read. The child is polled rather than waited on:
+/// `RunEvent::Exit` also holds this handle to kill it, and a thread parked in
+/// `wait()` would sit on that lock.
+fn watch_sidecar(handle: AppHandle, window: WebviewWindow, shared: SharedState) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(1));
+
+        let ended = match handle.state::<Sidecar>().0.lock() {
+            Ok(mut sidecar) => match sidecar.as_mut() {
+                Some(child) => !matches!(child.try_wait(), Ok(None)),
+                None => false,
+            },
+            Err(_) => false,
+        };
+
+        if ended {
+            announce_failure(
+                &window,
+                &shared,
+                Failure {
+                    trouble: Trouble::Died,
+                    log: Some(log_path()),
+                },
+            );
+            return;
+        }
+    });
+}
+
+/// Whether a request for the splash scheme is the crash screen's log link.
+fn wants_the_log(path: &str) -> bool {
+    path == "/log" || path == "/log/"
+}
+
+/// Opens the log in whatever program the person's machine uses for it, and says
+/// so on a page: a path printed in a page is a path somebody has to find and
+/// copy, and a link is the file itself.
+fn log_page(failure: Option<&Failure>) -> String {
+    let said = match failure.and_then(|failure| failure.log.as_ref()) {
+        None => "There is no log to open - this copy failed before it started one.".to_string(),
+        Some(path) => match open_file(path) {
+            Ok(()) => format!(
+                "Opening {}.",
+                crash::escape_html(&path.display().to_string())
+            ),
+            Err(error) => format!(
+                "The log could not be opened ({error}). It is at {}",
+                crash::escape_html(&path.display().to_string())
+            ),
+        },
+    };
+
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\">\
+         <title>Monty on the BEAM</title>{}</head>\
+         <body><main><h1>The log</h1><p class=\"lead\">{said}</p>\
+         <p class=\"log\"><a href=\"/?failed=1\">Back to what went wrong</a></p>\
+         </main></body></html>",
+        crash::STYLE
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn open_file(path: &Path) -> std::io::Result<()> {
+    Command::new("open").arg(path).spawn().map(|_| ())
+}
+
+#[cfg(target_os = "windows")]
+fn open_file(path: &Path) -> std::io::Result<()> {
+    use std::os::windows::process::CommandExt;
+
+    /// `CREATE_NO_WINDOW`, from `winbase.h`.
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    Command::new("cmd")
+        .arg("/C")
+        .arg("start")
+        .arg("")
+        .arg(path)
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map(|_| ())
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn open_file(path: &Path) -> std::io::Result<()> {
+    Command::new("xdg-open").arg(path).spawn().map(|_| ())
 }
 
 /// How long the window waits for the release to say where it listens, before it
@@ -99,29 +342,48 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 /// so the number is what stops a person watching nothing.
 const ANNOUNCEMENT_TIMEOUT: Duration = Duration::from_secs(45);
 
+/// How long the announced address gets to accept a connection before the window
+/// decides the release is not serving. The release says where it listens from
+/// inside its listener, so this normally succeeds at once; the wait is for the
+/// case where it died in the microseconds between the line and the request.
+const ANSWER_DEADLINE: Duration = Duration::from_secs(10);
+
 /// Starts the release and blocks until it says where it listens.
-fn start_sidecar(app: &tauri::App) -> Result<(Child, String), Box<dyn std::error::Error>> {
+fn start_sidecar(app: &AppHandle, shared: &SharedState) -> Result<(Child, String), Failure> {
+    let log = log_path();
     let path = sidecar_path(app);
 
-    let mut child = command(&path)
+    let missing = || Failure {
+        trouble: Trouble::MissingRelease,
+        log: Some(log.clone()),
+    };
+
+    // Named before anything is started: "the program is not there" is a
+    // different sentence from "the program would not start", and the difference
+    // is the whole of what a person can do about it.
+    if !path.exists() {
+        log_line(
+            &log,
+            &format!("no release at {}: this copy is incomplete", path.display()),
+        );
+
+        return Err(missing());
+    }
+
+    let mut child = match command(&path)
         // The release's own folder, and not whatever directory the window was
         // started from: a double-click, a shortcut, a scheduled task and a
-        // `cargo run` each begin somewhere else, and only the release's folder is
-        // where its launcher expects to be.
+        // `cargo run` each begin somewhere else, and only the release's folder
+        // is where its launcher expects to be.
         .current_dir(path.parent().unwrap_or_else(|| Path::new(".")))
-        // `bin/server` is the release's own web-server entry point: it runs the
-        // migrations this application keeps in two directories and then starts
-        // the endpoint, in that order, in one VM.
         // The application has no peers, so distribution buys it nothing and
         // costs it everything: a release node name is fixed, and a second
-        // launch — or a sidecar left running by an earlier one — makes this one
-        // die with "the name … seems to be in use by another Erlang node",
-        // which the shell can only report as a sidecar that never said where it
-        // listens.
+        // launch makes this one die with "the name ... seems to be in use by
+        // another Erlang node".
         .env("RELEASE_DISTRIBUTION", "none")
         // The pipe is the whole of "my window is alive": the release reads it
         // and stops when it closes, which is the case `RunEvent::Exit` below
-        // cannot cover — a window that was force-quit or crashed.
+        // cannot cover - a window that was force-quit or crashed.
         .env("EX_TBP_MONTY_WINDOW", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -130,39 +392,67 @@ fn start_sidecar(app: &tauri::App) -> Result<(Child, String), Box<dyn std::error
         // reads fills up and blocks the process writing to it.
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|error| format!("{} could not be started: {error}", path.display()))?;
+    {
+        Ok(child) => child,
+        Err(error) => {
+            log_line(
+                &log,
+                &format!("{} could not be started: {error}", path.display()),
+            );
 
-    let said = Arc::new(Mutex::new(Vec::new()));
+            // A release that is there and will not run is not a partial copy:
+            // the sentence a person can act on is that it did not start.
+            return Err(Failure {
+                trouble: Trouble::Stopped,
+                log: Some(log),
+            });
+        }
+    };
+
+    let opened = open_log(&log);
 
     if let Some(stderr) = child.stderr.take() {
-        let said = Arc::clone(&said);
-        let log = log_path();
+        let mut sink = Sink::new(opened.as_ref(), Arc::clone(shared));
 
         std::thread::spawn(move || {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                log_line(&log, &line);
                 // `writeln!` and not `println!`: a release build on Windows has
-                // no console, and `println!` panics when the write fails — one
-                // panic per line, each one showing the failure box.
+                // no console, and `println!` panics when the write fails - one
+                // panic per line, each one showing a failure.
                 let _ = writeln!(std::io::stdout(), "{line}");
 
-                remember(&said, line);
+                sink.line(&line);
             }
         });
     }
 
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or("the sidecar has no output to read")?;
+    let stdout = match child.stdout.take() {
+        Some(stdout) => stdout,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+
+            return Err(Failure {
+                trouble: Trouble::Stopped,
+                log: Some(log),
+            });
+        }
+    };
+
     let (sender, receiver) = mpsc::channel::<String>();
 
     // One thread reads the pipe for as long as it is open, so nothing blocks a
     // process that is writing to it, and the announcement can arrive at any time
     // without the window having to sit in `read_line` to see it.
+    let keeping = Arc::clone(shared);
+
     std::thread::spawn(move || {
+        let mut sink = Sink::new(None, Arc::clone(&keeping));
+
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             let _ = writeln!(std::io::stdout(), "{line}");
+
+            sink.line(&line);
 
             if sender.send(line).is_err() {
                 break;
@@ -172,58 +462,51 @@ fn start_sidecar(app: &tauri::App) -> Result<(Child, String), Box<dyn std::error
 
     loop {
         match receiver.recv_timeout(ANNOUNCEMENT_TIMEOUT) {
-            Ok(line) => match line.trim().strip_prefix("desktop ui: ") {
-                Some(url) => {
+            Ok(line) => {
+                if let Some(url) = line.trim().strip_prefix("desktop ui: ") {
                     let url = url.to_string();
-                    log_line(&log_path(), &format!("listening on {url}"));
+                    log_line(&log, &format!("listening on {url}"));
 
                     return Ok((child, url));
                 }
-                None => remember(&said, line),
-            },
+            }
 
-            // The release is gone, or it is still thinking. Either way there is no
-            // window to show and no point in the caller waiting for one: say what
-            // it said, stop it, and let `main` put that in front of a person.
+            // Either it is still thinking or it is gone, and the difference is
+            // what the person is told: a release that ended is `Stopped` (and
+            // its own last lines usually name why), one that is still running
+            // past the deadline is `Slow` - quitting and trying again is what
+            // helps there.
             Err(timed_out) => {
-                let what = match timed_out {
-                    mpsc::RecvTimeoutError::Timeout => format!(
-                        "the release did not say where it listens within {} seconds",
-                        ANNOUNCEMENT_TIMEOUT.as_secs()
-                    ),
+                let trouble = match timed_out {
+                    mpsc::RecvTimeoutError::Timeout => Trouble::Slow,
                     mpsc::RecvTimeoutError::Disconnected => {
-                        "the release stopped before it said where it listens".to_string()
+                        Trouble::classify(&shared.lock().unwrap().output)
                     }
                 };
 
                 let _ = child.kill();
                 let _ = child.wait();
 
-                let tail = said.lock().unwrap().join("\n");
-
-                return Err(if tail.trim().is_empty() {
-                    format!("{what}, and said nothing")
-                } else {
-                    format!("{what}. What it said:\n\n{tail}")
-                }
-                .into());
+                return Err(Failure {
+                    trouble,
+                    log: Some(log),
+                });
             }
         }
     }
 }
 
-/// The last lines a process printed, kept for the moment something has to say why
-/// it went quiet. Bounded, because a sidecar that runs for hours prints forever.
-fn remember(said: &Arc<Mutex<Vec<String>>>, line: String) {
-    let mut said = said.lock().unwrap();
-    said.push(line);
-
-    if said.len() > 40 {
-        said.remove(0);
+/// The release's log, open for appending: the crash screen's link opens this
+/// file, so it exists before anything can go wrong.
+fn open_log(path: &Path) -> Option<std::fs::File> {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
     }
+
+    OpenOptions::new().create(true).append(true).open(path).ok()
 }
 
-fn sidecar_path(app: &tauri::App) -> std::path::PathBuf {
+fn sidecar_path(app: &AppHandle) -> std::path::PathBuf {
     if let Ok(explicit) = std::env::var("EX_TBP_MONTY_SIDECAR") {
         return native(PathBuf::from(explicit));
     }
@@ -475,7 +758,8 @@ mod tests {
     #[test]
     fn the_bundle_is_asked_for_the_release_under_rel() {
         let resources = Path::new("/Applications/Monty on the BEAM.app/Contents/Resources");
-        let window = Path::new("/Applications/Monty on the BEAM.app/Contents/MacOS/ex-tbp-monty-desktop");
+        let window =
+            Path::new("/Applications/Monty on the BEAM.app/Contents/MacOS/ex-tbp-monty-desktop");
 
         let candidates = release_candidates(Some(resources), window);
 

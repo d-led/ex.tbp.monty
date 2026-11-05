@@ -786,6 +786,24 @@ jobs:
           esac
           MONTY_DESKTOP_PORT=43997 scripts/smoke-window.sh --window "$window"
 
+      # The other half of the same question, and the half nobody had ever
+      # looked at: what a person sees when the app *cannot* start. Pointed at a
+      # release that is not there, the window has to put up the crash screen for
+      # "this copy is incomplete" - asserted in its own log, because the page is
+      # inside a webview and nothing outside can read it. Without this, "the
+      # window explains itself" is a claim about code nobody has watched run.
+      - name: The window says what went wrong when the release is missing
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          case "${{ matrix.rid }}" in
+            osx-*) window="artifacts/${{ matrix.rid }}/Monty on the BEAM.app/Contents/MacOS/ex-tbp-monty-desktop" ;;
+            win-*) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop.exe" ;;
+            *) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop" ;;
+          esac
+          MONTY_DESKTOP_PORT=43994 scripts/smoke-window.sh --window "$window" \
+            --crash "/nonexistent/rel/ex_tbp_monty/bin/server"
+
       # The installer is the shape a Windows person actually uses, and the one
       # shape nothing had ever opened: the checks above look at the portable
       # folder, whose `rel\` is put there by `scripts/package.ps1`, while an
