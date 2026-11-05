@@ -412,7 +412,9 @@ sentence with it. Two changes:
   under `Contents/Resources/rel/…` in the `.app`, `rel/ex_tbp_monty` beside the
   window otherwise — asks `/health`, and prints what the release said if it never
   answers. The `desktop` job runs it right after packaging, which is the only
-  place a Windows release is started on Windows.
+  place a Windows release is started on Windows, and runs the window's three unit
+  tests there too: the `#[cfg(windows)]` path code is compiled by that job and
+  nowhere else.
 
 ## What is still open
 
