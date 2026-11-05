@@ -49,8 +49,12 @@ Push-Location (Split-Path -Parent $PSScriptRoot)
 try {
     $name = 'ex_tbp_monty'
     $release = "_build/desktop/rel/$name"
-    $launcher = Join-Path $release "bin/$name.bat"
-    $sidecar = Join-Path $release 'bin/server.bat'
+    # Two components, not `bin/server.bat`: `Join-Path` keeps the forward slash
+    # inside its second argument, and a batch file started that way hands its own
+    # `%~dp0` - slashes and all - to the release's launcher, whose `%~dp0..` then
+    # reads `…\bin/..` and `erl` answers "cannot get boot file".
+    $launcher = Join-Path $release "bin\$name.bat"
+    $sidecar = Join-Path $release 'bin\server.bat'
     $window = 'src-tauri/target/debug/ex-tbp-monty-desktop.exe'
 
     # Bundling is a separate config, merged only for `-Bundle`/`-App`:

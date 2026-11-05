@@ -6,10 +6,18 @@ rem is what config/runtime.exs waits for before it starts the endpoint, so the
 rem same release can also be used as a one-off CLI.
 rem
 rem `ex_tbp_monty.bat` is the launcher `mix release` writes; this file adds the
-rem three things the server does before it starts — create WANDB_DIR, migrate,
+rem three things the server does before it starts - create WANDB_DIR, migrate,
 rem then hand over.
 setlocal
 cd /d "%~dp0"
+
+rem `%CD%` and not `%~dp0` for the calls below. This file can be started with a
+rem path that mixes separators - the window was handing it
+rem `<root>\rel/ex_tbp_monty\bin/server.bat` - and `%~dp0` carries those slashes
+rem into the launcher, whose own `%~dp0..` then reads `<root>\bin/..`; `erl`
+rem answers "cannot get boot file" about a `start.boot` it cannot open. `cd /d`
+rem above has already normalised the directory, so `%CD%` is the same place
+rem spelled the way Windows spells it.
 
 rem wandb only uses WANDB_DIR if the directory is already there: given one that
 rem is not, it warns once and writes to the system temp directory instead, which
@@ -30,10 +38,10 @@ rem
 rem `bin\migrate.bat` is the same call for an operator who wants to migrate
 rem without starting a server.
 if not "%MIGRATE_ON_BOOT%"=="false" (
-  call "%~dp0ex_tbp_monty.bat" eval "ExTbpMonty.Release.migrate"
+  call "%CD%\ex_tbp_monty.bat" eval "ExTbpMonty.Release.migrate"
   if errorlevel 1 exit /b 1
 )
 
 set PHX_SERVER=true
-call "%~dp0ex_tbp_monty.bat" start
+call "%CD%\ex_tbp_monty.bat" start
 exit /b %errorlevel%

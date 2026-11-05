@@ -1,0 +1,5 @@
+# `cmd` is a CRLF parser. The release overlays under `rel/overlays/bin/*.bat` are
+# copied into a release unchanged, so their line endings have to be right in the
+# working tree — there is no packaging step that would fix them up. Storing LF and
+# letting cmd cope is the arrangement that fails in the one place nobody looks.
+*.bat text eol=crlf

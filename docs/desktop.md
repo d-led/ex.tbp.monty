@@ -356,8 +356,28 @@ CSS it imports did not exist yet. The second was reproduced without Windows at
 all. What no runner can answer is what happens after launch: `mix release` laying
 down `bin\ex_tbp_monty.bat`, and MuJoCo, which defaults to WGL on Windows —
 `rel/env.sh.eex` sets `MUJOCO_GL=osmesa` for Linux and `rel/env.bat.eex` has no
-equivalent, so a MuJoCo experiment is the first thing to watch there. Nobody has
-started the window on Windows yet.
+equivalent, so a MuJoCo experiment is the first thing to watch there.
+
+**Started, and it failed — twice, both fixed.** The first launch showed a console
+window that flashed and vanished: a release build on Windows was a _console_
+program (`windows_subsystem` unset), and a startup failure then takes its own
+sentence with it. Two changes:
+
+- The window is a window. `#![cfg_attr(not(debug_assertions), windows_subsystem =
+"windows")]`, and what a failure says goes to `%APPDATA%\ex-tbp-monty\window.log`
+  and to a message box — otherwise the release build has no console at all, and
+  `stderr` goes nowhere. The sidecar's own `stderr` is drained by a thread and the
+  last lines are appended to the failure, so "the sidecar stopped before it said
+  where it listens" now arrives with the reason underneath it.
+- **A path handed to `cmd` must not mix separators.** `resources.join("rel/ex_tbp_monty").join("bin/server.bat")`
+  produced `…\rel/ex_tbp_monty\bin/server.bat`; Windows accepts it, but `%~dp0`
+  inside the batch file inherits those slashes, so the launcher's `%~dp0..` became
+  `…\bin/..` and `erl` answered **`cannot get boot file`** about a `start.boot`
+  under a path that does not exist. The window now joins one component at a time
+  and normalises to `\` on Windows, and the overlays call the release's launcher
+  through `%CD%` (set by `cd /d "%~dp0"`) rather than `%~dp0`, so a caller cannot
+  reintroduce it. `*.bat` is stored with `eol=crlf` (`.gitattributes`) because
+  `cmd` is a CRLF parser and the overlays are copied into the release unchanged.
 
 ## What is still open
 

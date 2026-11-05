@@ -5,5 +5,7 @@ rem `bin/migrate`. Two instances migrating at boot is the race this avoids.
 setlocal
 cd /d "%~dp0"
 
-call "%~dp0ex_tbp_monty.bat" eval "ExTbpMonty.Release.migrate"
+rem `%CD%`, not `%~dp0`: the note in `server.bat` says why.
+
+call "%CD%\ex_tbp_monty.bat" eval "ExTbpMonty.Release.migrate"
 exit /b %errorlevel%
