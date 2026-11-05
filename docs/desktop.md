@@ -423,6 +423,14 @@ sentence with it. Two changes:
   whichever PowerShell runs it: the desktop job runs it under **both** before it
   packages anything, because that takes a second and the packaging takes twenty
   minutes.
+- **A release without its native kernels starts and dies.** `priv/native/*.so`
+  are gitignored build products of `use Rustler`, written as a side effect of
+  compiling those modules; CI caches `_build` and not them, so a warm cache can
+  hand back up-to-date beams and an empty folder, and `mix release` then assembles
+  a release whose `KdTreeNif` cannot load ("Failed to load NIF library"). The
+  build forces a compile when the kernels are missing and refuses to finish a
+  release that carries none, and the boot check below is what found it — on the
+  Linux and Windows runners, the first time that check ran.
 - **The release a bundle carries is started on every platform.**
   `scripts/boot-check.sh` starts the entry point the bundle holds — `bin/server`
   under `Contents/Resources/rel/…` in the `.app`, `rel/ex_tbp_monty` beside the

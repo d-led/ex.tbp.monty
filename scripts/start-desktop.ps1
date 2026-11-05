@@ -127,6 +127,19 @@ try {
         mix compile
     }
 
+    # The native kernels are gitignored build products in `priv/native`, written as
+    # a side effect of compiling the modules that `use Rustler`. A `_build`
+    # restored from CI's cache can carry up-to-date beams and an empty
+    # `priv/native`, and the release is then assembled without them: it starts and
+    # dies at `KdTreeNif` with "Failed to load NIF library". Forced only when they
+    # are missing, and `priv/native` is deliberately not cached — a stale copy that
+    # disagrees with the beams is how that happened.
+    if (-not (Get-ChildItem priv/native -Filter '*.so' -ErrorAction SilentlyContinue)) {
+        Invoke-Step 'building the native kernels (a cached build can be missing them)' {
+            mix compile --force
+        }
+    }
+
     Invoke-Step 'checking the asset toolchain (installs it once, then finds it)' {
         mix assets.install --if-missing
     }

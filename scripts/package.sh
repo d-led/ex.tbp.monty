@@ -243,7 +243,10 @@ disk_image() {
   cp -R "$bundle" "$stage/"
   ln -s /Applications "$stage/Applications"
 
-  hdiutil create -quiet -volname "$product $version" -srcfolder "$stage" \
+  # Not `-quiet`: a run failed here with the pager empty and the job's only line
+  # "Process completed with exit code 1", which says nothing about why. The
+  # progress line is worth more than the silence.
+  hdiutil create -volname "$product $version" -srcfolder "$stage" \
     -format UDZO -ov "$target"
   rm -rf "$stage"
   echo "  $target"

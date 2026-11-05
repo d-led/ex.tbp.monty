@@ -166,6 +166,19 @@ run "fetching the dependencies (a fresh clone has none)" \
 run "compiling the desktop build" \
   env MIX_ENV=desktop mix compile
 
+# The native kernels are gitignored build products in `priv/native`, written as a
+# side effect of compiling the modules that `use Rustler`. A `_build` restored
+# from CI's cache can carry up-to-date beams and an empty `priv/native`, and then
+# `mix release` assembles a release without them: it starts, and dies at
+# `KdTreeNif` with "Failed to load NIF library". Forcing the compile only when
+# they are missing costs a healthy tree nothing — rustler reuses its Rust
+# artifacts — and `priv/native` is deliberately *not* cached, because a stale copy
+# that disagrees with the beams is how this happened.
+if ! ls priv/native/*.so >/dev/null 2>&1; then
+  run "building the native kernels (a cached build can be missing them)" \
+    env MIX_ENV=desktop mix compile --force
+fi
+
 run "checking the asset toolchain (installs it once, then finds it)" \
   env MIX_ENV=desktop mix assets.install --if-missing
 
@@ -211,6 +224,15 @@ done
 
 run "building the desktop release (a no-change run only reassembles it)" \
   env MIX_ENV=desktop mix release --overwrite
+
+# And asked, rather than assumed: a release with no NIFs is a release whose window
+# cannot start, and this is the last moment the build can say so with a sentence
+# instead of shipping it.
+if ! find "$release" -path '*/priv/native/*.so' -print -quit | grep -q .; then
+  echo "the release carries no native kernels: $release has no priv/native/*.so" >&2
+  echo "  see docs/desktop.md" >&2
+  exit 1
+fi
 
 # No peers to cluster with. A distributed release has a fixed node name, so a
 # second launch fails with "the name ... is in use by another Erlang node" and
