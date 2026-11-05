@@ -71,7 +71,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   end
 
   defp device_key(nil), do: nil
-  defp device_key(device), do: {device.filesystem, device.mount}
+  defp device_key(device), do: device.mount
 
   # What the downloader says about this id right now, if there is one.
   #

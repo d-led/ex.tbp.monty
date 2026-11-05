@@ -1,9 +1,9 @@
 defmodule Monty.Studio.StorageTest do
   @moduledoc """
-  The room left where this deployment writes, asked of the filesystem.
+  The room left where this deployment writes, asked of the operating system.
 
   The numbers belong to the machine the suite runs on, so what is held here is
-  their shape and their relationships — a device with a total, free space inside
+  their shape and their relationships — a disk with a total, free space inside
   it, and a mount that is a directory — rather than any particular figure.
   """
 
@@ -13,19 +13,16 @@ defmodule Monty.Studio.StorageTest do
   alias Monty.Test.Tmp
 
   describe "the volume behind a path" do
-    test "answers with the device's own total, used and free space" do
+    test "answers with the volume's own total, free space and capacity" do
       usage = Storage.usage(Tmp.dir("storage"))
 
       assert usage.path == Path.expand(usage.path)
-      assert %{filesystem: filesystem, mount: mount} = usage.device
-      assert filesystem != ""
+      assert %{mount: mount} = usage.device
       assert File.dir?(mount)
 
-      assert %{total_bytes: total, used_bytes: used, free_bytes: free, percent: percent} =
-               usage.device
+      assert %{total_bytes: total, free_bytes: free, percent: percent} = usage.device
 
       assert total > 0
-      assert used >= 0 and used <= total
       assert free >= 0 and free <= total
       assert percent in 0..100
     end
@@ -49,6 +46,16 @@ defmodule Monty.Studio.StorageTest do
 
       assert Path.type(path) == :absolute
       assert total > 0
+    end
+
+    # The page says the room once rather than once per root, which it can only do
+    # if the same disk answers with the same name for paths on it.
+    test "two paths on one disk are answered with the one mount" do
+      directory = Tmp.dir("storage/two")
+      File.mkdir_p!(directory)
+
+      assert Storage.usage(directory).device.mount ==
+               Storage.usage(Path.join(directory, "deeper")).device.mount
     end
   end
 end

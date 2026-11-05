@@ -152,7 +152,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
              "nothing in #{Path.join(tmp, "data")} yet"
 
     assert view |> element("#free-space-volume") |> render() =~
-             ~r/\d+(\.\d+)? (B|KiB|MiB|GiB|TiB) free of \d+(\.\d+)? (B|KiB|MiB|GiB|TiB) on \/.*, \d+% used/
+             ~r/\d+(\.\d+)? (B|KiB|MiB|GiB|TiB) free of \d+(\.\d+)? (B|KiB|MiB|GiB|TiB) on \S+, \d+% used/
   end
 
   # The header's figure belongs to the directory, not to the rows. A root holds

@@ -8,26 +8,36 @@ defmodule Monty.Studio.Storage do
   the application's home; in a checkout they are `priv/` and whatever `MONTY_DATA`
   and `MONTY_MODELS` name, which need not be the same disk.
 
-  The number is the *device's*, as the operating system reports it — `df -kP` for
-  the filesystem the path sits on — not this application's share of it. That is
-  the honest answer to "is there room for another run": a quota, if one exists,
-  is the deployment's business, and the device is the thing that fills.
+  The number is the *device's*, as the operating system reports it, not this
+  application's share of it. That is the honest answer to "is there room for
+  another run": a quota, if one exists, is the deployment's business, and the
+  device is the thing that fills.
+
+  It is `os_mon`'s `disksup` that asks, and it answers with the whole of it: the
+  mount point, the total, the space this user may still write and the percentage
+  in use. On unix that is what `df` says, asked by OTP rather than parsed here;
+  on Windows it is the drive table rather than nothing at all — this module used
+  to run `df` itself, which is a program the platform this desktop app also
+  ships to does not have.
 
   `device: nil` means the operating system would not say, which is a reason to
   show nothing rather than a zero that reads as a full disk.
   """
 
   @typedoc """
-  The device a path sits on, as `df` reports it.
+  The disk a path sits on, as `disksup` reports it.
 
-  `percent` is used, as `df` computes it — of the whole device, not of what is
-  left to this application.
+  `mount` is the name the operating system gives it — `/` or
+  `/System/Volumes/Data` on unix, `C:\` on Windows — and is what tells two
+  paths whether they are one disk.
+
+  `free_bytes` is what this user may still write, and `percent` is used as the
+  operating system computes it: of the whole disk, not of what is left to this
+  application.
   """
   @type device :: %{
-          required(:filesystem) => String.t(),
-          required(:mount) => String.t(),
+          required(:mount) => Path.t(),
           required(:total_bytes) => non_neg_integer(),
-          required(:used_bytes) => non_neg_integer(),
           required(:free_bytes) => non_neg_integer(),
           required(:percent) => non_neg_integer()
         }
@@ -53,29 +63,38 @@ defmodule Monty.Studio.Storage do
     %{path: expanded, device: device(nearest_existing(expanded))}
   end
 
-  # `df -P` is the portable spelling: POSIX output, one line per filesystem,
-  # a path in and the filesystem out, with the mount point last so it may be
-  # joined back together when it holds a space.
+  # `disksup` answers `{mount point, total KiB, available KiB, percent used}` for
+  # the disk that holds the path it is given, and `{path, 0, 0, 0}` when it
+  # cannot say: a path that does not exist, a disk it does not list, or an
+  # `os_mon` that is not running (which it logs rather than raises).
   #
-  # The command is `df`, with the path this module was given and no shell.
-  # Nothing on `/mcp` passes a path through: the two places are the artifact
-  # root from the application's config and the download root from Monty's own
-  # environment variables. Asking the operating system is how the free space is
-  # read rather than assumed.
+  # On unix `disksup` builds a `df` command line with this path on it and runs it
+  # through its own port program, so a path is a path and not an argument. That
+  # is also why nothing here may pass a caller's path through: the two places are
+  # the artifact root from the application's config and the download root from
+  # Monty's own environment variables.
   defp device(path) do
-    with {out, 0} <- System.cmd("df", ["-kP", path], stderr_to_stdout: true),
-         [_header, line | _] <- String.split(out, "\n", trim: true),
-         [filesystem, total, used, free, capacity | mount] <- String.split(line) do
-      %{
-        filesystem: filesystem,
-        mount: Enum.join(mount, " "),
-        total_bytes: blocks(total),
-        used_bytes: blocks(used),
-        free_bytes: blocks(free),
-        percent: capacity |> String.trim_trailing("%") |> String.to_integer()
-      }
-    else
-      _would_not_say -> nil
+    case path |> disk_argument() |> :disksup.get_disk_info() |> List.first() do
+      {mount, total, free, percent} when total > 0 ->
+        %{
+          mount: to_string(mount),
+          total_bytes: kibibytes(total),
+          free_bytes: kibibytes(free),
+          percent: percent
+        }
+
+      _would_not_say ->
+        nil
+    end
+  end
+
+  # On Windows the argument is the drive root — `C:\` — because that is what the
+  # drive table is keyed by; on unix it is the path itself, which `df` resolves
+  # to a mount point.
+  defp disk_argument(path) do
+    case :os.type() do
+      {:win32, _} -> path |> Path.split() |> hd()
+      _ -> path
     end
   end
 
@@ -89,6 +108,6 @@ defmodule Monty.Studio.Storage do
     end
   end
 
-  # `df -k` counts in 1024-byte blocks whatever the filesystem's own block size.
-  defp blocks(kilobytes), do: String.to_integer(kilobytes) * 1024
+  # `disksup` counts in kibibytes.
+  defp kibibytes(kibibytes), do: kibibytes * 1024
 end

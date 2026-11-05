@@ -113,11 +113,12 @@ changes it while the queue drains, so the config value is where it started.
 A process with no queue up (a Mix task, a test run) says so and reports the
 configured limit, rather than claiming a number it cannot see.
 
-Storage is the _device's_ own answer — `df -kP` for the filesystem behind each
-place a run writes to, not this application's share of it — reported per place
-because a checkout keeps `priv/` and Monty's data roots on disks that need not be
-one. A machine the operating system will not answer for says so (`device: null`)
-rather than reporting zeros that read as a full disk.
+Storage is the _device's_ own answer — `os_mon`'s `disksup`, which on unix is
+what `df` says about the disk behind a path and on Windows the drive table —
+rather than this application's share of it, and is reported per place because a
+checkout keeps `priv/` and Monty's data roots on disks that need not be one. A
+machine the operating system will not answer for says so (`device: null`) rather
+than reporting zeros that read as a full disk.
 
 ### Asking "how many experiments?"
 
