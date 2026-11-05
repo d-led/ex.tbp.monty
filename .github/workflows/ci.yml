@@ -723,6 +723,16 @@ jobs:
       # that release beside it, and the portable folder and package of the result
       # in `artifacts/<platform>/`. The steps are in the script so that a laptop
       # and a runner cannot package differently — see docs/desktop.md.
+      # The window's own logic, on the platform whose branches nothing else
+      # compiles: `#[cfg(windows)]` — `cmd`/`call`, the separator normalising, the
+      # `.bat` name — is only ever compiled by this job, and the first Windows
+      # launch of this tool failed on exactly that difference ("cannot get boot
+      # file"). Three tests, seconds to run, where the difference lives.
+      - name: The window's own tests, on the platform its branches are for
+        if: runner.os == 'Windows'
+        shell: bash
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
       # Windows has two PowerShells and they are not the same language: 5.1 is
       # what a person has, 7 is what this runner adds, and `run-desktop.ps1`
       # parsed in 7 while 5.1 answered "Missing closing '}'" about an `else` on

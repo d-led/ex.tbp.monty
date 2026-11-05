@@ -332,3 +332,60 @@ fn show_failure(message: &str) {
 fn show_failure(message: &str) {
     let _ = writeln!(std::io::stderr(), "{message}");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The entry point is joined one component at a time. Written as one string —
+    /// `join("bin/server.bat")` — Windows keeps the forward slash, `cmd` hands it
+    /// on through `%~dp0`, and the release's own launcher then builds
+    /// `…\bin/..\releases\0.1.0\start` and `erl` answers "cannot get boot file".
+    #[test]
+    fn the_entry_point_is_joined_from_components() {
+        let joined = release_at(PathBuf::from("root"));
+
+        assert_eq!(
+            joined,
+            Path::new("root")
+                .join("ex_tbp_monty")
+                .join(SERVER_DIR)
+                .join(SERVER_FILE)
+        );
+    }
+
+    /// Whatever the bundle hands over, the launcher gets separators this platform
+    /// reads. On Windows that means no `/` at all; elsewhere the path is already
+    /// right and is left alone.
+    #[test]
+    fn the_launcher_gets_this_platforms_separators() {
+        let mixed = native(PathBuf::from("root/rel/ex_tbp_monty/bin/server.bat"));
+        let text = mixed.to_string_lossy().into_owned();
+
+        if cfg!(windows) {
+            assert!(
+                !text.contains('/'),
+                "a forward slash reached the launcher: {text}"
+            );
+        } else {
+            assert!(
+                text.contains('/'),
+                "the path was rewritten on a platform that did not need it: {text}"
+            );
+        }
+    }
+
+    /// A window that fails has nowhere to print: a release build on Windows has no
+    /// console, and a macOS `.app` opened from the Finder has no terminal. The file
+    /// is the trace, and it goes where the application keeps the rest of its files.
+    #[test]
+    fn a_failure_is_written_beside_the_applications_own_files() {
+        let path = log_path();
+
+        assert!(
+            path.ends_with(Path::new("ex-tbp-monty").join("window.log")),
+            "the log landed outside the application's folder: {}",
+            path.display()
+        );
+    }
+}
