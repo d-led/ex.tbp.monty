@@ -226,13 +226,21 @@ The `desktop` job runs these, and the order is half the point:
 6. **the upload** — and only then the checks that open what was uploaded:
    `scripts/smoke-window.sh` on the window this job built, the same script with
    `--crash` against a release that is not there, the Windows setup installed
-   and the installed window opened, and the downloaded tarball's release booted.
+   and the installed window opened, the downloaded tarball's release booted,
+   and last of all the artefact itself downloaded by name and the window inside
+   it unpacked and opened — the one copy that has left the runner.
 
 Steps 1 to 6 fail the job. The rest are `continue-on-error`, each with a
 `timeout-minutes` of its own. A check that fails or hangs _before_ the upload
 does not merely fail: `nightly.link` serves the newest artefact of a successful
 run, so the download is withheld for as long as the check runs, and the sibling
 project's Windows job spent three hours on an NSIS installer nobody could see.
+That last step has one trap, reproduced here: **do not unpack the app into
+`TMPDIR`**. A `.app` under `/var/folders/...` is refused a sandbox extension
+(`sandbox_extension_issue_file_to_process failed … Operation not permitted`), and
+the window then runs, opens nothing, and never serves. The same zip, unpacked
+into a folder inside the checkout, opened and served in the same minute. CI
+unpacks into `$GITHUB_WORKSPACE/downloaded` for that reason.
 
 ## Shipping: what a person downloads
 

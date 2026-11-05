@@ -977,6 +977,50 @@ jobs:
           MONTY_DESKTOP_PORT=43995 scripts/boot-check.sh "$work/ex-tbp-monty-${{ matrix.rid }}/rel/ex_tbp_monty"
           rm -rf "$work"
 
+      # The only copy that has left the runner. Every check above tests what this
+      # job built, in place, in a folder the build wrote: an upload that drops the
+      # executable bit, or an unpacker that loses a release's directory entries,
+      # still ends as a download that opens and cannot start, and none of the
+      # checks above can see it. So: the artefact, downloaded by name into a
+      # folder this job never wrote to, unpacked with the platform's own unpacker,
+      # opened. Last in the run on purpose - nothing above waits on it.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ matrix.asset }}
+          path: downloaded
+
+      - name: The download a person gets opens
+        continue-on-error: true
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/downloaded"
+          # Each platform's shape, unpacked the way its own README line unpacks
+          # it: `ditto` made the macOS zip, bsdtar the Windows one, and Linux
+          # ships a tarball at all because a zip loses the release's 0555
+          # launchers.
+          case "${{ matrix.rid }}" in
+            osx-*) unzip -q "${{ matrix.asset }}.zip" ;;
+            win-*) tar -xf "${{ matrix.asset }}.zip" ;;
+            *) tar -xzf "${{ matrix.asset }}.tar.gz" ;;
+          esac
+
+          window=$(find . -maxdepth 5 -type f \
+            \( -name 'ex-tbp-monty-desktop' -o -name 'ex-tbp-monty-desktop.exe' \) \
+            -print -quit)
+
+          if [ -z "$window" ]; then
+            echo "the download holds no window:" >&2
+            find . -maxdepth 3 | head -20 >&2
+            exit 1
+          fi
+
+          echo "unpacked from the upload: $window"
+          cd "$GITHUB_WORKSPACE"
+          MONTY_DESKTOP_PORT=43993 scripts/smoke-window.sh \
+            --window "$GITHUB_WORKSPACE/downloaded/${window#./}"
+
   # A tag is a promise that the file stays: an artefact expires, a release does
   # not. One release per tag, with every asset of every tag inside it.
   desktop-release:
