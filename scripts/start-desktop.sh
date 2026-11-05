@@ -174,7 +174,13 @@ run "compiling the desktop build" \
 # they are missing costs a healthy tree nothing — rustler reuses its Rust
 # artifacts — and `priv/native` is deliberately *not* cached, because a stale copy
 # that disagrees with the beams is how this happened.
-if ! ls priv/native/*.so >/dev/null 2>&1; then
+#
+# Rustler writes `kd_tree_nif.so` everywhere but Windows, where a shared
+# library is a `.dll`: the kernels are whatever this platform spells them, and
+# this folder holds no other platform's.
+kernels() { ls priv/native/*.so priv/native/*.dll 2>/dev/null; }
+
+if [ -z "$(kernels)" ]; then
   run "building the native kernels (a cached build can be missing them)" \
     env MIX_ENV=desktop mix compile --force
 fi
@@ -228,8 +234,8 @@ run "building the desktop release (a no-change run only reassembles it)" \
 # And asked, rather than assumed: a release with no NIFs is a release whose window
 # cannot start, and this is the last moment the build can say so with a sentence
 # instead of shipping it.
-if ! find "$release" -path '*/priv/native/*.so' -print -quit | grep -q .; then
-  echo "the release carries no native kernels: $release has no priv/native/*.so" >&2
+if [ -z "$(find "$release" -path '*/priv/native/*' \( -name '*.so' -o -name '*.dll' \) -print -quit)" ]; then
+  echo "the release carries no native kernels: $release has no priv/native/*.so and no *.dll" >&2
   echo "  see docs/desktop.md" >&2
   exit 1
 fi

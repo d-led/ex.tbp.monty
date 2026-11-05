@@ -134,12 +134,15 @@ try {
     # dies at `KdTreeNif` with "Failed to load NIF library". Forced only when they
     # are missing, and `priv/native` is deliberately not cached — a stale copy that
     # disagrees with the beams is how that happened.
-    if (-not (Get-ChildItem priv/native -Filter '*.so' -ErrorAction SilentlyContinue)) {
+    #
+    # Rustler writes `kd_tree_nif.so` everywhere but Windows, where a shared
+    # library is a `.dll`: the kernels are whatever this platform spells them.
+    if (-not (Get-ChildItem priv/native -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in '.so', '.dll' })) {
         Invoke-Step 'building the native kernels (a cached build can be missing them)' {
             mix compile --force
         }
     }
-
     Invoke-Step 'checking the asset toolchain (installs it once, then finds it)' {
         mix assets.install --if-missing
     }
@@ -162,6 +165,19 @@ try {
 
     Invoke-Step 'building the desktop release (a no-change run only reassembles it)' {
         mix release --overwrite
+    }
+
+    # Asked, rather than assumed: a release with no NIFs is a window that cannot
+    # start, and this is the last moment the build can say so with a sentence
+    # instead of shipping it. Only `priv/native` counts: Erlang's own
+    # `priv/lib/crypto.so` would otherwise answer for a kernel that is not there.
+    $kernels = Get-ChildItem "$release/lib" -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Extension -in '.so', '.dll' -and
+            $_.Directory.Name -eq 'native' -and $_.Directory.Parent.Name -eq 'priv'
+        }
+    if (-not $kernels) {
+        throw "the release carries no native kernels: $release has no priv/native/*.so and no *.dll — see docs/desktop.md"
     }
 
     # No peers to cluster with: a distributed release has a fixed node name, so a
