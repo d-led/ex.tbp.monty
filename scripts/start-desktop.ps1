@@ -199,7 +199,7 @@ IO.puts("runs:        #{Paths.artifacts()}")
         Remove-Item -Recurse -Force 'src-tauri/target/release/bundle' -ErrorAction SilentlyContinue
 
         Invoke-Step 'building the installer bundle (a minute warm, six cold — the window is rebuilt in release)' {
-            cargo tauri build --bundles nsis --config $bundleConfig
+            cargo tauri build --config $bundleConfig
         }
 
         $installer = Get-ChildItem -Path $bundleDir -Filter '*-setup.exe' -ErrorAction SilentlyContinue |

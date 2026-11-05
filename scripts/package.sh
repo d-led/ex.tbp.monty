@@ -116,8 +116,9 @@ build_app() {
 }
 
 # What a Linux person gets: a tarball holding the window with its release beside
-# it, which runs from anywhere, and the `.deb` the bundle step made, which a
-# distribution's package manager installs. `tar`, not `zip`: the release's own
+# it, which runs from anywhere, the `.deb` a distribution's package manager
+# installs, and the AppImage — the release squeezed into one executable, which
+# runs where nothing is installed at all. `tar`, not `zip`: the release's own
 # launchers are 0555 and a zip that loses that produces an application that
 # cannot start its server.
 linux_bundle() {
@@ -151,7 +152,11 @@ bundle_one() {
     cp "$file" "$artifacts/$rid/"
     echo "  $artifacts/$rid/$(basename "$file")"
   else
-    echo "  no ${pattern#\*}: the bundle step made none. See docs/desktop.md." >&2
+    # Fatal on purpose: the config asked the bundler for this shape, so a job
+    # that went green without it would be shipping less than it says it does.
+    echo "the bundle step made no ${pattern#\*}, and the bundle config asks for one" >&2
+    echo "  see docs/desktop.md" >&2
+    return 1
   fi
 }
 

@@ -42,17 +42,16 @@ bundle="src-tauri/target/release/bundle/macos/Monty on the BEAM.app"
 # Bundling is a separate config, merged only for `--app`: `bundle.active` in the
 # main config makes `cargo build` — the debug window this script opens every run
 # — fail in tauri-build's resource phase, and the debug window has no use for a
-# bundle. The targets are what a person on that platform can install: an `.app`
-# on macOS, a `.deb` on Linux (an AppImage is one more target in that file, and
-# a package that needs nothing installed to run).
+# bundle. What each platform makes is that file's own `targets`, and nothing
+# here repeats it: a `--bundles` flag alongside the config overrode the list,
+# which is how an AppImage named in `tauri.bundle.linux.json` was never built
+# while the job stayed green.
 case "$(uname -s)" in
   Darwin)
     bundle_config="$PWD/src-tauri/tauri.bundle.conf.json"
-    bundle_targets=app
     ;;
   Linux)
     bundle_config="$PWD/src-tauri/tauri.bundle.linux.json"
-    bundle_targets=deb
     ;;
   *)
     echo "scripts/start-desktop.sh bundles macOS and Linux; this is $(uname -s)." >&2
@@ -229,7 +228,7 @@ if [[ "$mode" == bundle || "$mode" == app ]]; then
   rm -rf src-tauri/target/release/rel src-tauri/target/release/bundle
 
   run "building the app bundle (a minute warm, six cold — the window is rebuilt in release)" \
-    cargo tauri build --bundles "$bundle_targets" --config "$bundle_config"
+    cargo tauri build --config "$bundle_config"
 
   if [[ "$mode" == bundle ]]; then
     echo
