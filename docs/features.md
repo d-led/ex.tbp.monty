@@ -197,9 +197,9 @@ what CI runs.
   its database, models, logs and runs under the OS application-data folder, not next
   to the release. `scripts/package.sh` makes the `.app`, a zip, a dmg and an unsigned
   `.pkg` whose payload arrives without the quarantine flag, and CI builds the same
-  three platforms for `main`, a dispatch and a tag — macOS arm64, Linux x64 (`.deb`
-  and a tarball) and Windows x64 (NSIS setup and the portable folder) — uploading
-  each to the release on a tag.
+  three platforms for `main`, a dispatch and a tag — macOS arm64, Linux x64 (a
+  tarball, a `.deb` and an AppImage) and Windows x64 (NSIS setup and the portable
+  folder) — uploading each to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
 - 2,219 `test` declarations in the suite.
 

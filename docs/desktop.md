@@ -367,17 +367,27 @@ started the window on Windows yet.
   `APPLE_SIGNING_IDENTITY`/`APPLE_ID`/`APPLE_TEAM_ID` is the path; neither can be
   done without a paid Apple Developer certificate.
 - **Three platforms, and how far each is proven.** The `desktop` job builds
-  macOS arm64 (`.app`, `.pkg`, `.dmg`), Linux x64 (a `.deb` and a tarball of the
-  window with its release beside it) and Windows x64 (an NSIS setup and the same
-  portable folder, zipped). The macOS app has been built and opened from a
-  checkout by a person; the Linux bundle has been built by CI and not yet
-  launched; the Windows one is built and uploaded, and nobody has started it.
-  `docs/status.md`'s own rule applies — nothing is claimed beyond what was run.
-  Linux needs
-  `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`,
-  `librsvg2-dev` and `patchelf` on the runner, which the job installs; an
-  AppImage is one more target in `src-tauri/tauri.bundle.linux.json` and has not
-  been tried.
+  macOS arm64 (`.app`, `.pkg`, `.dmg`), Linux x64 (a tarball of the window with
+  its release beside it, a `.deb`, and an AppImage) and Windows x64 (an NSIS
+  setup and the same portable folder, zipped). The macOS app has been built and
+  opened from a checkout by a person; the Linux bundle has been built by CI and
+  not yet launched; the Windows one is built and uploaded, and nobody has
+  started it. `docs/status.md`'s own rule applies — nothing is claimed beyond
+  what was run. Linux needs `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`,
+  `libayatana-appindicator3-dev`, `librsvg2-dev` and `patchelf` on the runner,
+  which the job installs — and no FUSE, because the AppImage tools are run with
+  `APPIMAGE_EXTRACT_AND_RUN`.
+- **The AppImage needed the release's own library path.** `linuxdeploy` stops at
+  `ERROR: Could not find dependency: libmujoco.so.3.17.0`: the release carries a
+  Python environment whose wheels link each other by soname, and linuxdeploy
+  resolves a binary's dependencies through the loader, which knows only the
+  system paths. `scripts/start-desktop.sh` runs the bundling step with
+  `LD_LIBRARY_PATH` over every directory of the assembled release that holds a
+  shared library, absolute (the loader resolves a relative entry against the
+  process's own directory, and linuxdeploy runs from `src-tauri`), plus
+  `APPIMAGE_EXTRACT_AND_RUN` for the tools themselves. Reproduced and fixed in a
+  Debian container with the project's own toolchain, and then on the runner: the
+  x64 AppImage is 231 MiB beside a 535 MiB `.deb` and a 525 MiB tarball.
 - **The prerequisites download** is on by default in the window (`prefetch: true`)
   and lands under the folder above. Nothing has been run end to end from a
   _fresh_ folder yet: a first launch downloads ~543 MB and then exports the
