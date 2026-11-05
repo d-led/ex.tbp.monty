@@ -341,7 +341,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
       run_id: run.id,
       experiment: run.experiment,
       status: run.status,
-      steps_done: length(run.log),
+      steps_done: run.steps_done,
       steps: run.steps,
       started_at: run.started_at
     }
@@ -633,7 +633,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
       experiment: run.experiment,
       status: run.status,
       steps: run.steps,
-      steps_done: length(run.log),
+      steps_done: run.steps_done,
       started_at: run.started_at,
       finished_at: run.finished_at,
       duration_us: run.duration_us,

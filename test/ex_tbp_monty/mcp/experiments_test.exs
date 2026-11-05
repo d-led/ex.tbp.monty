@@ -219,6 +219,20 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
       assert RunHistory.get(run.id) != nil, "a dry run must not delete anything"
     end
 
+    test "says how many steps each run it would delete has taken" do
+      # The dry run reads a page of runs, which is a page of rows: the count
+      # has to come from the row, not from a transcript the page no longer
+      # reads.
+      {:ok, run} = RunHistory.start(@run_attributes)
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 0}, %{})
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 1}, %{})
+      {:ok, run} = RunHistory.finish(run, %{}, "failed")
+
+      assert {:ok, answer} = Experiments.delete_runs(run_ids: [run.id])
+
+      assert [%{steps_done: 2}] = answer.would_delete
+    end
+
     test "deletes a settled run once it is confirmed" do
       run = settled("stopped")
 

@@ -237,21 +237,37 @@ defmodule Monty.Studio.RunHistoryTest do
     test "counts the steps it took, not the budget it was allowed" do
       # The column says 500 because that is what an episode may use; the run
       # recognised its object at step 22 and stopped.
-      run = %Run{status: "finished", steps: 500, log: for(n <- 1..22, do: %{"step" => n})}
+      {:ok, run} = RunHistory.start(Map.put(@attributes, :steps, 500))
 
-      assert RunHistory.steps_run(run) == 22
-      assert run.steps == 500
+      run =
+        Enum.reduce(1..22, run, fn step, run ->
+          {:ok, run} =
+            RunHistory.record_step(run, %{"step" => step, "episode" => 0}, moment(step))
+
+          run
+        end)
+
+      recorded = RunHistory.head(run.id)
+
+      assert RunHistory.steps_run(recorded) == 22
+      assert recorded.steps == 500
     end
 
     test "counts the episodes it stepped, against the ones it was asked for" do
-      run = %Run{
-        status: "finished",
-        inputs: %{"episodes" => 140},
-        log: for(step <- 0..1, episode <- 0..27, do: %{"step" => step, "episode" => episode})
-      }
+      {:ok, run} = RunHistory.start(Map.put(@attributes, :inputs, %{"episodes" => 140}))
 
-      assert RunHistory.episodes_run(run) == 28
-      assert RunHistory.episodes_asked(run) == 140
+      run =
+        Enum.reduce(0..27, run, fn episode, run ->
+          {:ok, run} =
+            RunHistory.record_step(run, %{"step" => 0, "episode" => episode}, moment(episode))
+
+          run
+        end)
+
+      recorded = RunHistory.head(run.id)
+
+      assert RunHistory.episodes_run(recorded) == 28
+      assert RunHistory.episodes_asked(recorded) == 140
     end
 
     test "says a record that was not asked for a scope does not know one" do
@@ -374,7 +390,21 @@ defmodule Monty.Studio.RunHistoryTest do
       page = RunHistory.search().runs
 
       assert Enum.all?(page ++ RunHistory.list(), &(&1.timeline == []))
-      assert %Run{timeline: [], log: [_step]} = Enum.find(page, &(&1.id == run.id))
+      assert %Run{timeline: [], log: []} = Enum.find(page, &(&1.id == run.id))
+    end
+
+    test "a page of runs still says how many steps each one took" do
+      # The count is a column, written as the steps are: the alternative is
+      # counting the log of every run on the page, which is what made a page
+      # cost grow with its runs' transcripts.
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+      {:ok, _run} = RunHistory.record_step(run, %{"step" => 1, "goals" => 0}, moment(1))
+
+      row = Enum.find(RunHistory.search().runs, &(&1.id == run.id))
+
+      assert row.steps_done == 2
+      assert row.log == []
     end
 
     test "a table's row carries neither the pictures nor the transcript" do
@@ -388,6 +418,7 @@ defmodule Monty.Studio.RunHistoryTest do
 
       assert row.status == "running"
       assert row.steps == run.steps
+      assert row.steps_done == 1
       assert row.log == []
       assert row.timeline == []
     end

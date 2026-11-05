@@ -23,6 +23,10 @@ defmodule Monty.Studio.RunHistory.Run do
     field :source, :string, default: "monty"
     field :status, :string, default: "running"
     field :steps, :integer, default: 0
+    # What a list draws, counted from `log` when it is written and never
+    # castable from outside: they are counts of another column, not inputs.
+    field :steps_done, :integer, default: 0
+    field :episodes_done, :integer, default: 0
     field :seed, :integer
     field :config, :map, default: %{}
     field :inputs, :map, default: %{}

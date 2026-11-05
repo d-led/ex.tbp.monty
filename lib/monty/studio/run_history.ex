@@ -78,6 +78,11 @@ defmodule Monty.Studio.RunHistory do
   The change is forced: the struct in hand carries the steps, so the array it
   holds is by definition what the row does not have yet, and an ordinary
   `put_change/3` would compare it with itself and write nothing.
+
+  The two counts a list draws are written here, from the same log, so a row
+  cannot say "three steps" about a transcript that holds two: `steps_done` is
+  how many entries there are and `episodes_done` how many distinct episodes
+  they name — the definitions `steps_run/1` and `episodes_run/1` read off a row.
   """
   @spec checkpoint(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
   def checkpoint(%Run{log: log, timeline: timeline} = run) do
@@ -85,8 +90,12 @@ defmodule Monty.Studio.RunHistory do
     |> Ecto.Changeset.change()
     |> Ecto.Changeset.force_change(:log, log)
     |> Ecto.Changeset.force_change(:timeline, timeline)
+    |> Ecto.Changeset.force_change(:steps_done, length(log))
+    |> Ecto.Changeset.force_change(:episodes_done, episodes_in(log))
     |> Repo.update()
   end
+
+  defp episodes_in(log), do: log |> Enum.map(& &1["episode"]) |> Enum.uniq() |> length()
 
   @doc """
   Appends one step and writes it, for a run whose page is watching every step.
@@ -186,7 +195,9 @@ defmodule Monty.Studio.RunHistory do
   widening it, which is what a person typing a second word means.
 
   Answers the page, the total it is a page of, and how many pages that makes, so
-  a view can draw its pager without asking again.
+  a view can draw its pager without asking again. A run on the page is a row:
+  neither its pictures nor its transcript, and how many steps it has taken is
+  the `steps_done` column rather than a count of a log nothing here reads.
   """
   @spec search(keyword()) :: %{
           runs: [Run.t()],
@@ -209,7 +220,7 @@ defmodule Monty.Studio.RunHistory do
       |> order_by(desc: :inserted_at)
       |> limit(^per_page)
       |> offset(^((page - 1) * per_page))
-      |> pictures_less()
+      |> rows()
 
     %{runs: runs, total: total, page: page, per_page: per_page, pages: pages(total, per_page)}
   end
@@ -534,16 +545,16 @@ defmodule Monty.Studio.RunHistory do
   The record's `steps` column is the budget an episode is allowed, not what
   happened: a run given 500 steps that recognised its object at 22 has a column
   saying 500 and a log saying 22. A page that shows the column as the run's
-  length is a page that lies, so it asks this instead.
+  length is a page that lies, so it asks this instead — and the answer is the
+  count written beside the log, so a row of a list can give it without reading
+  the transcript.
   """
   @spec steps_run(Run.t()) :: non_neg_integer()
-  def steps_run(%Run{log: log}), do: length(log)
+  def steps_run(%Run{steps_done: steps_done}), do: steps_done
 
   @doc "How many of the experiment's episodes this run actually stepped."
   @spec episodes_run(Run.t()) :: non_neg_integer()
-  def episodes_run(%Run{log: log}) do
-    log |> Enum.map(& &1["episode"]) |> Enum.uniq() |> length()
-  end
+  def episodes_run(%Run{episodes_done: episodes_done}), do: episodes_done
 
   @doc """
   How many episodes the run was asked for — the whole experiment, unless the
