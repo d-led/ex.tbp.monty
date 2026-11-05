@@ -409,8 +409,9 @@ sentence with it. Two changes:
   `cd /d` — and `cd /d` cannot honour a UNC path at all, so it quietly stayed
   where it was.
 - **A release that never speaks is reported, not waited on.** The window waits at
-  most two minutes for `desktop ui: <url>`; after that it stops the sidecar and
-  shows what the release said. Without a bound, a release whose runtime is missing
+  most forty-five seconds for `desktop ui: <url>` — a release with its database
+  already answers in about two, and a first launch adds the migrations; after
+  that the window stops the sidecar and shows what the release said. Without a bound, a release whose runtime is missing
   or whose launcher cannot find its boot file looks exactly like a slow one, and a
   person gets neither a window nor an explanation.
 - **Windows has two PowerShells and they are not the same language.**

@@ -90,13 +90,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// How long the window waits for the release to say where it listens. A first
-/// launch migrates a fresh database and warms a Python environment; a release
-/// that will never speak — a missing runtime, a launcher that cannot find its
-/// boot file — looks exactly the same from the other end of a pipe, and a person
-/// is staring at nothing while it does. Two minutes is generous for the first
-/// case and finite for the second.
-const ANNOUNCEMENT_TIMEOUT: Duration = Duration::from_secs(120);
+/// How long the window waits for the release to say where it listens, before it
+/// gives up and says what happened. Measured here: a release that has its
+/// database already answers in about two seconds, and a first launch pays for the
+/// migrations on top of that. A release that will never speak — a missing
+/// runtime, a launcher that cannot find its boot file — is indistinguishable from
+/// a slow one from the other end of a pipe, and the window is not on screen yet,
+/// so the number is what stops a person watching nothing.
+const ANNOUNCEMENT_TIMEOUT: Duration = Duration::from_secs(45);
 
 /// Starts the release and blocks until it says where it listens.
 fn start_sidecar(app: &tauri::App) -> Result<(Child, String), Box<dyn std::error::Error>> {
@@ -454,7 +455,7 @@ mod tests {
     /// of watching nothing happen.
     #[test]
     fn the_wait_for_the_release_is_bounded() {
-        assert_eq!(ANNOUNCEMENT_TIMEOUT.as_secs(), 120);
+        assert_eq!(ANNOUNCEMENT_TIMEOUT.as_secs(), 45);
     }
 
     /// A window that fails has nowhere to print: a release build on Windows has no
