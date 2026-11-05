@@ -168,20 +168,32 @@ run "compiling the desktop build" \
 
 # The native kernels are gitignored build products in `priv/native`, written as a
 # side effect of compiling the modules that `use Rustler`. A `_build` restored
-# from CI's cache can carry up-to-date beams and an empty `priv/native`, and then
-# `mix release` assembles a release without them: it starts, and dies at
-# `KdTreeNif` with "Failed to load NIF library". Forcing the compile only when
-# they are missing costs a healthy tree nothing — rustler reuses its Rust
-# artifacts — and `priv/native` is deliberately *not* cached, because a stale copy
-# that disagrees with the beams is how this happened.
+# from CI's cache can carry up-to-date beams and a `priv/native` missing some of
+# them, and then `mix release` assembles a release without them: it starts, and
+# dies at whichever the application loads first, with "Failed to load NIF
+# library".
 #
-# Rustler writes `kd_tree_nif.so` everywhere but Windows, where a shared
-# library is a `.dll`: the kernels are whatever this platform spells them, and
-# this folder holds no other platform's.
-kernels() { ls priv/native/*.so priv/native/*.dll 2>/dev/null; }
+# Some of them, not none. A Linux run shipped a release with `kd_tree_nif.so` and
+# no `matcher_nif.so`, because the cache key named the window's Cargo.lock and not
+# the crates', so one module recompiled and the other did not - and the check
+# here, being "are there any kernels", was answered by the one that was there.
+# Asking per crate is a question the wrong crate cannot answer.
+#
+# Rustler writes `kd_tree_nif.so` everywhere but Windows, where a shared library
+# is a `.dll`, so each crate is looked for under this platform's spelling only.
+kernels_missing() {
+  local root=$1 crate name
 
-if [ -z "$(kernels)" ]; then
-  run "building the native kernels (a cached build can be missing them)" \
+  for crate in native/*/Cargo.toml; do
+    name=$(basename "$(dirname "$crate")")
+    if [[ -z $(find "$root" \( -name "$name.so" -o -name "$name.dll" \) -print -quit 2>/dev/null) ]]; then
+      echo "$name"
+    fi
+  done
+}
+
+if [ -n "$(kernels_missing priv/native)" ]; then
+  run "building the native kernels (a cached build can be missing some)" \
     env MIX_ENV=desktop mix compile --force
 fi
 
@@ -231,11 +243,15 @@ done
 run "building the desktop release (a no-change run only reassembles it)" \
   env MIX_ENV=desktop mix release --overwrite
 
-# And asked, rather than assumed: a release with no NIFs is a release whose window
-# cannot start, and this is the last moment the build can say so with a sentence
-# instead of shipping it.
-if [ -z "$(find "$release" -path '*/priv/native/*' \( -name '*.so' -o -name '*.dll' \) -print -quit)" ]; then
-  echo "the release carries no native kernels: $release has no priv/native/*.so and no *.dll" >&2
+# And asked, rather than assumed: a release missing one kernel is a release whose
+# window cannot start, and this is the last moment the build can say so with a
+# sentence instead of shipping it. Per crate again, for the reason above.
+missing=$(kernels_missing "$release")
+
+if [ -n "$missing" ]; then
+  echo "the release carries no native kernel for:" >&2
+  echo "$missing" | sed 's/^/  /' >&2
+  echo "  $release has no priv/native/*.so and no *.dll for them, and the window would start and die there" >&2
   echo "  see docs/desktop.md" >&2
   exit 1
 fi

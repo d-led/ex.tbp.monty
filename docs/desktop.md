@@ -457,11 +457,17 @@ sentence with it. Two changes:
 - **A release without its native kernels starts and dies.** `priv/native/*.so`
   are gitignored build products of `use Rustler`, written as a side effect of
   compiling those modules; CI caches `_build` and not them, so a warm cache can
-  hand back up-to-date beams and an empty folder, and `mix release` then assembles
-  a release whose `KdTreeNif` cannot load ("Failed to load NIF library"). The
-  build forces a compile when the kernels are missing and refuses to finish a
-  release that carries none, and the boot check below is what found it — on the
-  Linux and Windows runners, the first time that check ran.
+  hand back up-to-date beams and a folder with some of them missing, and
+  `mix release` then assembles a release that dies at whichever kernel the
+  application loads first ("Failed to load NIF library"). _Some_, not none: a
+  Linux run shipped `kd_tree_nif.so` and no `matcher_nif.so`, because the cache
+  key named the window's `Cargo.lock` and not the crates', so one module
+  recompiled and the other did not — and the build's check, being "are there any
+  kernels", was answered by the one that was there. The build now asks per crate
+  (each under this platform's own spelling, `.so` or `.dll`) before and after
+  `mix release`, the cache key includes `native/*/Cargo.lock`, and the release
+  refuses to be assembled while a kernel is missing. The boot check below is what
+  found the first version of this, on the Linux and Windows runners.
 - **The release a bundle carries is started on every platform.**
   `scripts/boot-check.sh` starts the entry point the bundle holds — `bin/server`
   under `Contents/Resources/rel/…` in the `.app`, `rel/ex_tbp_monty` beside the

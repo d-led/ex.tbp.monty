@@ -679,7 +679,7 @@ jobs:
             deps
             _build
             src-tauri/target
-          key: ${{ runner.os }}-desktop-${{ hashFiles('mix.lock', 'src-tauri/Cargo.lock') }}
+          key: ${{ runner.os }}-desktop-${{ hashFiles('mix.lock', 'src-tauri/Cargo.lock', 'native/*/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-desktop-
 
       - name: Rust toolchain

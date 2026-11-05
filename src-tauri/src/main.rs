@@ -780,6 +780,13 @@ mod tests {
     /// the working directory is a path that sometimes works.
     #[test]
     fn nothing_the_window_looks_at_is_relative_to_the_working_directory() {
+        // The fixture has to be absolute in the platform's own spelling. `\repo`
+        // is not absolute on Windows — `Path::is_absolute` wants a drive or a UNC
+        // share — so this test failed there saying a release path was read from
+        // the working directory when none was.
+        #[cfg(windows)]
+        let window = Path::new(r"C:\repo\src-tauri\target\debug\ex-tbp-monty-desktop.exe");
+        #[cfg(not(windows))]
         let window = Path::new("/repo/src-tauri/target/debug/ex-tbp-monty-desktop");
 
         for candidate in release_candidates(None, window) {

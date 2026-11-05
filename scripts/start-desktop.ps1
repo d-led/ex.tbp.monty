@@ -129,17 +129,42 @@ try {
 
     # The native kernels are gitignored build products in `priv/native`, written as
     # a side effect of compiling the modules that `use Rustler`. A `_build`
-    # restored from CI's cache can carry up-to-date beams and an empty
-    # `priv/native`, and the release is then assembled without them: it starts and
-    # dies at `KdTreeNif` with "Failed to load NIF library". Forced only when they
-    # are missing, and `priv/native` is deliberately not cached - a stale copy that
-    # disagrees with the beams is how that happened.
+    # restored from CI's cache can carry up-to-date beams and a `priv/native`
+    # missing some of them, and the release is then assembled without them: it
+    # starts and dies at whichever the application loads first, with "Failed to
+    # load NIF library".
+    #
+    # Some of them, not none: a Linux run shipped a release with `kd_tree_nif.so`
+    # and no `matcher_nif.so`, because the cache key did not change with the crate
+    # whose lockfile did, so one module recompiled and the other did not. Asking
+    # per crate is a question the wrong crate cannot answer.
     #
     # Rustler writes `kd_tree_nif.so` everywhere but Windows, where a shared
-    # library is a `.dll`: the kernels are whatever this platform spells them.
-    if (-not (Get-ChildItem priv/native -ErrorAction SilentlyContinue |
-            Where-Object { $_.Extension -in '.so', '.dll' })) {
-        Invoke-Step 'building the native kernels (a cached build can be missing them)' {
+    # library is a `.dll`: each crate is looked for under this platform's spelling
+    # only.
+    function Get-MissingKernels {
+        param([string]$Root)
+
+        $missing = @()
+        $crates = Get-ChildItem native -Directory |
+            Where-Object { Test-Path (Join-Path $_.FullName 'Cargo.toml') }
+        foreach ($crate in $crates) {
+            $found = Get-ChildItem $Root -Recurse -File -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.Name -in "$($crate.Name).so", "$($crate.Name).dll" -and
+                    $_.Directory.Name -eq 'native' -and
+                    $_.Directory.Parent.Name -eq 'priv'
+                }
+            if (-not $found) {
+                $missing += $crate.Name
+            }
+        }
+
+        return $missing
+    }
+
+    if (Get-MissingKernels 'priv/native') {
+        Invoke-Step 'building the native kernels (a cached build can be missing some)' {
             mix compile --force
         }
     }
@@ -167,17 +192,16 @@ try {
         mix release --overwrite
     }
 
-    # Asked, rather than assumed: a release with no NIFs is a window that cannot
-    # start, and this is the last moment the build can say so with a sentence
-    # instead of shipping it. Only `priv/native` counts: Erlang's own
-    # `priv/lib/crypto.so` would otherwise answer for a kernel that is not there.
-    #
-    # The condition is one line because Windows PowerShell 5.1 will not continue
-    # a statement after a trailing `-and`.
-    $kernels = Get-ChildItem "$release/lib" -Recurse -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Extension -in '.so', '.dll' -and $_.Directory.Name -eq 'native' -and $_.Directory.Parent.Name -eq 'priv' }
-    if (-not $kernels) {
-        throw "the release carries no native kernels: $release has no priv/native/*.so and no *.dll - see docs/desktop.md"
+    # Asked, rather than assumed: a release missing one kernel is a window that
+    # cannot start, and this is the last moment the build can say so with a
+    # sentence instead of shipping it. Per crate again, for the reason above.
+    # Only `priv/native` counts: Erlang's own `priv/lib/crypto.so` would otherwise
+    # answer for a kernel that is not there.
+    $missingKernels = Get-MissingKernels "$release/lib"
+    if ($missingKernels) {
+        throw "the release carries no native kernel for: $($missingKernels -join ', ')
+  $release has no priv/native/*.so and no *.dll for them, and the window would start and die there
+  see docs/desktop.md"
     }
 
     # No peers to cluster with: a distributed release has a fixed node name, so a
