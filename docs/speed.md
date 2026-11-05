@@ -187,11 +187,11 @@ the step's reductions stayed at ~7.9 M before and after the change that removed 
 
 **What it was.** `Monty.Runtime.Barrier` starts a process per request so a round's
 deadline can kill it, and `spawn_monitor` copies the request's closure into that
-process — and a sensor request *is* the payload, closing over the observations
+process — and a sensor request _is_ the payload, closing over the observations
 (394 202 words ≈ 3.2 MB a step). Measured directly: seven spawns carrying 400 000
 words cost **83 ms**, seven carrying nothing cost **32 µs**.
 
-**The change.** A round of *one* request with no deadline has nothing to kill and
+**The change.** A round of _one_ request with no deadline has nothing to kill and
 no concurrency to lose, so it runs where it was called. Rounds of several requests
 keep a process each, deadline or none — they start together, and serialising them
 would trade a constant for a factor of the module count. `missing?/1` decides "no
@@ -209,3 +209,50 @@ everything is copied), then `MatcherNif.decode`/`decode_one` (18 % of allocation
 then the per-hypothesis plumbing (`gather`, `with_index`, `take` — ~18 % — and a
 batched `Geometry.dot`, 9 %). `nearest_many` is 2 % of the step, so more k-d work
 is not where the time is.
+
+## The profiler's time column is not a measurement (2026-11-06)
+
+`tprof` charges what it costs to be profiled. Mapping 6 432 elements 200 times
+costs **24.6 ms by the clock**; the same loop inside the profiler reports
+**402.7 ms** — sixteen times — of which 288.7 ms is `Enum.map`'s own loop and
+112.6 ms the closure it calls. `scripts/probe_tprof_overhead.exs` is that
+comparison and nothing else.
+
+So the step profile is read for two things only: **call counts**, which are real,
+and **words allocated**, which are real. Its time and per-call columns are a
+distribution weighted by call count, and they exaggerate the most-called
+functions worst: `Enum.map`, 306 050 iterations in a step, was credited 29 % of
+it. The honest currency is reductions, garbage and wall clock — plus a
+microbenchmark of the candidate change, as in `scripts/probe_decode.exs`.
+
+**What the counts say.** With 6 432 hypotheses, one step runs 306 050 `Enum.map`
+iterations, 33 127 `Enum.reduce`, 29 897 `take_list`, 22 856 `with_index_list`,
+17 477 `filter_list` and 10 881 `Geometry.dot` — some sixty passes over the
+hypothesis lists. `Geometry.dot` spends ten words a call and `transpose` 22,
+which is the arithmetic itself, and after `decode` there is no longer a single
+wasteful allocator. The remaining cost is the number of crossings, not the price
+of one.
+
+**What that means for the order of work.** Reading a column's floats as halves
+cost 20 % of the decode and moved a step by 3 %, because decode was 8.7 % of the
+step. Shaving one pass is worth a few percent; removing sixty of them is the
+factor that is missing. That is the conclusion of the round above, arrived at
+from the other side: the work has to cross once, not once per hypothesis.
+
+**Measured, this change.** One 6 432-value column: 941 µs → 753 µs, 11.8 → 7.7
+words per value. A step of `base_config_10distinctobj_dist_agent`: 7.87 M → 7.65
+M reductions, 81 MB → 78 MB of garbage, and the suite green at 2 269 tests
+including the seven that now describe `decode/1` itself.
+
+## The whole experiment runs to its end (2026-11-06)
+
+`mix monty.run base_config_10distinctobj_dist_agent`, left alone: **140 of 140
+eval episodes, every one ending in a recognition** — `learning_module_0: match`,
+the object named at a position and rotation — in 4 789 steps and 3 942 s: 823 ms
+a step on a machine at load 10.6, exit 0.
+
+The steps are the experiment's own. Monty's dashboard runs 140 episodes in 5 122
+eval steps and 3:18, which is ~39 ms a step, so what is left between us is
+per-step cost — 21 times — and not the shape of the run. Earlier attempts were
+stopped by hand around episode 90; this is the first that reached the last one,
+which is what the acceptance asked for.
