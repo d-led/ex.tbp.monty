@@ -11,10 +11,12 @@ queue.
 
 ## Green right now
 
-`main` is `523b733` (PR #9, the prerequisites saga). CI on it is **green in
-every job**: `lint`, `types`, all four test partitions, `coverage, CRAP and
-parity`, and `image, scan, non-root, publish`. Before it, `578ba03` was green in
-every job too, in 30m9s on both architectures.
+`main` is `b00271d` (the desktop runtime guard). CI on it is **green in every
+job**: `lint`, `types`, all four test partitions, `coverage, CRAP and parity`,
+`image, scan, non-root, publish`, and all three `desktop` builds — Linux x64
+(990 MB uploaded, the AppImage among the shapes), macOS arm64 (230 MB) and
+Windows x64 (264 MB). Before it, `0d6f4a7` was green in every job too, and
+`523b733` (PR #9, the prerequisites saga) before that.
 
 The one annotation on that run is not ours: `xref: [exclude: …]` is deprecated in
 Elixir 1.20 in favour of `elixirc_options: [no_warn_undefined: …]`, and the two
