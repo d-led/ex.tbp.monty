@@ -87,6 +87,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Every directory of the assembled release that holds a shared library, as a
+# search path. Absolute, because the loader resolves a relative entry against
+# whatever directory the process it is set for happens to run in — and linuxdeploy
+# runs from `src-tauri`. `-printf` is GNU find's, which is what this branch runs
+# on.
+bundled_library_path() {
+  find "$PWD/_build/desktop/rel/ex_tbp_monty" -name '*.so*' -printf '%h\n' | sort -u | paste -sd:
+}
+
 # One line before and one after, so a long build is visibly alive and a slow step
 # is visibly the slow one. No redirection: the tools' own output is the thing
 # worth reading when something goes wrong.
@@ -227,8 +236,30 @@ if [[ "$mode" == bundle || "$mode" == app ]]; then
   # a copy of `_build/desktop/rel`.
   rm -rf src-tauri/target/release/rel src-tauri/target/release/bundle
 
+# What `linuxdeploy` needs and a build machine does not provide.
+#
+# The release carries a Python environment whose wheels link each other by
+# soname — mujoco's extension module wants `libmujoco.so.3.17.0` from the
+# directory beside it — and linuxdeploy resolves a binary's dependencies through
+# the loader, which knows only the system paths. Without this the AppImage stops
+# at `ERROR: Could not find dependency: libmujoco.so.3.17.0`; with it, both
+# bundles are written (measured here: 510 MiB `.deb`, 427 MiB AppImage).
+#
+# `APPIMAGE_EXTRACT_AND_RUN=1` as well, because linuxdeploy and the AppImage
+# plugin it spawns are themselves AppImages, and mounting one needs `/dev/fuse` —
+# which a container and a GitHub runner do not have. Tauri passes
+# `--appimage-extract-and-run` to the first of them and not to the plugin, so the
+# variable is what covers the whole chain.
+bundle_env=()
+if [[ "$(uname -s)" == Linux ]]; then
+  bundle_env=(
+    APPIMAGE_EXTRACT_AND_RUN=1
+    "LD_LIBRARY_PATH=$(bundled_library_path)${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  )
+fi
+
   run "building the app bundle (a minute warm, six cold — the window is rebuilt in release)" \
-    cargo tauri build --config "$bundle_config"
+    env "${bundle_env[@]}" cargo tauri build --config "$bundle_config"
 
   if [[ "$mode" == bundle ]]; then
     echo
