@@ -224,8 +224,11 @@ into it needs write access, so leave the mount out (or make it writable) when th
 app should fetch them itself; either way they land on the volume and survive a
 restart.
 
-Nothing is fetched at boot: an offline container runs any experiment whose files
-are in place, and `/prerequisites` is what says which ones are missing. From a
+Nothing is fetched in front of the server: boot returns at once and what is
+missing arrives in the background — that is what the section above describes, and
+`PREFETCH=0` is how a deployment that would rather fetch deliberately turns it
+off. Either way an offline container runs any experiment whose files are in
+place, and `/prerequisites` is what says which ones are missing. From a
 fresh volume a MuJoCo run needs two downloads on that page — the YCB meshes it
 renders and the pretrained release its config names — after which the first
 experiment has its memory and starts. The third entry there, the older release

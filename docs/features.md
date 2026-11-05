@@ -1,6 +1,6 @@
 # Features
 
-What this repository does, checked in the tree on 2026-11-04. Every claim links to
+What this repository does, checked in the tree on 2026-11-05. Every claim links to
 the thing that proves it. Anything not built is listed at the end, so nobody has to
 guess. The counts are measured by [`scripts/refresh_features.py`](../scripts/refresh_features.py),
 not recalled — run it after anything lands that can move one.
@@ -196,10 +196,12 @@ what CI runs.
   ordinary application, unchanged) and a Tauri window supervises it; the app keeps
   its database, models, logs and runs under the OS application-data folder, not next
   to the release. `scripts/package.sh` makes the `.app`, a zip, a dmg and an unsigned
-  `.pkg` whose payload arrives without the quarantine flag, and CI builds that on
-  macOS arm64 for `main`, a dispatch and a tag, uploading it to the release on a tag.
+  `.pkg` whose payload arrives without the quarantine flag, and CI builds the same
+  three platforms for `main`, a dispatch and a tag — macOS arm64, Linux x64 (`.deb`
+  and a tarball) and Windows x64 (NSIS setup and the portable folder) — uploading
+  each to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
-- 2,178 `test` declarations in the suite.
+- 2,219 `test` declarations in the suite.
 
 ## Not built — do not assume these
 
@@ -208,11 +210,13 @@ what CI runs.
   and the rest — is `planned` in the map: `priv/monty_py/world.py` mirrors that
   Python rather than mapping onto it, so the map has nothing to point at. A change
   there is a change in two languages. ([from-monty.md](from-monty.md))
-- **A desktop build for another platform, or a signed one.** `scripts/package.sh`
-  refuses a platform other than the machine it runs on rather than faking it, so what
-  exists is macOS arm64; the `.app` and the `.pkg` are unsigned, so the first launch
-  is right-click → Open. Linux needs `libwebkit2gtk-4.1-dev` and its neighbours on
-  the runner, Windows needs MSVC and WebView2, and neither has been tried.
+- **A signed desktop build.** `scripts/package.sh` refuses a platform other than the
+  machine it runs on rather than faking it, so each OS is packaged by its own
+  runner: macOS arm64, Linux x64 and Windows x64 all exist, and none is signed.
+  The macOS app needs right-click → Open, and the Windows setup carries no
+  certificate of ours; Windows and Linux both need libraries the runner installs
+  (`libwebkit2gtk-4.1-dev` and its neighbours on Linux, MSVC and WebView2 on
+  Windows) and neither build has been started by anybody.
   ([desktop.md](desktop.md))
 - wandb: the five stats handlers and `mark_obs` frame marking.
 - Parallel episodes: the run page queues one run per episode and sets the
