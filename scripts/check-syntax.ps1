@@ -25,14 +25,18 @@ $failed = 0
 
 foreach ($candidate in $Path) {
     foreach ($file in Get-ChildItem -Path $candidate -ErrorAction Stop) {
-        $errors = $null
-        [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$errors)
+        $tokens = $null
+        $problems = $null
+        [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$problems)
 
-        if ($errors) {
+        if ($problems) {
             $failed = $failed + 1
             Write-Host "$($file.Name) does not parse in PowerShell $($PSVersionTable.PSVersion):"
-            foreach ($error in $errors) {
-                Write-Host "  line $($error.Extent.StartLineNumber): $($error.Message)"
+            # Not `$error`: that name is a read-only automatic variable in
+            # Windows PowerShell 5.1, and assigning it stops the checker instead
+            # of naming the file.
+            foreach ($problem in $problems) {
+                Write-Host "  line $($problem.Extent.StartLineNumber): $($problem.Message)"
             }
         }
     }

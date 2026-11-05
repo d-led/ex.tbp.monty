@@ -171,11 +171,11 @@ try {
     # start, and this is the last moment the build can say so with a sentence
     # instead of shipping it. Only `priv/native` counts: Erlang's own
     # `priv/lib/crypto.so` would otherwise answer for a kernel that is not there.
+    #
+    # The condition is one line because Windows PowerShell 5.1 will not continue
+    # a statement after a trailing `-and`.
     $kernels = Get-ChildItem "$release/lib" -Recurse -File -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.Extension -in '.so', '.dll' -and
-            $_.Directory.Name -eq 'native' -and $_.Directory.Parent.Name -eq 'priv'
-        }
+        Where-Object { $_.Extension -in '.so', '.dll' -and $_.Directory.Name -eq 'native' -and $_.Directory.Parent.Name -eq 'priv' }
     if (-not $kernels) {
         throw "the release carries no native kernels: $release has no priv/native/*.so and no *.dll — see docs/desktop.md"
     }
