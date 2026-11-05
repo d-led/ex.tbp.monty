@@ -167,9 +167,14 @@ LABEL org.opencontainers.image.title="Elixir TBP Monty" \
 # `priv/monty_py/world.py`, run in the interpreter `pythonx` builds and ships
 # inside the release. `mujoco` and `numpy` arrive as wheels at compile time
 # (`config/pythonx.exs`), which is the only thing a build has to fetch.
+#
+# `apt` is named because the pinned point release carries 3.0.3 and trixie has
+# 3.0.4 for CVE-2026-109518 — a package this image has only because the base
+# image does. Naming it upgrades that pair and nothing else, so the rest of the
+# image is still what the release pinned.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-       ca-certificates libstdc++6 openssl libncurses6 libsctp1 locales tzdata \
+       apt ca-certificates libstdc++6 openssl libncurses6 libsctp1 locales tzdata \
        libegl1 libgl1 libosmesa6 \
   && rm -rf /var/lib/apt/lists/* \
   && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
