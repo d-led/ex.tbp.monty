@@ -347,16 +347,17 @@ Two things had to exist before a Windows build could start its own server:
   (`…\Monty on the BEAM\…`). Both are `#[cfg(windows)]` in
   `src-tauri/src/main.rs`, so the macOS path is the same code it was.
 
-**Built by CI, and no artefact yet.** A `windows-2022` row runs it, and every
-attempt so far has failed on a defect only Windows has — first `npm` being
-`npm.cmd` (Elixir's `System.cmd` cannot start one; it failed with `:eacces`), then
-the stylesheet being built before anything compiled the application, so the
-colocated CSS it imports did not exist yet. Both are fixed, and the second was
-reproduced without Windows at all. What no runner can answer is what happens
-after launch: `mix release` laying down `bin\ex_tbp_monty.bat`, and MuJoCo, which
-defaults to WGL on Windows — `rel/env.sh.eex` sets `MUJOCO_GL=osmesa` for Linux
-and `rel/env.bat.eex` has no equivalent, so a MuJoCo experiment is the first
-thing to watch there. Nobody has started the window on Windows yet.
+**Built by CI, and not yet started.** A `windows-2022` row builds it, and the run
+at `ae325a1` is the first to upload `ex-tbp-monty-win-x64.zip` (264 MB) — after
+two attempts that failed on defects only Windows has: first `npm` being `npm.cmd`
+(Elixir's `System.cmd` cannot start one; it failed with `:eacces`), then the
+stylesheet being built before anything compiled the application, so the colocated
+CSS it imports did not exist yet. The second was reproduced without Windows at
+all. What no runner can answer is what happens after launch: `mix release` laying
+down `bin\ex_tbp_monty.bat`, and MuJoCo, which defaults to WGL on Windows —
+`rel/env.sh.eex` sets `MUJOCO_GL=osmesa` for Linux and `rel/env.bat.eex` has no
+equivalent, so a MuJoCo experiment is the first thing to watch there. Nobody has
+started the window on Windows yet.
 
 ## What is still open
 
@@ -370,8 +371,9 @@ thing to watch there. Nobody has started the window on Windows yet.
   window with its release beside it) and Windows x64 (an NSIS setup and the same
   portable folder, zipped). The macOS app has been built and opened from a
   checkout by a person; the Linux bundle has been built by CI and not yet
-  launched; the Windows one is compiled and never started. `docs/status.md`'s
-  own rule applies — nothing is claimed beyond what was run. Linux needs
+  launched; the Windows one is built and uploaded, and nobody has started it.
+  `docs/status.md`'s own rule applies — nothing is claimed beyond what was run.
+  Linux needs
   `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`,
   `librsvg2-dev` and `patchelf` on the runner, which the job installs; an
   AppImage is one more target in `src-tauri/tauri.bundle.linux.json` and has not

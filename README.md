@@ -79,14 +79,18 @@ build:
 | ----------- | -------------------------------------------------------------------------------------------------------------- |
 | macOS arm64 | [ex-tbp-monty-osx-arm64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-osx-arm64.zip) |
 | Linux x64   | [ex-tbp-monty-linux-x64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-linux-x64.zip) |
+| Windows x64 | [ex-tbp-monty-win-x64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-win-x64.zip)     |
 
 The macOS app is unsigned, so its first launch is right-click → Open. The Linux
 download holds a tarball of the window with its release beside it — and a `.deb`,
-for whoever would rather their package manager tracked it. Where it keeps its
-data, what is built for which platform, and why the download is about 300 MB
-while the app is 550 MB on disk — most of it the Python interpreter the release
-carries: [docs/desktop.md](docs/desktop.md). A checkout builds and opens it with
-`scripts/start-desktop.sh`, or `scripts\start-desktop.ps1` on Windows.
+for whoever would rather their package manager tracked it. The Windows one holds
+the same folder zipped, `ex-tbp-monty-desktop.exe` in it being the app, and an
+NSIS setup beside it for whoever wants an entry under "Apps & features". Where
+it keeps its data, what is built for which platform, and why the download is
+about 300 MB while the app is 550 MB on disk — most of it the Python interpreter
+the release carries: [docs/desktop.md](docs/desktop.md). A checkout builds and
+opens it with `scripts/start-desktop.sh`, or `scripts\start-desktop.ps1` on
+Windows.
 
 ## From source
 
