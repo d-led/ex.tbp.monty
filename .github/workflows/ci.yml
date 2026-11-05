@@ -769,95 +769,6 @@ jobs:
           esac
           scripts/boot-check.sh "$release"
 
-      # The window itself, not only the release inside it. Every check above
-      # asks the *server* a question, and all of them were green while the
-      # window opened on nothing: this one opens the executable a person
-      # downloads and waits for the page to report what it drew - the heading it
-      # shows and the ids on it - to `/__painted`. Only a webview that ran the
-      # page can send that report, which is the whole point of asking.
-      - name: Open the window this job built
-        timeout-minutes: 10
-        shell: bash
-        run: |
-          case "${{ matrix.rid }}" in
-            osx-*) window="artifacts/${{ matrix.rid }}/Monty on the BEAM.app/Contents/MacOS/ex-tbp-monty-desktop" ;;
-            win-*) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop.exe" ;;
-            *) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop" ;;
-          esac
-          MONTY_DESKTOP_PORT=43997 scripts/smoke-window.sh --window "$window"
-
-      # The other half of the same question, and the half nobody had ever
-      # looked at: what a person sees when the app *cannot* start. Pointed at a
-      # release that is not there, the window has to put up the crash screen for
-      # "this copy is incomplete" - asserted in its own log, because the page is
-      # inside a webview and nothing outside can read it. Without this, "the
-      # window explains itself" is a claim about code nobody has watched run.
-      - name: The window says what went wrong when the release is missing
-        timeout-minutes: 10
-        shell: bash
-        run: |
-          case "${{ matrix.rid }}" in
-            osx-*) window="artifacts/${{ matrix.rid }}/Monty on the BEAM.app/Contents/MacOS/ex-tbp-monty-desktop" ;;
-            win-*) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop.exe" ;;
-            *) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop" ;;
-          esac
-          MONTY_DESKTOP_PORT=43994 scripts/smoke-window.sh --window "$window" \
-            --crash "/nonexistent/rel/ex_tbp_monty/bin/server"
-
-      # The installer is the shape a Windows person actually uses, and the one
-      # shape nothing had ever opened: the checks above look at the portable
-      # folder, whose `rel\` is put there by `scripts/package.ps1`, while an
-      # installed copy gets its `rel\` from the bundler's resource copy. A
-      # download that installs and then crashes on start is exactly that
-      # difference.
-      - name: Install the Windows setup and open the installed window
-        if: runner.os == 'Windows'
-        timeout-minutes: 15
-        shell: bash
-        run: |
-          set -euo pipefail
-          setup=(artifacts/${{ matrix.rid }}/*-setup.exe)
-          if [ ! -f "${setup[0]}" ]; then
-            echo "the build made no installer to install" >&2
-            exit 1
-          fi
-          echo "installing ${setup[0]}"
-          ./"${setup[0]}" /S
-
-          # The install directory follows `productName` and the executable's
-          # name follows the crate, so both are found rather than assumed, and
-          # a package that installs nothing says so instead of timing out.
-          local_app=$(cygpath -u "${LOCALAPPDATA:-$HOME/AppData/Local}")
-          installed=$(find "$local_app" -maxdepth 5 -type f -iname 'ex-tbp-monty-desktop.exe' | head -1)
-
-          if [ -z "$installed" ]; then
-            echo "the installer put no window under $local_app:" >&2
-            find "$local_app" -maxdepth 3 -iname '*monty*' >&2 || true
-            exit 1
-          fi
-
-          echo "installed: $installed"
-          ls "$(dirname "$installed")" || true
-          MONTY_DESKTOP_PORT=43996 scripts/smoke-window.sh --window "$installed"
-
-      # What a person actually downloads: the tarball, unpacked elsewhere, with
-      # the release inside it started the way the window starts one. The boot
-      # check above starts the staging tree `package.sh` assembled; this starts
-      # the archive, which is the only shape tested on the machine it ships to.
-      # The sibling project found an amd64 container on an Apple-silicon machine
-      # failing this boot in OTP's `prim_tty` NIF while the staging folder
-      # served - the two disagree about exactly the thing worth knowing.
-      - name: The downloaded tarball's release starts
-        if: runner.os == 'Linux'
-        timeout-minutes: 10
-        shell: bash
-        run: |
-          set -euo pipefail
-          work=$(mktemp -d)
-          tar -xzf "artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}.tar.gz" -C "$work"
-          MONTY_DESKTOP_PORT=43995 scripts/boot-check.sh "$work/ex-tbp-monty-${{ matrix.rid }}/rel/ex_tbp_monty"
-          rm -rf "$work"
-
       # The one command a person runs, run here: the script the README offers,
       # pointed at the artefacts this job has just made, stopping before it opens
       # a window. It is the only thing that tests the script's own assumptions —
@@ -868,6 +779,7 @@ jobs:
       # broken while everything needed had unpacked: that is the bug this catches.
       - name: The one-line download unpacks what this job built
         if: runner.os != 'Windows'
+        timeout-minutes: 10
         run: |
           mkdir -p smoke
           # The wrapper nightly.link serves is the artefact the upload step
@@ -901,6 +813,7 @@ jobs:
 
       - name: The one-line download unpacks what this job built (Windows)
         if: runner.os == 'Windows'
+        timeout-minutes: 10
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force smoke | Out-Null
@@ -943,6 +856,126 @@ jobs:
           # promise.
           retention-days: 90
           if-no-files-found: error
+
+
+      # The download first, and the checks that *open* it after it — the sibling
+      # project's lesson, learned by a Windows job that sat on its last step for
+      # three hours with no line from it at all. `nightly.link` serves the newest
+      # artifact of a *successful* run, so a check that fails or hangs does not
+      # merely fail: it withholds the download for as long as it runs. There, an
+      # NSIS installer launched with `/S` never returned.
+      #
+      # So what must be true of the build is a gate above — packaged, its release
+      # answering, the download unpacking. What a person sees when they open it
+      # is checked below, `continue-on-error` and with its own deadline: the step
+      # can be red while the download is there. A red step nobody can act on is a
+      # smaller problem than a download nobody can get.
+
+      # The window itself, not only the release inside it. Every check above
+      # asks the *server* a question, and all of them were green while the
+      # window opened on nothing: this one opens the executable a person
+      # downloads and waits for the page to report what it drew - the heading it
+      # shows and the ids on it - to `/__painted`. Only a webview that ran the
+      # page can send that report, which is the whole point of asking.
+      - name: Open the window this job built
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          case "${{ matrix.rid }}" in
+            osx-*) window="artifacts/${{ matrix.rid }}/Monty on the BEAM.app/Contents/MacOS/ex-tbp-monty-desktop" ;;
+            win-*) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop.exe" ;;
+            *) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop" ;;
+          esac
+          MONTY_DESKTOP_PORT=43997 scripts/smoke-window.sh --window "$window"
+
+      # The other half of the same question, and the half nobody had ever
+      # looked at: what a person sees when the app *cannot* start. Pointed at a
+      # release that is not there, the window has to put up the crash screen for
+      # "this copy is incomplete" - asserted in its own log, because the page is
+      # inside a webview and nothing outside can read it. Without this, "the
+      # window explains itself" is a claim about code nobody has watched run.
+      - name: The window says what went wrong when the release is missing
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          case "${{ matrix.rid }}" in
+            osx-*) window="artifacts/${{ matrix.rid }}/Monty on the BEAM.app/Contents/MacOS/ex-tbp-monty-desktop" ;;
+            win-*) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop.exe" ;;
+            *) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop" ;;
+          esac
+          MONTY_DESKTOP_PORT=43994 scripts/smoke-window.sh --window "$window" \
+            --crash "/nonexistent/rel/ex_tbp_monty/bin/server"
+
+      # The installer is the shape a Windows person actually uses, and the one
+      # shape nothing had ever opened: the checks above look at the portable
+      # folder, whose `rel\` is put there by `scripts/package.ps1`, while an
+      # installed copy gets its `rel\` from the bundler's resource copy. A
+      # download that installs and then crashes on start is exactly that
+      # difference.
+      - name: Install the Windows setup and open the installed window
+        continue-on-error: true
+        if: runner.os == 'Windows'
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Anything left running by the checks above is killed first: an
+          # installer that finds the app open asks a question nobody is here to
+          # answer, and its answer is a hang.
+          taskkill //F //IM ex-tbp-monty-desktop.exe >/dev/null 2>&1 || true
+
+          setup=(artifacts/${{ matrix.rid }}/*-setup.exe)
+          if [ ! -f "${setup[0]}" ]; then
+            echo "the build made no installer to install" >&2
+            exit 1
+          fi
+
+          echo "installing ${setup[0]}"
+          # Bounded twice, and the bound is the lesson: an installer that waits
+          # out a job says nothing at all while it waits. `timeout` names the
+          # program that would not finish; the step's own deadline is the
+          # backstop behind it.
+          if ! timeout 300 ./"${setup[0]}" /S; then
+            echo "the installer did not finish within five minutes" >&2
+            exit 1
+          fi
+
+          # The install directory follows `productName` and the executable's
+          # name follows the crate, so both are found rather than assumed, and
+          # a package that installs nothing says so instead of timing out.
+          local_app=$(cygpath -u "${LOCALAPPDATA:-$HOME/AppData/Local}")
+          installed=$(find "$local_app" -maxdepth 5 -type f -iname 'ex-tbp-monty-desktop.exe' | head -1)
+
+          if [ -z "$installed" ]; then
+            echo "the installer put no window under $local_app:" >&2
+            find "$local_app" -maxdepth 3 -iname '*monty*' >&2 || true
+            exit 1
+          fi
+
+          echo "installed: $installed"
+          ls "$(dirname "$installed")" || true
+          MONTY_DESKTOP_PORT=43996 scripts/smoke-window.sh --window "$installed"
+
+      # What a person actually downloads: the tarball, unpacked elsewhere, with
+      # the release inside it started the way the window starts one. The boot
+      # check above starts the staging tree `package.sh` assembled; this starts
+      # the archive, which is the only shape tested on the machine it ships to.
+      # The sibling project found an amd64 container on an Apple-silicon machine
+      # failing this boot in OTP's `prim_tty` NIF while the staging folder
+      # served - the two disagree about exactly the thing worth knowing.
+      - name: The downloaded tarball's release starts
+        continue-on-error: true
+        if: runner.os == 'Linux'
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          tar -xzf "artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}.tar.gz" -C "$work"
+          MONTY_DESKTOP_PORT=43995 scripts/boot-check.sh "$work/ex-tbp-monty-${{ matrix.rid }}/rel/ex_tbp_monty"
+          rm -rf "$work"
 
   # A tag is a promise that the file stays: an artefact expires, a release does
   # not. One release per tag, with every asset of every tag inside it.
