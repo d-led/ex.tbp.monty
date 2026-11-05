@@ -214,10 +214,10 @@ ecto.*` reads the repository list before `runtime.exs` has run.)
 ## Shipping: what a person downloads
 
 The shape is the one `worksheet.net` uses — a packaging script that produces the
-installable thing, CI that uploads it, and a script that fetches and runs it —
+bundle, CI that uploads it, and a script that fetches, unpacks and runs it —
 because it needs no release to exist before somebody can try the app:
 
-1. `scripts/package.sh` builds what a person can install, for one platform at a
+1. `scripts/package.sh` builds what a person downloads, for one platform at a
    time, into `artifacts/<platform>/`:
 
    | file                          | what it is for                                                                                                                                   |
@@ -244,15 +244,16 @@ because it needs no release to exist before somebody can try the app:
    **no `-r`**, so `xattr -rd com.apple.quarantine` fails with "option -r not
    recognized". Stripping the flag from an app that a person unpacked themselves
    is a different thing, and that is what `run-desktop.sh` does — at their own
-   privilege, on a file they chose to install.
+   privilege, on a file they chose to unpack.
 
 2. CI's `desktop` job runs it on a runner of the architecture it ships to and
    uploads the zip as `ex-tbp-monty-osx-arm64`, for ninety days.
 3. `scripts/run-desktop.sh` (`run-desktop.ps1` on Windows) takes the newest build
    of `main` from `nightly.link`, expands it into `./ex-tbp-monty-<platform>/`
-   beside the download, and opens it. Nothing is installed and nothing is
-   registered: the folder is the installation, and deleting it is the whole of
-   uninstalling. Running the script again opens what is there; `--update`
+   beside the download, and opens it. It copies nothing anywhere and registers
+   nothing — no `PATH` entry, no menu entry, no registry key: the folder _is_ the
+   application, and deleting it is the whole of getting rid of it. Running the
+   script again opens what is there; `--update`
    (`-Update`, or `$env:EX_TBP_MONTY_UPDATE = 1` through the one-liner) takes the
    newest build first. The `.pkg` and the NSIS setup in the same download are for
    a person who wants an entry in `/Applications` or under "Apps & features" and

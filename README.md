@@ -67,8 +67,8 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 
 The script works out the platform itself. It takes the newest build of `main`
 into `./ex-tbp-monty-<platform>/`, unpacks it there and opens this: nothing is
-installed, nothing is registered, and deleting that folder is the whole of
-uninstalling it. Running it again opens what is there; for the newest build
+copied anywhere, nothing is registered, and deleting that folder is the whole of
+removing it. Running it again opens what is there; for the newest build
 again, `| bash -s -- --update` on macOS and Linux, and
 `$env:EX_TBP_MONTY_UPDATE = 1` before the Windows line. A tagged release keeps
 the same file in the releases page, which is what to use for a version that has

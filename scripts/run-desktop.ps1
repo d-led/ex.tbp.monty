@@ -10,8 +10,8 @@
         powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run-desktop.ps1 | iex"
 
     The download lands in the folder this is run from, in a directory of its
-    own — nothing is installed, nothing is registered, and deleting the folder is
-    the whole of uninstalling it. Run it again and it opens what is already
+    own — nothing is copied anywhere, nothing is registered, and deleting the
+    folder is the whole of removing it. Run it again and it opens what is already
     there; -Update takes the newest build of `main` first. A tagged release keeps
     the same file in the releases page, which is what to use for a version that
     has to stay put.

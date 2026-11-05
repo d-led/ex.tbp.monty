@@ -5,8 +5,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run-desktop.sh | bash
 #
 # The download lands in the folder this is run from, in a directory of its own —
-# nothing is installed, nothing is registered, and deleting the folder is the
-# whole of uninstalling it. Run it again and it opens what is already there;
+# nothing is copied anywhere, nothing is registered, and deleting the folder is
+# the whole of removing it. Run it again and it opens what is already there;
 # `--update` takes the newest build first. What it takes is the newest build of
 # `main`, and the same file attached to a tagged release, which is what to use
 # for a version that has to stay put.

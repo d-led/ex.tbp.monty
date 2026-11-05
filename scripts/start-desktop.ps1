@@ -10,8 +10,8 @@
         scripts\start-desktop.ps1                build both halves, then open the window
         scripts\start-desktop.ps1 -InBrowser     build the release, then serve it here
         scripts\start-desktop.ps1 -Where         build the release, then print where its data is
-        scripts\start-desktop.ps1 -Bundle        build the installer bundle, then print its path
-        scripts\start-desktop.ps1 -App           build the installer bundle, then open the app
+        scripts\start-desktop.ps1 -Bundle        build the app bundle, then print its path
+        scripts\start-desktop.ps1 -App           build the app bundle, then open the app
 
     What it opens is the native window: `src-tauri`, which starts the Elixir
     release as its sidecar, reads the address that release prints, and points a
