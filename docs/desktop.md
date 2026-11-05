@@ -574,6 +574,16 @@ names.
 
 ## What is still open
 
+- **CI's macOS leg does not start.** From 2026-11-05 21:38 every run shows
+  `desktop (ex-tbp-monty-osx-arm64): cancelled` about a second after the job is
+  queued, and its annotation says why: `The configuration
+'macos-14-arm64-us-default' is not supported`. The label has not changed — the
+  same job ran on `macos-14` at 14:33 the same day — so this is the account's
+  runner entitlement, not the workflow. Until it is restored the macOS side is
+  proven by hand: `scripts/package.sh osx-arm64`, the zip unpacked into a folder
+  inside the checkout, and `scripts/smoke-window.sh` opening that copy (heading,
+  marks and all), plus the same window with `--crash` pointed at a release that
+  is not there.
 - **A splash, and an origin guard.** Two of the four things the sibling
   project's window (`confluence_phx_mirror`) has are here now — the failure page
   and the prefilled issue — and two are not: a **splash window** shown at once,
