@@ -177,3 +177,35 @@ the code.
   when it can be measured on its own.
 - **Caching the graph's arrays twice over** — done, and it is where most of the
   earlier win came from; nothing else in the cache family has measured flat.
+
+## Half a step was a process spawn (2026-11-06)
+
+`tprof` on a real step put **50.6 % of the time in `erlang:spawn_opt/4`** (7 calls,
+372 ms) with `call_timeout: :infinity`, while the biggest algorithm entry was
+`Enum.map` at 6.5 %. A reduction count could not see it: `spawn_opt` is a BIF, and
+the step's reductions stayed at ~7.9 M before and after the change that removed it.
+
+**What it was.** `Monty.Runtime.Barrier` starts a process per request so a round's
+deadline can kill it, and `spawn_monitor` copies the request's closure into that
+process — and a sensor request *is* the payload, closing over the observations
+(394 202 words ≈ 3.2 MB a step). Measured directly: seven spawns carrying 400 000
+words cost **83 ms**, seven carrying nothing cost **32 µs**.
+
+**The change.** A round of *one* request with no deadline has nothing to kill and
+no concurrency to lose, so it runs where it was called. Rounds of several requests
+keep a process each, deadline or none — they start together, and serialising them
+would trade a constant for a factor of the module count. `missing?/1` decides "no
+answer" for both paths, so failure semantics are one definition, not two.
+
+**Measured.** Acceptance ladder unchanged digit for digit (`0.908 (802, 4)` …
+`11.712 (2342, 1)`); the same steps on the same machine went from 1.1-1.4 s to
+**84-477 ms** (cold step 827 ms). The five-LM config takes the untouched
+multi-request path (4.4 s/step, 31.5 M reductions) — its cost is the
+per-hypothesis pipeline, not the round.
+
+**Next, in the profile's order**: observations as immutable flat binaries (a refc
+binary crosses a process boundary as a pointer — within a node only; across nodes
+everything is copied), then `MatcherNif.decode`/`decode_one` (18 % of allocation),
+then the per-hypothesis plumbing (`gather`, `with_index`, `take` — ~18 % — and a
+batched `Geometry.dot`, 9 %). `nearest_many` is 2 % of the step, so more k-d work
+is not where the time is.

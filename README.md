@@ -2,14 +2,24 @@
 
 [Monty](https://github.com/thousandbrainsproject/tbp.monty) is the Thousand
 Brains Project's system: a sensor module moves over an object, learning modules
-model it and say where the sensor is on it. This is that system rewritten in
-Elixir — one process per module, every experiment Monty ships on a page in a
-browser, and an MCP endpoint for an assistant.
+model it, and the model says where the sensor is on it.
 
-The port is module for module and checked against Monty's own numbers;
-differences are listed in [docs/monty-differences.md](docs/monty-differences.md).
+This is that system rewritten in Elixir, with one idea behind it: **run Monty's
+experiments with a couple of clicks, install nothing, and reach Monty's
+documentation through an MCP.**
 
-## Run it
+<p>
+  <img src="docs/img/web-view.png" width="800" alt="An experiment in the studio: evidence over steps, both camera views, and the object">
+  <img src="docs/img/prerequisites.png" width="800" alt="The prerequisites page: what a run needs on disk, and one button to fetch it">
+</p>
+
+The port is module for module, and checked against Monty's own numbers —
+[what is ported](docs/features.md), [what was compared](docs/validation.md),
+[what differs](docs/monty-differences.md).
+
+## Start
+
+**In a browser, with Docker.** One file, one command, no database to set up:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/docker-compose.quickstart.yml
@@ -18,42 +28,17 @@ docker compose -f docker-compose.quickstart.yml up
 
 → <http://localhost:6401>
 
-The image is `ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64). That compose
-file runs the image alone: the database is a file on a named volume, and the
-release migrates itself as it boots. The volume and the `/prerequisites`
-downloads are named, so `docker compose down` keeps them and `down -v` deletes
-them.
+The image is `ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64): it migrates
+itself as it boots, and keeps its database, its downloads and its run records on
+named volumes, so `docker compose down` keeps them and `down -v` deletes them.
 
-Want a database server rather than the file? The same stack with Postgres beside
-it — same image, same port, `DATABASE_URL` the only difference:
+A server-backed stack is the same file with `postgres` in the name
+([docker-compose.postgres.yml](docker-compose.postgres.yml)). The image alone,
+against a Postgres you already have, is in [docs/container.md](docs/container.md)
+with every variable and the one writable directory.
 
-```bash
-curl -fsSLO https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/docker-compose.postgres.yml
-docker compose -f docker-compose.postgres.yml up
-```
-
-The image alone, against a Postgres you already have:
-
-```bash
-docker run --rm \
-  -e DATABASE_URL=ecto://user:pass@host:5432/monty \
-  -e SECRET_KEY_BASE="$(openssl rand -base64 48)" \
-  ghcr.io/d-led/ex.tbp.monty:latest /app/bin/migrate      # once per deploy
-
-docker run -d -p 4001:4000 \
-  -e DATABASE_URL=ecto://user:pass@host:5432/monty \
-  -e SECRET_KEY_BASE="$(openssl rand -base64 48)" \
-  -e PHX_HOST=localhost \
-  ghcr.io/d-led/ex.tbp.monty:latest
-```
-
-Tags, every variable, the one writable directory:
-[docs/container.md](docs/container.md).
-
-## As an app
-
-The same application in a native window, with its own server inside — no
-Docker, no Elixir, nothing to install but the app:
+**As an app, nothing installed.** The same studio in a native window, with its
+own server inside — no Docker, no Elixir:
 
 ```bash
 # macOS (Apple Silicon) and Linux (x86-64)
@@ -65,15 +50,11 @@ curl -fsSL https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run
 powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run-desktop.ps1 | iex"
 ```
 
-The script works out the platform itself. It takes the newest build of `main`
-into `./ex-tbp-monty-<platform>/`, unpacks it there and opens this: nothing is
-copied anywhere, nothing is registered, and deleting that folder is the whole of
-removing it. Running it again opens what is there; for the newest build
-again, `| bash -s -- --update` on macOS and Linux, and
-`$env:EX_TBP_MONTY_UPDATE = 1` before the Windows line. A tagged release keeps
-the same file in the releases page, which is what to use for a version that has
-to stay put. Prefer to take the file yourself? These links always give the latest
-build:
+It unpacks the newest build of `main` into `./ex-tbp-monty-<platform>/` and opens
+it; deleting that folder is the whole of removing it, and running it again opens
+what is there (`--update` on macOS and Linux, `$env:EX_TBP_MONTY_UPDATE = 1` on
+Windows, for the newest build again). A tagged release keeps the same file in the
+releases page. Or take the file yourself:
 
 | Platform    | Download                                                                                                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------- |
@@ -81,25 +62,12 @@ build:
 | Linux x64   | [ex-tbp-monty-linux-x64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-linux-x64.zip) |
 | Windows x64 | [ex-tbp-monty-win-x64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-win-x64.zip)     |
 
-Those are the three builds the workflow makes. An Intel Mac and an arm64 Linux
-machine have none published, so they build their own: `scripts/package.sh
-osx-x64` on an Intel Mac, `scripts/package.sh linux-arm64` on arm64 Linux, or
-`scripts/start-desktop.sh` for the window from a checkout —
-[docs/desktop.md](docs/desktop.md) has the rest.
-
-The macOS app is unsigned, so its first launch is right-click → Open. The Linux
-download holds three shapes of the same application: a tarball of the window
-with its release beside it, a `.deb` for whoever would rather their package
-manager tracked it, and an AppImage — one executable that runs where nothing is
-installed at all. The first two borrow the system's WebKitGTK 4.1 and GTK 3 (the
-`.deb` says so in its `Depends`); the AppImage carries them, which is the whole
-of why it is a third shape. The Windows one holds the same folder zipped,
-`ex-tbp-monty-desktop.exe` in it being the app, and an NSIS setup beside it for
-whoever wants an entry under "Apps & features". Where it keeps its data, what is
-built for which platform, and why the download is larger than the app — most of
-it the Python interpreter the release carries: [docs/desktop.md](docs/desktop.md).
-A checkout builds and opens it with `scripts/start-desktop.sh`, or
-`scripts\start-desktop.ps1` on Windows.
+Those are the three builds the workflow makes; Intel Macs and arm64 Linux build
+their own (`scripts/package.sh osx-x64`, `scripts/package.sh linux-arm64`), and a
+checkout opens the window with `scripts/start-desktop.sh`. The macOS app is
+unsigned, so its first launch is right-click → Open. What each download holds,
+and why it is larger than the app — mostly the Python interpreter the release
+carries — is in [docs/desktop.md](docs/desktop.md).
 
 ## From source
 
@@ -108,9 +76,8 @@ scripts/init-dev.sh    # Postgres on 6432, dependencies, database, assets
 scripts/run-dev.sh     # http://localhost:4000
 ```
 
-A development run keeps its data in that Postgres; a release and the desktop app
-keep theirs in a SQLite file unless `DATABASE_URL` names a server. `mix
-ecto.migrate` creates the file on first run and `mix ecto.drop` deletes it —
+A release and the desktop app keep their data in a SQLite file unless
+`DATABASE_URL` names a server —
 [docs/developers.md](docs/developers.md#a-file-instead-of-a-server).
 
 Needs Elixir 1.20, node/npm, Docker, and a Rust toolchain — and installs the
@@ -121,23 +88,38 @@ scripts/install-elixir.sh    # Elixir 1.20.5 + OTP 29.1, per user, no root
 scripts/install-rust.sh      # the Rust toolchain
 ```
 
-Both take no arguments and do nothing where their toolchain is already there.
-Rust is a _build_ requirement: the native kernels are NIFs (`native/kd_tree_nif`,
-`native/matcher_nif`) that rustler compiles with the application. Running the
-app needs none of it — the release carries the compiled shared objects.
-[docs/developers.md](docs/developers.md) has the tests, the gates CI runs and how
-a module is added.
+Both take no arguments and do nothing where their toolchain is already there;
+Rust is a _build_ requirement only — the native kernels compile with the app and
+the release carries them. Tests, the gates CI runs, and how a module is added:
+[docs/developers.md](docs/developers.md).
 
-## Also
+## Then what
 
-- **MCP.** `/mcp` answers an assistant about Monty's theory, roadmap and code, and
-  previews, saves and runs experiments. `http://localhost:4001/mcp` is already in
-  [`.vscode/mcp.json`](.vscode/mcp.json) — start the server with `PORT=4001
-scripts/run-dev.sh` (4000 is the default, and then the URL to copy is the one
-  `/mcp/config` prints) — [docs/mcp.md](docs/mcp.md).
-- **Headless.** `mix monty.run tutorial/first_experiment --steps 20` is the same
-  run record without the browser; flags and `mix monty.bench` in
-  [docs/features.md](docs/features.md).
+Open **Experiments**, pick one, press **Run it**. The page shows the config as
+Monty wrote it and as this app composes it, then streams the run: evidence over
+steps, the hypothesis space, both camera views, and where the agent is on the
+object. Every run is recorded, and replays step by step.
+
+If the page says files are missing, **Prerequisites** names them and fetches them
+in one click. An experiment built from a class this port has not written is
+refused, and the page names the class — a stand-in would be a different
+experiment.
+
+## Three ways in
+
+- **The studio**, above: a page per experiment, runs kept and replayable.
+- **An assistant**, through `/mcp`: ask about Monty's theory, roadmap and code,
+  and preview, save and run experiments. `http://localhost:4001/mcp` is already in
+  [`.vscode/mcp.json`](.vscode/mcp.json) — start the dev server with `PORT=4001`,
+  or copy the address `/mcp/config` prints — [docs/mcp.md](docs/mcp.md).
+- **A terminal**: the same run record without a browser, and a measurement of it:
+
+```bash
+mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8
+mix monty.bench base_config_10distinctobj_dist_agent --steps 5
+```
+
+Flags and what each prints: [docs/features.md](docs/features.md).
 
 ## How it follows Monty
 
@@ -163,20 +145,11 @@ scripts/run-dev.sh` (4000 is the default, and then the URL to copy is the one
 
 ## Where it differs
 
-Monty steps one object graph in one loop; here every module is a process. What
-follows from that is argued in [docs/monty-differences.md](docs/monty-differences.md) §2.
-
-- **Voting is a message round.** With no deadline it is Monty's synchronous
-  round; with one, the round closes when time is up and the step says how many
-  votes it used and whether it ran short.
-- **A module can fail on its own.** A dead one is replaced; a slow one is named
-  in that step and the step goes on.
-- **A stream per module, not one shared stream.** A seeded episode repeats
-  Python's numbers where the drawing order is the same.
-- **Values returned, not mutated.** Python's subclasses and self-mutating objects
-  become functions and returned state.
-- **A UI and an MCP server.** A page per experiment, runs kept in Postgres, and
-  `/mcp`.
+Monty steps one object graph in one loop; here every module is a process. Voting
+is a round with a deadline, a module that dies is replaced while the step goes on,
+each module draws from its own seeded stream, and state is returned rather than
+mutated. What follows from that, and what looks wrong upstream, is in
+[docs/monty-differences.md](docs/monty-differences.md).
 
 ## Docs
 
@@ -203,13 +176,10 @@ ships a verbatim copy of its config tree and of the snapshots our composer is
 checked against: those files stay Monty's, with its licence beside them in
 [priv/monty/LICENSE](priv/monty/LICENSE).
 
-The rest of what is third-party here is a dependency rather than a copy, so the
-build's own files are the list — each fetched package keeps its licence:
-
-| What                       | Where it is declared                                                |
-| -------------------------- | ------------------------------------------------------------------- |
-| Elixir libraries           | [`mix.exs`](mix.exs), pinned in [`mix.lock`](mix.lock)              |
-| browser packages           | [`assets/package.json`](assets/package.json)                        |
-| Python, in our interpreter | the `pyproject_toml` in [`config/pythonx.exs`](config/pythonx.exs)  |
-| the NIFs, the desktop app  | [`native/`](native), [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml) |
-| the image's base images    | [`Dockerfile`](Dockerfile)                                          |
+Everything else third-party here is a dependency rather than a copy, so the build
+files are the list — each fetched package keeps its licence: Elixir libraries in
+[`mix.exs`](mix.exs) (pinned in [`mix.lock`](mix.lock)), browser packages in
+[`assets/package.json`](assets/package.json), Python in
+[`config/pythonx.exs`](config/pythonx.exs), the NIFs and the window in
+[`native/`](native) and [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml), and the
+image's base images in the [Dockerfile](Dockerfile).
