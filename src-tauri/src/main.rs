@@ -16,7 +16,8 @@ use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -89,11 +90,24 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// How long the window waits for the release to say where it listens. A first
+/// launch migrates a fresh database and warms a Python environment; a release
+/// that will never speak — a missing runtime, a launcher that cannot find its
+/// boot file — looks exactly the same from the other end of a pipe, and a person
+/// is staring at nothing while it does. Two minutes is generous for the first
+/// case and finite for the second.
+const ANNOUNCEMENT_TIMEOUT: Duration = Duration::from_secs(120);
+
 /// Starts the release and blocks until it says where it listens.
 fn start_sidecar(app: &tauri::App) -> Result<(Child, String), Box<dyn std::error::Error>> {
     let path = sidecar_path(app);
 
     let mut child = command(&path)
+        // The release's own folder, and not whatever directory the window was
+        // started from: a double-click, a shortcut, a scheduled task and a
+        // `cargo run` each begin somewhere else, and only the release's folder is
+        // where its launcher expects to be.
+        .current_dir(path.parent().unwrap_or_else(|| Path::new(".")))
         // `bin/server` is the release's own web-server entry point: it runs the
         // migrations this application keeps in two directories and then starts
         // the endpoint, in that order, in one VM.
@@ -131,11 +145,7 @@ fn start_sidecar(app: &tauri::App) -> Result<(Child, String), Box<dyn std::error
                 // panic per line, each one showing the failure box.
                 let _ = writeln!(std::io::stdout(), "{line}");
 
-                let mut said = said.lock().unwrap();
-                said.push(line);
-                if said.len() > 40 {
-                    said.remove(0);
-                }
+                remember(&said, line);
             }
         });
     }
@@ -144,39 +154,71 @@ fn start_sidecar(app: &tauri::App) -> Result<(Child, String), Box<dyn std::error
         .stdout
         .take()
         .ok_or("the sidecar has no output to read")?;
-    let mut reader = BufReader::new(stdout);
-    let mut line = String::new();
+    let (sender, receiver) = mpsc::channel::<String>();
+
+    // One thread reads the pipe for as long as it is open, so nothing blocks a
+    // process that is writing to it, and the announcement can arrive at any time
+    // without the window having to sit in `read_line` to see it.
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            let _ = writeln!(std::io::stdout(), "{line}");
+
+            if sender.send(line).is_err() {
+                break;
+            }
+        }
+    });
 
     loop {
-        line.clear();
+        match receiver.recv_timeout(ANNOUNCEMENT_TIMEOUT) {
+            Ok(line) => match line.trim().strip_prefix("desktop ui: ") {
+                Some(url) => {
+                    let url = url.to_string();
+                    log_line(&log_path(), &format!("listening on {url}"));
 
-        if reader.read_line(&mut line)? == 0 {
-            // What the release said before it went is the whole answer to "why
-            // is there no window", and the thread above has been collecting it.
-            let said = said.lock().unwrap().join("\n");
-
-            return Err(if said.trim().is_empty() {
-                "the sidecar stopped before it said where it listens".to_string()
-            } else {
-                format!("the sidecar stopped before it said where it listens:\n\n{said}")
-            }
-            .into());
-        }
-
-        if let Some(url) = line.trim().strip_prefix("desktop ui: ") {
-            let url = url.to_string();
-            log_line(&log_path(), &format!("listening on {url}"));
-
-            // Whatever else it prints has to keep being read: a pipe nobody
-            // drains fills up and blocks the process writing to it.
-            std::thread::spawn(move || {
-                for line in reader.lines().map_while(Result::ok) {
-                    let _ = writeln!(std::io::stdout(), "{line}");
+                    return Ok((child, url));
                 }
-            });
+                None => remember(&said, line),
+            },
 
-            return Ok((child, url));
+            // The release is gone, or it is still thinking. Either way there is no
+            // window to show and no point in the caller waiting for one: say what
+            // it said, stop it, and let `main` put that in front of a person.
+            Err(timed_out) => {
+                let what = match timed_out {
+                    mpsc::RecvTimeoutError::Timeout => format!(
+                        "the release did not say where it listens within {} seconds",
+                        ANNOUNCEMENT_TIMEOUT.as_secs()
+                    ),
+                    mpsc::RecvTimeoutError::Disconnected => {
+                        "the release stopped before it said where it listens".to_string()
+                    }
+                };
+
+                let _ = child.kill();
+                let _ = child.wait();
+
+                let tail = said.lock().unwrap().join("\n");
+
+                return Err(if tail.trim().is_empty() {
+                    format!("{what}, and said nothing")
+                } else {
+                    format!("{what}. What it said:\n\n{tail}")
+                }
+                .into());
+            }
         }
+    }
+}
+
+/// The last lines a process printed, kept for the moment something has to say why
+/// it went quiet. Bounded, because a sidecar that runs for hours prints forever.
+fn remember(said: &Arc<Mutex<Vec<String>>>, line: String) {
+    let mut said = said.lock().unwrap();
+    said.push(line);
+
+    if said.len() > 40 {
+        said.remove(0);
     }
 }
 
@@ -197,9 +239,24 @@ fn sidecar_path(app: &tauri::App) -> std::path::PathBuf {
         }
     }
 
-    // Development: the release inside the checkout.
-    native(release_at(
-        Path::new("..").join("_build").join("desktop").join("rel"),
+    // Development: the release inside the checkout, worked out from this
+    // executable and not from the current directory. A debug window can be
+    // started from anywhere, and `target/debug/…` is four levels below the
+    // repository wherever that was.
+    let checkout = checkout_release_of(&std::env::current_exe().unwrap_or_default())
+        .unwrap_or_else(|| release_at(Path::new("..").join("_build").join("desktop").join("rel")));
+
+    // Nothing found anywhere: hand back the path whose absence the error names.
+    native(checkout)
+}
+
+/// `…/src-tauri/target/debug/ex-tbp-monty-desktop` → the release that checkout
+/// builds, `…/_build/desktop/rel/ex_tbp_monty/bin/server`.
+fn checkout_release_of(window_executable: &Path) -> Option<PathBuf> {
+    let repository = window_executable.ancestors().nth(4)?;
+
+    Some(release_at(
+        repository.join("_build").join("desktop").join("rel"),
     ))
 }
 
@@ -373,6 +430,31 @@ mod tests {
                 "the path was rewritten on a platform that did not need it: {text}"
             );
         }
+    }
+
+    /// A debug window can be started from any directory, so the release it is
+    /// meant to run is found from the executable — four levels below the
+    /// repository — and never from where the process happens to stand.
+    #[test]
+    fn the_checkout_release_is_found_from_the_executable() {
+        let window = Path::new("/repo/src-tauri/target/debug/ex-tbp-monty-desktop");
+        let expected = Path::new("/repo")
+            .join("_build")
+            .join("desktop")
+            .join("rel")
+            .join("ex_tbp_monty")
+            .join(SERVER_DIR)
+            .join(SERVER_FILE);
+
+        assert_eq!(checkout_release_of(window), Some(expected));
+    }
+
+    /// A release that never speaks is not a release that speaks slowly: the wait
+    /// is bounded, so a person is told within a stated number of seconds instead
+    /// of watching nothing happen.
+    #[test]
+    fn the_wait_for_the_release_is_bounded() {
+        assert_eq!(ANNOUNCEMENT_TIMEOUT.as_secs(), 120);
     }
 
     /// A window that fails has nowhere to print: a release build on Windows has no

@@ -394,10 +394,25 @@ sentence with it. Two changes:
   inside the batch file inherits those slashes, so the launcher's `%~dp0..` became
   `…\bin/..` and `erl` answered **`cannot get boot file`** about a `start.boot`
   under a path that does not exist. The window now joins one component at a time
-  and normalises to `\` on Windows, and the overlays call the release's launcher
-  through `%CD%` (set by `cd /d "%~dp0"`) rather than `%~dp0`, so a caller cannot
-  reintroduce it. `*.bat` is stored with `eol=crlf` (`.gitattributes`) because
+  and normalises to `\` on Windows, and the overlays take their own folder from
+  `%~dp0`, normalise the slashes **in it**, and call the launcher from that
+  (`set "HERE=%~dp0"`, `set "HERE=%HERE:/=\%"`) — so a caller cannot reintroduce
+  them, and the folder comes from the file rather than from wherever the process
+  was started. `*.bat` is stored with `eol=crlf` (`.gitattributes`) because
   `cmd` is a CRLF parser and the overlays are copied into the release unchanged.
+- **Nothing assumes a working directory.** A Windows process is started from
+  wherever its shortcut, task or shell was: the overlays use `%~dp0`, the window
+  spawns the sidecar with the release's own folder as its working directory
+  (`Command::current_dir`), and the development fallback finds `_build/desktop/rel`
+  from the executable's place in the checkout instead of from `../`. An earlier
+  version used `%CD%` for the overlay's calls, which is the directory _after_ a
+  `cd /d` — and `cd /d` cannot honour a UNC path at all, so it quietly stayed
+  where it was.
+- **A release that never speaks is reported, not waited on.** The window waits at
+  most two minutes for `desktop ui: <url>`; after that it stops the sidecar and
+  shows what the release said. Without a bound, a release whose runtime is missing
+  or whose launcher cannot find its boot file looks exactly like a slow one, and a
+  person gets neither a window nor an explanation.
 - **Windows has two PowerShells and they are not the same language.**
   `run-desktop.ps1` parsed cleanly in PowerShell 7 — what the runner adds — and
   Windows PowerShell 5.1, which is what a person has, answered "Missing closing

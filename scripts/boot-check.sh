@@ -37,7 +37,11 @@ log="$(mktemp "${TMPDIR:-/tmp}/boot-check.XXXXXX")"
 # it (`…\Monty on the BEAM\…`) is split by `cmd` alone, so the quoting is the
 # same two lines `src-tauri/src/main.rs` uses.
 case "$(uname -s)" in
-  MINGW* | MSYS* | CYGWIN*) cmd //c call "$entry" >"$log" 2>&1 & ;;
+  MINGW* | MSYS* | CYGWIN*)
+    # `cmd` needs a Windows path; this shell holds a POSIX one. `cygpath` is what
+    # Git Bash ships for exactly that translation.
+    cmd //c call "$(cygpath -w "$entry")" >"$log" 2>&1 &
+    ;;
   *) "$entry" >"$log" 2>&1 & ;;
 esac
 

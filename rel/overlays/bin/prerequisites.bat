@@ -7,13 +7,15 @@ rem
 rem It exits non-zero when a download does not arrive, which is deliberate: a
 rem server that started anyway would offer runs whose model is missing.
 setlocal
-cd /d "%~dp0"
+set "HERE=%~dp0"
+set "HERE=%HERE:/=\%"
+cd /d "%HERE%"
 
 rem The schema comes first, the way `bin\server.bat` does it: this is the step a
 rem fresh volume gets, and starting the application queries tables that a volume
 rem with no migrations does not have yet.
-call "%CD%\ex_tbp_monty.bat" eval "ExTbpMonty.Release.migrate"
+call "%HERE%ex_tbp_monty.bat" eval "ExTbpMonty.Release.migrate"
 if errorlevel 1 exit /b 1
 
-call "%CD%\ex_tbp_monty.bat" eval "ExTbpMonty.Release.fetch_prerequisites"
+call "%HERE%ex_tbp_monty.bat" eval "ExTbpMonty.Release.fetch_prerequisites"
 exit /b %errorlevel%
