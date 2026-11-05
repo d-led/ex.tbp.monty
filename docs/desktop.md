@@ -398,6 +398,15 @@ sentence with it. Two changes:
   through `%CD%` (set by `cd /d "%~dp0"`) rather than `%~dp0`, so a caller cannot
   reintroduce it. `*.bat` is stored with `eol=crlf` (`.gitattributes`) because
   `cmd` is a CRLF parser and the overlays are copied into the release unchanged.
+- **Windows has two PowerShells and they are not the same language.**
+  `run-desktop.ps1` parsed cleanly in PowerShell 7 — what the runner adds — and
+  Windows PowerShell 5.1, which is what a person has, answered "Missing closing
+  `}`" about an `else` on a line of its own. The scripts are written in the
+  plainer dialect now (ASCII only, `} else {` on one line, nothing hanging on an
+  operator or a pipe), and `scripts/check-syntax.ps1` parses every `.ps1` with
+  whichever PowerShell runs it: the desktop job runs it under **both** before it
+  packages anything, because that takes a second and the packaging takes twenty
+  minutes.
 
 ## What is still open
 
