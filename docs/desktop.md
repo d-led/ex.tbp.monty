@@ -407,6 +407,12 @@ sentence with it. Two changes:
   whichever PowerShell runs it: the desktop job runs it under **both** before it
   packages anything, because that takes a second and the packaging takes twenty
   minutes.
+- **The release a bundle carries is started on every platform.**
+  `scripts/boot-check.sh` starts the entry point the bundle holds — `bin/server`
+  under `Contents/Resources/rel/…` in the `.app`, `rel/ex_tbp_monty` beside the
+  window otherwise — asks `/health`, and prints what the release said if it never
+  answers. The `desktop` job runs it right after packaging, which is the only
+  place a Windows release is started on Windows.
 
 ## What is still open
 

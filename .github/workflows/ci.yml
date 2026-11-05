@@ -740,6 +740,21 @@ jobs:
       - name: Package the application
         run: ${{ matrix.package }}
 
+      # What the sibling project learned the hard way, and this one shipped three
+      # times over: the release a bundle carries is the thing that can be wrong,
+      # and it fails as a window that never appears. Started here without a
+      # window and asked `/health`, on the platform it ships to — which for
+      # Windows is the only place `cmd`, `%~dp0` and the `.bat` launcher are
+      # exercised at all.
+      - name: The release the bundle carries starts and answers
+        shell: bash
+        run: |
+          case "${{ matrix.rid }}" in
+            osx-*) release="artifacts/${{ matrix.rid }}/Monty on the BEAM.app/Contents/Resources/rel/ex_tbp_monty" ;;
+            *) release="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/rel/ex_tbp_monty" ;;
+          esac
+          scripts/boot-check.sh "$release"
+
       # The one command a person runs, run here: the script the README offers,
       # pointed at the artefacts this job has just made, stopping before it opens
       # a window. It is the only thing that tests the script's own assumptions —
