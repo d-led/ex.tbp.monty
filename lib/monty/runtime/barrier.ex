@@ -21,6 +21,17 @@ defmodule Monty.Runtime.Barrier do
   against it on this machine (paired, step by step, both under the same load)
   the round below is the cheaper of the two; a step is four rounds and a run is
   thousands of steps, so the round is worth keeping small.
+
+  A round of **one** request with **no deadline** has nothing to kill and no
+  concurrency to lose, so it runs the request where it was called. The process
+  is otherwise pure cost: `spawn_monitor` copies the request's environment into
+  the new one, and a request closure usually *is* the payload — a sensor request
+  closes over the observations, 3.2 MB a step. Measured here, seven spawns
+  carrying a 400 000-word term cost 83 ms against 32 µs carrying nothing, and
+  that copy was half of a model step's time, for a deadline the model never sets
+  (`call_timeout: :infinity`, `Monty.Studio.Setup`). A round of several requests
+  keeps a process each, deadline or none, because starting together is the
+  round's point; the payload is what to make cheap there.
   """
 
   @type id :: atom() | String.t()
@@ -39,7 +50,32 @@ defmodule Monty.Runtime.Barrier do
   @spec run([request()], timeout()) :: result()
   def run([], _timeout), do: %{replies: %{}, timed_out: []}
 
-  def run(requests, timeout) do
+  def run(requests, :infinity) when length(requests) > 1, do: run_spawned(requests, :infinity)
+
+  # A round of **one** request with no deadline has nothing to kill and no
+  # concurrency to lose, so it runs where it was called. The process is then pure
+  # cost: `spawn_monitor` copies the request's closure into the new one, and a
+  # sensor request closes over the observations — 3.2 MB, once per sensor per
+  # step. Measured on `base_config_10distinctobj_dist_agent`, seven spawns
+  # carrying a 400 000-word term cost 83 ms against 32 µs carrying nothing, and
+  # that copy was half of a model step's time — for a deadline the model never
+  # sets (`call_timeout: :infinity`, `Monty.Studio.Setup`).
+  #
+  # A round of several requests keeps its process per request even with no
+  # deadline: they start together, which is the round's point, and serialising
+  # them to save a copy would trade a constant for a factor of the module count.
+  # What to make cheap there is the payload — a refc binary crosses a process
+  # boundary as a pointer.
+  def run([{id, request}], :infinity) do
+    case answered(request) do
+      :unavailable -> %{replies: %{}, timed_out: [id]}
+      reply -> %{replies: %{id => reply}, timed_out: []}
+    end
+  end
+
+  def run(requests, timeout), do: run_spawned(requests, timeout)
+
+  defp run_spawned(requests, timeout) do
     started = Enum.map(requests, fn {id, request} -> {id, start(request, timeout)} end)
 
     started
@@ -85,12 +121,17 @@ defmodule Monty.Runtime.Barrier do
 
   # A request that ran out of its own time, or whose module went away, is a
   # missing contribution. Anything else is the request itself failing, and a
-  # round that turned that into "no answer" would hide the bug.
-  defp missing_or_crashed(reason) when reason in [:normal, :shutdown, :noproc], do: :missing
-  defp missing_or_crashed({:shutdown, _details}), do: :missing
-  defp missing_or_crashed({:timeout, _details}), do: :missing
-  defp missing_or_crashed({:noproc, _details}), do: :missing
-  defp missing_or_crashed(reason), do: exit({:request_crashed, reason})
+  # round that turned that into "no answer" would hide the bug. Both paths ask
+  # the same question, so they answer it in one place.
+  defp missing_or_crashed(reason) do
+    if missing?(reason), do: :missing, else: exit({:request_crashed, reason})
+  end
+
+  defp missing?(reason) when reason in [:normal, :shutdown, :noproc], do: true
+  defp missing?({:shutdown, _details}), do: true
+  defp missing?({:timeout, _details}), do: true
+  defp missing?({:noproc, _details}), do: true
+  defp missing?(_reason), do: false
 
   # Only "there is no process to answer" is turned into a missing contribution.
   # Anything else is a decision of the request's own, and is reported by its
@@ -104,5 +145,16 @@ defmodule Monty.Runtime.Barrier do
     :exit, {:normal, _details} -> :unavailable
     :exit, :shutdown -> :unavailable
     :exit, {:shutdown, _details} -> :unavailable
+  end
+
+  # The inline path's answer to a request: `call/1` for the missing-module case,
+  # and the same classifications the spawned path makes of a worker's death.
+  defp answered(request) do
+    call(request)
+  rescue
+    exception -> exit({:request_crashed, {exception, __STACKTRACE__}})
+  catch
+    :exit, reason -> if missing?(reason), do: :unavailable, else: exit({:request_crashed, reason})
+    kind, reason -> exit({:request_crashed, {kind, reason, __STACKTRACE__}})
   end
 end
