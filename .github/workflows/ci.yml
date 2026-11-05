@@ -700,7 +700,7 @@ jobs:
           # mounts itself (`docs/desktop.md`).
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
-            librsvg2-dev patchelf
+            librsvg2-dev patchelf xvfb xauth
 
       # A fresh runner has no `deps/`: every other job gets them from `mix lint`
       # or `mix test`, and this one compiles a different `MIX_ENV` first.
@@ -758,12 +758,87 @@ jobs:
       # exercised at all.
       - name: The release the bundle carries starts and answers
         shell: bash
+        # A check that can hang is a check that hides: the Windows run of this
+        # one printed both answers and then never ended, and the job's hour ran
+        # out before anybody knew why.
+        timeout-minutes: 10
         run: |
           case "${{ matrix.rid }}" in
             osx-*) release="artifacts/${{ matrix.rid }}/Monty on the BEAM.app/Contents/Resources/rel/ex_tbp_monty" ;;
             *) release="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/rel/ex_tbp_monty" ;;
           esac
           scripts/boot-check.sh "$release"
+
+      # The window itself, not only the release inside it. Every check above
+      # asks the *server* a question, and all of them were green while the
+      # window opened on nothing: this one opens the executable a person
+      # downloads and waits for the page to report what it drew - the heading it
+      # shows and the ids on it - to `/__painted`. Only a webview that ran the
+      # page can send that report, which is the whole point of asking.
+      - name: Open the window this job built
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          case "${{ matrix.rid }}" in
+            osx-*) window="artifacts/${{ matrix.rid }}/Monty on the BEAM.app/Contents/MacOS/ex-tbp-monty-desktop" ;;
+            win-*) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop.exe" ;;
+            *) window="artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}/ex-tbp-monty-desktop" ;;
+          esac
+          MONTY_DESKTOP_PORT=43997 scripts/smoke-window.sh --window "$window"
+
+      # The installer is the shape a Windows person actually uses, and the one
+      # shape nothing had ever opened: the checks above look at the portable
+      # folder, whose `rel\` is put there by `scripts/package.ps1`, while an
+      # installed copy gets its `rel\` from the bundler's resource copy. A
+      # download that installs and then crashes on start is exactly that
+      # difference.
+      - name: Install the Windows setup and open the installed window
+        if: runner.os == 'Windows'
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          setup=(artifacts/${{ matrix.rid }}/*-setup.exe)
+          if [ ! -f "${setup[0]}" ]; then
+            echo "the build made no installer to install" >&2
+            exit 1
+          fi
+          echo "installing ${setup[0]}"
+          ./"${setup[0]}" /S
+
+          # The install directory follows `productName` and the executable's
+          # name follows the crate, so both are found rather than assumed, and
+          # a package that installs nothing says so instead of timing out.
+          local_app=$(cygpath -u "${LOCALAPPDATA:-$HOME/AppData/Local}")
+          installed=$(find "$local_app" -maxdepth 5 -type f -iname 'ex-tbp-monty-desktop.exe' | head -1)
+
+          if [ -z "$installed" ]; then
+            echo "the installer put no window under $local_app:" >&2
+            find "$local_app" -maxdepth 3 -iname '*monty*' >&2 || true
+            exit 1
+          fi
+
+          echo "installed: $installed"
+          ls "$(dirname "$installed")" || true
+          MONTY_DESKTOP_PORT=43996 scripts/smoke-window.sh --window "$installed"
+
+      # What a person actually downloads: the tarball, unpacked elsewhere, with
+      # the release inside it started the way the window starts one. The boot
+      # check above starts the staging tree `package.sh` assembled; this starts
+      # the archive, which is the only shape tested on the machine it ships to.
+      # The sibling project found an amd64 container on an Apple-silicon machine
+      # failing this boot in OTP's `prim_tty` NIF while the staging folder
+      # served - the two disagree about exactly the thing worth knowing.
+      - name: The downloaded tarball's release starts
+        if: runner.os == 'Linux'
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          tar -xzf "artifacts/${{ matrix.rid }}/ex-tbp-monty-${{ matrix.rid }}.tar.gz" -C "$work"
+          MONTY_DESKTOP_PORT=43995 scripts/boot-check.sh "$work/ex-tbp-monty-${{ matrix.rid }}/rel/ex_tbp_monty"
+          rm -rf "$work"
 
       # The one command a person runs, run here: the script the README offers,
       # pointed at the artefacts this job has just made, stopping before it opens

@@ -47,6 +47,18 @@ esac
 
 pid=$!
 
+# Whether a process with this id is still there, asked the way the platform can
+# answer: `kill -0` only knows about processes this bash started on some
+# platforms, and `tasklist` is what Windows has.
+still_running() {
+  case "$(uname -s)" in
+    MINGW* | MSYS* | CYGWIN*)
+      tasklist //FI "PID eq $1" //NH 2>/dev/null | grep -q "[0-9]"
+      ;;
+    *) kill -0 "$1" 2>/dev/null ;;
+  esac
+}
+
 cleanup() {
   # A process tree on Windows: `cmd` starts the batch file, which starts the VM,
   # and killing the first of the three leaves the other two holding the port.
@@ -55,7 +67,24 @@ cleanup() {
     *) kill "$pid" 2>/dev/null || true ;;
   esac
 
-  wait "$pid" 2>/dev/null || true
+  # Bounded, and never `wait`: a check that waits for a process which will not
+  # die is a check that hangs instead of failing. This one did on Windows — the
+  # release answered `/health` and `/prerequisites` at 13:05 and the step was
+  # still open when the job's hour ran out, which says nothing about the release
+  # and everything about the cleanup.
+  for _ in $(seq 1 10); do
+    still_running "$pid" || break
+    sleep 1
+  done
+
+  if still_running "$pid"; then
+    echo "boot check: the release is still running (pid $pid) after being told to stop" >&2
+    case "$(uname -s)" in
+      MINGW* | MSYS* | CYGWIN*) taskkill //F //PID "$pid" >/dev/null 2>&1 || true ;;
+      *) kill -9 "$pid" 2>/dev/null || true ;;
+    esac
+  fi
+
   rm -f "$log"
 }
 trap cleanup EXIT

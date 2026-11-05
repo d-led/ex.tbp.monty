@@ -442,10 +442,56 @@ sentence with it. Two changes:
   room is left". The `desktop` job runs this right after packaging, which is the
   only place a Windows release is started on Windows, and runs the window's
   three unit tests there too: the `#[cfg(windows)]` path code is compiled by
-  that job and nowhere else.
+  that job and nowhere else.- **The window itself is opened, on all three platforms.**
+  `scripts/smoke-window.sh` starts the executable a person downloads and waits
+  for the page inside it to say what it drew: the layout's `Painted` hook sends
+  the address, the title, the heading and the ids on the page to `/__painted`,
+  and only a webview that ran the page can send that report. Every check above
+  asks the _server_ a question, and one of them was green on a build whose
+  window opened on nothing — that is the shape this exists for, and it found a
+  real one on its first run: the window looked for the release at
+  `Contents/Resources/ex_tbp_monty`, one segment short of where
+  `bundle.resources` copies it, and then fell back to a path relative to the
+  working directory, so a double-clicked app died naming somebody's source tree
+  (`release_candidates` in `src-tauri/src/main.rs`, with tests for both).
+- **The Windows installer is installed and opened.** The portable folder's `rel\`
+  is put there by `scripts/package.ps1`; an _installed_ copy gets its `rel\` from
+  the bundler's resource copy, so the two can differ — a download that installs
+  and then crashes on start is exactly that difference. The job runs the NSIS
+  setup with `/S`, finds the window where it landed, and opens it the same way.
+- **The Linux tarball's release is booted, not only the staging tree.**
+  The archive a person downloads is unpacked in a temporary directory and its
+  `rel/ex_tbp_monty` started there: the staging folder `package.sh` assembles and
+  the archive can disagree (the sibling project found an emulated container
+  failing this boot in OTP's `prim_tty` NIF while the staging folder served).
+- **A check that can hang is a check that hides.** The Windows run of the boot
+  check printed both answers and then never ended: the cleanup waited for a
+  process tree that would not die, and the job's hour ran out before anybody knew
+  why. The cleanup is bounded, says so when the release survives, and the step
+  itself has a ten-minute limit.
 
 ## What is still open
 
+- **What the window does with a failure, and while it waits.** The sibling
+  project (`confluence_phx_mirror`, `src-tauri/src/main.rs`, 1,523 lines against
+  this one's 474) has four things this window does not, in the order they look
+  worth taking:
+  - a **splash window** shown at once, so the person sees something in the two
+    seconds a release takes to announce its port, rather than nothing until the
+    window appears;
+  - a **failure page inside the window** — the sentence, the last lines the
+    release said folded behind a disclosure, and a button that opens the log —
+    where this shows a Windows message box and writes `window.log`;
+  - a **prefilled issue URL** carrying the failure, the build and the last
+    fifteen lines, so a report is one click and already has the diagnostics;
+  - a **navigation guard**: only the app's own origin may load, anything else
+    goes to the system browser deliberately rather than by accident. This
+    window never navigates anywhere else, which is why it has not needed one
+    yet, and a splash screen would be its first internal navigation.
+    Their window also has ~20 unit tests for those pieces (failure
+    classification, URL encoding, "where the window looks is never relative to
+    the working directory"); this one has 7, and the two it gained here came from
+    a real bug the window smoke found.
 - **Signing and notarisation.** The `.app` is unsigned, so the first launch needs
   right-click → Open (the installer clears the quarantine flag, which is what
   makes that possible at all). `ElixirKit.Release.codesign/1` plus Tauri's

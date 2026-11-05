@@ -228,27 +228,45 @@ fn sidecar_path(app: &tauri::App) -> std::path::PathBuf {
         return native(PathBuf::from(explicit));
     }
 
-    // In a bundle the release travels inside Resources — `bundle.resources` in
-    // tauri.bundle.conf.json puts it there — so this is the same layout with a
-    // different parent. Asked first, because a window run from the checkout and
-    // a window double-clicked from /Applications must not be able to disagree
-    // about which release is behind them.
-    if let Ok(resources) = app.path().resource_dir() {
-        let bundled = release_at(resources);
-        if bundled.exists() {
-            return native(bundled);
-        }
+    let executable = std::env::current_exe().unwrap_or_default();
+    let resources = app.path().resource_dir().ok();
+    let candidates = release_candidates(resources.as_deref(), &executable);
+
+    match candidates.iter().find(|path| path.exists()) {
+        Some(found) => native(found.clone()),
+        // Nothing found: hand back the path whose absence is worth naming rather
+        // than one the person running the window has to decode.
+        None => native(
+            candidates
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| release_at(PathBuf::from("rel"))),
+        ),
     }
+}
 
-    // Development: the release inside the checkout, worked out from this
-    // executable and not from the current directory. A debug window can be
-    // started from anywhere, and `target/debug/…` is four levels below the
-    // repository wherever that was.
-    let checkout = checkout_release_of(&std::env::current_exe().unwrap_or_default())
-        .unwrap_or_else(|| release_at(Path::new("..").join("_build").join("desktop").join("rel")));
+/// Where the release may be, in the order to try it.
+///
+/// The first is the one every shipped shape uses. `bundle.resources` in
+/// `tauri.bundle.conf.json` copies the release to `Resources/rel/ex_tbp_monty`
+/// inside a `.app`, and `scripts/package.sh` and `scripts/package.ps1` put `rel`
+/// beside the window everywhere else - which is the same folder, because
+/// `resource_dir()` is the executable's own directory when nothing bundled one.
+///
+/// It used to look at `Resources/ex_tbp_monty`, one segment short, and then fall
+/// back to `../_build/desktop/rel` - relative to the working directory, which for
+/// a double-clicked app is `/`. The window died naming a path into somebody's
+/// source tree, and `scripts/smoke-window.sh` is what said so.
+///
+/// The second is development: the release inside the checkout, worked out from
+/// this executable and not from the current directory.
+fn release_candidates(resources: Option<&Path>, executable: &Path) -> Vec<PathBuf> {
+    let bundled = resources.map(|dir| release_at(dir.join("rel")));
 
-    // Nothing found anywhere: hand back the path whose absence the error names.
-    native(checkout)
+    [bundled, checkout_release_of(executable)]
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
 /// `…/src-tauri/target/debug/ex-tbp-monty-desktop` → the release that checkout
@@ -448,6 +466,45 @@ mod tests {
             .join(SERVER_FILE);
 
         assert_eq!(checkout_release_of(window), Some(expected));
+    }
+
+    /// Inside a `.app` the release is at `Contents/Resources/rel/ex_tbp_monty`,
+    /// because that is what `bundle.resources` copies. Looking one segment
+    /// higher found nothing and fell through to a checkout path, and a
+    /// double-clicked app died naming somebody's source tree.
+    #[test]
+    fn the_bundle_is_asked_for_the_release_under_rel() {
+        let resources = Path::new("/Applications/Monty on the BEAM.app/Contents/Resources");
+        let window = Path::new("/Applications/Monty on the BEAM.app/Contents/MacOS/ex-tbp-monty-desktop");
+
+        let candidates = release_candidates(Some(resources), window);
+
+        assert_eq!(
+            candidates.first(),
+            Some(
+                &Path::new("/Applications/Monty on the BEAM.app/Contents/Resources")
+                    .join("rel")
+                    .join("ex_tbp_monty")
+                    .join(SERVER_DIR)
+                    .join(SERVER_FILE)
+            )
+        );
+    }
+
+    /// A window is started from wherever the person was — a double-click, a
+    /// shortcut, a scheduled task, a `cargo run` — so a release path read from
+    /// the working directory is a path that sometimes works.
+    #[test]
+    fn nothing_the_window_looks_at_is_relative_to_the_working_directory() {
+        let window = Path::new("/repo/src-tauri/target/debug/ex-tbp-monty-desktop");
+
+        for candidate in release_candidates(None, window) {
+            assert!(
+                candidate.is_absolute(),
+                "a release path was read from the working directory: {}",
+                candidate.display()
+            );
+        }
     }
 
     /// A release that never speaks is not a release that speaks slowly: the wait

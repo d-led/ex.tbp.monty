@@ -35,6 +35,13 @@ defmodule ExTbpMontyWeb.Router do
 
     get "/health", HealthController, :show
 
+    # What the page in the window drew, reported by the page and asked by
+    # `scripts/smoke-window.sh`. Both verbs are 404 unless this process is a
+    # window's sidecar, which is the only thing that can answer them — see
+    # `ExTbpMontyWeb.PaintController`.
+    post "/__painted", PaintController, :record
+    get "/__painted", PaintController, :show
+
     # The MCP server: one JSON-RPC message in, one answer out. `GET` and
     # `DELETE` are answered 405 by the controller, which is how a server
     # declines the transport's optional stream and its sessions.

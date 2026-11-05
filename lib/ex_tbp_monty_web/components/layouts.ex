@@ -36,6 +36,8 @@ defmodule ExTbpMontyWeb.Layouts do
   slot :inner_block, required: true
 
   def app(assigns) do
+    assigns = assign(assigns, :window?, ExTbpMontyWeb.Window.mode?())
+
     ~H"""
     <div class="flex min-h-screen">
       <div
@@ -131,6 +133,37 @@ defmodule ExTbpMontyWeb.Layouts do
 
       <.flash_group flash={@flash} />
     </div>
+
+    <%!-- What this page drew, said once it is on screen, and only in a window:
+    every other check of a desktop build asks the server a question, and all of
+    them were green while the window showed nothing. `scripts/smoke-window.sh`
+    waits for this report; a deployment has no page that sends one and no route
+    that takes it. One report per page load -- a navigation inside a LiveView
+    replaces the content without running this again, which is why the check
+    looks at the screen a launch lands on. --%>
+    <span :if={@window?} id="painted" phx-hook=".Painted" hidden></span>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".Painted">
+      export default {
+        mounted() {
+          requestAnimationFrame(() => {
+            const heading = document.querySelector("h1")
+
+            fetch("/__painted", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                path: window.location.pathname,
+                title: document.title,
+                heading: heading ? heading.textContent.trim() : "",
+                marks: [...document.querySelectorAll("[id]")]
+                  .map((element) => element.id)
+                  .filter((id) => id.length > 0)
+              })
+            })
+          })
+        }
+      }
+    </script>
     """
   end
 
