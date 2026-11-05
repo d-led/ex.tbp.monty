@@ -19,6 +19,13 @@ defmodule Monty.Test.Tmp do
 
   `prefix` names it in the system temporary directory, so a directory left behind
   by a crash is recognisable as this suite's.
+
+  Anything the test starts that writes into this directory has to be finished
+  with it before the test ends, and stopping the process is not always enough:
+  `start_supervised/2` stops a child only when the *next* test starts, and a
+  database closed while in WAL mode finalises its journal once its memory is
+  collected, which is later still. Either one writes back into a directory that
+  has just been removed, and the removal fails with "file already exists".
   """
   @spec dir(String.t()) :: Path.t()
   def dir(prefix) do

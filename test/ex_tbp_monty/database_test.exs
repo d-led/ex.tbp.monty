@@ -50,10 +50,22 @@ defmodule ExTbpMonty.DatabaseTest do
       Tmp.without_env("DATABASE_URL")
       path = Path.join(Tmp.dir("sqlite-journal"), "runs.db")
 
-      options = Database.repo() |> Keyword.merge(database: path, name: nil)
+      # One connection, because the pragma that leaves the mode again only
+      # applies while nothing else has the file open.
+      options = Database.repo() |> Keyword.merge(database: path, name: nil, pool_size: 1)
       {:ok, repo} = start_supervised({ExTbpMonty.Repo.SQLite, options})
 
       assert %{rows: [["wal"]]} = Ecto.Adapters.SQL.query!(repo, "PRAGMA journal_mode")
+
+      # And out of it again before the test ends. A database closed while in WAL
+      # mode finalises its journal after its process has gone — the handle is
+      # released when its memory is collected — so removing the directory raced a
+      # journal being written back, and a CI run lost it with "file already
+      # exists". Leaving the mode is what removes the journal, here and now.
+      assert %{rows: [["delete"]]} =
+               Ecto.Adapters.SQL.query!(repo, "PRAGMA journal_mode=delete")
+
+      assert :ok = stop_supervised(ExTbpMonty.Repo.SQLite)
     end
   end
 end
