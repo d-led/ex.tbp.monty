@@ -694,12 +694,13 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          # `libfuse2` is what lets the bundler run `linuxdeploy`, the AppImage
-          # tool it downloads: an AppImage mounts itself to run, and Ubuntu 22.04
-          # ships no FUSE 2 by default (`docs/desktop.md`).
+          # No `libfuse2`: the bundler and the AppImage tools it downloads are
+          # themselves AppImages, and `scripts/start-desktop.sh` sets
+          # `APPIMAGE_EXTRACT_AND_RUN` for the whole chain, so none of them
+          # mounts itself (`docs/desktop.md`).
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
-            librsvg2-dev patchelf libfuse2
+            librsvg2-dev patchelf
 
       # A fresh runner has no `deps/`: every other job gets them from `mix lint`
       # or `mix test`, and this one compiles a different `MIX_ENV` first.

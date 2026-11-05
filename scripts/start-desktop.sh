@@ -258,8 +258,10 @@ if [[ "$(uname -s)" == Linux ]]; then
   )
 fi
 
+  # `${arr[@]+"${arr[@]}"}`, because macOS ships bash 3.2, where an empty array
+  # under `set -u` is an unbound variable rather than nothing to pass.
   run "building the app bundle (a minute warm, six cold — the window is rebuilt in release)" \
-    env "${bundle_env[@]}" cargo tauri build --config "$bundle_config"
+    env ${bundle_env[@]+"${bundle_env[@]}"} cargo tauri build --config "$bundle_config"
 
   if [[ "$mode" == bundle ]]; then
     echo
