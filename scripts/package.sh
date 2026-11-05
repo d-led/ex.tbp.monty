@@ -199,6 +199,10 @@ installer_package() {
   # given a root that sits beside the package it is writing, `pkgbuild` produced a
   # 4.5 MB package of a 550 MB app, complaining "write: Permission denied" about
   # files it had just walked. The same tree in `$TMPDIR` makes a complete one.
+  #
+  # It prints "write: Permission denied" a few times whatever the root — a
+  # three-file tree copied the same way earns four of them, and its payload still
+  # lists every file. So the warnings are not the signal; the size is.
   stage="$(mktemp -d "${TMPDIR:-/tmp}/ex-tbp-monty-pkg.XXXXXX")"
 
   # The install location is `/`, so the paths inside the root are the paths on

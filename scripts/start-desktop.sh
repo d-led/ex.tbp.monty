@@ -190,6 +190,25 @@ run "building the scripts" \
 run "writing the build stamp (the footer reads it)" \
   env MIX_ENV=desktop mix build.info
 
+# A release keeps its runtime in `erts-<vsn>`, whose name is the OTP version —
+# and `mix release --overwrite` leaves an existing one alone. Two machines that
+# share `_build` (a checkout mounted into a container to build the Linux bundle,
+# which is how `docs/desktop.md` says to build it) then hand the second one the
+# first one's `erlexec`: a Mach-O binary under Linux. The window reports it at
+# the far end, as "the sidecar stopped before it said where it listens", and the
+# real sentence — `erlexec: Exec format error` — is one process down.
+#
+# Asking the runtime to halt is the direct question, and a wrong-architecture
+# binary answers it immediately. Dropping a broken one is enough: `mix release`
+# copies the runtime from the OTP this machine is running.
+for erts in "$release"/erts-*; do
+  if [[ -d "$erts" ]] && ! "$erts/bin/erl" -noshell -eval 'halt(0)' >/dev/null 2>&1; then
+    echo
+    echo "the release carries a runtime this machine cannot run ($erts) — replacing it"
+    rm -rf "$erts"
+  fi
+done
+
 run "building the desktop release (a no-change run only reassembles it)" \
   env MIX_ENV=desktop mix release --overwrite
 

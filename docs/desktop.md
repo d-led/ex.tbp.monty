@@ -370,10 +370,9 @@ started the window on Windows yet.
   macOS arm64 (`.app`, `.pkg`, `.dmg`), Linux x64 (a tarball of the window with
   its release beside it, a `.deb`, and an AppImage) and Windows x64 (an NSIS
   setup and the same portable folder, zipped). The macOS app has been built and
-  opened from a checkout by a person; the Linux bundle has been built by CI and
-  not yet launched; the Windows one is built and uploaded, and nobody has
-  started it. `docs/status.md`'s own rule applies — nothing is claimed beyond
-  what was run. Linux needs `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`,
+  opened from a checkout by a person; the Linux AppImage has been started (see
+  below); the Windows one is built and uploaded, and nobody has started it.
+  `docs/status.md`'s own rule applies — nothing is claimed beyond what was run. Linux needs `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`,
   `libayatana-appindicator3-dev`, `librsvg2-dev` and `patchelf` on the runner,
   which the job installs — and no FUSE, because the AppImage tools are run with
   `APPIMAGE_EXTRACT_AND_RUN`.
@@ -388,6 +387,20 @@ started the window on Windows yet.
   `APPIMAGE_EXTRACT_AND_RUN` for the tools themselves. Reproduced and fixed in a
   Debian container with the project's own toolchain, and then on the runner: the
   x64 AppImage is 231 MiB beside a 535 MiB `.deb` and a 525 MiB tarball.
+- **The AppImage starts.** Built in that container (`aarch64`, since that is the
+  host), the file was run with `xvfb-run` and no checkout in reach: the window
+  came up, the release inside it answered the window's own `GET /` in 457 ms,
+  and from outside the window `/`, `/health`, `/experiments` and `/runs`
+  answered 200. What that does not cover is a real desktop — the window was
+  drawn into a virtual one — and nothing has installed the `.deb` yet.
+- **A release keeps the runtime it was assembled with.** `erts-<version>` is
+  named after the OTP version, and `mix release --overwrite` leaves an existing
+  one alone, so a `_build` shared between a macOS checkout and the container
+  that builds the Linux bundle handed the bundle a Mach-O `erlexec`. The window
+  reports that as "the sidecar stopped before it said where it listens"; the
+  sentence that names the cause, `erlexec: Exec format error`, is one process
+  further down. The build asks the release's own `erl` to halt before
+  assembling, and drops an erts that cannot run here.
 - **The prerequisites download** is on by default in the window (`prefetch: true`)
   and lands under the folder above. Nothing has been run end to end from a
   _fresh_ folder yet: a first launch downloads ~543 MB and then exports the

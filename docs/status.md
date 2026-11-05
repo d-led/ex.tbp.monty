@@ -233,6 +233,26 @@ writes the one it is about to rank — the only file the script deletes — and
 it read and when it was written, so a partial export reads as a partial export
 rather than as a regression.
 
+## The Linux bundle has been started, not just built (2026-11-05)
+
+The AppImage was the last shape this repository made and nobody had run. It has
+now run: built in the project's Debian container (so `aarch64`), the file was
+started with `xvfb-run` and nothing else around it — no checkout, no display —
+and the window came up on the release carried inside it. The release answered
+the window's own `GET /` in 457 ms, and from outside the window `/`, `/health`,
+`/experiments` and `/runs` each answered 200. A real desktop is still untried
+(the window was drawn into a virtual one), and nothing has installed the `.deb`.
+
+The first launch failed, and the failure is worth keeping: `exec format error`
+on `erts-17.1.1/bin/erlexec`, reported by the window only as "the sidecar
+stopped before it said where it listens". The bundle carried a **Mach-O**
+`erlexec`: `erts-<version>` is named after the OTP version, both machines run
+29.1.2, `mix release --overwrite` leaves an existing one alone, and the container
+build reads the same `_build` a macOS bundle had just written. The build asks the
+release's own `erl` to halt before assembling now, and drops an erts that cannot
+run here — which also means the next macOS bundle after a container build is not
+the one that fails.
+
 ## Open points and bugs
 
 | #   | What                                                                                                                                                                                                                                                                                                                                                                                                                                          | Done means                                                                                                                   |
