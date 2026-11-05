@@ -181,7 +181,7 @@ what CI runs.
   skipped. Elixir 1.20.4 / OTP 29.1.2.
   ([`ci.yml`](../.github/workflows/ci.yml))
 - Stack: Phoenix 1.8, LiveView 1.2, Ecto over **Postgres or SQLite** (`ecto_sqlite3`),
-  Oban 2.20 with both engines, Bandit, Req, Tailwind 4 with daisyUI 5 and heroicons,
+  Oban 2.24 with both engines, Bandit, Req, Tailwind 4 with daisyUI 5 and heroicons,
   `yaml_elixir` for Hydra YAML, `pythonx` for Python.
   ([mix.exs](../mix.exs))
 - `docker compose up -d` gives development Postgres 17 and adminer on this
