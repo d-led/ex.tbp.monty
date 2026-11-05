@@ -58,4 +58,37 @@ defmodule Monty.Studio.StorageTest do
                Storage.usage(Path.join(directory, "deeper")).device.mount
     end
   end
+
+  # Windows has no `df`: the drive table `os_mon`'s `disksup` holds is asked
+  # instead, and this is the half of the module a machine without drives cannot
+  # exercise — so it is given the table rather than reading one.
+  describe "the drive behind a path on Windows" do
+    test "answers with the drive the path is on" do
+      volumes = [
+        {~c"C:\\", 100 * 1024, 40 * 1024, 60},
+        {~c"D:\\", 200 * 1024, 150 * 1024, 25}
+      ]
+
+      assert %{mount: "C:\\", total_bytes: 104_857_600, free_bytes: 41_943_040, percent: 60} =
+               Storage.windows_volume("C:\\Users\\someone\\data", volumes)
+    end
+
+    test "does not care how the drive is spelt or which separator the path uses" do
+      volumes = [{~c"D:\\", 200 * 1024, 150 * 1024, 25}]
+
+      assert %{mount: "D:\\"} = Storage.windows_volume("d:/data/runs", volumes)
+    end
+
+    test "answers nothing for a drive the table does not list" do
+      assert Storage.windows_volume("Z:\\data", [{~c"C:\\", 100 * 1024, 40 * 1024, 60}]) == nil
+    end
+
+    test "answers nothing for a path that names no drive" do
+      assert Storage.windows_volume("\\\\server\\share\\data", [{~c"C:\\", 1, 1, 1}]) == nil
+    end
+
+    test "answers nothing when the table has no room to report" do
+      assert Storage.windows_volume("C:\\data", [{~c"none", 0, 0, 0}]) == nil
+    end
+  end
 end

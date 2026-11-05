@@ -434,11 +434,15 @@ sentence with it. Two changes:
 - **The release a bundle carries is started on every platform.**
   `scripts/boot-check.sh` starts the entry point the bundle holds — `bin/server`
   under `Contents/Resources/rel/…` in the `.app`, `rel/ex_tbp_monty` beside the
-  window otherwise — asks `/health`, and prints what the release said if it never
-  answers. The `desktop` job runs it right after packaging, which is the only
-  place a Windows release is started on Windows, and runs the window's three unit
-  tests there too: the `#[cfg(windows)]` path code is compiled by that job and
-  nowhere else.
+  window otherwise — asks `/health`, then asks `/prerequisites`, and prints what
+  the release said if either never answers. The page is asked because a release
+  can be alive and still have nothing to say about the disk it writes to: it did
+  on Windows, while `df` — a program that platform does not have — was how the
+  room was read, and the page said "the operating system did not say how much
+  room is left". The `desktop` job runs this right after packaging, which is the
+  only place a Windows release is started on Windows, and runs the window's
+  three unit tests there too: the `#[cfg(windows)]` path code is compiled by
+  that job and nowhere else.
 
 ## What is still open
 

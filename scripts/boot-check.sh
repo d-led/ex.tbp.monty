@@ -60,10 +60,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
+answered=
 for _ in $(seq 1 120); do
   if curl -fsS -o /dev/null "http://127.0.0.1:$port/health" 2>/dev/null; then
+    answered=1
     echo "the release answered /health on $port"
-    exit 0
+    break
   fi
 
   if ! kill -0 "$pid" 2>/dev/null; then
@@ -75,6 +77,37 @@ for _ in $(seq 1 120); do
   sleep 1
 done
 
-echo "the release did not answer /health on $port within two minutes, saying:" >&2
-tail -20 "$log" >&2
-exit 1
+if [ -z "$answered" ]; then
+  echo "the release did not answer /health on $port within two minutes, saying:" >&2
+  tail -20 "$log" >&2
+  exit 1
+fi
+
+# Then the page that reads the disk, because a release can be alive and still
+# have nothing to say about the disk it writes to: it did, on Windows, while
+# `df` — a program that platform does not have — was how the room was read, and
+# the page said "the operating system did not say how much room is left".
+#
+# Asked over HTTP, on every platform, because that is the way a person asks it.
+page="$(curl -fsS --max-time 60 "http://127.0.0.1:$port/prerequisites")" || {
+  echo "the release did not answer /prerequisites on $port" >&2
+  tail -20 "$log" >&2
+  exit 1
+}
+
+case "$page" in
+  *"did not say how much room"*)
+    echo "the release cannot name the room behind its own roots:" >&2
+    grep -o "nothing in [^<]*\|did not say[^<]*" <<<"$page" >&2 || true
+    exit 1
+    ;;
+  *" free of "*)
+    echo "the release names the room left behind its roots"
+    ;;
+  *)
+    echo "the release's /prerequisites says no room at all" >&2
+    exit 1
+    ;;
+esac
+
+exit 0
