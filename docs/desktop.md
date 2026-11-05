@@ -377,6 +377,15 @@ started the window on Windows yet.
   `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev` and `patchelf`
   on the runner, which the job installs — and no FUSE, because the AppImage
   tools are run with `APPIMAGE_EXTRACT_AND_RUN`.
+- **Three runtime ids, and why the other two have no build.** `osx-arm64`,
+  `linux-x64` and `win-x64` are what the workflow makes. `osx-x64` and
+  `linux-arm64` have no runner row and so no download, and
+  `scripts/run-desktop.sh` says that before it downloads rather than reporting a
+  404 as "the build does not exist yet"; `scripts/package.sh osx-x64` /
+  `linux-arm64` build one on a machine of that kind. Windows has one id by
+  design — `run-desktop.ps1` always takes `win-x64`, which Windows on ARM runs
+  under its own emulation. Adding a row is a runner, not a code change:
+  `macos-15-intel` and `ubuntu-24.04-arm` both exist.
 - **The AppImage needed the release's own library path.** `linuxdeploy` stops at
   `ERROR: Could not find dependency: libmujoco.so.3.17.0`: the release carries a
   Python environment whose wheels link each other by soname, and linuxdeploy
@@ -394,6 +403,14 @@ started the window on Windows yet.
   and from outside the window `/`, `/health`, `/experiments` and `/runs`
   answered 200. What that does not cover is a real desktop — the window was
   drawn into a virtual one — and nothing has installed the `.deb` yet.
+- **Two shapes borrow, one carries.** The tarball and the `.deb` need the
+  system's WebKitGTK 4.1 and GTK 3 — the `.deb` says so itself
+  (`Depends: libwebkit2gtk-4.1-0, libgtk-3-0`) and the tarball declares nothing,
+  so a bare machine meets a loader error rather than a sentence. The AppImage
+  carries both, which is the reason it exists; without `/dev/fuse` it needs
+  `APPIMAGE_EXTRACT_AND_RUN=1`, which is what the build sets for the AppImage
+  tools it runs (`scripts/start-desktop.sh`) and what a person on a machine with
+  no FUSE — a container, a minimal server — has to set themselves.
 - **A release keeps the runtime it was assembled with.** `erts-<version>` is
   named after the OTP version, and `mix release --overwrite` leaves an existing
   one alone, so a `_build` shared between a macOS checkout and the container

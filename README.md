@@ -56,7 +56,7 @@ The same application in a native window, with its own server inside — no
 Docker, no Elixir, nothing to install but the app:
 
 ```bash
-# macOS (Apple Silicon or Intel) and Linux (x86-64 or arm64)
+# macOS (Apple Silicon) and Linux (x86-64)
 curl -fsSL https://raw.githubusercontent.com/d-led/ex.tbp.monty/main/scripts/run-desktop.sh | bash
 ```
 
@@ -81,11 +81,19 @@ build:
 | Linux x64   | [ex-tbp-monty-linux-x64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-linux-x64.zip) |
 | Windows x64 | [ex-tbp-monty-win-x64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-win-x64.zip)     |
 
+Those are the three builds the workflow makes. An Intel Mac and an arm64 Linux
+machine have none published, so they build their own: `scripts/package.sh
+osx-x64` on an Intel Mac, `scripts/package.sh linux-arm64` on arm64 Linux, or
+`scripts/start-desktop.sh` for the window from a checkout —
+[docs/desktop.md](docs/desktop.md) has the rest.
+
 The macOS app is unsigned, so its first launch is right-click → Open. The Linux
 download holds three shapes of the same application: a tarball of the window
 with its release beside it, a `.deb` for whoever would rather their package
 manager tracked it, and an AppImage — one executable that runs where nothing is
-installed at all. The Windows one holds the same folder zipped,
+installed at all. The first two borrow the system's WebKitGTK 4.1 and GTK 3 (the
+`.deb` says so in its `Depends`); the AppImage carries them, which is the whole
+of why it is a third shape. The Windows one holds the same folder zipped,
 `ex-tbp-monty-desktop.exe` in it being the app, and an NSIS setup beside it for
 whoever wants an entry under "Apps & features". Where it keeps its data, what is
 built for which platform, and why the download is larger than the app — most of

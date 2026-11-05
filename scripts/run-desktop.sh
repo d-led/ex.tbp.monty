@@ -86,10 +86,21 @@ if [ -z "$rid" ]; then
     rid="$os-$arch"
 fi
 
-case "$rid" in
-    osx-*) ;;
-    linux-*) ;;
-esac
+# What the workflow builds, and nothing else. A machine of another kind would
+# otherwise ask `nightly.link` for an asset no job uploads, get a 404, and be told
+# "the build does not exist yet" about a build nobody makes. `--base-url` is
+# exempt: that is how a bundle built on this machine is tried.
+if [ -z "$base_url" ]; then
+    case "$rid" in
+        osx-arm64 | linux-x64) ;;
+        *)
+            echo "There is no published $rid build: the workflow makes osx-arm64 and linux-x64." >&2
+            echo "A machine of this kind makes its own — scripts/start-desktop.sh from a checkout," >&2
+            echo "or scripts/package.sh $rid on a machine like this one (docs/desktop.md)." >&2
+            exit 1
+            ;;
+    esac
+fi
 
 asset="ex-tbp-monty-$rid"
 dir="${EX_TBP_MONTY_DIR:-$PWD/$asset}"
