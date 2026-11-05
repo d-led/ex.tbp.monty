@@ -31,3 +31,45 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+
+  # Rust: the window and its two NIFs, three manifests, three lockfiles. Patch
+  # and minor updates arrive as one PR per manifest; CI judges them, because
+  # `src-tauri`'s tests live in the desktop job and the NIFs are compiled and
+  # parity-tested by the ordinary test job.
+  - package-ecosystem: cargo
+    directory: "/src-tauri"
+    schedule:
+      interval: weekly
+    groups:
+      crates:
+        patterns: ["*"]
+
+  - package-ecosystem: cargo
+    directory: "/native/kd_tree_nif"
+    schedule:
+      interval: weekly
+    groups:
+      crates:
+        patterns: ["*"]
+    ignore:
+      # 6.x rewrites the tree and the query API. What judges that port is the
+      # Elixir parity suite, so it is a change with a specification behind it
+      # rather than a version to accept (docs/desktop.md, Rust dependencies).
+      - dependency-name: "kiddo"
+        update-types: ["version-update:semver-major"]
+      # The crate and the `rustler` hex package are released together and hex is
+      # the ceiling, so a zero-major bump of this crate is breaking here even
+      # when semver calls it minor.
+      - dependency-name: "rustler"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+
+  - package-ecosystem: cargo
+    directory: "/native/matcher_nif"
+    schedule:
+      interval: weekly
+    groups:
+      crates:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "rustler"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]

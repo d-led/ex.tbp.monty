@@ -211,6 +211,29 @@ ecto.*` reads the repository list before `runtime.exs` has run.)
     the server answer `/health` 200 and then exit about two seconds later.
     `test/desktop/parent_watch_test.exs` covers the same decision.
 
+### In the pipeline, in this order
+
+The `desktop` job runs these, and the order is half the point:
+
+1. the window's own tests on Windows, where `#[cfg(windows)]` is the only
+   branch that compiles;
+2. `scripts/check-syntax.ps1` under both PowerShell 5.1 and 7;
+3. the package;
+4. `scripts/boot-check.sh` on the release the bundle carries: `/health`, then
+   `/prerequisites`;
+5. the one-line download, unpacked from a wrapper shaped like the one
+   `nightly.link` serves, and the window found where the scripts put it;
+6. **the upload** — and only then the checks that open what was uploaded:
+   `scripts/smoke-window.sh` on the window this job built, the same script with
+   `--crash` against a release that is not there, the Windows setup installed
+   and the installed window opened, and the downloaded tarball's release booted.
+
+Steps 1 to 6 fail the job. The rest are `continue-on-error`, each with a
+`timeout-minutes` of its own. A check that fails or hangs _before_ the upload
+does not merely fail: `nightly.link` serves the newest artefact of a successful
+run, so the download is withheld for as long as the check runs, and the sibling
+project's Windows job spent three hours on an NSIS installer nobody could see.
+
 ## Shipping: what a person downloads
 
 The shape is the one `worksheet.net` uses — a packaging script that produces the
@@ -470,28 +493,83 @@ sentence with it. Two changes:
   why. The cleanup is bounded, says so when the release survives, and the step
   itself has a ten-minute limit.
 
+## When it cannot start
+
+`src-tauri/src/crash.rs` decides what the window shows when there is no page to
+show, and it names six situations, because two different problems arriving as
+one headline is how a report becomes unanswerable:
+
+| what happened                                        | the headline                                      |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| another copy holds the folder                        | Monty on the BEAM is already running              |
+| the release is not where the bundle carries it       | This copy of the app is incomplete                |
+| the release ran and stopped before announcing a port | Monty on the BEAM stopped while starting          |
+| it has not announced one within a minute             | Monty on the BEAM is taking longer than it should |
+| it announced a port and nothing accepts a connection | The window has nothing to show                    |
+| it was serving and then ended                        | Monty on the BEAM stopped                         |
+
+Which one it is comes from the release's own words. `Trouble::classify` looks
+for `database is locked` or `database busy` (another copy), for
+`no such file or directory` beside `bin/server` (an incomplete copy), and calls
+anything else `Stopped` — true, and it says where to look. The page carries the
+sentence, why it happened, what to do about it with no exit codes and no Elixir,
+the build (version, revision and time, from `priv/build_info.json` through
+`build.rs`), the release's last lines behind a disclosure, a link to `/log`, and
+a **prefilled issue URL** already carrying the failure and fifteen of those
+lines. While it waits it shows a spinner and a sentence per stage, so a slow
+first launch is distinguishable from a broken one.
+
+Its stylesheet is inline and written in system colours (`Canvas`, `CanvasText`,
+`LinkText`, `color-scheme: light dark`), because nothing is running to serve
+one, and the spinner honours `prefers-reduced-motion`.
+
+CI proves the incomplete-copy branch: `scripts/smoke-window.sh --crash PATH`
+points the window at a release that is not there and requires
+`showing the crash screen: This copy of the app is incomplete` in the window's
+own log, because the page lives inside a webview and nothing outside can read
+it. The other five are unit-tested — the classification, the page, the log
+link, the report's URL and its length, and the title bar, which says the app
+stopped even when the page cannot paint — which is as far as a check can go for
+a screen only a person can see.
+
+## Rust dependencies
+
+Three crates, three lockfiles (`src-tauri`, `native/kd_tree_nif`,
+`native/matcher_nif`), and Dependabot watches all of them weekly.
+
+Two versions move as a pair, and a bump that moves one is a build that fails:
+the `rustler` crate the NIFs declare and the `rustler` hex package `mix.exs`
+depends on. They are released together, so hex's newest is the ceiling — 0.38.0
+at the time of writing, against a crate at 0.39.0.
+
+`kiddo`, the k-d tree, sits on 5.3.3 while 6.x exists. 6.0 is a rewrite of the
+tree and of the query API (`KdTree` over `LeafStrategy`/`StemStrategy`, a
+fluent builder), and the thing that judges it is the Elixir parity suite —
+`test/monty/frameworks/utils/kd_tree_test.exs`, plus the
+`*_native_parity_test.exs` files beside the modules that query the tree — so
+the port is a change with a specification behind it rather than a version to
+accept.
+
+Dependabot also reports one moderate advisory against `src-tauri/Cargo.lock`:
+`glib` 0.18.5, unsound `Iterator` impls in `VariantStrIter`, patched in 0.20.0.
+It cannot be taken here. `glib` 0.18 is the last line the gtk3 bindings have,
+and `gtk` 0.18.2 pins it; `gtk` arrives through `tao`, `wry`, `muda` and
+`webkit2gtk`, which is the whole Linux window. The alert closes when those move
+to a newer gtk, not before, and the affected type is one this window never
+names.
+
 ## What is still open
 
-- **What the window does with a failure, and while it waits.** The sibling
-  project (`confluence_phx_mirror`, `src-tauri/src/main.rs`, 1,523 lines against
-  this one's 474) has four things this window does not, in the order they look
-  worth taking:
-  - a **splash window** shown at once, so the person sees something in the two
-    seconds a release takes to announce its port, rather than nothing until the
-    window appears;
-  - a **failure page inside the window** — the sentence, the last lines the
-    release said folded behind a disclosure, and a button that opens the log —
-    where this shows a Windows message box and writes `window.log`;
-  - a **prefilled issue URL** carrying the failure, the build and the last
-    fifteen lines, so a report is one click and already has the diagnostics;
-  - a **navigation guard**: only the app's own origin may load, anything else
-    goes to the system browser deliberately rather than by accident. This
-    window never navigates anywhere else, which is why it has not needed one
-    yet, and a splash screen would be its first internal navigation.
-    Their window also has ~20 unit tests for those pieces (failure
-    classification, URL encoding, "where the window looks is never relative to
-    the working directory"); this one has 7, and the two it gained here came from
-    a real bug the window smoke found.
+- **A splash, and an origin guard.** Two of the four things the sibling
+  project's window (`confluence_phx_mirror`) has are here now — the failure page
+  and the prefilled issue — and two are not: a **splash window** shown at once,
+  so the two seconds a release takes to announce its port are not blank, and a
+  **navigation guard**, so that only the app's own origin may load in the
+  window and anything else goes to the system browser deliberately rather than
+  by accident. This window never navigates anywhere else, which is why it has
+  not needed one yet, and a splash would be its first internal navigation. The
+  window has 17 tests against the sibling's ~20; the two it gained last came
+  from a real bug the window smoke found, a release path one segment short.
 - **Signing and notarisation.** The `.app` is unsigned, so the first launch needs
   right-click → Open (the installer clears the quarantine flag, which is what
   makes that possible at all). `ElixirKit.Release.codesign/1` plus Tauri's
