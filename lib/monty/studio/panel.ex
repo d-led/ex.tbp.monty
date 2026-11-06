@@ -86,13 +86,18 @@ defmodule Monty.Studio.Panel do
   defp yes_no(_off), do: "no"
 
   # Every object, in every epoch the config runs: "30 train · 140 eval". What
-  # "Run it" promises before it is pressed.
+  # "Run it" promises before it is pressed. Each phase counts its own objects —
+  # a config can train on two and evaluate on one, which is twice as many
+  # training episodes as the evaluation list alone would suggest.
   defp episodes_planned(setup) do
-    objects = length(Setup.objects(setup))
-
     case Setup.epoch_plan(setup) do
-      [] -> "none: the config switches both phases off"
-      plan -> Enum.map_join(plan, " · ", fn {mode, epochs} -> "#{objects * epochs} #{mode}" end)
+      [] ->
+        "none: the config switches both phases off"
+
+      plan ->
+        Enum.map_join(plan, " · ", fn {mode, epochs} ->
+          "#{length(Setup.objects(setup, mode)) * epochs} #{mode}"
+        end)
     end
   end
 

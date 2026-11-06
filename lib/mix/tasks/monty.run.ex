@@ -84,18 +84,34 @@ defmodule Mix.Tasks.Monty.Run do
   # the only way to ask for less — a run that answered one episode out of a
   # hundred and forty answers a different question from the experiment.
   defp run_phases(opened, opts, history) do
-    objects = length(Monty.Studio.Setup.objects(opened.setup))
-    plan = Monty.Studio.Setup.epoch_plan(opened.setup)
+    carried = Monty.Studio.Setup.memories(opened.setup)
 
-    Enum.reduce(plan, {[], history, %{}}, fn {mode, epochs}, {infos, history, _conclusion} ->
-      episodes = opts[:episodes] || objects * epochs
-      scope = %{mode: mode, steps: steps(opened, opts), episodes: episodes}
-
-      Enum.reduce(0..(episodes - 1)//1, {infos, history, %{}}, fn index,
-                                                                  {infos, history, _conclusion} ->
-        {episode_infos, history, conclusion} = run_episode(opened, scope, index, history, opts)
-        {infos ++ episode_infos, history, conclusion}
+    {infos, history, conclusion, _carried} =
+      opened.setup
+      |> Monty.Studio.Setup.epoch_plan()
+      |> Enum.reduce({[], history, %{}, carried}, fn {mode, epochs}, acc ->
+        run_phase(opened, mode, epochs, acc, opts)
       end)
+
+    {infos, history, conclusion}
+  end
+
+  # One phase: a full one is every object it names in every epoch it names, and
+  # an epoch walks *its* phase's objects — a config can train on two and
+  # evaluate on one, which is two episodes a training epoch and one an
+  # evaluation epoch.
+  defp run_phase(opened, mode, epochs, {infos, history, _conclusion, carried}, opts) do
+    objects = length(Monty.Studio.Setup.objects(opened.setup, mode))
+    episodes = opts[:episodes] || objects * epochs
+    scope = %{mode: mode, steps: steps(opened, opts), episodes: episodes}
+
+    Enum.reduce(0..(episodes - 1)//1, {infos, history, %{}, carried}, fn index,
+                                                                         {infos, history,
+                                                                          _conclusion, carried} ->
+      {episode_infos, history, conclusion, carried} =
+        run_episode(opened, scope, index, history, carried, opts)
+
+      {infos ++ episode_infos, history, conclusion, carried}
     end)
   end
 
@@ -108,10 +124,18 @@ defmodule Mix.Tasks.Monty.Run do
   end
 
   # The episode index is also where the object comes from: the queued runner
-  # starts its episodes the same way, so both cover the same ground.
-  defp run_episode(opened, scope, index, history, opts) do
+  # starts its episodes the same way, so both cover the same ground. The world an
+  # episode shows, the object in it and the memory it matches against all come
+  # from its own phase — `Setup.with_phase/2` and what the phase before it left
+  # behind.
+  defp run_episode(opened, scope, index, history, carried, opts) do
     {:ok, run} =
-      Monty.Studio.Run.start(opened.setup, steps: scope.steps, episode: index, mode: scope.mode)
+      Monty.Studio.Run.start(Monty.Studio.Setup.with_phase(opened.setup, scope.mode),
+        steps: scope.steps,
+        episode: index,
+        mode: scope.mode,
+        memory: carried
+      )
 
     :ok = Monty.Studio.Run.set_ground_truth(run)
     say_episode(index, scope.episodes, opts)
@@ -119,11 +143,24 @@ defmodule Mix.Tasks.Monty.Run do
     beat = System.monotonic_time(:second)
     {infos, history, last_run} = step_through(run, history, opts, index, [], beat)
     conclusion = Monty.Studio.Run.conclusion(last_run)
+    carried = next_memories(last_run, carried, scope.mode)
     Monty.Studio.Run.stop(last_run)
 
     # The episode is what a run has to show for itself: the steps of an episode
     # are worth one write, and the record is the checkpoint, not the transcript.
-    {Enum.reverse(infos), checkpoint(history), conclusion}
+    {Enum.reverse(infos), checkpoint(history), conclusion, carried}
+  end
+
+  # Monty's `model.update_ltm()`: what a training episode learned is what the
+  # next episode starts from. A memory is what an episode leaves behind rather
+  # than part of it, so a module that cannot answer for one is said out loud and
+  # the phase goes on from the memory it had.
+  defp next_memories(run, carried, mode) do
+    Monty.Studio.Run.next_memories(run, carried, mode)
+  rescue
+    error ->
+      Mix.shell().error("the memory could not be read: #{Exception.message(error)}")
+      carried
   end
 
   defp say_episode(_index, 1, _opts), do: :ok

@@ -454,10 +454,9 @@ defmodule Monty.Studio.Jobs.Run do
   # Monty's `model.update_ltm()`: the module decides what a training episode adds
   # to long-term memory. What answers here is the memory the *rest* of the phase
   # starts from — the graph this episode built is what the next one matches
-  # against — so it is read only where it can have changed.
+  # against — so it is read only where it can have changed (`Run.next_memories/3`).
   defp learned(run_id, run, memories) do
-    :ok = Run.update_ltm(run)
-    Run.memories(run)
+    Run.next_memories(run, memories, :train)
   rescue
     # A memory is what the episode leaves behind, not part of the episode: a
     # module that cannot answer for it must not turn a finished run into a crash.

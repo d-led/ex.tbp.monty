@@ -389,6 +389,31 @@ defmodule Monty.Studio.Run do
   def update_ltm(%__MODULE__{model: model, model_id: model_id}), do: model.update_ltm(model_id)
 
   @doc """
+  What the next episode starts from: `memories/1` after a training episode,
+  the memory it was given after an evaluation one.
+
+  A training episode hands on the graphs it built, because that is what
+  learning means — the next episode of the phase, whether it trains or
+  evaluates, matches against them. An evaluation episode writes nothing
+  (`EvidenceGraphLM.update_ltm_from_stm/1`), so it hands on what it was given:
+  reading the memory back copies tens of megabytes out of every module process
+  (`LearningModuleServer.state/1`) for a value that cannot have changed.
+
+  This is the one rule behind "an epoch continues where the last episode
+  stopped", so it is written once and both runners — the queued one and
+  `mix monty.run` — ask it rather than each keeping their own copy.
+  """
+  @spec next_memories(t(), %{optional(atom() | String.t()) => term()}, :train | :eval) :: %{
+          optional(atom() | String.t()) => term()
+        }
+  def next_memories(%__MODULE__{} = run, _memories, :train) do
+    :ok = update_ltm(run)
+    memories(run)
+  end
+
+  def next_memories(%__MODULE__{}, memories, :eval), do: memories
+
+  @doc """
   What the model concluded: each learning module's terminal state, if any.
 
   Read from the model rather than from the last step's report, because the
