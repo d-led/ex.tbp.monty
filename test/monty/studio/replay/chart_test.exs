@@ -86,6 +86,41 @@ defmodule Monty.Studio.Replay.ChartTest do
     end
   end
 
+  describe "the numbers on the value axis" do
+    test "land on a step a reader already has, not on the range cut into parts" do
+      # Twelve units of evidence is labelled every five, not every 3.75: the
+      # labels are one, two or five times a power of ten, chosen so the axis
+      # carries about four of them.
+      chart = Chart.many([series([0.0, 12.0], "mug")])
+
+      assert Enum.map(chart.ticks, & &1.label) == ["0", "5", "10"]
+    end
+
+    test "name zero whenever the axis spans it" do
+      # Evidence is measured from zero, so an axis that reaches under it says
+      # where zero is. Cutting the range into quarters left 0 between -1.4 and
+      # 3.7, so the line that every episode starts on had no name.
+      chart = Chart.many([series([-6.4, 8.7], "mug")])
+
+      labels = Enum.map(chart.ticks, & &1.label)
+
+      assert labels == ["-5", "0", "5"]
+      assert Enum.any?(chart.ticks, &(&1.value == 0.0))
+    end
+
+    test "carry as many decimals as the step needs, so no two labels read alike" do
+      chart = Chart.many([series([0.0, 0.9], "mug")])
+
+      assert Enum.map(chart.ticks, & &1.label) == ["0.0", "0.5"]
+    end
+
+    test "widen with the range instead of crowding it" do
+      chart = Chart.many([series([0.0, 250.0], "mug")])
+
+      assert Enum.map(chart.ticks, & &1.label) == ["0", "100", "200"]
+    end
+  end
+
   describe "a series drawn in a window" do
     test "scales the window across the width and the values across the height" do
       chart = Chart.new(points([0, 1, 2, 3]), window: {0, 3}, playhead: 0)

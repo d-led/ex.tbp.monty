@@ -156,6 +156,25 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     })
   end
 
+  # What the chart carries for the hover to read: one entry per drawn point, with
+  # the object it belongs to, the step, what that step was worth, and the unit.
+  defp samples(view) do
+    view
+    |> element("#replay-chart-hover")
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.attribute("data-samples")
+    |> hd()
+    |> Jason.decode!()
+  end
+
+  # The words on the value axis, top to bottom.
+  defp axis_labels(axis) do
+    ~r/>\s*(-?\d+(?:\.\d+)?)\s*</
+    |> Regex.scan(axis, capture: :all_but_first)
+    |> List.flatten()
+  end
+
   # A finished run that kept what its modules believed: one graph per object,
   # with the strongest evidence the module held for it. This is the shape the
   # chart of every object is drawn from. One map is one step; a list of maps is
@@ -516,18 +535,16 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     } do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      samples =
-        view
-        |> element("#replay-chart-hover")
-        |> render()
-        |> LazyHTML.from_fragment()
-        |> LazyHTML.attribute("data-samples")
+      decoded = samples(view)
 
-      decoded = Jason.decode!(hd(samples))
-
+      # The hover is read at the pointer's own place, which is a step between two
+      # of these, so what is carried is what the sentence is made of — the object,
+      # the step, the value, the unit — rather than a sentence about one of them.
       assert decoded != []
-      assert Enum.all?(decoded, &(&1["label"] =~ "#"))
-      assert Enum.at(decoded, 0)["label"] =~ "·"
+      assert Enum.all?(decoded, &is_binary(&1["line"]))
+      assert Enum.all?(decoded, &is_number(&1["step"]))
+      assert Enum.all?(decoded, &is_number(&1["value"]))
+      assert Enum.all?(decoded, &Map.has_key?(&1, "unit"))
     end
 
     test "says which episode it is", %{conn: conn} do
@@ -783,21 +800,33 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert view |> element("#replay-panel") |> render() =~ "steps 1–2"
     end
 
-    test "the value axis is labelled beside the plot", %{conn: conn} do
+    test "the value axis is labelled beside the plot, on numbers a reader can subtract", %{
+      conn: conn
+    } do
       run = run_believing([%{"mug" => 1.0}, %{"mug" => 5.0}])
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
       axis = view |> element("#replay-chart-y-axis") |> render()
-      words = axis |> LazyHTML.from_fragment() |> LazyHTML.text()
 
-      # Four values across the range, both ends included.
-      assert length(String.split(axis, "<span")) - 1 == 4
-      assert words =~ "1"
-      assert words =~ "5"
+      # Cutting the range into equal parts labelled a 1..5 axis 1.0, 2.3, 3.7,
+      # 5.0 — four numbers nobody compares in their head. A step of one is the
+      # ladder a reader already has.
+      assert axis_labels(axis) == ["1", "2", "3", "4", "5"]
 
       # The labels are beside the plot, not in it: text inside an SVG stretched
       # by `preserveAspectRatio="none"` is drawn wider than it is tall.
       plot = view |> element("#replay-chart") |> render()
-      refute plot =~ "15.2"
+      refute plot =~ "1.0"
+    end
+
+    test "the axis names zero when the evidence went under it", %{conn: conn} do
+      run = run_believing([%{"mug" => 8.7}, %{"mug" => -6.4}])
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+      axis = view |> element("#replay-chart-y-axis") |> render()
+
+      # Evidence is measured from zero, so an axis that spans it has to say
+      # where it is: the range cut into quarters put 0 between two labels and
+      # named neither of them zero.
+      assert axis_labels(axis) == ["-5", "0", "5"]
     end
 
     test "a chart can show another series", %{conn: conn, run: run} do
@@ -813,9 +842,8 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     test "hovering the line names the step and the value it was", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      # The readout is made on the server, so it is worded like the rest of the
-      # page; the hover itself only picks the nearest one and draws the line.
-      assert view |> element("#replay-chart-hover") |> render() =~ "#1 · "
+      # Every step the run recorded is there to be read, in the run's own order.
+      assert Enum.any?(samples(view), &(&1["step"] == 1))
     end
 
     test "a series measured in metres says so", %{conn: conn, run: run} do
@@ -823,7 +851,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       view |> element("#replay-series") |> render_change(%{"series" => "sensor:patch"})
 
-      assert view |> element("#replay-chart-hover") |> render() =~ " m"
+      assert Enum.all?(samples(view), &(&1["unit"] == "m"))
     end
 
     test "a run that built graphs opens on every object at once", %{conn: conn} do
@@ -853,7 +881,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      assert view |> element("#replay-chart-hover") |> render() =~ "bowl · #0 · "
+      assert Enum.any?(samples(view), &(&1["line"] == "bowl" and &1["step"] == 0))
     end
 
     test "the two strongest theories change as the slider moves", %{conn: conn} do

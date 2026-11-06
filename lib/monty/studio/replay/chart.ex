@@ -29,6 +29,12 @@ defmodule Monty.Studio.Replay.Chart do
 
   @width 320
   @height 150
+
+  # Four labelled lines is what a plot this tall carries without crowding, and
+  # the tolerance that keeps a value sitting exactly on a multiple from being
+  # read as sitting just below it.
+  @roughly_ticks 4
+  @tick_epsilon 1.0e-9
   @inset 4
 
   # The plot uses the whole box: the value labels are HTML beside it, not SVG
@@ -176,22 +182,69 @@ defmodule Monty.Studio.Replay.Chart do
   def with_playhead(%__MODULE__{from: from, to: to} = chart, step),
     do: %{chart | playhead: playhead(step, from, to)}
 
-  # Four values across the axis, always including both ends, in the fewest
-  # decimals that tell them apart: the numbers a reader uses to say how far one
-  # line is above another.
+  # Labelled lines land on round numbers — one, two or five times a power of ten
+  # — and the step is picked so the axis carries about four of them. Dividing the
+  # range into equal parts instead labelled it -6.4, -1.4, 3.7, 8.7: numbers a
+  # reader has to subtract to compare, and with zero between two of them rather
+  # than on one, so the line evidence is measured from had no name.
   defp ticks(min, max) when max > min do
-    steps = 3
+    step = tick_step(max - min)
+    decimals = decimals(step)
 
-    for index <- 0..steps do
-      value = min + (max - min) * index / steps
-      %{value: value, y: Float.round(y(value, min, max), 2), label: number(value)}
+    min
+    |> multiples_inside(max, step)
+    |> Enum.map(fn multiple ->
+      value = multiple * step
+
+      %{
+        value: value,
+        y: Float.round(y(value, min, max), 2),
+        label: format(value, decimals)
+      }
+    end)
+  end
+
+  defp ticks(min, _max) do
+    [%{value: min, y: Float.round(@height / 2, 2), label: format(min, whole?(min))}]
+  end
+
+  defp whole?(value) when value == trunc(value), do: 0
+  defp whole?(_value), do: 2
+
+  # The whole multiples of `step` inside the range. A step is never wider than
+  # half the range, so there is always at least one of them.
+  defp multiples_inside(min, max, step) do
+    first = min |> Kernel./(step) |> Kernel.-(@tick_epsilon) |> Float.ceil() |> trunc()
+    last = max |> Kernel./(step) |> Kernel.+(@tick_epsilon) |> Float.floor() |> trunc()
+
+    Enum.to_list(first..last//1)
+  end
+
+  # The step a reader expects between labelled lines: 1, 2 or 5 times a power of
+  # ten, and the smallest rung of that ladder that is not crowded.
+  defp tick_step(span) do
+    ideal = span / @roughly_ticks
+    magnitude = :math.pow(10, Float.floor(:math.log10(ideal)))
+    multiplier = ideal / magnitude
+
+    cond do
+      multiplier <= 1.0 -> magnitude
+      multiplier <= 2.0 -> 2 * magnitude
+      multiplier <= 5.0 -> 5 * magnitude
+      true -> 10 * magnitude
     end
   end
 
-  defp ticks(min, _max), do: [%{value: min, y: Float.round(@height / 2, 2), label: number(min)}]
+  # As many decimals as the step needs: a step of 5 is written in whole numbers,
+  # a step of 0.2 in one decimal, or two ticks would carry the same label.
+  defp decimals(step) do
+    step |> :math.log10() |> Float.floor() |> trunc() |> Kernel.*(-1) |> max(0)
+  end
 
-  defp number(value) when value == trunc(value), do: Integer.to_string(trunc(value))
-  defp number(value), do: :erlang.float_to_binary(value * 1.0, decimals: 1)
+  defp format(value, 0), do: Integer.to_string(round(value))
+
+  defp format(value, decimals),
+    do: :erlang.float_to_binary(Float.round(value, decimals), decimals: decimals)
 
   # Every line's stretches, flat: a template draws one `<polyline>` per stretch,
   # and how many stretches a line has is the chart's business, not the page's.

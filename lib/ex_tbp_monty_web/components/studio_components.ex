@@ -753,11 +753,13 @@ defmodule ExTbpMontyWeb.StudioComponents do
               if (box) box.setAttribute("visibility", "hidden")
             },
 
-            // The pointer is in box pixels, the points are in the SVG's own
-            // units. Both axes are scaled to the box, so both are converted —
-            // and compared in fractions of the box, which is what makes a point
-            // on a steep line nearer than a point on a flat one beside it.
-            nearest(event) {
+            // What the pointer is over, read off the drawn line rather than off
+            // the nearest stored point: a run of hundreds of steps has points a
+            // few pixels apart, and a readout that jumps from one to the next
+            // says the value is a staircase. Between two points of one stretch
+            // the line is straight, so the value at the pointer's place is the
+            // value between them.
+            atCursor(event) {
               if (this.samples.length === 0) return null
 
               const box = this.el.getBoundingClientRect()
@@ -765,33 +767,107 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
               const atX = ((event.clientX - box.left) / box.width) * this.width
               const atY = ((event.clientY - box.top) / box.height) * this.height
-              const away = sample =>
-                ((sample.x - atX) / this.width) ** 2 + ((sample.y - atY) / this.height) ** 2
+              let best = null
 
-              return this.samples.reduce((best, sample) =>
-                away(sample) < away(best) ? sample : best
-              )
+              for (const line of this.byLine().values()) {
+                // A pointer past the end of a line is not over it: reading the
+                // end of a line from somewhere else on the plot is the jump this
+                // readout exists to avoid.
+                if (atX < line[0].x || atX > line[line.length - 1].x) continue
+
+                const reading = this.readingAt(line, atX)
+                if (!reading) continue
+
+                // Which line the pointer is nearest, measured on the reading
+                // itself, so a steep line just under the cursor wins over a flat
+                // one at the same x.
+                const away = ((reading.y - atY) / this.height) ** 2
+                if (best === null || away < best.away) best = {...reading, away}
+              }
+
+              return best
+            },
+
+            // The points of each line, in the order they were drawn.
+            byLine() {
+              const lines = new Map()
+
+              for (const sample of this.samples) {
+                const drawn = lines.get(sample.line) || []
+                drawn.push(sample)
+                lines.set(sample.line, drawn)
+              }
+
+              return lines
+            },
+
+            // One line's value at `atX`: straight between the two points that
+            // bracket it when they are consecutive steps, and the nearer of them
+            // when they are not — an object that was not reported for a step has
+            // no line there to read.
+            readingAt(line, atX) {
+              let before = null
+              let after = null
+
+              for (const sample of line) {
+                if (sample.x <= atX) before = sample
+                else {
+                  after = sample
+                  break
+                }
+              }
+
+              if (!before) return after
+              if (!after) return before
+              if (after.step - before.step !== 1 || after.x <= before.x) {
+                return atX - before.x < after.x - atX ? before : after
+              }
+
+              const t = (atX - before.x) / (after.x - before.x)
+
+              return {
+                ...before,
+                x: atX,
+                y: before.y + t * (after.y - before.y),
+                step: before.step + t * (after.step - before.step),
+                value: before.value + t * (after.value - before.value)
+              }
+            },
+
+            // The sentence the server writes for a stored sample — the object,
+            // the step, the value — for a place between two of them, which is a
+            // step the server never had.
+            readingLabel(reading) {
+              // A pointer that lands on a step says the step, not "48.0": the
+              // interpolation only decides the decimals when it really is
+              // between two of them.
+              const step = Math.round(reading.step * 10) / 10
+              const position = Number.isInteger(step) ? String(step) : step.toFixed(1)
+              const name = reading.named ? `${reading.line} · ` : ""
+              const unit = reading.unit ? ` ${reading.unit}` : ""
+
+              return `${name}#${position} · ${reading.value.toFixed(2)}${unit}`
             },
 
             hover(event) {
-              const nearest = this.nearest(event)
-              if (!nearest) return
+              const reading = this.atCursor(event)
+              if (!reading) return
 
-              const percent = (nearest.x / this.width) * 100
+              const percent = (reading.x / this.width) * 100
 
               this.marker.style.left = `${percent}%`
               this.marker.hidden = false
 
-              this.label.textContent = nearest.label
+              this.label.textContent = this.readingLabel(reading)
               this.label.style.left = `${percent}%`
               this.label.style.transform =
                 percent < 20 ? "translateX(0)" : percent > 80 ? "translateX(-100%)" : "translateX(-50%)"
 
-              // The label stands on the far side of the point it names. A label at
-              // the top edge sits on top of a point high in the chart, and the
-              // point of intersection is the thing being read: a point in the top
-              // half puts the label below it, a point in the bottom half above.
-              const high = nearest.y / this.height < 0.5
+              // The label stands on the far side of the place it names. A label
+              // at the top edge sits on top of a line high in the chart, and the
+              // point of intersection is the thing being read: a place in the top
+              // half puts the label below it, a place in the bottom half above.
+              const high = reading.y / this.height < 0.5
               this.label.style.top = high ? "" : "0.125rem"
               this.label.style.bottom = high ? "0.125rem" : ""
 
@@ -825,7 +901,12 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
   # The chart's points are thinned to what a pointer can tell apart before they
   # are sent: this many per line, which is more than the plot has pixels for.
-  @samples_per_line 160
+  # Every drawn point is sent, not a sample of them: a hover reads the value at
+  # the pointer's own place on the line, and a line is only straight between the
+  # points it was drawn through. Twelve hundred points is well over one per pixel
+  # of a plot this wide, so a run zoomed all the way out still has a point under
+  # the pointer without sending a step per pixel.
+  @samples_per_line 1200
 
   # One entry per drawn point: where it sits, and the words a hover shows. The
   # label is made here, not in the browser, so it says "mug · step 3 · 0.41" like
@@ -848,7 +929,10 @@ defmodule ExTbpMontyWeb.StudioComponents do
         x: Float.round(x * 1.0, 2),
         y: Float.round(y * 1.0, 2),
         step: step,
-        label: label(line, named?, step, value, unit)
+        value: value,
+        line: line,
+        unit: unit,
+        named: named?
       }
     end)
     |> Jason.encode!()
@@ -864,18 +948,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
       Enum.take_every(drawn, max(div(length(drawn), @samples_per_line), 1))
     end)
   end
-
-  # `#647` is the recorded moment's place in the run, not the step number an
-  # episode carries: every episode counts from zero again, so "step 647" would
-  # be a step no episode has. The badge over the slider says the episode's own.
-  defp label(line, true, position, value, unit),
-    do: "#{line} · ##{position} · #{format_value(value)}#{unit_note(unit)}"
-
-  defp label(_line, false, position, value, unit),
-    do: "##{position} · #{format_value(value)}#{unit_note(unit)}"
-
-  defp unit_note(""), do: ""
-  defp unit_note(unit), do: " " <> unit
 
   # The palette Monty's own plots use, so an object is the same colour here as it
   # is in the figure a paper shows: tab10, in the order the objects were sorted.
