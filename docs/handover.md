@@ -596,3 +596,34 @@ value unit` for each sample, and the hook interpolates a position the server
 Proved in the browser, not just in ExUnit: at a drawn vertex the readout reads
 exactly the stored sample (`#48 · 8.69`), half a step later `#48.5 · 4.54`, and
 the crosshair follows the pointer at every position in between.
+
+---
+
+## 14. Open: `image amd64, scan, non-root` is red, and it is not a code failure
+
+The run for `9f476f5` failed on one job of fourteen. Every other job was green:
+lint, types, the four test partitions, coverage/CRAP/parity, both desktop
+bundles, `image arm64`.
+
+The failing step is **`Scan the image`** (`aquasecurity/trivy-action@v0.36.0`,
+`exit-code: "1"`, `severity: CRITICAL,HIGH`, `ignore-unfixed: true`,
+`.trivyignore.yaml` for read exceptions). `Build linux/amd64` succeeded and the
+two steps after the scan — `Run as an unprivileged user` and `Runs with no
+database server at all` — were skipped, so what failed is the gate rather than
+the image being unbuildable.
+
+What that means: the amd64 image now carries a **fixable** CRITICAL or HIGH
+finding — the packages come from the base image, so this is an upstream update
+that arrived between runs, not something a commit in this branch introduced.
+
+To pick up:
+
+1. Read the findings (`gh run view --job <id> --log` once the run completes; the
+   log is not downloadable while the run is in progress).
+2. Bump the base image in `Dockerfile` so the package is fixed upstream.
+3. If the finding cannot be fixed yet, add an entry to `.trivyignore.yaml` with
+   the reason and the date the exception expires — never a blanket suppression,
+   which is what that file's own comment says.
+
+Until this is done, a cancelled or failing amd64 leg is **not** a green one, and
+the arm64 image (which built and passed) is not evidence about it.
