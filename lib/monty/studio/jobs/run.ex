@@ -284,11 +284,16 @@ defmodule Monty.Studio.Jobs.Run do
   end
 
   # A file name, from a config's own words: anything that is not a letter, a
-  # digit, an underscore, a dot or a dash becomes a dash.
+  # digit, an underscore, a dot or a dash becomes a dash. A name that has nothing
+  # of that left — the empty run name most of Monty's test configs have — is no
+  # name, so the next one is asked for instead of filing a memory under `""`.
   defp sanitise(nil), do: nil
 
   defp sanitise(name) do
-    name |> to_string() |> String.replace(~r/[^A-Za-z0-9_.-]+/, "-") |> String.trim("-")
+    case name |> to_string() |> String.replace(~r/[^A-Za-z0-9_.-]+/, "-") |> String.trim("-") do
+      "" -> nil
+      file_name -> file_name
+    end
   end
 
   # Monty's `run()`: `train()` and then `evaluate()`, each a loop of its own with

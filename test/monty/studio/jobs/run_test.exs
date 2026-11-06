@@ -13,6 +13,10 @@ defmodule Monty.Studio.Jobs.RunTest do
   # evaluation cannot stand in for.
   @training_experiment "tutorial/surf_agent_2obj_unsupervised"
 
+  # The same, in the family Monty's own tests assert on: one object, three train
+  # epochs then three evaluation ones, and a config that names no run at all.
+  @unnamed_training_experiment "test/evidence_lm/evidence_mujoco"
+
   # The queue runs jobs by hand here: what is under test is the run, not Oban's
   # scheduler.
   setup do
@@ -120,6 +124,27 @@ defmodule Monty.Studio.Jobs.RunTest do
       # The object an untouched module names when it finds nothing it knows,
       # which is Monty's own naming for what a first training episode adds.
       assert GraphMemory.get_memory_ids(learned) == ["new_object0"]
+    end
+
+    test "and files it under the experiment when the config names neither a model nor a run" do
+      # Most of Monty's test configs leave `run_name` empty and name no model, so
+      # the run's own name is what is left: a memory filed under `""` is a memory
+      # that was written nowhere.
+      {:ok, opened} = Monty.Studio.open(@unnamed_training_experiment)
+      assert opened.setup.model_name_or_path == ""
+      assert opened.setup.logging.run_name == ""
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 30, 0, 1, 1))
+      assert {:ok, closed} = perform(record)
+
+      assert File.read!(closed.log_path) =~ "the memory learning_module_0 learned is in"
+
+      assert [file] =
+               Path.wildcard(
+                 Path.join([Artifacts.dir(closed.id), "memory", "trained", "*.jsonl.gz"])
+               )
+
+      assert Path.basename(file) == "test-evidence_lm-evidence_mujoco.jsonl.gz"
     end
 
     test "keeps what each step saw, so the run can be replayed" do
