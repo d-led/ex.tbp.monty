@@ -545,6 +545,20 @@ defmodule ExTbpMontyWeb.StudioComponents do
                   vector-effect="non-scaling-stroke"
                 />
               </g>
+              <%!-- Zero: what evidence is measured from. Every episode starts on
+            this line and a hypothesis can be penalised under it, so it is drawn
+            heavier than a gridline and below the lines. --%>
+              <line
+                :if={@chart.zero}
+                id="replay-chart-zero"
+                x1="0"
+                y1={@chart.zero}
+                x2={@chart.width}
+                y2={@chart.zero}
+                stroke="currentColor"
+                stroke-opacity="0.4"
+                vector-effect="non-scaling-stroke"
+              />
               <polyline
                 :for={polyline <- @chart.polylines}
                 id={polyline.id}

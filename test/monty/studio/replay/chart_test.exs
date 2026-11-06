@@ -17,6 +17,23 @@ defmodule Monty.Studio.Replay.ChartTest do
     value
   end
 
+  describe "the line the values are measured from" do
+    test "is drawn where the axis admits zero" do
+      chart = Chart.many([series([0.0, 2.0, -1.0], "mug")])
+
+      # Between the top and the bottom of the plot, and inside the inset: zero
+      # of a -1..2 range is a third of the way up.
+      assert chart.zero > 0 and chart.zero < chart.height
+      assert_in_delta chart.zero, chart.height - 2, chart.height * 0.5
+    end
+
+    test "is left out when nothing comes near zero, rather than stretching the axis" do
+      chart = Chart.many([series([30.0, 34.0, 38.0], "mug")])
+
+      assert chart.zero == nil
+    end
+  end
+
   describe "the episodes the chart shades" do
     test "is one band per episode, and neighbouring bands never share a colour" do
       chart =

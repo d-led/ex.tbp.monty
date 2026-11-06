@@ -44,6 +44,7 @@ defmodule Monty.Studio.Replay.Chart do
     :from,
     :to,
     :playhead,
+    :zero,
     lines: [],
     bands: [],
     polylines: [],
@@ -146,6 +147,11 @@ defmodule Monty.Studio.Replay.Chart do
       polylines: polylines_of(lines),
       min: min,
       max: max,
+      # Evidence always belongs to a range that contains zero — every episode
+      # starts there — so the line it is measured from is drawn wherever the
+      # axis admits it. A series that never comes near zero keeps an axis that
+      # says so, rather than one stretched to a line nobody's data touches.
+      zero: zero_y(min, max),
       from: from,
       to: to,
       hover: List.flatten(samples),
@@ -153,6 +159,9 @@ defmodule Monty.Studio.Replay.Chart do
       playhead: playhead(Keyword.get(opts, :playhead), from, to)
     }
   end
+
+  defp zero_y(min, max) when min <= 0 and max >= 0, do: Float.round(y(0, min, max), 2)
+  defp zero_y(_min, _max), do: nil
 
   @doc """
   The same chart with the playhead moved to `step`.
