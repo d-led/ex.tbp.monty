@@ -69,6 +69,14 @@ Specified by `test/monty/studio/run_test.exs`:
 - an evaluation episode writes nothing;
 - the next episode starts from what the last one wrote.
 
+**And the copy is only paid where it can matter.** Reading the memory back out of
+a module sends its whole state across a process boundary — **177 ms** for the ten
+objects of `base_config_10distinctobj_dist_agent`, two to four steps of work
+(`docs/speed.md`). So an *evaluation* phase neither writes the episode nor reads
+the memory back; it keeps the value it started with. That is also the cheaper
+shape for the erlang side of the house: the memory is a value, and handing the
+same one on beats re-loading it from a library every episode.
+
 ## 3. What is still missing before the guard may be lifted
 
 The rule is the one `7cba014` established: **a gap is refused with a sentence,

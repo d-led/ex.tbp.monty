@@ -267,3 +267,45 @@ are the same run, one of them slower for reasons outside the program. Reductions
 are the only per-step figure worth comparing across machines (7.65 M → 6.85 M),
 and the acceptance target of ~50 ms a step at ten objects is met on a quiet
 machine — the earlier "21 times" was a loaded-box artefact and is withdrawn.
+
+## A per-episode copy is not free, and a training phase would pay it (2026-11-06)
+
+Measured on `base_config_10distinctobj_dist_agent` (ten objects, pretrained memory,
+`MIX_ENV=test`), while wiring a training phase to carry its memory between
+episodes:
+
+| what                                                      | cost                                                           |
+| --------------------------------------------------------- | -------------------------------------------------------------- |
+| `Run.start/2`, pretrained memory                          | 1.9 s, 35 M reductions (world + positioning, as Monty pays it) |
+| `Run.memories/1` — the memory read back out of the module | **177 ms, 203 k reductions**                                   |
+| a step, after the first                                   | 5.7–6.1 M reductions, 23–84 ms                                 |
+
+177 ms is two to four steps of work for one copy, because `LearningModuleServer.state/1`
+sends the module's whole state across to the caller and the graph memory of a
+ten-object model is tens of megabytes. That is the cost `detailed/2` was written
+to avoid for the page's per-step reads, and the loop had walked into it once per
+episode.
+
+It is now read only where it can have changed: **an evaluation episode writes
+nothing into long-term memory, so it neither writes nor reads the memory back**,
+and the phase keeps the value it started with. `memories` is a value, so passing
+the same one to the next run is also cheaper than re-loading it (`Setup.memories/1`
+→ `Memory.load/2`, about twenty milliseconds a call).
+
+**The erlang-shaped fix, when a training phase is actually offered**: keep one
+model for the phase and reset the episode on it (`Model.reset_episode/1`, which
+Monty calls as `model.reset()`) instead of starting a model per episode. Then the
+memory never crosses a process boundary at all, and the flattened arrays the
+native kernels read (`node_arrays`, `feature_rows`) stay in the process that
+built them. Measured here, a fresh model's first step is _not_ noticeably more
+expensive than a later one (5.1 M reductions / 23 ms against 5.7 M / 81 ms), so
+this is worth doing for the copies rather than for the arrays — it is a tidier
+shape, not a large win on this config.
+
+**Where the scaling win actually is**: a step's cost is per hypothesis, and the
+hypotheses of one graph are independent of another graph's. Barriering modules
+across a step already exists; sharding _a module's_ graphs across schedulers, one
+task per graph, is the thing the BEAM does that a GIL-bound Python cannot. That is
+the work to do before claiming a speed advantage over Monty at seventy-seven
+objects, and it should be measured the same way — reductions and wall clock, run
+paired against the serial version in one session.
