@@ -256,3 +256,14 @@ eval steps and 3:18, which is ~39 ms a step, so what is left between us is
 per-step cost — 21 times — and not the shape of the run. Earlier attempts were
 stopped by hand around episode 90; this is the first that reached the last one,
 which is what the acceptance asked for.
+
+**The 823 ms was the machine, not the code.** That run was measured at load
+average 10.6-14.7 — another build was using the box throughout. The same
+experiment, on the same code path after `fc0a063`, ran at load 3.7-5.9 and
+finished in **4 789 steps in 203 s: 42.5 ms a step**, exit 0, **140 of 140
+episodes each ending in a recognition** — against Monty's ~39 ms. The step count
+and the goal total (4 558 928) are identical to the loaded run, so the two runs
+are the same run, one of them slower for reasons outside the program. Reductions
+are the only per-step figure worth comparing across machines (7.65 M → 6.85 M),
+and the acceptance target of ~50 ms a step at ten objects is met on a quiet
+machine — the earlier "21 times" was a loaded-box artefact and is withdrawn.
