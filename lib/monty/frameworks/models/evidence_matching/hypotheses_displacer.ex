@@ -589,7 +589,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
 
     {features
      |> Map.fetch!("pose_vectors")
-     |> Enum.map(fn pose -> {Enum.take(pose, 3), Enum.slice(pose, 3, 3)} end)
+     |> Enum.map(fn [normal_a, normal_b, normal_c, curvature_a, curvature_b, curvature_c | _] ->
+       {[normal_a, normal_b, normal_c], [curvature_a, curvature_b, curvature_c]}
+     end)
      |> List.to_tuple(),
      features |> Map.fetch!("pose_fully_defined") |> Enum.map(&hd/1) |> List.to_tuple()}
   end
