@@ -78,6 +78,25 @@ defmodule Monty.Frameworks.Experiments.MontyExperimentTest do
       assert bowl == %{object: "bowl", episode: 1, outcome: :finished, steps: 3}
     end
 
+    test "tells an episode which epoch of the phase it belongs to" do
+      # The epoch is what a config's sampler turns the object on, so it has to
+      # reach the episode: it travels in the callbacks the hook is given, and a
+      # run of three epochs over two objects sees each of them three times.
+      callbacks =
+        epoch(%{
+          objects: ["mug", "bowl"],
+          epochs: 3,
+          pre_episode: fn _state, _index, _object, callbacks ->
+            send(self(), {:epoch, Map.get(callbacks, :epoch)})
+            {:ok, 0}
+          end
+        })
+
+      assert {:finished, _, _} = MontyExperiment.run_epochs(%{}, callbacks)
+
+      assert epochs_seen() == [0, 0, 1, 1, 2, 2]
+    end
+
     test "is an episode the caller stopped, and no more objects after it" do
       callbacks = epoch(%{objects: ["mug", "bowl"], stopped?: fn -> true end})
 
@@ -133,7 +152,17 @@ defmodule Monty.Frameworks.Experiments.MontyExperimentTest do
     end
   end
 
-  defp epoch(options \\ []) do
+  # The epochs the episodes were told they belong to, in the order they were
+  # started.
+  defp epochs_seen do
+    receive do
+      {:epoch, epoch} -> [epoch | epochs_seen()]
+    after
+      0 -> []
+    end
+  end
+
+  defp epoch(options) do
     Map.merge(
       Map.merge(
         %{
