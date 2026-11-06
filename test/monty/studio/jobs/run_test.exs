@@ -147,6 +147,26 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert Path.basename(file) == "test-evidence_lm-evidence_mujoco.jsonl.gz"
     end
 
+    test "numbers the episodes of a run, not the episodes of each phase" do
+      # Three train epochs then three evaluation ones is six episodes, and each
+      # epoch counts its own episodes from zero — so a record that kept the
+      # epoch's index would hold two "episode 0"s and a chart would draw them as
+      # one, joining the last step of training to the first step of evaluation.
+      {:ok, opened} = Monty.Studio.open(@unnamed_training_experiment)
+      # Every episode of the experiment, not one a phase: six of them.
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 30, 0, 1, nil))
+
+      assert {:ok, closed} = perform(record)
+
+      episodes = closed.log |> Enum.map(& &1["episode"]) |> Enum.uniq() |> Enum.sort()
+      assert episodes == [0, 1, 2, 3, 4, 5]
+
+      # And every episode starts its own step counter again, which is what makes
+      # the number worth having.
+      assert closed.log |> Enum.filter(&(&1["episode"] == 3)) |> Enum.map(& &1["step"]) ==
+               Enum.to_list(0..(Enum.count(closed.log, &(&1["episode"] == 3)) - 1))
+    end
+
     test "keeps what each step saw, so the run can be replayed" do
       # A configuration whose learning module is a stand-in, so the episode runs
       # for the steps it is given rather than concluding at once: what is under

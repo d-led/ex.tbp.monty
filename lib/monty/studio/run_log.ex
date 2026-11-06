@@ -24,6 +24,13 @@ defmodule Monty.Studio.RunLog do
   every rotation, and the step counter restarts inside each episode, so
   `"step" => 0` alone says *when inside an episode* and not *when in the run* —
   which is exactly what a chart needs to keep the episodes apart.
+
+  It is the run's own episode number, not the epoch's: every epoch counts its
+  episodes from zero again, so a run of three training epochs and three
+  evaluation ones has six episodes and only three epoch-indices. Keeping the
+  index here would file the first evaluation episode with the first training one
+  and a chart would draw them as a single episode — a line across the boundary
+  where the evidence really did restart (`Jobs.Run.start_episode/5`).
   """
   @spec entry(map(), map(), keyword()) :: map()
   def entry(info, beliefs \\ %{}, options \\ []) do

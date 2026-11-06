@@ -210,6 +210,9 @@ defmodule Monty.Studio.Jobs.Run do
       infos: [],
       conclusion: %{},
       episode: 0,
+      # How many episodes this run has started. It, not the epoch's own index, is
+      # the number the record keeps: see `start_episode/5`.
+      episodes_started: 0,
       mode: :eval,
       # What the phase has learned so far, by module. A run is one episode, so
       # this is the memory a training phase carries from one to the next; an
@@ -336,8 +339,23 @@ defmodule Monty.Studio.Jobs.Run do
   # — the world for this episode's object, the agent positioned, the sensors
   # reset. The previous episode's processes go first, because a run steps one
   # world at a time.
+  # Monty's `pre_episode`, interface half: an episode starts where it was told to
+  # — the world for this episode's object, the agent positioned, the sensors
+  # reset. The previous episode's processes go first, because a run steps one
+  # world at a time.
+  #
+  # `index` is the episode's place *within its epoch*, and the epoch restarts it:
+  # a run of three train epochs then three evaluation ones has six episodes and
+  # only three indices. It seeds the episode (`Run.start/2` derives the draws from
+  # it) and it is what the log line names, Monty's own way. What the record keeps
+  # is the run's own episode — `episodes_started` — because a chart stacks the
+  # episodes of a run and two of them sharing a number would be drawn as one: a
+  # line joining the last step of the training phase to the first of the
+  # evaluation one, across a boundary where the evidence really did restart.
   defp start_episode(run_id, opened, %{run: previous} = state, index, object) do
     stop_run(previous)
+
+    episode = state.episodes_started
 
     case Run.start(opened.setup,
            steps: state.record.steps,
@@ -352,10 +370,10 @@ defmodule Monty.Studio.Jobs.Run do
 
         broadcast(
           run_id,
-          {:episode, %{episode: index, object: object, steps: state.record.steps}}
+          {:episode, %{episode: episode, object: object, steps: state.record.steps}}
         )
 
-        {:ok, %{state | run: run, episode: index}}
+        {:ok, %{state | run: run, episode: episode, episodes_started: episode + 1}}
 
       {:error, reason} ->
         {:error, reason}
