@@ -1116,6 +1116,34 @@ pickle afresh for each experiment.
 with `to_string/1` and `from_string/1` for the places a config or a log needs the
 string.
 
+## 2.19 "Back where it started" is an angle, not the same floats
+
+**What Monty does.** `InformedPolicy._assert_undo_jump_was_successful` compares
+the agent's pose after an undo jump with the pose it stored before the jump, with
+`np.all(state[agent].rotation == self._pre_jump_state.rotation)` — exact
+equality, on quaternions, and it raises when they differ.
+
+**What this port does.** The position is compared exactly, as Monty's is; the
+orientation is compared as an **angle**, and anything under a thousandth of a
+degree counts as where it started
+([`InformedPolicy`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex)).
+The raise now says how far the agent was turned, so the number is in the sentence
+rather than something to reproduce.
+
+**Why exact equality cannot hold here.** Monty stores the quaternion the
+environment gave it and hands that same quaternion back, so the comparison is
+between one value and itself. An agent's rotation here is rebuilt from the
+world's answer by **normalising** the quaternion the world reports
+(`Rotation.from_quaternion/1`), so a pose that is put back exactly still comes
+back **1.1e-16** away — measured by `Rotation.to_quaternion/1` followed by
+`Rotation.from_quaternion/1`. Monty's assertion is not too strict for Monty; it is
+too strict for a rotation that makes that trip, and it fired on
+`base_10simobj_surf_agent` after ten objects, ending a run that had done nothing
+wrong.
+
+**What it costs.** Nothing that is measurable: a jump that misses by even a
+hundredth of a degree still raises, and the raise now carries the angle.
+
 ---
 
 # Checked and found consistent

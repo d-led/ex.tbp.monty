@@ -53,6 +53,14 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   # `SetAgentPose` moves them with the agent.
   @identity_quaternion {1.0, 0.0, 0.0, 0.0}
 
+  # How far an undo jump may leave the agent turned and still count as back where
+  # it started. Monty compares the quaternions it stored, exactly; an agent's
+  # rotation here is rebuilt from the world's answer by normalising the quaternion
+  # the world reports, so a pose put back exactly still comes back about 1e-16
+  # away (measured). A thousandth of a degree is far above that noise and far below
+  # anything a jump could be wrong by (`docs/monty-differences.md` §2.19).
+  @min_turn_degrees 0.001
+
   @enforce_keys [:action_sampler, :agent_id]
   defstruct action_sampler: nil,
             agent_id: nil,
@@ -365,9 +373,29 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
       raise "an undo jump left the agent at #{inspect(current.position)}, not #{inspect(before.position)}"
     end
 
-    if current.rotation != before.rotation do
-      raise "an undo jump left the agent turned away from where it started"
+    # The angle finds its way into the sentence: "turned away" is only useful with
+    # how far, and the number is what tells a last bit from a wrong turn.
+    turned = degrees_apart(current.rotation, before.rotation)
+
+    if turned > @min_turn_degrees do
+      raise "an undo jump left the agent turned away from where it started, " <>
+              "by #{Float.round(turned, 3)} degrees"
     end
+  end
+
+  # Two unit quaternions `q` and `-q` are the same orientation, so the angle
+  # between two of them is `2·acos(|q₁·q₂|)` — the sign of the dot product says
+  # nothing, its magnitude says everything.
+  defp degrees_apart(%Rotation{wxyz: first}, %Rotation{wxyz: second}) do
+    alignment =
+      first
+      |> Tuple.to_list()
+      |> Enum.zip(Tuple.to_list(second))
+      |> Enum.reduce(0.0, fn {one, other}, sum -> sum + one * other end)
+      |> abs()
+      |> min(1.0)
+
+    2 * :math.acos(alignment) * 180.0 / :math.pi()
   end
 
   defp reset_jump_state(policy) do

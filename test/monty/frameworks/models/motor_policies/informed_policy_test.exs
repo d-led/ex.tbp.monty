@@ -15,12 +15,12 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyTest do
 
   # -- fixtures ------------------------------------------------------------
 
-  defp state(position \\ [0.1, 0.2, 0.3]) do
+  defp state(position \\ [0.1, 0.2, 0.3], rotation \\ @identity) do
     %{
       @agent => %AgentState{
         sensors: %{"patch" => %SensorState{position: [0.0, 0.0, 0.0], rotation: @identity}},
         position: position,
-        rotation: @identity
+        rotation: rotation
       }
     }
   end
@@ -219,6 +219,47 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyTest do
       assert_raise RuntimeError, ~r/undo jump left the agent/, fn ->
         step(policy, observations: observations(1.5), state: state([9.0, 9.0, 9.0]))
       end
+    end
+
+    # The world answers with a quaternion and the agent's rotation is rebuilt from
+    # it by normalising, so a pose that is put back exactly still comes back a
+    # last bit away (1.1e-16, measured). Monty compares the quaternions it stored,
+    # which never make that trip; here "the same orientation" has to mean an
+    # angle, not the same floats.
+    test "a rotation that came back a last bit away is the rotation it was given" do
+      {:ok, turned} = Rotation.from_euler_degrees([3.0, 71.0, 12.0])
+      {:ok, from_the_world} = Rotation.from_quaternion(Rotation.to_quaternion(turned))
+
+      {_result, policy} =
+        step(policy(use_goal_driven_actions: true),
+          observations: observations(0.5),
+          state: state([0.1, 0.2, 0.3], turned),
+          goal: goal()
+        )
+
+      {_result, policy} =
+        step(policy, observations: observations(1.5), state: state([0.1, 0.2, 0.3], turned))
+
+      assert {%MotorPolicyResult{actions: [%TurnLeft{}]}, _policy} =
+               step(policy,
+                 observations: observations(1.5),
+                 state: state([0.1, 0.2, 0.3], from_the_world)
+               )
+    end
+
+    test "says how far the agent was turned away, when it really was turned" do
+      {:ok, five_degrees} = Rotation.from_axis_angle([0.0, 1.0, 0.0], :math.pi() / 36)
+      {_result, policy} = step(after_a_jump(), observations: observations(1.5))
+
+      error =
+        assert_raise RuntimeError, ~r/turned away/, fn ->
+          step(policy,
+            observations: observations(1.5),
+            state: state([0.1, 0.2, 0.3], five_degrees)
+          )
+        end
+
+      assert error.message =~ "5.0"
     end
   end
 
