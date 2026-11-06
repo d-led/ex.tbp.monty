@@ -138,15 +138,25 @@ beginning of a busier one's could show nothing at all. It is
 `RunHistory.list_for(name, limit: @runs_shown)` now — the exact name in the SQL,
 five rows read.
 
-## 6. The desktop sidecar fails every log write before succeeding
+## 6. The desktop sidecar failed every log write before succeeding — **closed**
 
-Every line in the desktop window's console is preceded by
-`Failed to write log message to stdout, trying stderr`. The sidecar has no
-console, so each message pays a failed write first, doubling the log volume and
-burying real lines. Related, already fixed elsewhere: `println!` panics without
-a console, which is why the window writes its complaints to a file
-(`docs/desktop.md`). Worth making stdout logging conditional or writing to the
-file directly.
+Every line in the desktop window's console was preceded by
+`Failed to write log message to stdout, trying stderr`, so the console doubled
+every line and buried the real ones.
+
+The message is OTP's own: `logger_std_h:write_to_dev/2` writes the console handler
+through the `user` process, and its first clause catches and apologises before
+falling back to stderr. A sidecar has no console, so it failed on every line.
+`config/desktop.exs` now creates the default handler with
+`config: %{type: :standard_error}`, which takes the `standard_error` clause and
+cannot fail that way; the window drains both streams
+(`src-tauri/src/main.rs:388-453`), so nothing leaves its console.
+
+Proved on a throwaway database
+(`SQLITE_PATH=/tmp/deskdb.sqlite MIX_ENV=desktop`): the handler reads
+`type: :standard_error`, a `Logger.info/1` line lands on stderr and not on
+stdout, and "Failed to write log message" appears nowhere. (The window's own
+console was not opened for this; the stream is the property that changed.)
 
 ## 7. Performance: what is left, and how to measure it here
 
