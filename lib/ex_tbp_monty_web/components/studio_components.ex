@@ -527,7 +527,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
                 y="0"
                 width={@chart.width}
                 height={@chart.height}
-                fill="var(--chart-plot)"
+                fill="var(--chart-plot, #fafafa)"
               />
               <%!-- Which episode each stretch of the run is: evidence restarts at
             zero at every boundary, so the bands are what makes the rhythm
@@ -569,7 +569,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
                   y1={tick.y}
                   x2={@chart.width}
                   y2={tick.y}
-                  stroke="var(--chart-grid)"
+                  stroke="var(--chart-grid, #e5e7eb)"
                   stroke-width="1"
                   vector-effect="non-scaling-stroke"
                 />

@@ -25,14 +25,6 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         background-color: var(--swatch);
       }
 
-      .evidence-chart__plot {
-        /* The plot's own tint, one pale grey inside the axes. The scheme is
-           Monty's pyview dashboard: `plot_bgcolor` #fafafa over the page's
-           white paper, with #e5e7eb gridlines. One tint, not a colour per
-           episode — the boundaries are ruled, not shaded. */
-        fill: var(--chart-plot);
-      }
-
       .evidence-chart__tooltip {
         position: absolute;
         z-index: 10;
@@ -79,13 +71,18 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         <%!-- The plot's own tint, inside the axes and not in the gutter the
         labels sit in: the page's colour outside, one pale grey within, which is
         what makes a light chart read as a chart rather than as a hole in the
-        card. Drawn first, behind the grid and the lines. --%>
+        card. Drawn first, behind the grid and the lines.
+
+        The colour is on the element, with the value written out as a fallback:
+        a `fill` whose custom property is missing is not a default colour, it is
+        black — and a stylesheet this page did not rebuild is not a reason for a
+        chart to turn into a hole. --%>
         <rect
-          class="evidence-chart__plot"
           x={@chart.margin_left}
           y={@chart.margin_top}
           width={@chart.width - @chart.margin_left - @chart.margin_right}
           height={@chart.height - @chart.margin_top - @chart.margin_bottom}
+          fill="var(--chart-plot, #fafafa)"
         />
         <%!-- Which episode each stretch of the run is, in the colour of the object
         that episode was about — the pyview dashboard's own bands, at its own
@@ -137,7 +134,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
             x2={@chart.width - @chart.margin_right}
             y1={tick.y}
             y2={tick.y}
-            stroke="var(--chart-grid)"
+            stroke="var(--chart-grid, #e5e7eb)"
             stroke-width="0.5"
           />
           <text
