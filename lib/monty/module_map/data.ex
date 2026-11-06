@@ -30,7 +30,6 @@ defmodule Monty.ModuleMap.Data do
       status: :planned,
       elixir: "Monty.Attention.AttentionSystem",
       package: "monty",
-      python: "attention/attention_system.py",
       classes: [
         %{
           status: :planned,
@@ -47,14 +46,14 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Attention.AttentionSystem.DefaultAttentionSystem",
           python: "DefaultAttentionSystem"
         }
-      ]
+      ],
+      python: "attention/attention_system.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Attention.Decay",
       package: "monty",
-      python: "attention/decay.py",
       classes: [
         %{
           status: :planned,
@@ -71,14 +70,14 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Attention.Decay.LinearWeightDecay",
           python: "LinearWeightDecay"
         }
-      ]
+      ],
+      python: "attention/decay.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Attention.GoalFilter",
       package: "monty",
-      python: "attention/goal_filter.py",
       classes: [
         %{
           status: :planned,
@@ -95,14 +94,14 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Attention.GoalFilter.HardGoalFilter",
           python: "HardGoalFilter"
         }
-      ]
+      ],
+      python: "attention/goal_filter.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Attention.Merge",
       package: "monty",
-      python: "attention/merge.py",
       classes: [
         %{
           status: :planned,
@@ -114,14 +113,14 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Attention.Merge.Union",
           python: "Union"
         }
-      ]
+      ],
+      python: "attention/merge.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Attention.Telemetry",
       package: "monty",
-      python: "attention/telemetry.py",
       classes: [
         %{
           status: :planned,
@@ -138,59 +137,71 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Attention.Telemetry.DefaultAttentionSystemTelemetry",
           python: "DefaultAttentionSystemTelemetry"
         }
-      ]
+      ],
+      python: "attention/telemetry.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Attention.VoxelGrid",
       package: "monty",
-      python: "attention/voxel_grid.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Attention.VoxelGrid",
           python: "VoxelGrid"
         }
-      ]
+      ],
+      python: "attention/voxel_grid.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Attention.WeightPooler",
       package: "monty",
-      python: "attention/weight_pooler.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Attention.WeightPooler",
           python: "WeightPooler"
         }
-      ]
+      ],
+      python: "attention/weight_pooler.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Cmp",
       package: "monty",
-      python: "cmp.py",
       classes: [
-        %{status: :implemented, elixir: "Monty.Cmp.Message", python: "Message"},
-        %{status: :implemented, elixir: "Monty.Cmp.Goal", python: "Goal"},
         %{
           status: :implemented,
+          file: "lib/monty/cmp/message.ex",
+          elixir: "Monty.Cmp.Message",
+          python: "Message"
+        },
+        %{
+          status: :implemented,
+          file: "lib/monty/cmp/goal.ex",
+          elixir: "Monty.Cmp.Goal",
+          python: "Goal"
+        },
+        %{
+          status: :implemented,
+          file: "lib/monty/cmp/attention_region.ex",
           elixir: "Monty.Cmp.AttentionRegion",
           python: "AttentionRegion"
         }
-      ]
+      ],
+      python: "cmp.py"
     },
     %{
       reason: "Hydra config tooling; superseded by Monty.Config",
       status: :excluded,
       elixir: "Monty.Conf.CompareSnapshots",
       package: "monty",
-      python: "conf/compare_snapshots.py",
-      classes: []
+      classes: [],
+      python: "conf/compare_snapshots.py"
     },
     %{
       reason:
@@ -198,53 +209,54 @@ defmodule Monty.ModuleMap.Data do
       status: :excluded,
       elixir: "Monty.Conf.MakeEnvironment",
       package: "monty",
-      python: "conf/make_environment.py",
-      classes: []
+      classes: [],
+      python: "conf/make_environment.py"
     },
     %{
       reason: "Hydra config tooling; superseded by Monty.Config",
       status: :excluded,
       elixir: "Monty.Conf.UpdateSnapshots",
       package: "monty",
-      python: "conf/update_snapshots.py",
-      classes: []
+      classes: [],
+      python: "conf/update_snapshots.py"
     },
     %{
       reason: "Hydra config tooling; superseded by Monty.Config",
       status: :excluded,
       elixir: "Monty.Conf.Validate",
       package: "monty",
-      python: "conf/validate.py",
-      classes: []
+      classes: [],
+      python: "conf/validate.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Context",
       package: "monty",
-      python: "context.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Context.RuntimeContext",
           python: "RuntimeContext"
         }
-      ]
+      ],
+      python: "context.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Experiment.Environment",
       package: "monty",
-      python: "experiment/environment.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/experiment/environment/interface.ex",
           elixir: "Monty.Experiment.Environment.Interface",
           python: "Interface"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/environment/one_object_per_episode_interface.ex",
           elixir: "Monty.Experiment.Environment.OneObjectPerEpisodeInterface",
           python: "OneObjectPerEpisodeInterface"
         },
@@ -263,66 +275,69 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Experiment.Environment.SaccadeOnImageFromStreamInterface",
           python: "SaccadeOnImageFromStreamInterface"
         }
-      ]
+      ],
+      python: "experiment/environment.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Experiment.LearningModule",
       package: "monty",
-      python: "experiment/learning_module.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Experiment.LearningModule.ExperimentLearningModule",
           python: "ExperimentLearningModule"
         }
-      ]
+      ],
+      python: "experiment/learning_module.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Experiment.MatchCriteria",
       package: "monty",
-      python: "experiment/match_criteria.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/experiment/match_criteria/match_criterion.ex",
           elixir: "Monty.Experiment.MatchCriteria.MatchCriterion",
           python: "MatchCriterion"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/match_criteria/any_lms_match.ex",
           elixir: "Monty.Experiment.MatchCriteria.AnyLMsMatch",
           python: "AnyLMsMatch"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/match_criteria/named_lms_match.ex",
           elixir: "Monty.Experiment.MatchCriteria.NamedLMsMatch",
           python: "NamedLMsMatch"
         }
-      ]
+      ],
+      python: "experiment/match_criteria.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Experiment.Monty",
       package: "monty",
-      python: "experiment/monty.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Experiment.Monty.ExperimentMonty",
           python: "ExperimentMonty"
         }
-      ]
+      ],
+      python: "experiment/monty.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Experiment.MotorSystem",
       package: "monty",
-      python: "experiment/motor_system.py",
       classes: [
         %{
           status: :planned,
@@ -339,52 +354,60 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Experiment.MotorSystem.ExperimentMotorPolicy",
           python: "ExperimentMotorPolicy"
         }
-      ]
+      ],
+      python: "experiment/motor_system.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Experiment.RecognitionPolicy",
       package: "monty",
-      python: "experiment/recognition_policy.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy/recognition_counter.ex",
           elixir: "Monty.Experiment.RecognitionPolicy.RecognitionCounter",
           python: "RecognitionCounter"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy/recognition_result.ex",
           elixir: "Monty.Experiment.RecognitionPolicy.RecognitionResult",
           python: "RecognitionResult"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy.ex",
           elixir: "Monty.Experiment.RecognitionPolicy",
           python: "RecognitionPolicy"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy/monty_is_done.ex",
           elixir: "Monty.Experiment.RecognitionPolicy.MontyIsDone",
           python: "MontyIsDone"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy/min_eval_max_total_steps.ex",
           elixir: "Monty.Experiment.RecognitionPolicy.MinEvalMaxTotalSteps",
           python: "MinEvalMaxTotalSteps"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy/max_total_steps.ex",
           elixir: "Monty.Experiment.RecognitionPolicy.MaxTotalSteps",
           python: "MaxTotalSteps"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy/maximum_steps.ex",
           elixir: "Monty.Experiment.RecognitionPolicy.MaximumSteps",
           python: "MaximumSteps"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy/step_limit.ex",
           elixir: "Monty.Experiment.RecognitionPolicy.StepLimit",
           python: "StepLimit"
         },
@@ -395,32 +418,36 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy/minimum_lms.ex",
           elixir: "Monty.Experiment.RecognitionPolicy.MinimumLMs",
           python: "MinimumLMs"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy/naive_scan.ex",
           elixir: "Monty.Experiment.RecognitionPolicy.NaiveScan",
           python: "NaiveScan"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy/object_recognition.ex",
           elixir: "Monty.Experiment.RecognitionPolicy.ObjectRecognition",
           python: "ObjectRecognition"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_policy/any_policy.ex",
           elixir: "Monty.Experiment.RecognitionPolicy.AnyPolicy",
           python: "AnyPolicy"
         }
-      ]
+      ],
+      python: "experiment/recognition_policy.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Experiment.RecognitionStatus",
       package: "monty",
-      python: "experiment/recognition_status.py",
       classes: [
         %{
           status: :planned,
@@ -429,17 +456,18 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/recognition_status.ex",
           elixir: "Monty.Experiment.RecognitionStatus",
           python: "RecognitionStatus"
         }
-      ]
+      ],
+      python: "experiment/recognition_status.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Experiment.SensorModule",
       package: "monty",
-      python: "experiment/sensor_module.py",
       classes: [
         %{
           reason:
@@ -450,63 +478,69 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/sensor_module/experiment_transform.ex",
           elixir: "Monty.Experiment.SensorModule.ExperimentTransform",
           python: "ExperimentTransform"
         },
         %{
           status: :implemented,
+          file: "lib/monty/experiment/sensor_module/experiment_sensor_module.ex",
           elixir: "Monty.Experiment.SensorModule.ExperimentSensorModule",
           python: "ExperimentSensorModule"
         }
-      ]
+      ],
+      python: "experiment/sensor_module.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Experiment.SensorModules.Telemetry",
       package: "monty",
-      python: "experiment/sensor_modules/telemetry.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Experiment.SensorModules.Telemetry.Snapshot",
           python: "Snapshot"
         }
-      ]
+      ],
+      python: "experiment/sensor_modules/telemetry.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Actions.ActionSamplers",
       package: "monty",
-      python: "frameworks/actions/action_samplers.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/action_samplers/action_sampler.ex",
           elixir: "Monty.Frameworks.Actions.ActionSamplers.ActionSampler",
           python: "ActionSampler"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/action_samplers/constant_sampler.ex",
           elixir: "Monty.Frameworks.Actions.ActionSamplers.ConstantSampler",
           python: "ConstantSampler"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/action_samplers/uniformly_distributed_sampler.ex",
           elixir: "Monty.Frameworks.Actions.ActionSamplers.UniformlyDistributedSampler",
           python: "UniformlyDistributedSampler"
         }
-      ]
+      ],
+      python: "frameworks/actions/action_samplers.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Actions",
       package: "monty",
-      python: "frameworks/actions/actions.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/action.ex",
           elixir: "Monty.Frameworks.Actions.Action",
           python: "Action"
         },
@@ -522,6 +556,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/look_down.ex",
           elixir: "Monty.Frameworks.Actions.LookDown",
           python: "LookDown"
         },
@@ -537,6 +572,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/look_up.ex",
           elixir: "Monty.Frameworks.Actions.LookUp",
           python: "LookUp"
         },
@@ -552,6 +588,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/move_forward.ex",
           elixir: "Monty.Frameworks.Actions.MoveForward",
           python: "MoveForward"
         },
@@ -567,6 +604,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/move_tangentially.ex",
           elixir: "Monty.Frameworks.Actions.MoveTangentially",
           python: "MoveTangentially"
         },
@@ -582,6 +620,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/orient_horizontal.ex",
           elixir: "Monty.Frameworks.Actions.OrientHorizontal",
           python: "OrientHorizontal"
         },
@@ -597,6 +636,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/orient_vertical.ex",
           elixir: "Monty.Frameworks.Actions.OrientVertical",
           python: "OrientVertical"
         },
@@ -612,6 +652,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/set_agent_pitch.ex",
           elixir: "Monty.Frameworks.Actions.SetAgentPitch",
           python: "SetAgentPitch"
         },
@@ -627,6 +668,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/set_agent_pose.ex",
           elixir: "Monty.Frameworks.Actions.SetAgentPose",
           python: "SetAgentPose"
         },
@@ -642,6 +684,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/set_sensor_pitch.ex",
           elixir: "Monty.Frameworks.Actions.SetSensorPitch",
           python: "SetSensorPitch"
         },
@@ -657,6 +700,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/set_sensor_pose.ex",
           elixir: "Monty.Frameworks.Actions.SetSensorPose",
           python: "SetSensorPose"
         },
@@ -672,6 +716,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/set_sensor_rotation.ex",
           elixir: "Monty.Frameworks.Actions.SetSensorRotation",
           python: "SetSensorRotation"
         },
@@ -687,6 +732,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/set_yaw.ex",
           elixir: "Monty.Frameworks.Actions.SetYaw",
           python: "SetYaw"
         },
@@ -702,6 +748,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/turn_left.ex",
           elixir: "Monty.Frameworks.Actions.TurnLeft",
           python: "TurnLeft"
         },
@@ -717,98 +764,110 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/turn_right.ex",
           elixir: "Monty.Frameworks.Actions.TurnRight",
           python: "TurnRight"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/action_json_encoder.ex",
           elixir: "Monty.Frameworks.Actions.ActionJSONEncoder",
           python: "ActionJSONEncoder"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/actions/action_json_decoder.ex",
           elixir: "Monty.Frameworks.Actions.ActionJSONDecoder",
           python: "ActionJSONDecoder"
         }
-      ]
+      ],
+      python: "frameworks/actions/actions.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Agents",
       package: "monty",
-      python: "frameworks/agents.py",
-      classes: []
+      classes: [],
+      python: "frameworks/agents.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.EnvironmentUtils.Server",
       package: "monty",
-      python: "frameworks/environment_utils/server.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Frameworks.EnvironmentUtils.Server.MontyRequestHandler",
           python: "MontyRequestHandler"
         }
-      ]
+      ],
+      python: "frameworks/environment_utils/server.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.EnvironmentUtils.Transforms",
       package: "monty",
-      python: "frameworks/environment_utils/transforms.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/environment_utils/transforms/transform_context.ex",
           elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.TransformContext",
           python: "TransformContext"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/environment_utils/transforms/transform.ex",
           elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.Transform",
           python: "Transform"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/environment_utils/transforms/missing_to_max_depth.ex",
           elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.MissingToMaxDepth",
           python: "MissingToMaxDepth"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/environment_utils/transforms/add_noise_to_raw_depth_image.ex",
           elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.AddNoiseToRawDepthImage",
           python: "AddNoiseToRawDepthImage"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/environment_utils/transforms/gaussian_smoothing.ex",
           elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.GaussianSmoothing",
           python: "GaussianSmoothing"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/environment_utils/transforms/gaussian_blur_rgb.ex",
           elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.GaussianBlurRGB",
           python: "GaussianBlurRGB"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/environment_utils/transforms/depth_to_3d_locations.ex",
           elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations",
           python: "DepthTo3DLocations"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/environment_utils/transforms/no_depth_sensor_present.ex",
           elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.NoDepthSensorPresent",
           python: "NoDepthSensorPresent"
         }
-      ]
+      ],
+      python: "frameworks/environment_utils/transforms.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Environments.Environment",
       package: "monty",
-      python: "frameworks/environments/environment.py",
       classes: [
         %{
           status: :planned,
@@ -840,14 +899,14 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Frameworks.Environments.Environment.SimulatedObjectEnvironment",
           python: "SimulatedObjectEnvironment"
         }
-      ]
+      ],
+      python: "frameworks/environments/environment.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Environments.ObjectInitSamplers",
       package: "monty",
-      python: "frameworks/environments/object_init_samplers.py",
       classes: [
         %{
           status: :planned,
@@ -874,55 +933,66 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Frameworks.Environments.ObjectInitSamplers.RandomRotation",
           python: "RandomRotation"
         }
-      ]
+      ],
+      python: "frameworks/environments/object_init_samplers.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Environments.PositioningProcedures",
       package: "monty",
-      python: "frameworks/environments/positioning_procedures.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/environments/positioning_procedures/object_not_visible_error.ex",
           elixir: "Monty.Frameworks.Environments.PositioningProcedures.ObjectNotVisibleError",
           python: "ObjectNotVisibleError"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/environments/positioning_procedures/positioning_procedure_result.ex",
           elixir:
             "Monty.Frameworks.Environments.PositioningProcedures.PositioningProcedureResult",
           python: "PositioningProcedureResult"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/environments/positioning_procedures/positioning_procedure.ex",
           elixir: "Monty.Frameworks.Environments.PositioningProcedures.PositioningProcedure",
           python: "PositioningProcedure"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/environments/positioning_procedures/positioning_procedure_factory.ex",
           elixir:
             "Monty.Frameworks.Environments.PositioningProcedures.PositioningProcedureFactory",
           python: "PositioningProcedureFactory"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/environments/positioning_procedures/get_good_view.ex",
           elixir: "Monty.Frameworks.Environments.PositioningProcedures.GetGoodView",
           python: "GetGoodView"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/environments/positioning_procedures/get_good_view_factory.ex",
           elixir: "Monty.Frameworks.Environments.PositioningProcedures.GetGoodViewFactory",
           python: "GetGoodViewFactory"
         }
-      ]
+      ],
+      python: "frameworks/environments/positioning_procedures.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Environments.TwoDData",
       package: "monty",
-      python: "frameworks/environments/two_d_data.py",
       classes: [
         %{
           status: :planned,
@@ -939,14 +1009,14 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Frameworks.Environments.TwoDData.SaccadeOnImageFromStreamEnvironment",
           python: "SaccadeOnImageFromStreamEnvironment"
         }
-      ]
+      ],
+      python: "frameworks/environments/two_d_data.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Experiments.Hooks",
       package: "monty",
-      python: "frameworks/experiments/hooks.py",
       classes: [
         %{
           status: :planned,
@@ -958,57 +1028,61 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Frameworks.Experiments.Hooks.NoOpStepHook",
           python: "NoOpStepHook"
         }
-      ]
+      ],
+      python: "frameworks/experiments/hooks.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Experiments.Mode",
       package: "monty",
-      python: "frameworks/experiments/mode.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/experiments/mode/experiment_mode.ex",
           elixir: "Monty.Frameworks.Experiments.Mode.ExperimentMode",
           python: "ExperimentMode"
         }
-      ]
+      ],
+      python: "frameworks/experiments/mode.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Experiments.MontyExperiment",
       package: "monty",
-      python: "frameworks/experiments/monty_experiment.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/experiments/monty_experiment.ex",
           elixir: "Monty.Frameworks.Experiments.MontyExperiment",
           python: "MontyExperiment"
         }
-      ]
+      ],
+      python: "frameworks/experiments/monty_experiment.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Experiments.ObjectRecognitionExperiments",
       package: "monty",
-      python: "frameworks/experiments/object_recognition_experiments.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/experiments/object_recognition_experiments/monty_object_recognition_experiment.ex",
           elixir:
             "Monty.Frameworks.Experiments.ObjectRecognitionExperiments.MontyObjectRecognitionExperiment",
           python: "MontyObjectRecognitionExperiment"
         }
-      ]
+      ],
+      python: "frameworks/experiments/object_recognition_experiments.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Experiments.PretrainingExperiments",
       package: "monty",
-      python: "frameworks/experiments/pretraining_experiments.py",
       classes: [
         %{
           status: :planned,
@@ -1016,116 +1090,130 @@ defmodule Monty.ModuleMap.Data do
             "Monty.Frameworks.Experiments.PretrainingExperiments.MontySupervisedObjectPretrainingExperiment",
           python: "MontySupervisedObjectPretrainingExperiment"
         }
-      ]
+      ],
+      python: "frameworks/experiments/pretraining_experiments.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Experiments.Profile",
       package: "monty",
-      python: "frameworks/experiments/profile.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Frameworks.Experiments.Profile.ProfileExperimentMixin",
           python: "ProfileExperimentMixin"
         }
-      ]
+      ],
+      python: "frameworks/experiments/profile.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Experiments.Seed",
       package: "monty",
-      python: "frameworks/experiments/seed.py",
-      classes: []
+      classes: [],
+      python: "frameworks/experiments/seed.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Loggers.ExpLogger",
       package: "monty",
-      python: "frameworks/loggers/exp_logger.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/loggers/exp_logger/logging_callback_handler.ex",
           elixir: "Monty.Frameworks.Loggers.ExpLogger.LoggingCallbackHandler",
           python: "LoggingCallbackHandler"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/loggers/exp_logger/base_monty_logger.ex",
           elixir: "Monty.Frameworks.Loggers.ExpLogger.BaseMontyLogger",
           python: "BaseMontyLogger"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/loggers/exp_logger/test_logger.ex",
           elixir: "Monty.Frameworks.Loggers.ExpLogger.TestLogger",
           python: "TestLogger"
         }
-      ]
+      ],
+      python: "frameworks/loggers/exp_logger.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers",
       package: "monty",
-      python: "frameworks/loggers/graph_matching_loggers.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/loggers/graph_matching_loggers/basic_graph_matching_logger.ex",
           elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger",
           python: "BasicGraphMatchingLogger"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/loggers/graph_matching_loggers/detailed_graph_matching_logger.ex",
           elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers.DetailedGraphMatchingLogger",
           python: "DetailedGraphMatchingLogger"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/loggers/graph_matching_loggers/selective_evidence_logger.ex",
           elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers.SelectiveEvidenceLogger",
           python: "SelectiveEvidenceLogger"
         }
-      ]
+      ],
+      python: "frameworks/loggers/graph_matching_loggers.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Loggers.MontyHandlers",
       package: "monty",
-      python: "frameworks/loggers/monty_handlers.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/loggers/monty_handlers/monty_handler.ex",
           elixir: "Monty.Frameworks.Loggers.MontyHandlers.MontyHandler",
           python: "MontyHandler"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/loggers/monty_handlers/detailed_json_handler.ex",
           elixir: "Monty.Frameworks.Loggers.MontyHandlers.DetailedJSONHandler",
           python: "DetailedJSONHandler"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/loggers/monty_handlers/basic_csv_stats_handler.ex",
           elixir: "Monty.Frameworks.Loggers.MontyHandlers.BasicCSVStatsHandler",
           python: "BasicCSVStatsHandler"
         }
-      ]
+      ],
+      python: "frameworks/loggers/monty_handlers.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Loggers.WandbHandlers",
       package: "monty",
-      python: "frameworks/loggers/wandb_handlers.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/loggers/wandb_handlers/wandb_wrapper.ex",
           elixir: "Monty.Frameworks.Loggers.WandbHandlers.WandbWrapper",
           python: "WandbWrapper"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/loggers/wandb_handlers/wandb_handler.ex",
           elixir: "Monty.Frameworks.Loggers.WandbHandlers.WandbHandler",
           python: "WandbHandler"
         },
@@ -1154,14 +1242,14 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Frameworks.Loggers.WandbHandlers.DetailedWandbMarkedObsHandler",
           python: "DetailedWandbMarkedObsHandler"
         }
-      ]
+      ],
+      python: "frameworks/loggers/wandb_handlers.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.AbstractMontyClasses",
       package: "monty",
-      python: "frameworks/models/abstract_monty_classes.py",
       classes: [
         %{
           status: :planned,
@@ -1181,7 +1269,21 @@ defmodule Monty.ModuleMap.Data do
         %{
           status: :planned,
           elixir: "Monty.Frameworks.Models.AbstractMontyClasses.Monty",
-          python: "Monty"
+          python: "Monty",
+          stand_in: [
+            %{
+              name: Monty.Runtime.Model,
+              file: "lib/monty/runtime/model.ex",
+              kind: :module,
+              why: "owns the modules a config names, as supervised processes"
+            },
+            %{
+              name: Monty.Runtime.Step,
+              file: "lib/monty/runtime/step.ex",
+              kind: :module,
+              why: "steps them: the matching step, the vote round, the terminal checks"
+            }
+          ]
         },
         %{
           status: :planned,
@@ -1190,6 +1292,7 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/abstract_monty_classes/learning_module.ex",
           elixir: "Monty.Frameworks.Models.AbstractMontyClasses.LearningModule",
           python: "LearningModule"
         },
@@ -1205,41 +1308,45 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/abstract_monty_classes/goal_generator.ex",
           elixir: "Monty.Frameworks.Models.AbstractMontyClasses.GoalGenerator",
           python: "GoalGenerator"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/abstract_monty_classes/sensor_module.ex",
           elixir: "Monty.Frameworks.Models.AbstractMontyClasses.SensorModule",
           python: "SensorModule"
         }
-      ]
+      ],
+      python: "frameworks/models/abstract_monty_classes.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.Buffer",
       package: "monty",
-      python: "frameworks/models/buffer.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/buffer/feature_at_location_buffer.ex",
           elixir: "Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer",
           python: "FeatureAtLocationBuffer"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/buffer/buffer_encoder.ex",
           elixir: "Monty.Frameworks.Models.Buffer.BufferEncoder",
           python: "BufferEncoder"
         }
-      ]
+      ],
+      python: "frameworks/models/buffer.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.DisplacementMatching",
       package: "monty",
-      python: "frameworks/models/displacement_matching.py",
       classes: [
         %{
           status: :planned,
@@ -1251,14 +1358,14 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphMemory",
           python: "DisplacementGraphMemory"
         }
-      ]
+      ],
+      python: "frameworks/models/displacement_matching.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.BurstSampling",
       package: "monty",
-      python: "frameworks/models/evidence_matching/burst_sampling.py",
       classes: [
         %{
           status: :planned,
@@ -1267,161 +1374,186 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/burst_sampling/burst_sampling_hypotheses_updater.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHypothesesUpdater",
           python: "BurstSamplingHypothesesUpdater"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/burst_sampling.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.Channels",
       package: "monty",
-      python: "frameworks/models/evidence_matching/channels.py",
-      classes: []
+      classes: [],
+      python: "frameworks/models/evidence_matching/channels.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker",
       package: "monty",
-      python: "frameworks/models/evidence_matching/evidence_slope_tracker.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/evidence_matching/evidence_slope_tracker.ex",
           elixir: "Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker",
           python: "EvidenceSlopeTracker"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/evidence_slope_tracker/hypotheses_selection.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker.HypothesesSelection",
           python: "HypothesesSelection"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/evidence_slope_tracker.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator",
       package: "monty",
-      python: "frameworks/models/evidence_matching/feature_evidence/calculator.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/feature_evidence/calculator/feature_evidence_calculator.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.FeatureEvidenceCalculator",
           python: "FeatureEvidenceCalculator"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/feature_evidence/calculator/default_feature_evidence_calculator.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.DefaultFeatureEvidenceCalculator",
           python: "DefaultFeatureEvidenceCalculator"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/feature_evidence/calculator.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer",
       package: "monty",
-      python: "frameworks/models/evidence_matching/feature_evidence/scorer.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/feature_evidence/scorer/feature_evidence_scorer.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.FeatureEvidenceScorer",
           python: "FeatureEvidenceScorer"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/feature_evidence/scorer/default_feature_evidence_scorer.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.DefaultFeatureEvidenceScorer",
           python: "DefaultFeatureEvidenceScorer"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/feature_evidence/scorer.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.AllSelector",
       package: "monty",
-      python: "frameworks/models/evidence_matching/features_for_matching/all_selector.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/features_for_matching/all_selector/all_features_for_matching_selector.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.AllSelector.AllFeaturesForMatchingSelector",
           python: "AllFeaturesForMatchingSelector"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/features_for_matching/all_selector.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.Selector",
       package: "monty",
-      python: "frameworks/models/evidence_matching/features_for_matching/selector.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/features_for_matching/selector/features_for_matching_selector.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.Selector.FeaturesForMatchingSelector",
           python: "FeaturesForMatchingSelector"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/features_for_matching/selector/default_features_for_matching_selector.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.FeaturesForMatching.Selector.DefaultFeaturesForMatchingSelector",
           python: "DefaultFeaturesForMatchingSelector"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/features_for_matching/selector.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.GraphMemory",
       package: "monty",
-      python: "frameworks/models/evidence_matching/graph_memory.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/graph_memory/evidence_graph_memory.ex",
           elixir: "Monty.Frameworks.Models.EvidenceMatching.GraphMemory.EvidenceGraphMemory",
           python: "EvidenceGraphMemory"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/graph_memory.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.Hypotheses",
       package: "monty",
-      python: "frameworks/models/evidence_matching/hypotheses.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/evidence_matching/hypotheses.ex",
           elixir: "Monty.Frameworks.Models.EvidenceMatching.Hypotheses",
           python: "Hypotheses"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/hypotheses.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer",
       package: "monty",
-      python: "frameworks/models/evidence_matching/hypotheses_displacer.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/hypotheses_displacer/hypothesis_displacer_telemetry.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer.HypothesisDisplacerTelemetry",
           python: "HypothesisDisplacerTelemetry"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/evidence_matching/hypotheses_displacer.ex",
           elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer",
           python: "HypothesesDisplacer"
         },
@@ -1431,68 +1563,77 @@ defmodule Monty.ModuleMap.Data do
             "Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer.DefaultHypothesesDisplacer",
           python: "DefaultHypothesesDisplacer"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/hypotheses_displacer.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater",
       package: "monty",
-      python: "frameworks/models/evidence_matching/hypotheses_updater.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/evidence_matching/hypotheses_updater.ex",
           elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater",
           python: "HypothesesUpdater"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/hypotheses_updater/default_hypotheses_updater.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypothesesUpdater",
           python: "DefaultHypothesesUpdater"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/hypotheses_updater.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.LearningModule",
       package: "monty",
-      python: "frameworks/models/evidence_matching/learning_module.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/learning_module/invalid_evidence_threshold_config.ex",
           elixir:
             "Monty.Frameworks.Models.EvidenceMatching.LearningModule.InvalidEvidenceThresholdConfig",
           python: "InvalidEvidenceThresholdConfig"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex",
           elixir: "Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM",
           python: "EvidenceGraphLM"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/learning_module.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.EvidenceMatching.Model",
       package: "monty",
-      python: "frameworks/models/evidence_matching/model.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/evidence_matching/model/monty_for_evidence_graph_matching.ex",
           elixir: "Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching",
           python: "MontyForEvidenceGraphMatching"
         }
-      ]
+      ],
+      python: "frameworks/models/evidence_matching/model.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.FeatureLocationMatching",
       package: "monty",
-      python: "frameworks/models/feature_location_matching.py",
       classes: [
         %{
           status: :planned,
@@ -1504,43 +1645,60 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphMemory",
           python: "FeatureGraphMemory"
         }
-      ]
+      ],
+      python: "frameworks/models/feature_location_matching.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.GoalGeneration",
       package: "monty",
-      python: "frameworks/models/goal_generation.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/goal_generation/parent_lm_not_provided.ex",
           elixir: "Monty.Frameworks.Models.GoalGeneration.ParentLMNotProvided",
           python: "ParentLMNotProvided"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/goal_generation/graph_goal_generator.ex",
           elixir: "Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator",
           python: "GraphGoalGenerator"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/goal_generation/evidence_goal_generator.ex",
           elixir: "Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator",
           python: "EvidenceGoalGenerator"
         }
-      ]
+      ],
+      python: "frameworks/models/goal_generation.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.GraphMatching",
       package: "monty",
-      python: "frameworks/models/graph_matching.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Frameworks.Models.GraphMatching.MontyForGraphMatching",
-          python: "MontyForGraphMatching"
+          python: "MontyForGraphMatching",
+          stand_in: [
+            %{
+              name: Monty.Runtime.Model,
+              file: "lib/monty/runtime/model.ex",
+              kind: :module,
+              why: "owns the modules a config names, as supervised processes"
+            },
+            %{
+              name: Monty.Runtime.Step,
+              file: "lib/monty/runtime/step.ex",
+              kind: :module,
+              why: "steps them: the matching step, the vote round, the terminal checks"
+            }
+          ]
         },
         %{
           status: :planned,
@@ -1549,17 +1707,18 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/graph_matching/graph_memory.ex",
           elixir: "Monty.Frameworks.Models.GraphMatching.GraphMemory",
           python: "GraphMemory"
         }
-      ]
+      ],
+      python: "frameworks/models/graph_matching.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.Mixins.NoResetEvidence",
       package: "monty",
-      python: "frameworks/models/mixins/no_reset_evidence.py",
       classes: [
         %{
           status: :planned,
@@ -1572,107 +1731,121 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Frameworks.Models.Mixins.NoResetEvidence.TheoreticalLimitLMLoggingMixin",
           python: "TheoreticalLimitLMLoggingMixin"
         }
-      ]
+      ],
+      python: "frameworks/models/mixins/no_reset_evidence.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.MontyBase",
       package: "monty",
-      python: "frameworks/models/monty_base.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Frameworks.Models.MontyBase",
           python: "MontyBase"
         }
-      ]
+      ],
+      python: "frameworks/models/monty_base.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.MotorPolicies",
       package: "monty",
-      python: "frameworks/models/motor_policies.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/no_goal_provided.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.NoGoalProvided",
           python: "NoGoalProvided"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/surface_policy_telemetry.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.SurfacePolicyTelemetry",
           python: "SurfacePolicyTelemetry"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/policy_status.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.PolicyStatus",
           python: "PolicyStatus"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/motor_policy_result.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult",
           python: "MotorPolicyResult"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/runtime_motor_policy.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.RuntimeMotorPolicy",
           python: "RuntimeMotorPolicy"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/motor_policy.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.MotorPolicy",
           python: "MotorPolicy"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/base_policy.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.BasePolicy",
           python: "BasePolicy"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/informed_policy_random_walk.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.InformedPolicyRandomWalk",
           python: "InformedPolicyRandomWalk"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/predefined_policy.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.PredefinedPolicy",
           python: "PredefinedPolicy"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/jump_to_goal.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.JumpToGoal",
           python: "JumpToGoal"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/informed_policy.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.InformedPolicy",
           python: "InformedPolicy"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/naive_scan_policy.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.NaiveScanPolicy",
           python: "NaiveScanPolicy"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/surface_policy.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.SurfacePolicy",
           python: "SurfacePolicy"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policies/surface_policy_curvature_informed.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed",
           python: "SurfacePolicyCurvatureInformed"
         }
-      ]
+      ],
+      python: "frameworks/models/motor_policies.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.MotorPolicySelectors",
       package: "monty",
-      python: "frameworks/models/motor_policy_selectors.py",
       classes: [
         %{
           status: :planned,
@@ -1681,80 +1854,91 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policy_selectors/motor_policy_selector.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicySelectors.MotorPolicySelector",
           python: "MotorPolicySelector"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policy_selectors/single_policy_selector.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicySelectors.SinglePolicySelector",
           python: "SinglePolicySelector"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_policy_selectors/distant_policy_selector.ex",
           elixir: "Monty.Frameworks.Models.MotorPolicySelectors.DistantPolicySelector",
           python: "DistantPolicySelector"
         }
-      ]
+      ],
+      python: "frameworks/models/motor_policy_selectors.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.MotorSystem",
       package: "monty",
-      python: "frameworks/models/motor_system.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/motor_system/surface_policy_action_details_telemetry.ex",
           elixir: "Monty.Frameworks.Models.MotorSystem.SurfacePolicyActionDetailsTelemetry",
           python: "SurfacePolicyActionDetailsTelemetry"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_system/runtime_motor_system.ex",
           elixir: "Monty.Frameworks.Models.MotorSystem.RuntimeMotorSystem",
           python: "RuntimeMotorSystem"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_system.ex",
           elixir: "Monty.Frameworks.Models.MotorSystem",
           python: "MotorSystem"
         }
-      ]
+      ],
+      python: "frameworks/models/motor_system.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.MotorSystemState",
       package: "monty",
-      python: "frameworks/models/motor_system_state.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_system_state/sensor_state.ex",
           elixir: "Monty.Frameworks.Models.MotorSystemState.SensorState",
           python: "SensorState"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_system_state/agent_state.ex",
           elixir: "Monty.Frameworks.Models.MotorSystemState.AgentState",
           python: "AgentState"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_system_state/proprioceptive_state.ex",
           elixir: "Monty.Frameworks.Models.MotorSystemState.ProprioceptiveState",
           python: "ProprioceptiveState"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/motor_system_state.ex",
           elixir: "Monty.Frameworks.Models.MotorSystemState",
           python: "MotorSystemState"
         }
-      ]
+      ],
+      python: "frameworks/models/motor_system_state.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.NoResetEvidenceMatching",
       package: "monty",
-      python: "frameworks/models/no_reset_evidence_matching.py",
       classes: [
         %{
           status: :planned,
@@ -1767,398 +1951,449 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM",
           python: "NoResetEvidenceGraphLM"
         }
-      ]
+      ],
+      python: "frameworks/models/no_reset_evidence_matching.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.ObjectModel",
       package: "monty",
-      python: "frameworks/models/object_model.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/object_model/graph_object_model.ex",
           elixir: "Monty.Frameworks.Models.ObjectModel.GraphObjectModel",
           python: "GraphObjectModel"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/object_model/grid_too_small_error.ex",
           elixir: "Monty.Frameworks.Models.ObjectModel.GridTooSmallError",
           python: "GridTooSmallError"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/object_model/grid_object_model.ex",
           elixir: "Monty.Frameworks.Models.ObjectModel.GridObjectModel",
           python: "GridObjectModel"
         }
-      ]
+      ],
+      python: "frameworks/models/object_model.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.Salience.MotorPolicy",
       package: "monty",
-      python: "frameworks/models/salience/motor_policy.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/salience/motor_policy/goal_collocated_with_sensor.ex",
           elixir: "Monty.Frameworks.Models.Salience.MotorPolicy.GoalCollocatedWithSensor",
           python: "GoalCollocatedWithSensor"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/motor_policy/look_at_goal.ex",
           elixir: "Monty.Frameworks.Models.Salience.MotorPolicy.LookAtGoal",
           python: "LookAtGoal"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/motor_policy.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.Salience.OnObjectObservation",
       package: "monty",
-      python: "frameworks/models/salience/on_object_observation.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/on_object_observation.ex",
           elixir: "Monty.Frameworks.Models.Salience.OnObjectObservation",
           python: "OnObjectObservation"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/on_object_observation.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor",
       package: "monty",
-      python: "frameworks/models/salience/return_inhibitor.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/return_inhibitor/decay_kernel.ex",
           elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayKernel",
           python: "DecayKernel"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/return_inhibitor/decay_kernel_factory.ex",
           elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayKernelFactory",
           python: "DecayKernelFactory"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/return_inhibitor/decay_field.ex",
           elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayField",
           python: "DecayField"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/return_inhibitor.ex",
           elixir: "Monty.Frameworks.Models.Salience.ReturnInhibitor",
           python: "ReturnInhibitor"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/return_inhibitor.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.Salience.Segmentation.SlicMerge",
       package: "monty",
-      python: "frameworks/models/salience/segmentation/slic_merge.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Frameworks.Models.Salience.Segmentation.SlicMerge",
           python: "SlicMerge"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/segmentation/slic_merge.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.Salience.Segmentation.Strategy",
       package: "monty",
-      python: "frameworks/models/salience/segmentation/strategy.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/salience/segmentation/strategy/segmentation_strategy.ex",
           elixir: "Monty.Frameworks.Models.Salience.Segmentation.Strategy.SegmentationStrategy",
           python: "SegmentationStrategy"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/segmentation/strategy.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.Salience.SensorModule",
       package: "monty",
-      python: "frameworks/models/salience/sensor_module.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/sensor_module/salience_sm.ex",
           elixir: "Monty.Frameworks.Models.Salience.SensorModule.SalienceSM",
           python: "SalienceSM"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/sensor_module.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.Salience.Strategies.Protocol",
       package: "monty",
-      python: "frameworks/models/salience/strategies/protocol.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/protocol/salience_strategy.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Protocol.SalienceStrategy",
           python: "SalienceStrategy"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/strategies/protocol.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.Salience.Strategies.Uniform",
       package: "monty",
-      python: "frameworks/models/salience/strategies/uniform.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/uniform.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Uniform",
           python: "Uniform"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/strategies/uniform.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images",
       package: "monty",
-      python: "frameworks/models/salience/strategies/vocus2/images.py",
       classes: [
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/salience/strategies/vocus2/images/color_space_converter.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images.ColorSpaceConverter",
           python: "ColorSpaceConverter"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/strategies/vocus2/images.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids",
       package: "monty",
-      python: "frameworks/models/salience/strategies/vocus2/pyramids.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/vocus2/pyramids/pyramid.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.Pyramid",
           python: "Pyramid"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/salience/strategies/vocus2/pyramids/pyramid_combine.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.PyramidCombine",
           python: "PyramidCombine"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/salience/strategies/vocus2/pyramids/pyramid_collapse.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.PyramidCollapse",
           python: "PyramidCollapse"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/strategies/vocus2/pyramids.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2",
       package: "monty",
-      python: "frameworks/models/salience/strategies/vocus2/vocus2.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/vocus2/map_combine.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.MapCombine",
           python: "MapCombine"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/vocus2/weighted_sum.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.WeightedSum",
           python: "WeightedSum"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/vocus2/weighted_mean.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.WeightedMean",
           python: "WeightedMean"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/vocus2/operating_limits.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.OperatingLimits",
           python: "OperatingLimits"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/vocus2/no_operating_limits.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.NoOperatingLimits",
           python: "NoOperatingLimits"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/vocus2/safe_operating_limits.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.SafeOperatingLimits",
           python: "SafeOperatingLimits"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/salience/strategies/vocus2/color_channel_salience.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalience",
           python: "ColorChannelSalience"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/vocus2/depth_salience.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.DepthSalience",
           python: "DepthSalience"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/vocus2/orientation_salience.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.OrientationSalience",
           python: "OrientationSalience"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/salience/strategies/vocus2/vocus2_salience_config.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Vocus2SalienceConfig",
           python: "Vocus2SalienceConfig"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/vocus2/normalize.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2.Normalize",
           python: "Normalize"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/strategies/vocus2.ex",
           elixir: "Monty.Frameworks.Models.Salience.Strategies.Vocus2",
           python: "Vocus2"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/strategies/vocus2/vocus2.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Models.Salience.Telemetry",
       package: "monty",
-      python: "frameworks/models/salience/telemetry.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/telemetry/salience_sm_telemetry.ex",
           elixir: "Monty.Frameworks.Models.Salience.Telemetry.SalienceSMTelemetry",
           python: "SalienceSMTelemetry"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/salience/telemetry/noop_salience_sm_telemetry.ex",
           elixir: "Monty.Frameworks.Models.Salience.Telemetry.NoopSalienceSMTelemetry",
           python: "NoopSalienceSMTelemetry"
         },
         %{
           status: :implemented,
+          file:
+            "lib/monty/frameworks/models/salience/telemetry/detailed_salience_sm_telemetry.ex",
           elixir: "Monty.Frameworks.Models.Salience.Telemetry.DetailedSalienceSMTelemetry",
           python: "DetailedSalienceSMTelemetry"
         }
-      ]
+      ],
+      python: "frameworks/models/salience/telemetry.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.SensorModules",
       package: "monty",
-      python: "frameworks/models/sensor_modules.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/sensor_modules/snapshot_telemetry.ex",
           elixir: "Monty.Frameworks.Models.SensorModules.SnapshotTelemetry",
           python: "SnapshotTelemetry"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/sensor_modules/surface_normal_method.ex",
           elixir: "Monty.Frameworks.Models.SensorModules.SurfaceNormalMethod",
           python: "SurfaceNormalMethod"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/sensor_modules/observation_processor.ex",
           elixir: "Monty.Frameworks.Models.SensorModules.ObservationProcessor",
           python: "ObservationProcessor"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/sensor_modules/message_noise.ex",
           elixir: "Monty.Frameworks.Models.SensorModules.MessageNoise",
           python: "MessageNoise"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/sensor_modules/no_message_noise.ex",
           elixir: "Monty.Frameworks.Models.SensorModules.NoMessageNoise",
           python: "NoMessageNoise"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/sensor_modules/default_message_noise.ex",
           elixir: "Monty.Frameworks.Models.SensorModules.DefaultMessageNoise",
           python: "DefaultMessageNoise"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/sensor_modules/camera_sm.ex",
           elixir: "Monty.Frameworks.Models.SensorModules.CameraSM",
           python: "CameraSM"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/sensor_modules/percept_filter.ex",
           elixir: "Monty.Frameworks.Models.SensorModules.PerceptFilter",
           python: "PerceptFilter"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/sensor_modules/passthrough_percept_filter.ex",
           elixir: "Monty.Frameworks.Models.SensorModules.PassthroughPerceptFilter",
           python: "PassthroughPerceptFilter"
         },
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/models/sensor_modules/feature_change_filter.ex",
           elixir: "Monty.Frameworks.Models.SensorModules.FeatureChangeFilter",
           python: "FeatureChangeFilter"
         }
-      ]
+      ],
+      python: "frameworks/models/sensor_modules.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Models.TwoDSensorModule",
       package: "monty",
-      python: "frameworks/models/two_d_sensor_module.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Frameworks.Models.TwoDSensorModule",
           python: "TwoDSensorModule"
         }
-      ]
+      ],
+      python: "frameworks/models/two_d_sensor_module.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Run",
       package: "monty",
-      python: "frameworks/run.py",
-      classes: []
+      classes: [],
+      python: "frameworks/run.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.RunEnv",
       package: "monty",
-      python: "frameworks/run_env.py",
-      classes: []
+      classes: [],
+      python: "frameworks/run_env.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.RunParallel",
       package: "monty",
-      python: "frameworks/run_parallel.py",
-      classes: []
+      classes: [],
+      python: "frameworks/run_parallel.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Sensors",
       package: "monty",
-      python: "frameworks/sensors.py",
       classes: [
         %{
           status: :planned,
@@ -2170,36 +2405,36 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Frameworks.Sensors.SensorConfig",
           python: "SensorConfig"
         }
-      ]
+      ],
+      python: "frameworks/sensors.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Utils.CommunicationUtils",
       package: "monty",
-      python: "frameworks/utils/communication_utils.py",
-      classes: []
+      classes: [],
+      python: "frameworks/utils/communication_utils.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Utils.DataclassUtils",
       package: "monty",
-      python: "frameworks/utils/dataclass_utils.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Frameworks.Utils.DataclassUtils.Dataclass",
           python: "Dataclass"
         }
-      ]
+      ],
+      python: "frameworks/utils/dataclass_utils.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Utils.EdgeDetection",
       package: "monty",
-      python: "frameworks/utils/edge_detection.py",
       classes: [
         %{
           status: :planned,
@@ -2216,200 +2451,206 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Frameworks.Utils.EdgeDetection.EdgeDetector",
           python: "EdgeDetector"
         }
-      ]
+      ],
+      python: "frameworks/utils/edge_detection.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Utils.GraphMatchingUtils",
       package: "monty",
-      python: "frameworks/utils/graph_matching_utils.py",
-      classes: []
+      classes: [],
+      python: "frameworks/utils/graph_matching_utils.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Utils.LivePlotter",
       package: "monty",
-      python: "frameworks/utils/live_plotter.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Frameworks.Utils.LivePlotter",
           python: "LivePlotter"
         }
-      ]
+      ],
+      python: "frameworks/utils/live_plotter.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Utils.LoggingUtils",
       package: "monty",
-      python: "frameworks/utils/logging_utils.py",
-      classes: []
+      classes: [],
+      python: "frameworks/utils/logging_utils.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Utils.ObjectModelUtils",
       package: "monty",
-      python: "frameworks/utils/object_model_utils.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Frameworks.Utils.ObjectModelUtils.NumpyGraph",
           python: "NumpyGraph"
         }
-      ]
+      ],
+      python: "frameworks/utils/object_model_utils.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Utils.PlotUtils",
       package: "monty",
-      python: "frameworks/utils/plot_utils.py",
-      classes: []
+      classes: [],
+      python: "frameworks/utils/plot_utils.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Utils.PlotUtilsAnalysis",
       package: "monty",
-      python: "frameworks/utils/plot_utils_analysis.py",
-      classes: []
+      classes: [],
+      python: "frameworks/utils/plot_utils_analysis.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Utils.PlotUtilsDev",
       package: "monty",
-      python: "frameworks/utils/plot_utils_dev.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Frameworks.Utils.PlotUtilsDev.PolicyPlot",
           python: "PolicyPlot"
         }
-      ]
+      ],
+      python: "frameworks/utils/plot_utils_dev.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Frameworks.Utils.ProfileUtils",
       package: "monty",
-      python: "frameworks/utils/profile_utils.py",
-      classes: []
+      classes: [],
+      python: "frameworks/utils/profile_utils.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Utils.SensorProcessing",
       package: "monty",
-      python: "frameworks/utils/sensor_processing.py",
-      classes: []
+      classes: [],
+      python: "frameworks/utils/sensor_processing.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Frameworks.Utils.SpatialArithmetics",
       package: "monty",
-      python: "frameworks/utils/spatial_arithmetics.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/frameworks/utils/spatial_arithmetics/tangent_frame.ex",
           elixir: "Monty.Frameworks.Utils.SpatialArithmetics.TangentFrame",
           python: "TangentFrame"
         }
-      ]
+      ],
+      python: "frameworks/utils/spatial_arithmetics.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Geometry",
       package: "monty",
-      python: "geometry.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/geometry/rotation.ex",
           elixir: "Monty.Geometry.Rotation",
           python: "Rotation"
         },
         %{
           status: :implemented,
+          file: "lib/monty/geometry/surface_pose_vectors.ex",
           elixir: "Monty.Geometry.SurfacePoseVectors",
           python: "SurfacePoseVectors"
         },
         %{
           status: :implemented,
+          file: "lib/monty/geometry/orientation_matrix.ex",
           elixir: "Monty.Geometry.OrientationMatrix",
           python: "OrientationMatrix"
         },
         %{
           status: :implemented,
+          file: "lib/monty/geometry/gaze_direction.ex",
           elixir: "Monty.Geometry.GazeDirection",
           python: "GazeDirection"
         }
-      ]
+      ],
+      python: "geometry.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Hydra",
       package: "monty",
-      python: "hydra.py",
-      classes: []
+      classes: [],
+      python: "hydra.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Math",
       package: "monty",
-      python: "math.py",
-      classes: []
+      classes: [],
+      python: "math.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Memento",
       package: "monty",
-      python: "memento.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Memento.Snapshotable",
           python: "Snapshotable"
         }
-      ]
+      ],
+      python: "memento.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Observations",
       package: "monty",
-      python: "observations.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Observations.SensorObservation",
           python: "SensorObservation"
         }
-      ]
+      ],
+      python: "observations.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Path",
       package: "monty",
-      python: "path.py",
-      classes: []
+      classes: [],
+      python: "path.py"
     },
     %{
       reason: nil,
       status: :implemented,
       elixir: "Monty.Runtime",
       package: "monty",
-      python: "runtime.py",
-      classes: []
+      classes: [],
+      python: "runtime.py"
     },
     %{
       reason:
@@ -2417,20 +2658,22 @@ defmodule Monty.ModuleMap.Data do
       status: :implemented,
       elixir: "Monty.SensorModules.SensorModule",
       package: "monty",
-      python: "sensor_modules/sensor_module.py",
       classes: [
         %{
           status: :implemented,
+          file: "lib/monty/sensor_modules/sensor_module/payload.ex",
           elixir: "Monty.SensorModules.SensorModule.Payload",
           python: "Payload"
         },
         %{
           status: :implemented,
+          file: "lib/monty/sensor_modules/sensor_module/transform_context.ex",
           elixir: "Monty.SensorModules.SensorModule.TransformContext",
           python: "TransformContext"
         },
         %{
           status: :implemented,
+          file: "lib/monty/sensor_modules/sensor_module/transform.ex",
           elixir: "Monty.SensorModules.SensorModule.Transform",
           python: "Transform"
         },
@@ -2443,17 +2686,18 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/sensor_modules/sensor_module.ex",
           elixir: "Monty.SensorModules.SensorModule",
           python: "SensorModule"
         }
-      ]
+      ],
+      python: "sensor_modules/sensor_module.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Habitat.Actions",
       package: "monty",
-      python: "simulators/habitat/actions.py",
       classes: [
         %{
           status: :planned,
@@ -2510,14 +2754,14 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Simulators.Habitat.Actions.OrientVertical",
           python: "OrientVertical"
         }
-      ]
+      ],
+      python: "simulators/habitat/actions.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Habitat.Actuator",
       package: "monty",
-      python: "simulators/habitat/actuator.py",
       classes: [
         %{
           status: :planned,
@@ -2539,14 +2783,14 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Simulators.Habitat.Actuator.NoActionParameters",
           python: "NoActionParameters"
         }
-      ]
+      ],
+      python: "simulators/habitat/actuator.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Habitat.Agents",
       package: "monty",
-      python: "simulators/habitat/agents.py",
       classes: [
         %{
           status: :planned,
@@ -2563,14 +2807,14 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Simulators.Habitat.Agents.SingleSensorAgent",
           python: "SingleSensorAgent"
         }
-      ]
+      ],
+      python: "simulators/habitat/agents.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Habitat.Environment",
       package: "monty",
-      python: "simulators/habitat/environment.py",
       classes: [
         %{
           status: :planned,
@@ -2584,17 +2828,18 @@ defmodule Monty.ModuleMap.Data do
         },
         %{
           status: :implemented,
+          file: "lib/monty/simulators/habitat/environment/habitat_environment.ex",
           elixir: "Monty.Simulators.Habitat.Environment.HabitatEnvironment",
           python: "HabitatEnvironment"
         }
-      ]
+      ],
+      python: "simulators/habitat/environment.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Habitat.Sensors",
       package: "monty",
-      python: "simulators/habitat/sensors.py",
       classes: [
         %{
           status: :planned,
@@ -2611,154 +2856,273 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Simulators.Habitat.Sensors.SemanticSensorConfig",
           python: "SemanticSensorConfig"
         }
-      ]
+      ],
+      python: "simulators/habitat/sensors.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Habitat.Simulator",
       package: "monty",
-      python: "simulators/habitat/simulator.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Simulators.Habitat.Simulator.HabitatSim",
           python: "HabitatSim"
         }
-      ]
+      ],
+      python: "simulators/habitat/simulator.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Mujoco.Agents",
       package: "monty",
-      python: "simulators/mujoco/agents.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Agents.Axis",
-          python: "Axis"
+          python: "Axis",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Agents.Agent",
-          python: "Agent"
+          python: "Agent",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Agents.Embodiment",
-          python: "Embodiment"
+          python: "Embodiment",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Agents.NoopAgent",
-          python: "NoopAgent"
+          python: "NoopAgent",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Agents.DistantAgent",
-          python: "DistantAgent"
+          python: "DistantAgent",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Agents.SurfaceAgent",
-          python: "SurfaceAgent"
+          python: "SurfaceAgent",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         }
-      ]
+      ],
+      python: "simulators/mujoco/agents.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Mujoco.Objects",
       package: "monty",
-      python: "simulators/mujoco/objects.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Objects.InvalidObjectMetadata",
-          python: "InvalidObjectMetadata"
+          python: "InvalidObjectMetadata",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Objects.ObjectMetadata",
-          python: "ObjectMetadata"
+          python: "ObjectMetadata",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Objects.ObjectMetadataDecoder",
-          python: "ObjectMetadataDecoder"
+          python: "ObjectMetadataDecoder",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         }
-      ]
+      ],
+      python: "simulators/mujoco/objects.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Mujoco.Simulator",
       package: "monty",
-      python: "simulators/mujoco/simulator.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Simulator.ModelMetadata",
-          python: "ModelMetadata"
+          python: "ModelMetadata",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Simulator.MuJoCoAgentFactory",
-          python: "MuJoCoAgentFactory"
+          python: "MuJoCoAgentFactory",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Simulator.UnknownObjectType",
-          python: "UnknownObjectType"
+          python: "UnknownObjectType",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Simulator.MissingObjectModel",
-          python: "MissingObjectModel"
+          python: "MissingObjectModel",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Simulator.MissingObjectTexture",
-          python: "MissingObjectTexture"
+          python: "MissingObjectTexture",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Simulator.DataPathNotConfigured",
-          python: "DataPathNotConfigured"
+          python: "DataPathNotConfigured",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Simulator.ActuateMethodMissing",
-          python: "ActuateMethodMissing"
+          python: "ActuateMethodMissing",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         },
         %{
           status: :planned,
           elixir: "Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator",
-          python: "MuJoCoSimulator"
+          python: "MuJoCoSimulator",
+          stand_in: [
+            %{
+              path: "priv/monty_py/world.py",
+              kind: :file,
+              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+            }
+          ]
         }
-      ]
+      ],
+      python: "simulators/mujoco/simulator.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Tacto.Agents",
       package: "monty",
-      python: "simulators/tacto/agents.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Simulators.Tacto.Agents.TactoFingerAgent",
           python: "TactoFingerAgent"
         }
-      ]
+      ],
+      python: "simulators/tacto/agents.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Tacto.Config",
       package: "monty",
-      python: "simulators/tacto/config.py",
       classes: [
         %{
           status: :planned,
@@ -2790,56 +3154,56 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Simulators.Tacto.Config.TactoSensorSpec",
           python: "TactoSensorSpec"
         }
-      ]
+      ],
+      python: "simulators/tacto/config.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Tacto.Sensors",
       package: "monty",
-      python: "simulators/tacto/sensors.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Simulators.Tacto.Sensors.TactoSensor",
           python: "TactoSensor"
         }
-      ]
+      ],
+      python: "simulators/tacto/sensors.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Telemetry.Formatters",
       package: "monty",
-      python: "telemetry/formatters.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Telemetry.Formatters.JsonFormatter",
           python: "JsonFormatter"
         }
-      ]
+      ],
+      python: "telemetry/formatters.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Telemetry.Publishers",
       package: "monty",
-      python: "telemetry/publishers.py",
       classes: [
         %{
           status: :planned,
           elixir: "Monty.Telemetry.Publishers.TelemetryPublisher",
           python: "TelemetryPublisher"
         }
-      ]
+      ],
+      python: "telemetry/publishers.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Telemetry.Schemas",
       package: "monty",
-      python: "telemetry/schemas.py",
       classes: [
         %{
           status: :planned,
@@ -2851,22 +3215,22 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Monty.Telemetry.Schemas.TelemetryEvent",
           python: "TelemetryEvent"
         }
-      ]
+      ],
+      python: "telemetry/schemas.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Telemetry.Telemeter",
       package: "monty",
-      python: "telemetry/telemeter.py",
-      classes: []
+      classes: [],
+      python: "telemetry/telemeter.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Teleop.Controls",
       package: "teleop",
-      python: "controls.py",
       classes: [
         %{
           status: :planned,
@@ -2883,22 +3247,22 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Teleop.Controls.SelectorBar",
           python: "SelectorBar"
         }
-      ]
+      ],
+      python: "controls.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Teleop.Default",
       package: "teleop",
-      python: "default.py",
-      classes: [%{status: :planned, elixir: "Teleop.Default", python: "Default"}]
+      classes: [%{status: :planned, elixir: "Teleop.Default", python: "Default"}],
+      python: "default.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Teleop.Helpers",
       package: "teleop",
-      python: "helpers.py",
       classes: [
         %{
           status: :planned,
@@ -2915,24 +3279,24 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Teleop.Helpers.FeatureInset",
           python: "FeatureInset"
         }
-      ]
+      ],
+      python: "helpers.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Teleop.LivePlotter",
       package: "teleop",
-      python: "live_plotter.py",
       classes: [
         %{status: :planned, elixir: "Teleop.LivePlotter", python: "LivePlotter"}
-      ]
+      ],
+      python: "live_plotter.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Teleop.Panels",
       package: "teleop",
-      python: "panels.py",
       classes: [
         %{
           status: :planned,
@@ -2949,22 +3313,22 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Teleop.Panels.DetailsPanel",
           python: "DetailsPanel"
         }
-      ]
+      ],
+      python: "panels.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Teleop.Plotter",
       package: "teleop",
-      python: "plotter.py",
-      classes: [%{status: :planned, elixir: "Teleop.Plotter", python: "Plotter"}]
+      classes: [%{status: :planned, elixir: "Teleop.Plotter", python: "Plotter"}],
+      python: "plotter.py"
     },
     %{
       reason: nil,
       status: :planned,
       elixir: "Teleop.Policies",
       package: "teleop",
-      python: "policies.py",
       classes: [
         %{
           status: :planned,
@@ -2981,7 +3345,8 @@ defmodule Monty.ModuleMap.Data do
           elixir: "Teleop.Policies.SurfaceInteractivePolicy",
           python: "SurfaceInteractivePolicy"
         }
-      ]
+      ],
+      python: "policies.py"
     }
   ]
 

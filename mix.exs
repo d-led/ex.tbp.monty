@@ -195,7 +195,16 @@ defmodule ExTbpMonty.MixProject do
         "ecto.migrate --migrations-path=priv/repo/migrations --migrations-path=priv/repo/manual_migrations",
       "ecto.setup": ["ecto.create", "ecto.migrate_all", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate_all --quiet", "test"],
+      test: [
+        # The map is a picture of the checkouts beside this one; a suite run is
+        # the moment it is cheapest to keep it true. A machine without them —
+        # CI has neither — keeps the committed map and is told so, rather than
+        # failing a run over a neighbour it does not need.
+        "monty.module_map.gen --best-effort",
+        "ecto.create --quiet",
+        "ecto.migrate_all --quiet",
+        "test"
+      ],
       "assets.setup": ["assets.install --if-missing"],
       "assets.build": [
         "cmd --cd assets npm ci",

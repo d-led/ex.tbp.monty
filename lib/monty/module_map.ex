@@ -123,13 +123,40 @@ defmodule Monty.ModuleMap do
     problems =
       Enum.flat_map(packages, &coverage_problems(&1, mapped)) ++
         missing_modules(entries) ++
-        missing_reasons(entries)
+        missing_reasons(entries) ++
+        missing_stand_ins(entries)
 
     case problems do
       [] -> {:ok, summary(entries) |> Map.put(:unchecked, absent_checkouts(packages))}
       problems -> {:error, problems}
     end
   end
+
+  # A stand-in is a promise about what runs: a module that has to exist, or a
+  # file that has to be here. A table that names a replacement nothing provides
+  # would read as "handled" on the page while a config naming the class is
+  # refused.
+  defp missing_stand_ins(entries) do
+    for %{classes: classes} = entry <- entries,
+        %{python: class} = cls <- classes,
+        stand_in <- Map.get(cls, :stand_in, []),
+        problem = stand_in_problem(stand_in),
+        do: "#{entry.package}/#{class}: stand-in #{describe_stand_in(stand_in)} #{problem}"
+  end
+
+  defp stand_in_problem(%{kind: :module, name: module}) do
+    if Code.ensure_loaded?(module), do: nil, else: "does not exist"
+  end
+
+  defp stand_in_problem(%{kind: :file, path: path}) do
+    if File.exists?(Path.join(File.cwd!(), path)), do: nil, else: "is not in this repository"
+  end
+
+  defp stand_in_problem(other), do: "is not a module or a file: #{inspect(other)}"
+
+  defp describe_stand_in(%{kind: :module, name: module}), do: inspect(module)
+  defp describe_stand_in(%{kind: :file, path: path}), do: path
+  defp describe_stand_in(other), do: inspect(other)
 
   # A package whose checkout is not on this machine: its source-side coverage
   # was not checked, and the caller says so rather than implying it was.

@@ -28,6 +28,7 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
   use Mix.Task
 
   alias Monty.ModuleMap
+  alias Monty.ModuleMap.StandIns
 
   @map_path "lib/monty/module_map/data.ex"
 
@@ -35,27 +36,81 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
   def run(args) do
     {opts, _rest} =
       OptionParser.parse!(args,
-        strict: [source: :string, teleop_source: :string, reset_decisions: :boolean]
+        strict: [
+          source: :string,
+          teleop_source: :string,
+          reset_decisions: :boolean,
+          best_effort: :boolean
+        ]
       )
 
     configure_sources(opts)
 
     decisions = if opts[:reset_decisions], do: %{}, else: read_existing()
 
-    entries =
-      ModuleMap.packages()
-      |> Enum.flat_map(&entries_for(&1, decisions))
-      |> Enum.sort_by(&{&1.package, &1.python})
+    case entries(decisions, opts[:best_effort]) do
+      :skip ->
+        Mix.shell().info("#{@map_path}: left as it is — no checkout to regenerate it from")
 
-    File.mkdir_p!(Path.dirname(@map_path))
-    File.write!(@map_path, render(entries, sources()) |> Code.format_string!())
+      {entries, generated} ->
+        entries = Enum.sort_by(entries, &{&1.package, &1.python})
+        write(entries, sources(generated))
 
-    summary = ModuleMap.summary(entries)
+        summary = ModuleMap.summary(entries)
 
-    Mix.shell().info(
-      "#{@map_path}: #{summary.files} files, #{summary.classes} classes, " <>
-        "#{summary.implemented} implemented, per package: #{inspect(summary.by_package)}"
-    )
+        Mix.shell().info(
+          "#{@map_path}: #{summary.files} files, #{summary.classes} classes, " <>
+            "#{summary.implemented} implemented, per package: #{inspect(summary.by_package)}"
+        )
+    end
+  end
+
+  # Every package that has a checkout is regenerated; one that does not keeps
+  # the entries the committed map already holds. `--best-effort` — what `mix
+  # test` passes — leaves the map alone entirely rather than failing over a
+  # neighbour the suite does not need: CI has no checkout at all.
+  #
+  # `generated` is only the packages this run read: a kept package's entry is
+  # the one the map already had, commit and all, and asking a checkout that is
+  # not there for its commit would replace a fact with nil.
+  defp entries(decisions, best_effort) do
+    ModuleMap.packages()
+    |> Enum.reduce_while({[], []}, fn package, {entries, generated} ->
+      case entries_for(package, decisions, best_effort) do
+        {:ok, entries_of_package, :generated} ->
+          {:cont, {entries ++ entries_of_package, [package.name | generated]}}
+
+        {:ok, entries_of_package, :kept} ->
+          {:cont, {entries ++ entries_of_package, generated}}
+
+        :skip ->
+          {:halt, :skip}
+      end
+    end)
+    |> case do
+      :skip -> :skip
+      {entries, generated} -> {entries, Enum.reverse(generated)}
+    end
+  end
+
+  # A map that reads the same is not rewritten: the file's mtime is what makes
+  # Mix recompile `Monty.ModuleMap.Data`, and `mix test` asks for this on every
+  # run.
+  defp write(entries, sources) do
+    content = render(entries, sources) |> Code.format_string!()
+    previous = File.read(@map_path)
+
+    if content == previous do
+      :ok
+    else
+      File.mkdir_p!(Path.dirname(@map_path))
+      # Written beside the map and renamed onto it: `mix test --partitions`
+      # starts several processes that all ask for this, and a half-written map
+      # is a compilation error for the next one.
+      temporary = @map_path <> ".tmp"
+      File.write!(temporary, content)
+      File.rename!(temporary, @map_path)
+    end
   end
 
   defp configure_sources(opts) do
@@ -66,7 +121,49 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
       do: Application.put_env(:ex_tbp_monty, :teleop_source, Path.expand(source))
   end
 
-  defp entries_for(package, existing) do
+  defp entries_for(package, existing, best_effort) do
+    if File.dir?(Path.join(package.root.(), package.relative)) do
+      {:ok, generated_entries(package, existing), :generated}
+    else
+      keep_previous(package, best_effort)
+    end
+  end
+
+  # A machine without the checkout cannot regenerate that package. What the map
+  # already holds is the best answer available here, so it is carried over
+  # unchanged — and when there is nothing to carry, an explicit regeneration
+  # says so instead of writing a map with a package missing.
+  defp keep_previous(package, best_effort) do
+    case previous_entries(package) do
+      [] when best_effort ->
+        :skip
+
+      [] ->
+        Mix.raise(
+          "no checkout for #{package.name} at #{package.root.()}: regenerating " <>
+            "would erase its entries. Pass --source, or --best-effort to leave the map alone"
+        )
+
+      entries ->
+        Mix.shell().info(
+          "module map: no checkout for #{package.name}; keeping the #{length(entries)} " <>
+            "entries the map already holds"
+        )
+
+        {:ok, entries, :kept}
+    end
+  end
+
+  defp previous_entries(package) do
+    if Code.ensure_loaded?(Monty.ModuleMap.Data) do
+      Monty.ModuleMap.Data.entries()
+      |> Enum.filter(&(Map.get(&1, :package, "monty") == package.name))
+    else
+      []
+    end
+  end
+
+  defp generated_entries(package, existing) do
     Enum.map(ModuleMap.python_files(package), fn relative ->
       elixir = ModuleMap.module_for(package.namespace, relative)
       known = Map.get(existing, {package.name, relative}, %{})
@@ -112,7 +209,57 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
       status: class_status(package, known, elixir, class, relative)
     }
     |> put_reason(excluded_class_reason(known, class))
+    |> put_file()
+    |> put_stand_ins(StandIns.for_class(class, relative))
   end
+
+  # Where a written class lives, asked of the compiled module rather than
+  # derived from its name: the port is not obliged to keep one module per file,
+  # and `sensor_modules/camera_sm.ex` holds `CameraSM` beside a
+  # `sensor_modules.ex` that never existed. The beam knows its own source, so
+  # the map carries the answer and a page's link is data, not a guess.
+  defp put_file(%{status: :implemented} = entry) do
+    case source_file(entry.elixir) do
+      nil -> entry
+      file -> Map.put(entry, :file, file)
+    end
+  end
+
+  defp put_file(entry), do: entry
+
+  defp source_file(module) do
+    name = Module.concat(String.split(module, "."))
+
+    with true <- Code.ensure_loaded?(name),
+         beam when is_list(beam) <- :code.which(name),
+         {:ok, {_module, chunks}} <- :beam_lib.chunks(beam, [:compile_info]),
+         source when is_list(source) <- chunks[:compile_info][:source] do
+      Path.relative_to(List.to_string(source), File.cwd!())
+    else
+      _unknown -> nil
+    end
+  end
+
+  # What runs instead, where anything does — the fact a reader of the map needs
+  # to tell "not written yet" from "replaced on purpose". Written only where
+  # there is one, so 358 empty lists do not bury the two answers.
+  defp put_stand_ins(entry, []), do: entry
+
+  defp put_stand_ins(entry, stand_ins),
+    do: Map.put(entry, :stand_in, Enum.map(stand_ins, &with_file/1))
+
+  # A stand-in module's file, for the same reason a class's is recorded.
+  defp with_file(%{kind: :module, name: module} = stand_in) do
+    case source_file(inspect_module(module)) do
+      nil -> stand_in
+      file -> Map.put(stand_in, :file, file)
+    end
+  end
+
+  defp with_file(stand_in), do: stand_in
+
+  defp inspect_module(module) when is_atom(module), do: inspect(module)
+  defp inspect_module(module), do: to_string(module)
 
   # `reason: nil` on every class of every file would bury the two classes that
   # have one, so the key is written only where it means something.
@@ -203,16 +350,29 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
   # `git pull` in the Monty checkout once changed 297 files — so the map carries
   # the commit it describes: a regenerated map then *says* upstream moved, in the
   # diff, instead of leaving a stale map to be discovered by a failing test.
-  defp sources do
-    Map.new(ModuleMap.packages(), fn package ->
-      root = package.root.()
+  defp sources(generated) do
+    previous = previous_sources()
 
-      {package.name,
-       %{
-         "commit" => git(root, ~w(rev-parse HEAD)),
-         "date" => git(root, ~w(show -s --format=%cI HEAD))
-       }}
+    Map.new(ModuleMap.packages(), fn package ->
+      # A package with no checkout keeps the commit the map already names: the
+      # map describes the code it was read from, and this run did not read it.
+      if package.name in generated,
+        do: {package.name, current_source(package)},
+        else: {package.name, Map.get(previous, package.name) || current_source(package)}
     end)
+  end
+
+  defp current_source(package) do
+    root = package.root.()
+
+    %{
+      "commit" => git(root, ~w(rev-parse HEAD)),
+      "date" => git(root, ~w(show -s --format=%cI HEAD))
+    }
+  end
+
+  defp previous_sources do
+    if Code.ensure_loaded?(Monty.ModuleMap.Data), do: Monty.ModuleMap.Data.sources(), else: %{}
   end
 
   defp git(root, arguments) do

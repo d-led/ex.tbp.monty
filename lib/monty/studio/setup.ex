@@ -27,6 +27,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Frameworks.Utils.SpatialArithmetics
   alias Monty.Geometry.Rotation
   alias Monty.ModuleMap
+  alias Monty.ModuleMap.StandIns
   alias Monty.Studio.Finding
   alias Monty.Studio.Memory
 
@@ -1889,18 +1890,10 @@ defmodule Monty.Studio.Setup do
   # world is the one that changes what a run's numbers mean. A training
   # experiment is not a shell: there is no training loop here yet, and saying so
   # is the point.
-  @shell_classes [
-    "Monty",
-    "MontyForGraphMatching"
-  ]
-
-  # Classes whose code this repository *carries and runs*: `priv/monty_py` is
-  # the MuJoCo world, written here against `mujoco` and executed in the
-  # interpreter this application carries. The module map calls the classes it
-  # mirrors `planned` because no Elixir module of that name exists — the right
-  # answer to "is it ported" and the wrong one to "does it run". It runs.
-  @world_marker ".simulators.mujoco."
-
+  #
+  # Which classes those are is `Monty.ModuleMap.StandIns`, not a second list:
+  # the same table goes into the generated map, so a page and a refusal cannot
+  # disagree.
   defp module_findings(setup) do
     modules = all_modules(setup)
     unknown = Enum.filter(modules, &(&1.status == :unknown))
@@ -1908,7 +1901,7 @@ defmodule Monty.Studio.Setup do
     planned =
       for module <- modules,
           module.status == :planned,
-          module.class not in @shell_classes,
+          not StandIns.shell?(module.class),
           do: module
 
     {in_the_world, stand_ins} = Enum.split_with(planned, &runs_in_the_world?/1)
@@ -1916,7 +1909,7 @@ defmodule Monty.Studio.Setup do
     shell =
       for module <- modules,
           module.status == :planned,
-          module.class in @shell_classes,
+          StandIns.shell?(module.class),
           do: module.class
 
     Enum.map(unknown, &unknown_module_finding/1) ++
@@ -1929,10 +1922,7 @@ defmodule Monty.Studio.Setup do
   # A MuJoCo class is not a stand-in: the world a run steps implements it, in
   # `priv/monty_py`, so listing it would tell a reader that a scene is missing
   # when the scene is exactly what ran.
-  defp runs_in_the_world?(%{python: python}) when is_binary(python),
-    do: String.contains?(python, @world_marker)
-
-  defp runs_in_the_world?(_module), do: false
+  defp runs_in_the_world?(%{python: python}), do: StandIns.in_the_world?(python)
 
   # Said only where it is true of the run: a MuJoCo run executes those classes.
   # A stand-in run does not execute them at all, so it has nothing to report.
