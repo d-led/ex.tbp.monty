@@ -360,6 +360,29 @@ defmodule Monty.Studio.SetupTest do
       refute Setup.valid?(setup)
     end
 
+    test "an experiment that trains on one list and evaluates another walks both" do
+      # `test/evidence_lm/evidence_mujoco` names two objects for training and one
+      # for evaluation. Monty builds an interface per phase and walks the one for
+      # the mode it is in; a run here that walked the evaluation list in both
+      # would be half the experiment — and its second training object would never
+      # be shown at all.
+      setup = setup_for("test/evidence_lm/evidence_mujoco")
+
+      assert Setup.objects(setup, :train) == ["capsule3DSolid", "cubeSolid"]
+      assert Setup.objects(setup, :eval) == ["capsule3DSolid"]
+
+      # Two objects for three epochs, then one for three: nine episodes, and a
+      # budget of three would stop the run in the middle of its training.
+      assert Setup.epoch_plan(setup) == [{:train, 3}, {:eval, 3}]
+      assert Setup.planned_episodes(setup) == 9
+      assert Setup.episodes(setup) == 9
+
+      # What an episode is built from — the world it shows, the object in it —
+      # is its own phase's list.
+      assert Setup.object_name(Setup.with_phase(setup, :train), 1) == "cubeSolid"
+      assert Setup.object_name(Setup.with_phase(setup, :eval), 1) == "capsule3DSolid"
+    end
+
     test "an experiment that trains is not refused for training" do
       setup = setup_for("surf_agent_unsupervised_10distinctobj")
 

@@ -169,7 +169,14 @@ defmodule Monty.Studio.Jobs.Run do
     record = attach_log(record, run_id, log_ready)
     sensor_ids = Setup.sensor_ids(opened.setup)
     experiment = Setup.experiment_class(opened.setup)
-    objects = Setup.objects(opened.setup)
+    # An epoch walks its own phase's objects: a config can train on two and
+    # evaluate on one, which is two episodes a training epoch and one an
+    # evaluation epoch.
+    objects = %{
+      train: Setup.objects(opened.setup, :train),
+      eval: Setup.objects(opened.setup, :eval)
+    }
+
     # How much of the experiment this run is: all of it, unless its record says
     # fewer episodes — which is how a page runs a slice and how a test runs one.
     # The number is per phase, so a two-phase config sliced to two runs two of
@@ -184,7 +191,7 @@ defmodule Monty.Studio.Jobs.Run do
 
     say(
       run_id,
-      "run started: #{record.experiment}, #{length(objects)} object(s) × " <>
+      "run started: #{record.experiment}, #{objects_line(objects)} × " <>
         "#{phases_line(plan)}, #{episodes} episode(s) in all, " <>
         "up to #{record.steps} steps each"
     )
@@ -306,7 +313,9 @@ defmodule Monty.Studio.Jobs.Run do
     {outcome, ran, state} =
       callbacks.experiment.run_epochs(
         %{state | mode: mode},
-        Map.merge(callbacks, %{epochs: epochs, episodes: episodes})
+        callbacks
+        |> Map.put(:objects, Map.get(callbacks.objects, mode, []))
+        |> Map.merge(%{epochs: epochs, episodes: episodes})
       )
 
     case outcome do
@@ -320,6 +329,13 @@ defmodule Monty.Studio.Jobs.Run do
   end
 
   defp run_phases([], _episodes, state, _callbacks), do: {:finished, [], state}
+
+  # "2 object(s) to train on, 1 to evaluate", which is not always one number.
+  defp objects_line(objects) do
+    Enum.map_join([:train, :eval], ", ", fn mode ->
+      "#{length(Map.get(objects, mode, []))} to #{if mode == :train, do: "train on", else: "evaluate"}"
+    end)
+  end
 
   # "3 train epoch(s) then 14 eval epoch(s)", in the words the record uses.
   defp phases_line([]), do: "no epochs: the config switches both phases off"
@@ -357,7 +373,10 @@ defmodule Monty.Studio.Jobs.Run do
 
     episode = state.episodes_started
 
-    case Run.start(opened.setup,
+    # The episode is built from its own phase's objects: the world it shows, the
+    # semantic id it carries and the target it is judged by all come from the
+    # interface Monty would have used for this mode.
+    case Run.start(Setup.with_phase(opened.setup, state.mode),
            steps: state.record.steps,
            episode: index,
            mode: state.mode,

@@ -147,19 +147,24 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert Path.basename(file) == "test-evidence_lm-evidence_mujoco.jsonl.gz"
     end
 
-    test "numbers the episodes of a run, not the episodes of each phase" do
-      # Three train epochs then three evaluation ones is six episodes, and each
-      # epoch counts its own episodes from zero — so a record that kept the
-      # epoch's index would hold two "episode 0"s and a chart would draw them as
-      # one, joining the last step of training to the first step of evaluation.
+    test "numbers the episodes of a run, and walks each phase's own objects" do
+      # This config trains on two objects (`capsule3DSolid`, `cubeSolid`) for three
+      # epochs and evaluates one for three, so a run of it is nine episodes — and
+      # each epoch counts its own episodes from zero, so a record that kept the
+      # epoch's index would hold three "episode 0"s and a chart would draw them as
+      # one.
       {:ok, opened} = Monty.Studio.open(@unnamed_training_experiment)
-      # Every episode of the experiment, not one a phase: six of them.
       {:ok, record} = RunHistory.start(RunLog.attributes(opened, 30, 0, 1, nil))
 
       assert {:ok, closed} = perform(record)
 
       episodes = closed.log |> Enum.map(& &1["episode"]) |> Enum.uniq() |> Enum.sort()
-      assert episodes == [0, 1, 2, 3, 4, 5]
+      assert episodes == Enum.to_list(0..8)
+
+      # Each epoch walks its phase's objects — two in training, one in
+      # evaluation — which `Setup.with_phase/2` is what an episode is built from
+      # (`setup_test.exs` says so directly; the stand-in scene shows one sphere,
+      # so the memory cannot tell the two objects apart here).
 
       # And every episode starts its own step counter again, which is what makes
       # the number worth having.

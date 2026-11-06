@@ -67,6 +67,10 @@ defmodule Monty.Studio.Setup do
             findings: [],
             positioning: [],
             object_names: nil,
+            # What each phase walks, as Monty keeps them apart: an experiment can
+            # train on two objects and evaluate on one, and then its training
+            # epochs are twice as long as its evaluation ones.
+            objects_by_phase: %{},
             agent_class: nil,
             recognition_policy: nil,
             model_name_or_path: nil
@@ -178,6 +182,7 @@ defmodule Monty.Studio.Setup do
       transforms: transforms(config),
       positioning: get_in(config, ["eval_env_interface_args", "positioning_procedures"]) || [],
       object_names: object_names(config),
+      objects_by_phase: objects_by_phase(config),
       agent_class: agent_class_of(config),
       recognition_policy: Map.get(config, "recognition_policy"),
       model_name_or_path: Map.get(config, "model_name_or_path"),
@@ -759,6 +764,45 @@ defmodule Monty.Studio.Setup do
   end
 
   @doc """
+  The same experiment, seen from one of its phases.
+
+  Monty builds a training interface and an evaluation interface, each with its own
+  objects, and `run_epoch` walks whichever belongs to the mode it is in. A setup
+  here carries one list, so what an episode of a phase is built from — the world,
+  the object it shows, the semantic id stamped on it — has to come from that
+  phase's list. `with_phase/2` is that setup: everything downstream keeps reading
+  `object_names` and gets the right objects without knowing about phases.
+
+  Without it, `test/evidence_lm/evidence_mujoco` walks `capsule3DSolid` twice and
+  `cubeSolid` never: the epoch loop hands the second object to an episode whose
+  world was built from the evaluation list.
+  """
+  @spec with_phase(t(), :train | :eval) :: t()
+  def with_phase(%__MODULE__{} = setup, mode) do
+    names = objects(setup, mode)
+    %{setup | object_names: names, objects_by_phase: %{train: names, eval: names}}
+  end
+
+  @doc """
+  The objects one phase of the run walks, one episode each.
+
+  Monty keeps a training interface and an evaluation interface, and they do not
+  have to name the same objects: `test/evidence_lm/evidence_mujoco` trains on
+  `capsule3DSolid` and `cubeSolid` and evaluates on `capsule3DSolid`, so its
+  training epochs are six episodes and its evaluation ones three. Walking the
+  evaluation list in both would be a shorter experiment than the config asks
+  for — and, since the second training object would never be seen, a memory with
+  one object in it where Monty's has two.
+  """
+  @spec objects(t(), :train | :eval) :: [String.t()]
+  def objects(%__MODULE__{} = setup, mode) do
+    case Map.get(setup.objects_by_phase, mode, []) do
+      [] -> objects(setup)
+      names -> names
+    end
+  end
+
+  @doc """
   How many eval epochs the run is: Monty's `n_eval_epochs`.
 
   A rotation experiment is the same object list walked again —
@@ -856,15 +900,21 @@ defmodule Monty.Studio.Setup do
   defp termination(_none), do: %{}
 
   @doc """
-  How many episodes a run of this experiment is: every object, in every rotation.
+  How many episodes a run of this experiment is: every object, in every rotation,
+  in every phase.
 
   `base_77obj_dist_agent` is seventy-seven objects in three rotations, so two
   hundred and thirty-one episodes — Monty's `run_epoch` inside his `evaluate`.
+  An experiment that trains first is both halves: `test/evidence_lm/evidence_mujoco`
+  trains on two objects for three epochs and evaluates one object for three, so
+  it is nine episodes, and a budget of three would stop it in the middle of its
+  training.
+
   A page shows this number before starting, because "run the experiment" and
   "run twelve steps" are very different promises.
   """
   @spec episodes(t()) :: pos_integer()
-  def episodes(%__MODULE__{} = setup), do: length(objects(setup)) * eval_epochs(setup)
+  def episodes(%__MODULE__{} = setup), do: planned_episodes(setup)
 
   @doc """
   How many episodes the whole experiment is, phases and all.
@@ -876,14 +926,12 @@ defmodule Monty.Studio.Setup do
   """
   @spec planned_episodes(t()) :: non_neg_integer()
   def planned_episodes(%__MODULE__{} = setup) do
-    per_epoch = length(objects(setup))
-
     # Added up rather than handed to `Enum.sum/1`, whose type is a list of
     # numbers summing to a number: an episode count is a count, and a type that
-    # admits a float invites one.
+    # admits a float invites one. Each phase counts its own objects.
     setup
     |> epoch_plan()
-    |> Enum.map(fn {_mode, epochs} -> per_epoch * epochs end)
+    |> Enum.map(fn {mode, epochs} -> length(objects(setup, mode)) * epochs end)
     |> Enum.reduce(0, &+/2)
   end
 
@@ -1598,6 +1646,20 @@ defmodule Monty.Studio.Setup do
     get_in(config, ["eval_env_interface_args", "object_names"]) ||
       get_in(config, ["train_env_interface_args", "object_names"]) ||
       []
+  end
+
+  # Each phase's list, and a phase that names none walks the other's: a config
+  # that only trains names its objects in the training half, and one that only
+  # evaluates names them in the evaluation half — either would otherwise be a run
+  # of nothing.
+  defp objects_by_phase(config) do
+    train = get_in(config, ["train_env_interface_args", "object_names"]) || []
+    evaluate = get_in(config, ["eval_env_interface_args", "object_names"]) || []
+
+    %{
+      train: if(train == [], do: evaluate, else: train),
+      eval: if(evaluate == [], do: train, else: evaluate)
+    }
   end
 
   defp named_object(%{"name" => name}), do: name
