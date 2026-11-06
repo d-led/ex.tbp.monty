@@ -9,7 +9,7 @@ defmodule Monty.Studio.RunLogTest do
 
   use ExUnit.Case, async: true
 
-  alias Monty.Studio.RunLog
+  alias Monty.Studio.{RunLog, Summary}
 
   describe "a recorded step" do
     test "keeps each sensor's place and what its centre reported" do
@@ -170,6 +170,26 @@ defmodule Monty.Studio.RunLogTest do
       actions: [],
       duration_us: 1234
     }
+  end
+
+  describe "the summary a finished run leaves" do
+    # A record that says "failed" and nothing else is the page this file exists
+    # to prevent: the reason goes into the same summary the numbers do, because
+    # that is what a person reads when the run did not finish.
+    test "a run that failed keeps why in its own words and the detail beside it" do
+      stored =
+        RunLog.summary(%Summary{}, %{
+          "reason" => "an undo jump left the agent turned away from where it started",
+          "technical" => "** (RuntimeError) an undo jump left …"
+        })
+
+      assert stored["reason"] == "an undo jump left the agent turned away from where it started"
+      assert stored["technical"] =~ "RuntimeError"
+    end
+
+    test "a run that finished has no reason to give" do
+      refute RunLog.summary(%Summary{}) |> Map.has_key?("reason")
+    end
   end
 
   defp belief do

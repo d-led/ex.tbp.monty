@@ -147,4 +147,51 @@ defmodule Monty.Studio.FailureTest do
       assert explained.technical == @crash
     end
   end
+
+  describe "a crash that reached an outcome" do
+    # What the episode loop puts in `{:crashed, step, reason}` is whatever
+    # stopped it: the pair `crashed/3` builds when a step died, or a bare term
+    # an episode that would not start answered with. Both are what the record
+    # keeps, and neither may arrive as nothing.
+    test "a crash written on a step is kept exactly as it was written" do
+      recorded = Failure.crashed(:error, %RuntimeError{message: "the motor disagreed"}, [])
+
+      assert Failure.stopped({:crashed, 7, recorded}) == recorded
+    end
+
+    test "an outcome that is not a failure has nothing to explain" do
+      assert Failure.stopped(:finished) == nil
+      assert Failure.stopped(:stopped) == nil
+    end
+
+    test "an exception that arrived on its own keeps its own sentence" do
+      stored = Failure.stopped(%RuntimeError{message: "the motor disagreed"})
+
+      assert stored["reason"] == "the motor disagreed"
+      assert stored["technical"] =~ "RuntimeError"
+    end
+
+    test "a sentence the world answered with stays a sentence" do
+      assert Failure.stopped("idx must satisfy 0 <= idx < 3")["reason"] ==
+               "idx must satisfy 0 <= idx < 3"
+    end
+
+    # The one thing a record must never do with a term is pass it off as the
+    # answer to "why did this stop".
+    test "a term is the detail, and says so in a sentence" do
+      stored = Failure.stopped({:positioning_did_not_finish, 5})
+
+      assert stored["reason"] == "The run stopped with an error this page cannot put in words."
+      assert stored["technical"] == "{:positioning_did_not_finish, 5}"
+    end
+
+    # "The object was not in view" is a run that could not start, not an
+    # unreadable one: it is the commonest way an episode fails to begin.
+    test "an object the world could not show is said plainly" do
+      stored = Failure.stopped({:target_not_visible, 3})
+
+      assert stored["reason"] == "The world could not put the object in front of the agent."
+      assert stored["technical"] == "{:target_not_visible, 3}"
+    end
+  end
 end

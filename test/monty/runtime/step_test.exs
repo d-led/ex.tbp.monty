@@ -5,7 +5,14 @@ defmodule Monty.Runtime.StepTest do
   alias Monty.Context
   alias Monty.Geometry.{OrientationMatrix, Rotation}
   alias Monty.Runtime.{Model, Registry, Step}
-  alias Monty.Test.{Messages, RecordingLearningModule, RecordingMotor, RecordingSensorModule}
+
+  alias Monty.Test.{
+    Messages,
+    RaisingMotor,
+    RecordingLearningModule,
+    RecordingMotor,
+    RecordingSensorModule
+  }
 
   @agent "agent_id_0"
   @identity Rotation.to_matrix(Rotation.identity())
@@ -509,6 +516,36 @@ defmodule Monty.Runtime.StepTest do
 
       assert Model.done?(model_id)
       assert_receive {:set_terminal_state, :lm_1, :time_out}
+    end
+  end
+
+  describe "a step whose module raised" do
+    # A coordinator's death is how a run ends when an invariant the policy holds
+    # turns out to be false. The caller is handed an exit whose reason is the
+    # exception the step was running — and that exception, with the frame that
+    # raised it, is what a page can say. "A process exited" is not.
+    test "reaches the caller as that exception, with the frame that raised it" do
+      model_id = start_model(motor: {RaisingMotor, RaisingMotor.new("the motor disagreed")})
+
+      {exception, stacktrace} =
+        try do
+          step(model_id)
+          flunk("the step was expected to die")
+        rescue
+          raised -> {raised, __STACKTRACE__}
+        end
+
+      assert %RuntimeError{message: "the motor disagreed"} = exception
+      assert Enum.any?(stacktrace, &match?({RaisingMotor, _, _, _}, &1))
+    end
+
+    # Nothing raised: the model is simply not there. That stays an exit, so a
+    # caller cannot mistake it for an exception somebody can fix.
+    test "a model that is not running is left as an exit" do
+      nowhere = Registry.via({:step, "no-such-model"})
+
+      assert {:noproc, _} =
+               catch_exit(Step.step(nowhere, observations(), %{@agent => %{}}, Context.new(1)))
     end
   end
 

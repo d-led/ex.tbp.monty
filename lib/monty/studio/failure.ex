@@ -43,6 +43,8 @@ defmodule Monty.Studio.Failure do
 
   @unreadable_hint "The technical details hold what it was; the run's own log has the rest."
 
+  @target_not_visible "The world could not put the object in front of the agent."
+
   @doc """
   Explains a reason a record keeps.
 
@@ -98,6 +100,33 @@ defmodule Monty.Studio.Failure do
   @spec recorded(explained()) :: %{String.t() => String.t() | nil}
   def recorded(%{what: what, technical: technical}),
     do: %{"reason" => what, "technical" => technical}
+
+  @doc """
+  What stopped a run, however it reached us, in the shape a record keeps.
+
+  An episode that died on a step carries the pair `crashed/3` built while the
+  traceback still existed; an episode that would not start carries whatever the
+  world or the config answered — an exception, a sentence, or a term. None of
+  them may arrive as nothing: a record that says "failed" and stops there is the
+  page this module exists to prevent.
+
+  `nil` is the answer for an outcome that is not a failure at all — a run that
+  finished, or one somebody stopped. The status says which; a reason beside it
+  would read as something having gone wrong.
+  """
+  @spec stopped(term()) :: %{String.t() => String.t() | nil} | nil
+  def stopped(outcome) when outcome in [:finished, :stopped], do: nil
+  def stopped({:crashed, _step, reason}), do: stopped(reason)
+  def stopped(%{"reason" => _} = recorded), do: recorded
+  def stopped(%{__exception__: true} = exception), do: crashed(:error, exception, [])
+  def stopped(sentence) when is_binary(sentence), do: sentence |> explain() |> recorded()
+
+  # A scene that could not show the object is the commonest way an episode
+  # fails to begin, and it deserves its own words rather than "unreadable".
+  def stopped({:target_not_visible, _id} = reason),
+    do: %{"reason" => @target_not_visible, "technical" => inspect(reason)}
+
+  def stopped(term), do: term |> inspect() |> explain() |> recorded()
 
   # `Exception.format/3` opens with "** (Kind) message" and indents the stacktrace
   # beneath it. The kind is a module name for an error, a thrown value's own word

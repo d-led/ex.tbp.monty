@@ -35,10 +35,25 @@ defmodule Monty.Runtime.Model do
     Supervisor.start_link(__MODULE__, options, name: via(model_id))
   end
 
-  @doc "Runs one step of a model by id."
+  @doc """
+  Runs one step of a model by id.
+
+  A coordinator that dies takes the step with it, and `GenServer.call` hands the
+  caller an exit whose reason is the exception the step was running. That exit is
+  unwrapped here, so the caller sees the exception the step died of — with the
+  step's own traceback, where the failing module's frame is — rather than "a
+  process exited", which is all a page could say about it otherwise
+  (`Monty.Studio.Failure`).
+
+  Anything else a call can be handed stays an exit: a model that is not running
+  is nobody's exception.
+  """
   @spec step(atom() | String.t(), map(), map(), Monty.Context.t()) :: {:ok, [map()], map()}
   def step(model_id, observations, proprioceptive_state, ctx) do
     Step.step(Registry.via({:step, model_id}), observations, proprioceptive_state, ctx)
+  catch
+    :exit, {{%{__exception__: true} = exception, stacktrace}, {GenServer, :call, _args}} ->
+      reraise exception, stacktrace
   end
 
   @doc "Whether the model has concluded this episode."

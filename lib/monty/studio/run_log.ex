@@ -209,9 +209,17 @@ defmodule Monty.Studio.RunLog do
   defp round_evidence(evidence) when is_number(evidence), do: Float.round(evidence * 1.0, 3)
   defp round_evidence(_not_a_number), do: nil
 
-  @doc "A finished run's summary, as the database stores it."
-  @spec summary(Summary.t()) :: map()
-  def summary(%Summary{} = summary) do
+  @doc """
+  A finished run's summary, as the database stores it.
+
+  `failure` is what stopped a run that did not finish — a sentence and the
+  detail beside it, in the shape `Failure` writes. It joins the numbers, because
+  the summary is the whole of what a page shows after the last step: a record
+  that says "failed" in one column and nothing in the other is a page that says
+  the run stopped without saying why.
+  """
+  @spec summary(Summary.t(), %{String.t() => String.t() | nil} | nil) :: map()
+  def summary(%Summary{} = summary, failure \\ nil) do
     %{
       "steps" => summary.steps,
       "duration_us" => summary.duration_us,
@@ -231,6 +239,7 @@ defmodule Monty.Studio.RunLog do
           {to_string(id), terminal && to_string(terminal)}
         end)
     }
+    |> Map.merge(failure || %{})
   end
 
   @doc """

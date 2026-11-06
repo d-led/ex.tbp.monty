@@ -365,17 +365,17 @@ defmodule Monty.Studio.Jobs.Run do
     emit(run_id, state.episode, info, rendered, sensor_ids, beliefs, centre_view(run, info.step))
     {:ok, info, %{state | run: run, record: record}}
   catch
-    # An exit and a raise are the same thing here: the step did not produce a
+    # A raise and an exit are the same thing here: the step did not produce a
     # report. Both end the episode as a failure, because the alternative — the
     # exception escaping the job — leaves a record saying "running" for ever,
-    # and a page nobody trusts.
-    :exit, reason -> broken(run_id, run, reason)
-    :error, reason -> broken(run_id, run, reason)
+    # and a page nobody trusts. The sentence is built here, where the traceback
+    # still exists: formatted later from a bare term, it would have none.
+    kind, reason -> step_died(run_id, run, Failure.crashed(kind, reason, __STACKTRACE__))
   end
 
-  defp broken(run_id, run, reason) do
-    say(run_id, "step #{run.step} died: #{inspect(reason)}")
-    {:error, reason}
+  defp step_died(run_id, run, %{"reason" => what} = recorded) do
+    say(run_id, "step #{run.step} died: #{what}")
+    {:error, recorded}
   end
 
   # A run whose statistics did not get written has still run: the episode is
@@ -438,12 +438,16 @@ defmodule Monty.Studio.Jobs.Run do
   defp close(record, opened, outcome, infos, conclusion, run_id) do
     summary = Summary.from_infos(infos, opened.setup, conclusion)
     status = status_of(outcome)
+    # One summary for the record and for whoever is watching: why a run did not
+    # finish is part of it, because that is everything a page has after the last
+    # step.
+    stored = RunLog.summary(summary, Failure.stopped(outcome))
 
     say(run_id, closing_line(outcome, infos, summary))
 
-    case RunHistory.finish(record, RunLog.summary(summary), status) do
+    case RunHistory.finish(record, stored, status) do
       {:ok, record} ->
-        broadcast(run_id, {:finished, %{status: status, summary: RunLog.summary(summary)}})
+        broadcast(run_id, {:finished, %{status: status, summary: stored}})
         {:ok, record}
 
       {:error, changeset} ->
@@ -463,8 +467,10 @@ defmodule Monty.Studio.Jobs.Run do
   defp closing_line(:stopped, infos, summary),
     do: "run stopped after #{length(infos)} step(s), #{summary.duration_us} µs of compute"
 
-  defp closing_line({:crashed, step, reason}, infos, _summary),
-    do: "run failed at step #{step} after #{length(infos)} step(s): #{inspect(reason)}"
+  defp closing_line({:crashed, step, reason}, infos, _summary) do
+    what = reason |> Failure.stopped() |> Map.fetch!("reason")
+    "run failed at step #{step} after #{length(infos)} step(s): #{what}"
+  end
 
   # -- failing loudly enough -------------------------------------------------
 
