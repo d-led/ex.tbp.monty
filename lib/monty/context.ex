@@ -9,9 +9,11 @@ defmodule Monty.Context do
   function of its episode seed.
 
   `rng_for/2` is the older arrangement, kept for the sites that have not been
-  moved onto the stream yet (the environment's noise transforms and the message
-  noise of a camera, which draw per module per step). It is a different set of
-  numbers by construction, and `docs/monty-differences.md` §2.1 lists what is left.
+  moved onto the stream yet (the environment's noise transforms and the
+  transform pipeline of `Monty.SensorModules.SensorModule`, which draw per module
+  per step). It is a different set of numbers by construction, and
+  `docs/monty-differences.md` §2.1 lists what is left. The camera's message noise
+  draws from the stream, as Monty's does.
 
   The step is advanced by the coordinator, never by a module.
   """

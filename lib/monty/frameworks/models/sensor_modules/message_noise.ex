@@ -7,16 +7,16 @@ defmodule Monty.Frameworks.Models.SensorModules.MessageNoise do
 
   Monty passes a numpy `RandomState` that the noise mutates as it draws. Here the
   stream is an argument instead: a noise layer draws from it and answers a
-  percept, drawing nothing else afterwards. The stream comes from
-  `Monty.Context.rng_for/2`, so it is a function of the episode seed, the
-  sensor's id and the step, and of nothing else — which is what makes a run
-  replayable (`docs/monty-differences.md` §2.1).
+  percept. It is the episode's one stream (`Monty.Random.Stream`), the same one
+  the motor system and the goal generators draw from, because it is the same one
+  in Monty — so the draws a noisy percept makes move the numbers of everything
+  stepped after it (`docs/monty-differences.md` §2.1).
   """
 
   alias Monty.Cmp.Message
 
   @type t :: struct()
-  @type rng :: :rand.state()
+  @type rng :: GenServer.server()
 
   @doc "The percept, noisier."
   @callback call(t(), Message.t(), rng()) :: Message.t()

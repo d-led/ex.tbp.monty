@@ -18,11 +18,12 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
   ## The random stream
 
   Monty's `step` draws from `ctx.rng`, one stream per runtime that every module
-  and every step shares. Here the sensor derives its stream from the context and
-  its own id for the step (`Monty.Context.rng_for/2`), so the same episode seed
-  replays the same noise whatever order the modules were stepped in — the same
-  deviation the learning modules and the policies make (`docs/monty-differences.md`
-  §2.1). A sensor with no `noise_params` draws nothing and is unaffected.
+  and every step shares. The noise layer draws from that same stream here, so a
+  noised percept consumes the draws Monty's does and the run stays comparable.
+  The sensor's transforms and the environment still derive a stream of their own
+  from the context and the module's id (`Monty.Context.rng_for/2`) — a deviation
+  from Monty's single object that `docs/monty-differences.md` §2.1 lists. A
+  sensor with no `noise_params` draws nothing and is unaffected.
 
   ## When there is no percept
 
@@ -237,7 +238,8 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
   end
 
   defp add_noise(percept, %__MODULE__{noise: {module, noise}, sensor_module_id: id}, ctx) do
-    module.call(noise, percept, Monty.Context.rng_for(ctx, id))
+    _ = id
+    module.call(noise, percept, ctx.rng)
   end
 
   # A step the motor system took on its own is not a step to learn from: the

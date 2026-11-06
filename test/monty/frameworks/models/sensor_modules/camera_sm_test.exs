@@ -240,6 +240,42 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
                noised(observation, params, ctx: ctx(8)).location
     end
 
+    test "draws NumPy's numbers, in the shape Monty draws them", %{observation: observation} do
+      # `numpy.random.RandomState(7).normal(0, 0.1, 3)`, which is what Monty's
+      # `rng.normal(0, sigma, shape)` returns for a three-part feature.
+      numpy = [0.16905257038003563, -0.04659373705408328, 0.0032820163678584403]
+
+      exact = percept(observation).non_morphological_features["hsv"]
+
+      moved =
+        noised(observation, %{"features" => %{"hsv" => 0.1}}, ctx: ctx(7)).non_morphological_features[
+          "hsv"
+        ]
+
+      # Hue is clipped to the wheel, so only the two after it are compared
+      # unchanged; the hue is the first draw either way.
+      assert_in_delta Enum.at(moved, 0), Enum.at(exact, 0) + Enum.at(numpy, 0), 1.0e-12
+      assert_in_delta Enum.at(moved, 1), Enum.at(exact, 1) + Enum.at(numpy, 1), 1.0e-12
+      assert_in_delta Enum.at(moved, 2), Enum.at(exact, 2) + Enum.at(numpy, 2), 1.0e-12
+    end
+
+    test "flips a boolean on NumPy's uniform draw", %{observation: observation} do
+      # `numpy.random.RandomState(7).random_sample()` is 0.0763: below the 0.1
+      # this test allows and above the 0.07 it refuses.
+      flipping = %{"features" => %{"pose_fully_defined" => 0.1}}
+      keeping = %{"features" => %{"pose_fully_defined" => 0.07}}
+
+      refute percept(observation, ctx: ctx(7)).morphological_features["pose_fully_defined"]
+
+      assert noised(observation, flipping, ctx: ctx(7)).morphological_features[
+               "pose_fully_defined"
+             ]
+
+      refute noised(observation, keeping, ctx: ctx(7)).morphological_features[
+               "pose_fully_defined"
+             ]
+    end
+
     test "is not added to a percept with no features worth matching on" do
       # Monty's condition is `process_features_in_lm`: a percept that is only a
       # location has no features to noise.
@@ -454,7 +490,22 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
 
   # -- fixtures --------------------------------------------------------------
 
-  defp ctx(seed \\ 0), do: Context.new(seed)
+  # A context with the episode's stream behind it, which is where the noise
+  # layer draws from. Each `ctx/1` starts a stream of its own, so two calls with
+  # the same seed are two runs of the same episode.
+  defp ctx(seed \\ 0) do
+    model_id = "camera-#{System.unique_integer([:positive])}"
+
+    spec =
+      Supervisor.child_spec(
+        {Monty.Random.Stream, %{model_id: model_id, seed: seed}},
+        id: model_id
+      )
+
+    start_supervised!(spec)
+
+    %{Context.new(seed) | rng: Monty.Random.Stream.via(model_id)}
+  end
 
   defp sensor(options \\ []) do
     CameraSM.new("patch", Keyword.merge([features: @features, is_surface_sm: true], options))

@@ -710,9 +710,48 @@ two runs draw the same numbers and decide differently: the difference is in
 goal selection at the step the learning module's evidence first drives the motor
 system, and only from step 8 do the draws differ as a consequence of the
 different view. That is a decision to compare, not a generator to port.
-(Draw sites still on a per-module stream: `DepthTo3DLocations` noise, a camera's
-message noise, and `ActionSampler.stream/3`, whose `ConstantSampler` this config
-never reaches.)
+
+**A camera's message noise draws from the stream too, since 2026-11-06.** It used
+to draw from `Monty.Context.rng_for/2` — an Erlang `:exsss` stream of the sensor's
+own, one per step — so a config with `noise_params` made none of Monty's numbers
+and spent none of the episode's stream: every draw after it belonged to a
+different experiment. `DefaultMessageNoise` now draws NumPy's normals from
+`ctx.rng` (`Monty.Random.Stream.normals/4`, and `random/1` for a boolean's
+probability), which is where Monty's `rng.normal(0, sigma, shape)` and
+`rng.random()` read. The numbers themselves are pinned against
+`numpy.random.RandomState(7)` in `camera_sm_test.exs`.
+
+**Measured, `unsupervised_inference_distinctobj_dist_agent`, seed 42, episode 1,
+step 0** — the first observation of the episode, per graph's highest evidence,
+against a run of Monty's own captured from its dashboard stream
+(`contrib/liveview_experiment` broadcaster, `zmq_port`):
+
+| graph           | Monty, `noise_params` removed | this port, `noise_params` removed |
+| --------------- | ----------------------------- | --------------------------------- |
+| mug             | 0.926976537864891             | 0.926976537864891                 |
+| bowl            | 0.911301662451220             | 0.911301662451220                 |
+| strawberry      | 0.809914                      | 0.809913732534838                 |
+| mustard_bottle  | 0.806172                      | 0.806172023088476                 |
+| spoon           | 0.762661                      | 0.762661333111226                 |
+| potted_meat_can | 0.673517                      | 0.673516709831654                 |
+| dice            | 0.633181191709936             | 0.633181191709935                 |
+| c_lego_duplo    | 0.513050                      | 0.513050464142806                 |
+| banana          | 0.471451                      | 0.471450867812467                 |
+| golf_ball       | 0.469935                      | 0.469934640113824                 |
+
+So the world, the positioning, the patch, the features and the feature evidence
+are Monty's to the last bit — the largest disagreement in the table is one unit
+in the last place. With the noise on, the same step reads 0.650 / 0.672 / 0.445
+where Monty reads 0.856 / 0.880 / 0.710, and that is the remaining piece: a
+`noise_params` is a **dict in Monty and a map here**, so the features are drawn in
+the YAML's order there and in term order here, which assigns the same count of
+draws to different features and — because `rk_gauss` keeps one spare value —
+changes which `random_sample` calls interleave with it. Carrying the YAML's key
+order into the composed config is the work that would close it.
+
+Draw sites still on a per-module stream: `DepthTo3DLocations` noise,
+`Monty.SensorModules.SensorModule`'s transform pipeline, and
+`ActionSampler.stream/3`.
 
 ## 2.2 `motor_only_step` travels in the result
 
