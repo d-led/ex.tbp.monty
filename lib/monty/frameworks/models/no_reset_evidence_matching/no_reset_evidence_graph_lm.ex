@@ -52,6 +52,8 @@ defmodule Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM
 
   @burst_sampling "tbp.monty.frameworks.models.evidence_matching.burst_sampling.BurstSamplingHypothesesUpdater"
 
+  @evidence_graph_lm "tbp.monty.frameworks.models.evidence_matching.learning_module.EvidenceGraphLM"
+
   @enforce_keys [:lm]
   defstruct [:lm, last_location: nil]
 
@@ -75,20 +77,27 @@ defmodule Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM
   @doc """
   The module a config's `_target_` names, built from it.
 
-  The updater is forced to burst sampling before the config is read, which is
-  what Monty's `__init__` does (`if not hasattr(kwargs, "hypotheses_updater_class")`
-  asks a dict whether it has an attribute: it never does), so the module's
+  Two things about the config are this class's rather than the evidence
+  module's, and both are replaced before the evidence module reads it. The
+  target is this class — the config asked for it — while the module it wraps is
+  `EvidenceGraphLM`, which refuses to be built from a config naming anything
+  else. And the updater is forced to burst sampling, which is what Monty's
+  `__init__` does (`if not hasattr(kwargs, "hypotheses_updater_class")` asks a
+  dict whether it has an attribute: it never does), so the module's
   `hypotheses_updater_args` are honoured and its choice of updater is not.
   """
   @spec from_config(map(), keyword()) :: {:ok, t()} | {:error, term()}
   def from_config(config, options \\ []) when is_map(config) do
-    with {:ok, lm} <- EvidenceGraphLM.from_config(put_burst_sampling(config), options) do
+    with {:ok, lm} <- EvidenceGraphLM.from_config(evidence_config(config), options) do
       {:ok, new(lm)}
     end
   end
 
-  defp put_burst_sampling(config),
-    do: Map.put(config, "hypotheses_updater_class", @burst_sampling)
+  defp evidence_config(config) do
+    config
+    |> Map.put("_target_", @evidence_graph_lm)
+    |> Map.put("hypotheses_updater_class", @burst_sampling)
+  end
 
   # Monty sets `gsg.wait_growth_multiplier = 1` on whatever generator the module
   # has; only the evidence generator reads it, and a generator without the field
