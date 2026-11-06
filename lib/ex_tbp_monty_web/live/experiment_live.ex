@@ -134,11 +134,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # The last few runs of one experiment, newest first. Five: this is a list to
   # click through, not the runs page, and the detail belongs to the run.
-  defp recent_runs(name) do
-    RunHistory.search(state: "all", text: name, per_page: 25).runs
-    |> Enum.filter(&(&1.experiment == name))
-    |> Enum.take(@runs_shown)
-  end
+  #
+  # By the experiment's own name, in the query: a text search narrowed here would
+  # read twenty-five rows to keep five, and — because it is a *substring* match —
+  # it could return nothing at all for an experiment whose name is the beginning
+  # of a busier one's.
+  defp recent_runs(name), do: RunHistory.list_for(name, limit: @runs_shown)
 
   # A run's record is written the moment it is queued, so `running` on the record
   # before a worker exists means "queued": the queue knows better, and this is
