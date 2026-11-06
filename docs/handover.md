@@ -593,9 +593,23 @@ value unit` for each sample, and the hook interpolates a position the server
    `unit`, `named`) and the hook writes the one sentence. `label/5` and
    `unit_note/1` are gone, and the page's tests assert the parts.
 
+Two more came out of walking the pointer across the axis a percent at a time,
+which a screenshot cannot show:
+
+4. **The overlay kept a stale reading over blank stretches.** Before the first
+   recorded belief — thirteen percent of this run's axis — no line exists, and
+   the crosshair stayed where the pointer had last found one, naming a step the
+   pointer was nowhere near. `hover` now hides when there is no reading.
+5. **The tooltip was pinned to a plot edge**, while the place it named sat
+   mid-height. It now sits just above its own point (below it when there is no
+   room above) and stays inside the box.
+
 Proved in the browser, not just in ExUnit: at a drawn vertex the readout reads
-exactly the stored sample (`#48 · 8.69`), half a step later `#48.5 · 4.54`, and
-the crosshair follows the pointer at every position in between.
+exactly the stored sample (`#48 · 8.69`), half a step later `#48.5 · 4.54`; over
+one-percent steps across the whole axis the crosshair's left edge equals the
+pointer's position at all 86 positions that have a line (drift ≤ 0.8 %), the step
+advances 1.6–1.7 per percent with no discontinuity, and nothing is shown at
+1–13 % or past the final step.
 
 ---
 
