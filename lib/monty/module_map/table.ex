@@ -120,9 +120,7 @@ defmodule Monty.ModuleMap.Table do
   def filter(rows, query, status) do
     tokens = tokens(query)
 
-    rows
-    |> Enum.filter(&in_status?(&1, status))
-    |> Enum.filter(&matches?(&1, tokens))
+    Enum.filter(rows, &(in_status?(&1, status) and matches?(&1, tokens)))
   end
 
   @doc "The statuses a row can have, in the order the page offers them."
