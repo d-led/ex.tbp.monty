@@ -177,15 +177,26 @@ defmodule ExTbpMontyWeb.EvidenceChart do
       // them out of the SVG instead of asking the server for a second copy.
       export default {
         mounted() {
+          // Where the pointer was, in the page's own pixels. A live chart is
+          // redrawn every step, and almost every redraw happens while somebody is
+          // hovering it — a tooltip that is hidden on each one is a tooltip that
+          // blinks, and one that is never repositioned drifts away from the
+          // cursor the moment the chart grows under it.
+          this.pointer = null
           this.tooltip = this.el.parentElement.querySelector("[data-chart-tooltip]")
+
           this.el.addEventListener("mousemove", (event) => this.hover(event))
           this.el.addEventListener("mouseleave", () => this.hide())
         },
 
-        // The chart is redrawn every step, so a tooltip from before the patch
-        // would be describing a picture that is no longer there.
+        // The picture changed, the pointer did not: the tooltip keeps saying what
+        // is under it, with the numbers from the new picture. Only a pointer that
+        // has left the chart hides it.
         updated() {
-          this.hide()
+          this.tooltip = this.el.parentElement.querySelector("[data-chart-tooltip]")
+          if (this.pointer === null) return this.hide()
+
+          this.hover(this.pointer)
         },
 
         geometry() {
@@ -204,19 +215,21 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           }
         },
 
-        hover(event) {
+        hover(pointer) {
+          this.pointer = { clientX: pointer.clientX, clientY: pointer.clientY }
+
           const chart = this.geometry()
           const rect = this.el.getBoundingClientRect()
           const scale = rect.width / chart.width
-          const x = (event.clientX - rect.left) / scale
+          const x = (this.pointer.clientX - rect.left) / scale
           const plot = chart.width - chart.left - chart.right
 
-          if (x < chart.left || x > chart.left + plot) return this.hide()
+          if (x < chart.left || x > chart.left + plot) return this.hide(false)
 
           const rows = this.rowsAt(x, chart)
-          if (rows.length === 0) return this.hide()
+          if (rows.length === 0) return this.hide(false)
 
-          this.show(rows, chart, rect, event)
+          this.show(rows, chart, rect, this.pointer)
         },
 
         // The values at the step nearest the cursor, which is the question a
@@ -313,7 +326,9 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           return line
         },
 
-        hide() {
+        hide(pointer_left = true) {
+          if (pointer_left) this.pointer = null
+
           if (this.tooltip) this.tooltip.setAttribute("hidden", "")
           this.crosshairMark?.remove()
           this.crosshairMark = null

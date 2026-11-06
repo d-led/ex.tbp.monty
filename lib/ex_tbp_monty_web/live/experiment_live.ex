@@ -185,23 +185,39 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
 
     # A page that moves to another run starts that run's story, not the last
-    # one's: charts, beliefs and frames are per run, and two runs' steps in one
-    # chart would be a line through episodes that never happened.
-
+    # one's.
     socket
+    |> clear_run_view()
     |> assign(
       run_id: record.id,
       status: record.status,
       progress: steps_of_last_episode(record),
       log_path: record.log_path,
-      summary: nil,
-      beliefs: %{},
-      charts: %{},
-      centre: nil
+      summary: nil
     )
-    |> stream(:frames, [], reset: true)
     |> seed_log(record)
     |> watch()
+  end
+
+  # Everything on the page that belongs to *one* run: the beliefs a chart is drawn
+  # from, the chart itself, the picture of where the agent is, and the two flags
+  # that say what has already been seeded from a record.
+  #
+  # Both ways into a run go through it — a second press of "Run it" as much as a
+  # page following a run already going. Without it a second run's steps land in
+  # the first run's chart: the same episode numbers mean the same x, so the lines
+  # of two runs that never happened together are drawn as one.
+  defp clear_run_view(socket) do
+    socket
+    |> assign(
+      beliefs: %{},
+      charts: %{},
+      centre: nil,
+      chart_extent: {0, 0},
+      beliefs_seeded: false,
+      frames_seeded: false
+    )
+    |> stream(:frames, [], reset: true)
   end
 
   # The lines a run already printed are in the record; showing the log from the
@@ -1138,6 +1154,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
         {:noreply,
          socket
+         |> clear_run_view()
          |> assign(
            run_id: first.id,
            status: "running",

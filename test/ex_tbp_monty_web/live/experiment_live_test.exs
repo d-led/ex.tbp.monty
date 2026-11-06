@@ -401,6 +401,26 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert chart =~ "is the answer so far"
     end
 
+    test "a second Run it draws the second run's chart, not more of the first", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      first = chart_points(view)
+      IO.puts("POINTS first=#{first}")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # The chart is one run's. Two runs' steps share episode numbers and steps,
+      # so a chart that kept the first one's beliefs would draw the second run's
+      # points into the first one's line — a history nobody ran.
+      IO.puts("POINTS second=#{chart_points(view)}")
+      assert chart_points(view) == first
+    end
+
     test "counts the steps of the episode it is running, not of the whole run", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=2")
@@ -760,6 +780,20 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   defp poll(view) do
     send(view.pid, :studio_poll)
     _ = :sys.get_state(view.pid)
+  end
+
+  # How many points the module's chart draws, all lines together: two steps of a
+  # run are two points, and two runs of two steps drawn as one line are four.
+  defp chart_points(view) do
+    chart = view |> element("#chart-learning_module_0") |> render()
+
+    chart
+    |> String.split(~r/points="/, trim: true)
+    |> Enum.map(fn part ->
+      part |> String.split("\"") |> hd() |> String.split(~r/\s+/, trim: true)
+    end)
+    |> Enum.map(&length/1)
+    |> Enum.sum()
   end
 
   defp perform_run(view) do
