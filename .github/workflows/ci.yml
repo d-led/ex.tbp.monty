@@ -641,7 +641,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          # `macos-latest`, not `macos-14`: this account's queue answers the
+          # pinned label with "The configuration 'macos-14-arm64-us-default'
+          # is not supported" and cancels the job a second after it is queued,
+          # while the same image under `macos-latest` builds — which is how the
+          # mirror's desktop release builds it.
+          - os: macos-latest
             rid: osx-arm64
             asset: ex-tbp-monty-osx-arm64
             # The Tauri CLI is built from source and cached here; the images
