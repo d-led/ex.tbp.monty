@@ -1,19 +1,29 @@
-# Hand-over — 2026-11-06
+# Hand-over — 2026-11-06 (evening)
 
 What is open, what is already known, and where the evidence is. Written for
 whoever picks this up next; every claim below was measured or read, and the
 file and line that settles each one is named.
 
-State at hand-over: CI is **green in every job** (`42178863188` on `6bd0bfe`, so
-section 1 is closed). A step of `base_config_10distinctobj_dist_agent` costs
-**6.85 M reductions** and the whole experiment finishes: **140/140 episodes,
-every one ending in a recognition, 4 789 steps in 203 s, exit 0, 42.5 ms a step**
-on a quiet machine (Monty's dashboard: ~39 ms).
+State at hand-over: **`scripts/quality.sh` is green** on `e5ad552` — lint clean,
+2 311 tests (19 properties), CRAP worst 29.85 against a threshold of 20. CI's
+last completed run (`42254886887`, on `4d92066`) was **red in two jobs**, both
+fixed by `e5ad552`: `lint` (one unformatted test file) and `types` (a real bug
+dialyzer found — the generator's "map unchanged" guard compared a binary with a
+`File.read/1` result, so it never fired and every `mix test` rewrote the map).
+Check CI on the commit after this one before believing anything in section 10.
 
-What is left, in order: the desktop sidecar's failed stdout write on every line
-(6), the performance work (7), and one known gap in the same family as the crash
-that was just fixed — `mix monty.run` does not catch a raise, so a headless run's
-record is closed by the Reaper instead of by the run (3).
+What is left, in order:
+
+1. **Training makes fewer objects than Monty does** — the chart the user
+   noticed: Monty's training built three graphs, ours two, from the same six
+   training episodes (section 10.4). This is the first thing to look at.
+2. **`GraphLM` + `DisplacementGraphLM`** — the keystone port, 62 experiments
+   (section 10.6). Must land as a pair.
+3. **Two decisions still with the user** (10.7): Monty's pytest fixtures in the
+   catalogue, and whether Habitat-Sim stays a permanent refusal.
+4. **Performance** (7) is unchanged and still the biggest single win left.
+5. The deferred review of the colocated CSS/JS/hooks, which is written down in
+   the repository memory, not here.
 
 ---
 
@@ -226,7 +236,130 @@ monty.module_map.verify` enforces it. Never rename a mapped module.
 
 ---
 
-## 10. The port's own computational gaps, and where they are written down
+## 10. This session: the map became tooling, the table became a page, the runner learned
+
+### 10.1 What landed, in order
+
+| commit    | what it changes                                                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `d8590c5` | `mix monty.run` carries the memory between episodes and walks each phase's own objects (it started every episode from the eval list and learned nothing)                        |
+| `f0fbb3b` | the module map carries `stand_in:` (19 classes) and `file:` (176), `Setup`'s findings read one table instead of keeping two lists, and `mix test` refreshes the map best-effort |
+| `91a3226` | `/modules` — the generated map as a filterable table                                                                                                                            |
+| `9025e2f` | each row links the file _and_ the test beside it, on both sides, by scheme                                                                                                      |
+| `4d92066` | the evidence chart draws the zero line (`Chart.zero`)                                                                                                                           |
+| `e87eb53` | the same on the run page (`Replay.Chart.zero`)                                                                                                                                  |
+| `e5ad552` | the map's "unchanged" guard actually fires; the lint formatting CI asked for                                                                                                    |
+
+### 10.2 The module map is tooling now, not a document
+
+`lib/monty/module_map/data.ex` is generated and the generator keeps it true:
+`mix test` runs `monty.module_map.gen --best-effort` first, so a machine with the
+checkouts beside it refreshes the map before the suite, and a machine without
+them — CI has neither — keeps the committed map and says so. A package with no
+checkout keeps its entries _and_ its recorded commit; an unchanged map is not
+rewritten (mtime is what makes Mix recompile it); the write goes beside the file
+and is renamed onto it, because `mix test --partitions 4` can start four at once.
+
+Two facts are now in the map that a page cannot invent: `stand_in:` and `file:`.
+The first is written down once, in `Monty.ModuleMap.StandIns` — the two shells
+(`Monty`, `MontyForGraphMatching` → `Monty.Runtime.Model` + `Monty.Runtime.Step`)
+and the 17 MuJoCo classes the carried world in `priv/monty_py/world.py`
+implements — and `verify` fails if a declared stand-in names a module that is not
+there. The second is asked of the compiled module's own `compile_info`, because
+the port does not keep one module per file (`sensor_modules/camera_sm.ex` holds
+`CameraSM`).
+
+### 10.3 `/modules`: 360 classes, four columns, two filters
+
+`ExTbpMontyWeb.ModulesLive` (route `/modules`, `Monty.ModuleMap.Table` is the
+pure half): Monty class (linked at the commit the map records), Elixir module
+(linked at the file the map recorded, or at the path the name promises), status,
+and what stands in. Filters are URL state (`?q=…&status=…`); `q` is any words
+from the row, all of which must match.
+
+### 10.4 The finding this session ended on: our training builds **two** graphs where Monty builds **three**
+
+The user noticed it on the charts — Monty's pyview chart shows three lines
+(`new_object0..2`), ours two — and said "this experiment must have 3 objects".
+The config does not:
+
+- `conf/env_interface/test_train_2obj_predefined_eval_1obj_predefined.yaml`
+  names **2 training objects** (`capsule3DSolid`, `cubeSolid`) and **1 evaluation
+  object** (`capsule3DSolid`); `n_train_epochs: 3`, `n_eval_epochs: 3`, so a run
+  is **6 training + 3 evaluation episodes**, which is what both runners do.
+- The third line is a _graph_, not a configured object. Monty names what a
+  training episode learned `"new_object" + str(len(graph_memory))`
+  (`evidence_matching/learning_module.py:590`, `set_detected_object`) whenever the
+  episode ends `no_match` with possible matches, or with none — so the memory
+  grows by one whenever training fails to recognise what it saw.
+- Monty's own rows, `~/tbp/results/monty/projects/monty_runs/test_evidence_lm_evidence_mujoco_with_liveview/train_stats.csv`
+  (6 rows): results `new_object0`, `new_object0`, `new_object1`, `new_object2`,
+  `new_object0`, `new_object0`, steps 21/25/22/23/25/24, evidence ≤ 5.25.
+  **Three graphs.**
+- Ours, six training episodes in `/tmp/port_evidence_mujoco2.log`: steps
+  25/28/29/28/27/32, last belief `nothing yet`, `new_object0` ×5, evidence up to
+  11.74. **Two graphs** (`new_object0`, `new_object1`).
+
+So the open question is not the object list but **training recognition**: our
+training episodes report a match against graph 0 where Monty's fail to match and
+create a new graph, and our episodes run 3–8 steps longer. Two candidates, in
+order of likelihood: (a) our train-mode matching concludes too readily (evidence,
+`object_evidence_threshold`, or the pose-narrowing rule), and (b) our episodes
+have a different ending, so the `no_match` branch that creates a graph is not
+reached. Compare per episode against the CSV above — same seed (42), same config.
+
+### 10.5 The runner's memory rule has one home
+
+`Run.next_memories/3` is "what the next episode starts from": a training episode
+hands on the graphs it built, an evaluation one hands on what it was given. Both
+`Jobs.Run` and `mix monty.run` ask it. Measured on
+`test/evidence_lm/evidence_mujoco`: it used to be 3 + 3 episodes with `nothing
+yet` throughout and a `no_match` summary; it is now 6 + 3 with episode 2 already
+seeing `new_object0 (112 hypotheses)` and a `match` summary.
+
+### 10.6 The plan for 100 % of the map (the user's standing priority)
+
+The bar is **0 planned classes**; today 360 classes are **176 implemented, 182
+planned, 2 excluded** (the excluded two are Hydra's own tooling and stay
+excluded). `mix monty.module_map.verify` prints the numbers; `/modules` shows
+them with the reason for each.
+
+Order by experiments unblocked:
+
+1. `GraphLM` (`frameworks/models/graph_matching.py:497-1104`) — the keystone.
+   Its surface is 43 methods but only eight are arithmetic:
+   `_compute_possible_matches`, `_update_possible_matches`, `_update_memory`,
+   `_update_target_graph_mapping`, `_agent_moved_since_reset`, `_add_displacements`,
+   `_select_features_to_use`, `_add_votes_to_buffer_stats`. The rest is
+   bookkeeping `EvidenceGraphLM` already expresses here, plus the LM struct's
+   fields. Collaborators to check first: `FeatureAtLocationBuffer` (may not be
+   written) and `GraphGoalGenerator` (ported).
+2. `DisplacementGraphLM` — 62 experiments on its own.
+3. `FeatureGraphLM` — 19. 4. `MontySupervisedObjectPretrainingExperiment` — 17.
+4. `TwoDSensorModule` + `DefaultAttentionSystem` — 10.
+5. `MontyBase`, the no-reset model, Omniglot — 8.
+
+**The trap that decides how to sequence it**: `class_status` marks a class
+`implemented` when `Code.ensure_loaded?` says its module exists. Creating
+`Monty.Frameworks.Models.GraphMatching.GraphLM` on its own therefore makes the
+page offer configs whose arithmetic is half written. `GraphLM` must land
+**together with its first real subclass** (`DisplacementGraphLM`) and with
+Monty's own `tests/unit/frameworks/models/graph_matching_test.py` translated as
+the spec. The two shell classes stay `planned` on purpose — do not "implement"
+them to move the counter.
+
+### 10.7 Two questions still with the user
+
+- Monty's pytest fixtures are in our catalogue and are not experiments
+  (`test/hierarchy/monty/*`, `test/hierarchy/environment/*`, `test/run*`,
+  `test/base_config/base*`, `test/profile/base*`): should the catalogue label
+  them "a Monty test fixture, not an experiment", or keep refusing them?
+- Is Habitat-Sim a permanent refusal, with the stand-in scene offered as the
+  shape-only option? Nothing has changed here; the refusal is honest today.
+
+---
+
+## 11. The port's own computational gaps, and where they are written down
 
 Sections 1–9 are about the app, CI, one crash and performance. The **gaps in
 the port itself** are a different list and are not duplicated here — they are
@@ -241,25 +374,18 @@ kept where they are checked, so they cannot drift from the code:
 
 The gaps that are genuinely open, in the order they block work:
 
-1. **Nothing can be trained.** `Setup.phase_findings/1` refuses any phase that
-   trains (`:training_not_implemented`), so the port runs _evaluation_ against
-   pretrained graphs only. Every config whose phase is `train` is refused
-   rather than faked — that is the fix of `7cba014`, which removed the stand-in
-   experiments: an unported class or phase is now an error, not an `:info`
-   finding beside a run that quietly stepped something else. 84 of 210
-   experiments were affected. If you are asked "why can't I run this config",
-   this is usually the answer, and making it faker would undo that commit.
-   **Work on this has started and has its own page**: [`training.md`](training.md)
-   records that Monty's learning code is ported and a training episode already
-   runs at the runtime level, that the missing piece was the _loop_ (a model per
-   episode carried nothing forward, and `end_episode` never called
-   `update_ltm`), and that the memory now travels between a phase's episodes.
-   What still keeps the guard up — persisting a trained memory, and comparing a
-   config's training against Monty's own numbers — is §3 of that file.
-2. **Unported classes are refused, not stubbed.** `@shell_classes` in
-   `lib/monty/studio/setup.ex` names the two that exist as shells (`Monty`,
-   `MontyForGraphMatching`); anything else in a config's `model_class` is a
-   finding that says so.
+1. **Training runs, and its numbers do not yet match Monty's.** The refusal that
+   used to sit here (`:training_not_implemented`) is gone: a training phase
+   carries what each episode learned into the next one, and a run writes the
+   memory it built (`Memory.save/4`, `<artifacts>/<run>/memory/trained/`). What
+   is open is the _science_: our training builds one graph fewer than Monty's on
+   `test/evidence_lm/evidence_mujoco` (section 10.4), and nothing yet compares a
+   trained memory with Monty's own. [`training.md`](training.md) §3 is where the
+   persistence notes live; the comparison is section 10.4 here.
+2. **Unported classes are refused, not stubbed.** `Monty.ModuleMap.StandIns`
+   names the two that exist as shells (`Monty`, `MontyForGraphMatching`) and the
+   MuJoCo classes the carried world implements; anything else a config names is a
+   finding that says so. The table on `/modules` is the same data, generated.
 3. **The motor policy disagrees with the world on a surface-agent jump** — the
    raise in section 4 (`InformedPolicy.assert_undo_jump_was_successful/2`). This
    is the one computational gap with a stack trace attached, on
