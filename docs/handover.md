@@ -114,10 +114,11 @@ instead of having to reproduce the run. It is
 **How it was proved.** Two policy tests (a rotation that came back a last bit
 away is where it started; a five-degree turn raises and says "by 5.0 degrees");
 then the config itself — `mix monty.run base_10simobj_surf_agent --no-record`
-ran to **28 recognitions with no undo-jump raise**, where the old code died at 10. (It was stopped there rather than carried to 140/140: the box was swapping,
-and the point was the crash, not the episode count.) The acceptance ladder is
-unchanged digit for digit: `0.746 (192, 6)` … `6.338 (1429, 2)`, `goals 15065`
-under `MIX_ENV=test`, and `0.908 (802, 4)` … `11.712 (2342, 1)` in dev.
+**finished all 140 episodes, every one ending in `match`: 22 842 steps in 437 s
+(19 ms a step), exit 0, and not one undo-jump raise** — where the old code died
+at the tenth recognition. The acceptance ladder is unchanged digit for digit:
+`0.746 (192, 6)` … `6.338 (1429, 2)`, `goals 15065` under `MIX_ENV=test`, and
+`0.908 (802, 4)` … `11.712 (2342, 1)`, `goals 15328` in dev.
 
 ## 5. The experiment page's run list — **answered; the query was sound**
 
