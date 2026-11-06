@@ -37,6 +37,9 @@ defmodule Monty.Test.MinimalLearningModule do
   def observation_processed?(state), do: state.processed?
 
   @impl true
+  def conclusion(_state), do: nil
+
+  @impl true
   def update_terminal_condition(state), do: {state, nil}
 
   @impl true

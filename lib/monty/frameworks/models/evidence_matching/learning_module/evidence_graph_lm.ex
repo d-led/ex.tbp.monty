@@ -1747,6 +1747,18 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   def observation_processed?(%__MODULE__{} = lm),
     do: FeatureAtLocationBuffer.get_last_obs_processed(lm.buffer)
 
+  @doc """
+  What the module has concluded so far, read and not recomputed.
+
+  Monty's `lm.terminal_state`, which this module's own `matching_step` writes
+  the moment nothing is possible. The model decides the step from it; deciding
+  what to conclude is `update_terminal_condition/1`.
+  """
+  @impl true
+  @spec conclusion(t()) ::
+          Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.terminal_state()
+  def conclusion(%__MODULE__{} = lm), do: lm.terminal_state
+
   @doc "Records whether this step's observation reached the learning module."
   @impl true
   @spec add_lm_processing_to_buffer_stats(t(), boolean()) :: t()

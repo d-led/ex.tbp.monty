@@ -557,6 +557,7 @@ defmodule Monty.Runtime.Step do
 
   defp after_matching_step(%State{} = state) do
     if any_module_processed?(state) do
+      state = read_conclusions(state)
       {state, matched?} = check_terminal_conditions(state)
 
       if matched? do
@@ -599,6 +600,22 @@ defmodule Monty.Runtime.Step do
     state.learning_modules
     |> Enum.map(&Registry.via({:learning_module, model_id, &1.id}))
     |> Enum.any?(&LearningModuleServer.observation_processed?/1)
+  end
+
+  # Monty's `check_terminal_conditions` starts from `lm.terminal_state`, the
+  # attribute a module's own step has just written — a module that found nothing
+  # possible has concluded `no_match` already. A module here is a process, so the
+  # model asks for that one value; `update_terminal_conditions/1` is the other
+  # question, and Monty asks it only past an episode's minimum number of steps.
+  defp read_conclusions(%State{model_id: model_id} = state) do
+    requests =
+      Enum.map(state.learning_modules, fn lm ->
+        server = Registry.via({:learning_module, model_id, lm.id})
+        {lm.id, fn -> LearningModuleServer.query(server, &lm.module.conclusion(&1)) end}
+      end)
+
+    %{replies: conclusions} = Barrier.run(requests, state.call_timeout)
+    %{state | terminal_states: Map.merge(state.terminal_states, conclusions)}
   end
 
   # Every module having given up is the one conclusion that needs no criterion:

@@ -343,6 +343,26 @@ defmodule Monty.Runtime.StepTest do
       assert_receive {:exploratory_step, :lm_0, _percepts, :exploratory}
     end
 
+    test "a training episode explores in the step its modules gave up, before its minimum" do
+      model_id =
+        start_model(
+          experiment_mode: :train,
+          num_exploratory_steps: 1,
+          min_train_steps: 5,
+          learning_modules: [learning_module(:lm_0, terminal: :no_match)]
+        )
+
+      # A module's own step is where it concludes it found nothing possible, and
+      # the model reads that conclusion rather than asking for one — a minimum
+      # number of steps is not a reason to keep looking at an object that has
+      # already been given up on.
+      assert {:ok, _, info} = step(model_id)
+
+      assert info.terminal_states == %{lm_0: :no_match}
+      assert info.step_type == :exploratory
+      refute_received {:update_terminal_condition, :lm_0}
+    end
+
     test "an exploration that saw enough steps ends the episode" do
       model_id =
         start_model(
@@ -379,6 +399,7 @@ defmodule Monty.Runtime.StepTest do
       model_id =
         start_model(
           experiment_mode: :eval,
+          min_eval_steps: 1,
           learning_modules: [
             learning_module(:lm_0, terminal: :no_match),
             learning_module(:lm_1, terminal: :no_match)
@@ -386,13 +407,13 @@ defmodule Monty.Runtime.StepTest do
           sm_to_lm: %{lm_0: [:patch], lm_1: [:patch]}
         )
 
-      # The modules' own step is what concludes they cannot match, and the
-      # model reads their conclusions before it asks them again — so the end of
-      # an episode with nothing recognised lands one step later.
+      # The modules' own step is what concludes they cannot match, and the model
+      # reads those conclusions in the same step: nothing is left to agree on, so
+      # no criterion and no re-asking are needed. Only the evaluation's minimum
+      # number of steps still has to pass.
       {:ok, _, first} = step(model_id)
-      refute first.done?
-      assert_receive {:update_terminal_condition, :lm_0}
-      assert_receive {:update_terminal_condition, :lm_1}
+      assert first.terminal_states == %{lm_0: :no_match, lm_1: :no_match}
+      refute_received {:update_terminal_condition, _}
 
       {:ok, _, second} = step(model_id)
       assert second.done?

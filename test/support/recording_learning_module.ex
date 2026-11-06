@@ -80,6 +80,9 @@ defmodule Monty.Test.RecordingLearningModule do
   def observation_processed?(state), do: state.processed?
 
   @impl true
+  def conclusion(state), do: state.terminal
+
+  @impl true
   def update_terminal_condition(state) do
     send(state.notify, {:update_terminal_condition, state.id})
     {state, state.terminal}

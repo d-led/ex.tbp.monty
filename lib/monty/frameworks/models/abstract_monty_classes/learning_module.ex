@@ -103,6 +103,18 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
   @callback observation_processed?(state) :: boolean()
 
   @doc """
+  What the module has concluded so far, without asking it to reconsider.
+
+  Monty's `lm.terminal_state` field. A module writes it from its own step as
+  soon as it can conclude anything at all — `EvidenceGraphLM.matching_step`
+  concludes `:no_match` the moment nothing is possible — and the model reads it
+  to decide the step (`MontyForGraphMatching.check_terminal_conditions`).
+  Deciding what to conclude is `update_terminal_condition/1`, which Monty asks
+  for only once an episode is past its minimum number of steps.
+  """
+  @callback conclusion(state) :: terminal_state()
+
+  @doc """
   Checks the module's own terminal condition and reports what it concluded.
 
   Called once per step in which the module processed an observation, so a

@@ -87,10 +87,11 @@ defmodule Monty.Studio.Jobs.RunTest do
       # An episode in evaluation ends when its module recognises the object,
       # which takes about twenty steps: three is fewer than that, so the steps
       # are the ones asked for and there is no conclusion to report — and none
-      # invented.
+      # invented. The module is named with no conclusion rather than left out,
+      # which is Monty's own answer for a module that never concluded.
       assert closed.summary["steps"] == 3
       assert Enum.map(closed.timeline, & &1["step"]) == [0, 1, 2]
-      assert closed.summary["outcome"] == %{}
+      assert closed.summary["outcome"] == %{"learning_module_0" => nil}
     end
 
     test "steps the epochs the config asks for, and only those" do

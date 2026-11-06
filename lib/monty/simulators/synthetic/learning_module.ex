@@ -96,6 +96,9 @@ defmodule Monty.Simulators.Synthetic.LearningModule do
   def observation_processed?(state), do: Map.get(state, :processed, false)
 
   @impl true
+  def conclusion(state), do: Map.get(state, :terminal_state)
+
+  @impl true
   def update_terminal_condition(state), do: {state, nil}
 
   @impl true
