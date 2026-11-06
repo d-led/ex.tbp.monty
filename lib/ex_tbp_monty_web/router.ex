@@ -71,6 +71,9 @@ defmodule ExTbpMontyWeb.Router do
     # the list a colleague was sent.
     live "/jobs", RunHistoryLive, :index
     live "/prerequisites", PrerequisitesLive, :index
+    # Monty's classes and this application's, from the generated map: the one
+    # page that answers "what is written and what still has to be".
+    live "/modules", ModulesLive, :index
     # Not `/mcp`: that address is the server itself (POST is a JSON-RPC message,
     # GET is declined with 405). This is the page that says how to point a client
     # at it, with the port this instance actually answers on.

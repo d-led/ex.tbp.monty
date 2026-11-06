@@ -234,6 +234,12 @@ defmodule ExTbpMontyWeb.Layouts do
             icon="hero-arrow-down-tray-mini"
           />
           <.sidebar_link id="nav-runs" navigate={~p"/runs"} label="Runs" icon="hero-play-mini" />
+          <.sidebar_link
+            id="nav-modules"
+            navigate={~p"/modules"}
+            label="Modules"
+            icon="hero-cube-transparent-mini"
+          />
           <%!-- An editor is the other way in: the same application answering an
           assistant over MCP, with the configuration to hand. --%>
           <.sidebar_link
