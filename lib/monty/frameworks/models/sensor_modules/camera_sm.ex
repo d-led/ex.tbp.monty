@@ -202,6 +202,20 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
     }
   end
 
+  @doc """
+  Drops what was seen, keeping the delta filter's memory.
+
+  Monty's `_reset_modules_buffers`: the observations of the object that has gone
+  are never read again, but `filter_memory` is what decides whether the next
+  observation is new, so clearing it would make the first patch on the next
+  object look like a change of scene rather than a look at something else.
+  """
+  @impl true
+  @spec clear_buffers(t()) :: t()
+  def clear_buffers(%__MODULE__{} = sm) do
+    %__MODULE__{sm | telemetry: SnapshotTelemetry.reset(sm.telemetry), processed_observations: []}
+  end
+
   defp record_snapshot(%__MODULE__{pose: %SensorState{} = pose} = sm, observation) do
     %__MODULE__{
       sm

@@ -67,6 +67,15 @@ defmodule Monty.Runtime.SensorModuleServer do
   @spec reset(server()) :: :ok
   def reset(server), do: GenServer.call(server, :reset, :infinity)
 
+  @doc """
+  Drops the observations this sensor kept, keeping what it has learnt.
+
+  What a run without episode boundaries asks when the object under the sensor
+  changes: Monty's `_reset_modules_buffers`.
+  """
+  @spec clear_buffers(server()) :: :ok
+  def clear_buffers(server), do: GenServer.call(server, :clear_buffers, :infinity)
+
   @doc "The module's own state, for tests and the run inspector."
   @spec state(server()) :: term()
   def state(server), do: GenServer.call(server, :state, :infinity)
@@ -99,6 +108,10 @@ defmodule Monty.Runtime.SensorModuleServer do
 
   def handle_call(:reset, _from, server) do
     {:reply, :ok, %{server | state: server.module.reset(server.state)}}
+  end
+
+  def handle_call(:clear_buffers, _from, server) do
+    {:reply, :ok, %{server | state: server.module.clear_buffers(server.state)}}
   end
 
   def handle_call(:state, _from, server), do: {:reply, server.state, server}

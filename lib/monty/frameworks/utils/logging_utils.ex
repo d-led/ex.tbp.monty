@@ -94,15 +94,25 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
   """
   @spec compute_pose_error(Rotation.t() | [Rotation.t()], Rotation.t(), keyword()) :: float()
   def compute_pose_error(predicted, target, options \\ []) do
-    error =
-      predicted
-      |> List.wrap()
-      |> Enum.map(fn rotation ->
-        rotation |> Rotation.multiply(Rotation.invert(target)) |> Rotation.magnitude()
-      end)
-      |> Enum.min()
+    error = predicted |> compute_pose_errors(target) |> Enum.min()
 
     if Keyword.get(options, :degrees, false), do: error * 180 / :math.pi(), else: error
+  end
+
+  @doc """
+  The angular error of every predicted rotation against the target's.
+
+  Monty's `compute_pose_errors`, which `compute_pose_error/3` is the smallest of:
+  a hypothesis space's pose errors are the whole distribution, not its best
+  member, and that is what the pyview dashboard's telemetry draws.
+  """
+  @spec compute_pose_errors(Rotation.t() | [Rotation.t()], Rotation.t()) :: [float()]
+  def compute_pose_errors(predicted, target) do
+    predicted
+    |> List.wrap()
+    |> Enum.map(fn rotation ->
+      rotation |> Rotation.multiply(Rotation.invert(target)) |> Rotation.magnitude()
+    end)
   end
 
   @doc """

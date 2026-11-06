@@ -250,7 +250,13 @@ defmodule Monty.Runtime.Step do
 
   def handle_call(:done?, _from, state), do: {:reply, state.done?, state}
   def handle_call(:status, _from, %State{} = state), do: {:reply, describe_status(state), state}
-  def handle_call(:reset_episode, _from, state), do: {:reply, :ok, reset_episode_state(state)}
+
+  # A model's own `reset/0`: `MontyBase.reset` unless the class this run started
+  # overrides it, which is how a run without episode boundaries keeps what its
+  # modules believe (`NoResetEvidenceGraphMatching.reset_episode_state/1`).
+  def handle_call(:reset_episode, _from, %State{model_class: class} = state),
+    do: {:reply, :ok, class.reset_episode_state(state)}
+
   def handle_call(:update_ltm, _from, state), do: {:reply, :ok, update_ltm_state(state)}
 
   # A global time-out ends the episode: an episode that ran out of steps did
@@ -267,8 +273,12 @@ defmodule Monty.Runtime.Step do
     {:reply, :ok, set_experiment_mode_state(state, mode)}
   end
 
-  def handle_call({:fixme_set_ground_truth, primary_target, opts}, _from, state) do
-    {:reply, :ok, set_ground_truth_state(state, primary_target, opts)}
+  def handle_call(
+        {:fixme_set_ground_truth, primary_target, opts},
+        _from,
+        %State{model_class: class} = state
+      ) do
+    {:reply, :ok, class.set_ground_truth_state(state, primary_target, opts)}
   end
 
   def handle_call(:state, _from, state), do: {:reply, state, state}
@@ -687,20 +697,42 @@ defmodule Monty.Runtime.Step do
   end
 
   # -- the episode boundary -------------------------------------------------
+  #
+  # A reset is two halves, and a model class may want only one of them:
+  # `NoResetEvidenceGraphMatching` restarts the counters and clears the buffers
+  # between objects while keeping the hypotheses, because a run without episode
+  # boundaries has to notice an object change from its own evidence. So the
+  # halves are public and named, and a model class composes them.
 
-  defp reset_episode_state(%State{model_id: model_id} = state) do
-    Enum.each(state.learning_modules, fn lm ->
-      LearningModuleServer.reset_stm(Registry.via({:learning_module, model_id, lm.id}))
-    end)
+  @doc """
+  Monty's `MontyBase.reset`: the modules forget the episode they just had, the
+  motor system forgets where it was in its policy, and the counters and the
+  terminal states start again.
 
-    Enum.each(state.sensor_modules, fn sm ->
-      SensorModuleServer.reset(Registry.via({:sensor_module, model_id, sm.id}))
-    end)
+  Long-term memory is untouched, which is why an episode can end mid-object and
+  the next one still knows what a mug looks like.
+  """
+  @spec reset_episode_state(State.t()) :: State.t()
+  def reset_episode_state(%State{} = state) do
+    state
+    |> exec_learning_modules(&LearningModuleServer.reset_stm/1)
+    |> exec_sensor_modules(&SensorModuleServer.reset/1)
+    |> restart_counters()
+    |> reset_motor()
+  end
 
+  @doc """
+  One episode's numbers start again, and nothing else does.
+
+  Monty's `reset_episode_steps/0`, `switch_to_matching_step/0` and
+  `_is_done = False` — what makes the next stretch of steps an episode, which is
+  the half of a reset a run without boundaries still performs.
+  """
+  @spec restart_counters(State.t()) :: State.t()
+  def restart_counters(%State{} = state) do
     %{
       state
-      | motor_state: reset_motor(state.motor),
-        step_type: :matching,
+      | step_type: :matching,
         matching_steps: 0,
         exploratory_steps: 0,
         terminal_states: %{},
@@ -709,9 +741,24 @@ defmodule Monty.Runtime.Step do
     }
   end
 
-  defp reset_motor(nil), do: nil
+  @doc "Runs `fun` against every learning module's server, for its side effect."
+  @spec exec_learning_modules(State.t(), (GenServer.server() -> any())) :: State.t()
+  def exec_learning_modules(%State{model_id: model_id, learning_modules: modules} = state, fun) do
+    Enum.each(modules, fn lm -> fun.(Registry.via({:learning_module, model_id, lm.id})) end)
+    state
+  end
 
-  defp reset_motor({module, motor_state}), do: module.reset(motor_state)
+  @doc "Runs `fun` against every sensor module's server, for its side effect."
+  @spec exec_sensor_modules(State.t(), (GenServer.server() -> any())) :: State.t()
+  def exec_sensor_modules(%State{model_id: model_id, sensor_modules: modules} = state, fun) do
+    Enum.each(modules, fn sm -> fun.(Registry.via({:sensor_module, model_id, sm.id})) end)
+    state
+  end
+
+  defp reset_motor(%State{motor: nil} = state), do: state
+
+  defp reset_motor(%State{motor: {module, motor_state}} = state),
+    do: %{state | motor_state: module.reset(motor_state)}
 
   defp set_experiment_mode_state(%State{model_id: model_id} = state, mode) do
     Enum.each(state.learning_modules, fn lm ->
@@ -757,19 +804,29 @@ defmodule Monty.Runtime.Step do
     %{spec | state: SensorModuleServer.state(Registry.via({:sensor_module, model_id, spec.id}))}
   end
 
-  defp set_ground_truth_state(%State{model_id: model_id} = state, primary_target, opts) do
-    Enum.each(state.learning_modules, fn lm ->
-      LearningModuleServer.set_target(
-        Registry.via({:learning_module, model_id, lm.id}),
-        primary_target
-      )
-    end)
+  @doc """
+  Monty's `fixme_set_ground_truth`: the object this episode is about, told to
+  every module, and the world's names for its semantic ids.
 
-    # Monty's `fixme_set_ground_truth(primary_target, semantic_id_to_label)`: the
-    # world's map is what turns a percept's semantic id into the object's name,
-    # and only the experiment knows it.
-    Map.put(state, :semantic_id_to_label, Keyword.get(opts, :semantic_id_to_label, %{}))
+  Monty's own comment: the modules cannot work this out, and without it nothing
+  the episode does can be scored.
+  """
+  @spec set_ground_truth_state(State.t(), map() | nil, keyword()) :: State.t()
+  def set_ground_truth_state(%State{} = state, primary_target, opts) do
+    state
+    |> exec_learning_modules(&LearningModuleServer.set_target(&1, primary_target))
+    |> put_semantic_id_to_label(opts)
   end
+
+  @doc """
+  The world's map from a percept's semantic id to the object's name.
+
+  Only the experiment knows it, and it is what lets a step say *which* object was
+  under the patch rather than only that one was.
+  """
+  @spec put_semantic_id_to_label(State.t(), keyword()) :: State.t()
+  def put_semantic_id_to_label(%State{} = state, opts),
+    do: %{state | semantic_id_to_label: Keyword.get(opts, :semantic_id_to_label, %{})}
 
   defp learning_servers(%State{model_id: model_id} = state, model_id) do
     Enum.map(state.learning_modules, &Registry.via({:learning_module, model_id, &1.id}))

@@ -368,17 +368,10 @@ defmodule Monty.Studio.Run do
   @spec memories(t()) :: %{optional(atom() | String.t()) => term()}
   def memories(%__MODULE__{model_id: model_id, setup: setup}) do
     Map.new(setup.learning_modules, fn learning_module ->
-      state =
-        LearningModuleServer.state(Registry.via({:learning_module, model_id, learning_module.id}))
-
-      {learning_module.id, memory_of(state)}
+      server = Registry.via({:learning_module, model_id, learning_module.id})
+      {learning_module.id, LearningModuleServer.graph_memory(server)}
     end)
   end
-
-  # A module that keeps no graph memory — the stand-in learning module a config
-  # without an evidence model gets — has nothing to hand on.
-  defp memory_of(state) when is_map(state), do: Map.get(state, :graph_memory, :none)
-  defp memory_of(_state), do: :none
 
   @doc """
   Folds this episode into long-term memory: Monty's `model.update_ltm()`.

@@ -37,6 +37,19 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.SensorModule do
   @doc "Clears short-term state for a new episode."
   @callback reset(state) :: state
 
+  @doc """
+  Drops the observations this sensor kept, and nothing it has learnt.
+
+  Monty's `NoResetEvidenceGraphMatching._reset_modules_buffers` sets
+  `sm.processed_obs = []` at an object boundary: the observations will not be
+  read again, but the delta filter's memory decides what counts as a change and
+  has to survive, or the first patch on the new object is a sight the sensor has
+  never had. `reset/1` is the whole-episode version and is not the same thing.
+
+  The default is a sensor that keeps nothing.
+  """
+  @callback clear_buffers(state) :: state
+
   @doc "Goals this sensor proposes (a salience module proposes; a camera does not)."
   @callback propose_goals(state) :: {[Goal.t()], state}
 
@@ -63,7 +76,10 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.SensorModule do
       @impl Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
       def propose_region(state), do: {Monty.Cmp.AttentionRegion.empty(), state}
 
-      defoverridable propose_goals: 1, propose_region: 1
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
+      def clear_buffers(state), do: state
+
+      defoverridable propose_goals: 1, propose_region: 1, clear_buffers: 1
     end
   end
 end

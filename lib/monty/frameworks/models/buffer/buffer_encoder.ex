@@ -20,6 +20,7 @@ defmodule Monty.Frameworks.Models.Buffer.BufferEncoder do
   alias Monty.Cmp
   alias Monty.Cmp.{AttentionRegion, Goal, Message}
   alias Monty.Frameworks.Actions.ActionJSONEncoder
+  alias Monty.Frameworks.Models.Mixins.NoResetEvidence.HypothesesUpdaterGraphTelemetry
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
   alias Monty.Geometry.{GazeDirection, OrientationMatrix, Rotation, SurfacePoseVectors}
 
@@ -45,6 +46,10 @@ defmodule Monty.Frameworks.Models.Buffer.BufferEncoder do
     # object; the struct is the same value with names on it.
     AgentState => :struct,
     SensorState => :struct,
+    # Monty's encoder writes any dataclass as an object of its fields
+    # (`is_dataclass_instance` in `BufferEncoder.default`), which is what this
+    # telemetry is.
+    HypothesesUpdaterGraphTelemetry => :struct,
     DateTime => :iso8601,
     NaiveDateTime => :iso8601,
     Date => :iso8601,

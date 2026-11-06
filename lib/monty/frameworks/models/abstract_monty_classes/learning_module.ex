@@ -71,6 +71,20 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
   @doc "Clears short-term memory before a new episode."
   @callback reset_stm(state) :: state
 
+  @doc """
+  Drops what the module accumulated, and nothing it learned.
+
+  Monty's `MontyForNoResetEvidenceGraphMatching._reset_modules_buffers` reaches
+  into every module's buffer (`lm.buffer.reset()`) rather than resetting the
+  module, because resetting would also throw away the hypotheses: a run without
+  episode boundaries keeps what it believes across an object change and only
+  frees the observations it will not read again. A module's state is opaque to
+  the coordinator here, so that reach-in is a callback.
+
+  The default is a module with no buffer — nothing to drop.
+  """
+  @callback clear_buffers(state) :: state
+
   # -- what the model asks between steps ------------------------------------
   #
   # Monty's model reaches into a module to ask whether it processed this step's
@@ -132,8 +146,39 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
   """
   @callback set_terminal_state(state, terminal_state()) :: state
 
+  @doc """
+  Forgets what the module concluded, keeping everything it believes.
+
+  Monty's `NoResetEvidenceGraphMatching._reset_terminal_states` calls
+  `lm.set_individual_ts(None)` on every module at an object boundary: the
+  episode's answer is over, the hypothesis space is not. The default is the
+  narrowest thing that is true of every module — a module with no detected
+  object to forget has only its terminal state to clear.
+  """
+  @callback clear_conclusion(state) :: state
+
+  @doc """
+  Names the object this episode is about, and leaves the module's history alone.
+
+  Monty's `MontyForNoResetEvidenceGraphMatching.fixme_set_ground_truth` writes
+  `lm.primary_target` and `lm.primary_target_rotation_quat` directly after the
+  first episode, instead of the `fixme_reset_ground_truth` an ordinary episode
+  calls — which would empty `stepwise_targets_list`, the record of what the
+  sensor was on, step by step, across every object of the run.
+  """
+  @callback set_primary_target(state, map() | nil) :: state
+
   @doc "Tells the module whether this episode trains or evaluates."
   @callback set_experiment_mode(state, mode()) :: state
+
+  @doc """
+  The long-term memory this module holds, or `:none` for a module that keeps none.
+
+  A run hands the memory of a training episode to the next one, and it is the
+  module that holds it — `GraphLM.graph_memory`, which Monty reads straight off
+  the attribute. A module's state is opaque here, so the module answers.
+  """
+  @callback graph_memory(state) :: Monty.Frameworks.Models.GraphMatching.GraphMemory.t() | :none
 
   @doc """
   Folds what the episode saw into long-term memory, at the end of an episode.
@@ -194,10 +239,26 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.LearningModule do
       @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
       def update_stats_after_vote(state), do: state
 
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+      def clear_buffers(state), do: state
+
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+      def clear_conclusion(state), do: set_terminal_state(state, nil)
+
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+      def set_primary_target(state, primary_target), do: set_target(state, primary_target)
+
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+      def graph_memory(_state), do: :none
+
       defoverridable propose_goals: 1,
                      propose_region: 1,
                      get_output: 1,
-                     update_stats_after_vote: 1
+                     update_stats_after_vote: 1,
+                     clear_buffers: 1,
+                     clear_conclusion: 1,
+                     set_primary_target: 2,
+                     graph_memory: 1
     end
   end
 end

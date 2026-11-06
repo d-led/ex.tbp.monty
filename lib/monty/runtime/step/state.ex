@@ -26,6 +26,7 @@ defmodule Monty.Runtime.Step.State do
 
   @enforce_keys [:model_id]
   defstruct model_id: nil,
+            model_class: Monty.Runtime.Step,
             sensor_modules: [],
             learning_modules: [],
             inputs: %{},
@@ -65,6 +66,7 @@ defmodule Monty.Runtime.Step.State do
 
   @type t :: %__MODULE__{
           model_id: id(),
+          model_class: module(),
           sensor_modules: [module_spec()],
           learning_modules: [module_spec()],
           inputs: %{optional(id()) => input()},
@@ -110,6 +112,7 @@ defmodule Monty.Runtime.Step.State do
 
     %__MODULE__{
       model_id: Map.fetch!(options, :model_id),
+      model_class: Map.get(options, :model_class, Monty.Runtime.Step),
       sensor_modules: Map.get(options, :sensor_modules, []),
       learning_modules: learning_modules,
       inputs: inputs,

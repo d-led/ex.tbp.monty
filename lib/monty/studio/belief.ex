@@ -78,6 +78,11 @@ defmodule Monty.Studio.Belief do
     }
   end
 
+  # A no-reset module is an evidence module that also remembers where the sensor
+  # was; a belief is read off the evidence module either way.
+  def of(%Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM{lm: inner}),
+    do: of(inner)
+
   def of(_module_without_a_hypothesis_space), do: nil
 
   @doc """

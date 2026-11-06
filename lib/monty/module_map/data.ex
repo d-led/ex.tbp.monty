@@ -1725,13 +1725,17 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/models/mixins/no_reset_evidence.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file:
+            "lib/monty/frameworks/models/mixins/no_reset_evidence/hypotheses_updater_graph_telemetry.ex",
           elixir:
             "Monty.Frameworks.Models.Mixins.NoResetEvidence.HypothesesUpdaterGraphTelemetry",
           python: "HypothesesUpdaterGraphTelemetry"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file:
+            "lib/monty/frameworks/models/mixins/no_reset_evidence/theoretical_limit_lm_logging_mixin.ex",
           elixir: "Monty.Frameworks.Models.Mixins.NoResetEvidence.TheoreticalLimitLMLoggingMixin",
           python: "TheoreticalLimitLMLoggingMixin"
         }
@@ -1945,13 +1949,17 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/models/no_reset_evidence_matching.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file:
+            "lib/monty/frameworks/models/no_reset_evidence_matching/monty_for_no_reset_evidence_graph_matching.ex",
           elixir:
             "Monty.Frameworks.Models.NoResetEvidenceMatching.MontyForNoResetEvidenceGraphMatching",
           python: "MontyForNoResetEvidenceGraphMatching"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file:
+            "lib/monty/frameworks/models/no_reset_evidence_matching/no_reset_evidence_graph_lm.ex",
           elixir: "Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM",
           python: "NoResetEvidenceGraphLM"
         }

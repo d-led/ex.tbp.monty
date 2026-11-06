@@ -95,6 +95,34 @@ defmodule Monty.Runtime.LearningModuleServer do
   @spec reset_stm(server()) :: :ok
   def reset_stm(server), do: GenServer.call(server, :reset_stm, :infinity)
 
+  @doc """
+  Drops what the module accumulated, keeping what it learned.
+
+  What a run without episode boundaries asks of its modules when the object
+  under the sensor changes: Monty's `_reset_modules_buffers`.
+  """
+  @spec clear_buffers(server()) :: :ok
+  def clear_buffers(server), do: GenServer.call(server, :clear_buffers, :infinity)
+
+  @doc "Forgets what the module concluded, keeping what it believes."
+  @spec clear_conclusion(server()) :: :ok
+  def clear_conclusion(server), do: GenServer.call(server, :clear_conclusion, :infinity)
+
+  @doc "Names this episode's object without emptying the module's history."
+  @spec set_primary_target(server(), map() | nil) :: :ok
+  def set_primary_target(server, primary_target),
+    do: GenServer.call(server, {:set_primary_target, primary_target}, :infinity)
+
+  @doc """
+  The long-term memory this module holds, or `:none`.
+
+  A training episode's memory is handed to the next one, and the module is what
+  holds it — asked here rather than read off the state, because only the module
+  knows where in its state the memory is.
+  """
+  @spec graph_memory(server()) :: Monty.Frameworks.Models.GraphMatching.GraphMemory.t() | :none
+  def graph_memory(server), do: GenServer.call(server, :graph_memory, :infinity)
+
   @doc "Records whether this step's observation reached the module."
   @spec add_lm_processing_to_buffer_stats(server(), boolean()) :: :ok
   def add_lm_processing_to_buffer_stats(server, processed),
@@ -208,6 +236,22 @@ defmodule Monty.Runtime.LearningModuleServer do
   def handle_call(:reset_stm, _from, server) do
     {:reply, :ok, %{server | state: server.module.reset_stm(server.state)}}
   end
+
+  def handle_call(:clear_buffers, _from, server) do
+    {:reply, :ok, %{server | state: server.module.clear_buffers(server.state)}}
+  end
+
+  def handle_call(:clear_conclusion, _from, server) do
+    {:reply, :ok, %{server | state: server.module.clear_conclusion(server.state)}}
+  end
+
+  def handle_call({:set_primary_target, primary_target}, _from, server) do
+    state = server.module.set_primary_target(server.state, primary_target)
+    {:reply, :ok, %{server | state: state}}
+  end
+
+  def handle_call(:graph_memory, _from, server),
+    do: {:reply, server.module.graph_memory(server.state), server}
 
   def handle_call({:add_lm_processing_to_buffer_stats, processed}, _from, server) do
     state = server.module.add_lm_processing_to_buffer_stats(server.state, processed)

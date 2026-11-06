@@ -23,6 +23,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Frameworks.Environments.ObjectInitSamplers.{Default, Predefined, RandomRotation}
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
+  alias Monty.Frameworks.Models.NoResetEvidenceMatching.MontyForNoResetEvidenceGraphMatching
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
   alias Monty.Frameworks.Models.SensorModules.CameraSM
   alias Monty.Frameworks.Utils.SpatialArithmetics
@@ -380,7 +381,20 @@ defmodule Monty.Studio.Setup do
   # The models this port has written, by the name a config gives. A config that
   # names any other runs on this port's runtime, which is what the findings say
   # out loud rather than leaving to be discovered.
-  @model_classes %{"MontyForEvidenceGraphMatching" => MontyForEvidenceGraphMatching}
+  @model_classes %{
+    "MontyForEvidenceGraphMatching" => MontyForEvidenceGraphMatching,
+    "MontyForNoResetEvidenceGraphMatching" => MontyForNoResetEvidenceGraphMatching
+  }
+
+  # The learning modules this port has written, by the class a config targets.
+  # Monty names one per experiment and the class decides the step, so a run built
+  # from the wrong one is a run of a different experiment.
+  @learning_modules %{
+    "tbp.monty.frameworks.models.evidence_matching.learning_module.EvidenceGraphLM" =>
+      EvidenceGraphLM,
+    "tbp.monty.frameworks.models.no_reset_evidence_matching.NoResetEvidenceGraphLM" =>
+      Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM
+  }
 
   @doc """
   The model a run of this setup starts.
@@ -821,17 +835,24 @@ defmodule Monty.Studio.Setup do
       module.call(module.new(options), seed, mode, epoch, episode)
     end
 
-  # The keys the three samplers take, read by name: a config key is data from a
-  # file, and `String.to_atom/1` on one is how a leak begins.
+  # The keys the three samplers take, by name: a config key is data from a file,
+  # and `String.to_atom/1` on one is how a leak begins. A key the config does not
+  # name is left out rather than passed as `nil`, so the sampler's own default
+  # applies — `RandomRotation`, whose config names only its class, stands where
+  # its `new/0` says and turns the object every episode.
+  @sampler_options %{
+    "positions" => :positions,
+    "rotations" => :rotations,
+    "scales" => :scales,
+    "change_every_episode" => :change_every_episode,
+    "position" => :position,
+    "scale" => :scale
+  }
+
   defp sampler_options(args) do
-    [
-      positions: Map.get(args, "positions"),
-      rotations: Map.get(args, "rotations"),
-      scales: Map.get(args, "scales"),
-      change_every_episode: Map.get(args, "change_every_episode"),
-      position: Map.get(args, "position"),
-      scale: Map.get(args, "scale")
-    ]
+    for {name, option} <- @sampler_options, Map.has_key?(args, name) do
+      {option, Map.fetch!(args, name)}
+    end
   end
 
   @doc """
@@ -1125,31 +1146,37 @@ defmodule Monty.Studio.Setup do
   # one this port has written, and the stand-in otherwise. The config decides,
   # because a module built from it is what makes a run a run of *this*
   # experiment rather than of a topology that merely looks like it.
-  # A module with no pretrained memory is built the way Monty builds one before
-  # loading a state dict into it: with the empty memory the module makes itself.
-  defp learning_module_spec(lm, :none, detailed?),
-    do:
-      build_learning_module(lm, &EvidenceGraphLM.from_config(&1, has_detailed_logger: detailed?))
-
+  #
+  # Two classes are ported and a config chooses between them by name: the
+  # evidence module, and the no-reset one an unsupervised-inference experiment
+  # runs (`.../no_reset_evidence_matching.py::NoResetEvidenceGraphLM`). A config
+  # naming any other is handed the evidence module, whose own `from_config`
+  # refuses a target it does not know — which is how such a config ends up on the
+  # stand-in and is refused by `module_findings/1` rather than run.
   defp learning_module_spec(lm, memory, detailed?) do
-    build_learning_module(
-      lm,
-      &EvidenceGraphLM.from_config(&1, memory: memory, has_detailed_logger: detailed?)
-    )
+    module = learning_module_module(lm.config)
+    options = [has_detailed_logger: detailed?]
+    options = if memory == :none, do: options, else: [memory: memory] ++ options
+
+    case module.from_config(lm.config, options) do
+      {:ok, state} -> %{id: lm.id, module: module, state: state}
+      {:error, _reason} -> stand_in_learning_module(lm)
+    end
   end
 
-  defp build_learning_module(lm, build) do
-    case build.(lm.config) do
-      {:ok, state} ->
-        %{id: lm.id, module: EvidenceGraphLM, state: state}
+  # A module with no pretrained memory is built the way Monty builds one before
+  # loading a state dict into it: with the empty memory the module makes itself,
+  # from its own config's sizes.
+  defp learning_module_module(config) do
+    Map.get(@learning_modules, Map.get(config, "_target_"), EvidenceGraphLM)
+  end
 
-      {:error, _reason} ->
-        %{
-          id: lm.id,
-          module: Monty.Simulators.Synthetic.LearningModule,
-          state: Monty.Simulators.Synthetic.LearningModule.new(lm.id)
-        }
-    end
+  defp stand_in_learning_module(lm) do
+    %{
+      id: lm.id,
+      module: Monty.Simulators.Synthetic.LearningModule,
+      state: Monty.Simulators.Synthetic.LearningModule.new(lm.id)
+    }
   end
 
   @doc """
@@ -1858,7 +1885,7 @@ defmodule Monty.Studio.Setup do
        Enum.map(setup.transforms, &Monty.Studio.Setup.describe_target(get_in(&1, ["_target_"]))) ++
        [setup.attention_system])
     |> Enum.reject(&is_nil/1)
-    |> Enum.uniq_by(& &1.python)
+    |> Enum.uniq_by(& &1.class)
   end
 
   # -- findings -------------------------------------------------------------

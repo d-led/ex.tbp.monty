@@ -415,6 +415,47 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     |> build_updater()
   end
 
+  @doc """
+  Drops the buffer, and keeps everything else.
+
+  Monty's `MontyForNoResetEvidenceGraphMatching._reset_modules_buffers` calls
+  `lm.buffer.reset()` directly, between objects it has no signal for. The buffer
+  is what an episode is written from and what a training episode builds a graph
+  out of; the hypotheses, the MLH and the terminal state are what the run
+  believes, and a run without episode boundaries keeps those.
+  """
+  @impl true
+  @spec clear_buffers(t()) :: t()
+  def clear_buffers(%__MODULE__{} = lm), do: %{lm | buffer: FeatureAtLocationBuffer.new()}
+
+  @doc """
+  Forgets the episode's answer and keeps the hypothesis space.
+
+  Monty's `set_individual_ts(None)`: the conclusion, the object it named and the
+  pose that came with it go; the hypotheses, their evidence and the buffer's
+  statistics stay.
+  """
+  @impl true
+  @spec clear_conclusion(t()) :: t()
+  def clear_conclusion(%__MODULE__{} = lm), do: set_individual_ts(lm, nil)
+
+  @doc """
+  Names this episode's object without emptying `stepwise_targets_list`.
+
+  The stepwise list is the record of what the sensor was on at every step, and a
+  run without episode boundaries keeps it across an object change — it is the
+  only place that record exists.
+  """
+  @impl true
+  @spec set_primary_target(t(), map() | nil) :: t()
+  def set_primary_target(%__MODULE__{} = lm, primary_target) do
+    %{
+      lm
+      | primary_target: Map.get(primary_target, "object"),
+        primary_target_rotation_quat: Map.get(primary_target, "quat_rotation")
+    }
+  end
+
   # Monty resets the goal generator with the rest of the short-term memory: a
   # schedule built against another object's observations says nothing here.
   defp reset_goal_generator(%__MODULE__{gsg: nil} = lm), do: lm
@@ -522,7 +563,22 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   location: a step with no place in it cannot be indexed against the episode.
   """
   @spec add_displacements(t(), [Message.t()]) :: {:ok, [Message.t()]} | {:error, term()}
-  def add_displacements(%__MODULE__{} = lm, percepts) do
+  def add_displacements(%__MODULE__{} = lm, percepts),
+    do: add_displacements(lm, percepts, lm.buffer.last_location)
+
+  @doc """
+  The same, from a location the caller remembers rather than the buffer.
+
+  Monty's `GraphLM._add_displacements` reads `self.buffer.last_location`, and
+  `NoResetEvidenceGraphLM` overrides it to read its own field — because the model
+  clears the buffer when the object under the sensor changes, while where the
+  sensor was has to survive
+  (`.../no_reset_evidence_matching.py::NoResetEvidenceGraphLM._add_displacements`).
+  The location is an argument so that each class states where its own is.
+  """
+  @spec add_displacements(t(), [Message.t()], [float()] | nil) ::
+          {:ok, [Message.t()]} | {:error, term()}
+  def add_displacements(%__MODULE__{} = _lm, percepts, previous_location) do
     sensor_module_percepts = Enum.filter(percepts, &Message.from_sensor_module?/1)
 
     case Cmp.location_mean(sensor_module_percepts) do
@@ -531,7 +587,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       location ->
         displacement =
-          case lm.buffer.last_location do
+          case previous_location do
             nil -> [0.0, 0.0, 0.0]
             previous -> Geometry.subtract(location, previous)
           end
@@ -553,7 +609,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   # -- matching ------------------------------------------------------------
 
-  defp compute_possible_matches(%__MODULE__{} = lm, observations, moved?) do
+  @doc """
+  Monty's `GraphLM._compute_possible_matches`: the query this step's observation
+  makes of memory, and the hypothesis space it leaves possible.
+
+  `moved?` decides whether the observation carries a displacement with it. It is
+  false for a step that has not moved yet — the first one — where a displacement
+  of zero would be a measurement nobody made.
+
+  Public because `NoResetEvidenceGraphLM` assembles Monty's own `matching_step`
+  from the same steps this module's does, and states for itself when the agent
+  has moved.
+  """
+  @spec compute_possible_matches(t(), [Message.t()], boolean()) :: t()
+  def compute_possible_matches(%__MODULE__{} = lm, observations, moved?) do
     query = {
       select_features_to_use(lm, observations),
       if(moved?, do: FeatureAtLocationBuffer.current_displacement(lm.buffer))
@@ -696,9 +765,22 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   hypothesis afterwards.
   """
   @spec displace_all(t(), [Message.t()]) :: t()
-  def displace_all(%__MODULE__{buffer: %{last_location: nil}} = lm, _percepts), do: lm
+  def displace_all(%__MODULE__{} = lm, percepts),
+    do: displace_hypotheses(lm, percepts, lm.buffer.last_location)
 
-  def displace_all(%__MODULE__{} = lm, percepts) do
+  @doc """
+  The same, by a displacement the caller works out from its own memory of where
+  the sensor was.
+
+  `NoResetEvidenceGraphLM` overrides Monty's `_displace_hypotheses` for the same
+  reason it overrides `_add_displacements`: the buffer is cleared between objects
+  and the sensor's place is not. A module with no previous place has nothing to
+  displace by and says so by returning itself.
+  """
+  @spec displace_hypotheses(t(), [Message.t()], [float()] | nil) :: t()
+  def displace_hypotheses(%__MODULE__{} = lm, _percepts, nil), do: lm
+
+  def displace_hypotheses(%__MODULE__{} = lm, percepts, previous_location) do
     case Cmp.location_mean(Enum.filter(percepts, &Message.from_sensor_module?/1)) do
       nil ->
         Logger.warning(
@@ -708,7 +790,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         lm
 
       location ->
-        displacement = Geometry.subtract(location, lm.buffer.last_location)
+        displacement = Geometry.subtract(location, previous_location)
 
         hypotheses =
           Map.new(lm.hypotheses, fn {graph_id, hypotheses} ->
@@ -1640,7 +1722,21 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   step's error is measured from.
   """
   @spec collect_stats_to_save(t()) :: {t(), map()}
-  def collect_stats_to_save(%__MODULE__{} = lm) do
+  def collect_stats_to_save(%__MODULE__{} = lm), do: collect_stats_to_save(lm, &detailed_stats/2)
+
+  @doc """
+  The same, with the detailed fields supplied by whoever owns the module.
+
+  Monty adds the whole hypothesis space to the step's statistics only for a
+  module with a detailed logger, through `_add_detailed_stats` — a method a
+  mixin may *replace*: `TheoreticalLimitLMLoggingMixin` states its own and does
+  not call `super()`, so the learning module that mixes it in logs its four
+  fields and not this module's four. Elixir has no inheritance, so the replacing
+  function is passed in and the rest of the step stays here
+  (`docs/monty-differences.md` §2.9).
+  """
+  @spec collect_stats_to_save(t(), (t(), map() -> map())) :: {t(), map()}
+  def collect_stats_to_save(%__MODULE__{} = lm, detailed) do
     lm = append_mlh_prediction_error(lm)
 
     stats = %{
@@ -1648,7 +1744,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       "current_mlh" => current_mlh(lm)
     }
 
-    {lm, if(lm.has_detailed_logger, do: detailed_stats(lm, stats), else: stats)}
+    {lm, if(lm.has_detailed_logger, do: detailed.(lm, stats), else: stats)}
   end
 
   defp log_stats(%__MODULE__{} = lm, _ctx) do
@@ -1724,6 +1820,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
           Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.mode()
         ) :: t()
   def set_experiment_mode(%__MODULE__{} = lm, mode), do: %{lm | mode: mode}
+
+  @doc "The graphs this module matches against, and writes to after a training episode."
+  @impl true
+  @spec graph_memory(t()) :: GraphMemory.t()
+  def graph_memory(%__MODULE__{graph_memory: memory}), do: memory
 
   @doc """
   Takes the episode's ending as this module's, without asking it to reconsider.
