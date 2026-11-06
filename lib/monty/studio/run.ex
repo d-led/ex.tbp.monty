@@ -62,7 +62,9 @@ defmodule Monty.Studio.Run do
 
   Options: `:steps` (how many timesteps this run is for, used for the
   controller's progress), `:model_id`, `:episode` (which episode of the epoch it
-  is, counted from zero), `:mode` (`:eval` or `:train`, default `:eval`),
+  is, counted from zero), `:epoch` (which pass over the objects this episode
+  belongs to, which is what a sampler walking one pose per epoch reads), `:mode`
+  (`:eval` or `:train`, default `:eval`),
   `:has_detailed_logger` (whether this run's logging wants the whole hypothesis
   space per step), and `:memory` — the memory each learning module starts from,
   by module id, defaulting to the pretrained one (`Setup.memories/1`). A run is
@@ -102,7 +104,8 @@ defmodule Monty.Studio.Run do
 
     with {:ok, factories} <- Setup.positioning_procedures(setup),
          {:ok, policy} <- Setup.recognition_policy(setup),
-         {:ok, interface, positioning} <- position(setup, factories, episode) do
+         {:ok, interface, positioning} <-
+           position(setup, factories, episode, epoch: Keyword.get(opts, :epoch, 0), phase: mode) do
       case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {model, spec}) do
         {:ok, _pid} ->
           # The mode is told to the model, not assumed by it. Monty's experiment
@@ -181,10 +184,11 @@ defmodule Monty.Studio.Run do
   # done the positioning inside that reset, with Monty's random stream; stepping
   # the procedures again would move an agent Monty had placed and make the episode
   # a different one.
-  defp position(%Setup{} = setup, factories, episode) do
+  defp position(%Setup{} = setup, factories, episode, opts) do
     # The episode's own object: Monty's interface shows one object per episode and
-    # walks the list, so the world a run builds is about *this* episode's target.
-    world = Setup.world(setup, episode)
+    # walks the list, so the world a run builds is about *this* episode's target —
+    # in the pose its phase's sampler gives this episode of this epoch.
+    world = Setup.world(setup, episode, opts)
 
     interface =
       Interface.new(

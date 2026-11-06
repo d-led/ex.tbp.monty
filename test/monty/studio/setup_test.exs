@@ -20,6 +20,15 @@ defmodule Monty.Studio.SetupTest do
 
   defp setup_for(name, options \\ []), do: elem(Setup.from_experiment(name, options), 1)
 
+  # The orientation an episode is shown at, as the sampler a config names gives
+  # it: Euler angles in degrees, which is how a config writes a pose.
+  defp pose(setup, options) do
+    episode = Keyword.fetch!(options, :episode)
+    params = Setup.object_params(setup, episode, Keyword.put_new(options, :phase, :train))
+
+    params["euler_rotation"]
+  end
+
   describe "the default world" do
     # A run that says nothing steps Monty's own simulator: this build carries it
     # (`priv/monty_py`), so there is nothing to install and nothing to configure.
@@ -381,6 +390,28 @@ defmodule Monty.Studio.SetupTest do
       # is its own phase's list.
       assert Setup.object_name(Setup.with_phase(setup, :train), 1) == "cubeSolid"
       assert Setup.object_name(Setup.with_phase(setup, :eval), 1) == "capsule3DSolid"
+    end
+
+    test "a config's sampler turns the object from one epoch to the next" do
+      setup = setup_for("test/evidence_lm/evidence_mujoco")
+
+      # Monty's `Predefined` defaults to `[(0, 0, 0), (45, 0, 0)]` one per epoch,
+      # and a training epoch visits every object once — so the second epoch sees
+      # both objects turned, which is what makes it a second graph.
+      assert pose(setup, epoch: 0, episode: 0) == [0.0, 0.0, 0.0]
+      assert pose(setup, epoch: 0, episode: 1) == [0.0, 0.0, 0.0]
+      assert pose(setup, epoch: 1, episode: 0) == [45.0, 0.0, 0.0]
+      assert pose(setup, epoch: 1, episode: 1) == [45.0, 0.0, 0.0]
+      assert pose(setup, epoch: 2, episode: 1) == [0.0, 0.0, 0.0]
+    end
+
+    test "a config that names no sampler leaves the object where the scene put it" do
+      # `test/run_mujoco`'s interface names none: the object stays where the
+      # scene places it, in every episode, which is what every experiment this
+      # port ran before the samplers were written did.
+      setup = setup_for("test/run_mujoco")
+
+      assert Setup.object_params(setup, 0, epoch: 1, phase: :train) == nil
     end
 
     test "an experiment that trains is not refused for training" do

@@ -20,6 +20,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Experiment.Environment.OneObjectPerEpisodeInterface
   alias Monty.Experiment.RecognitionPolicy
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
+  alias Monty.Frameworks.Environments.ObjectInitSamplers.{Default, Predefined, RandomRotation}
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
@@ -72,6 +73,11 @@ defmodule Monty.Studio.Setup do
             # train on two objects and evaluate on one, and then its training
             # epochs are twice as long as its evaluation ones.
             objects_by_phase: %{},
+            # Which pose an episode shows, per phase: Monty builds a training
+            # interface and an evaluation interface, and each has its own
+            # `object_init_sampler`. `nil` is a config that names none — the
+            # scene's own place, which is what every run here used to be.
+            object_init_sampler: %{train: nil, eval: nil},
             agent_class: nil,
             recognition_policy: nil,
             model_name_or_path: nil
@@ -184,6 +190,7 @@ defmodule Monty.Studio.Setup do
       positioning: get_in(config, ["eval_env_interface_args", "positioning_procedures"]) || [],
       object_names: object_names(config),
       objects_by_phase: objects_by_phase(config),
+      object_init_sampler: samplers(config),
       agent_class: agent_class_of(config),
       recognition_policy: Map.get(config, "recognition_policy"),
       model_name_or_path: Map.get(config, "model_name_or_path"),
@@ -622,6 +629,10 @@ defmodule Monty.Studio.Setup do
   def world(%__MODULE__{} = setup, episode) when is_integer(episode),
     do: world(setup, setup.world, episode)
 
+  @spec world(t(), non_neg_integer(), keyword()) :: Monty.Simulators.Environment.t()
+  def world(%__MODULE__{} = setup, episode, opts) when is_integer(episode) and is_list(opts),
+    do: world(setup, setup.world, episode, opts)
+
   @doc """
   The world episode `episode` of an epoch steps.
 
@@ -631,14 +642,27 @@ defmodule Monty.Studio.Setup do
   episode and call that a run of ten.
   """
   @spec world(t(), :synthetic | :mujoco, non_neg_integer()) :: Monty.Simulators.Environment.t()
-  def world(%__MODULE__{} = setup, :mujoco, episode) do
+  def world(%__MODULE__{} = setup, world, episode) when is_atom(world),
+    do: world(setup, world, episode, [])
+
+  @doc """
+  The same world, with the episode's place in its epoch and its phase.
+
+  Options: `:epoch` (which pass over the objects this is, defaulting to the
+  first) and `:phase` (`:train` or `:eval`, whose sampler decides the pose).
+  Both matter: `Predefined` walks its rotations one per epoch, so a world built
+  without the epoch shows every episode of a run the same side of the object.
+  """
+  @spec world(t(), :synthetic | :mujoco, non_neg_integer(), keyword()) ::
+          Monty.Simulators.Environment.t()
+  def world(%__MODULE__{} = setup, :mujoco, episode, opts) do
     case engine(setup) do
-      :mujoco -> mujoco_world(setup, episode)
+      :mujoco -> mujoco_world(setup, episode, opts)
       _not_mujoco -> raise ArgumentError, uncarried_world(setup)
     end
   end
 
-  def world(%__MODULE__{} = setup, :synthetic, _episode) do
+  def world(%__MODULE__{} = setup, :synthetic, _episode, _opts) do
     Monty.Simulators.Synthetic.Environment.new(
       sensor_ids(setup),
       Monty.Simulators.Synthetic.Scene.new(
@@ -653,7 +677,7 @@ defmodule Monty.Studio.Setup do
 
   # A world this build does not carry — an operator can configure one — is
   # refused with the words a page shows, not a FunctionClauseError.
-  def world(%__MODULE__{}, world, _episode) when is_atom(world) do
+  def world(%__MODULE__{}, world, _episode, _opts) when is_atom(world) do
     raise ArgumentError,
           "#{inspect(world)} is not a world this application carries: only MuJoCo " <>
             "and the stand-in scene can be stepped here."
@@ -673,11 +697,11 @@ defmodule Monty.Studio.Setup do
   # Monty's simulator, from the numbers the config states: the data path the
   # meshes load from, the agent its `env_init_args` names (class, start pose and
   # per-sensor camera), and the object this episode is about.
-  defp mujoco_world(%__MODULE__{} = setup, episode) do
+  defp mujoco_world(%__MODULE__{} = setup, episode, opts) do
     Monty.Simulators.Mujoco.Environment.new(
       data_path: data_path(setup),
       agents: [agent_spec(setup)],
-      objects: object_specs(setup, episode),
+      objects: object_specs(setup, episode, opts),
       sensors: sensor_ids(setup)
     )
   end
@@ -719,20 +743,95 @@ defmodule Monty.Studio.Setup do
   # The object this episode is about, standing where the interface's own sampler
   # puts it. One object at a time is Monty's own scene: the primary target, and
   # its distractors when a config asks for any.
-  defp object_specs(%__MODULE__{} = setup, episode) do
+  defp object_specs(%__MODULE__{} = setup, episode, opts) do
     case object_name(setup, episode) do
       nil ->
         []
 
       name ->
-        [
-          %{
-            "name" => name,
-            "position" => object_centre(setup),
-            "semantic_id" => target_semantic_id(setup, episode)
-          }
-        ]
+        # The phase's sampler decides where the object stands and how it is
+        # turned; a config that names none keeps the place the scene was drawn
+        # with.
+        placed = %{
+          "name" => name,
+          "position" => object_centre(setup),
+          "semantic_id" => target_semantic_id(setup, episode)
+        }
+
+        params =
+          object_params(setup, episode,
+            epoch: Keyword.get(opts, :epoch, 0),
+            phase: Keyword.get(opts, :phase, :eval)
+          )
+
+        [Map.merge(placed, params || %{})]
     end
+  end
+
+  @doc """
+  The pose episode `episode` of `epoch` shows: Monty's `object_init_sampler`.
+
+  `nil` when the phase's config names no sampler, which is a scene that places
+  its own object and never turns it.
+
+  The pose is what makes an epoch an epoch: a sampler that is never asked leaves
+  every episode of an experiment looking at the object in one orientation, and a
+  memory that learned the first of them explains all the rest.
+  """
+  @spec object_params(t(), non_neg_integer(), keyword()) :: map() | nil
+  def object_params(%__MODULE__{} = setup, episode, opts) do
+    phase = Keyword.get(opts, :phase, :eval)
+
+    case Map.get(setup.object_init_sampler, phase) do
+      nil -> nil
+      sampler -> sampler.(seed_of(setup), phase, Keyword.get(opts, :epoch, 0), episode)
+    end
+  end
+
+  defp seed_of(%__MODULE__{seed: seed}) when is_integer(seed), do: seed
+  defp seed_of(%__MODULE__{}), do: 0
+
+  # Monty instantiates one `object_init_sampler` per interface, so each phase
+  # gets its own here. A target this port has not written is `nil` — the scene's
+  # own place — rather than a sampler that draws poses Monty never drew.
+  @samplers %{
+    "tbp.monty.frameworks.environments.object_init_samplers.Predefined" => Predefined,
+    "tbp.monty.frameworks.environments.object_init_samplers.Default" => Default,
+    "tbp.monty.frameworks.environments.object_init_samplers.RandomRotation" => RandomRotation
+  }
+
+  defp samplers(config) do
+    for phase <- [:train, :eval], into: %{} do
+      {phase, sampler(get_in(config, ["#{phase}_env_interface_args", "object_init_sampler"]))}
+    end
+  end
+
+  defp sampler(%{"_target_" => target} = args) do
+    case Map.fetch(@samplers, target) do
+      {:ok, Default} -> &Default.call/4
+      {:ok, module} -> bound(module, sampler_options(args))
+      :error -> nil
+    end
+  end
+
+  defp sampler(_absent), do: nil
+
+  defp bound(module, options),
+    do: fn seed, mode, epoch, episode ->
+      module.call(module.new(options), seed, mode, epoch, episode)
+    end
+
+  # The keys the three samplers take, read by name: a config key is data from a
+  # file, and `String.to_atom/1` on one is how a leak begins.
+  defp sampler_options(args) do
+    [
+      positions: Map.get(args, "positions"),
+      rotations: Map.get(args, "rotations"),
+      scales: Map.get(args, "scales"),
+      change_every_episode: Map.get(args, "change_every_episode"),
+      position: Map.get(args, "position"),
+      scale: Map.get(args, "scale")
+    ]
   end
 
   @doc """

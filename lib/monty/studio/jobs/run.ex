@@ -217,6 +217,10 @@ defmodule Monty.Studio.Jobs.Run do
       infos: [],
       conclusion: %{},
       episode: 0,
+      # Which pass over the phase's objects the run is on. Monty's sampler reads
+      # it: `Predefined` walks its rotations one per epoch, so an epoch is what a
+      # run of three sees as upright, then turned, then upright again.
+      epoch: 0,
       # How many episodes this run has started. It, not the epoch's own index, is
       # the number the record keeps: see `start_episode/5`.
       episodes_started: 0,
@@ -231,7 +235,7 @@ defmodule Monty.Studio.Jobs.Run do
       run_phases(plan, episodes, state, %{
         experiment: experiment,
         objects: objects,
-        pre_episode: &start_episode(run_id, opened, &1, &2, &3),
+        pre_episode: &start_episode(run_id, opened, &1, &2, &3, &4),
         ground_truth: &ground_truth(&1),
         step: &step_once(run_id, &1, sensor_ids),
         finished?: fn %{run: run} -> Run.finished?(run) end,
@@ -368,7 +372,7 @@ defmodule Monty.Studio.Jobs.Run do
   # episodes of a run and two of them sharing a number would be drawn as one: a
   # line joining the last step of the training phase to the first of the
   # evaluation one, across a boundary where the evidence really did restart.
-  defp start_episode(run_id, opened, %{run: previous} = state, index, object) do
+  defp start_episode(run_id, opened, %{run: previous} = state, index, object, callbacks) do
     stop_run(previous)
 
     episode = state.episodes_started
@@ -379,6 +383,7 @@ defmodule Monty.Studio.Jobs.Run do
     case Run.start(Setup.with_phase(opened.setup, state.mode),
            steps: state.record.steps,
            episode: index,
+           epoch: Map.get(callbacks, :epoch, 0),
            mode: state.mode,
            memory: state.memories,
            has_detailed_logger: Logging.detailed?(state.logging)

@@ -109,7 +109,7 @@ defmodule Mix.Tasks.Monty.Run do
                                                                          {infos, history,
                                                                           _conclusion, carried} ->
       {episode_infos, history, conclusion, carried} =
-        run_episode(opened, scope, index, history, carried, opts)
+        run_episode(opened, scope, index, objects, history, carried, opts)
 
       {infos ++ episode_infos, history, conclusion, carried}
     end)
@@ -128,11 +128,18 @@ defmodule Mix.Tasks.Monty.Run do
   # episode shows, the object in it and the memory it matches against all come
   # from its own phase — `Setup.with_phase/2` and what the phase before it left
   # behind.
-  defp run_episode(opened, scope, index, history, carried, opts) do
+  defp run_episode(opened, scope, index, objects, history, carried, opts) do
+    # An epoch walks the phase's objects once, so the flat episode index of the
+    # phase is two numbers Monty keeps apart: the epoch, and the episode within
+    # it. Both are read — the sampler turns the object once per epoch, and the
+    # episode's draws come from a seed derived from the episode within the epoch.
+    {epoch, episode} = epoch_and_episode(index, objects)
+
     {:ok, run} =
       Monty.Studio.Run.start(Monty.Studio.Setup.with_phase(opened.setup, scope.mode),
         steps: scope.steps,
-        episode: index,
+        episode: episode,
+        epoch: epoch,
         mode: scope.mode,
         memory: carried
       )
@@ -162,6 +169,15 @@ defmodule Mix.Tasks.Monty.Run do
       Mix.shell().error("the memory could not be read: #{Exception.message(error)}")
       carried
   end
+
+  # `index` is the phase's own episode counter and `objects` is how long an
+  # epoch is, so the epoch is the division and the episode the remainder. A
+  # phase with no objects is one episode an epoch, which is what a config that
+  # names none runs.
+  defp epoch_and_episode(index, objects) when objects > 0,
+    do: {div(index, objects), rem(index, objects)}
+
+  defp epoch_and_episode(index, _no_objects), do: {index, 0}
 
   defp say_episode(_index, 1, _opts), do: :ok
 

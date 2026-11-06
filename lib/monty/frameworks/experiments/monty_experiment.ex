@@ -82,7 +82,10 @@ defmodule Monty.Frameworks.Experiments.MontyExperiment do
   """
   @type callbacks(state, info) :: %{
           required(:objects) => [String.t()],
-          required(:pre_episode) => (state, non_neg_integer(), String.t() ->
+          required(:pre_episode) => (state,
+                                     non_neg_integer(),
+                                     String.t(),
+                                     callbacks(state, info) ->
                                        {:ok, state} | {:error, term()}),
           required(:step) => (state -> {:ok, info, state} | {:error, term()}),
           required(:finished?) => (state -> boolean()),
@@ -139,7 +142,11 @@ defmodule Monty.Frameworks.Experiments.MontyExperiment do
       {outcome, ran, state} =
         experiment.run_epoch(
           state,
-          Map.merge(callbacks, %{first_episode: first, episodes: budget})
+          Map.merge(callbacks, %{
+            first_episode: first,
+            episodes: budget,
+            epoch: div(first, per_epoch)
+          })
         )
 
       episodes = Enum.reverse(ran, episodes)
@@ -239,8 +246,8 @@ defmodule Monty.Frameworks.Experiments.MontyExperiment do
   @spec pre_episode(state, non_neg_integer(), String.t() | nil, callbacks(state, info)) ::
           {:ok, state} | {:error, term()}
         when state: term(), info: term()
-  def pre_episode(state, index, object, %{pre_episode: pre_episode}),
-    do: pre_episode.(state, index, object)
+  def pre_episode(state, index, object, %{pre_episode: pre_episode} = callbacks),
+    do: pre_episode.(state, index, object, callbacks)
 
   @doc """
   Monty's `post_episode`: whatever the end of an episode owes.
