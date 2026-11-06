@@ -4,56 +4,50 @@ What is open, what is already known, and where the evidence is. Written for
 whoever picks this up next; every claim below was measured or read, and the
 file and line that settles each one is named.
 
-State at hand-over: `main` is green except CI's macOS leg (`6bd0bfe`, fix
-pushed, run `42178863188` queued — see 1). A step of
-`base_config_10distinctobj_dist_agent` costs **6.85 M reductions** and the whole
-experiment finishes: **140/140 episodes, every one ending in a recognition,
-4 789 steps in 203 s, exit 0, 42.5 ms a step** on a quiet machine (Monty's
-dashboard: ~39 ms). Suite 2 269 green, lint clean, CRAP within its thresholds.
+State at hand-over: CI is **green in every job** (`42178863188` on `6bd0bfe`, so
+section 1 is closed). A step of `base_config_10distinctobj_dist_agent` costs
+**6.85 M reductions** and the whole experiment finishes: **140/140 episodes,
+every one ending in a recognition, 4 789 steps in 203 s, exit 0, 42.5 ms a step**
+on a quiet machine (Monty's dashboard: ~39 ms).
+
+What is left, in order: the desktop sidecar's failed stdout write on every line
+(6), the performance work (7), and one known gap in the same family as the crash
+that was just fixed — `mix monty.run` does not catch a raise, so a headless run's
+record is closed by the Reaper instead of by the run (3).
 
 ---
 
-## 1. CI: the macOS leg was a runner label, not an entitlement (needs a verdict)
+## 1. CI: the macOS leg was a runner label, not an entitlement — **closed**
 
-**Open only until a run finishes.** `6bd0bfe` changes the desktop matrix's
-`os: macos-14` to `os: macos-latest` in `.github/workflows/ci.yml:648`. Every
-earlier run had `desktop (ex-tbp-monty-osx-arm64): cancelled` a second after
-queueing, annotated `The configuration 'macos-14-arm64-us-default' is not
-supported` — which was first written down (in `docs/desktop.md` and a commit
-message) as an account entitlement. It is not: the sibling repo
-`~/src/confluence_phx_mirror` builds the same platform from `macos-latest` on
-the same account. `docs/desktop.md` has been corrected; the wrong diagnosis is
-still in the history of commit `93397d4`.
-
-- **Next**: check `gh run view <run> --json jobs` for
-  `desktop (ex-tbp-monty-osx-arm64)`. Green means closed; a fresh annotation
-  means the label was not the whole story.
-- **Known consequence while it was cancelled**: the run's overall conclusion is
-  `cancelled`, and `desktop release` (`ci.yml:1027`, `if: refs/tags/v*`) is
-  skipped with it. Everything else — lint, 4 test partitions, types, coverage /
-  CRAP / parity, both images, the image index, Linux and Windows bundles —
-  succeeds.
+`6bd0bfe` changed the desktop matrix's `os: macos-14` to `os: macos-latest` in
+`.github/workflows/ci.yml:648`, and run `42178863188` came back **green in every
+job**, `desktop (ex-tbp-monty-osx-arm64): success` included. So the annotation
+`The configuration 'macos-14-arm64-us-default' is not supported` was the label
+and nothing else; the earlier "account entitlement" reading (in `docs/desktop.md`
+and commit `93397d4`) was wrong and `3f94618` has the correction.
 
 ## 2. No tagged release exists, so "latest binary" means the nightly artifact
 
-`gh release list` is empty and `desktop release` only runs on `v*` tags. The
+`gh release list` is empty and `desktop release` only runs on `v*` tags, so it is
+skipped on every `main` run — that is the one line to expect in a green run. The
 README's three download links and `scripts/run-desktop.sh` / `run-desktop.ps1`
 all go through `nightly.link/.../workflows/ci/main/<asset>.zip`, which serves
 the newest `ci` artifacts from `main`; all three returned **HTTP 200** when
 checked (osx-arm64, linux-x64, win-x64). Nothing is broken — but a versioned
 "latest release" page does not exist. A `v*` tag is what creates it.
 
-## 3. A crashed step leaves no sentence on the run — **the biggest open defect**
+## 3. A crashed step left no sentence on the run — **closed, and the diagnosis was one process too far**
 
-Symptom: the run page says _"This run did not finish. It stopped without saying
-why."_ `Monty.Studio.Failure.explain(nil)` (`failure.ex:51`) — the record has no
-`reason` at all.
+Symptom: the run page said _"This run did not finish. It stopped without saying
+why."_ — `Failure.explain(nil)`, the record has no `reason` at all. The
+statistics sat beside it: the desktop database's
+`4b2d9d31-0d2d-44ce-9511-7a496fcd760c` is `failed` with `steps_done: 2383`,
+`episodes_done: 22` and a summary of every number **but** a reason.
 
-The console log shows what actually happened, on
-`base_10simobj_surf_agent` after nine objects were recognised:
+The crash itself, reproduced headlessly on `base_10simobj_surf_agent` — same
+stack trace as the studio run that reported it:
 
 ```
-[error] GenServer {Monty.Runtime.Registry, {:step, "studio-1507"}} terminating
 ** (RuntimeError) an undo jump left the agent turned away from where it started
     informed_policy.ex:369  assert_undo_jump_was_successful/2   (raise)
     informed_policy.ex:211  jump_outcome/3
@@ -62,62 +56,87 @@ The console log shows what actually happened, on
     step.ex:222             Step.handle_call/3
 ```
 
-The machinery to record this already exists and is good:
-`Monty.Studio.Jobs.Run.died/2` (`jobs/run.ex:475`) writes `Failure.crashed/3`'s
-sentence under `reason`, the traceback under `technical`, finishes the record as
-`"failed"` and broadcasts. **But it is only reachable from a `rescue`/`catch`
-inside the Oban job worker** (`jobs/run.ex:118–124`). The crash was in the step
-GenServer, a different process: if the worker was blocked in a `call` to it the
-exit is caught; between calls — or for a studio-started run with no job worker —
-nobody is watching, which is exactly what happened.
+**The earlier reading of this was wrong, and the wrong part is worth keeping.**
+This section used to say the crash happened "between calls" with nobody watching,
+and that the step coordinator should therefore write to `RunHistory` itself. It
+does not: a coordinator computes only during a call, and the caller — the Oban
+worker — was inside `GenServer.call`, so it was handed the exit, `step_once`'s
+`catch` turned it into `{:crashed, step, reason}`, and
+`Monty.Frameworks.Experiments.MontyExperiment` carried it up. The reason _was_
+known. `close/6` then finished the record with `RunLog.summary/1`, which returns
+the numbers and has no field for a reason — so the one thing the run knew was the
+one thing the record did not keep.
 
-**The change, and the reasons for its shape:**
+**The change** (in the order it happens):
 
-1. `lib/monty/runtime/step.ex`, `handle_call({:step, …})` (~line 200): wrap the
-   body in `try`, and on `rescue error` build
-   `Monty.Studio.Failure.crashed(:error, error, __STACKTRACE__)`, write it with
-   the same `RunHistory.finish(record, Map.merge(record.summary || %{}, recorded), "failed")`
-   that `died/2` uses (the run id is `state.model_id` — the key the step is
-   registered under, `{:step, "studio-1507"}`), say "the run died: …" in the
-   run's own log, then `{:stop, :step_failed, {:error, recorded}, state}`.
-2. `catch` the `:throw`/`:exit` kinds too, so a killed step says so rather than
-   "no reason" (`Failure.crashed/3` takes the kind; `@killed`/`@exited`
-   sentences already exist in `failure.ex`).
-3. Test in the shape of the existing `jobs/run_test.exs` ones: a raising step
-   leaves a run whose failure explains it, traceback under `technical`, status
-   `"failed"`; and a killed step says it was killed.
+1. `Monty.Runtime.Model.step/4` unwraps a coordinator's death: what
+   `GenServer.call` raises is `{{exception, traceback}, {GenServer, :call, _}}`,
+   and that is re-raised as the exception with the step's own traceback — the
+   frame that actually failed. A model that is not running stays an exit.
+2. `Monty.Studio.Jobs.Run.step_once/3` builds `Failure.crashed(kind, reason,
+__STACKTRACE__)` in its `catch`, **where the traceback still exists** — a
+   reason formatted later from a bare term has none.
+3. `Monty.Studio.Failure.stopped/1` is what a crash becomes however it arrives: a
+   pair already built, an exception, a sentence, or a term (which is the detail,
+   never the answer). `{:target_not_visible, id}` gets its own sentence.
+4. `RunLog.summary/2` merges that pair into the summary, and `close/6` passes it
+   whenever the outcome is `{:crashed, …}`. A record that says `failed` now says
+   why, in the same row a page reads.
 
-**Do not** `try` around the step's arithmetic and keep stepping, and do not
-rescue in `Failure`/`Inspect` to blanket-hide unknown shapes. A raised
-invariant means the policy's belief and the world disagree; the run must stop
-and keep the traceback.
+**Not done, on purpose**: no `RunHistory` call was added under `lib/monty/runtime/`.
+The coordinator owns processes and routing; the studio owns records. A crash
+reaches the database through the caller, which is the only process that knows
+which run it was stepping.
 
-## 4. Then judge the raise itself (unresolved question)
+**Still open in the same family** — recorded so it is not mistaken for fixed:
+`mix monty.run` has its own episode loop and no `catch`, so a raise there leaves
+the record `running` until a page reaps it, with the Reaper's truthful but
+uninformative "it stopped before it finished — nothing was working on it any
+more". The task does exit 1 (reproduced), so a script sees the failure.
 
-`InformedPolicy.assert_undo_jump_was_successful/2` (`informed_policy.ex:369`)
-raising on `base_10simobj_surf_agent` is either a real bug (an undo jump does
-not land where the policy believes) or an assertion too strict for this
-configuration. Not knowable until it is recorded properly (point 3) — do not
-"fix" the motor policy before the sentence exists.
+## 4. The raise itself: the assertion was too strict here — **closed**
 
-## 5. The experiment page shows no runs below the definition
+> `InformedPolicy.assert_undo_jump_was_successful/2` raising on
+> `base_10simobj_surf_agent` is either a real bug or an assertion too strict.
 
-The section is still there — `experiment_live.ex:442`, `#experiment-runs`,
-`@runs_shown 5` — but it is fed by
-`RunHistory.search(state: "all", text: name, per_page: 25)` in
-`recent_runs/1` (`experiment_live.ex:137`). Two candidate causes, to be told
-apart by one query against the same DB, not by argument:
+It is the second, and the number settles it. Monty compares the quaternions it
+_stored_ — `np.all(state[agent].rotation == self._pre_jump_state.rotation)`, exact
+equality — so it compares one value with itself. An agent's rotation here is
+rebuilt from the world's answer by normalising the quaternion the world reports
+(`Rotation.from_quaternion/1`), so a pose put back exactly still comes back
+**1.1e-16** away; `Rotation.to_quaternion/1` followed by
+`Rotation.from_quaternion/1` measures that directly. The comparison is now an
+angle — a thousandth of a degree counts as where it started — and the raise says
+how far the agent was turned, so the next reader has the number in the sentence
+instead of having to reproduce the run. It is
+`docs/monty-differences.md` §2.19.
 
-1. **Name mismatch**: the run stores the string it was started from; a run
-   started from a draft stores the draft's name, and `text: name` misses it.
-2. **`search/1` changed shape under it**: the newest commit on that file is
-   `4d0fe23` ("A row without its pictures is for the callers that only ask
-   whether the run is there"), which moved callers onto `@without_pictures`
-   rows. If the text search reads a column the light row no longer selects,
-   the filter matches nothing — silting up as "no runs" with no error.
+**How it was proved.** Two policy tests (a rotation that came back a last bit
+away is where it started; a five-degree turn raises and says "by 5.0 degrees");
+then the config itself — `mix monty.run base_10simobj_surf_agent --no-record`
+ran to **28 recognitions with no undo-jump raise**, where the old code died at 10. (It was stopped there rather than carried to 140/140: the box was swapping,
+and the point was the crash, not the episode count.) The acceptance ladder is
+unchanged digit for digit: `0.746 (192, 6)` … `6.338 (1429, 2)`, `goals 15065`
+under `MIX_ENV=test`, and `0.908 (802, 4)` … `11.712 (2342, 1)` in dev.
 
-Fix direction: filter by the run's experiment identity rather than a substring
-of a name.
+## 5. The experiment page's run list — **answered; the query was sound**
+
+The two candidates were a name mismatch and `search/1` reading a column the light
+row no longer selects. The query settles both, against the database the report
+came from: the desktop SQLite file
+(`~/Library/Application Support/ex-tbp-monty/ex_tbp_monty.db`) has **two** rows
+for `base_10simobj_surf_agent`, and the page's own predicate finds both —
+`lower(experiment) LIKE lower('%base_10simobj_surf_agent%')` matches, and
+`search(state: "all", text: name)` returns them (checked). So the list was not
+"finding nothing": the page whose screenshot showed "No run of this experiment
+yet" was showing a database without runs of that experiment — the dev Postgres
+holds only `base_config_10distinctobj_dist_agent` (two finished runs).
+
+What _was_ wrong is smaller, and is fixed: `recent_runs/1` read twenty-five rows
+to keep five and then filtered them in Elixir, so an experiment whose name is the
+beginning of a busier one's could show nothing at all. It is
+`RunHistory.list_for(name, limit: @runs_shown)` now — the exact name in the SQL,
+five rows read.
 
 ## 6. The desktop sidecar fails every log write before succeeding
 
