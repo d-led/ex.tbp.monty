@@ -100,18 +100,19 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
     # `Code.format_string!/1` does not end a file with a newline; `mix format`
     # does, and a map the formatter would rewrite fails the lint gate.
     content = IO.iodata_to_binary([Code.format_string!(render(entries, sources)), "\n"])
-    previous = File.read(@map_path)
 
-    if content == previous do
-      :ok
-    else
-      File.mkdir_p!(Path.dirname(@map_path))
-      # Written beside the map and renamed onto it: `mix test --partitions`
-      # starts several processes that all ask for this, and a half-written map
-      # is a compilation error for the next one.
-      temporary = @map_path <> ".tmp"
-      File.write!(temporary, content)
-      File.rename!(temporary, @map_path)
+    case File.read(@map_path) do
+      {:ok, ^content} ->
+        :ok
+
+      _changed_or_absent ->
+        File.mkdir_p!(Path.dirname(@map_path))
+        # Written beside the map and renamed onto it: `mix test --partitions`
+        # starts several processes that all ask for this, and a half-written map
+        # is a compilation error for the next one.
+        temporary = @map_path <> ".tmp"
+        File.write!(temporary, content)
+        File.rename!(temporary, @map_path)
     end
   end
 

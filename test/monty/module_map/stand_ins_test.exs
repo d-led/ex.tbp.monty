@@ -5,7 +5,8 @@ defmodule Monty.ModuleMap.StandInsTest do
 
   describe "what runs in place of a class" do
     test "the shells are replaced by the runtime, and say which part does what" do
-      stand_ins = StandIns.for_class("MontyForGraphMatching", "frameworks/models/graph_matching.py")
+      stand_ins =
+        StandIns.for_class("MontyForGraphMatching", "frameworks/models/graph_matching.py")
 
       assert Enum.map(stand_ins, & &1.name) == [Monty.Runtime.Model, Monty.Runtime.Step]
 
