@@ -851,9 +851,14 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
             hover(event) {
               const reading = this.atCursor(event)
-              if (!reading) return
+
+              // Over a stretch where nothing was recorded there is no value to
+              // name, and keeping the last one is worse than saying nothing: the
+              // crosshair would stand where the pointer is not.
+              if (!reading) return this.hide()
 
               const percent = (reading.x / this.width) * 100
+              const rect = this.el.getBoundingClientRect()
 
               this.marker.style.left = `${percent}%`
               this.marker.hidden = false
@@ -863,13 +868,18 @@ defmodule ExTbpMontyWeb.StudioComponents do
               this.label.style.transform =
                 percent < 20 ? "translateX(0)" : percent > 80 ? "translateX(-100%)" : "translateX(-50%)"
 
-              // The label stands on the far side of the place it names. A label
-              // at the top edge sits on top of a line high in the chart, and the
-              // point of intersection is the thing being read: a place in the top
-              // half puts the label below it, a place in the bottom half above.
-              const high = reading.y / this.height < 0.5
-              this.label.style.top = high ? "" : "0.125rem"
-              this.label.style.bottom = high ? "0.125rem" : ""
+              // Beside the place it names, a little above it: a number pinned to
+              // the top edge and a crosshair halfway down are two things a
+              // reader has to connect by hand. Above the point unless there is
+              // no room above it, in which case below.
+              const point = (reading.y / this.height) * rect.height
+              const above = point > 28
+
+              this.label.style.top = `${Math.max(
+                Math.min(above ? point - 24 : point + 8, rect.height - 20),
+                2
+              )}px`
+              this.label.style.bottom = ""
 
               this.label.hidden = false
             },
