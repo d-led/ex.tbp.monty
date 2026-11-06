@@ -33,6 +33,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
   """
 
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
+  alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Geometry.Rotation
 
   @doc """
@@ -247,6 +248,8 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
     learning_modules
     |> Enum.with_index()
     |> Map.new(fn {lm, index} ->
+      lm = graph_module(lm)
+
       stats =
         lm
         |> graph_lm_episode_stats()
@@ -273,6 +276,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
   """
   @spec graph_lm_episode_stats(struct()) :: map()
   def graph_lm_episode_stats(lm) do
+    lm = graph_module(lm)
     performance = episode_performance(lm)
     individual = individual_ts_performance(lm)
     {location, rotation, scale} = detected_pose(lm)
@@ -318,6 +322,16 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
     num_steps: 0,
     location: [0, 0, 0]
   }
+
+  # A module that composes another answers the statistics of the module it
+  # composes. Monty's learning modules share one struct by inheritance, so
+  # everything below — the buffer, the possible matches, the pose it detected —
+  # is a field of the composed module; a class here that holds one instead (the
+  # no-reset module, the same decision as `docs/monty-differences.md` §2.9) has
+  # those fields one level down, and an episode's statistics are still about the
+  # module that saw the episode.
+  defp graph_module(%{lm: %EvidenceGraphLM{} = inner}), do: inner
+  defp graph_module(lm), do: lm
 
   defp episode_performance(lm) do
     # Monty's guard: the first step's `on_object` is what says the episode ever

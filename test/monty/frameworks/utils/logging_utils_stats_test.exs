@@ -13,6 +13,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
 
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM
   alias Monty.Frameworks.Utils.LoggingUtils
   alias Monty.Geometry.Rotation
 
@@ -206,6 +207,31 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
 
       assert stats["TFNP"] == "unknown_object_not_matched_(TN)"
       assert stats["possible_match_sources"] == ""
+    end
+  end
+
+  describe "a module that composes another" do
+    # Monty's no-reset module is an `EvidenceGraphLM` by inheritance and by
+    # composition here, so an episode's statistics are the composed module's.
+    # Reading them off the wrapper is what crashed a studio run at the end of
+    # every episode: `key :buffer not found`.
+    test "reports the statistics of the module it composes" do
+      inner = lm(stepwise_target_object: "bowl")
+
+      assert LoggingUtils.graph_lm_episode_stats(NoResetEvidenceGraphLM.new(inner)) ==
+               LoggingUtils.graph_lm_episode_stats(inner)
+    end
+
+    test "answers the episode's row as that module's row" do
+      inner = lm()
+
+      rows =
+        LoggingUtils.stats_per_lm([NoResetEvidenceGraphLM.new(inner)], %{"object" => "mug"},
+          step: 12,
+          matching_steps: 9
+        )
+
+      assert %{"primary_performance" => "correct", "num_steps" => _} = rows["LM_0"]
     end
   end
 
