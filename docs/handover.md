@@ -309,6 +309,28 @@ order of likelihood: (a) our train-mode matching concludes too readily (evidence
 have a different ending, so the `no_match` branch that creates a graph is not
 reached. Compare per episode against the CSV above — same seed (42), same config.
 
+**Answered — it was neither (a) nor (b).** The object was never _turned_. The
+sampler that gives an episode its pose (`object_init_sampler`, `Predefined` by
+default with rotations `[(0, 0, 0), (45, 0, 0)]` one per epoch) was `planned`
+here, so every episode of every run showed the object in the pose the scene
+placed it in. A graph built from one view then explains every later episode:
+matching concludes on the evidence the first episode's own nodes supply, and the
+memory never needs a second graph.
+
+The evidence for it is Monty's own stream, captured by subscribing to the
+dashboard's ZMQ publisher (`evidence_chart` carries the max evidence per graph
+after every step): its training evidence goes **0.4 → −0.6** in episode 3 and
+**0.19 → −1.81** in episode 4, at 45°, while ours climbed to 11.7 — the two
+runs were looking at different sides of the same object. After the samplers were
+wired: episodes 3 and 4 drop to −0.58 and −0.53 with no possible matches, and the
+run builds **three graphs**, `new_object0..2`, as Monty does.
+
+What remains different, smaller and named rather than fixed: episode 2 takes 28
+steps against Monty's 25 (8 matching steps against 5, so our pose narrows later
+than his at the same evidence), and the evaluation phase takes 4/4/4 where
+Monty's takes 8/4/7. Both are conclusion timing at equal evidence, not the graph
+count.
+
 ### 10.5 The runner's memory rule has one home
 
 `Run.next_memories/3` is "what the next episode starts from": a training episode
