@@ -75,7 +75,7 @@ defmodule Monty.Runtime.LearningModuleServer do
   """
   @spec update_stats_after_vote(server()) :: :ok
   def update_stats_after_vote(server),
-    do: GenServer.call(server, :update_stats_after_vote, :infinity)
+    do: apply_state(server, & &1.update_stats_after_vote(&2))
 
   @spec propose_goals(server()) :: [Goal.t()]
   def propose_goals(server), do: GenServer.call(server, :propose_goals, :infinity)
@@ -93,7 +93,7 @@ defmodule Monty.Runtime.LearningModuleServer do
   def get_output(server), do: GenServer.call(server, :get_output, :infinity)
 
   @spec reset_stm(server()) :: :ok
-  def reset_stm(server), do: GenServer.call(server, :reset_stm, :infinity)
+  def reset_stm(server), do: apply_state(server, & &1.reset_stm(&2))
 
   @doc """
   Drops what the module accumulated, keeping what it learned.
@@ -102,16 +102,16 @@ defmodule Monty.Runtime.LearningModuleServer do
   under the sensor changes: Monty's `_reset_modules_buffers`.
   """
   @spec clear_buffers(server()) :: :ok
-  def clear_buffers(server), do: GenServer.call(server, :clear_buffers, :infinity)
+  def clear_buffers(server), do: apply_state(server, & &1.clear_buffers(&2))
 
   @doc "Forgets what the module concluded, keeping what it believes."
   @spec clear_conclusion(server()) :: :ok
-  def clear_conclusion(server), do: GenServer.call(server, :clear_conclusion, :infinity)
+  def clear_conclusion(server), do: apply_state(server, & &1.clear_conclusion(&2))
 
   @doc "Names this episode's object without emptying the module's history."
   @spec set_primary_target(server(), map() | nil) :: :ok
   def set_primary_target(server, primary_target),
-    do: GenServer.call(server, {:set_primary_target, primary_target}, :infinity)
+    do: apply_state(server, & &1.set_primary_target(&2, primary_target))
 
   @doc """
   The long-term memory this module holds, or `:none`.
@@ -126,7 +126,7 @@ defmodule Monty.Runtime.LearningModuleServer do
   @doc "Records whether this step's observation reached the module."
   @spec add_lm_processing_to_buffer_stats(server(), boolean()) :: :ok
   def add_lm_processing_to_buffer_stats(server, processed),
-    do: GenServer.call(server, {:add_lm_processing_to_buffer_stats, processed}, :infinity)
+    do: apply_state(server, & &1.add_lm_processing_to_buffer_stats(&2, processed))
 
   @doc "Whether the last buffered observation was one this module processed."
   @spec observation_processed?(server()) :: boolean()
@@ -141,31 +141,31 @@ defmodule Monty.Runtime.LearningModuleServer do
   @doc "Times the module out without asking it to reconsider."
   @spec set_terminal_state(server(), term()) :: :ok
   def set_terminal_state(server, terminal_state),
-    do: GenServer.call(server, {:set_terminal_state, terminal_state}, :infinity)
+    do: apply_state(server, & &1.set_terminal_state(&2, terminal_state))
 
   @doc "Tells the module whether this episode trains or evaluates."
   @spec set_experiment_mode(server(), term()) :: :ok
   def set_experiment_mode(server, mode),
-    do: GenServer.call(server, {:set_experiment_mode, mode}, :infinity)
+    do: apply_state(server, & &1.set_experiment_mode(&2, mode))
 
   @doc "Folds the episode into long-term memory, if it was a training episode."
   @spec update_ltm_from_stm(server()) :: :ok
-  def update_ltm_from_stm(server), do: GenServer.call(server, :update_ltm_from_stm, :infinity)
+  def update_ltm_from_stm(server), do: apply_state(server, & &1.update_ltm_from_stm(&2))
 
   @doc "Names the object this episode is about, as the experiment knows it."
   @spec set_target(server(), map() | nil) :: :ok
   def set_target(server, primary_target),
-    do: GenServer.call(server, {:set_target, primary_target}, :infinity)
+    do: apply_state(server, & &1.set_target(&2, primary_target))
 
   @doc "Records which object the module's sensor is on this step."
   @spec set_stepwise_target(server(), String.t()) :: :ok
   def set_stepwise_target(server, label),
-    do: GenServer.call(server, {:set_stepwise_target, label}, :infinity)
+    do: apply_state(server, & &1.set_stepwise_target(&2, label))
 
   @doc "Records which objects the graph a training episode built came from."
   @spec fixme_update_ground_truth(server()) :: :ok
   def fixme_update_ground_truth(server),
-    do: GenServer.call(server, :fixme_update_ground_truth, :infinity)
+    do: apply_state(server, & &1.fixme_update_ground_truth(&2))
 
   @doc "The module's own state, for tests and the run inspector."
   @spec state(server()) :: term()
@@ -185,6 +185,12 @@ defmodule Monty.Runtime.LearningModuleServer do
   """
   @spec query(server(), (term() -> answer)) :: answer when answer: var
   def query(server, projection), do: GenServer.call(server, {:query, projection}, :infinity)
+
+  # A module function that answers the state it leaves the module in, called in
+  # the process that holds it. The fun travels, so the server stays a boundary
+  # rather than growing a clause per callback.
+  @spec apply_state(server(), (module(), term() -> term())) :: :ok
+  defp apply_state(server, fun), do: GenServer.call(server, {:apply, fun}, :infinity)
 
   # -- callbacks ------------------------------------------------------------
 
@@ -214,10 +220,6 @@ defmodule Monty.Runtime.LearningModuleServer do
     {:reply, :ok, %{server | state: state}}
   end
 
-  def handle_call(:update_stats_after_vote, _from, server) do
-    {:reply, :ok, %{server | state: server.module.update_stats_after_vote(server.state)}}
-  end
-
   def handle_call(:propose_goals, _from, server) do
     {goals, state} = server.module.propose_goals(server.state)
     {:reply, goals, %{server | state: state}}
@@ -233,30 +235,18 @@ defmodule Monty.Runtime.LearningModuleServer do
     {:reply, output, %{server | state: state}}
   end
 
-  def handle_call(:reset_stm, _from, server) do
-    {:reply, :ok, %{server | state: server.module.reset_stm(server.state)}}
-  end
-
-  def handle_call(:clear_buffers, _from, server) do
-    {:reply, :ok, %{server | state: server.module.clear_buffers(server.state)}}
-  end
-
-  def handle_call(:clear_conclusion, _from, server) do
-    {:reply, :ok, %{server | state: server.module.clear_conclusion(server.state)}}
-  end
-
-  def handle_call({:set_primary_target, primary_target}, _from, server) do
-    state = server.module.set_primary_target(server.state, primary_target)
-    {:reply, :ok, %{server | state: state}}
+  # The calls that answer nothing but the module's new state — `reset_stm`,
+  # `clear_buffers`, `set_target` and the nine others like them. They differ only
+  # in which module function they ask for, so they share one clause and the
+  # function arrives in the message: a learning module's server is a process
+  # boundary, and an alphabet of twenty-four branches is the state machine of a
+  # module that does not have one.
+  def handle_call({:apply, fun}, _from, server) do
+    {:reply, :ok, %{server | state: fun.(server.module, server.state)}}
   end
 
   def handle_call(:graph_memory, _from, server),
     do: {:reply, server.module.graph_memory(server.state), server}
-
-  def handle_call({:add_lm_processing_to_buffer_stats, processed}, _from, server) do
-    state = server.module.add_lm_processing_to_buffer_stats(server.state, processed)
-    {:reply, :ok, %{server | state: state}}
-  end
 
   def handle_call(:observation_processed?, _from, server) do
     {:reply, server.module.observation_processed?(server.state), server}
@@ -265,36 +255,6 @@ defmodule Monty.Runtime.LearningModuleServer do
   def handle_call(:update_terminal_condition, _from, server) do
     {state, terminal_state} = server.module.update_terminal_condition(server.state)
     {:reply, terminal_state, %{server | state: state}}
-  end
-
-  def handle_call({:set_terminal_state, terminal_state}, _from, server) do
-    state = server.module.set_terminal_state(server.state, terminal_state)
-    {:reply, :ok, %{server | state: state}}
-  end
-
-  def handle_call({:set_experiment_mode, mode}, _from, server) do
-    state = server.module.set_experiment_mode(server.state, mode)
-    {:reply, :ok, %{server | state: state}}
-  end
-
-  def handle_call(:update_ltm_from_stm, _from, server) do
-    state = server.module.update_ltm_from_stm(server.state)
-    {:reply, :ok, %{server | state: state}}
-  end
-
-  def handle_call({:set_target, primary_target}, _from, server) do
-    state = server.module.set_target(server.state, primary_target)
-    {:reply, :ok, %{server | state: state}}
-  end
-
-  def handle_call({:set_stepwise_target, label}, _from, server) do
-    state = server.module.set_stepwise_target(server.state, label)
-    {:reply, :ok, %{server | state: state}}
-  end
-
-  def handle_call(:fixme_update_ground_truth, _from, server) do
-    state = server.module.fixme_update_ground_truth(server.state)
-    {:reply, :ok, %{server | state: state}}
   end
 
   def handle_call(:state, _from, server), do: {:reply, server.state, server}
