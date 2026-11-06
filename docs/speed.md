@@ -309,3 +309,26 @@ task per graph, is the thing the BEAM does that a GIL-bound Python cannot. That 
 the work to do before claiming a speed advantage over Monty at seventy-seven
 objects, and it should be measured the same way — reductions and wall clock, run
 paired against the serial version in one session.
+
+### Runs scale across cores, and that is measured (2026-11-06)
+
+`MIX_ENV=test`, `base_config_10distinctobj_dist_agent`, five steps each:
+
+|                                | wall                          |
+| ------------------------------ | ----------------------------- |
+| one run (start, 5 steps, stop) | 2 548 ms                      |
+| two runs, started together     | 2 619 ms — **1 310 ms a run** |
+
+Two runs cost 1.03 times the wall time of one, so throughput nearly doubles with
+the run count: each run is its own set of processes and the schedulers spread
+them. That is what the experiment page's "runs side by side" setting and the
+queue's `studio: 2` already use.
+
+It is worth being precise about what this does and does not say. Monty can run
+two experiments side by side too — as two Python processes — so run-level
+parallelism is not by itself an advantage; what the BEAM adds is that it happens
+_inside one node_, one scheduler pool, one set of immutable binaries shared by
+reference instead of copied, and one queue that knows what is running. The
+advantage that a GIL-bound Python cannot take at all is the next one: sharding a
+single step's per-graph work across schedulers, described above and **still
+unmeasured**.
