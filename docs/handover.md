@@ -178,15 +178,23 @@ box, 140/140 episodes. Two changes this session: decode as 32-bit halves
   closures (`spread_against`, `gather`, `keep_where`) about 2× per hypothesis.
   `Hypotheses.gather/3`, `poses`/`locations`, and the displacer's hot path are
   **already** binaries and kernels — do not "optimise" them again.
-- **Next target**: `SpatialArithmetics.check_orthonormal/1`
-  (`spatial_arithmetics.ex:182`) doing a per-hypothesis `mᵀ·m` against
-  `Geometry.identity()` — 12 976 `Geometry.transpose/1` calls and 5 129
-  `Geometry.mul/2` closures in one step. Same shape of waste as `node_poses`:
-  a small fixed-size computation in a hot loop. Measure with
-  `MIX_ENV=test mix run scripts/probe_step_cost.exs`, then the ladder
-  (`mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8
---no-record`) which must stay digit for digit: `0.746 (192, 6)` …
-  `6.338 (1429, 2)`, `goals 15065`.
+- **The "next target" this note used to name was a phantom.** It said
+  `SpatialArithmetics.check_orthonormal/1` (`spatial_arithmetics.ex:182`) does a
+  per-hypothesis `mᵀ·m` in the hot loop, on the strength of 12 976
+  `Geometry.transpose/1` and 5 129 `Geometry.mul/2` calls in one step. The
+  function has **no production caller** — `grep -rn check_orthonormal lib/` finds
+  its definition and nothing else, and only
+  `spatial_arithmetics_test.exs:192` calls it. The counts belong to the
+  `align_orthonormal_vectors*` family (`:218`, `:340`, `:468`), `Cmp.Message`'s
+  rotation (`message.ex:187`) and `EvidenceGraphLM`'s pose comparison
+  (`evidence_graph_lm.ex:1260`, `:1441`, `:1605`). This is the trap the memory
+  warns about: a call count read off a profile was attributed to a neighbouring
+  function in the same module, and "optimising" it would have changed nothing.
+  If a cheap win is wanted, measure first and name the _caller_
+  (`MIX_ENV=test mix run scripts/probe_step_cost.exs` for the step's cost), then
+  run the ladder — `mix monty.run base_config_10distinctobj_dist_agent
+--episodes 1 --steps 8 --no-record` — which must stay digit for digit:
+  `0.746 (192, 6)` … `6.338 (1429, 2)`, `goals 15065` under `MIX_ENV=test`.
 
 ## 8. Standing rules this codebase is held to
 
