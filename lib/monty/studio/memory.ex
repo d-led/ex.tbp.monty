@@ -1,12 +1,13 @@
 defmodule Monty.Studio.Memory do
   @moduledoc """
-  Monty's pretrained memory, as a run can load it.
+  Monty's pretrained memory, as a run can load it — and as a run's own training
+  can leave it.
 
   Monty stores a pretrained learning module as a torch pickle;
   `Monty.Studio.Pretrained` turns one into a JSONL of objects, nodes and
-  features, and this reads one of those back. That is the bridge between
-  Monty's memory and a run here: the arithmetic on top is the port's
-  `EvidenceGraphLM`, which is what a run then recognises with.
+  features, this reads one of those back (`load/3`) and writes one (`save/4`).
+  That is the bridge between Monty's memory and a run here: the arithmetic on top
+  is the port's `EvidenceGraphLM`, which is what a run then recognises with.
 
   ## Where the libraries live
 
@@ -206,6 +207,75 @@ defmodule Monty.Studio.Memory do
   end
 
   defp model_of(file), do: file |> Path.rootname() |> Path.rootname()
+
+  @doc """
+  Writes `memory` out as the library for `name` in `release`.
+
+  This is the other half of `load/3`: what a training phase learned dies with the
+  run that learned it unless it is written down, and the format it is written in
+  is the one the pretrained libraries are already in — objects, nodes and
+  features, one record a graph.
+
+  Every graph is written as it stands, so reading it back gives the same nodes in
+  the same places. What a record does not carry is the memory's own configuration
+  — its object model and its `k` — because that belongs to the experiment that
+  continues the training, not to the graph (see `Monty.Studio.Setup.memories/1`).
+  """
+  @spec save(GraphMemory.t(), String.t(), String.t(), Path.t()) :: :ok | {:error, term()}
+  def save(%GraphMemory{} = memory, name, release, dir \\ libraries_dir()) do
+    with :ok <- check_name(name),
+         :ok <- check_release(release) do
+      write(path_for(name, release, dir), records_of(memory))
+    end
+  end
+
+  defp check_name(name) do
+    if model_name?(name), do: :ok, else: {:error, {:not_a_model_name, name}}
+  end
+
+  defp check_release(release) do
+    if model_name?(release), do: :ok, else: {:error, {:not_a_model_name, release}}
+  end
+
+  # sobelow_skip ["Traversal.FileModule"]
+  # The path is built by `path_for/3` from a directory and two names `check_*`
+  # have already held to the shape of a Monty directory name.
+  defp write(path, records) do
+    body = Enum.map_join(records, "\n", &Jason.encode!/1)
+
+    with :ok <- File.mkdir_p(Path.dirname(path)) do
+      File.write(path, :zlib.gzip(body <> "\n"))
+    end
+  end
+
+  # One record a graph, in the shape `graph_of/1` reads back: the object and the
+  # channel it belongs to, one position a node, and every node's features under
+  # the names the graph gives them. Column order is the reader's to choose, so it
+  # is not written.
+  #
+  # The graph is read through the memory's own object model, because a module that
+  # learned into grid models holds those and a pretrained library holds plain
+  # graphs: both answer `graph/1`, and what a record is made of is the same either
+  # way.
+  defp records_of(%GraphMemory{} = memory) do
+    for {object_id, channels} <- GraphMemory.state_dict(memory),
+        {input_channel, model} <- channels,
+        graph <- [memory.object_model.graph(model)],
+        graph != nil do
+      %{
+        "object_id" => object_id,
+        "input_channel" => input_channel,
+        "positions" => graph.pos,
+        "features" => features_of(graph)
+      }
+    end
+  end
+
+  defp features_of(%{x: rows, feature_mapping: mapping}) do
+    Map.new(mapping, fn {name, {start, stop}} ->
+      {name, Enum.map(rows, &Enum.slice(&1, start, stop - start))}
+    end)
+  end
 
   # sobelow_skip ["Traversal.FileModule"]
   # The path is a directory from `libraries_dir/0` plus a name `model_name?/1`

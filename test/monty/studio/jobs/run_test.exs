@@ -1,12 +1,17 @@
 defmodule Monty.Studio.Jobs.RunTest do
   use ExTbpMontyWeb.ConnCase, async: false
 
-  alias Monty.Studio.{Artifacts, Drafts, Jobs, RunHistory, RunLog}
+  alias Monty.Frameworks.Models.GraphMatching.GraphMemory
+  alias Monty.Studio.{Artifacts, Drafts, Jobs, Memory, RunHistory, RunLog}
   alias Monty.Test.Tmp
 
   # The experiment a run of this file steps: an evaluation config whose classes
   # this port has written, and the experiment the port is judged by.
   @experiment "base_config_10distinctobj_dist_agent"
+
+  # An experiment that trains, from an empty memory, on two objects — the one an
+  # evaluation cannot stand in for.
+  @training_experiment "tutorial/surf_agent_2obj_unsupervised"
 
   # The queue runs jobs by hand here: what is under test is the run, not Oban's
   # scheduler.
@@ -85,16 +90,36 @@ defmodule Monty.Studio.Jobs.RunTest do
     end
 
     test "steps the epochs the config asks for, and only those" do
-      # The config names three train epochs and switches training off, so what
-      # it runs is the fourteen evaluation ones — and nothing here trains. A
-      # config that asks to train is refused rather than stood in for, because a
-      # training episode would explore and conclude nothing.
+      # The config switches training off and names fourteen evaluation epochs, so
+      # what a run of it does is those fourteen and no training phase.
       {:ok, opened} = Monty.Studio.open(@experiment)
       {:ok, one_episode} = RunHistory.start(RunLog.attributes(opened, 1, 0, 1, 1))
       assert {:ok, evaluated} = perform(one_episode)
 
       assert File.read!(evaluated.log_path) =~ "14 eval epoch(s)"
       refute File.read!(evaluated.log_path) =~ "train epoch(s)"
+    end
+
+    test "a run that trains leaves the memory it learned where the run's own files are" do
+      # Monty's `save_state_dir/1` writes the pretrained model at the end of
+      # pretraining. Without that, what a training phase learned dies with the
+      # process that built it, and the next run starts from the pretrained graphs
+      # again. The file is the library format, so `Memory.load/3` reads it.
+      {:ok, opened} = Monty.Studio.open(@training_experiment)
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 40, 0, 1, 1))
+
+      assert {:ok, closed} = perform(record)
+      assert closed.status == "finished"
+      assert File.read!(closed.log_path) =~ "the memory learning_module_0 learned is in"
+
+      libraries = Path.join(Artifacts.dir(closed.id), "memory")
+      assert [file] = Path.wildcard(Path.join(libraries, "**/*.jsonl.gz"))
+
+      {:ok, learned} = Memory.load(Path.basename(file, ".jsonl.gz"), "trained", libraries)
+
+      # The object an untouched module names when it finds nothing it knows,
+      # which is Monty's own naming for what a first training episode adds.
+      assert GraphMemory.get_memory_ids(learned) == ["new_object0"]
     end
 
     test "keeps what each step saw, so the run can be replayed" do

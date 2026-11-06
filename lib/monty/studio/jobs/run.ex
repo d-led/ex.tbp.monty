@@ -26,12 +26,18 @@ defmodule Monty.Studio.Jobs.Run do
     CentreView,
     Failure,
     Logging,
+    Memory,
     Run,
     RunHistory,
     RunLog,
     Setup,
     Summary
   }
+
+  # The release a run's own training is filed under. It is not a Monty release:
+  # no archive is published under it, so a config can never name it by accident
+  # and load graphs it did not ask for.
+  @trained_release "trained"
 
   @doc "Enqueues a run of `attributes` (see `RunLog.attributes/2`) and returns the job."
   @spec enqueue(map()) :: {:ok, Oban.Job.t()} | {:error, term()}
@@ -224,7 +230,65 @@ defmodule Monty.Studio.Jobs.Run do
       })
 
     say(run_id, episodes_line(ran))
+    keep_memory(run_id, opened, plan, state.memories)
     close(state.record, opened, outcome, state.infos, state.conclusion, run_id)
+  end
+
+  # Monty's `save_state_dir/1`: what a training phase learned is written down at
+  # the end of it, because a memory that only exists inside the process that
+  # built it dies with the run — the evaluation phase after it, and the next run,
+  # would start from the pretrained graphs again.
+  #
+  # It goes in the run's own directory rather than in the library tree: a library
+  # is named by the experiment that loads it (`Memory.load/3`), and a run's output
+  # is named by the run. `memory/trained/<name>.jsonl.gz` is the format the
+  # pretrained libraries are in, so anything that can read one can read this.
+  defp keep_memory(run_id, opened, plan, memories) do
+    if Enum.any?(plan, fn {mode, _epochs} -> mode == :train end) do
+      Enum.each(memories, fn {module_id, memory} ->
+        write_memory(run_id, opened, module_id, memory)
+      end)
+    end
+  end
+
+  # A module that keeps no graph memory — the stand-in learning module a config
+  # without an evidence model gets — has nothing to write, and the `shell`
+  # finding already says so.
+  defp write_memory(_run_id, _opened, _module_id, :none), do: :ok
+
+  defp write_memory(run_id, opened, module_id, memory) do
+    path = Path.join([Artifacts.dir(run_id), "memory"])
+
+    case Memory.save(memory, library_name(opened, module_id), @trained_release, path) do
+      :ok ->
+        say(run_id, "the memory #{module_id} learned is in #{path}")
+
+      {:error, reason} ->
+        # A memory that could not be written is worth a sentence, not a crash: the
+        # run itself concluded, and what is lost is what comes after it.
+        say(run_id, "the memory #{module_id} learned could not be written: #{inspect(reason)}")
+    end
+  end
+
+  # The name the run's own memory is filed under: the model its config names,
+  # which is what a later run of that config would ask for, and the run's own
+  # name when it names none. Two modules in one run are two memories, so the
+  # module id keeps them apart.
+  defp library_name(opened, module_id) do
+    base =
+      Memory.name_of(opened.setup.model_name_or_path) ||
+        sanitise(opened.setup.logging.run_name) || sanitise(opened.name) ||
+        "monty-memory"
+
+    if length(opened.setup.learning_modules) > 1, do: base <> "-" <> module_id, else: base
+  end
+
+  # A file name, from a config's own words: anything that is not a letter, a
+  # digit, an underscore, a dot or a dash becomes a dash.
+  defp sanitise(nil), do: nil
+
+  defp sanitise(name) do
+    name |> to_string() |> String.replace(~r/[^A-Za-z0-9_.-]+/, "-") |> String.trim("-")
   end
 
   # Monty's `run()`: `train()` and then `evaluate()`, each a loop of its own with

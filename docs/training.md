@@ -111,14 +111,14 @@ one Monty would have built.
    are composed here — but their world is Habitat-Sim (§6), so the referee has to
    be a config this build steps, or Monty's own numbers for one of its Habitat runs
    taken as the reference while the graphs are compared rather than the pictures.
-2. **What was learned has to survive the run.** Today the memory lives in the
-   learning module's process and dies with it, which is fine for an episode and
-   useless for a training run: a `train` phase that ends leaves no library, so the
-   evaluation phase after it — and the next run — start from the pretrained
-   graphs again. Monty writes pickles (`_snapshot_monty`, `memory_to_pickles`);
-   here the equivalent is the library format `Monty.Studio.Memory` already _reads_
-   (`priv/monty/libraries/<release>/<model>.jsonl.gz`, written by
-   `Monty.Studio.Pretrained`), so a writer is the missing half.
+2. **What was learned has to survive the run** _(done)_: `Memory.save/4` writes a
+   memory in the format `load/3` reads, and a run with a training phase writes
+   each module's memory to `<artifacts>/<run>/memory/trained/<name>.jsonl.gz`
+   when it ends — Monty's `save_state_dir/1`, in this port's format. The round
+   trip is specified by `test/monty/studio/memory_test.exs` (the same objects,
+   every node in the same place with the same features) and end to end by
+   `test/monty/studio/jobs/run_test.exs` (a training episode's memory is on disk
+   afterwards and names `new_object0`).
 3. **A loaded library is not the memory the config would build.**
    `Memory.read!/1` builds a plain `GraphMemory` with `GraphObjectModel` and no
    `k`/thresholds, and `Setup` hands that to the module in place of the empty
@@ -143,9 +143,8 @@ one Monty would have built.
 
 1. Carry the memory through a phase _(done: §2)_ and lift the guard _(done)_.
 2. A referee for one config this build steps _(§3.1)_.
-3. Write a trained memory out as a library and read it back into the next phase —
-   one round trip, tested against the same memory — and load it into the memory
-   the config itself would have built _(§3.2, §3.3)_.
+3. Load a written memory into the memory the config itself would have built
+   _(§3.3)_, and give a later run a way to find the library an earlier one wrote.
 4. `Mix.Tasks.Monty.Run`'s own loop _(§3.4)_.
 5. Port what the catalog is missing, biggest first: `DisplacementGraphLM` (44),
    `MontySupervisedObjectPretrainingExperiment` (11), `FeatureGraphLM` (10), the

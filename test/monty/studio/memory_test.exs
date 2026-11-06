@@ -12,6 +12,8 @@ defmodule Monty.Studio.MemoryTest do
 
   use ExTbpMontyWeb.ConnCase, async: true
 
+  alias Monty.Frameworks.Models.GraphMatching.GraphMemory
+  alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Studio.{Memory, Setup}
   alias Monty.Test.Tmp
 
@@ -188,6 +190,82 @@ defmodule Monty.Studio.MemoryTest do
       assert Memory.available_libraries(dir) ==
                ["pretrained_ycb_v12/surf_agent_1lm_10distinctobj"]
     end
+  end
+
+  describe "a memory written out as a library" do
+    test "reads back with the same objects, and every node in the same place with the same features" do
+      dir = Tmp.dir("written")
+      memory = trained_memory()
+
+      assert :ok = Memory.save(memory, "trained_here", "pretrained_here", dir)
+      assert Memory.available?("trained_here", "pretrained_here", dir)
+
+      {:ok, loaded} = Memory.load("trained_here", "pretrained_here", dir)
+
+      assert GraphMemory.get_memory_ids(loaded) == GraphMemory.get_memory_ids(memory)
+
+      for object_id <- GraphMemory.get_memory_ids(memory),
+          channel <- GraphMemory.get_input_channels_in_graph(memory, object_id) do
+        assert nodes(loaded, object_id, channel) == nodes(memory, object_id, channel)
+      end
+    end
+
+    test "is refused for a name that is not a model's, rather than written outside the library" do
+      dir = Tmp.dir("written")
+
+      assert Memory.save(trained_memory(), "../escape", "pretrained_here", dir) ==
+               {:error, {:not_a_model_name, "../escape"}}
+
+      refute File.exists?(Path.join(dir, "pretrained_here"))
+    end
+  end
+
+  # What matching reads, as values that do not depend on which column a feature
+  # happens to sit in: each node's position and its features by name, sorted so
+  # two memories that hold the same nodes compare equal whatever order they were
+  # stored in.
+  defp nodes(memory, object_id, channel) do
+    model = GraphMemory.get_graph(memory, object_id, channel)
+    %{x: rows, feature_mapping: mapping} = GraphObjectModel.graph(model)
+
+    [GraphObjectModel.positions(model), rows]
+    |> Enum.zip_with(fn [position, row] ->
+      {position,
+       Map.new(mapping, fn {name, {first, last}} ->
+         {name, Enum.slice(row, first, last - first)}
+       end)}
+    end)
+    |> Enum.sort()
+  end
+
+  # A memory as a training episode leaves it: two objects, three nodes, and the
+  # features the evidence-based module matches on.
+  defp trained_memory do
+    memory = GraphMemory.new(features_to_use: %{"patch" => ~w(hsv pose_vectors)})
+
+    [{"mug", [[0.0, 0.0, 0.0], [0.01, 0.0, 0.0]]}, {"bowl", [[0.0, 0.0, 0.05]]}]
+    |> Enum.reduce(memory, fn {object_id, positions}, memory ->
+      {:ok, model} =
+        GraphObjectModel.build_model(
+          GraphObjectModel.new(object_id),
+          positions,
+          features_for(positions)
+        )
+
+      GraphMemory.add_graph_to_memory(memory, %{"patch" => model}, object_id)
+    end)
+  end
+
+  defp features_for(positions) do
+    %{
+      "hsv" => Enum.map(positions, fn _position -> [0.1, 0.2, 0.3] end),
+      "pose_fully_defined" => Enum.map(positions, fn _position -> [1.0] end),
+      "principal_curvatures_log" => Enum.map(positions, &[Enum.sum(&1)]),
+      "pose_vectors" =>
+        Enum.map(positions, fn _position ->
+          [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        end)
+    }
   end
 
   # An export in the format `Memory` reads: one object, one channel, one node.
