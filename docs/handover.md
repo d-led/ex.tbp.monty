@@ -185,3 +185,55 @@ monty.module_map.verify` enforces it. Never rename a mapped module.
   (`9e4b296`).
 - **The full experiment completing** — twice, with identical step and goal
   counts (4 789 steps, 4 558 928 goals), once at load 10.6–14.7 and once quiet.
+
+---
+
+## 10. The port's own computational gaps, and where they are written down
+
+Sections 1–9 are about the app, CI, one crash and performance. The **gaps in
+the port itself** are a different list and are not duplicated here — they are
+kept where they are checked, so they cannot drift from the code:
+
+| What a person needs                                                            | Where it lives                                                                                                                            |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| What is ported, module by module                                               | `docs/features.md`                                                                                                                        |
+| Every deliberate divergence from Monty, numbered, with Monty's own line quoted | `docs/monty-differences.md` (§1.1–§1.15 are Monty behaviours we either reproduce or refuse to; §2.x the numerical and stream differences) |
+| The mapping the build enforces                                                 | `lib/monty/module_map/data.ex`, checked by `mix monty.module_map.verify`                                                                  |
+| Which configs cannot run here, and why                                         | `Monty.Studio.Setup` — `phase_findings/1` and `not_ported_finding/2`                                                                      |
+
+The gaps that are genuinely open, in the order they block work:
+
+1. **Nothing can be trained.** `Setup.phase_findings/1` refuses any phase that
+   trains (`:training_not_implemented`), so the port runs _evaluation_ against
+   pretrained graphs only. Every config whose phase is `train` is refused
+   rather than faked — that is the fix of `7cba014`, which removed the stand-in
+   experiments: an unported class or phase is now an error, not an `:info`
+   finding beside a run that quietly stepped something else. 84 of 210
+   experiments were affected. If you are asked "why can't I run this config",
+   this is usually the answer, and making it faker would undo that commit.
+2. **Unported classes are refused, not stubbed.** `@shell_classes` in
+   `lib/monty/studio/setup.ex` names the two that exist as shells (`Monty`,
+   `MontyForGraphMatching`); anything else in a config's `model_class` is a
+   finding that says so.
+3. **The motor policy disagrees with the world on a surface-agent jump** — the
+   raise in section 4 (`InformedPolicy.assert_undo_jump_was_successful/2`). This
+   is the one computational gap with a stack trace attached, on
+   `base_10simobj_surf_agent`, after nine objects were recognised. It may be a
+   real difference in how the undo is accounted for, or an assertion stricter
+   than Monty's behaviour; the port's `docs/monty-differences.md` is where it
+   belongs once it is understood.
+4. **Config values Monty interpolates may not resolve here.** A blueprint that
+   says `n_eval_epochs: ${constants.rotations_all_count}` was refused with
+   `:epochs_not_a_count` — the interpolation was not applied before the value
+   was validated. Check whether this is still true (`Monty.Studio.Blueprint`)
+   before treating it as open; it was recorded as open point 11 and may have
+   moved with the blueprint work.
+5. **Votes between modules** were the cause of a `CaseClauseError` on
+   `tutorial/dist_agent_5lm_2obj_eval` (open point 12). `_combine_votes` was
+   ported and the ladder's eight lines did not move — verify against that
+   config rather than trusting this note.
+
+**The rule that keeps this list honest**: a computational gap must surface as a
+refusal with a sentence, never as a stand-in that runs. That is what `7cba014`
+established and what section 3 is trying to extend to crashes — the same
+principle, applied to a process that dies instead of a class that is missing.
