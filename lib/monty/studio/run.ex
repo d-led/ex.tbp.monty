@@ -331,7 +331,7 @@ defmodule Monty.Studio.Run do
         counter:
           RecognitionCounter.count_step(
             run.counter,
-            info.inputs != %{},
+            info.processed?,
             info.step_type == :exploratory
           )
     }

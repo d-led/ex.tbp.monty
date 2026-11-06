@@ -20,7 +20,7 @@ defmodule Monty.Runtime.EpisodeTest do
     end
   end
 
-  defp start_model(learning_module_options \\ []) do
+  defp start_model(learning_module_options \\ [], sensor_options \\ []) do
     model_id = "episode-#{System.unique_integer([:positive])}"
 
     spec = %{
@@ -30,7 +30,7 @@ defmodule Monty.Runtime.EpisodeTest do
           id: :patch,
           agent_id: @agent,
           module: RecordingSensorModule,
-          state: RecordingSensorModule.new(id: :patch)
+          state: RecordingSensorModule.new([{:id, :patch} | sensor_options])
         }
       ],
       learning_modules: [
@@ -133,6 +133,28 @@ defmodule Monty.Runtime.EpisodeTest do
       # would have been used had the budget been the thing that stopped it.
       assert result.steps == 3
       assert result.timed_out?
+    end
+
+    # Monty counts a step towards `max_eval_steps` only if a module processed it
+    # (`_check_if_any_lms_updated`). A sensor that moved over the object without
+    # looking — the location changed, the features did not — hands the module a
+    # percept and no features, and such a step is not one of them.
+    test "a step that only carried a location is not one of the policy's matching steps" do
+      {:ok, policy} =
+        ObjectRecognition.new(max_train_steps: 1000, max_eval_steps: 2, max_total_steps: 4)
+
+      looking = Episode.run(start_model(), environment(), mode: :eval, policy: policy)
+
+      moving =
+        Episode.run(start_model([], features?: false), environment(), mode: :eval, policy: policy)
+
+      # Two matching steps when every step brings features, and none when the
+      # sensor only moved: the ceiling ends that episode instead, although every
+      # step reached the module.
+      assert looking.steps == 2
+      assert Enum.all?(moving.infos, &(&1.inputs == %{lm_0: 1}))
+      assert moving.steps == 4
+      assert moving.timed_out?
     end
 
     test "asks for exploration, and the next step is exploratory" do

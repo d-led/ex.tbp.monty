@@ -464,6 +464,33 @@ defmodule Monty.Runtime.StepTest do
       {:ok, _, _} = step(model_id)
       assert matching_steps(model_id) == 0
     end
+
+    # The experiment counts its own steps from the report, not from the model's
+    # counter, so the report has to answer the same question: a percept that
+    # reached a module is not the same thing as one it processed.
+    test "a step a module processed is reported as one" do
+      model_id = start_model()
+
+      {:ok, _, info} = step(model_id)
+      assert info.processed?
+    end
+
+    test "a location-only step is reported as one no module processed" do
+      model_id = start_model(sensor_modules: [sensor_module(:patch, features?: false)])
+
+      {:ok, _, info} = step(model_id)
+
+      # Delivered, so the module buffered the location — and nothing to process.
+      assert info.inputs == %{lm_0: 1}
+      refute info.processed?
+    end
+
+    test "a step whose percept never passed is reported as one no module processed" do
+      model_id = start_model(sensor_modules: [sensor_module(:patch, pass?: false)])
+
+      {:ok, _, info} = step(model_id)
+      refute info.processed?
+    end
   end
 
   describe "the episode boundary" do

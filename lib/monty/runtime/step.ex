@@ -20,8 +20,10 @@ defmodule Monty.Runtime.Step do
       percept that step;
     * every module sends a vote before any module receives one;
     * the action chosen at step *t* belongs to step *t+1*;
-    * a module with no inputs is not stepped at all, and a step that reached
-      no module is not counted as a matching or exploratory step.
+    * a module with no inputs is not stepped at all, and a step that left every
+      module with nothing to process is not counted as a matching or
+      exploratory step — which includes a step that handed a module a location
+      and no features.
 
   The coordinator is also the model Monty's experiment talks to
   (`ExperimentMonty`): it owns the experiment mode, the step type, the step
@@ -46,6 +48,7 @@ defmodule Monty.Runtime.Step do
           step: non_neg_integer(),
           percept_ids: [atom()],
           inputs: %{optional(atom()) => non_neg_integer()},
+          processed?: boolean(),
           votes: map(),
           goals: non_neg_integer(),
           actions: [map()],
@@ -221,10 +224,15 @@ defmodule Monty.Runtime.Step do
     {actions, state} =
       step_motor_system(state, observations, proprioceptive_state, percepts, goals, ctx)
 
-    state = advance(state)
+    {state, processed?} = advance(state)
 
     info = %{
       step: state.step,
+      # Monty's `check_if_any_lms_updated`, which the experiment asks after every
+      # step: whether the step gave a module something to process, as opposed to
+      # only a location to buffer. It answers whether this step was a matching
+      # step at all, which is what the episode's own limits are counted in.
+      processed?: processed?,
       # A sensor that answered nothing is not a percept: a view finder measures
       # the scene for the motor system and sends none (`docs/monty-differences.md`
       # §2.11).
@@ -550,13 +558,20 @@ defmodule Monty.Runtime.Step do
   # at the end of every step: count the step, ask the modules whether they are
   # done, and decide whether the episode switches to exploring or stops.
 
+  # Answers the state and whether the step was one a module processed, which the
+  # experiment counts its own steps in — so the question is asked once here
+  # rather than once more from the caller.
   defp advance(%State{} = state) do
     state = count_step(state)
+    processed? = any_module_processed?(state)
 
-    case state.step_type do
-      :matching -> after_matching_step(state)
-      :exploratory -> after_exploratory_step(state)
-    end
+    state =
+      case state.step_type do
+        :matching -> after_matching_step(state, processed?)
+        :exploratory -> after_exploratory_step(state, processed?)
+      end
+
+    {state, processed?}
   end
 
   defp count_step(%State{step_type: :matching} = state),
@@ -565,8 +580,8 @@ defmodule Monty.Runtime.Step do
   defp count_step(%State{step_type: :exploratory} = state),
     do: %{state | exploratory_steps: state.exploratory_steps + 1}
 
-  defp after_matching_step(%State{} = state) do
-    if any_module_processed?(state) do
+  defp after_matching_step(%State{} = state, processed?) do
+    if processed? do
       state = read_conclusions(state)
       {state, matched?} = check_terminal_conditions(state)
 
@@ -593,9 +608,9 @@ defmodule Monty.Runtime.Step do
     end
   end
 
-  defp after_exploratory_step(%State{} = state) do
+  defp after_exploratory_step(%State{} = state, processed?) do
     cond do
-      not any_module_processed?(state) ->
+      not processed? ->
         %{state | exploratory_steps: state.exploratory_steps - 1}
 
       state.exploratory_steps >= state.num_exploratory_steps ->

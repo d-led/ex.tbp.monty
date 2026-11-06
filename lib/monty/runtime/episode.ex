@@ -149,7 +149,7 @@ defmodule Monty.Runtime.Episode do
       environment,
       ctx,
       policy,
-      RecognitionCounter.count_step(counter, info.inputs != %{}, info.step_type == :exploratory),
+      RecognitionCounter.count_step(counter, info.processed?, info.step_type == :exploratory),
       %{steps: run.steps + 1, infos: [info | run.infos], last_actions: actions}
     )
   end
