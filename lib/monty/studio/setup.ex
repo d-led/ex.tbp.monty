@@ -628,7 +628,7 @@ defmodule Monty.Studio.Setup do
   def world(%__MODULE__{} = setup, :mujoco, episode) do
     case engine(setup) do
       :mujoco -> mujoco_world(setup, episode)
-      engine -> raise ArgumentError, uncarried_engine(engine)
+      _not_mujoco -> raise ArgumentError, uncarried_world(setup)
     end
   end
 
@@ -653,9 +653,15 @@ defmodule Monty.Studio.Setup do
             "and the stand-in scene can be stepped here."
   end
 
-  defp uncarried_engine(engine) do
-    "this experiment's world is #{engine_name(engine)}, which this application does not " <>
-      "carry: only MuJoCo and the stand-in scene can be stepped here."
+  defp uncarried_world(%__MODULE__{environment: nil}) do
+    "This experiment names no environment, so there is no world to step here. Run one whose " <>
+      "config names a world this build carries."
+  end
+
+  defp uncarried_world(%__MODULE__{environment: %{module: %{class: class}}}) do
+    "This experiment's world is #{class}, which this application does not carry: only " <>
+      "MuJoCo and the stand-in scene can be stepped here. Step the stand-in scene to run a " <>
+      "config of its shape, or run one whose world this build has."
   end
 
   # Monty's simulator, from the numbers the config states: the data path the
@@ -897,9 +903,6 @@ defmodule Monty.Studio.Setup do
   defp engine(%__MODULE__{environment: %{module: %{class: "HabitatEnvironment"}}}), do: :habitat
   defp engine(%__MODULE__{environment: %{module: %{class: "HabitatSim"}}}), do: :habitat
   defp engine(%__MODULE__{}), do: nil
-
-  defp engine_name(:habitat), do: "Habitat-Sim"
-  defp engine_name(nil), do: "no simulator its config names"
 
   # The class the experiment's agent is, from `env_init_args.agents` — which is
   # how Monty's own MuJoCo configs name `SurfaceAgent` or `DistantAgent`.
@@ -1700,31 +1703,18 @@ defmodule Monty.Studio.Setup do
 
   defp findings(setup, monty_config, config) do
     module_findings(setup) ++
-      phase_findings(setup) ++
       connectivity_findings(setup, monty_config) ++
       wiring_findings(setup) ++
       memory_findings(setup) ++
       settings_findings(config)
   end
 
-  # A training epoch has no counterpart here: this application steps a model, and
-  # the loop Monty wraps around it (`train()`) is not written. Such a config is
-  # refused for the same reason an unported class is — it would be stepped in
-  # `:train` mode, explore, and conclude nothing, which looks like the experiment
-  # and answers none of it. Evaluation is the half this port has.
-  defp phase_findings(%__MODULE__{phases: %{train: true}}) do
-    [
-      Finding.new(
-        :error,
-        :training_not_implemented,
-        "This experiment trains, and this application has no training loop: a run of it " <>
-          "here would explore and never conclude. Run one that only evaluates.",
-        "experiment.config.do_train"
-      )
-    ]
-  end
-
-  defp phase_findings(%__MODULE__{}), do: []
+  # A training epoch used to be refused here, because this application stepped a
+  # model and never kept what an episode learned: the run would explore and
+  # conclude nothing, which looks like the experiment and answers none of it.
+  # That is no longer what happens — a training phase hands each episode the
+  # memory the last one wrote (`Jobs.Run.end_episode/4`) — so there is nothing
+  # left for a finding to refuse, and a config that trains runs.
 
   # A run with no memory cannot recognise anything, so it does not start rather
   # than reporting "no conclusion" after sixty steps: an empty memory gives the
@@ -1955,6 +1945,19 @@ defmodule Monty.Studio.Setup do
   end
 
   defp mujoco_findings(%__MODULE__{} = setup) do
+    case engine(setup) do
+      :mujoco ->
+        object_in_world_findings(setup)
+
+      # The selector names MuJoCo and the config names its own simulator, which is
+      # not the same program: `world/3` raises this sentence, and a run that has to
+      # die to say it leaves a failed record where a refused run was the answer.
+      _not_mujoco ->
+        [Finding.new(:error, :world_not_carried, uncarried_world(setup), "environment")]
+    end
+  end
+
+  defp object_in_world_findings(%__MODULE__{} = setup) do
     case object_label(setup) do
       nil ->
         [

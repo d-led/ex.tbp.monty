@@ -360,15 +360,14 @@ defmodule Monty.Studio.SetupTest do
       refute Setup.valid?(setup)
     end
 
-    test "an experiment that trains is refused for the same reason" do
+    test "an experiment that trains is not refused for training" do
       setup = setup_for("surf_agent_unsupervised_10distinctobj")
 
-      assert [training] =
-               for(%{code: :training_not_implemented} = finding <- setup.findings, do: finding)
-
-      assert training.level == :error
-      assert training.message =~ "no training loop"
-      refute Setup.valid?(setup)
+      # A training phase hands each episode the memory the last one wrote
+      # (`Jobs.Run.end_episode/4`), so training is not a gap a finding stands in
+      # for: the config is one this application runs, and the run is its plan.
+      assert Setup.valid?(setup)
+      assert Setup.epoch_plan(setup) == [{:train, 10}]
     end
 
     test "and does not explain itself where Monty's code is what runs" do
@@ -404,6 +403,28 @@ defmodule Monty.Studio.SetupTest do
       {:ok, setup} = Setup.from_experiment("tutorial/first_experiment", world_simulator: :mujoco)
 
       refute :world_is_a_stand_in in Enum.map(setup.findings, & &1.code)
+    end
+
+    test "and refuses a config whose world is another simulator, before a run starts" do
+      # A MuJoCo run of a Habitat config cannot be the experiment: the scene is
+      # images another program rendered, and there is no mesh to place. Saying so
+      # here disables the run; leaving it to `Setup.world/3` would raise inside
+      # the job and leave a failed record for a config the page offered.
+      {:ok, setup} = Setup.from_experiment("test/evidence_lm/evidence", world_simulator: :mujoco)
+
+      assert [world] = for(%{code: :world_not_carried} = f <- setup.findings, do: f)
+
+      assert world.level == :error
+      assert world.message =~ "HabitatEnvironment"
+      assert world.message =~ "stand-in scene"
+      refute Setup.valid?(setup)
+
+      # The stand-in scene is a world this build steps, so the same config is
+      # offered there — as a stand-in run, which the page says out loud.
+      {:ok, stand_in} =
+        Setup.from_experiment("test/evidence_lm/evidence", world_simulator: :synthetic)
+
+      refute :world_not_carried in Enum.map(stand_in.findings, & &1.code)
     end
 
     test "and says separately that Monty's model and experiment loop are this port's own" do
