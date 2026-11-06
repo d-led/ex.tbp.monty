@@ -920,17 +920,20 @@ defmodule Monty.ModuleMap.Data do
           python: "ObjectInitParams"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/environments/object_init_samplers/default.ex",
           elixir: "Monty.Frameworks.Environments.ObjectInitSamplers.Default",
           python: "Default"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/environments/object_init_samplers/predefined.ex",
           elixir: "Monty.Frameworks.Environments.ObjectInitSamplers.Predefined",
           python: "Predefined"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/environments/object_init_samplers/random_rotation.ex",
           elixir: "Monty.Frameworks.Environments.ObjectInitSamplers.RandomRotation",
           python: "RandomRotation"
         }
