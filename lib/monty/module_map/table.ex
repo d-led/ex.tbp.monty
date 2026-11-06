@@ -31,8 +31,10 @@ defmodule Monty.ModuleMap.Table do
           class: String.t(),
           file: String.t(),
           python_url: String.t() | nil,
+          monty_test_url: String.t() | nil,
           elixir: String.t(),
           elixir_url: String.t() | nil,
+          test_url: String.t() | nil,
           status: :implemented | :planned | :excluded,
           reason: String.t() | nil,
           stand_ins: [map()],
@@ -61,8 +63,10 @@ defmodule Monty.ModuleMap.Table do
         class: class,
         file: entry.python,
         python_url: upstream_url(entry, Map.get(commits, entry.package)),
+        monty_test_url: monty_test_url(entry, Map.get(commits, entry.package)),
         elixir: cls.elixir,
         elixir_url: file_url(repo, revision, cls),
+        test_url: test_url(repo, revision, cls),
         status: cls.status,
         reason: Map.get(cls, :reason),
         stand_ins: with_links(stand_ins, repo, revision)
@@ -177,6 +181,35 @@ defmodule Monty.ModuleMap.Table do
     path = Map.get(cls, :file) || "lib/" <> Macro.underscore(elixir) <> ".ex"
 
     repo <> "/blob/" <> revision <> "/" <> path
+  end
+
+  # Monty's own test for the file, where the package keeps its tests in the tree
+  # that mirrors `src/tbp/monty` (`tests/unit/frameworks/models/
+  # sensor_modules_test.py`). `conf/` is Hydra tooling that this application
+  # replaces rather than ports, and it has no such test; `tbp.teleop` ships no
+  # tests at all, so its rows offer none rather than a link to nothing.
+  defp monty_test_url(%{package: "monty", python: python}, commit)
+       when is_binary(python) do
+    if String.starts_with?(python, "conf/") do
+      nil
+    else
+      @upstream <>
+        "tbp.monty/blob/" <> (commit || "main") <> "/tests/unit/" <> test_path(python)
+    end
+  end
+
+  defp monty_test_url(_entry, _commit), do: nil
+
+  defp test_path(python), do: String.replace_suffix(python, ".py", "_test.py")
+
+  # Ours, where our tests mirror `lib/` the same way: a written module's test is
+  # its own file with `_test.exs` after it. A class that is only named has no
+  # module, so it has no test to point at.
+  defp test_url(_repo, _revision, %{status: status}) when status != :implemented, do: nil
+  defp test_url(nil, _revision, _cls), do: nil
+
+  defp test_url(repo, revision, %{elixir: elixir}) do
+    repo <> "/blob/" <> revision <> "/test/" <> Macro.underscore(elixir) <> "_test.exs"
   end
 
   # A stand-in wears a link where it has one: a module this application wrote

@@ -196,7 +196,19 @@ defmodule ExTbpMontyWeb.ModulesLive do
         {@row.class}
       </.link>
       <span :if={is_nil(@row.python_url)} class="pl-1 font-semibold">{@row.class}</span>
-      <p class="text-[11px] text-base-content/50">{@row.file}</p>
+      <p class="text-[11px] text-base-content/50">
+        {@row.file}
+        <.link
+          :if={@row.monty_test_url}
+          href={@row.monty_test_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="ml-1 text-base-content/60 underline decoration-base-300 decoration-1 underline-offset-2 hover:text-primary"
+          title="Monty's own test for this file"
+        >
+          test
+        </.link>
+      </p>
     </td>
     """
   end
@@ -223,6 +235,17 @@ defmodule ExTbpMontyWeb.ModulesLive do
         {@row.elixir}
       </.link>
       <span :if={is_nil(@row.elixir_url)} class="text-base-content/40">{@row.elixir}</span>
+      <p :if={@row.test_url} class="text-[10px] text-base-content/50">
+        <.link
+          href={@row.test_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="underline decoration-base-300 decoration-1 underline-offset-2 hover:text-primary"
+          title="the test beside this module"
+        >
+          test
+        </.link>
+      </p>
     </td>
     """
   end

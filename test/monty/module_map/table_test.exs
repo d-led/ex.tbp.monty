@@ -52,6 +52,27 @@ defmodule Monty.ModuleMap.TableTest do
                "#{@repo}/blob/#{@revision}/lib/monty/frameworks/models/graph_matching/graph_lm.ex"
     end
 
+    test "link the test beside each file" do
+      # Monty keeps `tests/unit` mirroring `src/tbp/monty`, and ours mirrors
+      # `lib/`: a row is a way into the code and into what checks it.
+      camera = row!("CameraSM")
+
+      assert camera.monty_test_url ==
+               "https://github.com/thousandbrainsproject/tbp.monty/blob/" <>
+                 "#{ModuleMap.sources()["monty"]["commit"]}/tests/unit/frameworks/models/sensor_modules_test.py"
+
+      assert camera.test_url ==
+               "#{@repo}/blob/#{@revision}/test/monty/frameworks/models/sensor_modules/camera_sm_test.exs"
+
+      # A class that is only named has no module here, so it has no test of ours.
+      assert row!("GraphLM").test_url == nil
+
+      # `tbp.teleop` ships no tests, so its rows offer none rather than a link
+      # to a tree that is not there.
+      teleop = Enum.find(rows(), &(&1.package == "teleop"))
+      assert teleop.monty_test_url == nil
+    end
+
     test "carry what stands in for a class the runtime replaces" do
       shell = row!("MontyForGraphMatching")
 

@@ -97,7 +97,9 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
   # Mix recompile `Monty.ModuleMap.Data`, and `mix test` asks for this on every
   # run.
   defp write(entries, sources) do
-    content = render(entries, sources) |> Code.format_string!()
+    # `Code.format_string!/1` does not end a file with a newline; `mix format`
+    # does, and a map the formatter would rewrite fails the lint gate.
+    content = IO.iodata_to_binary([Code.format_string!(render(entries, sources)), "\n"])
     previous = File.read(@map_path)
 
     if content == previous do
