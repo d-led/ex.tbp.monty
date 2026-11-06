@@ -204,7 +204,11 @@ defmodule Monty.Studio.Jobs.Run do
       infos: [],
       conclusion: %{},
       episode: 0,
-      mode: :eval
+      mode: :eval,
+      # What the phase has learned so far, by module. A run is one episode, so
+      # this is the memory a training phase carries from one to the next; an
+      # evaluation phase writes nothing into it and hands it on unchanged.
+      memories: Setup.memories(opened.setup)
     }
 
     {outcome, ran, state} =
@@ -270,6 +274,7 @@ defmodule Monty.Studio.Jobs.Run do
            steps: state.record.steps,
            episode: index,
            mode: state.mode,
+           memory: state.memories,
            has_detailed_logger: Logging.detailed?(state.logging)
          ) do
       {:ok, run} ->
@@ -295,29 +300,54 @@ defmodule Monty.Studio.Jobs.Run do
     {:ok, state}
   end
 
-  # Monty's `post_episode`: the episode is logged, then its processes go. The
-  # order matters — the episode is logged *before* the memory a training episode
-  # writes, because that write rewrites the episode's ground truth and an episode
-  # logged afterwards would look confused about the object it just recognised.
+  # Monty's `post_episode`: the episode is logged, then the memory it produced is
+  # written, and then its processes go. The order matters — the episode is logged
+  # *before* the write, because that write rewrites the episode's ground truth
+  # and an episode logged afterwards would look confused about the object it just
+  # recognised (`monty_experiment.py`, `post_episode`).
   defp end_episode(run_id, %{run: run} = state, outcome, infos) do
-    conclusion =
+    {conclusion, memories} =
       if crashed?(outcome) do
         # The crash took the model with it: a module's failure stopped the step
         # the model is, and both the statistics and the conclusion are read off
         # that model. The reason this run ends is the crash, said once with its
         # own traceback — asking a dead process for the rest would replace it
-        # with "a process the run was waiting on exited".
+        # with "a process the run was waiting on exited". Nothing was learned,
+        # so the phase keeps the memory it had.
         say(run_id, "the episode crashed, so its statistics were not read")
-        %{}
+        {%{}, state.memories}
       else
         log_statistics(run_id, state.logging, run)
-        Run.conclusion(run)
+        conclusion = Run.conclusion(run)
+        learned = update_memory(run_id, run)
+        {conclusion, learned || state.memories}
       end
 
     stop_run(run)
 
     # `infos` arrive newest first; a page reads an epoch oldest first.
-    %{state | run: nil, infos: state.infos ++ Enum.reverse(infos), conclusion: conclusion}
+    %{
+      state
+      | run: nil,
+        infos: state.infos ++ Enum.reverse(infos),
+        conclusion: conclusion,
+        memories: memories
+    }
+  end
+
+  # Monty's `model.update_ltm()`: the module decides what a training episode adds
+  # to long-term memory, and an evaluation episode adds nothing. What it answers
+  # is the memory the *rest* of the phase starts from — the graph this episode
+  # built is what the next one matches against.
+  defp update_memory(run_id, run) do
+    :ok = Run.update_ltm(run)
+    Run.memories(run)
+  rescue
+    # A memory is what the episode leaves behind, not part of the episode: a
+    # module that cannot answer for it must not turn a finished run into a crash.
+    error ->
+      say(run_id, "the memory could not be written: #{Exception.message(error)}")
+      nil
   end
 
   defp crashed?({:crashed, _step, _reason}), do: true

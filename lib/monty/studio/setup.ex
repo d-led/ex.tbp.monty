@@ -420,6 +420,7 @@ defmodule Monty.Studio.Setup do
   @spec model_spec(t(), atom() | String.t(), keyword()) :: map()
   def model_spec(%__MODULE__{} = setup, model_id, opts \\ []) do
     detailed? = Keyword.get(opts, :has_detailed_logger, false)
+    memories = Keyword.get_lazy(opts, :memory, fn -> memories(setup) end)
 
     Map.merge(
       %{
@@ -428,7 +429,7 @@ defmodule Monty.Studio.Setup do
         learning_modules:
           Enum.map(
             setup.learning_modules,
-            &learning_module_spec(&1, memory_for(setup), detailed?)
+            &learning_module_spec(&1, Map.get(memories, &1.id, :none), detailed?)
           ),
         sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
         lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
@@ -1018,6 +1019,20 @@ defmodule Monty.Studio.Setup do
     else
       _absent -> :none
     end
+  end
+
+  @doc """
+  The memory each learning module starts an episode from, by module id.
+
+  One memory for all of them: Monty loads the model's memory once and every
+  learning module matches against the same graphs. A run that learns replaces
+  this map with the one it wrote (`Monty.Studio.Run.memories/1`), which is how a
+  training phase carries what one episode learned into the next.
+  """
+  @spec memories(t()) :: %{optional(atom() | String.t()) => term()}
+  def memories(%__MODULE__{learning_modules: modules} = setup) do
+    memory = memory_for(setup)
+    Map.new(modules, &{&1.id, memory})
   end
 
   # The release the config names, and failing that any release this machine has

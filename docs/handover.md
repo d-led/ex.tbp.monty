@@ -249,6 +249,13 @@ The gaps that are genuinely open, in the order they block work:
    finding beside a run that quietly stepped something else. 84 of 210
    experiments were affected. If you are asked "why can't I run this config",
    this is usually the answer, and making it faker would undo that commit.
+   **Work on this has started and has its own page**: [`training.md`](training.md)
+   records that Monty's learning code is ported and a training episode already
+   runs at the runtime level, that the missing piece was the _loop_ (a model per
+   episode carried nothing forward, and `end_episode` never called
+   `update_ltm`), and that the memory now travels between a phase's episodes.
+   What still keeps the guard up — persisting a trained memory, and comparing a
+   config's training against Monty's own numbers — is §3 of that file.
 2. **Unported classes are refused, not stubbed.** `@shell_classes` in
    `lib/monty/studio/setup.ex` names the two that exist as shells (`Monty`,
    `MontyForGraphMatching`); anything else in a config's `model_class` is a

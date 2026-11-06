@@ -198,6 +198,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
   @spec time_out(atom() | String.t()) :: :ok
   def time_out(model_id), do: Model.time_out(model_id)
 
+  @doc """
+  `MontyBase.update_ltm`: write the episode into long-term memory.
+
+  The experiment calls it once per episode, after the episode has been logged
+  (`monty_experiment.py`, `post_episode`); each learning module decides whether
+  the episode it had is one to learn from.
+  """
+  @spec update_ltm(atom() | String.t()) :: :ok
+  def update_ltm(model_id), do: Model.update_ltm(model_id)
+
   @doc "Stops the model's processes."
   @spec stop(atom() | String.t()) :: :ok | {:error, :not_found}
   def stop(model_id), do: Model.stop(model_id)

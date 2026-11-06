@@ -17,7 +17,7 @@ defmodule Monty.Studio.Run do
   alias Monty.Experiment.RecognitionPolicy
   alias Monty.Experiment.RecognitionPolicy.{RecognitionCounter, RecognitionResult}
   alias Monty.Frameworks.Experiments.Seed
-  alias Monty.Runtime.Positioning
+  alias Monty.Runtime.{LearningModuleServer, Positioning, Registry}
   alias Monty.Studio.{Belief, Setup}
 
   # How many steps an episode may take when the caller names no number. Not a
@@ -62,9 +62,12 @@ defmodule Monty.Studio.Run do
 
   Options: `:steps` (how many timesteps this run is for, used for the
   controller's progress), `:model_id`, `:episode` (which episode of the epoch it
-  is, counted from zero), `:mode` (`:eval` or `:train`, default `:eval`), and
+  is, counted from zero), `:mode` (`:eval` or `:train`, default `:eval`),
   `:has_detailed_logger` (whether this run's logging wants the whole hypothesis
-  space per step).
+  space per step), and `:memory` — the memory each learning module starts from,
+  by module id, defaulting to the pretrained one (`Setup.memories/1`). A run is
+  one episode, so `:memory` and `memories/1` are what let a training phase keep
+  what it learned between episodes.
 
   The episode number is not bookkeeping: a run's random draws come from the
   seed its episode derives from the experiment's, so the same experiment and a
@@ -91,7 +94,8 @@ defmodule Monty.Studio.Run do
 
     spec =
       Setup.model_spec(setup, model_id,
-        has_detailed_logger: Keyword.get(opts, :has_detailed_logger, false)
+        has_detailed_logger: Keyword.get(opts, :has_detailed_logger, false),
+        memory: Keyword.get_lazy(opts, :memory, fn -> Setup.memories(setup) end)
       )
 
     model = Setup.model_class(setup)
@@ -349,6 +353,40 @@ defmodule Monty.Studio.Run do
   def decision(%__MODULE__{policy: policy, counter: counter} = run) do
     RecognitionPolicy.call(policy, model_view(run), counter)
   end
+
+  @doc """
+  What each learning module holds in long-term memory now, by module id.
+
+  A run is one episode and its processes stop at the end of it, so this is what
+  has to be handed to the next run for a training phase to keep what it learned:
+  `start/2`'s `:memory`.
+  """
+  @spec memories(t()) :: %{optional(atom() | String.t()) => term()}
+  def memories(%__MODULE__{model_id: model_id, setup: setup}) do
+    Map.new(setup.learning_modules, fn learning_module ->
+      state =
+        LearningModuleServer.state(Registry.via({:learning_module, model_id, learning_module.id}))
+
+      {learning_module.id, memory_of(state)}
+    end)
+  end
+
+  # A module that keeps no graph memory — the stand-in learning module a config
+  # without an evidence model gets — has nothing to hand on.
+  defp memory_of(state) when is_map(state), do: Map.get(state, :graph_memory, :none)
+  defp memory_of(_state), do: :none
+
+  @doc """
+  Folds this episode into long-term memory: Monty's `model.update_ltm()`.
+
+  The experiment calls it at the end of an episode, after the episode has been
+  logged — the write rewrites the mapping from graphs to targets, and an episode
+  logged after it would look confused about the object it just recognised — and
+  the module decides what it means: a training episode writes, an evaluation one
+  does not (`EvidenceGraphLM.update_ltm_from_stm/1`).
+  """
+  @spec update_ltm(t()) :: :ok
+  def update_ltm(%__MODULE__{model: model, model_id: model_id}), do: model.update_ltm(model_id)
 
   @doc """
   What the model concluded: each learning module's terminal state, if any.
