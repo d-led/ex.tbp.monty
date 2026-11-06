@@ -433,12 +433,12 @@ established and what section 3 is trying to extend to crashes — the same
 principle, applied to a process that dies instead of a class that is missing.
 
 Where the two lists above are about _behaviour_, §12 is about the **tests**: what
-referees them, how many of Monty's own cases are translated (11 of 652), and the
+referees them, how many of Monty's own cases are translated (22 of 652), and the
 order in which the rest should be done.
 
 ---
 
-## 12. The tests themselves: 11 of Monty's 652 cases are translated — and each translation has been paying
+## 12. The tests themselves: 22 of Monty's 652 cases are translated — and each translation has been paying
 
 The question that opened this was "have we validated all individual components?".
 For the _numbers_ the answer is mostly yes: sixteen Monty recordings referee
@@ -448,9 +448,9 @@ answer is no, and it is measurable in one line:
 
     grep -rh "def test_" $(find tests/unit -name "*_test.py") | sed 's/.*def \(test_[a-z0-9_]*\).*/\1/' | sort -u
 
-says Monty's `tests/unit` holds **652 distinct case names**, and of those, **11**
-are named anywhere in our `test/` — all eleven translated on 2026-11-06 evening,
-all in `burst_sampling_test.py`. Our 177 tests in `test/monty/frameworks/models/
+says Monty's `tests/unit` holds **652 distinct case names**, and of those, **22**
+are named anywhere in our `test/` — all of them translated on 2026-11-06, all in
+`burst_sampling_test.py`. Our 187 tests in `test/monty/frameworks/models/
 evidence_matching/` are hand-written behaviours and parity fixtures; they are
 worth keeping, but they are not translations and were never proof of parity.
 
@@ -463,7 +463,7 @@ worth keeping, but they are not translations and were never proof of parity.
 > states intent; it is not evidence of parity, and it must not be counted as
 > such. A case that cannot be translated is listed, never dropped silently.
 
-### 12.2 What eleven translations bought: two defects and one of my own
+### 12.2 What the first eleven bought: two defects and one of my own
 
 1. `BurstSamplingHypothesesUpdater.new/2` accepted a **negative
    `sampling_multiplier`**, which asks a burst for a negative number of
@@ -517,7 +517,7 @@ evidence_matching/burst_sampling/burst_sampling_hypotheses_updater_test.exs`):
 
 | Area (Monty's cases)                                    | Translated | Left |
 | ------------------------------------------------------- | ---------: | ---: |
-| `evidence_matching/burst_sampling_test.py` (24)         |         20 |    4 |
+| `evidence_matching/burst_sampling_test.py` (24)         |         22 |    2 |
 | `evidence_matching/evidence_lm_test.py` (16)            |          0 |   16 |
 | `evidence_matching/evidence_slope_tracker_test.py` (11) |          0 |   11 |
 | `evidence_matching/hypotheses_displacer_test.py` (3)    |          0 |    3 |
@@ -532,15 +532,15 @@ Burst sampling first, because the measured remaining difference lives there: in
 `test/evidence_lm/evidence_mujoco` our best hypothesis climbs monotonically
 (`1.0 → 3.0 → 4.481 → 6.481 → 7.981 → 9.981`) where Monty's highest drops out of
 the graph every other step (`0.964 → 2.320 → 1.320 → 0.320 → 2.300`). Which
-hypotheses get proposed is what a burst decides, so the four cases left there
+hypotheses get proposed is what a burst decides, so the two cases left there
 are the ones that can turn that divergence into a failing test.
 
 Then `evidence_lm_test.py`, which is where a hypothesis is displaced, scored and
 dropped — and where our trained graph's node counts (38/9/13 against Monty's
 45/16/10) are decided.
 
-**Four of the twenty-four could not be translated as this port is written**, and
-they are named rather than dropped:
+**Two of the twenty-four cannot be translated as this port is written**, and they
+are named rather than dropped:
 
 - `test_sample_new_hypotheses_without_feature_matching` and
   `..._with_feature_matching` — they swap Monty's `feature_evidence_calculator`,
@@ -641,3 +641,92 @@ To pick up:
 
 Until this is done, a cancelled or failing amd64 leg is **not** a green one, and
 the arm64 image (which built and passed) is not evidence about it.
+
+---
+
+## 15. For whoever picks this up: the state, and the order
+
+**State at `2116249`.** Gate green — `./scripts/quality.sh` (2355 tests, 19
+properties, lint, coverage/CRAP/parity) and `MIX_ENV=test mix dialyzer` at 0
+errors. CI is green in every job **except** `image amd64, scan, non-root`, which
+is section 14: a fixable CRITICAL/HIGH finding in the amd64 base image, not a
+code failure. The macOS leg is cancelled before it starts (section 1, runner
+label). Neither is a green leg, and neither is caused by anything in this
+branch.
+
+### 15.1 What landed, and what each one is worth
+
+| Commit               | What it does                                                                     | How it is known                                      |
+| -------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `4ba5875`            | a step reads the module's own conclusion instead of a cache                      | the 2-vs-3 graph difference disappeared              |
+| `334a92c`, `93792f7` | `object_init_sampler` ported and wired (pose per episode)                        | epoch 1 turns the object 45°, as Monty does          |
+| `c88cca6`            | negative `sampling_multiplier` refused; 3 translated cases                       | the refusal case failed before the guard             |
+| `9f476f5`            | `max_global_slope` says "nothing measured" rather than `0.0`; 8 cases            | the replay referee caught the regression this caused |
+| `9acbab4`            | replay chart: round ticks that name zero, hover reads the line under the pointer | measured in the browser, section 13                  |
+| `17387b9`            | the readout hides where nothing was recorded, and sits on its own point          | one-percent pointer walk across the axis             |
+| `01bb813`            | 22 of Monty's 24 burst cases; the two that cannot be, named                      | the replay referee still green                       |
+| `df0cce9`, `2116249` | the red scan job and the pointer-walk faults written down                        | —                                                    |
+
+### 15.2 The rule that decides what "done" means here
+
+A ported class's tests come from Monty's own `tests/unit/**/test_*.py`, one case
+for one case, each naming the case it translates. A hand-written behaviour test
+is intent, not parity, and must not be counted as evidence. `AGENTS.md` has it
+beside "Module for module"; section 12 has the method and the traps.
+
+Re-measure the whole tree in one command (from `monty-orig`):
+
+    for n in $(grep -rh "def test_" $(find tests/unit -name "*_test.py") |
+               sed 's/.*def \(test_[a-z0-9_]*\).*/\1/' | sort -u); do
+      grep -rq "$n" ../ex.tbp.monty/test/ && echo "$n"
+    done | wc -l
+
+It said **11** at the start of the session and **22** at the end: every one of them
+a case in `burst_sampling_test.py`, which is now 22 of its 24. Everything else in
+`tests/unit` — 630 case names — has no counterpart yet.
+
+### 15.3 The order, and why each step is next
+
+1. **Wire `features_for_matching_selector` into the burst sampler.**
+   Monty's selector turns feature evidence off for a channel with no feature
+   weights and whenever `feature_evidence_increment <= 0`; this port always
+   pre-scores a newly sampled hypothesis. Two of the four untranslated burst
+   cases are exactly this switch, so the port and the case land together.
+2. **Translate `tests/unit/frameworks/models/evidence_matching/evidence_lm_test.py`
+   (16 cases).** This is where a hypothesis is displaced, scored and dropped —
+   and where the one measured difference lives: our trained graph keeps 38/9/13
+   nodes where Monty's keeps 45/16/10, and our best hypothesis climbs
+   monotonically (`1.0 → 3.0 → 4.481 → 6.481 → 7.981 → 9.981`) where Monty's
+   highest leaves the graph every other step (`0.964 → 2.320 → 1.320 → 0.320 →
+2.300`). Do not hunt that by hand before the file is translated: each
+   translation is a candidate explanation, and a red one is the answer.
+3. **Then the rest of that directory** — `evidence_slope_tracker_test.py` (11),
+   `hypotheses_displacer_test.py` (3), `graph_memory_test.py` (2) — and only
+   then the wider tree (`frameworks` 530, `simulators` 100, `actions` 129,
+   `utils` 106, `attention` 45, `experiments` 53, the rest smaller).
+4. **A trained memory against Monty's own `model.pt`** is still uncompared
+   (section 11, open point 1). That is the check the node counts above need.
+5. **The amd64 scan** (section 14): bump the base image, or record an exception
+   with a reason and an expiry in `.trivyignore.yaml`.
+
+### 15.4 What not to trust
+
+- **A hand-written test as parity.** It says what someone intended, not what
+  Monty does. Twenty-two cases are translated; the rest of our suite is not.
+- **A cancelled or failed leg as green.** The macOS job never starts; the amd64
+  image's scan currently fails. Say which leg you mean.
+- **The arm64 image as evidence about amd64**, or the other way round.
+- **`mix lint 2>&1 | tail`** — it hides the exit code, and a "clean" tail after a
+  failure reads exactly like a pass.
+- **A local full-suite run on a loaded machine.** The heavy cases
+  (`recording_episode_test.exs`, the MuJoCo `host_test.exs`) time out at a load
+  average near 90; run them alone or believe CI.
+
+### 15.5 The two commands that catch most regressions in a minute
+
+    mix test test/monty/pretrained_replay_test.exs   # Monty's own recording
+    mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8
+
+The first replays a recorded episode and measures the hypothesis space object by
+object; the second must print the eight evidence lines beginning `0.908` and
+ending `11.712`. If either moves, the change under test is the cause.

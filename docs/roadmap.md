@@ -14,6 +14,13 @@ a trade-off:
 3. **Functional core, actor shell.** Ported algorithms are pure modules that
    read like their Python; `Monty.Runtime.*` only routes, holds state and
    measures. Determinism is a feature: one RNG stream per episode.
+4. **A module arrives with Monty's own test for it, translated.** One case in
+   `tests/unit/**/test_*.py` becomes one ExUnit test that names the case it
+   translates; where Monty drove a private method, ours drives the nearest
+   public entry point and says so. A hand-written behaviour test states intent,
+   never parity, and is not counted as such. Re-measure the count with the
+   one-liner in `handover.md` §12 — at the end of 2026-11-06 it was **22 of 652**,
+   all twenty-two the burst sampler's.
 
 ## Done — v0.1, the studio
 
@@ -60,6 +67,30 @@ should move with every commit; when a mapped class is implemented,
    `FeatureEvidence.Calculator` (**ported**: numeric, circular and categorical
    comparisons, weighted per feature) and the two `FeaturesForMatching`
    selectors (**ported**).
+
+   **`BurstSamplingHypothesesUpdater` (ported, 22 of Monty's 24 cases
+   translated)** — the count per burst, the trigger and its duration, the
+   tracker per graph id, the maximum slope the decision reads, the poses a burst
+   proposes. What is open, and what the last four cases wait on:
+
+   - **`features_for_matching_selector` is not wired into the sampler.** Monty's
+     `DefaultFeaturesForMatchingSelector` turns feature evidence off for a
+     channel with no feature weights, and whenever `feature_evidence_increment
+<= 0`; this port always starts a newly sampled hypothesis with the node's
+     own feature evidence. Port the selector into the updater and translate
+     `test_sample_new_hypotheses_with_feature_matching` /
+     `..._without_feature_matching`.
+   - **The threshold refusal** —
+     `test_init_fails_when_passed_invalid_evidence_threshold_config` — is
+     translated, but not where Monty asserts it: Monty validates in the
+     updater's constructor and this port parses the setting once when the module
+     is built, so the case lives against `LearningModule.parse_config/2`.
+   - A burst is where "which hypotheses get proposed" is decided, and that is
+     the one measured difference left on `test/evidence_lm/evidence_mujoco`: our
+     best hypothesis climbs monotonically where Monty's highest leaves the graph
+     every other step. Translate the rest of this file's neighbours
+     (`evidence_lm_test.py`, 16 cases) before hunting that difference by hand.
+
 4. **`graph_memory/`** — `GraphMemory`, `ObjectModel`, `features`/`locations`
    bookkeeping. Fixtures: a small graph saved by Monty, loaded identically.
 5. **`evidence_matching/learning_module.py`** — `EvidenceGraphLM`. The first real
@@ -199,6 +230,13 @@ from the page and from `mix monty.run`.
   frames its sensors actually received, per sensor, per step. A chart that cannot
   be explained from the module's state is not shown: the point of the graph is to
   see Monty think, and of the frames to see what it was thinking about.
+- **A chart's values axis and its hover are part of that honesty** (done
+  2026-11-06): labelled lines on round numbers — 1, 2 or 5 times a power of ten,
+  about four of them — so the axis says where zero is instead of leaving it
+  between two labels; and a hover that reads the line _at the pointer's x_,
+  interpolating between the points it was drawn through, rather than snapping to
+  a subsampled one. Both are `handover.md` §13, with the measurements that found
+  them.
 - Config editor: edit a group, see the composed diff and the snapshot check
   before saving; a config Monty would reject cannot be saved.
 - Step inspector: the CMP payload a sensor sent and what a learning module did
