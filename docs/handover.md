@@ -515,27 +515,84 @@ evidence_matching/burst_sampling/burst_sampling_hypotheses_updater_test.exs`):
 
 ### 12.4 What is left, in the order it should be done
 
-| Area (Monty's cases)                                                                                                                                                              | Translated | Left |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------: | ---: |
-| `evidence_matching/burst_sampling_test.py` (24)                                                                                                                                   |         12 |   12 |
-| `evidence_matching/evidence_lm_test.py` (16)                                                                                                                                      |          0 |   16 |
-| `evidence_matching/evidence_slope_tracker_test.py` (11)                                                                                                                           |          0 |   11 |
-| `evidence_matching/hypotheses_displacer_test.py` (3)                                                                                                                              |          0 |    3 |
-| `evidence_matching/graph_memory_test.py` (2)                                                                                                                                      |          0 |    2 |
-| rest of `tests/unit` (frameworks 530, actions 129, utils 106, simulators 100, attention 45, experiments 53, sensor_modules 11, environment_utils 17, environments 6, telemetry 8) |          0 | ~590 |
+| Area (Monty's cases)                                    | Translated | Left |
+| ------------------------------------------------------- | ---------: | ---: |
+| `evidence_matching/burst_sampling_test.py` (24)         |         20 |    4 |
+| `evidence_matching/evidence_lm_test.py` (16)            |          0 |   16 |
+| `evidence_matching/evidence_slope_tracker_test.py` (11) |          0 |   11 |
+| `evidence_matching/hypotheses_displacer_test.py` (3)    |          0 |    3 |
+| `evidence_matching/graph_memory_test.py` (2)            |          0 |    2 |
+| the rest of `tests/unit`                                |          0 | ~590 |
+
+The last row is what the other areas hold: frameworks 530 cases (models 245,
+actions 129, utils 106, ...), simulators 100, attention 45, experiments 53,
+sensor modules 11, environment utilities 17, environments 6, telemetry 8.
 
 Burst sampling first, because the measured remaining difference lives there: in
 `test/evidence_lm/evidence_mujoco` our best hypothesis climbs monotonically
 (`1.0 → 3.0 → 4.481 → 6.481 → 7.981 → 9.981`) where Monty's highest drops out of
 the graph every other step (`0.964 → 2.320 → 1.320 → 0.320 → 2.300`). Which
-hypotheses get proposed is what a burst decides, so the twelve remaining cases
-there are the ones that can turn that divergence into a failing test.
+hypotheses get proposed is what a burst decides, so the four cases left there
+are the ones that can turn that divergence into a failing test.
 
 Then `evidence_lm_test.py`, which is where a hypothesis is displaced, scored and
 dropped — and where our trained graph's node counts (38/9/13 against Monty's
 45/16/10) are decided.
 
+**Four of the twenty-four could not be translated as this port is written**, and
+they are named rather than dropped:
+
+- `test_sample_new_hypotheses_without_feature_matching` and
+  `..._with_feature_matching` — they swap Monty's `feature_evidence_calculator`,
+  `get_feature_array` and `get_feature_order` for mocks behind a
+  `features_for_matching_selector`. That seam does not exist here: this port
+  **always** starts a newly sampled hypothesis with the node's own feature
+  evidence. Monty's default selector turns that off for a channel with no
+  feature weights, and whenever `feature_evidence_increment <= 0`
+  (`features_for_matching/selector.py`), so a config that disables feature
+  evidence would start its hypotheses at zero in Monty and at a score here. That
+  is the next thing to port in this file, and the reason those two cases are
+  listed rather than translated.
+- `test_init_fails_when_passed_invalid_evidence_threshold_config` **is**
+  translated, but not where Monty asserts it: Monty validates in the updater's
+  constructor and this port parses the setting once when the module is built, so
+  the case lives in `evidence_graph_lm_config_test.exs` against
+  `parse_config/2`.
+
 **One rule for the work itself**: run
 `mix test test/monty/pretrained_replay_test.exs` on every change to sampling
 before believing any result. It is the only referee in the tree that measures
 what a burst does to a real episode, and it is fast.
+
+---
+
+## 13. The replay chart: three things it was doing that the data did not say
+
+Reported as "hover jumps between points instead of being true to sampling the
+graph where the mouse is", "the 0 is not on the y axis" and "normalize the
+ticks, adaptive but not arbitrary". All three were real, and the DOM said so:
+the value axis read `-6.4, -1.4, 3.7, 8.7`.
+
+1. **The ticks were the range cut into quarters.** `Replay.Chart.ticks/2` walked
+   `min + (max - min) * i / 3`, so no label was a number anyone compares in their
+   head, and zero — the line every episode starts on — fell _between_ two of them
+   and was never named. They are now the multiples of one, two or five times a
+   power of ten inside the range, with the step chosen so the axis carries about
+   four: `0.0 … 12` is labelled `0, 5, 10`, and `-6.4 … 8.7` is labelled
+   `-5, 0, 5`. The decimals follow the step, so two labels can never read alike.
+2. **The hover snapped to a subsampled point.** Only 160 points per line were
+   sent to the browser (`@samples_per_line`), and the hook picked the nearest of
+   them, so a 162-step run jumped between every second step. Every drawn point is
+   sent now, and the hook reads the value _at the pointer's own x_: straight
+   between the two points that bracket it, and the nearer of the two when they
+   are not consecutive steps — an object that was not reported has no line there
+   to read, and a pointer past the end of a line is not over it.
+3. **The sentence was written twice.** The server composed `object · #step ·
+value unit` for each sample, and the hook interpolates a position the server
+   never had, so the sample now carries the parts (`line`, `step`, `value`,
+   `unit`, `named`) and the hook writes the one sentence. `label/5` and
+   `unit_note/1` are gone, and the page's tests assert the parts.
+
+Proved in the browser, not just in ExUnit: at a drawn vertex the readout reads
+exactly the stored sample (`#48 · 8.69`), half a step later `#48.5 · 4.54`, and
+the crosshair follows the pointer at every position in between.

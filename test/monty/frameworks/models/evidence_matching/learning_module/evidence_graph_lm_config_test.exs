@@ -67,6 +67,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert Map.has_key?(lm.tolerances["patch"], "pose_vectors")
     end
 
+    test "a threshold it cannot read is refused, not guessed at" do
+      # Translated from Monty's
+      # `test_init_fails_when_passed_invalid_evidence_threshold_config`. Monty
+      # validates it in the updater's constructor; this port parses the setting
+      # once, when the module is built, so the same refusal is asserted at that
+      # entry point: a threshold that is neither a rule this port knows, nor a
+      # percentage, nor a number.
+      alias Monty.Frameworks.Models.EvidenceMatching.LearningModule
+      alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.InvalidEvidenceThresholdConfig
+
+      assert {:error, %InvalidEvidenceThresholdConfig{config: "invalid"}} =
+               LearningModule.parse_config("invalid", 0.9)
+    end
+
     test "decides the comparison strategy and how many neighbours it reads" do
       {:ok, lm} = EvidenceGraphLM.from_config(config())
 

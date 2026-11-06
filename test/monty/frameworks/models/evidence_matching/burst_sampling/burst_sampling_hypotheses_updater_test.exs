@@ -94,8 +94,31 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     tracker
   end
 
-  defp features do
-    %{"patch" => %{"pose_vectors" => @pose, "pose_fully_defined" => true, "rgba" => [0.2]}}
+  # A rotation keeps its own inverse as its transpose, which is what makes it a
+  # rotation rather than any other 3x3 matrix.
+  defp rotation?(matrix) do
+    transpose = matrix |> Enum.zip() |> Enum.map(&Tuple.to_list/1)
+    product = for row <- matrix, do: for(column <- transpose, do: dot(row, column))
+
+    product
+    |> List.flatten()
+    |> Enum.with_index()
+    |> Enum.all?(fn {value, index} ->
+      expected = if rem(index, 4) == 0, do: 1.0, else: 0.0
+      abs(value - expected) < 1.0e-9
+    end)
+  end
+
+  defp dot(left, right), do: Enum.zip_with(left, right, &(&1 * &2)) |> Enum.sum()
+
+  defp features(pose_fully_defined \\ true) do
+    %{
+      "patch" => %{
+        "pose_vectors" => @pose,
+        "pose_fully_defined" => pose_fully_defined,
+        "rgba" => [0.2]
+      }
+    }
   end
 
   # The same graph, with its frames measured the way a real model measures them:
@@ -160,6 +183,196 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
         end)
 
       assert counted.sampling_burst_steps == 0
+    end
+  end
+
+  describe "the poses a burst puts its hypotheses in" do
+    test "a named set of poses is tiled across the selected nodes" do
+      # Translated from `test_sample_new_hypotheses_with_initial_poses_set`.
+      # A fixed pose set is the experiment saying where the object may be
+      # turned; a burst may only use those, once per node it puts them on.
+      nodes = length(GraphMemory.get_locations_in_graph(memory(), "mug", "patch"))
+      poses = for angle <- [0.0, 120.0], do: inverse_rotation([0.0, 0.0, angle])
+
+      updater =
+        updater(sampling_multiplier: 2.0, initial_possible_poses: poses)
+        |> Map.put(:sampling_burst_steps, 3)
+
+      {_updater, updated, telemetry} =
+        BurstSamplingHypothesesUpdater.update_evidence(
+          updater,
+          Hypotheses.empty(),
+          features(),
+          "mug",
+          0.0
+        )
+
+      added = Enum.take(Hypotheses.poses(updated), -length(telemetry.added_ids))
+
+      assert length(added) == nodes * length(poses)
+      assert Enum.all?(added, &(&1 in poses))
+
+      for pose <- poses do
+        assert Enum.count(added, &(&1 == pose)) == nodes
+      end
+    end
+
+    test "with no named poses, a burst derives them from the graph's rotations" do
+      # Translated from `test_sample_new_hypotheses_with_initial_possible_poses_informed`:
+      # "informed" is Monty's default — a pose per node, built from the stored
+      # surface frame — and every one of them has to be a rotation.
+      nodes = length(GraphMemory.get_locations_in_graph(memory(), "mug", "patch"))
+
+      updater =
+        updater(sampling_multiplier: 2.0)
+        |> Map.put(:sampling_burst_steps, 3)
+
+      {_updater, updated, telemetry} =
+        BurstSamplingHypothesesUpdater.update_evidence(
+          updater,
+          Hypotheses.empty(),
+          features(),
+          "mug",
+          0.0
+        )
+
+      added = Enum.take(Hypotheses.poses(updated), -length(telemetry.added_ids))
+
+      # Two poses per node: a well-defined normal has a mirror twin.
+      assert length(added) == nodes * 2
+      assert Enum.all?(added, &rotation?/1)
+    end
+  end
+
+  describe "which graph the tracker belongs to" do
+    test "a graph met for the first time gets its own tracker" do
+      # Translated from `test_update_hypotheses_creates_tracker_for_new_graph_id`.
+      # The tracker is what a burst measures evidence movement with, so a graph
+      # without one would be sampled every step as if it had just stalled.
+      updater = %{updater() | evidence_slope_trackers: %{}}
+
+      {updater, _hypotheses, _telemetry} =
+        BurstSamplingHypothesesUpdater.update_evidence(
+          updater,
+          hypotheses(),
+          features(),
+          "mug",
+          0.0
+        )
+
+      assert Map.has_key?(updater.evidence_slope_trackers, "mug")
+    end
+  end
+
+  describe "the maximum slope the burst decision reads" do
+    test "a tracker with no hypotheses does not drag the maximum down" do
+      # Translated from `test_max_global_slope_skips_empty_trackers`: 1.0 from
+      # the tracker that has evidence, not 0.0 from the one that has none.
+      updater =
+        %{
+          updater()
+          | evidence_slope_trackers: %{
+              "mug" => tracker_from([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]),
+              "cleared" => EvidenceSlopeTracker.new(min_age: 0)
+            }
+        }
+        |> BurstSamplingHypothesesUpdater.begin_step()
+
+      assert updater.max_slope == 1.0
+    end
+
+    test "one observation is not a slope, so the maximum stays unmeasured" do
+      # Translated from `test_max_global_slope_skips_trackers_with_nan_slopes`:
+      # a tracker with a single update has no two consecutive observations to
+      # difference, and Monty's maximum over nothing is -inf — `nil` here.
+      tracker = EvidenceSlopeTracker.new() |> EvidenceSlopeTracker.add_hyp(3)
+      {:ok, tracker} = EvidenceSlopeTracker.update(tracker, [1.0, 2.0, 3.0])
+
+      updater =
+        %{updater() | evidence_slope_trackers: %{"mug" => tracker}}
+        |> BurstSamplingHypothesesUpdater.begin_step()
+
+      assert updater.max_slope == nil
+    end
+
+    test "when nothing at all is retained, every hypothesis is reported removed" do
+      # Translated from
+      # `test_sample_existing_hypotheses_returns_empty_when_no_hypotheses_retained`.
+      # Monty's case stops before the new hypotheses are concatenated and asserts
+      # the empty subset plus a cleared tracker; here the two happen in one call,
+      # so the visible form of "nothing retained" is every id in `removed_ids`.
+      tracker = tracker_from([0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0])
+
+      hypotheses =
+        Hypotheses.new(
+          evidence: [1.0, 2.0, 3.0, 4.0, 5.0],
+          locations: for(index <- 0..4, do: [index * 1.0, 0.0, 0.0]),
+          poses: List.duplicate(Enum.chunk_every(@pose, 3), 5),
+          possible: List.duplicate(true, 5)
+        )
+
+      {_updater, updated, telemetry} =
+        %{updater() | evidence_slope_trackers: %{"mug" => tracker}}
+        |> BurstSamplingHypothesesUpdater.update_evidence(hypotheses, features(), "mug", 0.0)
+
+      assert telemetry.removed_ids == [0, 1, 2, 3, 4]
+      assert Hypotheses.count(updated) == 0
+    end
+  end
+
+  describe "how many hypotheses a burst proposes" do
+    test "nothing is proposed outside a burst, whatever the multiplier" do
+      # Translated from `test_sample_count_returns_zero_count_when_not_in_burst`;
+      # its inside-a-burst twin `test_sample_new_hypotheses_returns_empty_when_count_zero`
+      # is the multiplier-0 row of the case below. The multiplier only has a
+      # meaning inside a burst; between bursts the space is refined by evidence
+      # on the hypotheses already there.
+      for multiplier <- [0.0, 0.5, 1.0, 2.0] do
+        updater = updater(sampling_multiplier: multiplier)
+        assert updater.sampling_burst_steps == 0
+
+        {_updater, _hypotheses, telemetry} =
+          BurstSamplingHypothesesUpdater.update_evidence(
+            updater,
+            Hypotheses.empty(),
+            features(),
+            "mug",
+            0.0
+          )
+
+        assert telemetry.added_ids == []
+      end
+    end
+
+    test "a burst proposes whole pose sets, and no more of them than the graph holds" do
+      # Translated from `test_sample_count_returns_positive_count_during_burst`,
+      # a property over multiplier and whether the sensed pose is well defined.
+      # A set is what a node can be turned onto: two poses when the normal is
+      # known, the umbilical count when it is not.
+      nodes = length(GraphMemory.get_locations_in_graph(memory(), "mug", "patch"))
+
+      for multiplier <- [0.0, 0.5, 1.0, 2.0], pose_fully_defined <- [true, false] do
+        poses_per_node = if pose_fully_defined, do: 2, else: 8
+
+        updater =
+          updater(sampling_multiplier: multiplier)
+          |> Map.put(:sampling_burst_steps, 3)
+
+        {_updater, _hypotheses, telemetry} =
+          BurstSamplingHypothesesUpdater.update_evidence(
+            updater,
+            Hypotheses.empty(),
+            features(pose_fully_defined),
+            "mug",
+            0.0
+          )
+
+        proposed = length(telemetry.added_ids)
+
+        assert proposed >= 0
+        assert rem(proposed, poses_per_node) == 0
+        assert proposed <= nodes * poses_per_node
+      end
     end
   end
 
@@ -372,7 +585,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
           )
         end)
 
-      # Four nodes, a multiplier of two and three poses: 8 wanted, floored to 6.
+      # Translated from `test_num_hyps_per_node_with_initial_possible_poses`:
+      # a named pose set means one hypothesis per pose, not the two an exposed
+      # normal would have. Four nodes, a multiplier of two and three poses: 8
+      # wanted, floored to 6.
       assert length(telemetry.added_ids) == 6
       assert rem(length(telemetry.added_ids), 3) == 0
     end
