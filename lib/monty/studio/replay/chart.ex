@@ -24,7 +24,7 @@ defmodule Monty.Studio.Replay.Chart do
   rather than as a table to compare.
   """
 
-  alias Monty.Studio.Chart, as: EvidenceChart
+  alias Monty.Studio
   alias Monty.Studio.Replay
 
   @width 320
@@ -64,21 +64,23 @@ defmodule Monty.Studio.Replay.Chart do
   One episode's stretch of the x axis, tinted.
 
   Evidence restarts at zero at every episode boundary, so a run's lines climb
-  and drop in a rhythm. The bands are what makes that rhythm countable: without
-  them the drops are falls nobody measured.
+  and drop in a rhythm. The bands are what makes that rhythm countable, and each
+  wears the colour of the object its episode was about — the pyview dashboard's
+  `buildEpisodeShapes` — so the tint names the object as well as the episode.
   """
   @type band :: %{episode: non_neg_integer(), x: float(), width: float(), colour: String.t()}
 
   @typedoc """
   One drawn series: where it was drawn, and what to call it.
 
-  `colour` is an index rather than a colour: the chart does not know what a page
-  paints with, it only knows that two lines must not be given the same one.
+  `colour` is the object's own, looked up by name (`Monty.Studio.Chart.colour/2`),
+  so a line keeps its colour when the lines reorder themselves and it is the same
+  colour as that object's episode bands.
   """
   @type line :: %{
           id: String.t(),
           label: String.t(),
-          colour: non_neg_integer(),
+          colour: String.t(),
           points: [{float(), float()}],
           polylines: [String.t()]
         }
@@ -103,7 +105,7 @@ defmodule Monty.Studio.Replay.Chart do
           height: pos_integer(),
           lines: [line()],
           bands: [band()],
-          polylines: [%{colour: non_neg_integer(), id: String.t(), points: String.t()}],
+          polylines: [%{colour: String.t(), id: String.t(), points: String.t()}],
           min: number(),
           max: number(),
           from: number(),
@@ -271,12 +273,7 @@ defmodule Monty.Studio.Replay.Chart do
   # episodes: consecutive steps of an episode are one stretch, and a band runs to
   # the step before the next episode begins so that neighbours tile without a gap.
   defp bands(series, {from, to}) do
-    episodes =
-      series
-      |> Enum.map(fn drawn -> Enum.filter(drawn.points, &is_integer(&1[:episode])) end)
-      |> Enum.find(&(&1 != []))
-
-    case episodes do
+    case episodes(series) do
       nil ->
         []
 
@@ -297,12 +294,22 @@ defmodule Monty.Studio.Replay.Chart do
 
     %{
       episode: hd(run).episode,
-      x: x,
+      x: Float.round(x, 2),
       # An episode reaches to the step the next one begins at — not to its own
       # last step, which would leave every episode a step short of the next.
-      width: min(x(next_start, from, to), @width) - x,
-      colour: EvidenceChart.band_colour(hd(run).episode)
+      width: Float.round(min(x(next_start, from, to), @width) - x, 2),
+      # A recorded moment keeps its episode but not the object that episode was
+      # about, so each band takes a hue of its own from the episode's number.
+      colour: Studio.Chart.colour(nil, hd(run).episode)
     }
+  end
+
+  # The series that carries episode numbers, if one does: a recorded run's does,
+  # a probe's replay may not.
+  defp episodes(series) do
+    series
+    |> Enum.map(fn drawn -> Enum.filter(drawn.points, &is_integer(&1[:episode])) end)
+    |> Enum.find(&(&1 != []))
   end
 
   defp inside(points, {from, to}),
@@ -317,7 +324,7 @@ defmodule Monty.Studio.Replay.Chart do
     drawn = %{
       id: series.id,
       label: series.label,
-      colour: colour,
+      colour: Studio.Chart.colour(series.id, colour),
       points: points,
       polylines: polylines(series.points, points, {from, to})
     }

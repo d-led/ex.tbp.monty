@@ -25,6 +25,14 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         background-color: var(--swatch);
       }
 
+      .evidence-chart__plot {
+        /* The plot's own tint, one pale grey inside the axes. The scheme is
+           Monty's pyview dashboard: `plot_bgcolor` #fafafa over the page's
+           white paper, with #e5e7eb gridlines. One tint, not a colour per
+           episode — the boundaries are ruled, not shaded. */
+        fill: var(--chart-plot);
+      }
+
       .evidence-chart__tooltip {
         position: absolute;
         z-index: 10;
@@ -68,10 +76,21 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         data-margin-top={@chart.margin_top}
         data-margin-bottom={@chart.margin_bottom}
       >
-        <%!-- Which episode each stretch of the run is. Evidence restarts at zero
-        at every boundary, and a reader counting the descents is counting
-        episodes, so they are shaded in turn rather than left to be inferred from
-        the dashes. Drawn first, behind the grid and the lines. --%>
+        <%!-- The plot's own tint, inside the axes and not in the gutter the
+        labels sit in: the page's colour outside, one pale grey within, which is
+        what makes a light chart read as a chart rather than as a hole in the
+        card. Drawn first, behind the grid and the lines. --%>
+        <rect
+          class="evidence-chart__plot"
+          x={@chart.margin_left}
+          y={@chart.margin_top}
+          width={@chart.width - @chart.margin_left - @chart.margin_right}
+          height={@chart.height - @chart.margin_top - @chart.margin_bottom}
+        />
+        <%!-- Which episode each stretch of the run is, in the colour of the object
+        that episode was about — the pyview dashboard's own bands, at its own
+        0.08: enough to name the object, far too little to hide a line. Drawn
+        over the plot's tint and under the grid. --%>
         <g :for={band <- @chart.episode_bands}>
           <rect
             x={band.x}
@@ -79,6 +98,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
             width={band.width}
             height={@chart.height - @chart.margin_top - @chart.margin_bottom}
             fill={band.colour}
+            fill-opacity="0.08"
             class="episode-band"
             data-episode={band.episode}
           />
@@ -117,9 +137,8 @@ defmodule ExTbpMontyWeb.EvidenceChart do
             x2={@chart.width - @chart.margin_right}
             y1={tick.y}
             y2={tick.y}
-            stroke="currentColor"
+            stroke="var(--chart-grid)"
             stroke-width="0.5"
-            class="text-base-content/20"
           />
           <text
             x={@chart.margin_left - 6}

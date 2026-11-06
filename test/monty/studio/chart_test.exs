@@ -178,7 +178,9 @@ defmodule Monty.Studio.ChartTest do
 
   describe "an episode's background" do
     # Which stretch of the run was which episode is the thing a reader counts when
-    # the evidence falls back to zero; a shaded band says it without a legend.
+    # the evidence falls back to zero. The pyview dashboard tints each episode's
+    # band with the colour of the object it was about, at 0.08 — copied here, so
+    # the picture a reader compares against is the same picture.
     test "covers the steps of its episode, end to end, and none of the next" do
       chart =
         Chart.new([
@@ -198,51 +200,67 @@ defmodule Monty.Studio.ChartTest do
       assert first_x == chart.margin_left
     end
 
-    test "alternates its colour, so two neighbours are never the same one" do
-      chart =
-        Chart.new([
-          {0, 0, belief(%{"mug" => 1.0})},
-          {0, 1, belief(%{"mug" => 3.0})},
-          {1, 0, belief(%{"mug" => 0.5})},
-          {1, 1, belief(%{"mug" => 2.0})},
-          {2, 0, belief(%{"mug" => 0.2})},
-          {2, 1, belief(%{"mug" => 0.4})}
-        ])
-
-      colours = Enum.map(chart.episode_bands, & &1.colour)
-
-      assert length(colours) == 3
-      assert [first, second, third] = colours
-      assert first != second
-      assert third == first
-    end
-
     test "is clipped to the stretch of the run being looked at" do
       steps =
         for episode <- 0..3, step <- 0..1, do: {episode, step, belief(%{"mug" => 1.0})}
 
-      # Four episodes of two steps each, laid end to end: 0..1, 1..2, 2..3, 3..4.
-      # The window is the middle two.
       chart = Chart.new(steps, window: {1, 3})
 
       assert chart.episode_bands |> Enum.map(& &1.episode) == [1, 2]
-
-      # Shaded from the window's own left edge, not from where the episode began.
       assert hd(chart.episode_bands).x == chart.margin_left
 
       assert chart.episode_bands
              |> Enum.all?(fn band -> band.x + band.width <= chart.width - chart.margin_right end)
     end
 
-    test "leaves a one-step episode unshaded, because it has no width to shade" do
+    test "wears the colour of the object its episode was about" do
+      chart =
+        Chart.new(
+          [
+            {0, 0, belief(%{"mug" => 1.0})},
+            {0, 1, belief(%{"mug" => 3.0})},
+            {1, 0, belief(%{"bowl" => 0.5})},
+            {1, 1, belief(%{"bowl" => 2.0})}
+          ],
+          episode_objects: %{0 => "mug", 1 => "bowl"}
+        )
+
+      assert chart.episode_bands |> Enum.map(& &1.colour) == ["#1f77b4", "#ff7f0e"]
+    end
+
+    test "an episode whose object it was not told takes a hue of its own" do
       chart =
         Chart.new([
           {0, 0, belief(%{"mug" => 1.0})},
+          {0, 1, belief(%{"mug" => 3.0})},
           {1, 0, belief(%{"mug" => 0.5})},
           {1, 1, belief(%{"mug" => 2.0})}
         ])
 
-      assert chart.episode_bands |> Enum.map(& &1.episode) == [1]
+      assert [first, second] = Enum.map(chart.episode_bands, & &1.colour)
+      assert first =~ "hsl("
+      assert first != second
+    end
+  end
+
+  describe "the colour of an object" do
+    # The pyview dashboard's `getObjectColor`, copied: named objects wear tab10,
+    # which is why a line keeps its colour while the lines reorder themselves.
+    test "is the palette's, by name, wherever the object ranks" do
+      assert Chart.colour("mug") == "#1f77b4"
+      assert Chart.colour("banana") == "#17becf"
+      assert Chart.colour("mug", 7) == "#1f77b4"
+    end
+
+    test "is a golden-angle hue when the name is not one Monty knows" do
+      assert Chart.colour("new_object0", 0) =~ "hsl("
+      assert Chart.colour("new_object0", 0) != Chart.colour("new_object1", 1)
+    end
+
+    test "never gives two objects of a run the same colour" do
+      names = ["mug", "bowl", "potted_meat_can", "spoon", "strawberry", "mustard_bottle"]
+
+      assert names |> Enum.map(&Chart.colour/1) |> Enum.uniq() |> length() == length(names)
     end
   end
 

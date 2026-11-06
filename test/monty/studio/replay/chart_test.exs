@@ -35,6 +35,9 @@ defmodule Monty.Studio.Replay.ChartTest do
   end
 
   describe "the episodes the chart shades" do
+    # Evidence restarts at zero at every boundary, so a run's lines climb and drop
+    # in a rhythm. One band per episode, each in a colour of its own — the pyview
+    # dashboard's bands — is what makes that rhythm countable.
     test "is one band per episode, and neighbouring bands never share a colour" do
       chart =
         Chart.new([
@@ -68,8 +71,6 @@ defmodule Monty.Studio.Replay.ChartTest do
     end
 
     test "an episode of a single step at the edge has no width, so it is left out" do
-      # The rule the live chart states too: a band of no width would be a line of
-      # no colour, which reads as a boundary rather than an episode.
       chart =
         Chart.new([
           %{step: 0, value: 1.0, episode: 0},
@@ -287,8 +288,9 @@ defmodule Monty.Studio.Replay.ChartTest do
       )
     end
 
-    test "every series is a line, numbered so two of them cannot share a colour" do
-      assert Enum.map(two_objects().lines, &{&1.label, &1.colour}) == [{"mug", 0}, {"bowl", 1}]
+    test "every series is a line, each in the colour its own object wears" do
+      assert Enum.map(two_objects().lines, &{&1.label, &1.colour}) ==
+               [{"mug", "#1f77b4"}, {"bowl", "#ff7f0e"}]
     end
 
     test "both are scaled to the same range, or each would look like the winner" do

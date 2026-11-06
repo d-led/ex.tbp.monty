@@ -112,6 +112,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # has two answers, and averaging them would be a third.
       beliefs: %{},
       charts: %{},
+      # Which object each episode was about, by episode: a chart's bands wear the
+      # colour of the object their episode recognised, which is how the pyview
+      # dashboard's own picture reads.
+      episode_objects: %{},
       # Which stretch of the run's own x axis the chart draws, `{from, to}` or
       # `nil` for all of it. It comes from the URL rather than from an assign the
       # page owns: a zoomed chart is a link that can be kept, and every way of
@@ -212,6 +216,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> assign(
       beliefs: %{},
       charts: %{},
+      episode_objects: %{},
       centre: nil,
       chart_extent: {0, 0},
       beliefs_seeded: false,
@@ -703,7 +708,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       else
         socket
         |> assign(x_window: window)
-        |> assign(charts: charts_of(socket.assigns.beliefs, window))
+        |> assign(
+          charts: charts_of(socket.assigns.beliefs, window, socket.assigns.episode_objects)
+        )
       end
 
     {:noreply, socket}
@@ -840,7 +847,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   defp handle_studio({:started, steps}, socket) do
     socket
-    |> assign(status: "running", progress: {0, steps})
+    |> assign(status: "running", progress: {0, steps}, episode_objects: %{})
     |> refresh_runs()
   end
 
@@ -849,7 +856,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # restarts inside each episode, and a log that did not say so would look like
   # a run going backwards.
   defp handle_studio({:episode, %{episode: index, object: object}}, socket) do
-    push(socket, nil, "episode #{index + 1}: #{object || "the scene's own object"}", :info)
+    socket
+    |> assign(episode_objects: Map.put(socket.assigns.episode_objects, index, object))
+    |> push(nil, "episode #{index + 1}: #{object || "the scene's own object"}", :info)
   end
 
   defp handle_studio(
@@ -925,17 +934,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
     assign(socket,
       beliefs: histories,
-      charts: charts_of(histories, window),
+      charts: charts_of(histories, window, socket.assigns.episode_objects),
       chart_extent: Chart.extent(longest)
     )
   end
 
   # One chart per module, from the module's own history, drawn for the stretch of
-  # the run the page is looking at.
-  defp charts_of(histories, window),
+  # the run the page is looking at. The objects by episode travel with it: a band
+  # wears the colour of the object its episode was about.
+  defp charts_of(histories, window, episode_objects),
     do:
       Map.new(histories, fn {module_id, steps} ->
-        {module_id, Chart.new(steps, window: window)}
+        {module_id, Chart.new(steps, window: window, episode_objects: episode_objects)}
       end)
 
   # Zoom is a parameter, not a mode: `?x_from=12&x_to=30` is the chart of the

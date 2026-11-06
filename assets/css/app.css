@@ -42,6 +42,16 @@
   --color-primary-content: oklch(98% 0.01 306.703);
 }
 
+/* A chart's plot area, taken from Monty's pyview dashboard — `plot_bgcolor`
+   #fafafa over the page's white paper, with #e5e7eb gridlines — so a chart here
+   and the chart a reader compares it against are the same picture. One tint for
+   the whole plot: episodes are ruled at their boundaries, not shaded in turn.
+   A dark theme needs its own pair; `pastel` is the only one registered. */
+:root {
+  --chart-plot: #fafafa;
+  --chart-grid: #e5e7eb;
+}
+
 /* Add variants based on LiveView classes */
 @custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
 @custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);

@@ -27,29 +27,31 @@ defmodule Monty.Studio.Chart do
   @margin_top 10
   @margin_right 12
 
-  # Enough colours to tell a handful of objects apart before they repeat; a
-  # recognition run is usually between one and ten objects, and a line's identity
-  # is also carried by the legend beside it.
-  @palette [
-    "#2563eb",
-    "#dc2626",
-    "#16a34a",
-    "#d97706",
-    "#7c3aed",
-    "#0891b2",
-    "#db2777",
-    "#4b5563"
-  ]
   # How much room an episode's label needs before it is drawn: anything less and
   # the labels of a long run run into each other.
   @label_min_gap 24
 
-  # The background behind an episode, alternating so two neighbouring episodes are
-  # never the same colour. Evidence restarts at zero at every boundary, and a
-  # reader counting the descents is counting episodes: two pale bands say where one
-  # ends without a line to decode, at a tint light enough to leave the series
-  # untouched.
-  @band_palette ["#fbe9e7", "#e8f5e9"]
+  # The colours Monty's own dashboard draws with — `OBJECT_COLORS` in the pyview
+  # experiment's `evidence-chart.js`, the tab10 palette — so an object is the same
+  # colour on both charts. Looked up by name rather than by position, which is
+  # what keeps a line's colour still while the lines reorder themselves.
+  @object_colours %{
+    "mug" => "#1f77b4",
+    "bowl" => "#ff7f0e",
+    "potted_meat_can" => "#2ca02c",
+    "spoon" => "#d62728",
+    "strawberry" => "#9467bd",
+    "mustard_bottle" => "#8c564b",
+    "dice" => "#e377c2",
+    "golf_ball" => "#7f7f7f",
+    "c_lego_duplo" => "#bcbd22",
+    "banana" => "#17becf"
+  }
+
+  # The pyview dashboard's hue generator: consecutive indices are spread as far
+  # apart as a circle allows, so an unnamed object is never mistaken for a
+  # neighbour.
+  @golden_angle 137.508
 
   defstruct width: 0,
             height: 0,
@@ -149,6 +151,7 @@ defmodule Monty.Studio.Chart do
 
     {placed, starts, spans} = stack(steps)
     {from, to} = window(Keyword.get(options, :window), last_step(placed))
+    episode_objects = Keyword.get(options, :episode_objects, %{})
     placed = within(placed, from, to)
 
     # Ranked worst first, so the object a run is converging on is drawn last and
@@ -184,7 +187,7 @@ defmodule Monty.Studio.Chart do
       chart
       | episode_starts: starts,
         episode_labels: labelled,
-        episode_bands: bands(spans, from, to, chart)
+        episode_bands: bands(spans, from, to, chart, episode_objects)
     }
 
     series =
@@ -195,7 +198,7 @@ defmodule Monty.Studio.Chart do
 
         %{
           graph_id: object_id,
-          colour: Enum.at(@palette, rem(index, length(@palette))),
+          colour: colour(object_id, index),
           evidence: Enum.map(points, fn {_episode, x, evidence} -> {x, evidence} end),
           points: segments(points, chart),
           last: point(List.last(points) |> last_point(chart), chart)
@@ -208,7 +211,7 @@ defmodule Monty.Studio.Chart do
     # The marker wears the colour of the line it names, so "the answer" and "the
     # line that got there" are the same thing to look at.
     mlh_colour =
-      Enum.find_value(series, @palette |> hd(), fn %{graph_id: id, colour: colour} ->
+      Enum.find_value(series, colour(nil, 0), fn %{graph_id: id, colour: colour} ->
         if mlh && id == mlh.graph_id, do: colour
       end)
 
@@ -246,11 +249,30 @@ defmodule Monty.Studio.Chart do
   defp within(placed, from, to),
     do: Enum.filter(placed, fn {_episode, x, _belief} -> x >= from and x <= to end)
 
-  # A band per episode that the window can see, clipped to the window: the part
-  # of an episode a reader is looking at is shaded, and the colour alternates so
-  # neighbouring episodes never share one. An episode of a single step has no
-  # width to shade and is left out rather than drawn as a line of no colour.
-  defp bands(spans, from, to, chart) do
+  @doc """
+  The colour of `name`, or a hue of its own when the name is not one Monty knows.
+
+  The pyview dashboard's `getObjectColor`: a named object wears the colour of the
+  tab10 palette, so its line and its episodes' bands are the same colour on both
+  charts and a line does not change colour while the order of the lines does.
+  Anything else — an episode whose object the chart was not told, a graph with no
+  name — takes a hue from the golden angle, which spreads consecutive indices as
+  far apart as a circle allows.
+  """
+  @spec colour(String.t() | nil, integer()) :: String.t()
+  def colour(name, index \\ 0) do
+    Map.get(@object_colours, name, golden_angle_colour(index))
+  end
+
+  defp golden_angle_colour(index) do
+    "hsl(#{Float.round(:math.fmod(index * @golden_angle, 360.0), 3)}, 70%, 50%)"
+  end
+
+  # One band per episode the window can see, clipped to it, in the colour of the
+  # object that episode was about — the pyview dashboard's `buildEpisodeShapes`.
+  # An episode whose object this chart was not told takes a hue of its own, from
+  # the episode's number so that a band keeps its colour while the window moves.
+  defp bands(spans, from, to, chart, objects) do
     for %{episode: episode, from: first, to: last} <- spans,
         clipped_first = max(first, from),
         clipped_last = min(last, to),
@@ -261,21 +283,10 @@ defmodule Monty.Studio.Chart do
         episode: episode,
         x: rounded(x),
         width: rounded(x_coordinate(clipped_last, chart) - x),
-        colour: band_colour(episode)
+        colour: colour(Map.get(objects, episode), episode)
       }
     end
   end
-
-  @doc """
-  The tint of episode `episode`'s band.
-
-  Two in turn, so neighbouring episodes never share one. Both charts shade
-  episodes — the live one and the replay of a stored run — so the palette lives
-  here rather than in either of them, and a reader who learns one page's colours
-  reads the other's.
-  """
-  @spec band_colour(non_neg_integer()) :: String.t()
-  def band_colour(episode), do: Enum.at(@band_palette, rem(episode, length(@band_palette)))
 
   # One object's reported evidence, per step, in the order the module listed the
   # objects on the last step it reported them — so the line the run is chasing is

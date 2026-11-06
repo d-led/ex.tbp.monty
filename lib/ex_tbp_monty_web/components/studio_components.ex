@@ -518,9 +518,22 @@ defmodule ExTbpMontyWeb.StudioComponents do
               role="img"
               aria-label="The chosen series over the steps in the window"
             >
+              <%!-- The plot's own tint, as Monty's pyview dashboard draws it:
+            one pale grey inside the axes against the page's own colour. Drawn
+            first, behind everything. The SVG *is* the plot here — the value
+            labels are HTML beside it — so this fills it entire. --%>
+              <rect
+                x="0"
+                y="0"
+                width={@chart.width}
+                height={@chart.height}
+                fill="var(--chart-plot)"
+              />
               <%!-- Which episode each stretch of the run is: evidence restarts at
-            zero at every boundary, so the shading is what makes the rhythm
-            countable. Drawn first, behind the lines. --%>
+            zero at every boundary, so the bands are what makes the rhythm
+            countable. Each wears the colour of the object its episode was about
+            — the pyview dashboard's fill, at its own 0.08. Drawn over the plot's
+            tint and under the lines. --%>
               <rect
                 :for={band <- @chart.bands}
                 x={band.x}
@@ -528,8 +541,24 @@ defmodule ExTbpMontyWeb.StudioComponents do
                 width={band.width}
                 height={@chart.height}
                 fill={band.colour}
+                fill-opacity="0.08"
                 class="episode-band"
                 data-episode={band.episode}
+              />
+              <%!-- Where one episode ends and the next begins, ruled as well as
+            tinted: two episodes of the same object are one colour, and the
+            boundary between them is still a step the chart must show. --%>
+              <line
+                :for={band <- @chart.bands}
+                :if={band.x > 0}
+                x1={band.x}
+                y1="0"
+                x2={band.x}
+                y2={@chart.height}
+                stroke="currentColor"
+                stroke-opacity="0.18"
+                stroke-dasharray="2 2"
+                vector-effect="non-scaling-stroke"
               />
               <%!-- Where the labels beside the plot sit, drawn under the lines so a
             line is never hidden by a gridline. --%>
@@ -540,8 +569,8 @@ defmodule ExTbpMontyWeb.StudioComponents do
                   y1={tick.y}
                   x2={@chart.width}
                   y2={tick.y}
-                  stroke="currentColor"
-                  stroke-opacity="0.12"
+                  stroke="var(--chart-grid)"
+                  stroke-width="1"
                   vector-effect="non-scaling-stroke"
                 />
               </g>
@@ -564,7 +593,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
                 id={polyline.id}
                 points={polyline.points}
                 fill="none"
-                stroke={line_colour(polyline.colour)}
+                stroke={polyline.colour}
                 stroke-width="1.5"
                 stroke-linejoin="round"
                 vector-effect="non-scaling-stroke"
@@ -608,7 +637,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
           class="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-base-content/70"
         >
           <li :for={line <- @chart.lines} class="flex items-center gap-1">
-            <span class="h-0.5 w-3 rounded" style={"background: #{line_colour(line.colour)}"}></span>
+            <span class="h-0.5 w-3 rounded" style={"background: #{line.colour}"}></span>
             <span class="font-mono">{line.label}</span>
           </li>
         </ul>
@@ -958,12 +987,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
       Enum.take_every(drawn, max(div(length(drawn), @samples_per_line), 1))
     end)
   end
-
-  # The palette Monty's own plots use, so an object is the same colour here as it
-  # is in the figure a paper shows: tab10, in the order the objects were sorted.
-  @chart_colours ~w(#1f77b4 #ff7f0e #2ca02c #d62728 #9467bd #8c564b #e377c2 #7f7f7f #bcbd22 #17becf)
-
-  defp line_colour(index), do: Enum.at(@chart_colours, rem(index, length(@chart_colours)))
 
   defp inputs(entry) do
     entry
