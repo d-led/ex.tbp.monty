@@ -54,6 +54,26 @@ defmodule Monty.Studio.ChartTest do
 
       assert chart.y_min == 0.0
     end
+
+    # Evidence is measured from zero — every episode starts there and a
+    # hypothesis is penalised below it — so the line it is measured from is
+    # drawn, and it sits at the bottom of the plot exactly when the range is
+    # 0..y_max.
+    test "draws the line evidence is measured from" do
+      below =
+        Chart.new([
+          {0, 1, belief(%{"mug" => 2.0})},
+          {0, 2, belief(%{"mug" => -0.6})},
+          {0, 3, belief(%{"mug" => -3.4})}
+        ])
+
+      above = Chart.new([{0, 1, belief(%{"mug" => 1.2})}, {0, 2, belief(%{"mug" => 2.4})}])
+
+      # SVG's y grows downwards: on a -4..2 axis zero is a third of the way up,
+      # and on a 0..3 axis it is the bottom of the plot, on the bottom margin.
+      assert below.zero < above.zero
+      assert above.zero == above.height - above.margin_bottom
+    end
   end
 
   describe "an object's line" do

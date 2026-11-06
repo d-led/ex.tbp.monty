@@ -61,6 +61,7 @@ defmodule Monty.Studio.Chart do
             x_max: 0,
             y_min: 0.0,
             y_max: 1.0,
+            zero: 0.0,
             series: [],
             ticks: [],
             episode_bands: [],
@@ -108,6 +109,7 @@ defmodule Monty.Studio.Chart do
           x_max: non_neg_integer(),
           y_min: float(),
           y_max: float(),
+          zero: number(),
           series: [series()],
           ticks: [%{value: float(), y: number(), label: String.t()}],
           episode_bands: [
@@ -210,7 +212,18 @@ defmodule Monty.Studio.Chart do
         if mlh && id == mlh.graph_id, do: colour
       end)
 
-    %{chart | series: series, ticks: ticks(chart), mlh: mlh, mlh_colour: mlh_colour}
+    %{
+      chart
+      | series: series,
+        ticks: ticks(chart),
+        # Evidence is measured from zero and can fall under it, so the line it is
+        # measured from is drawn: the floor keeps zero inside the range, every
+        # episode starts on it, and a reader comparing two objects is reading the
+        # distance from it (`y_floor/1`).
+        zero: rounded(y(0.0, chart)),
+        mlh: mlh,
+        mlh_colour: mlh_colour
+    }
   end
 
   defp last_point({_episode, x, evidence}, _chart), do: {x, evidence}

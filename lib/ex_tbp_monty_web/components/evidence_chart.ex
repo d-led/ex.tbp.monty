@@ -132,6 +132,20 @@ defmodule ExTbpMontyWeb.EvidenceChart do
             {tick.label}
           </text>
         </g>
+        <%!-- Zero: what evidence is measured from. Every episode starts on this
+        line and a hypothesis can be penalised below it, so it is drawn heavier
+        than the grid and under the lines — a chart of a signed quantity that
+        does not say where zero is makes the reader guess. --%>
+        <line
+          x1={@chart.margin_left}
+          x2={@chart.width - @chart.margin_right}
+          y1={@chart.zero}
+          y2={@chart.zero}
+          stroke="currentColor"
+          stroke-width="1"
+          class="text-base-content/40"
+          data-zero={@chart.zero}
+        />
         <g :for={series <- @chart.series}>
           <polyline
             :for={points <- series.points}
