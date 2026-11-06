@@ -715,6 +715,12 @@ a case in `burst_sampling_test.py`, which is now 22 of its 24. Everything else i
   Monty does. Twenty-two cases are translated; the rest of our suite is not.
 - **A cancelled or failed leg as green.** The macOS job never starts; the amd64
   image's scan currently fails. Say which leg you mean.
+- **A pending run as proof of an intermediate commit.** `main`'s concurrency
+  group is `cancel-in-progress: false`, but GitHub still replaces an older
+  _pending_ run with a newer one, so on this branch five pushes in an hour can
+  leave three runs cancelled. Only the run for the head commit proves anything;
+  check `gh run list --limit 1` after the last push of a session, not the runs
+  for the commits in between.
 - **The arm64 image as evidence about amd64**, or the other way round.
 - **`mix lint 2>&1 | tail`** — it hides the exit code, and a "clean" tail after a
   failure reads exactly like a pass.
