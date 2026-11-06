@@ -1705,7 +1705,8 @@ defmodule Monty.ModuleMap.Data do
           ]
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/models/graph_matching/graph_lm.ex",
           elixir: "Monty.Frameworks.Models.GraphMatching.GraphLM",
           python: "GraphLM"
         },
