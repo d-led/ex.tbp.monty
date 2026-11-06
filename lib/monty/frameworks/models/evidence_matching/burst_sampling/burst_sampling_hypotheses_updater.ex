@@ -64,13 +64,22 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   """
   @spec new(GraphMemory.t(), keyword()) :: t()
   def new(%GraphMemory{} = memory, options) do
+    multiplier = Keyword.get(options, :sampling_multiplier, 0.4)
+
+    # Monty's constructor refuses this rather than carrying it: a negative
+    # multiplier asks a burst for a negative number of hypotheses, and the
+    # count is what decides how much of the space a burst explores.
+    if multiplier < 0 do
+      raise ArgumentError, "sampling_multiplier should be >= 0, got #{multiplier}"
+    end
+
     %__MODULE__{
       graph_memory: memory,
       displacer: Keyword.fetch!(options, :displacer),
       scorer: Keyword.fetch!(options, :scorer),
       initial_possible_poses: Keyword.get(options, :initial_possible_poses),
       umbilical_num_poses: Keyword.get(options, :umbilical_num_poses, 8),
-      sampling_multiplier: Keyword.get(options, :sampling_multiplier, 0.4),
+      sampling_multiplier: multiplier,
       burst_trigger_slope: Keyword.get(options, :burst_trigger_slope, 1.0),
       burst_sampling_duration: Keyword.get(options, :burst_sampling_duration, 5),
       deletion_trigger_slope: Keyword.get(options, :deletion_trigger_slope, 0.5)

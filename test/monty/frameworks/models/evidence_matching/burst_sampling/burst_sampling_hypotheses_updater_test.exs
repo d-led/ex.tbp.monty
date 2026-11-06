@@ -56,6 +56,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     )
   end
 
+  # Monty's tests write initial poses as Euler angles and invert them before
+  # handing them to the updater; the upstream conversion does the same.
+  defp inverse_rotation(euler_degrees) do
+    {:ok, rotation} = Rotation.from_euler_degrees(euler_degrees)
+
+    rotation |> Rotation.invert() |> Rotation.to_matrix()
+  end
+
   defp features do
     %{"patch" => %{"pose_vectors" => @pose, "pose_fully_defined" => true, "rgba" => [0.2]}}
   end
@@ -125,6 +133,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     end
   end
 
+  describe "what it refuses" do
+    test "a negative sampling multiplier, as Monty's constructor does" do
+      # Monty's `test_init_fails_when_sampling_multiplier_is_negative`. A
+      # negative multiplier asks a burst for a negative number of hypotheses,
+      # which is not a count anyone can act on.
+      assert_raise ArgumentError, ~r/sampling_multiplier should be >= 0/, fn ->
+        updater(sampling_multiplier: -1.0)
+      end
+    end
+  end
+
   describe "displacing" do
     test "with nothing to move by, nothing moves" do
       assert BurstSamplingHypothesesUpdater.displace_hypotheses(updater(), hypotheses(), nil) ==
@@ -171,6 +190,52 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       assert Hypotheses.count(updated) > Hypotheses.count(hypotheses())
       assert telemetry.added_ids != []
       assert updater.sampling_burst_steps > 0
+    end
+
+    test "a burst asks for whole pose sets, one per pose on every node" do
+      # Monty's `test_sample_count_proportional_multi_channel`, through the public
+      # step: with P initial poses and a multiplier capped at P, a burst proposes
+      # `nodes * min(multiplier, P)` hypotheses, floored to a multiple of P —
+      # half a set of poses is not a hypothesis set.
+      poses = for index <- 0..2, do: inverse_rotation([0.0, 0.0, index * 120.0])
+
+      {_updater, _updated, telemetry} =
+        updater(initial_possible_poses: poses, sampling_multiplier: 2.0)
+        |> BurstSamplingHypothesesUpdater.begin_step()
+        |> then(fn updater ->
+          BurstSamplingHypothesesUpdater.update_evidence(
+            updater,
+            Hypotheses.empty(),
+            features(),
+            "mug",
+            0.0
+          )
+        end)
+
+      # Four nodes, a multiplier of two and three poses: 8 wanted, floored to 6.
+      assert length(telemetry.added_ids) == 6
+      assert rem(length(telemetry.added_ids), 3) == 0
+    end
+
+    test "a multiplier larger than the pose set is capped at one set per node" do
+      # Monty's `min(sampling_multiplier, num_hyps_per_node)`: asking for ten when
+      # the experiment named three poses still proposes three per node.
+      poses = for index <- 0..2, do: inverse_rotation([0.0, 0.0, index * 120.0])
+
+      {_updater, _updated, telemetry} =
+        updater(initial_possible_poses: poses, sampling_multiplier: 10.0)
+        |> BurstSamplingHypothesesUpdater.begin_step()
+        |> then(fn updater ->
+          BurstSamplingHypothesesUpdater.update_evidence(
+            updater,
+            Hypotheses.empty(),
+            features(),
+            "mug",
+            0.0
+          )
+        end)
+
+      assert length(telemetry.added_ids) == 4 * 3
     end
 
     test "an observation no channel of the graph carries updates nothing" do
