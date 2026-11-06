@@ -4,8 +4,9 @@ What is open, what is already known, and where the evidence is. Written for
 whoever picks this up next; every claim below was measured or read, and the
 file and line that settles each one is named.
 
-State at hand-over: **`scripts/quality.sh` is green** on `e5ad552` — lint clean,
-2 311 tests (19 properties), CRAP worst 29.85 against a threshold of 20. CI's
+State at hand-over: **`scripts/quality.sh` is green** on the tree this file is
+in — lint clean, 2 318 tests (19 properties), CRAP worst 29.85 against a
+threshold of 20. CI's
 last completed run (`42254886887`, on `4d92066`) was **red in two jobs**, both
 fixed by `e5ad552`: `lint` (one unformatted test file) and `types` (a real bug
 dialyzer found — the generator's "map unchanged" guard compared a binary with a
