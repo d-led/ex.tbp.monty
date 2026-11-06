@@ -574,13 +574,17 @@ names.
 
 ## What is still open
 
-- **CI's macOS leg does not start.** From 2026-11-05 21:38 every run shows
-  `desktop (ex-tbp-monty-osx-arm64): cancelled` about a second after the job is
-  queued, and its annotation says why: `The configuration
-'macos-14-arm64-us-default' is not supported`. The label has not changed — the
-  same job ran on `macos-14` at 14:33 the same day — so this is the account's
-  runner entitlement, not the workflow. Until it is restored the macOS side is
-  proven by hand: `scripts/package.sh osx-arm64`, the zip unpacked into a folder
+- **CI's macOS leg did not start — a pinned runner label, not an entitlement.**
+  From 2026-11-05 21:38 every run showed
+  `desktop (ex-tbp-monty-osx-arm64): cancelled` about a second after the job was
+  queued, with the annotation `The configuration
+'macos-14-arm64-us-default' is not supported`. This was first written down here
+  as the account's runner entitlement. It was not: the sibling project
+  (`confluence_phx_mirror`) builds the same platform from `macos-latest` on the
+  same account. `macos-14` resolves to a configuration this account does not
+  have, `macos-latest` to the one it does, and the job now asks for the second
+  (`6bd0bfe`). The by-hand checks below were what covered the gap while the leg
+  was cancelled: `scripts/package.sh osx-arm64`, the zip unpacked into a folder
   inside the checkout, and `scripts/smoke-window.sh` opening that copy (heading,
   marks and all), plus the same window with `--crash` pointed at a release that
   is not there.
