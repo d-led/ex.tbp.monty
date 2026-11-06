@@ -50,7 +50,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
             deletion_trigger_slope: 0.5,
             sampling_burst_steps: 0,
             evidence_slope_trackers: %{},
-            max_slope: 0.0
+            # `nil` until a step has measured one; Monty's -inf, which no BEAM
+            # float can hold.
+            max_slope: nil
 
   @type t :: %__MODULE__{}
 
@@ -102,7 +104,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   @spec begin_step(t()) :: t()
   def begin_step(%__MODULE__{} = updater) do
     max_slope = max_global_slope(updater)
-    stalled? = max_slope <= updater.burst_trigger_slope and updater.sampling_burst_steps == 0
+
+    # Monty's maximum over nothing measurable is -inf, which is below every
+    # trigger threshold; a BEAM float cannot hold it, so `nil` carries that
+    # state. The burst-already-running guard is not part of the comparison:
+    # Monty keeps it outside, and a burst that restarted itself whenever
+    # nothing was measurable yet would never end.
+    stalled? =
+      updater.sampling_burst_steps == 0 and
+        (is_nil(max_slope) or max_slope <= updater.burst_trigger_slope)
 
     %{
       updater
@@ -454,7 +464,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     |> Enum.flat_map(&EvidenceSlopeTracker.calculate_slopes/1)
     |> Enum.reject(&is_nil/1)
     |> case do
-      [] -> 0.0
+      [] -> nil
       slopes -> Enum.max(slopes)
     end
   end

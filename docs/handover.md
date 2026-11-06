@@ -431,3 +431,111 @@ The gaps that are genuinely open, in the order they block work:
 refusal with a sentence, never as a stand-in that runs. That is what `7cba014`
 established and what section 3 is trying to extend to crashes — the same
 principle, applied to a process that dies instead of a class that is missing.
+
+Where the two lists above are about _behaviour_, §12 is about the **tests**: what
+referees them, how many of Monty's own cases are translated (11 of 652), and the
+order in which the rest should be done.
+
+---
+
+## 12. The tests themselves: 11 of Monty's 652 cases are translated — and each translation has been paying
+
+The question that opened this was "have we validated all individual components?".
+For the _numbers_ the answer is mostly yes: sixteen Monty recordings referee
+feature evidence, the slope tracker, the recognition policy, the motor policy,
+positioning, salience, vocus2 and a whole pretrained episode. For the _code_ the
+answer is no, and it is measurable in one line:
+
+    grep -rh "def test_" $(find tests/unit -name "*_test.py") | sed 's/.*def \(test_[a-z0-9_]*\).*/\1/' | sort -u
+
+says Monty's `tests/unit` holds **652 distinct case names**, and of those, **11**
+are named anywhere in our `test/` — all eleven translated on 2026-11-06 evening,
+all in `burst_sampling_test.py`. Our 177 tests in `test/monty/frameworks/models/
+evidence_matching/` are hand-written behaviours and parity fixtures; they are
+worth keeping, but they are not translations and were never proof of parity.
+
+### 12.1 The rule, now in `AGENTS.md`
+
+> **Tests are translations.** A ported module's tests come from Monty's own
+> `tests/unit/**/test_*.py`, one case for one case, each naming the case it
+> translates. Where Monty's case drives a private method, drive the nearest
+> public entry point and say so in the comment. A hand-written behaviour test
+> states intent; it is not evidence of parity, and it must not be counted as
+> such. A case that cannot be translated is listed, never dropped silently.
+
+### 12.2 What eleven translations bought: two defects and one of my own
+
+1. `BurstSamplingHypothesesUpdater.new/2` accepted a **negative
+   `sampling_multiplier`**, which asks a burst for a negative number of
+   hypotheses. Monty's constructor raises `ValueError("sampling_multiplier
+should be >= 0")`; ours now raises the same sentence (`c88cca6`).
+2. `max_global_slope/1` answered **`0.0`** where Monty answers **`-inf`** when
+   nothing is measurable. With the default trigger slope of 1.0 the two agree by
+   accident; with any negative `burst_trigger_slope` the first step opens a burst
+   in Monty and not here. A BEAM float cannot hold `-inf`, so `nil` now carries
+   that state and `begin_step/1` counts it as stalled.
+3. And the regression that (2) caused, which is the useful part: the first
+   version moved the `sampling_burst_steps == 0` guard _inside_ the comparison,
+   so a burst that was already running restarted itself on any step where
+   nothing was measurable yet — every burst stretched, more hypotheses sampled
+   than Monty: `step 39: banana has 1735, Monty 1437` in
+   `test/monty/pretrained_replay_test.exs`. Monty keeps the guard outside the
+   comparison. Four of Monty's own cases (`test_burst_does_not_trigger_when_
+already_in_burst`, `..._max_slope_above_threshold`, `test_sampling_burst_
+steps_decrements_in_exit`, `..._does_not_go_negative`) now pin what the
+   referee caught.
+
+The referee already in the tree found that in one run. That is the argument for
+translating the rest: the fixtures catch differences in _outcome_, and Monty's
+cases catch differences in _rule_, which is where a bug survives the outcome for
+a while.
+
+### 12.3 How to translate one, in order
+
+1. Read Monty's case and write down the rule it pins in one sentence.
+2. Find our public entry point for the same rule (`update_evidence/5`,
+   `begin_step/1`, `end_step/1`, `sample_count/5`…). Our helpers are `defp`;
+   drive the entry point and say in the comment that Monty drove a private
+   method.
+3. Port the fixture **honestly**: Monty's `Mock()` tracker becomes a real
+   `EvidenceSlopeTracker` whose slopes the test then asserts on, so the fixture
+   proves its own premise before the assertion it was built for.
+4. Assert the same outcome Monty asserts, with our vocabulary.
+5. Name Monty's case in a comment, so the count is greppable.
+
+Traps hit while doing this (all now in `test/monty/frameworks/models/
+evidence_matching/burst_sampling/burst_sampling_hypotheses_updater_test.exs`):
+
+- Monty writes initial poses as **Euler degrees**; ours wants a 3×3 matrix, and
+  inverted: `Rotation.from_euler_degrees/1 |> Rotation.invert() |> Rotation.to_matrix()`.
+- `Hypotheses.pose_bytes/1` wants a **3×3 nested matrix**, not a flat nine-list.
+- A fixture memory must store **`pose_fully_defined`** and list it in
+  `features_to_use`, or `HypothesesDisplacer.node_poses/4` raises `KeyError`.
+  Monty's trained graphs always carry it.
+
+### 12.4 What is left, in the order it should be done
+
+| Area (Monty's cases)                                                                                                                                                              | Translated | Left |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------: | ---: |
+| `evidence_matching/burst_sampling_test.py` (24)                                                                                                                                   |         12 |   12 |
+| `evidence_matching/evidence_lm_test.py` (16)                                                                                                                                      |          0 |   16 |
+| `evidence_matching/evidence_slope_tracker_test.py` (11)                                                                                                                           |          0 |   11 |
+| `evidence_matching/hypotheses_displacer_test.py` (3)                                                                                                                              |          0 |    3 |
+| `evidence_matching/graph_memory_test.py` (2)                                                                                                                                      |          0 |    2 |
+| rest of `tests/unit` (frameworks 530, actions 129, utils 106, simulators 100, attention 45, experiments 53, sensor_modules 11, environment_utils 17, environments 6, telemetry 8) |          0 | ~590 |
+
+Burst sampling first, because the measured remaining difference lives there: in
+`test/evidence_lm/evidence_mujoco` our best hypothesis climbs monotonically
+(`1.0 → 3.0 → 4.481 → 6.481 → 7.981 → 9.981`) where Monty's highest drops out of
+the graph every other step (`0.964 → 2.320 → 1.320 → 0.320 → 2.300`). Which
+hypotheses get proposed is what a burst decides, so the twelve remaining cases
+there are the ones that can turn that divergence into a failing test.
+
+Then `evidence_lm_test.py`, which is where a hypothesis is displaced, scored and
+dropped — and where our trained graph's node counts (38/9/13 against Monty's
+45/16/10) are decided.
+
+**One rule for the work itself**: run
+`mix test test/monty/pretrained_replay_test.exs` on every change to sampling
+before believing any result. It is the only referee in the tree that measures
+what a burst does to a real episode, and it is fast.

@@ -23,6 +23,13 @@ The rules that are specific to it, in priority order:
   order; do not introduce process-local randomness into a step.
 - **Tests specify behaviour**, with Monty numbers as fixtures where the maths
   matters. No `Process.sleep/1`; monitor or `:sys.get_state/1` instead.
+- **Tests are translations.** A ported module's tests come from Monty's own
+  `tests/unit/**/test_*.py`, one case for one case, each naming the case it
+  translates. Where Monty's case drives a private method, drive the nearest
+  public entry point and say so in the comment. A hand-written behaviour test
+  states intent; it is not evidence of parity, and it must not be counted as
+  such. A case that cannot be translated is listed, never dropped silently.
+  `docs/handover.md` §12 has the method, the traps and the count.
 
 Run `scripts/quality.sh` (what CI runs) before considering work done;
 `mix dialyzer` is the separate types job. Format with `scripts/reformat.sh` —
