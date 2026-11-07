@@ -974,6 +974,37 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert axis_labels(axis) == ["-5", "0", "5"]
     end
 
+    test "opens on every object, whatever the run before it was left on", %{conn: conn} do
+      # All ten objects on one axis with a legend is how an episode is read, and
+      # how Monty's own dashboard draws it. Choosing a run is a patch, which
+      # keeps this process alive: a series picked for one run used to follow the
+      # reader to the next one, so every run after the first opened on one line,
+      # with no legend and nothing saying why.
+      steps = [
+        %{"mug" => 1.0, "bowl" => 0.5},
+        %{"mug" => 2.0, "bowl" => 1.0},
+        %{"mug" => 3.0, "bowl" => 0.2}
+      ]
+
+      first = run_believing(steps)
+      second = run_believing(steps)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{first.id}")
+
+      assert has_element?(view, "#replay-chart-legend")
+      assert has_element?(view, "#replay-series option[value='objects'][selected]")
+
+      view |> element("#replay-series") |> render_change(%{"series" => "evidence"})
+
+      assert has_element?(view, "#replay-series option[value='evidence'][selected]")
+      refute has_element?(view, "#replay-chart-legend")
+
+      view |> render_patch(~p"/runs/#{second.id}")
+
+      assert has_element?(view, "#replay-series option[value='objects'][selected]")
+      assert has_element?(view, "#replay-chart-legend")
+    end
+
     test "a chart can show another series", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 

@@ -212,6 +212,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
       run ->
         run = with_steps(run)
+        socket = for_run(socket, run)
 
         {:noreply,
          socket
@@ -221,6 +222,19 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          |> stream(:log, run.log, reset: true)
          |> assign(logged: length(run.log))
          |> assign_replay(run, Replay.last_step(run))}
+    end
+  end
+
+  # What the reader chose to look at belongs to the run they chose it for: a
+  # series, a window and a step are answers about one run. Carrying them to the
+  # next run opened in the same tab meant every run after the first was drawn the
+  # way the previous one had been left — one line, no legend, and nothing on the
+  # page saying why — because choosing a run is a `patch`, which keeps this
+  # process, and its assigns, alive.
+  defp for_run(socket, %{id: id}) do
+    case socket.assigns[:run] do
+      %{id: ^id} -> socket
+      _another_run -> assign(socket, series_id: nil, window: nil, step: nil, playing: false)
     end
   end
 
