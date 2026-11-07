@@ -62,6 +62,60 @@ Two conclusions follow, and both are arithmetic rather than opinion:
 2. **Deleting the learning module entirely would be 2.3×.** The 10–30× therefore
    cannot come from one more narrow kernel, however well written.
 
+## What a step is made of now, and where the copying is (2026-11-07)
+
+Re-measured on the same config with the same instruments, after the studio
+stopped writing a transcript to Postgres per step: **7.1 M reductions and 188 MB
+of garbage a step**, 339 ms of wall clock on a machine carrying a Python run and
+12 GB of swap (wall clock is quoted only to show it was loaded; the two counts
+are the measurement).
+
+| who                                      | reductions/step | share |
+| ---------------------------------------- | --------------: | ----: |
+| `Monty.Runtime.LearningModuleServer`     |           3.6 M |   51% |
+| the caller's own process (orchestration) |           1.9 M |   26% |
+| the two `SensorModuleServer`s            |           1.3 M |   19% |
+| `Monty.Random.Stream`                    |           0.1 M |    2% |
+| `Monty.Runtime.Step`                     |           0.1 M |    1% |
+
+Allocation, largest first: **`gen_server:loop/5` 71.5%**, `MatcherNif.decode_one`
+3.8%, `Geometry.dot` 2.6% (57 888 calls a step), `EvidenceSlopeTracker.write_slot`
+2.1%, `Enum.map` 2.1%, `Hypotheses.gather` 1.9%, `MatcherNif.decode` 1.9%,
+`Enum.with_index` 1.9%, `Enum.take` 1.3%, `Geometry.transpose` 1.3%.
+
+**`gen_server:loop/5` is where a term crossing a process boundary is copied onto
+the receiver's heap.** The step's replies are `:ok`, so the weight is in what the
+step sends. One step's observations, as they are handed to the sensor modules:
+
+| key                 |                  per sensor | why it is that size                    |
+| ------------------- | --------------------------: | -------------------------------------- |
+| `semantic_3d`       |                      512 kB | one row per pixel, as a list of floats |
+| `sensor_frame_data` |                      512 kB | the same points in the sensor's frame  |
+| `rgba`              |                      257 kB | pixels, as lists of floats             |
+| `depth`             |                      129 kB | pixels, as lists of floats             |
+| `semantic`          |                       65 kB | one id per pixel                       |
+| the whole step      | **2.9 MB** over two sensors |                                        |
+
+A float in a list costs four words on the heap, so each of those arrays is four
+times its payload before it is copied, and it is copied into the process that
+reads it. That is the item to work on: the arrays belong in **flat binaries**,
+which is what the native kernels already take for hypotheses (`pose_bytes`,
+`location_bytes`, `values_bytes`), and which would cut that copy about four
+times over.
+
+Two things that are _not_ worth doing, measured rather than assumed:
+
+- **Copying a learning module's state.** It is 55.5 MB on the wire and
+  `Model.state/1` costs 176 ms — but it is called **once per episode**, by
+  `Logging.report/3`, not per step: every per-step call (`:step`, votes, goals,
+  terminal state) answers `:ok` or a number, which is why `Model.status/1` is
+  2 µs. A mutable state behind a NIF would optimise a cost the step does not pay.
+- **Deleting `sensor_frame_data`.** It is 512 kB a sensor a step and nothing this
+  port runs reads it — Monty reads it in `point_cloud_features`, and this port
+  computes normals and curvatures from `semantic_3d` instead. But Monty's
+  `DepthTo3DLocations` produces it, and `depth_to_3d_locations_test.exs` asserts
+  that it does, so removing it is a parity break dressed as an optimisation.
+
 ## What the native kernels have bought
 
 22 M reductions and 212 MB a step before them; 9 M and 85 MB now — from the
