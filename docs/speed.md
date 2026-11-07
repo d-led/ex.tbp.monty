@@ -161,6 +161,17 @@ So the change worth writing is **one packed pass over the hypothesis set**
 `location_bytes`, `values_bytes` already carry), replacing the four or five
 separate walks with one. That is a batched kernel, not a faster `dot`.
 
+**Checked before writing it, and it is partly there already.** The columns are
+already binaries (`Hypotheses.evidence_bytes/1`, `locations`, `poses`),
+`take/2` and `rows_at/2` select with `binary_part/3` rather than walking lists,
+and the displacement — the biggest per-hypothesis arithmetic — is
+`MatcherNif.displaced_locations/3` when the kernel is loaded, with a list-based
+`reference_moved/2` kept for parity. So the next move is not "pack the
+hypotheses"; it is to find _which_ of the remaining walks is the 474 097 maps a
+step. Reading the code does not answer that: the obvious candidates are already
+packed, which is what an `fprof` call graph is for — attribute the `Enum` calls
+to their callers, then batch the one at the top of that list.
+
 Two numbers keep the earlier suspicions out of the way: the payload copy is
 **10.5 %** (`gen_server:decode_msg` — the 2.9 MB of observations measured at
 1.6 ms above), and the hypothesis primitives are **2 %**.
