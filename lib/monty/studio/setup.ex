@@ -1988,9 +1988,15 @@ defmodule Monty.Studio.Setup do
         end
 
       :error ->
-        if described.status == :implemented, do: :not_registered
+        not_registered(described)
     end
   end
+
+  # A config that names no class at all is `module_findings/1`'s to say; the same
+  # for one the map does not know. Only "implemented, and no module here" is this
+  # clause's.
+  defp not_registered(%{status: :implemented}), do: :not_registered
+  defp not_registered(_absent_or_unknown), do: nil
 
   defp unbuildable_learning_module_finding(lm, reason) do
     Finding.new(
