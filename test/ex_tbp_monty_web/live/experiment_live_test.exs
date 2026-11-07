@@ -300,6 +300,46 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   end
 
   describe "during the run" do
+    # A press of Run starts a world stepping, and a second press while it steps is
+    # the same world stepped twice — the queue would take it, because its refusal
+    # is per episode and world. The page says so instead: neither button that
+    # starts something is offered while one is going, and Stop is.
+    test "the buttons that start something are disabled while a run is going", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      assert has_element?(view, "#run:not([disabled])")
+      refute has_element?(view, "#stop")
+
+      view |> element("#run") |> render_click()
+
+      assert has_element?(view, "#run[disabled]")
+      assert has_element?(view, "#step[disabled]")
+      assert has_element?(view, "#stop")
+    end
+
+    # One press of Run with a parallelism of three is three runs, and stopping
+    # them one at a time from another page is not what "stop" means.
+    test "Stop ends every run of the experiment, not only the one on screen", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      view |> element("#parallelism") |> render_change(%{"parallelism" => "3"})
+      view |> element("#run") |> render_click()
+
+      assert view |> element("#stop") |> render() =~ "Stop 3 runs"
+
+      view |> element("#stop") |> render_click()
+
+      assert render(view) =~ "stopped: it had not started yet"
+
+      statuses =
+        RunHistory.list_for("base_config_10distinctobj_dist_agent")
+        |> Enum.map(&RunHistory.get(&1.id).status)
+
+      assert statuses == ["failed", "failed", "failed"]
+    end
+
     test "each step is streamed into the log as it happens", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=3&episodes=1")
@@ -312,7 +352,9 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert view |> element("#log-#{first_id}") |> render() =~ "queued: 3 step(s)"
     end
 
-    test "a second viewer joins the run that is going instead of starting another", %{conn: conn} do
+    test "a second viewer watches the run that is going instead of starting another", %{
+      conn: conn
+    } do
       {:ok, one, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
@@ -322,10 +364,11 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       one |> element("#run") |> render_click()
       started = current_run_id(one)
 
-      # A run belongs to the experiment, not to the page that started it: a
-      # second click attaches to the run in flight rather than stepping the same
-      # world twice, and both pages then watch the same steps.
-      two |> element("#run") |> render_click()
+      # A run belongs to the experiment, not to the page that started it, and
+      # there is no second run on offer while it goes: the button that would
+      # start one is disabled, and the page that did not start this one watches
+      # it without being asked.
+      refute has_element?(two, "#run:not([disabled])")
 
       assert current_run_id(two) == started
       assert RunHistory.list_for("base_config_10distinctobj_dist_agent") |> length() == 1
@@ -626,7 +669,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert settled.summary["reason"] =~ "stopped before it finished"
     end
 
-    test "a run waiting its turn that no process is holding is stopped with the reason" do
+    test "a run waiting its turn is stopped where it waits" do
       {:ok, record} =
         RunHistory.start(%{
           experiment: "base_config_10distinctobj_dist_agent",
@@ -636,8 +679,10 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
           inputs: %{}
         })
 
-      # Queued, so the reaper leaves it alone — but on this node nothing holds
-      # it, which is what Stop has to say out loud.
+      # Queued, so the reaper leaves it alone — and no process holds it, which is
+      # exactly what stopping a waiting run has to handle: nothing to ask, so the
+      # job is cancelled where it waits. Closing only the record would have left
+      # a queued job that starts afterwards, stepping a run that says it stopped.
       {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(record)
 
       conn = Phoenix.ConnTest.build_conn()
@@ -648,11 +693,11 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert current_run_id(view) == record.id
       view |> element("#stop") |> render_click()
 
-      assert render(view) =~ "that run is not running any more"
+      assert render(view) =~ "stopped: it had not started yet"
 
       stopped = RunHistory.get(record.id)
       assert stopped.status == "failed"
-      assert stopped.summary["reason"] == "nothing was running it any more"
+      assert stopped.summary["reason"] == "it was stopped before it finished"
     end
   end
 

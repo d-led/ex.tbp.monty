@@ -211,40 +211,58 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
     else
       first_movement_detected? = agent_moved_since_reset?(lm)
       feature_percepts = Enum.filter(percepts, & &1.process_features_in_lm)
+      log_not_moved(lm, first_movement_detected?)
 
       case add_displacements(lm, percepts) do
-        {:ok, percepts} ->
-          lm = %{lm | buffer: FeatureAtLocationBuffer.append(lm.buffer, percepts)}
-
-          lm =
-            Enum.reduce(percepts, lm, fn percept, lm ->
-              %{lm | buffer: FeatureAtLocationBuffer.append_input_percepts(lm.buffer, percept)}
-            end)
-
-          if not first_movement_detected? do
-            Logger.debug("#{lm.learning_module_id} has not moved yet")
-          end
-
-          case narrow.(lm, ctx, feature_percepts, first_movement_detected?) do
-            {:ok, lm} ->
-              lm =
-                if get_possible_matches(lm) == [] do
-                  set_individual_ts(lm, :no_match)
-                else
-                  lm
-                end
-
-              {:ok, lm |> step_goal_generator(ctx, feature_percepts) |> record_stats()}
-
-            {:error, :not_implemented} ->
-              raise "#{lm.learning_module_id} is a bare GraphLM, which has no matching " <>
-                      "scheme to narrow possible matches with; a subclass supplies one"
-          end
-
         {:error, _reason} ->
           {:ok, lm}
+
+        {:ok, displaced} ->
+          displaced
+          |> buffered(lm)
+          |> narrow_and_conclude(ctx, narrow, feature_percepts, first_movement_detected?)
       end
     end
+  end
+
+  # Monty logs it and matches anyway: the first step of an episode has nothing
+  # behind it to have moved from, which is a zero displacement rather than a
+  # reason not to look.
+  defp log_not_moved(_lm, true), do: :ok
+  defp log_not_moved(lm, false), do: Logger.debug("#{lm.learning_module_id} has not moved yet")
+
+  # The observation goes into the buffer twice, as Monty writes it: once as the
+  # step's own percepts, and once per displaced percept as what this module is
+  # matching against.
+  #
+  # `append/2` refuses a step with no sensor-module location — the same
+  # observation `add_displacements/2` has just refused, so a step that reaches
+  # here has one, and reading the buffer out of the result is what this row is
+  # allowed to assume.
+  defp buffered(percepts, lm) do
+    {:ok, buffer} = FeatureAtLocationBuffer.append(lm.buffer, percepts)
+    lm = %{lm | buffer: buffer}
+
+    Enum.reduce(percepts, lm, fn percept, lm ->
+      %{lm | buffer: FeatureAtLocationBuffer.append_input_percepts(lm.buffer, percept)}
+    end)
+  end
+
+  defp narrow_and_conclude(lm, ctx, narrow, feature_percepts, first_movement_detected?) do
+    case narrow.(lm, ctx, feature_percepts, first_movement_detected?) do
+      {:ok, lm} ->
+        {:ok, lm |> concluded() |> step_goal_generator(ctx, feature_percepts) |> record_stats()}
+
+      {:error, :not_implemented} ->
+        raise "#{lm.learning_module_id} is a bare GraphLM, which has no matching " <>
+                "scheme to narrow possible matches with; a subclass supplies one"
+    end
+  end
+
+  # A narrowing that leaves nothing possible is this episode's answer: Monty
+  # names the module `:no_match` rather than reporting an empty hypothesis space.
+  defp concluded(lm) do
+    if get_possible_matches(lm) == [], do: set_individual_ts(lm, :no_match), else: lm
   end
 
   @doc "Monty's `exploratory_step`: buffer the observation, learn nothing yet."
@@ -255,18 +273,8 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
       {:ok, lm}
     else
       case add_displacements(lm, percepts) do
-        {:ok, percepts} ->
-          lm = %{lm | buffer: FeatureAtLocationBuffer.append(lm.buffer, percepts)}
-
-          lm =
-            Enum.reduce(percepts, lm, fn percept, lm ->
-              %{lm | buffer: FeatureAtLocationBuffer.append_input_percepts(lm.buffer, percept)}
-            end)
-
-          {:ok, lm}
-
-        {:error, _reason} ->
-          {:ok, lm}
+        {:ok, displaced} -> {:ok, buffered(displaced, lm)}
+        {:error, _reason} -> {:ok, lm}
       end
     end
   end
@@ -280,7 +288,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   nothing and look like one that had not decided yet.
   """
   @spec compute_possible_matches(t(), Monty.Context.t(), [Message.t()], boolean()) ::
-          {:ok, t()} | {:error, :not_implemented}
+          {:error, :not_implemented}
   def compute_possible_matches(
         %__MODULE__{} = _lm,
         _ctx,
@@ -556,7 +564,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   which is said out loud rather than answered with "not yet", because the model
   reads that as an episode that has not finished.
   """
-  @spec get_unique_pose_if_available(t(), graph_id()) :: pose() | nil
+  @spec get_unique_pose_if_available(t(), graph_id()) :: nil
   def get_unique_pose_if_available(%__MODULE__{possible_paths: paths}, object_id) do
     case Map.get(paths, object_id) do
       nil ->
@@ -737,19 +745,21 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   def add_displacements(%__MODULE__{} = lm, percepts) do
     sensor_module_percepts = Enum.filter(percepts, &Message.from_sensor_module?/1)
 
-    with location when not is_nil(location) <- Cmp.location_mean(sensor_module_percepts) do
-      displacement =
-        case lm.buffer.last_location do
-          nil ->
-            [0.0, 0.0, 0.0]
+    case Cmp.location_mean(sensor_module_percepts) do
+      nil ->
+        {:error, :no_sensor_module_location}
 
-          last_location ->
-            Enum.zip_with([location, last_location], fn [now, then] -> now - then end)
-        end
+      location ->
+        displacement =
+          case lm.buffer.last_location do
+            nil ->
+              [0.0, 0.0, 0.0]
 
-      {:ok, Enum.map(percepts, &Message.set_displacement(&1, displacement))}
-    else
-      nil -> {:error, :no_sensor_module_location}
+            last_location ->
+              Enum.zip_with([location, last_location], fn [now, then] -> now - then end)
+          end
+
+        {:ok, Enum.map(percepts, &Message.set_displacement(&1, displacement))}
     end
   end
 

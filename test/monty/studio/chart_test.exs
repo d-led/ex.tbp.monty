@@ -74,6 +74,34 @@ defmodule Monty.Studio.ChartTest do
       assert below.zero < above.zero
       assert above.zero == above.height - above.margin_bottom
     end
+
+    # One label per whole unit was a working rule until a run climbed past a
+    # hundred: a hundred and thirteen numbers in a plot a few hundred pixels
+    # tall is a grey wall with a line lost in it. The step follows the range.
+    test "labels a long run in round steps instead of every unit" do
+      chart = Chart.new([{0, 1, belief(%{"mug" => 112.7})}])
+
+      assert chart.y_max == 113.0
+      assert chart.ticks |> Enum.map(& &1.label) == ~w(0 20 40 60 80 100)
+    end
+
+    test "keeps every unit while the range is small enough to read" do
+      chart = Chart.new([{0, 1, belief(%{"mug" => 3.2})}])
+
+      assert chart.ticks |> Enum.map(& &1.label) == ~w(0 1 2 3 4)
+    end
+
+    # The axis is a picture of a number line, not a list of the numbers it
+    # happens to contain: an axis that grew a label per unit for every run would
+    # have to be re-read for every run, and one that always jumped by ten would
+    # hide the fifth of a unit a reader is watching accumulate.
+    test "never draws more labels than a reader can count" do
+      for evidence <- [1.0, 3.0, 7.0, 9.0, 12.0, 41.0, 112.0, 980.0] do
+        chart = Chart.new([{0, 1, belief(%{"mug" => evidence})}])
+
+        assert length(chart.ticks) <= 8, "#{length(chart.ticks)} labels for evidence #{evidence}"
+      end
+    end
   end
 
   describe "an object's line" do

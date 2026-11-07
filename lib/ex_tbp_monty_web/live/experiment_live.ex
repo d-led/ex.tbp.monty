@@ -323,7 +323,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             id="run"
             phx-click="run"
             class="btn btn-primary btn-sm"
-            disabled={!runable?(assigns)}
+            disabled={!startable?(assigns)}
           >
             <.icon name="hero-play-mini" class="size-4" /> Run it
           </button>
@@ -333,7 +333,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           <span class="font-mono text-[11px] text-base-content/60">
             up to {@steps} steps per episode
           </span>
-          <button id="step" phx-click="step" class="btn btn-sm" disabled={!runable?(assigns)}>
+          <button id="step" phx-click="step" class="btn btn-sm" disabled={!startable?(assigns)}>
             <.icon name="hero-forward-mini" class="size-4" /> One step
           </button>
           <%!-- Monty starts a parallel run with a second script; here it is a
@@ -392,7 +392,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               </option>
             </select>
           </form>
-          <button :if={@run_id} id="stop" phx-click="stop" class="btn btn-ghost btn-sm">Stop</button>
+          <%!-- Stop is about the experiment, not about the run this page
+          happens to be following: a run started from another tab, and the
+          second, third and fourth of a parallel press, are runs of this
+          experiment too. The button is here whenever one of them is going, and
+          it stops all of them — a reader who says "stop" means the thing they
+          started, not the one page that was watching it. --%>
+          <button
+            :if={in_flight(assigns) != []}
+            id="stop"
+            phx-click="stop"
+            class="btn btn-ghost btn-sm text-warning"
+            title="Stop it at its next step"
+          >
+            {stop_label(assigns)}
+          </button>
           <span :if={@run_id} id="run-progress" class="badge badge-ghost">
             step {elem(@progress, 0)} / {elem(@progress, 1)}
           </span>
@@ -718,9 +732,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   @impl true
   def handle_event("run", _params, %{assigns: %{opened: opened, steps: steps}} = socket) do
-    if Setup.valid?(opened.setup),
-      do: start(socket, opened, steps, socket.assigns.parallelism, socket.assigns.episodes),
-      else: {:noreply, socket}
+    case refusal(socket.assigns) do
+      nil -> start(socket, opened, steps, socket.assigns.parallelism, socket.assigns.episodes)
+      :going -> already_going(socket, opened)
+      :cannot_run -> {:noreply, socket}
+    end
   end
 
   # The chart is drawn for a stretch of the run, and zooming means saying which:
@@ -755,24 +771,26 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # One step is a run of one step: a person clicking it twice wants two runs to
   # look at, not one run that pretends to have done two.
   def handle_event("step", _params, %{assigns: %{opened: opened}} = socket) do
-    if Setup.valid?(opened.setup),
-      do: start(socket, opened, 1, 1, 1),
-      else: {:noreply, socket}
+    case refusal(socket.assigns) do
+      nil -> start(socket, opened, 1, 1, 1)
+      :going -> already_going(socket, opened)
+      :cannot_run -> {:noreply, socket}
+    end
   end
 
-  def handle_event("stop", _params, %{assigns: %{run_id: nil}} = socket), do: {:noreply, socket}
+  # Stop ends every run of this experiment that is still going, and it is here
+  # whether or not this page is the one watching: a run started from another tab,
+  # or the second of a parallel press, is a run of this experiment too.
+  #
+  # `Jobs.cancel/1` is the whole answer for both shapes of job. One still waiting
+  # its turn is cancelled outright, because cancelling is the only thing that was
+  # going to happen to it; one that is executing is asked to end at its next step,
+  # so it still writes down the steps it took.
+  def handle_event("stop", _params, socket) do
+    outcomes = socket.assigns |> in_flight() |> Enum.map(&cancel/1)
+    {text, level} = stopped(outcomes)
 
-  def handle_event("stop", _params, %{assigns: %{run_id: run_id}} = socket) do
-    case Jobs.Run.stop(run_id) do
-      :ok ->
-        {:noreply, push(socket, nil, "stopping: the run stops at its next step", :info)}
-
-      {:error, :not_found} ->
-        {:noreply,
-         socket
-         |> push(nil, "that run is not running any more", :warning)
-         |> settle(run_id)}
-    end
+    {:noreply, socket |> push(nil, text, level) |> refresh_runs()}
   end
 
   def handle_event("filter", %{"filter" => text}, socket) do
@@ -785,7 +803,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # in the table from the moment it is queued — not when a worker picks it up.
   def handle_info({:recorded, run}, %{assigns: %{opened: %{name: name}}} = socket)
       when run.experiment == name do
-    {:noreply, put_run(socket, run, :first)}
+    {:noreply,
+     socket
+     |> put_run(run, :first)
+     |> follow_if_idle(run)}
   end
 
   def handle_info({:recorded, _other}, socket), do: {:noreply, socket}
@@ -892,6 +913,19 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   defp refresh_runs(socket), do: socket
+
+  # A page that was open before a run of this experiment started watches it. The
+  # run belongs to the experiment, not to the page that asked for it — and Run is
+  # disabled while one is going, so joining it is not something a reader should
+  # have to press: with nothing to press, a second viewer would otherwise have to
+  # find the run on another page.
+  defp follow_if_idle(%{assigns: %{run_id: nil}} = socket, record) do
+    socket
+    |> follow(record)
+    |> push(nil, "a run of this experiment started: watching it", :info)
+  end
+
+  defp follow_if_idle(socket, _record), do: socket
 
   # A newly recorded run goes to the top; one that has settled keeps its place,
   # because a page must not shuffle under a reader while they are reading it.
@@ -1228,7 +1262,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp already_going(socket, opened) do
     case RunHistory.running_for(opened.name) do
       nil ->
-        {:noreply, push(socket, nil, "nothing new to start", :warning)}
+        {:noreply, push(socket, nil, "a run of this experiment is already on its way", :warning)}
 
       record ->
         {:noreply,
@@ -1274,17 +1308,41 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # The page can hold a run id whose worker is gone — the VM restarted, the job
   # was killed. Waiting for news that will never come is the worst state a page
-  # can be in, so say it happened.
-  defp settle(socket, run_id) do
+  # can be in, so a record that still says `running` with no job behind it is
+  # closed where it is read: the only thing left of that run is the row, and a
+  # row saying "running" with nothing working on it is the lie the Reaper exists
+  # to undo. Closing it here means a page that has just stopped something does
+  # not wait for the sweep to say so.
+  defp close_orphan(run_id) do
     case RunHistory.head(run_id) do
       %{status: "running"} = record ->
-        {:ok, _} =
+        {:ok, _closed} =
           RunHistory.finish(record, %{"reason" => "nothing was running it any more"}, "failed")
 
-        assign(socket, status: "failed")
+        :settled
 
       _finished_or_gone ->
-        socket
+        :nothing
+    end
+  end
+
+  defp cancel({run, %{id: job_id}}) do
+    case Jobs.cancel(job_id) do
+      {:ok, ended} -> ended
+      {:error, :settled} -> close_orphan(run.id)
+    end
+  end
+
+  defp cancel({run, nil}), do: close_orphan(run.id)
+
+  defp stopped([]), do: {"nothing was going", :warning}
+
+  defp stopped(outcomes) do
+    case Enum.uniq(outcomes) do
+      [:stopping] -> {"stopping: the run ends after its next step", :info}
+      [:settled] -> {"stopped: it had not started yet", :info}
+      [:nothing] -> {"that run had already finished", :warning}
+      _several -> {"stopping what is running; what had not started will not start", :info}
     end
   end
 
@@ -1391,12 +1449,51 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
-  # A run starts only when the config composes *and* the files it reads are
-  # there. The two refusals are different — a composition error is the config's,
-  # a missing download is this machine's — so the page says which one it is.
   # A run starts when the config composes and the files it reads are here: two
-  # conditions, and the page says which one is in the way.
+  # conditions, and the page says which one is in the way — a composition error
+  # is the config's, a missing download is this machine's.
   defp runable?(assigns), do: config_runnable?(assigns) and missing(assigns[:opened]) == []
+
+  # Why a press of Run or One step would do nothing, or `nil` when it would
+  # start. Both buttons are disabled for the same two reasons, and both events
+  # refuse for them as well: a disabled button can still be pressed by a page
+  # that was one refresh behind, or by a client that posts the event itself.
+  #
+  # The second reason is not the queue's. The queue refuses a second run of the
+  # same episode in the same world; it would happily start a *different* run of
+  # the same experiment beside the one already going, which is the same world
+  # stepped twice and two answers to one question.
+  defp refusal(assigns) do
+    cond do
+      not runable?(assigns) -> :cannot_run
+      in_flight(assigns) != [] -> :going
+      true -> nil
+    end
+  end
+
+  defp startable?(assigns), do: refusal(assigns) == nil
+
+  # The runs of this experiment that are still going — queued or executing — each
+  # with the job that will carry it. Read off the records the page keeps live
+  # (`{:recorded, …}` and `{:settled, …}` come from the runs table), not off the
+  # one run this page happens to be following, so a run started from another tab
+  # is as visible and as stoppable here as one started from this one.
+  defp in_flight(assigns) do
+    queue = Map.get(assigns, :queue) || %{}
+
+    for run <- Map.get(assigns, :runs, []),
+        run_state(run, Map.get(queue, run.id)) in ["running", "queued"],
+        do: {run, Map.get(queue, run.id)}
+  end
+
+  # "Stop" says how much it would stop: one press of Run with a parallelism of
+  # four is four runs, and a button that said "Stop" would be hiding three.
+  defp stop_label(assigns) do
+    case length(in_flight(assigns)) do
+      1 -> "Stop"
+      several -> "Stop #{several} runs"
+    end
+  end
 
   defp config_runnable?(assigns) do
     case assigns[:opened] do

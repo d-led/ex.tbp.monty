@@ -42,6 +42,17 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLMTest do
       | buffer: FeatureAtLocationBuffer.update_stats(buffer, %{"lm_processed_steps" => false})
     }
 
+  # A module that has been on the object once: what `receive_votes` and
+  # `update_terminal_condition` both ask before they conclude anything.
+  defp observed(%{buffer: buffer} = lm, location \\ [0.1, 0.2, 0.3]) do
+    {:ok, buffer} = FeatureAtLocationBuffer.append(buffer, [percept(location)])
+    %{lm | buffer: buffer}
+  end
+
+  defp percept(location, overrides \\ %{}) do
+    Messages.percept(Map.merge(%{location: location, sender_id: "patch"}, overrides))
+  end
+
   describe "the goals a module proposes" do
     # `test_returns_gsg_goals_when_last_obs_processed`
     test "returns its goal generator's goals when the last observation was processed" do
@@ -138,6 +149,155 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLMTest do
       assert GraphLM.select_features_to_use(lm, [percept]) == %{
                "patch" => %{"hsv" => [0.1, 0.2, 0.3], "pose_fully_defined" => true}
              }
+    end
+  end
+
+  describe "a matching step" do
+    # Monty's base class raises `NotImplementedError` here and every subclass
+    # answers instead; this port answers with an error, because a graph module
+    # that narrowed nothing would look like one that had not decided yet.
+    test "a module with no matching scheme says so instead of narrowing nothing" do
+      assert_raise RuntimeError, ~r/has no matching scheme/, fn ->
+        GraphLM.matching_step([percept([0.0, 0.0, 0.0])], Monty.Context.new(0), lm())
+      end
+    end
+
+    test "narrows with the scheme it is given, and keeps the observation" do
+      narrow = fn lm, _ctx, _features, _moved? ->
+        {:ok, %{lm | possible_matches: %{"mug" => [1]}}}
+      end
+
+      {:ok, stepped} =
+        GraphLM.matching_step([percept([0.0, 0.0, 0.0])], Monty.Context.new(0), lm(), narrow)
+
+      assert Map.keys(stepped.possible_matches) == ["mug"]
+      assert FeatureAtLocationBuffer.size(stepped.buffer) == 1
+    end
+
+    # A sensor that moved without looking: there is nothing to match, and a step
+    # that is not a matching step is not one of the episode's converted steps.
+    test "is nothing at all when the step carried only a location" do
+      only_location = percept([0.0, 0.0, 0.0], %{process_features_in_lm: false})
+
+      {:ok, stepped} = GraphLM.matching_step([only_location], Monty.Context.new(0), lm())
+
+      assert FeatureAtLocationBuffer.size(stepped.buffer) == 0
+    end
+  end
+
+  describe "an exploratory step" do
+    test "keeps the observation for the training pass that follows" do
+      {:ok, stepped} =
+        GraphLM.exploratory_step([percept([0.5, 0.0, 0.0])], Monty.Context.new(0), lm())
+
+      assert FeatureAtLocationBuffer.size(stepped.buffer) == 1
+      assert FeatureAtLocationBuffer.current_location(stepped.buffer) == [0.5, 0.0, 0.0]
+    end
+
+    test "is nothing at all when the step carried only a location" do
+      only_location = percept([0.5, 0.0, 0.0], %{process_features_in_lm: false})
+
+      {:ok, stepped} = GraphLM.exploratory_step([only_location], Monty.Context.new(0), lm())
+
+      assert FeatureAtLocationBuffer.size(stepped.buffer) == 0
+    end
+  end
+
+  describe "a vote from another module" do
+    test "rules out the objects it names, and records what it was told" do
+      lm = %{observed(lm()) | possible_matches: %{"mug" => [1], "bowl" => [2]}}
+
+      {:ok, voted} = GraphLM.receive_votes(["mug"], lm)
+
+      assert Map.keys(voted.possible_matches) == ["bowl"]
+      assert List.last(voted.buffer.stats["vote"]) == ["mug"]
+    end
+
+    # A vote against an object this module never considered joins nothing: the
+    # module has been on no object yet, so it has no conclusion to revise.
+    test "is ignored by a module that has not been on the object" do
+      lm = %{lm() | possible_matches: %{"mug" => [1]}}
+
+      {:ok, voted} = GraphLM.receive_votes(["mug"], lm)
+
+      assert Map.keys(voted.possible_matches) == ["mug"]
+      refute Map.has_key?(voted.buffer.stats, "vote")
+    end
+
+    test "an empty vote is nothing to answer" do
+      lm = %{observed(lm()) | possible_matches: %{"mug" => [1]}}
+
+      assert {:ok, voted} = GraphLM.receive_votes([], lm)
+      assert voted == lm
+    end
+  end
+
+  describe "the conclusion a module reaches" do
+    test "nothing possible is a no-match, and where it last looked is recorded" do
+      {lm, state} = GraphLM.update_terminal_condition(observed(lm()), fn _, _ -> nil end)
+
+      assert state == :no_match
+      assert List.last(lm.buffer.stats["detected_location_rel_body"]) == [0.1, 0.2, 0.3]
+    end
+
+    test "nothing possible before anything was seen is a no-match with no place to record" do
+      {lm, state} = GraphLM.update_terminal_condition(lm(), fn _, _ -> nil end)
+
+      assert state == :no_match
+      assert lm.buffer.stats["detected_location_rel_body"] == [nil, nil, nil]
+    end
+
+    test "one object left with a pose is a match" do
+      lm = %{observed(lm()) | possible_matches: %{"mug" => [1]}}
+
+      {lm, state} = GraphLM.update_terminal_condition(lm, fn _lm, "mug" -> [:a_pose] end)
+
+      assert state == :match
+      assert lm.terminal_state == :match
+    end
+
+    test "one object left whose pose is not narrowed yet withdraws a match already made" do
+      lm = %{observed(lm()) | possible_matches: %{"mug" => [1]}, terminal_state: :match}
+
+      {lm, state} = GraphLM.update_terminal_condition(lm, fn _, _ -> nil end)
+
+      assert state == nil
+      assert lm.terminal_state == nil
+    end
+
+    test "several objects left is no conclusion, and withdraws a match already made" do
+      lm = %{
+        observed(lm())
+        | possible_matches: %{"mug" => [1], "bowl" => [2]},
+          terminal_state: :match
+      }
+
+      {lm, state} = GraphLM.update_terminal_condition(lm, fn _, _ -> [:a_pose] end)
+
+      assert state == nil
+      assert lm.terminal_state == nil
+    end
+  end
+
+  describe "what a training step maps" do
+    test "a detected graph stands for the target it was learned from, and the reverse" do
+      lm = %{
+        observed(lm())
+        | mode: :train,
+          detected_object: "new_object0",
+          primary_target: "mug"
+      }
+
+      mapped = GraphLM.fixme_update_ground_truth(lm)
+
+      assert mapped.graph_id_to_target == %{"new_object0" => MapSet.new(["mug"])}
+      assert mapped.target_to_graph_id == %{"mug" => MapSet.new(["new_object0"])}
+    end
+
+    test "a matching step maps nothing: there is no ground truth to learn from" do
+      lm = %{observed(lm()) | mode: :matching, detected_object: "mug", primary_target: "mug"}
+
+      assert GraphLM.fixme_update_ground_truth(lm) == lm
     end
   end
 end

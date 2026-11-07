@@ -423,15 +423,42 @@ defmodule Monty.Studio.Chart do
 
   defp rounded(value), do: Float.round(value * 1.0, 2)
 
-  # One tick per whole unit of evidence, which is the resolution a reader needs:
-  # evidence is a sum of increments around one, so halves would be noise.
+  # How many labels an axis may carry before the labels are the chart. A run of
+  # one hundred and twelve units of evidence at one tick a unit drew a hundred
+  # and thirteen numbers into two hundred and sixty pixels: a grey wall, and the
+  # line behind it unreadable.
+  @max_ticks 8
+
+  # The steps a reader can divide by in their head: one, two, five, and their
+  # tens. Evidence is a sum of increments around one, so a step of three and a
+  # half would be a number nobody asked for.
+  @tick_steps [1, 2, 5]
+
+  # One tick per step, from the floor — which is zero unless the data went below
+  # it, because labelling from zero whatever the range was left the part under
+  # zero unnamed, and a reader could not tell how far down a line had gone.
   defp ticks(chart) do
-    # From the floor, which is zero unless the data went below it: labelling
-    # from zero whatever the range was left the part under zero unnamed, so a
-    # reader could not tell how far down a line had gone.
-    for value <- trunc(chart.y_min)..trunc(chart.y_max)//1 do
-      %{value: value * 1.0, y: rounded(y(value * 1.0, chart)), label: "#{value}"}
-    end
+    step = tick_step(chart.y_max - chart.y_min)
+    first = (chart.y_min / step) |> Float.ceil() |> trunc() |> Kernel.*(step)
+
+    first
+    |> Stream.iterate(&(&1 + step))
+    |> Enum.take_while(&(&1 <= chart.y_max))
+    |> Enum.map(fn value ->
+      %{value: value * 1.0, y: rounded(y(value * 1.0, chart)), label: Integer.to_string(value)}
+    end)
+  end
+
+  # The smallest round step that keeps the axis to `@max_ticks` labels. Every
+  # step is a whole number, so every label is one.
+  defp tick_step(span) do
+    Enum.find(round_steps(), fn step -> span / step + 1 <= @max_ticks end) ||
+      List.last(round_steps())
+  end
+
+  # Ascending, so the first one that fits is the finest that does.
+  defp round_steps do
+    for decade <- 0..12, base <- @tick_steps, do: base * Integer.pow(10, decade)
   end
 
   # Where the module's most likely hypothesis sits — the answer, on the line it
