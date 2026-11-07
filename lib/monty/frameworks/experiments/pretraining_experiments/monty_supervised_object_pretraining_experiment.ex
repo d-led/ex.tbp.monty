@@ -88,6 +88,12 @@ defmodule Monty.Frameworks.Experiments.PretrainingExperiments.MontySupervisedObj
   The order is the whole of it — see the module docstring. The memory is written
   by whatever the callbacks do next (`Run.next_memories/3`), so the answer has
   to be in place before this returns.
+
+  An episode that **crashed** is not told an answer: its model is gone, asking it
+  would replace the reason the run ended with "a process the run was waiting on
+  exited", and a graph built from an episode that did not happen is worse than
+  none. Monty has no equivalent — a crash leaves its epoch as an exception, so
+  nothing is stated either.
   """
   @spec post_episode(
           map(),
@@ -96,6 +102,9 @@ defmodule Monty.Frameworks.Experiments.PretrainingExperiments.MontySupervisedObj
           MontyExperiment.callbacks(term(), term())
         ) ::
           term()
+  def post_episode(state, {:crashed, _step, _reason} = outcome, infos, callbacks),
+    do: MontyExperiment.post_episode(state, outcome, infos, callbacks)
+
   def post_episode(%{run: run} = state, outcome, infos, callbacks) do
     {:ok, supervised} = Run.supervise(run)
 

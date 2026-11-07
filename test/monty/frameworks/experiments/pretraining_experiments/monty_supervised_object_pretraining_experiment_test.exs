@@ -96,6 +96,17 @@ defmodule Monty.Frameworks.Experiments.PretrainingExperiments.MontySupervisedObj
     assert stats["detected_location_rel_body"] == [0.0, 1.5, 0.0]
   end
 
+  test "an episode that crashed is told nothing, so a dead model cannot fail it twice" do
+    # A crash took the model with it. Asking it for the answer would replace the
+    # reason the run ended with "a process the run was waiting on exited".
+    run = start()
+    :ok = Model.stop(run.model_id)
+
+    state = Pretraining.post_episode(%{run: run}, {:crashed, 2, :boom}, [], callbacks())
+
+    assert state.run == run
+  end
+
   test "the episode's answer becomes a graph named after the object" do
     run = start()
     {:ok, state} = Pretraining.pre_episode(%{run: run}, 0, "mug", callbacks())
