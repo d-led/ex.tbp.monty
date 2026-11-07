@@ -1185,6 +1185,62 @@ hundredth of a degree still raises, and the raise now carries the angle.
 
 ---
 
+## 2.20 A supervised episode's answer is a call, and an impossible config is refused
+
+**What Monty does.** `MontySupervisedObjectPretrainingExperiment` runs its
+training episodes as exploration and then reaches into every learning module to
+state the answer the experiment already knows:
+
+```
+lm.detected_object = target["object"]
+lm.buffer.stats["possible_matches"] = [target["object"]]
+lm.buffer.stats["detected_location_on_model"] = self.first_epoch_object_location[target["object"]]
+lm.buffer.stats["detected_location_rel_body"] = target["position"]
+lm.buffer.stats["detected_rotation"] = target["euler_rotation"]
+lm.detected_rotation_r = Rotation.from_quat(target["quat_rotation"]).inv()
+lm.buffer.stats["detected_scale"] = target["scale"]
+```
+
+and, for a module it does not supervise, clears those fields so that
+`update_ltm_from_stm` has no `detected_object` to write a graph under.
+
+**What this port does.** The same six numbers, in the same order, through one
+function per module: `GraphLM.supervise/3` for a module the experiment names and
+`GraphLM.clear_hypotheses/1` for the others
+([`graph_lm.ex`](../lib/monty/frameworks/models/graph_matching/graph_lm.ex)).
+`Monty.Studio.Run.supervise/1` reads the target off the world and calls the
+model once, which is where the loop stops being able to reach into a module: a
+module here is a process, not an attribute
+(§2.9 says the same about every other method the model calls).
+
+Two things follow from that, and both are refusals rather than stand-ins:
+
+- **`GraphLM.from_config/2` refuses the base class.** `graph_1lm.yaml` names
+  `GraphLM` itself; Monty builds it and raises `NotImplementedError` on the
+  second step, inside a run. Here the setup is refused before it starts, with the
+  sentence "a bare graph module has no matching scheme to narrow possible matches
+  with" (§2.6 of the hand-over is why this is a finding and not a stand-in).
+- **A supervised experiment against the stand-in scene is refused.** The answer
+  it states is read off `primary_target`, and the synthetic sphere answers none,
+  so `Setup` refuses the run (`:no_target_to_supervise`) rather than crashing at
+  the end of an episode that had already run.
+
+**What this does *not* change.** The `location_on_model` a module is given is the
+object's place the *first* time the experiment showed it, not this episode's —
+Monty's `first_epoch_object_location`, carried by the run. A later epoch that
+places the object elsewhere still extends the graph it built the first time.
+
+**One repair came with it.** Monty's `Predefined` and `RandomRotation` samplers
+write `quat_rotation` beside `rotation`, the same `wxyz` quaternion under a
+second name, and the world's `primary_target` is
+`{"object": …, "semantic_id": …, **object_params}` — every sampled parameter
+travels with the answer. This port dropped `euler_rotation` and `quat_rotation`
+when it copied a sampled object into its scene, so a target here had no turn to
+state. Both samplers carry `quat_rotation` now, `priv/monty_py/world.py` keeps
+it, and `supervise/3` raises with the object's name if a target still has none.
+
+---
+
 # Checked and found consistent
 
 Recorded so the next reader does not repeat the audit. The first two are claims
