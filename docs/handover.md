@@ -1,4 +1,7 @@
-# Hand-over — 2026-11-06 (evening)
+# Hand-over — 2026-11-06 (evening), continued 2026-11-07
+
+The newest section is 16. Sections 1–15 are the previous evening and are still
+right where they name a file, a commit or a measurement.
 
 What is open, what is already known, and where the evidence is. Written for
 whoever picks this up next; every claim below was measured or read, and the
@@ -342,10 +345,13 @@ seeing `new_object0 (112 hypotheses)` and a `match` summary.
 
 ### 10.6 The plan for 100 % of the map (the user's standing priority)
 
-The bar is **0 planned classes**; today 360 classes are **176 implemented, 182
-planned, 2 excluded** (the excluded two are Hydra's own tooling and stay
-excluded). `mix monty.module_map.verify` prints the numbers; `/modules` shows
-them with the reason for each.
+The bar is **0 planned classes**; at the time of writing 360 classes were **176
+implemented, 182 planned, 2 excluded** (the excluded two are Hydra's own
+tooling and stay excluded). It is **187 implemented** since §17, which is
+`GraphLM`, `DisplacementGraphMemory` and
+`MontySupervisedObjectPretrainingExperiment` and the classes they brought with
+them. `mix monty.module_map.verify` prints the numbers; `/modules` shows them
+with the reason for each.
 
 Order by experiments unblocked:
 
@@ -370,6 +376,12 @@ page offer configs whose arithmetic is half written. `GraphLM` must land
 Monty's own `tests/unit/frameworks/models/graph_matching_test.py` translated as
 the spec. The two shell classes stay `planned` on purpose — do not "implement"
 them to move the counter.
+
+**Items 1, 2 and 3 of that list have since landed** (§17): `GraphLM`,
+`DisplacementGraphLM` and `MontySupervisedObjectPretrainingExperiment`, which is
+why the count moved to 187. The trap above is why they landed together, and
+`Setup` now refuses a learning module it cannot build rather than standing one
+in — including the case where the map says `:implemented` and no module answers.
 
 ### 10.7 Two questions still with the user
 
@@ -736,3 +748,190 @@ a case in `burst_sampling_test.py`, which is now 22 of its 24. Everything else i
 The first replays a recorded episode and measures the hypothesis space object by
 object; the second must print the eight evidence lines beginning `0.908` and
 ending `11.712`. If either moves, the change under test is the cause.
+
+---
+
+## 16. 2026-11-07: the transcript left the database, the chart stopped lying, and the speed work found its target
+
+**State at `ff42f52`.** `./scripts/quality.sh` green (2 438 tests, 19 properties,
+lint, coverage/CRAP/parity, complexity worst 29.85) and `MIX_ENV=test mix
+dialyzer` at 0 errors. CI: `5682859` and `1079af6` were watched to green in every
+job — `types`, `lint`, all four shards, coverage, both images, all three desktop
+builds. `3c43031` and `ff42f52` are documentation-only and were **not** watched;
+check `gh run list --limit 1` before believing this section's gate.
+
+Rocky start, worth reading before the next push: `de96fe7` went out **red** on
+`types` because `scripts/quality.sh` does **not** run dialyzer — CI's `types` job
+does. The first repair (use `update_all`'s bare count) then broke **94 tests** at
+runtime, because Postgres answers `{1, nil}`. The fix asks `Repo.exists?/1` and
+discards the answer, which satisfies both. **Run the gate and dialyzer before
+every push.**
+
+### 16.1 What landed
+
+| Commit                                                | What it does                                                                                                                                  | How it is known                                                                                                                                        |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `de96fe7`                                             | a run's steps stream from memory through `Monty.Studio.RunStream`; the row is written at every episode boundary and once when the run settles | the row was being rewritten whole per step: 13 MB/step at the tail of an 887-step run, its last hundred steps at 5 s each against 157 ms for its first |
+| `de96fe7`                                             | a run ended out of band keeps its steps: whoever closes it writes what memory holds                                                           | the ended run had recorded `0 steps` while its page drew 55                                                                                            |
+| `de96fe7`                                             | the chart's value axis always spans zero; the axis column's height is rendered with a unit                                                    | in the browser: labels `0, 20, 40`, and the column is 150 px instead of none — the unit-less `height: 150` was why labels piled on one spot            |
+| `5682859`                                             | the write path asks whether the run exists instead of reading `update_all`'s answer                                                           | dialyzer 0 errors and the 94 tests green together                                                                                                      |
+| `4c5e22c`                                             | the chart's view (series, window, step) belongs to the run it was chosen for                                                                  | a series picked for one run no longer follows the reader to the next; a test patches between runs to prove it                                          |
+| `4cd0a5b`, `8d49404`, `1079af6`, `3c43031`, `ff42f52` | `docs/speed.md` carries today's numbers; two instruments added                                                                                | below                                                                                                                                                  |
+
+### 16.2 The speed numbers, and the four things they ruled out
+
+A step is **7.1 M reductions and 188 MB of garbage**, split learning module 51 %,
+caller 26 %, sensor modules 19 % (`scripts/probe_step_cost.exs`, ten objects, six
+steps). `docs/speed.md` has the tables; these are the conclusions:
+
+1. **A mutable-state NIF for a module's hypothesis space — measured, rejected.**
+   The state is 55.5 MB and `Model.state/1` costs 176 ms, but it is called
+   **once per episode** (`Logging.report/3`). Per-step replies are `:ok`, which
+   is why `Model.status/1` is 2 µs.
+2. **Flat binaries for the camera arrays — measured, rejected.** One step's
+   observations cost **1 582–1 748 µs to copy as lists and 1 µs as binaries**
+   (`scripts/probe_copy_cost.exs`), but a step is ~275 ms, so the whole payload
+   copy is under 1 %. The 71.5 % of _words_ under `gen_server:loop/5` in tprof's
+   table is allocation inside the frame, **not** the size of the messages.
+3. **Batching `Geometry.dot` — rejected.** It is **6 reductions a call**
+   (`scripts/probe_hypothesis_cost.exs`); `dot` and `transpose` together are 2 %
+   of a step.
+4. **Deleting `sensor_frame_data` — refused.** Nothing in this port reads it,
+   but Monty's `DepthTo3DLocations` produces it and
+   `depth_to_3d_locations_test.exs` asserts that, so removing it is a parity
+   break.
+
+### 16.3 Where the time actually is, and the one query still owed
+
+`eprof` over one step, every process: `Enum` map internals 10.8 %, message copy
+10.5 %, reduce 3.6 %, kd-tree 3.3 %, `take_list` 3.0 %, `MatcherNif.decode`
+3.6 %, `with_index` 2.1 %, `filter` 2.0 %, `drop` 1.9 % — about **30 % in generic
+`Enum`/`lists`/`Stream` passes over the hypothesis arrays**.
+
+`fprof` on the learning module's process for one step (2 539 575 calls) turns
+that into callers:
+
+| what                                            |      accumulated |                        calls a step |
+| ----------------------------------------------- | ---------------: | ----------------------------------: |
+| `Enum.map/2`                                    | **1 778 (41 %)** |                          **25 987** |
+| `MatcherNif.decode/1` → `decode_one/1`          |       440 (10 %) |              862 (≈127 values each) |
+| `Enum.slice/3` → `slice_forward` → `slice_list` |       420 (10 %) |                          **16 083** |
+| `Enum.reduce/3` fold                            |        399 (9 %) |                             199 813 |
+| `Enum.take_list/2`                              |        306 (7 %) | 161 250 (144 957 its own recursion) |
+| `Hypotheses.gather/3` fun                       |        128 (3 %) |                             128 320 |
+
+So there is **no single hot loop**: ~26 000 small maps a step over hypothesis
+lists of a dozen rows, plus 16 000 list slices used for selection. **The query
+still owed** is the direct caller of `Enum.slice/3` — its caller block was
+deleted with the 660 MB trace before it was read. One re-trace answers it, and
+then the change is mechanical: select through `Hypotheses.take/2`'s
+`binary_part/3` (already written, used elsewhere) instead of list slicing for the
+10 %, and fuse the maps for the 41 %.
+
+The hypothesis columns are **already packed** — evidence, locations and poses are
+binaries, `take/2` and `rows_at/2` select with `binary_part/3`, and displacement
+is `MatcherNif.displaced_locations/3`. Do not "pack the hypotheses" again.
+
+### 16.4 The yardstick
+
+Monty runs `unsupervised_inference_distinctobj_dist_agent` to completion in
+**0:38:10 — 49 617 eval steps, 99 episodes, 10 epochs, seed 42: 46 ms a step**.
+Its dashboard draws all ten objects on one axis, legend included, evidence
+restarting at each episode boundary. That is what this port is measured against,
+and the chart now opens that way by default (16.1).
+
+### 16.5 What not to trust, added today
+
+- **`scripts/quality.sh` as the whole gate.** It does not run dialyzer. CI's
+  `types` job is separate.
+- **A profiler's word column as the size of a message.** See 16.2(2).
+- **A microbenchmark that sizes its result.** `:erts_debug.size` costs about
+  twenty reductions — more than `Geometry.dot/2` — and the first version of
+  `probe_hypothesis_cost.exs` measured the harness.
+- **A profile's call counts as one step's.** `probe_step_profile.exs` profiles
+  three steps; divide by three.
+- **A measurement taken while another `MIX_ENV=test` process runs.** A stray
+  probe sharing `_build` and the database sandbox made two gate runs look like a
+  94-test regression. Check `ps` before believing a red gate.
+
+---
+
+## 17. 2026-11-07 (later): `tutorial/first_experiment` runs, and its graph is Monty's
+
+The hand-over's open item 1 was `GraphLM` + `DisplacementGraphLM` (10.6). Both
+were half-written: the classes existed, the module map called them
+`:implemented`, `Setup` had no entry for either, and `Setup.learning_module_spec`
+silently fell back to `EvidenceGraphLM` or to the synthetic stand-in. The
+tutorial config was refused by its experiment class, so nothing exercised the
+hole. It does now.
+
+### 17.1 What landed
+
+| Commit   | What it does                                                                                                                                                                             | How it is known                                                                                       |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| this one | `DisplacementGraphLM` answers every `LearningModule` callback, built by `from_config/2`; `GraphLM` joins it and refuses itself (`:no_matching_scheme`)                                   | a test asks the behaviour for its callback list and asserts nothing is missing                        |
+| this one | `MontySupervisedObjectPretrainingExperiment` ported: exploring when every module is supervised, the answer stated at `post_episode`, before memory is written                            | the tutorial builds a graph named `mug` in one episode (test + real run)                              |
+| this one | supervision crosses the process boundary: `Run.supervise/1` → `Model` → `Step` → `LearningModuleServer` → `GraphLM.supervise/3` / `clear_hypotheses/1`                                   | `docs/monty-differences.md` §2.20                                                                     |
+| this one | an unbuildable learning module is a **finding**, not a stand-in (`:learning_module_not_buildable`); a supervised experiment on the stand-in scene is refused (`:no_target_to_supervise`) | `setup_test.exs`: `graph_1lm` is refused, `feature_pred_off_object` is refused, the tutorial is valid |
+| this one | the samplers carry `quat_rotation` and `priv/monty_py/world.py` keeps `euler_rotation`/`quat_rotation` in `primary_target`                                                               | Monty's own target is `{"object": …, "semantic_id": …, **object_params}`; ours had no turn to state   |
+| this one | `mix monty.run` begins and ends an episode through the config's **experiment class**, as the queued runner already did                                                                   | before this, a pretraining config ran under this task with no supervision at all                      |
+
+### 17.2 The parity number that matters
+
+Monty's own run of the same config (`uv run python run.py
+experiment=tutorial/first_experiment`, this machine, seed 42) and ours, same
+config, same seed:
+
+|                         | Monty                          | this port                      |
+| ----------------------- | ------------------------------ | ------------------------------ |
+| steps                   | 3                              | 3                              |
+| of which matching       | 0                              | 0                              |
+| policy                  | `is_done`, `time_out_lms`      | done at step 3                 |
+| graphs                  | `mug` / `patch`                | `mug` / `patch`                |
+| nodes                   | 3                              | 3                              |
+| edges                   | 6                              | 6                              |
+| stored features         | 13                             | the same 13 names              |
+| first node, world frame | `[6.50e-05, 1.49994, 0.03907]` | `[2.56e-04, 1.49974, 0.03900]` |
+
+The node and edge counts and the feature set are identical; the first node
+differs at the fourth decimal — sub-millimetre, and it is where the agent's
+sensor ended up, not what the module did with it. That difference is the
+positioning and action stream, and it is the next thing to look at if a graph
+ever grows a different shape.
+
+The first comparison ever made between a trained memory here and Monty's own
+`model.pt` is therefore this one, and it is the check §11 open point 1 asked for
+on the one experiment where it is cheap: `/tmp/monty_first_exp/first_experiment/
+pretrained/model.pt` against `Run.next_memories/3` of the same run.
+
+### 17.3 What this opens, and what it closes
+
+Closed:
+
+- **`DisplacementGraphLM` is runnable.** It answers the whole behaviour, so the
+  coordinator can step it; the module map's `:implemented` is now true of it.
+- **The tutorial experiment runs end to end** — `mix monty.run
+tutorial/first_experiment` — and the studio page offers it.
+- **`Setup` no longer stands anything in for a learning module.** A class it
+  cannot build is a finding with a sentence, and an `:implemented` class with no
+  module is refused as the port defect it is.
+
+Opened, in the order it blocks work:
+
+1. **`GraphLM`'s own tests are two of its four Monty cases.** Our
+   `graph_lm_test.exs` translates all four of
+   `tests/unit/frameworks/models/graph_matching_test.py`
+   (`propose_goals` ×2, `propose_region` ×2). `displacement_matching.py` has no
+   unit test upstream; `graph_building_test.py` needs Habitat-Sim and is skipped
+   without it, which is why §2.20's behaviour is stated as hand-written intent
+   rather than as a translation.
+2. **The tutorial's evaluation phase has never run.** `do_eval: false` and
+   `n_eval_epochs: 3` in the config mean Monty's `evaluate/1` warns and does
+   nothing, and the phase plan here does the same. A pretraining run that wants
+   to _check_ the graph it built is a different experiment (Section 10.6's
+   `MontySupervisedObjectPretrainingExperiment` — 11 configs — is the training
+   half only).
+3. **The memory is written but never read back into a module here.** The run
+   writes `memory/trained/<name>.jsonl.gz`; `Setup.memories/1` loads a memory
+   named by the config. Nothing yet points a config at the memory the previous
+   run trained, so "train, then evaluate" is two runs and a path.
