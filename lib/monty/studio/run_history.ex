@@ -127,48 +127,53 @@ defmodule Monty.Studio.RunHistory do
     timeline = Jason.encode!(new_timeline)
     now = DateTime.utc_now()
 
-    # One expression per column, each with the delta beside the column it
-    # extends. The counts are computed from the array the statement is writing,
-    # so there is no second place a count can be forgotten.
-    {count, _} =
-      from(run in Run,
-        where: run.id == ^id,
-        update: [
-          set: [
-            log:
-              fragment(
-                "coalesce(?, '[]'::jsonb) || ?::jsonb",
-                run.log,
-                type(^log, :string)
-              ),
-            timeline:
-              fragment(
-                "coalesce(?, '[]'::jsonb) || ?::jsonb",
-                run.timeline,
-                type(^timeline, :string)
-              ),
-            steps_done:
-              fragment(
-                "jsonb_array_length(coalesce(?, '[]'::jsonb) || ?::jsonb)",
-                run.log,
-                type(^log, :string)
-              ),
-            episodes_done:
-              fragment(
-                """
-                (select count(distinct coalesce(step->>'episode', ''))
-                   from jsonb_array_elements(coalesce(?, '[]'::jsonb) || ?::jsonb) as step)
-                """,
-                run.log,
-                type(^log, :string)
-              ),
-            updated_at: ^now
+    # Whether the run is there to append to, asked as a question rather than read
+    # off `update_all`'s answer: that answer is `{count, rows}` on an adapter that
+    # can return rows and a bare count on one that cannot, so a pattern for it
+    # type-checks on neither without a clause the analyser calls unreachable.
+    if Repo.exists?(from(run in Run, where: run.id == ^id)) do
+      _ =
+        from(run in Run,
+          where: run.id == ^id,
+          update: [
+            set: [
+              log:
+                fragment(
+                  "coalesce(?, '[]'::jsonb) || ?::jsonb",
+                  run.log,
+                  type(^log, :string)
+                ),
+              timeline:
+                fragment(
+                  "coalesce(?, '[]'::jsonb) || ?::jsonb",
+                  run.timeline,
+                  type(^timeline, :string)
+                ),
+              steps_done:
+                fragment(
+                  "jsonb_array_length(coalesce(?, '[]'::jsonb) || ?::jsonb)",
+                  run.log,
+                  type(^log, :string)
+                ),
+              episodes_done:
+                fragment(
+                  """
+                  (select count(distinct coalesce(step->>'episode', ''))
+                     from jsonb_array_elements(coalesce(?, '[]'::jsonb) || ?::jsonb) as step)
+                  """,
+                  run.log,
+                  type(^log, :string)
+                ),
+              updated_at: ^now
+            ]
           ]
-        ]
-      )
-      |> Repo.update_all([])
+        )
+        |> Repo.update_all([])
 
-    if count == 1, do: {:ok, stepped}, else: {:error, :not_found}
+      {:ok, stepped}
+    else
+      {:error, :not_found}
+    end
   end
 
   defp rewrite(%Run{log: log, timeline: timeline} = run) do
