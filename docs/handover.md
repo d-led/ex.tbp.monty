@@ -1029,3 +1029,16 @@ what is left of them is a **capability inside a class that exists**:
   show.
 - **The stand-in world's number as the MuJoCo one.** Different refusals, both
   true, `--world` decides which you are reading.
+
+### 18.5 The gate, watched
+
+`scripts/quality.sh` green (2 471 tests, 19 properties, worst complexity 29.85)
+and `MIX_ENV=test mix dialyzer` at 0 errors. CI run `42424897200` on `1917d13`
+is **green in every job** — `lint`, `types`, all four test shards, `coverage,
+CRAP and parity`, both images including `image amd64, scan, non-root`, the image
+index and all three desktop bundles. `desktop release` is the one skipped job,
+because there is no `v*` tag (§2).
+
+The acceptance ladder was re-run after `Setup`'s classification became public
+and is unchanged digit for digit: `0.908 (802, 4)` … `11.712 (2342, 1)`,
+`goals 15328`.
