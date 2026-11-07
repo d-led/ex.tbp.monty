@@ -25,6 +25,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     Replay,
     RunHistory,
     RunLog,
+    RunStream,
     Setup
   }
 
@@ -41,7 +42,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   @selection_events Selection.events()
 
   # The replay panel's controls, grouped the same way and for the same reason.
-  @replay_events ~w(replay_seek replay_step replay_play replay_pause replay_zoom replay_brush replay_series)
+  @replay_events ~w(replay_seek replay_step replay_play replay_pause replay_zoom replay_brush replay_series replay_follow)
 
   # How often a page showing a run asks the record what the run is doing. The
   # worker broadcasts every step, so this is the answer to silence: a message
@@ -210,6 +211,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          |> put_flash(:error, "That run is gone.")}
 
       run ->
+        run = with_steps(run)
+
         {:noreply,
          socket
          |> put_run(run)
@@ -218,6 +221,53 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          |> stream(:log, run.log, reset: true)
          |> assign(logged: length(run.log))
          |> assign_replay(run, Replay.last_step(run))}
+    end
+  end
+
+  # A run that is still stepping has its steps here, in memory, and its row is
+  # written at an episode boundary rather than at every step: the stream is the
+  # newer of the two, and the only one that has the step being taken. Once the
+  # run settles its row has everything and the stream has been dropped, so which
+  # of the two answered is not something a caller has to know.
+  #
+  # The counts and the timestamp are taken from the steps themselves, not left as
+  # the row's: a header reading `steps_done` off a row written an episode ago
+  # would say "0 steps · nothing recorded for a minute" about a run that is
+  # stepping, which is the page lying about the one thing it is for.
+  defp with_steps(%RunHistory.Run{id: id} = run) do
+    case RunStream.steps(id) do
+      {[], []} ->
+        run
+
+      {log, timeline} ->
+        # The stream holds a run from its first step, so it is never shorter than
+        # the row for a run this node is stepping. If it ever is, the row is the
+        # one to believe: a page must not lose steps it was already showing.
+        if length(log) < length(run.log) do
+          run
+        else
+          %{
+            run
+            | log: log,
+              timeline: timeline,
+              steps_done: length(log),
+              episodes_done: RunHistory.episodes_in(log),
+              updated_at: newest(log) || run.updated_at
+          }
+        end
+    end
+  end
+
+  # When the last step was taken: the entry's own clock, which is the instant a
+  # reader is shown.
+  defp newest([]), do: nil
+
+  defp newest(log) do
+    with %{"at" => iso} when is_binary(iso) <- List.last(log),
+         {:ok, at, _offset} <- DateTime.from_iso8601(iso) do
+      at
+    else
+      _no_clock -> nil
     end
   end
 
@@ -253,10 +303,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         assign(socket, run: nil)
 
       run ->
+        run = with_steps(run)
+
         socket
         |> put_run(run)
         |> append_log(run)
-        |> assign_replay(run, socket.assigns[:step])
+        |> assign_replay(run, :follow)
     end
   end
 
@@ -276,11 +328,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # The replay starts where the run ended: a person opening a finished run wants
   # to see what it came to, and rewinding is one drag away.
   defp assign_replay(socket, run, step) do
-    step = step || Replay.first_step(run)
+    step = step_for(socket, run, step)
     catalog = catalog(socket, run)
     series = charts_of(catalog)
     series_id = socket.assigns[:series_id] || default_series(series)
-    window = Replay.window(run, socket.assigns[:window] || whole_run(run))
+    window = window_for(socket, run)
     moment = run |> Replay.at(step) |> with_pictures(run)
     {chart, chart_key, chart_base} = chart_with(socket, catalog, series_id, window, step)
 
@@ -288,6 +340,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     |> assign(
       moment: moment,
       step: step,
+      last_step: Replay.last_step(run),
       series: series,
       series_id: series_id,
       window: window,
@@ -298,7 +351,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       chart: chart,
       # Playback is the play button's, not a redraw's: a tick that redrew the
       # page after switching playback off stopped after a single step.
-      playing: Map.get(socket.assigns, :playing, false)
+      playing: Map.get(socket.assigns, :playing, false),
+      follow: Map.get(socket.assigns, :follow, true)
     )
     |> assign(
       catalog_key: catalog.key,
@@ -325,6 +379,38 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp kept_pictures?(run), do: run.id |> RunHistory.sensors_at(0) |> Replay.kept_pictures?()
+
+  # A run that is still stepping moves on without the page. Reading the record
+  # again answers the step the page already held, so a replay that kept it was a
+  # picture of the moment the page was opened however long the run went on: the
+  # graph stopped following the evidence while the run kept producing it.
+  #
+  # Only a refresh asks to follow — it passes `:follow` rather than a step. A
+  # step the reader chose is theirs, and no refresh takes it away; the playhead
+  # follows the end of the run only while it was already at that end.
+  defp step_for(socket, run, :follow) do
+    last = Replay.last_step(run)
+
+    case {Map.get(socket.assigns, :follow, true), socket.assigns[:step],
+          socket.assigns[:last_step]} do
+      # Not following: wherever the reader left it is the step to show.
+      {false, step, _observed} -> step || last
+      {true, nil, _was} -> last
+      {true, was, was} -> last || was
+      {true, was, _observed} -> was
+    end
+  end
+
+  defp step_for(_socket, _run, step), do: step
+
+  # The window grows with the run while it is the whole run — a chart of a run
+  # that ended at step 13 cannot say anything about step 300. A stretch the
+  # reader zoomed into is theirs until they ask for the whole run again.
+  defp window_for(socket, run) do
+    if Map.get(socket.assigns, :window_follows?, true),
+      do: whole_run(run),
+      else: socket.assigns[:window] || whole_run(run)
+  end
 
   defp whole_run(run) do
     {Replay.first_step(run) || 0, Replay.last_step(run) || 0}
@@ -840,6 +926,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           pictures={@pictures}
           recorded={length(Replay.steps(@run))}
           playing={@playing}
+          follow={@follow}
         />
       </section>
 
@@ -1014,10 +1101,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp replay("replay_seek", %{"step" => step}, %{assigns: %{run: run}} = socket),
-    do: replay_to(socket, run, parse_step(step))
+    do: socket |> assign(follow: false) |> replay_to(run, parse_step(step))
 
   defp replay("replay_step", %{"delta" => delta}, %{assigns: %{run: run}} = socket),
-    do: replay_to(socket, run, socket.assigns.step + parse_step(delta))
+    do: socket |> assign(follow: false) |> replay_to(run, socket.assigns.step + parse_step(delta))
 
   defp replay("replay_play", _params, %{assigns: %{run: run}} = socket) do
     socket =
@@ -1033,6 +1120,16 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp replay("replay_pause", _params, socket), do: assign(socket, playing: false)
+
+  # Ticking "follow latest steps" is a request for the newest step, which is the
+  # one thing the page should not wait for the next refresh to hear about.
+  defp replay("replay_follow", _params, %{assigns: %{run: run}} = socket) do
+    if Map.get(socket.assigns, :follow, true) do
+      assign(socket, follow: false)
+    else
+      socket |> assign(follow: true) |> replay_to(run, Replay.last_step(run))
+    end
+  end
 
   defp replay("replay_zoom", %{"zoom" => zoom}, %{assigns: %{run: run}} = socket) do
     replay_window(
@@ -1173,8 +1270,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   defp replay_to(socket, run, step) do
     step = step |> max(Replay.first_step(run) || 0) |> min(Replay.last_step(run) || 0)
-    window = Replay.window(run, socket.assigns.window)
-    assign_replay(socket, run, step) |> assign(window: window)
+    assign_replay(socket, run, step) |> assign(playing: socket.assigns[:playing] || false)
   end
 
   defp replay_window(socket, window) do
@@ -1187,7 +1283,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         socket.assigns.step
       )
 
-    assign(socket, window: window, chart: chart, chart_key: chart_key, chart_base: chart_base)
+    assign(socket,
+      window: window,
+      window_follows?: window == whole_run(socket.assigns.run),
+      chart: chart,
+      chart_key: chart_key,
+      chart_base: chart_base
+    )
   end
 
   defp schedule_replay(socket) do

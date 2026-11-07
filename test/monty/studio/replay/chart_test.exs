@@ -27,10 +27,15 @@ defmodule Monty.Studio.Replay.ChartTest do
       assert_in_delta chart.zero, chart.height - 2, chart.height * 0.5
     end
 
-    test "is left out when nothing comes near zero, rather than stretching the axis" do
+    test "is kept when the values themselves never come near it" do
+      # Evidence is a sum that starts at zero, and Monty's dashboard draws the
+      # axis from there: an axis that began at the lowest line would turn "40"
+      # into forty above wherever the weakest line happened to be.
       chart = Chart.many([series([30.0, 34.0, 38.0], "mug")])
 
-      assert chart.zero == nil
+      assert chart.min == 0
+      assert Enum.any?(chart.ticks, &(&1.label == "0"))
+      assert chart.zero > 0 and chart.zero < chart.height
     end
   end
 
@@ -157,7 +162,10 @@ defmodule Monty.Studio.Replay.ChartTest do
 
       assert zoomed.min == whole.min
       assert zoomed.max == whole.max
-      assert {zoomed.min, zoomed.max} == {10, 20}
+
+      # Zero is part of the run's range whatever the window shows, so the axis
+      # is 0..20 and not 10..20.
+      assert {zoomed.min, zoomed.max} == {0, 20}
 
       # The last two steps, at the heights the unzoomed chart gives them: only x
       # moved, because x is the only axis that was zoomed.

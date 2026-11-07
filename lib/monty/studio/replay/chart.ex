@@ -139,9 +139,21 @@ defmodule Monty.Studio.Replay.Chart do
     {from, to} = window(series, Keyword.get(opts, :window))
     visible = Enum.map(series, &%{&1 | points: inside(&1.points, {from, to})})
 
-    # The run's own range, not the window's: see the moduledoc.
+    # The run's own range, not the window's: see the moduledoc. Zero is always
+    # part of it — evidence is a sum that starts at zero, Monty's own dashboard
+    # draws the axis from there, and an axis that began at the lowest line turns
+    # "40" into "forty above wherever the weakest line happened to be" rather
+    # than forty steps of evidence. The zero line is drawn wherever it is in
+    # range (`zero_y/2`), so the baseline the lines are measured from is named.
     values = Enum.flat_map(series, fn drawn -> Enum.map(drawn.points, & &1.value) end)
-    {min, max} = {Enum.min(values, fn -> 0 end), Enum.max(values, fn -> 0 end)}
+    {lowest, highest} = {Enum.min(values, fn -> 0 end), Enum.max(values, fn -> 0 end)}
+
+    # A series whose values never move is drawn across the middle of the plot
+    # (`y/3` below), which needs its degenerate range kept as it is.
+    {min, max} =
+      if lowest == highest,
+        do: {lowest, highest},
+        else: {Kernel.min(lowest, 0), Kernel.max(highest, 0)}
 
     {lines, samples} =
       visible

@@ -9,6 +9,12 @@ defmodule Monty.Studio.Jobs.Run do
   it printed is in `priv/studio_runs/<id>/run.log`; both are written as it goes,
   so a run that dies leaves a record of how far it got.
 
+  A step's own report is not written to the database as it is taken: it goes to
+  `Monty.Studio.RunStream`, in memory, which is where the page watching the run
+  reads it from — Monty's logger and its dashboard do the same. The row gets the
+  transcript at every episode boundary and once at the end, which keeps a step's
+  cost a function of the step rather than of how long the run has been going.
+
   Stopping is a message, not a kill: the worker checks its mailbox between
   timesteps, so a stop lands at a step boundary and the summary describes the
   steps that actually happened.
@@ -18,7 +24,6 @@ defmodule Monty.Studio.Jobs.Run do
 
   require Logger
 
-  alias Monty.Simulators.Synthetic.{Camera, Environment}
   alias Monty.Studio
 
   alias Monty.Studio.{
@@ -30,6 +35,7 @@ defmodule Monty.Studio.Jobs.Run do
     Run,
     RunHistory,
     RunLog,
+    RunStream,
     Setup,
     Summary
   }
@@ -447,13 +453,39 @@ defmodule Monty.Studio.Jobs.Run do
     stop_run(run)
 
     # `infos` arrive newest first; a page reads an epoch oldest first.
+    #
+    # The episode boundary is where the transcript reaches the database: the row
+    # is one write an episode rather than one a step, and a run whose node dies
+    # leaves a record that is an episode behind rather than an empty one.
     %{
       state
       | run: nil,
+        record: keep(state.record),
         infos: state.infos ++ Enum.reverse(infos),
         conclusion: conclusion,
         memories: memories
     }
+  end
+
+  # The record in hand is the transcript; writing it is what makes it history.
+  # A write that fails does not stop a run: the steps are still in memory for the
+  # page, and the next boundary tries again.
+  defp keep(record) do
+    {saved, _held?} = keep_with_state(record)
+    saved
+  end
+
+  # Whether the row now holds the steps decides whether the memory may be
+  # dropped: it is the only copy until it is written.
+  defp keep_with_state(record) do
+    case RunHistory.checkpoint(record) do
+      {:ok, saved} ->
+        {saved, true}
+
+      {:error, reason} ->
+        Logger.warning("studio run #{record.id}: cannot write its steps: #{inspect(reason)}")
+        {record, false}
+    end
   end
 
   # Monty's `model.update_ltm()`: the module decides what a training episode adds
@@ -510,9 +542,28 @@ defmodule Monty.Studio.Jobs.Run do
     # rendered. An experiment behind the port records nothing drawable otherwise,
     # which is a replay of blank frames.
     rendered = Run.rendered_observations(run) || observations
-    record = RunLog.record_step(state.record, info, rendered, beliefs, episode: state.episode)
 
-    emit(run_id, state.episode, info, rendered, sensor_ids, beliefs, centre_view(run, info.step))
+    # What the record keeps and what a page draws are built here, once: the step
+    # itself is the only thing that has `info` and `beliefs`.
+    entry = RunLog.entry(info, beliefs, episode: state.episode)
+    moment = RunLog.moment(info, rendered)
+    record = RunHistory.append_step(state.record, entry, moment)
+
+    # Everything else a step costs a page — the log line, the pictures, telling
+    # whoever is watching — is `RunStream`'s, and it is handed over, not waited
+    # for.
+    RunStream.publish(run_id, %{
+      entry: entry,
+      moment: moment,
+      line: RunLog.line(entry),
+      observations: rendered,
+      sensor_ids: sensor_ids,
+      number: info.step,
+      episode: state.episode,
+      beliefs: beliefs,
+      centre: centre_view(run, info.step)
+    })
+
     {:ok, info, %{state | run: run, record: record}}
   catch
     # A raise and an exit are the same thing here: the step did not produce a
@@ -548,42 +599,10 @@ defmodule Monty.Studio.Jobs.Run do
     end
   end
 
-  defp emit(run_id, episode, info, observations, sensor_ids, beliefs, centre) do
-    entry = RunLog.entry(info, beliefs, episode: episode)
-    line = RunLog.line(entry)
-    say(run_id, line)
-    frames = frames_for(sensor_ids, observations, info.step)
-
-    broadcast(
-      run_id,
-      {:step,
-       %{
-         line: line,
-         episode: episode,
-         step: info.step,
-         frames: frames,
-         beliefs: beliefs,
-         centre: centre
-       }}
-    )
-  end
-
   # Where the agent is, relative to the object it is meant to be looking at. A
   # world with no scene has nothing to centre on and answers `nil`, which the page
   # reads as "no such panel".
   defp centre_view(run, step), do: CentreView.frame(run.interface.env, step)
-
-  # Every sensor, every step: a queued run has no socket waiting on it, so the
-  # throttle that protects a live page has nothing to protect. The frames are
-  # not thumbnails either — they are the same drawing a live page would get.
-  defp frames_for(sensor_ids, observations, step) do
-    seen = Map.get(observations, Environment.agent_id(), %{})
-
-    sensor_ids
-    |> Enum.filter(&Map.has_key?(seen, &1))
-    |> Enum.map(&Camera.frame(&1, seen[&1], step))
-    |> Enum.map(&Map.take(&1, [:sensor_id, :media_type, :data, :note]))
-  end
 
   defp close(record, opened, outcome, infos, conclusion, run_id) do
     summary = Summary.from_infos(infos, opened.setup, conclusion)
@@ -594,6 +613,11 @@ defmodule Monty.Studio.Jobs.Run do
     stored = RunLog.summary(summary, Failure.stopped(outcome))
 
     say(run_id, closing_line(outcome, infos, summary))
+
+    # The run's steps go into the row once, here, rather than once a step while
+    # it ran. They stay in memory for a page until the row has them.
+    {record, held?} = keep_with_state(record)
+    if held?, do: RunStream.clear(run_id)
 
     case RunHistory.finish(record, stored, status) do
       {:ok, record} ->

@@ -106,6 +106,60 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     record
   end
 
+  # A step handed to the stream, the way a worker hands one over: the worker does
+  # not write the row per step, so this is the only place the page can learn of
+  # a step until the run's next episode boundary.
+  defp publish(run_id, step) do
+    Monty.Studio.RunStream.publish(run_id, %{
+      entry: %{
+        "step" => step,
+        "episode" => 0,
+        "at" => Monty.Studio.RunLog.now().instant,
+        "goals" => 0,
+        "votes" => %{"sent" => 1, "used" => 1},
+        "percepts" => ["patch"],
+        "inputs" => %{"learning_module_0" => 1},
+        "actions" => 1,
+        "duration_us" => 140
+      },
+      moment: moment(step),
+      line: nil,
+      observations: %{},
+      sensor_ids: [],
+      number: step,
+      episode: 0,
+      beliefs: %{},
+      centre: nil
+    })
+  end
+
+  describe "a run that is still stepping" do
+    test "is counted from memory, and is not called stalled", %{conn: conn} do
+      # The row is written at an episode boundary, so during an episode it says
+      # what it said before the episode began. A header reading the row would
+      # say "0 steps · nothing recorded for a minute — not progressing" about a
+      # run that is stepping, which is the page lying about the one thing it is
+      # for.
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 100,
+          inputs: %{"episodes" => 1}
+        })
+
+      publish(run.id, 0)
+      publish(run.id, 1)
+      publish(run.id, 2)
+      _ = :sys.get_state(Monty.Studio.RunStream)
+
+      {:ok, _view, html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert html =~ "3 steps"
+      refute html =~ "not progressing"
+    end
+  end
+
   describe "what a row says a run did" do
     test "the steps and episodes it stepped, not the budget it was allowed", %{conn: conn} do
       # The run in question: allowed 500 steps an episode, given all 140 episodes
@@ -154,6 +208,42 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
         }
       }
     })
+  end
+
+  # A run that is still going: a page follows one of these, where a finished run
+  # is read once and stays still.
+  defp running_run(steps) do
+    {:ok, run} =
+      RunHistory.start(%{
+        experiment: "tutorial/first_experiment",
+        source: "monty",
+        steps: 10,
+        seed: 42,
+        config: %{},
+        inputs: %{}
+      })
+
+    Enum.reduce(0..(steps - 1)//1, run, &record_step(&2, &1))
+  end
+
+  defp record_step(run, step) do
+    {:ok, run} =
+      RunHistory.record_step(
+        run,
+        %{
+          "step" => step,
+          "at" => Monty.Studio.RunLog.now().instant,
+          "goals" => 1,
+          "votes" => %{"sent" => 1, "used" => 1},
+          "percepts" => ["patch"],
+          "inputs" => %{"learning_module_0" => 1},
+          "actions" => 1,
+          "duration_us" => 120
+        },
+        moment(step)
+      )
+
+    run
   end
 
   # What the chart carries for the hover to read: one entry per drawn point, with
@@ -760,6 +850,60 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert view |> element("#replay-frame-patch") |> render() =~ "depth 0.030–0.050 m"
     end
 
+    # A run that is still stepping moves on without the page. Reading the record
+    # again answers the step the page already had, so a replay that kept it was a
+    # picture of the moment the page was opened however long the run went on —
+    # the chart stopped following the evidence while the run kept producing it.
+    test "keeps up with a run that is still stepping", %{conn: conn} do
+      run = running_run(2)
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#replay-step") |> render() =~ "step 1"
+      assert view |> element("#replay-panel") |> render() =~ "steps 0–1"
+
+      run = record_step(run, 2)
+      send(view.pid, {:studio, run.id, {:step, %{step: 2}}})
+      send(view.pid, :refresh_due)
+
+      assert view |> element("#replay-step") |> render() =~ "step 2"
+      assert view |> element("#replay-panel") |> render() =~ "steps 0–2"
+    end
+
+    # The other half of the same rule: a step the reader chose is theirs. A
+    # refresh that pulled the playhead forward would take away the step they
+    # were looking at, every time the run stepped.
+    test "a step the reader chose stays put while the run steps on", %{conn: conn} do
+      run = running_run(2)
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      view |> element("#replay-seek") |> render_change(%{"step" => "0"})
+
+      run = record_step(run, 2)
+      send(view.pid, {:studio, run.id, {:step, %{step: 2}}})
+      send(view.pid, :refresh_due)
+
+      assert view |> element("#replay-step") |> render() =~ "step 0"
+      assert view |> element("#replay-panel") |> render() =~ "steps 0–2"
+    end
+
+    # Monty's dashboard has this control, and it is the question a page watching
+    # a run has to answer: is the chart about the newest step, or about the one
+    # being read? Taking the playhead anywhere turns it off; ticking it comes
+    # back to the newest step.
+    test "follow latest steps is a choice, and comes back to the newest step", %{conn: conn} do
+      run = running_run(3)
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert has_element?(view, "#replay-follow[checked]")
+      view |> element("#replay-seek") |> render_change(%{"step" => "0"})
+      refute has_element?(view, "#replay-follow[checked]")
+
+      view |> element("#replay-follow") |> render_click()
+
+      assert has_element?(view, "#replay-follow[checked]")
+      assert view |> element("#replay-step") |> render() =~ "step 2"
+    end
+
     test "the chart follows the step and can be zoomed", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
@@ -808,9 +952,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       axis = view |> element("#replay-chart-y-axis") |> render()
 
       # Cutting the range into equal parts labelled a 1..5 axis 1.0, 2.3, 3.7,
-      # 5.0 — four numbers nobody compares in their head. A step of one is the
-      # ladder a reader already has.
-      assert axis_labels(axis) == ["1", "2", "3", "4", "5"]
+      # 5.0 — four numbers nobody compares in their head. Whole steps are the
+      # ladder a reader already has, and the ladder starts at zero: evidence is
+      # measured from there.
+      assert axis_labels(axis) == ["0", "2", "4"]
 
       # The labels are beside the plot, not in it: text inside an SVG stretched
       # by `preserveAspectRatio="none"` is drawn wider than it is tall.

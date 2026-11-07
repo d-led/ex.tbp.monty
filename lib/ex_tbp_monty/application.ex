@@ -21,6 +21,10 @@ defmodule ExTbpMonty.Application do
       {Registry, keys: :unique, name: Monty.Runtime.Registry},
       # One child per running model (module servers + step coordinator).
       {DynamicSupervisor, name: ExTbpMonty.ModelSupervisor, strategy: :one_for_one},
+      # The steps of runs that are still stepping, kept in memory: a run's
+      # transcript reaches its page from here, and the database is written when
+      # the run settles rather than once per step.
+      Monty.Studio.RunStream,
       # One child per prerequisite download, restarted never: a download either
       # finishes or is started again deliberately.
       {DynamicSupervisor, name: ExTbpMonty.PrerequisitesSupervisor, strategy: :one_for_one},

@@ -218,9 +218,16 @@ defmodule ExTbpMontyWeb.StudioComponents do
   end
 
   @doc "Milliseconds for a duration in microseconds."
-  @spec duration(non_neg_integer()) :: String.t()
-  def duration(microseconds) when microseconds < 1_000, do: "#{microseconds} µs"
-  def duration(microseconds), do: "#{Float.round(microseconds / 1_000, 1)} ms"
+  @spec duration(non_neg_integer() | nil) :: String.t()
+  def duration(nil), do: "—"
+
+  def duration(microseconds) when is_integer(microseconds) and microseconds < 1_000,
+    do: "#{microseconds} µs"
+
+  def duration(microseconds) when is_integer(microseconds),
+    do: "#{Float.round(microseconds / 1_000, 1)} ms"
+
+  def duration(_no_duration), do: "—"
 
   # Why there is nothing to look at, in the run's own terms: a run from before a
   # step kept its pictures has none anywhere, and one step can miss its own.
@@ -246,6 +253,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
   attr :graphs, :boolean, default: true
   attr :recorded, :integer, default: 0
   attr :playing, :boolean, default: false
+  attr :follow, :boolean, default: true
   # Whether the run kept any picture at all: a run recorded before a step kept
   # them has none, and that is said in one sentence rather than drawn as a row of
   # empty frames per step.
@@ -464,6 +472,20 @@ defmodule ExTbpMontyWeb.StudioComponents do
               all
             </button>
           </div>
+          <%!-- Monty's dashboard has the same control, and it is the question a
+          page watching a run has to answer: is the chart about the newest step,
+          or about the one being read? Ticking it follows the run; taking the
+          playhead anywhere turns it off, because a step the reader chose is
+          theirs. --%>
+          <label class="flex items-center gap-1 text-[11px] text-base-content/60">
+            <input
+              type="checkbox"
+              id="replay-follow"
+              phx-click="replay_follow"
+              checked={@follow}
+              class="checkbox checkbox-xs"
+            /> follow latest steps
+          </label>
           <span class="text-[11px] text-base-content/50">
             steps {@chart.from}–{@chart.to} · {format_value(@chart.min)} … {format_value(@chart.max)} {chart_unit(
               @series,
@@ -489,7 +511,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
           <div
             id="replay-chart-y-axis"
             class="relative w-9 shrink-0 text-right font-mono text-[10px] leading-none text-base-content/50"
-            style={"height: #{@chart.height}"}
+            style={"height: #{@chart.height}px"}
             aria-hidden="true"
           >
             <span

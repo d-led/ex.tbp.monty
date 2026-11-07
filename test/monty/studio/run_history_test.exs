@@ -94,6 +94,61 @@ defmodule Monty.Studio.RunHistoryTest do
       assert saved.log == RunHistory.get(run.id).log
     end
 
+    test "adds what came after what the row already holds" do
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+
+      # The second write carries one step, not the two the record holds: a
+      # transcript that is written whole grows with the run, so the steps the
+      # row has are left where they are.
+      stepped =
+        run
+        |> RunHistory.append_step(%{"step" => 1, "goals" => 0}, moment(1))
+        |> RunHistory.append_step(%{"step" => 2, "goals" => 0}, moment(2))
+
+      assert {:ok, saved} = RunHistory.checkpoint(stepped)
+      assert saved.steps_done == 3
+      assert Enum.map(RunHistory.get(run.id).log, & &1["step"]) == [0, 1, 2]
+    end
+
+    test "does not write the same step twice" do
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, once} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+
+      # What the row holds is what the record says it holds, so a second
+      # checkpoint of the same record has nothing to add.
+      assert {:ok, _twice} = RunHistory.checkpoint(once)
+      assert Enum.map(RunHistory.get(run.id).log, & &1["step"]) == [0]
+      assert Enum.map(RunHistory.get(run.id).timeline, & &1["step"]) == [0]
+    end
+
+    test "a checkpoint with nothing new writes nothing" do
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, once} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+      written_at = RunHistory.get(run.id).updated_at
+
+      assert {:ok, _nothing} = RunHistory.checkpoint(once)
+      assert RunHistory.get(run.id).updated_at == written_at
+    end
+
+    test "a run closed without its worker still has the steps it took" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      # A page's "End now" kills the worker, and the row it would have written is
+      # never written. The steps it took are in memory, so whoever closes the run
+      # writes them: a record saying "0 steps" about a run that stepped is a
+      # record that lost them.
+      publish(run.id, 0)
+      publish(run.id, 1)
+      _ = :sys.get_state(Monty.Studio.RunStream)
+
+      assert {:ok, kept} = RunHistory.keep_streamed(RunHistory.head(run.id))
+
+      assert Enum.map(RunHistory.get(run.id).log, & &1["step"]) == [0, 1]
+      assert kept.steps_done == 2
+      assert Monty.Studio.RunStream.steps(run.id) == {[], []}
+    end
+
     test "says it is being stepped without writing its log" do
       # Between checkpoints the row is silent, and silence is what an abandoned
       # run also looks like.
@@ -127,6 +182,21 @@ defmodule Monty.Studio.RunHistoryTest do
       "step" => step,
       "sensors" => %{"patch" => %{"location" => [step * 0.01, 0.0, 0.1], "value" => step * 0.01}}
     }
+  end
+
+  # A step handed to the stream, the way a worker hands one over.
+  defp publish(run_id, step) do
+    Monty.Studio.RunStream.publish(run_id, %{
+      entry: %{"step" => step, "episode" => 0, "at" => Monty.Studio.RunLog.now().instant},
+      moment: moment(step),
+      line: nil,
+      observations: %{},
+      sensor_ids: [],
+      number: step,
+      episode: 0,
+      beliefs: %{},
+      centre: nil
+    })
   end
 
   describe "a run that ends" do

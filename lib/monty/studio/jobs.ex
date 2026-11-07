@@ -270,11 +270,13 @@ defmodule Monty.Studio.Jobs do
   end
 
   # A `running` record whose process is gone is closed here, because the process
-  # that would have closed it is the one that just ended.
+  # that would have closed it is the one that just ended. The steps it took are
+  # still in memory, and are written before the row is closed.
   defp settle(run_id, reason) when is_binary(run_id) and is_binary(reason) do
     case RunHistory.head(run_id) do
       %Run{status: "running"} = record ->
         summary = Map.put(record.summary || %{}, "reason", reason)
+        {:ok, record} = RunHistory.keep_streamed(record)
         {:ok, _closed} = RunHistory.finish(record, summary, "failed")
         announce(run_id, reason)
         :settled

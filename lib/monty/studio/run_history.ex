@@ -60,8 +60,8 @@ defmodule Monty.Studio.RunHistory do
   whole transcript per step made a step cost grow with the run: measured on a
   300-step run, one step took 0.6–1.4 s against 2–6 ms for a single row, because
   every step re-encoded and re-sent the 3.3 MB timeline it had already sent. A
-  run that steps thousands of times appends here and calls `checkpoint/1` when it
-  reaches a point worth remembering.
+  run that steps thousands of times appends here and calls `checkpoint/1`, which
+  writes only the steps the row does not have yet.
   """
   @spec append_step(Run.t(), map(), map()) :: Run.t()
   def append_step(%Run{log: log, timeline: timeline} = run, entry, moment) do
@@ -69,23 +69,109 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
-  Writes the steps appended since the last checkpoint.
+  Writes the steps appended since the last checkpoint, and only those.
 
-  Both arrays are written in one update, so a step is either in the record or
-  not — a log that says step 4 happened while the timeline is still at 3 would
-  be a replay that disagrees with itself.
+  Both arrays are written together, so a step is either in the record or not — a
+  log that says step 4 happened while the timeline is still at 3 would be a
+  replay that disagrees with itself.
 
-  The change is forced: the struct in hand carries the steps, so the array it
-  holds is by definition what the row does not have yet, and an ordinary
-  `put_change/3` would compare it with itself and write nothing.
+  The steps the row already has are left alone, which is what keeps a step's
+  cost from growing with the run. Writing the whole transcript instead was
+  measured at **14 MB rewritten per step at the end of an 887-step run** — a
+  timeline of 15 kB a step, cumulative, so the bytes written over a run go as
+  $n^2/2$ and the last hundred steps of that run took 5 s each against 157 ms
+  for the first hundred. `docs/speed.md` has the table. What a step costs now is
+  the steps since the last checkpoint, which on this path is one.
 
-  The two counts a list draws are written here, from the same log, so a row
-  cannot say "three steps" about a transcript that holds two: `steps_done` is
-  how many entries there are and `episodes_done` how many distinct episodes
-  they name — the definitions `steps_run/1` and `episodes_run/1` read off a row.
+  On Postgres the two columns are appended to in the statement that writes them
+  (`jsonb` concatenation), so the row is never re-encoded whole. On SQLite,
+  whose JSON column this application also supports, the transcript is still
+  written whole: that path is the desktop's and the statement for it is not
+  written yet, so it is named here rather than pretended to be done.
+
+  The two counts a list draws are written by the same statement, from the same
+  log, so a row cannot say "three steps" about a transcript that holds two:
+  `steps_done` is how many entries there are and `episodes_done` how many
+  distinct episodes they name — the definitions `steps_run/1` and `episodes_run/1`
+  read off a row.
   """
-  @spec checkpoint(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
-  def checkpoint(%Run{log: log, timeline: timeline} = run) do
+  @spec checkpoint(Run.t()) :: {:ok, Run.t()} | {:error, term()}
+  def checkpoint(%Run{log: log, timeline: timeline, steps_done: written} = run) do
+    # `steps_done` is the row's own count, written by this function and by
+    # nothing else; a record that holds less than it claims has been replaced
+    # rather than appended to, and is rewritten whole from its first step.
+    written = min(written || 0, length(log))
+    new_log = Enum.drop(log, written)
+    new_timeline = Enum.drop(timeline, written)
+    stepped = %{run | steps_done: length(log), episodes_done: episodes_in(log)}
+
+    cond do
+      new_log == [] ->
+        {:ok, run}
+
+      appendable?() ->
+        append_steps(run, new_log, new_timeline, stepped)
+
+      true ->
+        rewrite(run)
+    end
+  end
+
+  # Postgres, and only Postgres: `||` over two `jsonb` arrays is one statement
+  # that does not read the array it appends to.
+  defp appendable?,
+    do: ExTbpMonty.Database.repo_module().__adapter__() == Ecto.Adapters.Postgres
+
+  defp append_steps(%Run{id: id}, new_log, new_timeline, stepped) do
+    log = Jason.encode!(new_log)
+    timeline = Jason.encode!(new_timeline)
+    now = DateTime.utc_now()
+
+    # One expression per column, each with the delta beside the column it
+    # extends. The counts are computed from the array the statement is writing,
+    # so there is no second place a count can be forgotten.
+    {count, _} =
+      from(run in Run,
+        where: run.id == ^id,
+        update: [
+          set: [
+            log:
+              fragment(
+                "coalesce(?, '[]'::jsonb) || ?::jsonb",
+                run.log,
+                type(^log, :string)
+              ),
+            timeline:
+              fragment(
+                "coalesce(?, '[]'::jsonb) || ?::jsonb",
+                run.timeline,
+                type(^timeline, :string)
+              ),
+            steps_done:
+              fragment(
+                "jsonb_array_length(coalesce(?, '[]'::jsonb) || ?::jsonb)",
+                run.log,
+                type(^log, :string)
+              ),
+            episodes_done:
+              fragment(
+                """
+                (select count(distinct coalesce(step->>'episode', ''))
+                   from jsonb_array_elements(coalesce(?, '[]'::jsonb) || ?::jsonb) as step)
+                """,
+                run.log,
+                type(^log, :string)
+              ),
+            updated_at: ^now
+          ]
+        ]
+      )
+      |> Repo.update_all([])
+
+    if count == 1, do: {:ok, stepped}, else: {:error, :not_found}
+  end
+
+  defp rewrite(%Run{log: log, timeline: timeline} = run) do
     run
     |> Ecto.Changeset.change()
     |> Ecto.Changeset.force_change(:log, log)
@@ -95,7 +181,36 @@ defmodule Monty.Studio.RunHistory do
     |> Repo.update()
   end
 
-  defp episodes_in(log), do: log |> Enum.map(& &1["episode"]) |> Enum.uniq() |> length()
+  @doc "How many distinct episodes a log names, counting the steps that named none as one."
+  @spec episodes_in([map()]) :: non_neg_integer()
+  def episodes_in(log), do: log |> Enum.map(& &1["episode"]) |> Enum.uniq() |> length()
+
+  @doc """
+  Makes a run's record hold the steps held in memory for it, and forgets them.
+
+  The transcript of a run that is still stepping lives in
+  `Monty.Studio.RunStream`, not in the row: the row is written at an episode
+  boundary. A worker that is killed — a page's "End now", a node going away, a
+  process that died — cannot write its own record, so whoever closes the run
+  writes what memory still has first, or the steps are lost with the process
+  that took them.
+
+  Written whole rather than appended to: memory holds the run from its first
+  step, and the row may already hold a prefix of it.
+  """
+  @spec keep_streamed(Run.t()) :: {:ok, Run.t()} | {:error, term()}
+  def keep_streamed(%Run{id: id} = run) do
+    case Monty.Studio.RunStream.steps(id) do
+      {[], []} ->
+        {:ok, run}
+
+      {log, timeline} ->
+        with {:ok, saved} <- rewrite(%{run | log: log, timeline: timeline}) do
+          :ok = Monty.Studio.RunStream.clear(id)
+          {:ok, saved}
+        end
+    end
+  end
 
   @doc """
   Appends one step and writes it, for a run whose page is watching every step.
