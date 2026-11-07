@@ -12,3 +12,15 @@ vulnerabilities:
       unreachable as this image runs: `WANDB_MODE=disabled` means the client
       never opens a connection. Raise the pin when wandb rebuilds; the date
       above is when this exception has to be argued again if it has not.
+
+  - id: CVE-2026-78661
+    expired_at: 2027-02-05
+    statement: >-
+      The same binary, a different library: `wandb-core` carries
+      golang.org/x/net v0.61.0, and this HTML-parsing denial of service is fixed
+      in v0.62.0. `wandb` 0.31.0 is the newest release on PyPI (2026-10-16) and
+      is what ships it, so there is nothing to raise the pin to yet, and nothing
+      here compiles that Go program. Unreachable as the image runs, for the
+      reason above: with `WANDB_MODE=disabled` the client opens no connection
+      and nothing parses a document. Expires earlier than the entry above
+      because this one has a fix upstream that only needs a rebuild.
