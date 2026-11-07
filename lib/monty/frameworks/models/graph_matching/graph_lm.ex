@@ -219,7 +219,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
 
         {:ok, displaced} ->
           displaced
-          |> buffered(lm)
+          |> buffer_percepts(lm)
           |> narrow_and_conclude(ctx, narrow, feature_percepts, first_movement_detected?)
       end
     end
@@ -239,7 +239,15 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   # observation `add_displacements/2` has just refused, so a step that reaches
   # here has one, and reading the buffer out of the result is what this row is
   # allowed to assume.
-  defp buffered(percepts, lm) do
+  @doc """
+  The step's percepts, in the buffer — twice, as Monty writes them.
+
+  Once as the step's own percepts, which is what a memory update reads later,
+  and once per displaced percept as what this module matched against. A class
+  that composes this one runs this after its own displacement is set.
+  """
+  @spec buffer_percepts([Message.t()], t()) :: t()
+  def buffer_percepts(percepts, %__MODULE__{} = lm) do
     {:ok, buffer} = FeatureAtLocationBuffer.append(lm.buffer, percepts)
     lm = %{lm | buffer: buffer}
 
@@ -273,7 +281,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
       {:ok, lm}
     else
       case add_displacements(lm, percepts) do
-        {:ok, displaced} -> {:ok, buffered(displaced, lm)}
+        {:ok, displaced} -> {:ok, buffer_percepts(displaced, lm)}
         {:error, _reason} -> {:ok, lm}
       end
     end
@@ -483,6 +491,8 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
     observations? = FeatureAtLocationBuffer.get_num_observations_on_object(lm.buffer) > 0
 
     cond do
+      # Nothing possible, which is this episode's answer whatever the pose would
+      # have been: Monty records where the sensor last held, then concludes.
       possible_matches == [] ->
         lm =
           if observations? do
@@ -498,7 +508,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
             lm
           end
 
-        lm = %{lm | terminal_state: :no_match}
+        lm = set_individual_ts(lm, :no_match)
 
         {lm, lm.terminal_state}
 
@@ -507,20 +517,22 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
 
         case pose_of.(lm, object_id) do
           nil ->
-            lm = if lm.terminal_state == :match, do: %{lm | terminal_state: nil}, else: lm
+            # A match already made is withdrawn: the pose that came with it is no
+            # longer the only one possible.
+            lm = if lm.terminal_state == :match, do: set_individual_ts(lm, nil), else: lm
 
             Logger.info("Pose for #{lm.learning_module_id} not narrowed down yet")
 
             {lm, lm.terminal_state}
 
           _pose ->
-            lm = %{lm | terminal_state: :match}
+            lm = set_individual_ts(lm, :match)
             Logger.info("#{lm.learning_module_id} recognized object #{object_id}")
-            {lm, :match}
+            {lm, lm.terminal_state}
         end
 
       true ->
-        lm = if lm.terminal_state == :match, do: %{lm | terminal_state: nil}, else: lm
+        lm = if lm.terminal_state == :match, do: set_individual_ts(lm, nil), else: lm
         Logger.info("#{lm.learning_module_id} did not recognize an object yet.")
         {lm, lm.terminal_state}
     end
@@ -806,20 +818,41 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
 
   # The generator is a copy that belongs to the module, so it is handed the
   # module it now points at before it is stepped.
-  defp step_goal_generator(%__MODULE__{gsg: nil} = lm, _ctx, _percepts), do: lm
+  @doc """
+  One step of the goal generator, pointed at the module it now belongs to.
 
-  defp step_goal_generator(%__MODULE__{} = lm, ctx, percepts) do
+  A class that composes this one runs the generator itself, because its own
+  fields are what the generator was told about.
+  """
+  @spec step_goal_generator(t(), Monty.Context.t(), [Message.t()]) :: t()
+  def step_goal_generator(%__MODULE__{gsg: nil} = lm, _ctx, _percepts), do: lm
+
+  def step_goal_generator(%__MODULE__{} = lm, ctx, percepts) do
     gsg = lm.gsg.__struct__.point_at(lm.gsg, lm)
     %{lm | gsg: gsg.__struct__.step(gsg, ctx, percepts)}
   end
 
-  defp record_stats(%__MODULE__{} = lm) do
+  @doc """
+  Monty's statistics for one step, written into the buffer.
+
+  `extra` is for a class that composes this one: the numbers only it knows —
+  the paths a displacement match came from, say — are merged over what a graph
+  module records by itself. Monty gets the same effect by asking the subclass
+  from inside `collect_stats_to_save`; a struct that is not this one cannot be
+  asked, so it says instead.
+  """
+  @spec record_stats(t(), map()) :: t()
+  def record_stats(%__MODULE__{} = lm, extra \\ %{}) do
     {lm, stats} = collect_stats_to_save(lm)
 
     %{
       lm
       | buffer:
-          FeatureAtLocationBuffer.update_stats(lm.buffer, stats, append: lm.has_detailed_logger)
+          FeatureAtLocationBuffer.update_stats(
+            lm.buffer,
+            Map.merge(stats, extra),
+            append: lm.has_detailed_logger
+          )
     }
   end
 end

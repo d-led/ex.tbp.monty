@@ -145,9 +145,10 @@ defmodule Mix.Tasks.Monty.RunTest do
     end
 
     test "an experiment built from classes this port has not written" do
-      # Monty's first tutorial names `DisplacementGraphLM` and a training
-      # experiment class, and neither is written here. A stand-in would run and
-      # conclude nothing, so the run is refused and nothing is recorded.
+      # Monty's first tutorial names a training experiment class — the learning
+      # module it trains is written, the class that supervises it is not. A
+      # stand-in would run and conclude nothing, so the run is refused and
+      # nothing is recorded.
       assert_raise Mix.Error, ~r/would not start/, fn ->
         Mix.Tasks.Monty.Run.run(["tutorial/first_experiment", "--steps", "1"])
       end

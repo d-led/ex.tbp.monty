@@ -1353,12 +1353,14 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/models/displacement_matching.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/models/displacement_matching/displacement_graph_lm.ex",
           elixir: "Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM",
           python: "DisplacementGraphLM"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/models/displacement_matching/displacement_graph_memory.ex",
           elixir: "Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphMemory",
           python: "DisplacementGraphMemory"
         }

@@ -69,6 +69,38 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
   def log_sign(values) when is_list(values), do: Enum.map(values, &log_sign/1)
 
   @doc """
+  Point pair features: the four numbers that describe how two surface points sit
+  relative to each other — Monty's `point_pair_features`.
+
+  The line between them, its length, and the three angles it makes with the two
+  surface normals and they with each other: `[length, angle(n_i, line),
+  angle(n_j, line), angle(n_i, n_j)]`, in radians, with the line taken from `i`
+  to `j`.
+
+  A displacement module keeps these on every edge of a graph, so a step's
+  displacement can be compared with a stored one however the object is turned.
+
+      iex> Monty.Frameworks.Utils.SensorProcessing.point_pair_features(
+      ...>   [0.0, 0.0, 0.0],
+      ...>   [1.0, 0.0, 0.0],
+      ...>   [1.0, 0.0, 0.0],
+      ...>   [0.0, 1.0, 0.0]
+      ...> )
+      [1.0, 0.0, 1.5707963267948966, 1.5707963267948966]
+  """
+  @spec point_pair_features([number()], [number()], [number()], [number()]) :: [float()]
+  def point_pair_features(pos_i, pos_j, normal_i, normal_j) do
+    line = SpatialArithmetics.subtract(pos_j, pos_i)
+
+    [
+      SpatialArithmetics.magnitude(line),
+      SpatialArithmetics.get_angle_between(normal_i, line),
+      SpatialArithmetics.get_angle_between(normal_j, line),
+      SpatialArithmetics.get_angle_between(normal_i, normal_j)
+    ]
+  end
+
+  @doc """
   One `rgb` pixel as hue, saturation and value, each in `0..1`.
 
   `skimage.color.rgb2hsv`, whose conventions this follows: hue is the angle

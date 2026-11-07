@@ -264,4 +264,49 @@ defmodule Monty.Frameworks.Utils.SensorProcessingTest do
       assert_in_delta value, 10.0 / 255.0, 1.0e-12
     end
   end
+
+  describe "point_pair_features/4" do
+    # A displacement module compares a step's displacement with a stored edge by
+    # these four numbers: how far apart the points are, and the three angles the
+    # line between them makes with the two surface normals.
+    test "measures the line between two points and its angles to both normals" do
+      features =
+        SensorProcessing.point_pair_features(
+          [0.0, 0.0, 0.0],
+          [1.0, 0.0, 0.0],
+          [1.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0]
+        )
+
+      assert [length, from_first, from_second, between_normals] = features
+      assert_in_delta length, 1.0, 1.0e-12
+      assert_in_delta from_first, 0.0, 1.0e-12
+      assert_in_delta from_second, :math.pi() / 2, 1.0e-12
+      assert_in_delta between_normals, :math.pi() / 2, 1.0e-12
+    end
+
+    # The line is taken from the first point to the second, so the two points
+    # are not interchangeable: swapping them reverses the line and turns the
+    # angles measured from it round.
+    test "takes the line from the first point to the second" do
+      [_, forward_first, _, _] =
+        SensorProcessing.point_pair_features(
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 1.0],
+          [0.0, 0.0, 1.0],
+          [0.0, 0.0, 1.0]
+        )
+
+      [_, backward_first, _, _] =
+        SensorProcessing.point_pair_features(
+          [0.0, 0.0, 1.0],
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 1.0],
+          [0.0, 0.0, 1.0]
+        )
+
+      assert_in_delta forward_first, 0.0, 1.0e-12
+      assert_in_delta backward_first, :math.pi(), 1.0e-12
+    end
+  end
 end

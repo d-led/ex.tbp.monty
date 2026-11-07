@@ -363,7 +363,11 @@ defmodule Monty.Studio.SetupTest do
       # has not written, so the page disables the run and the task refuses it.
       assert stand_ins.level == :error
       assert stand_ins.message =~ "cannot run here"
-      assert stand_ins.message =~ "DisplacementGraphLM"
+
+      # The learning module this experiment trains is written; the experiment
+      # class that supervises it is not, so that is what the refusal names.
+      assert stand_ins.message =~ "MontySupervisedObjectPretrainingExperiment"
+      refute stand_ins.message =~ "DisplacementGraphLM"
       refute stand_ins.message =~ "MuJoCoSimulator"
 
       refute Setup.valid?(setup)

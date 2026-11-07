@@ -20,6 +20,10 @@ defmodule Monty.Geometry.Rotation do
 
   alias Monty.Math
 
+  # This module has an `apply/2` of its own — Monty's `Rotation.apply`, which
+  # rotates vectors — so the `Kernel` one has to stand aside by name.
+  import Kernel, except: [apply: 2]
+
   @enforce_keys [:wxyz]
   defstruct [:wxyz]
 
@@ -197,6 +201,50 @@ defmodule Monty.Geometry.Rotation do
     rotation
   end
 
+  @doc """
+  The rotation that best aligns two sets of vectors: scipy's
+  `Rotation.align_vectors`.
+
+  Answers `{rotation, rssd}`, where `rotation` turns each `b` towards the `a` it
+  was paired with, and `rssd` is what is left over — the square root of the
+  weighted sum of squared distances, `sqrt(Σ wᵢ |aᵢ − R bᵢ|²)`, which is zero
+  when the two sets are the same up to a rotation.
+
+  scipy minimises that sum by singular value decomposition (the Kabsch
+  algorithm). The same minimiser is the leading eigenvector of a 4×4 symmetric
+  matrix built from the two sets' correlation — Horn's closed form — and that is
+  what this uses, because `mean/2` already finds leading eigenvectors the same
+  way. Both answer a proper rotation, never a reflection.
+
+  Two sets that lie on one line do not determine a rotation about that line.
+  scipy warns and answers with one of the rotations that fit; so does this, and
+  any of them is as close as the others.
+  """
+  @spec align_vectors([[number()]], [[number()]], [number()] | nil) :: {t(), float()}
+  def align_vectors(a_vectors, b_vectors, weights \\ nil) do
+    weights = weights || List.duplicate(1.0, length(a_vectors))
+
+    # The correlation of the two sets, weighted: `Σ wᵢ bᵢ aᵢᵀ`. This is the
+    # matrix whose leading quaternion is the rotation that turns `b` into `a`;
+    # written the other way round it answers the rotation that turns `a` into
+    # `b`, which is what a test of this function is for.
+    correlation =
+      b_vectors
+      |> Enum.zip(a_vectors)
+      |> Enum.zip(weights)
+      |> Enum.reduce(List.duplicate(List.duplicate(0.0, 3), 3), fn {{b, a}, weight}, sum ->
+        b
+        |> outer_product(a)
+        |> Enum.map(fn row -> Enum.map(row, &(&1 * weight)) end)
+        |> add_matrices(sum)
+      end)
+
+    [w, x, y, z] = correlation |> horn_matrix() |> dominant_eigenvector([1.0, 0.0, 0.0, 0.0])
+
+    {:ok, rotation} = from_quaternion({w, x, y, z})
+    {rotation, rssd(rotation, a_vectors, b_vectors, weights)}
+  end
+
   @doc "The quaternion `{w, x, y, z}`."
   @spec to_quaternion(t()) :: {float(), float(), float(), float()}
   def to_quaternion(%__MODULE__{wxyz: wxyz}), do: wxyz
@@ -286,6 +334,45 @@ defmodule Monty.Geometry.Rotation do
 
   defp outer_product(values) do
     for first <- values, do: Enum.map(values, &(first * &1))
+  end
+
+  defp outer_product(column, row), do: for(first <- column, do: Enum.map(row, &(first * &1)))
+
+  # Horn's matrix: the quaternion that turns the `b` set into its `a` set is its
+  # leading eigenvector. Its eigenvalues sum to zero, so it is shifted up by more
+  # than its spectral radius before iterating — that way the leading one is also
+  # the largest in magnitude, which is what power iteration finds.
+  defp horn_matrix([[sxx, sxy, sxz], [syx, syy, syz], [szx, szy, szz]]) do
+    [
+      [sxx + syy + szz, syz - szy, szx - sxz, sxy - syx],
+      [syz - szy, sxx - syy - szz, sxy + syx, szx + sxz],
+      [szx - sxz, sxy + syx, -sxx + syy - szz, syz + szy],
+      [sxy - syx, szx + sxz, syz + szy, -sxx - syy + szz]
+    ]
+    |> shifted_positive()
+  end
+
+  defp shifted_positive(matrix) do
+    bound = matrix |> List.flatten() |> Enum.map(&abs/1) |> Enum.sum()
+
+    matrix
+    |> Enum.with_index()
+    |> Enum.map(fn {row, index} ->
+      Enum.with_index(row, fn value, column ->
+        value + if(index == column, do: bound, else: 0.0)
+      end)
+    end)
+  end
+
+  defp rssd(rotation, a_vectors, b_vectors, weights) do
+    a_vectors
+    |> Enum.zip(b_vectors)
+    |> Enum.zip(weights)
+    |> Enum.reduce(0.0, fn {{a, b}, weight}, sum ->
+      rotated = apply(rotation, b)
+      sum + weight * Enum.sum(Enum.zip_with(rotated, a, fn x, y -> (x - y) * (x - y) end))
+    end)
+    |> :math.sqrt()
   end
 
   defp add_matrices(left, right) do

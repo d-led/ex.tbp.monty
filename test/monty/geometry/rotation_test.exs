@@ -157,6 +157,94 @@ defmodule Monty.Geometry.RotationTest do
     end
   end
 
+  # The reference is scipy's `Rotation.align_vectors`, which the numbers below
+  # were read off; Monty calls it to turn a learned path into the object's pose.
+  describe "align_vectors/3" do
+    test "turns the second set onto the first" do
+      # Five points, rotated by (30, -12, 71) degrees and written down to six
+      # decimals — so the answer is that rotation, but not to the last bit.
+      a = [
+        [-0.367876, 0.147301, -0.085858],
+        [-0.306599, -0.576925, -1.247556],
+        [-1.327474, 0.465686, 0.25102],
+        [-0.467474, -0.602741, 0.412884],
+        [0.814854, -0.063653, -0.45793]
+      ]
+
+      b = [
+        [0.00123, 0.298746, -0.274138],
+        [-0.890592, -0.454671, -0.991647],
+        [0.060144, 1.340215, -0.492207],
+        [-0.620475, 0.489842, 0.356887],
+        [0.105414, -0.930468, -0.029252]
+      ]
+
+      {rotation, rssd} = Rotation.align_vectors(a, b)
+
+      assert [pitch, yaw, roll] = Rotation.to_euler_degrees(rotation)
+      assert_in_delta pitch, 30.0, 1.0e-4
+      assert_in_delta yaw, -12.0, 1.0e-4
+      assert_in_delta roll, 71.0, 1.0e-4
+
+      # scipy's own residual for these rounded numbers is 1.2244367e-6.
+      assert_in_delta rssd, 1.224436675558933e-06, 1.0e-9
+    end
+
+    test "an exact rotation is recovered with nothing left over" do
+      turn = quarter_turn_about_z()
+      b = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+      a = Enum.map(b, fn vector -> Rotation.apply(turn, vector) end)
+
+      {rotation, rssd} = Rotation.align_vectors(a, b)
+
+      assert_vectors_match(Rotation.to_euler_degrees(rotation), [0.0, 0.0, 90.0])
+      assert_in_delta rssd, 0.0, 1.0e-12
+    end
+
+    test "two sets that are already the same need no rotation" do
+      b = [[1.0, 2.0, 3.0], [-1.0, 0.5, 0.0], [0.25, -0.75, 1.5]]
+
+      {rotation, rssd} = Rotation.align_vectors(b, b)
+
+      assert_vectors_match(Rotation.to_euler_degrees(rotation), [0.0, 0.0, 0.0])
+      assert_in_delta rssd, 0.0, 1.0e-12
+    end
+
+    # A weight of zero is how a caller says "this pair does not count". Two pairs
+    # settle a rotation exactly; a third that contradicts them can be paid no
+    # attention or counted, and the two answers differ.
+    test "a weight says how much a pair counts towards the answer" do
+      b = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]
+      a = [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]]
+
+      {quarter_turn, nothing_left} = Rotation.align_vectors(a, b, [1.0, 1.0, 0.0])
+      {compromise, left_over} = Rotation.align_vectors(a, b, [1.0, 1.0, 1.0])
+
+      assert_vectors_match(Rotation.to_euler_degrees(quarter_turn), [0.0, 0.0, 90.0])
+      assert_in_delta nothing_left, 0.0, 1.0e-12
+
+      # Counted, the third pair — the same +x sent to -x rather than to +y —
+      # cannot be satisfied by any rotation, so what is left is not zero and the
+      # answer is neither rotation.
+      assert left_over > 0.1
+    end
+
+    # One pair fixes where one direction goes and says nothing about the turn
+    # about it. Any such turn fits equally well, so the test asks only what the
+    # pair does determine.
+    test "one pair fixes a direction and leaves the turn about it open" do
+      {rotation, rssd} = Rotation.align_vectors([[0.0, 0.0, 1.0]], [[1.0, 0.0, 0.0]])
+
+      assert_vectors_match(Rotation.apply(rotation, [1.0, 0.0, 0.0]), [0.0, 0.0, 1.0])
+      assert_in_delta rssd, 0.0, 1.0e-12
+    end
+  end
+
+  defp quarter_turn_about_z do
+    {:ok, rotation} = Rotation.from_axis_angle([0.0, 0.0, 1.0], :math.pi() / 2)
+    rotation
+  end
+
   defp cross([a1, a2, a3], [b1, b2, b3]) do
     [a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1]
   end
