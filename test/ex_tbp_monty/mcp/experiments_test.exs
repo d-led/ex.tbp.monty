@@ -54,8 +54,9 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
       assert index.matching == index.total
       assert index.returned == index.matching or index.truncated?
 
-      # The four choices a person asks about, each with the counts the page shows.
-      assert Enum.map(index.facets, & &1.key) == ~w(agent modules learning_module model)
+      # The choices a person asks about, each with the counts the page shows —
+      # readiness first, because "what can I run here" is the first question.
+      assert Enum.map(index.facets, & &1.key) == ~w(ready agent modules learning_module model)
 
       agents = Enum.find(index.facets, &(&1.key == "agent"))
       assert Enum.sum(Enum.map(agents.values, & &1.count)) == index.total
@@ -67,6 +68,16 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
       assert index.matching < index.total
       assert index.experiments != []
       assert Enum.all?(index.experiments, &(&1.agent == "surf"))
+    end
+
+    # The question a model (or a person) asks before choosing one: what can this
+    # deployment actually run? Every experiment is on exactly one side.
+    test "splits the catalogue into what runs here and what is refused" do
+      runs = Experiments.list(ready: "yes")
+      refused = Experiments.list(ready: "no")
+
+      assert runs.matching + refused.matching == runs.total
+      assert MapSet.disjoint?(names(runs), names(refused))
     end
 
     test "counts the choices with the other filters applied" do
@@ -273,6 +284,8 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
       assert RunHistory.get(finished.id) != nil
     end
   end
+
+  defp names(index), do: MapSet.new(index.experiments, & &1.name)
 
   defp settled(status) do
     {:ok, run} = RunHistory.start(@run_attributes)

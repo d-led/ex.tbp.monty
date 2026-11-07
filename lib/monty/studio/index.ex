@@ -28,6 +28,7 @@ defmodule Monty.Studio.Index do
           modules: non_neg_integer(),
           learning_module: String.t(),
           model: String.t(),
+          ready: String.t(),
           groups: %{optional(String.t()) => String.t()},
           search: String.t()
         }
@@ -50,19 +51,34 @@ defmodule Monty.Studio.Index do
   defstruct entries: [], facets: []
 
   @facets [
+    %{key: "ready", label: "Runs here?"},
     %{key: "agent", label: "Agent"},
     %{key: "modules", label: "Learning modules"},
     %{key: "learning_module", label: "Learning module"},
     %{key: "model", label: "Starts from"}
   ]
 
-  @doc "Builds the index from catalog entries."
-  @spec build([map()]) :: t()
-  def build(experiments) do
-    entries = experiments |> Enum.map(&entry/1) |> Enum.sort_by(& &1.name)
+  @doc """
+  Builds the index from catalog entries.
+
+  `verdicts` is `Monty.Studio.Readiness.verdicts/1`: `"yes"` for an experiment
+  nothing here refuses, `"no"` for one something does. An experiment it does not
+  name is `"unknown"` — a page that was not told says so rather than guessing,
+  and a fixture of three experiments need not open all of Monty's.
+  """
+  @spec build([map()], %{optional(String.t()) => String.t()}) :: t()
+  def build(experiments, verdicts \\ %{}) do
+    entries = experiments |> Enum.map(&entry(&1, verdicts)) |> Enum.sort_by(& &1.name)
 
     %__MODULE__{entries: entries, facets: facets(entries)}
   end
+
+  @doc """
+  The word a facet shows for one of its values, so a row's cell and the pill that
+  filters it say the same thing.
+  """
+  @spec label(String.t(), String.t()) :: String.t()
+  def label(key, value), do: label_for(key, value)
 
   @doc """
   Narrows the index with the query parameters a page carries.
@@ -92,12 +108,13 @@ defmodule Monty.Studio.Index do
 
   # -- entries --------------------------------------------------------------
 
-  defp entry(experiment) do
+  defp entry(experiment, verdicts) do
     groups = experiment.groups
     config = Map.get(experiment, :config) || %{}
 
     entry = %{
       name: experiment.name,
+      ready: Map.get(verdicts, experiment.name, "unknown"),
       agent: agent(groups["environment"]),
       modules: modules(groups["monty/learning_module"], groups["monty/connectivity"]),
       learning_module: learning_module(groups["monty/learning_module"]),
@@ -187,6 +204,7 @@ defmodule Monty.Studio.Index do
     entry |> value_of(facet) |> then(&(&1 in values))
   end
 
+  defp value_of(entry, "ready"), do: entry.ready
   defp value_of(entry, "agent"), do: entry.agent
   defp value_of(entry, "modules"), do: Integer.to_string(entry.modules)
   defp value_of(entry, "learning_module"), do: entry.learning_module
@@ -225,7 +243,19 @@ defmodule Monty.Studio.Index do
     end
   end
 
+  # Readiness first and "yes" before "unknown" before "no": the answer a person
+  # opens this page for is "what can I run".
+  defp sort_key("ready", value), do: {0, ready_order(value), value}
+
   defp sort_key(_key, value), do: {0, 0, value}
+
+  defp ready_order("yes"), do: 0
+  defp ready_order("unknown"), do: 1
+  defp ready_order("no"), do: 2
+  defp ready_order(_value), do: 3
+
+  defp label_for("ready", "yes"), do: "runs here"
+  defp label_for("ready", "no"), do: "refused"
 
   defp label_for("modules", "1"), do: "one"
   defp label_for("modules", value), do: value <> " modules"

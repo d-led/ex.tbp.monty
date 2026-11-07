@@ -250,11 +250,13 @@ defmodule ExTbpMonty.Mcp.Tools do
       "title" => "List experiments (counts and facets)",
       "description" =>
         ~s|How many experiments there are, the choices they make counted, and a page of | <>
-          ~s|the matching ones. `agent` (dist/surf), `modules` (learning modules, a | <>
-          ~s|number), `learning_module`, `model` (pretrained/scratch) and a word `query` | <>
+          ~s|the matching ones. `ready` (yes/no: whether this deployment can run it), | <>
+          ~s|`agent` (dist/surf), `modules` (learning modules, a number), | <>
+          ~s|`learning_module`, `model` (pretrained/scratch) and a word `query` | <>
           ~s|are all optional and combine; the counts respect them. This is the tool for | <>
           ~s|"how many experiments", "which use surface agents", "how many with five | <>
-          ~s|learning modules" — not a list to count yourself. Whether *this deployment* | <>
+          ~s|learning modules", "which can actually run here" — not a list to | <>
+          ~s|count yourself. Whether *this deployment* | <>
           ~s|runs several at once is `monty_studio`, and not a property of a config.|,
       "inputSchema" => %{
         "type" => "object",
@@ -264,6 +266,11 @@ defmodule ExTbpMonty.Mcp.Tools do
             "description" => "Words the name or choices must contain."
           },
           "agent" => %{"type" => "string", "description" => "`dist`, `surf`, or `other`."},
+          "ready" => %{
+            "type" => "string",
+            "description" =>
+              "`yes` for the ones this deployment runs, `no` for the ones it refuses."
+          },
           "modules" => %{
             "type" => "string",
             "description" => "How many learning modules, e.g. `5`."

@@ -3,9 +3,14 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   Every experiment, a hundred of them or a thousand, arranged to be read.
 
   A list of experiment names is a list you scan, so this page is built for
-  scanning: four facets whose counts respect each other (pick "surface agent"
+  scanning: five facets whose counts respect each other (pick "surface agent"
   and the other counts become what is still reachable), a search box for when
   you know the name, and the values in force as chips you can click off.
+
+  The first facet is the answer a person opens this page for: whether the
+  experiment runs here at all. `Monty.Studio.Readiness` is that answer — the
+  same one `Setup`'s findings refuse a run with, so a row saying "refused" and
+  a page that will not start the run cannot disagree.
 
   The filters are this LiveView's state, not the address bar's. Choosing a tag
   re-renders the list in place — no navigation, no reload — and the text and the
@@ -19,17 +24,22 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
 
   use ExTbpMontyWeb, :live_view
 
-  alias Monty.Studio.{Catalog, Drafts, Index}
+  alias Monty.Studio.{Catalog, Drafts, Index, Readiness}
 
   @page_size 30
   @default_size "some"
 
   @impl true
   def mount(_params, _session, socket) do
+    # The rows are streamed by `handle_params/3`, which runs before the first
+    # render and is where the filters arrive. Streaming here as well would put a
+    # page of unfiltered rows in the first paint and then replace it — the
+    # reader sees a flash of the wrong list, and a `?ready=no` link looked like
+    # it had done nothing.
     {:ok,
      socket
      |> assign(
-       index: Index.build(Catalog.experiments()),
+       index: Index.build(Catalog.experiments(), verdicts()),
        templates: Catalog.templates(),
        drafts: Drafts.names(),
        filters: %{},
@@ -37,8 +47,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
        size: @default_size
      )
      |> stream_configure(:experiments, dom_id: &"experiment-#{dom_id_of(&1.name)}")
-     |> stream(:experiments, [])
-     |> narrow()}
+     |> stream(:experiments, [])}
   end
 
   # Arriving from a link: the query string seeds the filters once. From then on
@@ -90,6 +99,10 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
     |> stream(:experiments, entries, reset: true)
   end
 
+  # Whether each experiment runs here, as `Monty.Studio.Readiness` answers it:
+  # cached, because composing two hundred configs is not a page's work.
+  defp verdicts, do: Readiness.catalog() |> Readiness.verdicts()
+
   # The parameters `Index` takes, built from what the LiveView holds.
   defp params_of(%{filters: filters, query: query}) do
     filters
@@ -115,8 +128,9 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
       <header id="intro" class="space-y-2">
         <h1 class="text-3xl font-semibold tracking-tight">Monty experiments</h1>
         <p class="max-w-3xl text-base-content/70">
-          {@result.total} configurations Monty ships. Filter by agent, module count, learning
-          module or starting point, or open one to see what it wires together.
+          {@result.total} configurations Monty ships. Filter by whether it runs here, agent,
+          module count, learning module or starting point, or open one to see what it wires
+          together.
         </p>
       </header>
 
@@ -303,7 +317,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
                   :for={facet <- @result.facets}
                   class="py-1.5 pe-3 pl-0 align-middle whitespace-nowrap"
                 >
-                  <span class="badge badge-ghost badge-sm">{column(entry, facet.key)}</span>
+                  <span class="badge badge-ghost badge-sm">{column(entry, facet)}</span>
                 </td>
               </tr>
             </tbody>
@@ -368,13 +382,15 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   # Monty's names are paths; a glob path is built from its segments.
   defp segments(name), do: String.split(name, "/")
 
-  # What a row shows under one of the facets' headings. The four labels are
-  # `Monty.Studio.Index`'s; the values are this entry's own, so a column and the
-  # tag that filters it say the same thing in the same words.
-  defp column(entry, "modules"), do: "#{entry.modules} lm"
-  defp column(entry, "agent"), do: entry.agent
-  defp column(entry, "learning_module"), do: entry.learning_module
-  defp column(entry, "model"), do: entry.model
+  # What a row shows under one of the facets' headings. The labels are
+  # `Monty.Studio.Index`'s, so a column and the tag that filters it say the same
+  # thing in the same words — readiness most of all, where "runs here" is the
+  # whole reason the column exists.
+  defp column(entry, %{key: "ready"} = facet), do: Index.label(facet.key, entry.ready)
+  defp column(entry, %{key: "modules"}), do: "#{entry.modules} lm"
+  defp column(entry, %{key: "agent"}), do: entry.agent
+  defp column(entry, %{key: "learning_module"}), do: entry.learning_module
+  defp column(entry, %{key: "model"}), do: entry.model
 
   defp showing(matching, total) when matching == total, do: "#{total} experiments"
   defp showing(matching, total), do: "#{matching} of #{total} experiments"

@@ -168,6 +168,16 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
       assert has_element?(view, "#chip-modules-5")
     end
 
+    # Arriving through a link used to render a page of unfiltered rows and the
+    # filtered ones on top of them: the mount streamed the first page before
+    # `handle_params/3` had read the query, and the reset never removed it. The
+    # chips were right, so nothing caught it until a row was asserted on.
+    test "arriving through a link shows only what the link asked for", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments?q=first_experiment")
+
+      assert row_names(view) == ["tutorial-first_experiment"]
+    end
+
     test "clicking a chosen value takes the filter away", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/experiments?agent=surf")
 
@@ -231,6 +241,45 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
       view |> element("#show-all") |> render_click()
 
       assert has_element?(view, "#show-fewer")
+    end
+  end
+
+  describe "what this application can actually run" do
+    test "the first facet asks it, with both answers on offer", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments")
+
+      assert has_element?(view, "#facet-ready")
+      assert has_element?(view, "#facet-ready-yes")
+      assert has_element?(view, "#facet-ready-no")
+    end
+
+    # `tutorial/first_experiment` is a supervised experiment, and the stand-in
+    # scene cannot say what object it showed, so this world refuses it. The same
+    # config runs against MuJoCo — which is why the answer belongs to the
+    # application and not to the name.
+    test "an experiment this world refuses is offered under \"refused\"", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments?ready=no&q=first_experiment")
+
+      assert row_names(view) == ["tutorial-first_experiment"]
+    end
+
+    test "...and is not offered under \"runs here\"", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments?ready=yes&q=first_experiment")
+
+      assert row_names(view) == []
+    end
+
+    test "an experiment whose classes are missing is on the same side of the divide",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments?ready=no&q=base_infer_cows_large")
+
+      assert "base_infer_cows_large_compositional" in row_names(view)
+    end
+
+    test "the column says the same thing as the pill that filters it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments?ready=yes&q=base_config_10distinctobj")
+
+      assert view |> render() =~ "runs here"
     end
   end
 

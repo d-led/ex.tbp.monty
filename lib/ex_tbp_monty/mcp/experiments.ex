@@ -25,6 +25,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
     Index,
     Jobs,
     Panel,
+    Readiness,
     RunHistory,
     RunLog,
     Setup
@@ -52,7 +53,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
   def list(opts \\ []) do
     all = Catalog.experiments()
     chosen = Enum.filter(all, &chosen?(&1, opts))
-    result = chosen |> Index.build() |> Index.filter(facet_params(opts))
+    result = chosen |> Index.build(verdicts()) |> Index.filter(facet_params(opts))
     {page, truncated?} = window(result.entries, opts)
     by_name = Map.new(chosen, &{&1.name, &1})
 
@@ -538,12 +539,17 @@ defmodule ExTbpMonty.Mcp.Experiments do
   defp facet_params(opts) do
     %{
       "q" => opts[:query],
+      "ready" => opts[:ready],
       "agent" => opts[:agent],
       "modules" => opts[:modules],
       "learning_module" => opts[:learning_module],
       "model" => opts[:model]
     }
   end
+
+  # Whether each experiment runs in this deployment, from the one place that
+  # answers it — the same table the experiments page filters on.
+  defp verdicts, do: Readiness.catalog() |> Readiness.verdicts()
 
   defp window(entries, opts) do
     limit = min(opts[:limit] || @default_limit, @max_limit)

@@ -132,4 +132,69 @@ defmodule Monty.Studio.IndexTest do
       assert Enum.map(modules.values, & &1.value) == ["1", "5"]
     end
   end
+
+  # Whether an experiment runs here is a fact about the application, not about the
+  # config, so the index is told it rather than deriving it. What it must do is
+  # keep the answer, filter on it, and say "unknown" where it was told nothing.
+  describe "whether an experiment runs here" do
+    defp rated do
+      Index.build(
+        [
+          experiment(
+            "dist_1lm",
+            "habitat_ycb_dist_agent_semantics0",
+            "evidence_1lm_nn5_dod003",
+            "1lm_1sm"
+          ),
+          experiment(
+            "surf_5lm",
+            "habitat_ycb_surf_agent_semantics0",
+            "evidence_5lm_nn10_dod003",
+            "5lm_5sm"
+          ),
+          experiment(
+            "surf_1lm_scratch",
+            "habitat_ycb_surf_agent_semantics0",
+            "displacement_1lm",
+            "1lm_1sm"
+          )
+        ],
+        %{"dist_1lm" => "yes", "surf_5lm" => "no"}
+      )
+    end
+
+    test "is the first facet, because it is the answer a reader comes for" do
+      assert hd(rated().facets).key == "ready"
+    end
+
+    test "a row carries the verdict it was given, and says so when there was none" do
+      entries = Map.new(rated().entries, &{&1.name, &1.ready})
+
+      assert entries["surf_5lm"] == "no"
+      assert entries["surf_1lm_scratch"] == "unknown"
+    end
+
+    test "keeps only what runs here, and only what does not" do
+      runs = Index.filter(rated(), %{"ready" => "yes"})
+      refused = Index.filter(rated(), %{"ready" => "no"})
+
+      assert Enum.map(runs.entries, & &1.name) == ["dist_1lm"]
+      assert Enum.map(refused.entries, & &1.name) == ["surf_5lm"]
+    end
+
+    test "counts under the other filters, like every other facet" do
+      result = Index.filter(rated(), %{"agent" => "surf"})
+      ready = Enum.find(result.facets, &(&1.key == "ready"))
+
+      assert Enum.sort_by(ready.values, & &1.value) == [
+               %{value: "no", label: "refused", count: 1},
+               %{value: "unknown", label: "unknown", count: 1}
+             ]
+    end
+
+    test "reads as the question it answers, not as the stored value" do
+      assert Index.label("ready", "yes") == "runs here"
+      assert Index.label("ready", "no") == "refused"
+    end
+  end
 end
