@@ -1,19 +1,44 @@
 # Differences, and what this port suspects in Monty
 
-Two things make an Elixir run disagree with a Python one: a decision here, and
-something in Monty that looks wrong. Both are recorded here, in the same shape,
-because anyone comparing two sets of numbers needs them together. Where an entry
-suspects Monty, _suspected_ is doing work: it says what the code does, what its
-own comments say it means, and what evidence there is — a reader who knows the
-project better may well read the intent differently, and nothing here has been
-reported upstream by us.
+Two things make an Elixir run disagree with a Python one: a decision this port
+made, and something in Monty that looks wrong. Both are here, because anyone
+comparing two sets of numbers needs them together.
 
-**Read §2.1 and §2.5 before diffing any run.** They are the two that change the
-numbers; everything else changes where code lives or what an error looks like.
+Where an entry suspects Monty, _suspected_ is doing work: it says what the code
+does, what its own comments say it means, and what evidence there is. Someone who
+knows the project better may read the intent differently, and nothing here has
+been reported upstream.
 
-**What has actually been compared with Monty, and how closely it agreed, is in
-[`validation.md`](validation.md)** — this file records the differences the port
-keeps on purpose or suspects in Monty, that one records the agreements.
+## Read this first
+
+**Two entries change a run's numbers. Read those two before you diff a run.**
+
+1. [**§2.1 Random streams**](#21-random-streams-one-stream-per-episode-numpys-numbers)
+   — the one that bites.
+2. [**§2.5 A sampler answers the stream it leaves behind**](#25-a-sampler-answers-the-stream-it-leaves-behind)
+   — the same stream, one layer down.
+
+Everything else changes where code lives, what an error looks like, or what
+happens on a path Monty itself never takes.
+
+**Looking for something specific?**
+
+| If you are asking…                           | Read                             |
+| -------------------------------------------- | -------------------------------- |
+| "two runs disagree — is it me or Monty?"     | §2.1 and §2.5                    |
+| "is this a bug in Monty, or deliberate?"     | §1                               |
+| "why is the Elixir code shaped differently?" | §2                               |
+| "has this been compared against Monty yet?"  | [`validation.md`](validation.md) |
+
+**Status words**, used in one column of the table below:
+
+| Word           | Means                                                                      |
+| -------------- | -------------------------------------------------------------------------- |
+| **Confirmed**  | It follows from Monty's code alone.                                        |
+| **Suspected**  | It looks wrong; only Monty's authors can say what was meant.               |
+| **Latent**     | It looks wrong, but something else stops it being reached today.           |
+| **Reproduced** | This port keeps it on purpose, so numbers stay comparable. A test pins it. |
+| **Decision**   | Not a defect — the port chose a different shape.                           |
 
 ## At a glance
 
@@ -34,7 +59,7 @@ keeps on purpose or suspects in Monty, that one records the agreements.
 | [1.13](#113-cv2s-area-resize-does-something-else-when-only-one-axis-enlarges)                | `INTER_AREA` with one axis enlarging is neither area nor linear             | Confirmed by measurement; unreachable from Monty's pyramids | Answers the area average                                                           |
 | [1.14](#114-a-pixel-with-no-depth-becomes-the-nearest-patch-in-the-view)                     | A depth of zero, mapped to log-depth zero, is _above_ every real depth      | Suspected; masked by the depth transforms real configs use  | Reproduced on purpose, pinned by a test                                            |
 | [1.15](#115-montys-two-gaussians-are-not-the-same-gaussian)                                  | OpenCV's Gaussian and SciPy's are one function truncated two ways           | Confirmed by measurement                                    | Each where Monty uses it: OpenCV for salience, SciPy for the positioning procedure |
-| [2.1](#21-random-streams-the-one-that-changes-your-numbers)                                  | One mutable RNG vs a stream per module                                      | Decision                                                    | Per-module streams                                                                 |
+| [2.1](#21-random-streams-one-stream-per-episode-numpys-numbers)                              | One mutable RNG threaded through every module                               | Decision                                                    | One stream per episode, held in a process                                          |
 | [2.2](#22-motor_only_step-travels-in-the-result)                                             | A policy sets a flag on the motor system                                    | Decision                                                    | The flag travels in the result                                                     |
 | [2.3](#23-the-motor-system-answers-with-itself)                                              | The motor system mutates itself                                             | Decision                                                    | It answers with its next version                                                   |
 | [2.4](#24-get_output1-answers-message-lm)                                                    | `get_output` answers a bare `Message`                                       | Decision                                                    | `{message, module}`, like every step                                               |
@@ -47,14 +72,13 @@ keeps on purpose or suspects in Monty, that one records the agreements.
 | [2.11](#211-a-sensor-with-no-surface-answers-nil)                                            | A sensor's step always answers a percept                                    | Decision                                                    | No surface to see is `nil`, not a made-up location                                 |
 | [2.12](#212-the-sensors-pose-is-composed-once)                                               | Two classes compose a sensor's world pose                                   | Decision                                                    | One function, two callers                                                          |
 | [2.13](#213-two-protocols-and-a-mutable-transform-become-one-behaviour-and-a-threaded-value) | Protocols for `isinstance`, and transforms that mutate themselves           | Decision                                                    | The port's one sensor behaviour; a transform answers itself                        |
-
-Statuses mean:
-
-- **Confirmed** — the behaviour follows from the code alone.
-- **Latent** — the behaviour looks wrong, but something else currently stops it
-  being reached.
-- **Reproduced** — this port keeps the behaviour on purpose, so numbers stay
-  comparable. Pinned by a test.
+| [2.14](#214-the-positioning-loop-is-bounded)                                                 | The positioning loop has no bound                                           | Decision                                                    | Stops after 100 steps, and says so                                                 |
+| [2.15](#215-two-recording-environments-and-only-one-of-them-is-montys)                       | Two recording environments                                                  | Decision                                                    | A recording names which interpreter made it                                        |
+| [2.16](#216-distractors-are-refused-not-placed)                                              | Distractors are placed around the target                                    | Decision                                                    | Refused — the stand-in world holds one object                                      |
+| [2.17](#217-a-recognition-policy-is-given-what-it-reads-not-the-model)                       | A policy is handed the live model                                           | Decision                                                    | Handed a view of it: four readings                                                 |
+| [2.18](#218-a-memory-arrives-as-an-export-not-as-a-pickle)                                   | A memory is a torch pickle                                                  | Decision                                                    | An export (JSONL), read once and copied per run                                    |
+| [2.19](#219-back-where-it-started-is-an-angle-not-the-same-floats)                           | "Back where it started" is exact float equality                             | Decision                                                    | An angle, to a thousandth of a degree                                              |
+| [2.20](#220-a-supervised-episodes-answer-is-a-call-and-an-impossible-config-is-refused)      | An episode's answer is written into modules                                 | Decision                                                    | A call per module; impossible configs refused, not crashed                         |
 
 ## How the links work
 
@@ -73,6 +97,9 @@ nesting.
 # 1. Suspected defects in Monty
 
 ## 1.1 The sanity check in `_compute_graph_mismatch` cannot fail
+
+**In one line:** it can never fail, so the one check that the two graphs are being
+compared in the same frame does nothing.
 
 **What's wrong.** The check subtracts an expression from itself, so the
 difference is exactly zero and the assertion compares a value with itself.
@@ -114,6 +141,9 @@ Nothing about the numbers changes.
 
 ## 1.2 `np.all` over Euler angles: a single-axis rotation is never a pose change
 
+**In one line:** a rotation about one axis never counts as a pose change, so
+fewer hypothesis-testing jumps happen than the comments describe.
+
 **What's wrong.** `np.all` over three elementwise comparisons is true only when
 _all three_ Euler angles differ, so a rotation about a single axis never counts
 as a pose change.
@@ -149,6 +179,9 @@ Pinned by the test "does not treat a turn about one axis as a new pose" in
 [`evidence_goal_generator_test.exs`](../test/monty/frameworks/models/goal_generation/evidence_goal_generator_test.exs).
 
 ## 1.3 `np.all` on the top-two ids, stricter than its own comment
+
+**In one line:** the jump condition fires only when _both_ of the top two
+changes — a new runner-up under the same leader does not count.
 
 **What's wrong.** The condition fires only when _both_ ids change. A new
 runner-up under an unchanged leader is not a change as far as this code is
@@ -194,6 +227,9 @@ the top two changes".
 
 ## 1.4 `argsort(...)[-2]` on a single hypothesis
 
+**In one line:** with one hypothesis, `[-2]` raises — but a guard upstream keeps
+the case out of reach today.
+
 **What's wrong.** With one hypothesis the evidence array has length one, and
 `[-2]` raises `IndexError: index -2 is out of bounds`.
 
@@ -233,6 +269,9 @@ its own right — see [§2.6](#26-get_top_two_pose_hypotheses_for_graph_id2-answ
 
 ## 1.5 `first_sensor` is only bound inside the loop
 
+**In one line:** an agent with no sensors fails with `UnboundLocalError` several
+lines later, instead of the message the code intends.
+
 **What's wrong.** `first_sensor` is assigned on the loop's first iteration and
 read after it. An agent reporting no sensors leaves it unbound, so the failure is
 an `UnboundLocalError` several lines later rather than the message the code
@@ -267,6 +306,9 @@ asks for the shared rotation with the empty case spelled out — the identity wh
 there are none — so the failure mode is a value rather than an unbound name.
 
 ## 1.6 `JumpToGoal` saves one name and restores another
+
+**In one line:** a policy resumed mid-jump comes back with no undo actions and no
+memory that it was jumping.
 
 **What's wrong.** The jump state is saved from `_undo_actions` and restored into
 `_undo_jump_actions`, which nothing in `JumpToGoal` reads or writes. `is_jumping`
@@ -320,6 +362,9 @@ checkpoint test first.
 ---
 
 ## 1.7 A depth of zero is read as an object a metre away
+
+**In one line:** "no depth" (0) reads as "object closer than 1 m", so an agent
+facing nothing backs away from it, every step, forever.
 
 **What's wrong.** A surface agent that cannot see the object is supposed to
 search for it. Before it searches, `_touch_object` reads the depth at the centre
@@ -377,6 +422,9 @@ world whose miss is depth 0 backs away 13.5 cm per step.
 
 ## 1.8 The pixel grid is not a camera's pixel grid
 
+**In one line:** the unprojection grid spans the image's edges rather than its
+pixel centres, so every point is half a pixel out.
+
 **What's wrong.** A depth image is unprojected with a grid that runs from −1 to
 +1 over the _pixels_, not over the pixel _centres_:
 
@@ -420,6 +468,9 @@ requires the points to land on the sphere.
 
 ## 1.9 The mean is divided by the count twice in the plane fit
 
+**In one line:** `np.mean` already divides by the count, so dividing again leaves
+the mean's outer product in the scatter matrix.
+
 **What's wrong.** `surface_normal_total_least_squares` builds the scatter matrix
 a total-least-squares plane fit is made of — the covariance of the patch's
 points — and subtracts the mean's outer product from the second moment. The mean
@@ -456,6 +507,9 @@ so a normal estimated here and one estimated by Monty move together, and records
 it at the code site.
 
 ## 1.10 The "pose not defined" flag is written where nothing reads it
+
+**In one line:** the flag lands in `features`, while every reader looks in
+`morphological_features`.
 
 **What's wrong.** A sensor module computes whether the curvature directions are
 meaningful — two principal curvatures that differ by less than
@@ -498,6 +552,9 @@ with a test that pins the flag where Monty puts it.
 
 ## 1.11 The RGB blur comment names the wrong kernel size
 
+**In one line:** the docstring says OpenCV picks `6*sigma + 1`; measured, it picks
+`8*sigma + 1`.
+
 **What Monty does.** `GaussianBlurRGB` passes `(kernel_size, kernel_size)` to
 OpenCV, and its docstring says what OpenCV does when `kernel_size` is left at
 zero:
@@ -527,6 +584,9 @@ a config that relies on the comment's arithmetic.
 ---
 
 ## 1.12 Lab goes through OpenCV's 8-bit tables
+
+**In one line:** `uint8` in, so Lab comes back 8-bit and quantised rather than
+floating point.
 
 **What Monty does.** `vocus2/images.py` converts an 8-bit RGB image to Lab and
 divides by 255 to bring it into `[0, 1]`:
@@ -558,6 +618,9 @@ OpenCV's rounding.
 ---
 
 ## 1.13 `cv2`'s area resize does something else when only one axis enlarges
+
+**In one line:** enlarge one axis and shrink the other, and `INTER_AREA` stops
+being an area average — it is neither area nor linear.
 
 **What Monty does.** `vocus2/images.py::resize` is a thin wrapper over
 `cv2.resize`, and the pyramids use `INTER_AREA` to shrink by an octave and
@@ -594,6 +657,9 @@ only — none does today.
 ---
 
 ## 1.14 A pixel with no depth becomes the nearest patch in the view
+
+**In one line:** an empty pixel scores as the _nearest_ thing in view, so a hole
+in the depth map looks like an object held against the lens.
 
 **What Monty does.** `DepthSalience.process` turns a depth image into
 `-log(depth)` and then removes the infinities:
@@ -632,6 +698,9 @@ that hands a depth image straight to the strategy.
 
 ## 1.15 Monty's two Gaussians are not the same Gaussian
 
+**In one line:** `cv2.GaussianBlur` and `scipy.ndimage.gaussian_filter` differ in
+kernel size, edge rule and reach — they are not interchangeable.
+
 **What.** The salience code blurs with OpenCV — `cv2.GaussianBlur`, kernel size
 `8σ+1` (§1.11), `BORDER_REFLECT_101` (§1.11) — and the positioning code smooths
 with SciPy — `scipy.ndimage.gaussian_filter(image, sigma, mode="constant")`, a
@@ -661,6 +730,9 @@ Decisions, not suspected defects. Each is a place where two runs can differ
 without either being wrong.
 
 ## 2.1 Random streams: one stream per episode, NumPy's numbers
+
+**In one line:** Monty threads one mutable RNG through every module; so does this
+port — but as a process, not a value passed around.
 
 **The difference.** Monty threads one mutable `RandomState` (`ctx.rng`) through
 every module in step order, so what a module draws depends on how many draws
@@ -755,6 +827,9 @@ Draw sites still on a per-module stream: `DepthTo3DLocations` noise,
 
 ## 2.2 `motor_only_step` travels in the result
 
+**In one line:** the flag rides in the result instead of being set on a shared
+object.
+
 **The difference.** Monty hands the motor system to the selector
 (`fixme_provide_motor_system`) so a policy can set `motor_only_step` on it
 directly. Here the policy says it in the `MotorPolicyResult` and the motor system
@@ -771,6 +846,9 @@ object between policy, selector and motor system.
 
 ## 2.3 The motor system answers with itself
 
+**In one line:** every call answers the next version of itself, because a struct
+cannot be changed in place.
+
 **The difference.** `MotorSystem.call/6` answers `{actions, motor_system}` rather
 than only the actions. Same for the selectors and the policies.
 
@@ -783,6 +861,9 @@ next version of itself.
 
 ## 2.4 `get_output/1` answers `{message, lm}`
 
+**In one line:** `{message, module}`, so every step in the port has one shape to
+compose.
+
 **The difference.** Monty's returns the `Message` alone; ours answers it with the
 module, like every other step in this port.
 
@@ -794,6 +875,9 @@ steps does not need to remember which ones answer bare values.
 [`EvidenceGraphLM.get_output/1`](../lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
 
 ## 2.5 A sampler answers the stream it leaves behind
+
+**In one line:** `{action, rng}` — the caller threads the stream, so several
+draws in one step get different answers.
 
 **The difference.** Monty writes `self.action_sampler.sample(self.agent_id,
 ctx.rng)` and mutates `ctx.rng` in place, so one stream advances across the
@@ -822,6 +906,8 @@ a given stream, but the stream is not Monty's.
 
 ## 2.6 `get_top_two_pose_hypotheses_for_graph_id/2` answers `{best, nil}`
 
+**In one line:** "there is no second hypothesis" is a value here, not a raise.
+
 **The difference.** Monty raises where this port returns a value — see
 [§1.4](#14-argsort-2-on-a-single-hypothesis).
 
@@ -832,6 +918,9 @@ worse than a goal that is not proposed.
 **Where.** [`evidence_graph_lm.ex`](../lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
 
 ## 2.7 `depth_at_center` is a function, and the policies delegate to it
+
+**In one line:** the centre-pixel read lives with the procedures; policies reach
+it through their own namespace.
 
 **The difference.** Monty keeps it in `positioning_procedures.py`, as a
 `@staticmethod` of `PositioningProcedure` at
@@ -849,6 +938,9 @@ namespace, which is where the policies' code already asked it from while the
 environment layer was unported. The call sites read as they did.
 
 ## 2.8 Small vocabulary differences
+
+**In one line:** atoms for closed sets, tuples for quaternions, and Monty's units
+wherever a number could differ.
 
 - `PolicyStatus` is `:ready | :in_progress` here, `"ready" | "in_progress"`
   upstream; the strings appear only on a wire.
@@ -870,6 +962,9 @@ Monty's units throughout: the vocabulary stays Monty's where it would show up in
 a number, and becomes Elixir's where it would not.
 
 ## 2.9 Inheritance becomes public functions and a module-dispatched hook
+
+**In one line:** a public function plus a module-dispatched hook replaces
+Python's class hierarchy — same actions, different address.
 
 **The difference.** Monty's `SurfacePolicy` is an `InformedPolicy`: it inherits
 the jump machinery and overrides `__call__`, `reset` and `_handle_successful_jump`.
@@ -900,6 +995,9 @@ class hierarchy.
 
 ## 2.10 Missing coverage counts as zero
 
+**In one line:** a coverage nobody asked for reads as zero, instead of raising
+`KeyError`.
+
 **What Monty does.** A sensor module's percept is built from the middle pixel, and
 a surface sensor may still extract features with that pixel off the object as long
 as part of the patch is on it — so the condition reads the coverage it computed a
@@ -925,6 +1023,9 @@ features the config declared.
 ---
 
 ## 2.11 A sensor with no surface answers `nil`
+
+**In one line:** a sensor that saw no surface says so; it does not invent a
+location no pixel supports.
 
 **What Monty does.** `CameraSM.step` always answers a percept: the processor
 reads `observation["semantic_3d"]` and indexes its middle row, so an observation
@@ -953,6 +1054,9 @@ describing nothing is worse than no percept at all.
 ---
 
 ## 2.12 The sensor's pose is composed once
+
+**In one line:** one function composes a sensor's world pose, called by both
+sensor modules — one rule, not two copies.
 
 **What Monty does.** The sensor's place in the world is the agent's pose with the
 sensor's own offset turned and added, and its rotation the two rotations
@@ -984,6 +1088,9 @@ a test pins the composition through each of them.
 ---
 
 ## 2.13 Two protocols and a mutable transform become one behaviour and a threaded value
+
+**In one line:** two `Protocol`s become one behaviour, and a transform answers the
+transform it leaves behind instead of mutating itself.
 
 **What Monty does.** `tbp/monty/sensor_modules/sensor_module.py` declares
 `RuntimeSensorModule` and `Transform` as `Protocol`s, and
@@ -1024,6 +1131,9 @@ with the state it left.
 
 ## 2.14 The positioning loop is bounded
 
+**In one line:** bounded at 100 steps, with an error that says so, instead of a
+run that hangs.
+
 **What Monty does.** `ExperimentEnvironment.pre_episode` builds each configured
 positioning procedure and steps the environment until the procedure answers
 `terminated` or `truncated`, with no bound on the number of steps ([environment.py
@@ -1043,6 +1153,9 @@ dozen steps on the shipped configs — a studio run of
 Monty would have hung.
 
 ## 2.15 Two recording environments, and only one of them is Monty's
+
+**In one line:** two interpreters on purpose, and every recording says which one
+made it.
 
 **What Monty does.** `environment_arm64.yml` pins `python=3.8`,
 `numpy<=1.23.5` (because `numpy >= 1.24` drops `np.long`), `quaternion=2023.0.3`
@@ -1076,6 +1189,9 @@ would be measuring 4.13.0, which is a different measurement, not a fresher one.
 
 ## 2.16 Distractors are refused, not placed
 
+**In one line:** `{:error, {:distractors_not_supported, n}}` for any `n > 0`,
+because the stand-in world holds one object.
+
 **What Monty does.** `OneObjectPerEpisodeInterface` adds the primary target, then
 draws `num_distractors` names from the source list — everything but the target —
 places them around it, and records for each whether it is the primary target.
@@ -1093,6 +1209,9 @@ empty one, would make a number that means something different from Monty's. A
 refusal is a run that says which feature is missing.
 
 ## 2.17 A recognition policy is given what it reads, not the model
+
+**In one line:** four readings, not the live model — so a decision can be recorded
+and replayed.
 
 **What Monty does.** A policy is `__call__(self, model: MontyBase, count)`: it is
 handed the model object and reads whatever it likes off it — `model.is_done`,
@@ -1120,6 +1239,9 @@ arithmetic; when the episode loop is wired to these policies, what it reports is
 its own concern.
 
 ## 2.18 A memory arrives as an export, not as a pickle
+
+**In one line:** `.pt` becomes JSONL once, off the BEAM; a run is handed a copy,
+because a run learns.
 
 **What Monty does.** A pretrained learning module is a torch pickle (`.pt`)
 holding `GraphObjectModel`s; `MontyExperiment` loads it into the learning modules
@@ -1157,6 +1279,9 @@ string.
 
 ## 2.19 "Back where it started" is an angle, not the same floats
 
+**In one line:** compared as an angle under 0.001°, because the quaternion
+round-trip is 1.1e-16 away.
+
 **What Monty does.** `InformedPolicy._assert_undo_jump_was_successful` compares
 the agent's pose after an undo jump with the pose it stored before the jump, with
 `np.all(state[agent].rotation == self._pre_jump_state.rotation)` — exact
@@ -1186,6 +1311,9 @@ hundredth of a degree still raises, and the raise now carries the angle.
 ---
 
 ## 2.20 A supervised episode's answer is a call, and an impossible config is refused
+
+**In one line:** six numbers through one call per module, and two refusals where
+Monty would raise mid-run.
 
 **What Monty does.** `MontySupervisedObjectPretrainingExperiment` runs its
 training episodes as exploration and then reaches into every learning module to
@@ -1225,8 +1353,8 @@ Two things follow from that, and both are refusals rather than stand-ins:
   so `Setup` refuses the run (`:no_target_to_supervise`) rather than crashing at
   the end of an episode that had already run.
 
-**What this does *not* change.** The `location_on_model` a module is given is the
-object's place the *first* time the experiment showed it, not this episode's —
+**What this does _not_ change.** The `location_on_model` a module is given is the
+object's place the _first_ time the experiment showed it, not this episode's —
 Monty's `first_epoch_object_location`, carried by the run. A later epoch that
 places the object elsewhere still extends the graph it built the first time.
 
