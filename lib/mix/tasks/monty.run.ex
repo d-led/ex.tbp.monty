@@ -84,7 +84,10 @@ defmodule Mix.Tasks.Monty.Run do
   # the only way to ask for less — a run that answered one episode out of a
   # hundred and forty answers a different question from the experiment.
   defp run_phases(opened, opts, history) do
-    carried = Monty.Studio.Setup.memories(opened.setup)
+    carried = %{
+      memories: Monty.Studio.Setup.memories(opened.setup),
+      first_seen: %{}
+    }
 
     {infos, history, conclusion, _carried} =
       opened.setup
@@ -128,12 +131,18 @@ defmodule Mix.Tasks.Monty.Run do
   # episode shows, the object in it and the memory it matches against all come
   # from its own phase — `Setup.with_phase/2` and what the phase before it left
   # behind.
+  #
+  # An episode begins and ends through the *config's* experiment class, exactly
+  # as the queued runner does it: a class is not a label on a page, and a
+  # pretraining config that ran here without its class would explore and learn
+  # nothing.
   defp run_episode(opened, scope, index, objects, history, carried, opts) do
     # An epoch walks the phase's objects once, so the flat episode index of the
     # phase is two numbers Monty keeps apart: the epoch, and the episode within
     # it. Both are read — the sampler turns the object once per epoch, and the
     # episode's draws come from a seed derived from the episode within the epoch.
     {epoch, episode} = epoch_and_episode(index, objects)
+    experiment = Monty.Studio.Setup.experiment_class(opened.setup)
 
     {:ok, run} =
       Monty.Studio.Run.start(Monty.Studio.Setup.with_phase(opened.setup, scope.mode),
@@ -141,21 +150,59 @@ defmodule Mix.Tasks.Monty.Run do
         episode: episode,
         epoch: epoch,
         mode: scope.mode,
-        memory: carried
+        memory: carried.memories,
+        first_seen: carried.first_seen
       )
 
-    :ok = Monty.Studio.Run.set_ground_truth(run)
+    # The run is already started, so the class's `pre_episode` has nothing to
+    # start: it adds what this experiment's episodes begin with, which is the
+    # ground truth (and, for a supervised one, the switch to exploring).
+    {:ok, state} = experiment.pre_episode(%{run: run}, index, object_of(run), episode_callbacks())
+
     say_episode(index, scope.episodes, opts)
 
     beat = System.monotonic_time(:second)
-    {infos, history, last_run} = step_through(run, history, opts, index, [], beat)
+    {infos, history, last_run} = step_through(state.run, history, opts, index, [], beat)
+
+    # The class states the episode's answer before it is written, and writing it
+    # is what `next_memories/3` does.
+    state =
+      experiment.post_episode(%{run: last_run}, :finished, infos, episode_callbacks())
+
+    last_run = state.run
     conclusion = Monty.Studio.Run.conclusion(last_run)
-    carried = next_memories(last_run, carried, scope.mode)
+
+    carried = %{
+      memories: next_memories(last_run, carried.memories, scope.mode),
+      first_seen: last_run.first_seen
+    }
+
     Monty.Studio.Run.stop(last_run)
 
     # The episode is what a run has to show for itself: the steps of an episode
     # are worth one write, and the record is the checkpoint, not the transcript.
     {Enum.reverse(infos), checkpoint(history), conclusion, carried}
+  end
+
+  # What an experiment class may ask of this task: it does not own the world, the
+  # run or the record, so the two hooks it can use are the ground truth — which
+  # is `Monty.Studio.Run`'s own — and nothing at either end.
+  defp episode_callbacks do
+    %{
+      pre_episode: fn state, _index, _object, _callbacks -> {:ok, state} end,
+      ground_truth: fn %{run: run} = state ->
+        :ok = Monty.Studio.Run.set_ground_truth(run)
+        {:ok, state}
+      end,
+      post_episode: fn state, _outcome, _infos -> state end
+    }
+  end
+
+  defp object_of(run) do
+    case Monty.Studio.Run.target(run) do
+      %{"object" => object} -> object
+      _no_target -> nil
+    end
   end
 
   # Monty's `model.update_ltm()`: what a training episode learned is what the

@@ -219,7 +219,9 @@ defmodule Monty.Frameworks.Experiments.MontyExperiment do
     case experiment.pre_episode(state, index, object, callbacks) do
       {:ok, state} ->
         {outcome, infos, state} = run_episode_steps(state, callbacks)
-        state = post_episode(state, outcome, infos, callbacks)
+        # Both ends of an episode are the class's, as they are in Monty: the
+        # loop only decides that an episode happened.
+        state = experiment.post_episode(state, outcome, infos, callbacks)
         episodes = [result(object, index, outcome, infos) | episodes]
 
         case outcome do

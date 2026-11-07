@@ -127,6 +127,30 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert GraphMemory.get_memory_ids(learned) == ["new_object0"]
     end
 
+    test "a supervised experiment states the episode's answer, so its memory has the object" do
+      # The tutorial is the one config here that learns by being told what it
+      # saw: its experiment class states the object and the pose at the end of
+      # the episode, and that statement is what the memory is written under.
+      # Three exploring steps is its whole episode (`num_exploring_steps: 3`).
+      # Against MuJoCo, because a supervised episode reads the object and pose it
+      # was given off the world, and the stand-in scene has none to state.
+      {:ok, opened} = Monty.Studio.open("tutorial/first_experiment", world_simulator: :mujoco)
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 3, 0, 1, 1))
+
+      assert {:ok, closed} = perform(record)
+      assert closed.status == "finished"
+      assert closed.steps_done == 3
+
+      libraries = Path.join(Artifacts.dir(closed.id), "memory")
+      assert [file] = Path.wildcard(Path.join(libraries, "**/*.jsonl.gz"))
+
+      {:ok, learned} = Memory.load(Path.basename(file, ".jsonl.gz"), "trained", libraries)
+
+      # The object the world says it put in front of the agent, not a
+      # `new_object<n>`: the experiment knew the answer and said it.
+      assert GraphMemory.get_memory_ids(learned) == ["mug"]
+    end
+
     test "and files it under the experiment when the config names neither a model nor a run" do
       # Most of Monty's test configs leave `run_name` empty and name no model, so
       # the run's own name is what is left: a memory filed under `""` is a memory

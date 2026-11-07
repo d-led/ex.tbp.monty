@@ -19,8 +19,10 @@ defmodule Monty.Frameworks.Environments.ObjectInitSamplers.Default do
 
   A map, in Monty's own names: `"position"` in metres, `"rotation"` as a `wxyz`
   quaternion, `"euler_rotation"` in degrees, and `"scale"`. Monty's
-  `quat_rotation` is the same quaternion as `rotation` under a second name and is
-  not carried: nothing here reads it.
+  `Predefined` and `RandomRotation` write `quat_rotation` beside `rotation` —
+  the same quaternion under a second name — and this module does not, which is
+  Monty's own asymmetry; a supervision that reads it asks for it with
+  `with_quat_rotation/1`.
   """
 
   alias Monty.Frameworks.Experiments.Seed
@@ -70,6 +72,18 @@ defmodule Monty.Frameworks.Environments.ObjectInitSamplers.Default do
       "scale" => vector(scale)
     }
   end
+
+  @doc """
+  The same parameters, with the object's turn under its second name.
+
+  `quat_rotation` is the `wxyz` quaternion `rotation` already holds, under the
+  name Monty's pretraining supervision reads (`Monty.Frameworks.Models.
+  GraphMatching.GraphLM.supervise/3`). The samplers that carry it upstream carry
+  it here; `Default` does not, and neither does this.
+  """
+  @spec with_quat_rotation(params()) :: params()
+  def with_quat_rotation(%{"rotation" => quaternion} = params),
+    do: Map.put(params, "quat_rotation", quaternion)
 
   @doc """
   A place, an orientation or a scale as three floats.

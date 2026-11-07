@@ -102,6 +102,18 @@ defmodule Monty.Runtime.Model do
   @spec update_ltm(atom() | String.t()) :: :ok
   def update_ltm(model_id), do: Step.update_ltm(Registry.via({:step, model_id}))
 
+  @doc """
+  Tells the modules the episode's answer, as a supervised experiment knows it.
+
+  Monty's `_pass_target_info_to_model`: the modules the experiment names are
+  given the object, its pose and where it stood; every other module's hypotheses
+  are dropped, because what it guessed is not something to learn from.
+  """
+  @spec supervise(atom() | String.t(), map(), [number()], [String.t()]) :: :ok
+  def supervise(model_id, target, location_on_model, supervised_ids) do
+    Step.supervise(Registry.via({:step, model_id}), target, location_on_model, supervised_ids)
+  end
+
   @doc "Ends the episode without a conclusion."
   @spec time_out(atom() | String.t()) :: :ok
   def time_out(model_id), do: Step.time_out(Registry.via({:step, model_id}))

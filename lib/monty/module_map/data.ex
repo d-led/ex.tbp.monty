@@ -1089,7 +1089,9 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/experiments/pretraining_experiments.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file:
+            "lib/monty/frameworks/experiments/pretraining_experiments/monty_supervised_object_pretraining_experiment.ex",
           elixir:
             "Monty.Frameworks.Experiments.PretrainingExperiments.MontySupervisedObjectPretrainingExperiment",
           python: "MontySupervisedObjectPretrainingExperiment"

@@ -44,6 +44,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
   alias Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
+  alias Monty.Geometry.Rotation
 
   @default_learning_module_id "LM_0"
 
@@ -147,6 +148,17 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
     |> init_graph_lm()
   end
 
+  @doc """
+  Monty's `GraphLM(**config)`: refused, because a bare graph module cannot match.
+
+  `_compute_possible_matches` is the subclass's in Monty — the base class raises
+  `NotImplementedError` — so a config naming `GraphLM` itself (`graph_1lm.yaml`
+  is one) asks for a module that has nothing to narrow possible matches with.
+  Saying so before a run starts is truer than raising on its second step.
+  """
+  @spec from_config(map(), keyword()) :: {:error, :no_matching_scheme}
+  def from_config(_config, _options \\ []), do: {:error, :no_matching_scheme}
+
   defp reset_goal_generator(%__MODULE__{gsg: nil} = lm), do: lm
 
   defp reset_goal_generator(%__MODULE__{} = lm),
@@ -173,6 +185,82 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
         primary_target_rotation_quat: primary_target["quat_rotation"],
         stepwise_target_object: nil,
         stepwise_targets_list: []
+    }
+  end
+
+  # -- supervision ----------------------------------------------------------
+
+  @doc """
+  Monty's `_pass_target_info_to_model`: the conclusion an experiment states.
+
+  A pretraining experiment does not match. It knows which object it put in front
+  of the agent, so the episode's answer is that knowledge rather than something
+  the module worked out — and the six numbers a matching episode would have
+  concluded for itself (where on the model, where the sensor was, the turn, the
+  scale) are the ones it is told instead.
+
+  `location_on_model` is the object's place in the world the *first* time this
+  experiment showed it, not this episode's: a later epoch may place the object
+  somewhere else, and the graph must stay where it was learned. That map is
+  Monty's `first_epoch_object_location`.
+  """
+  @spec supervise(t(), map(), [number()]) :: t()
+  def supervise(%__MODULE__{} = lm, target, location_on_model) do
+    {:ok, rotation} = Rotation.from_quaternion(quaternion(target))
+
+    stats = %{
+      "possible_matches" => [target["object"]],
+      "detected_location_on_model" => location_on_model,
+      "detected_location_rel_body" => target["position"],
+      "detected_rotation" => target["euler_rotation"],
+      "detected_scale" => target["scale"]
+    }
+
+    %{
+      lm
+      | detected_object: target["object"],
+        detected_rotation_r: Rotation.invert(rotation),
+        buffer: FeatureAtLocationBuffer.add_overall_stats(lm.buffer, stats)
+    }
+  end
+
+  # Monty's target carries the object's turn under two names; `quat_rotation` is
+  # the `wxyz` one a rotation is built from. A target without it cannot
+  # supervise anything, and failing here says which object it was.
+  defp quaternion(%{"quat_rotation" => [w, x, y, z]}), do: {w, x, y, z}
+
+  defp quaternion(target) do
+    raise ArgumentError,
+          "a supervised episode needs the target's quat_rotation, and " <>
+            "#{inspect(target["object"])} has none"
+  end
+
+  @doc """
+  Monty's wipe for a module the experiment does not supervise.
+
+  Such a module matched on its own during the episode, so what it concluded is a
+  guess — and a guess written into memory is worse than nothing learned.
+  `detected_object` is what gates the write, so clearing it is the whole
+  decision; the hypotheses go with it so that the episode's statistics do not
+  claim a match nobody made.
+  """
+  @spec clear_hypotheses(t()) :: t()
+  def clear_hypotheses(%__MODULE__{} = lm) do
+    cleared = %{
+      "detected_location_on_model" => nil,
+      "detected_location_rel_body" => nil,
+      "detected_rotation" => nil,
+      "detected_scale" => nil
+    }
+
+    %{
+      lm
+      | possible_matches: %{},
+        possible_paths: %{},
+        detected_object: nil,
+        detected_pose: nil,
+        detected_rotation_r: nil,
+        buffer: FeatureAtLocationBuffer.add_overall_stats(lm.buffer, cleared)
     }
   end
 
@@ -363,7 +451,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   # The pose the module reports is the object's in the world; the memory stores
   # observations in the object's own frame, so what it is given is the inverse.
   defp model_rotation(nil), do: nil
-  defp model_rotation(rotation), do: rotation.__struct__.inv(rotation)
+  defp model_rotation(%Rotation{} = rotation), do: Rotation.invert(rotation)
 
   # Monty's `_update_target_graph_mapping`: two dicts, kept as sets, so a graph
   # built from two objects that look alike says so.

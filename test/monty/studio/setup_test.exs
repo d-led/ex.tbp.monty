@@ -354,7 +354,9 @@ defmodule Monty.Studio.SetupTest do
 
   describe "what is ported" do
     test "an experiment built from classes this port has not written is refused" do
-      setup = setup_for("tutorial/first_experiment")
+      # `FeatureGraphLM` is the example: a learning module whose matching is not
+      # written here, in an experiment that is otherwise MuJoCo's own.
+      setup = setup_for("test/graph_learning/feature_pred_off_object")
 
       assert [stand_ins] =
                for(%{code: :modules_not_ported} = finding <- setup.findings, do: finding)
@@ -363,14 +365,23 @@ defmodule Monty.Studio.SetupTest do
       # has not written, so the page disables the run and the task refuses it.
       assert stand_ins.level == :error
       assert stand_ins.message =~ "cannot run here"
-
-      # The learning module this experiment trains is written; the experiment
-      # class that supervises it is not, so that is what the refusal names.
-      assert stand_ins.message =~ "MontySupervisedObjectPretrainingExperiment"
-      refute stand_ins.message =~ "DisplacementGraphLM"
+      assert stand_ins.message =~ "FeatureGraphLM"
       refute stand_ins.message =~ "MuJoCoSimulator"
 
       refute Setup.valid?(setup)
+    end
+
+    test "the tutorial's experiment names only classes this port has written" do
+      # This config used to be the example above: its learning module and then
+      # its supervising experiment class were missing. Both are written, so the
+      # same config runs — and this test is what says so.
+      #
+      # Against MuJoCo, because a supervised episode reads the object and pose it
+      # was given off the world, and the stand-in scene has none to state.
+      setup = setup_for("tutorial/first_experiment", world_simulator: :mujoco)
+
+      assert Enum.all?(setup.findings, &(&1.level != :error))
+      assert Setup.valid?(setup)
     end
 
     test "an experiment that trains on one list and evaluates another walks both" do
@@ -699,14 +710,19 @@ defmodule Monty.Studio.SetupTest do
       assert Enum.any?(spec.sensor_modules, &match?(%{module: Synthetic.SensorModule}, &1))
     end
 
-    test "falls back to the stand-in for a module this port has not written" do
-      # A displacement module: matching on point-pair features, which is not
-      # ported, so the stand-in runs and says so by being one.
-      setup = setup_from(%{@base | "monty/learning_module" => "displacement_1lm"})
+    test "falls back to the stand-in for a module this port cannot build" do
+      # `graph_1lm` names `GraphLM` itself, which has no matching scheme to
+      # narrow possible matches with — Monty's base class raises
+      # `NotImplementedError` on the second step. The setup is refused rather
+      # than run, so the stand-in is never stepped; the spec still has to answer
+      # for a config that will be refused.
+      setup = setup_from(%{@base | "monty/learning_module" => "graph_1lm"})
 
       spec = Setup.model_spec(setup, "model_0")
 
       assert [%{module: Synthetic.LearningModule}] = spec.learning_modules
+      assert :learning_module_not_buildable in Enum.map(setup.findings, & &1.code)
+      refute Setup.valid?(setup)
     end
   end
 end

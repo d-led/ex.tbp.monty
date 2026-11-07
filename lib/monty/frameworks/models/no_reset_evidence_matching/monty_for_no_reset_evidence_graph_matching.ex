@@ -148,6 +148,11 @@ defmodule Monty.Frameworks.Models.NoResetEvidenceMatching.MontyForNoResetEvidenc
   @spec update_ltm(atom() | String.t()) :: :ok
   def update_ltm(model_id), do: Model.update_ltm(model_id)
 
+  @doc "`MontySupervisedObjectPretrainingExperiment._pass_target_info_to_model`."
+  @spec supervise(atom() | String.t(), map(), [number()], [String.t()]) :: :ok
+  def supervise(model_id, target, location_on_model, supervised_ids),
+    do: Model.supervise(model_id, target, location_on_model, supervised_ids)
+
   @doc "Stops the model's processes."
   @spec stop(atom() | String.t()) :: :ok | {:error, :not_found}
   def stop(model_id), do: Model.stop(model_id)

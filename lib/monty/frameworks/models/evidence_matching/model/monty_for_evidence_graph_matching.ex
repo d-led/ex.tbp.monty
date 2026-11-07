@@ -208,6 +208,18 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
   @spec update_ltm(atom() | String.t()) :: :ok
   def update_ltm(model_id), do: Model.update_ltm(model_id)
 
+  @doc """
+  `MontySupervisedObjectPretrainingExperiment._pass_target_info_to_model`.
+
+  The modules the experiment names are told the object, the pose it was placed
+  with and where it stood; the others have their hypotheses dropped. What a
+  module does with that is the graph module's own business, so the model passes
+  it on rather than deciding it.
+  """
+  @spec supervise(atom() | String.t(), map(), [number()], [String.t()]) :: :ok
+  def supervise(model_id, target, location_on_model, supervised_ids),
+    do: Model.supervise(model_id, target, location_on_model, supervised_ids)
+
   @doc "Stops the model's processes."
   @spec stop(atom() | String.t()) :: :ok | {:error, :not_found}
   def stop(model_id), do: Model.stop(model_id)

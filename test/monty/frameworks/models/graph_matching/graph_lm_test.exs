@@ -300,4 +300,67 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLMTest do
       assert GraphLM.fixme_update_ground_truth(lm) == lm
     end
   end
+
+  describe "supervision" do
+    # Monty's `_pass_target_info_to_model`: a pretraining experiment states the
+    # answer instead of matching for it, and the six numbers it states are the
+    # ones a matching episode would have concluded for itself.
+    defp target do
+      %{
+        "object" => "mug",
+        "position" => [0.0, 1.5, 0.0],
+        "euler_rotation" => [0.0, 45.0, 0.0],
+        "quat_rotation" => [0.7071067811865476, 0.0, 0.7071067811865475, 0.0],
+        "scale" => [1.0, 1.0, 1.0]
+      }
+    end
+
+    test "names the object, the place on the model, the turn and the scale" do
+      supervised = GraphLM.supervise(lm(), target(), [-0.2, 1.5, 0.0])
+
+      assert supervised.detected_object == "mug"
+      assert supervised.buffer.stats["possible_matches"] == ["mug"]
+      assert supervised.buffer.stats["detected_location_on_model"] == [-0.2, 1.5, 0.0]
+      assert supervised.buffer.stats["detected_location_rel_body"] == [0.0, 1.5, 0.0]
+      assert supervised.buffer.stats["detected_rotation"] == [0.0, 45.0, 0.0]
+      assert supervised.buffer.stats["detected_scale"] == [1.0, 1.0, 1.0]
+    end
+
+    test "records the turn as the inverse of the one the object was placed with" do
+      supervised = GraphLM.supervise(lm(), target(), [0.0, 1.5, 0.0])
+
+      {:ok, placed} =
+        Monty.Geometry.Rotation.from_quaternion(
+          {0.7071067811865476, 0.0, 0.7071067811865475, 0.0}
+        )
+
+      assert supervised.detected_rotation_r == Monty.Geometry.Rotation.invert(placed)
+    end
+
+    test "refuses a target that does not say which way the object was turned" do
+      assert_raise ArgumentError, ~r/"mug" has none/, fn ->
+        GraphLM.supervise(lm(), Map.delete(target(), "quat_rotation"), [0.0, 1.5, 0.0])
+      end
+    end
+
+    test "a module the experiment does not supervise keeps nothing to learn from" do
+      cleared =
+        lm()
+        |> GraphLM.supervise(target(), [0.0, 1.5, 0.0])
+        |> GraphLM.clear_hypotheses()
+
+      assert cleared.detected_object == nil
+      assert GraphLM.get_possible_matches(cleared) == []
+      assert cleared.buffer.stats["detected_location_on_model"] == nil
+      assert cleared.buffer.stats["detected_location_rel_body"] == nil
+    end
+
+    test "a cleared module writes nothing into memory" do
+      lm = %{lm() | mode: :train}
+      {:ok, buffer} = FeatureAtLocationBuffer.append(lm.buffer, [percept([0.1, 0.2, 0.3])])
+      cleared = GraphLM.clear_hypotheses(%{lm | buffer: buffer})
+
+      assert GraphLM.update_ltm_from_stm(cleared).graph_memory == cleared.graph_memory
+    end
+  end
 end

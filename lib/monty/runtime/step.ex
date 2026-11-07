@@ -174,6 +174,17 @@ defmodule Monty.Runtime.Step do
   def update_ltm(server), do: GenServer.call(server, :update_ltm, :infinity)
 
   @doc """
+  Tells the modules the episode's answer, as a supervised experiment knows it.
+
+  Monty's `_pass_target_info_to_model`. The modules `supervised_ids` names are
+  given the object, the pose it was placed with and where it stood; the others
+  have their hypotheses dropped, because a guess is not worth learning from.
+  """
+  @spec supervise(server(), map(), [number()], [String.t()]) :: :ok
+  def supervise(server, target, location_on_model, supervised_ids),
+    do: GenServer.call(server, {:supervise, target, location_on_model, supervised_ids}, :infinity)
+
+  @doc """
   Ends the episode without a conclusion.
 
   Monty's `deal_with_time_out` with `global_time_out=True`: the modules that
@@ -266,6 +277,9 @@ defmodule Monty.Runtime.Step do
     do: {:reply, :ok, class.reset_episode_state(state)}
 
   def handle_call(:update_ltm, _from, state), do: {:reply, :ok, update_ltm_state(state)}
+
+  def handle_call({:supervise, target, location_on_model, supervised_ids}, _from, state),
+    do: {:reply, :ok, supervise_state(state, target, location_on_model, supervised_ids)}
 
   # A global time-out ends the episode: an episode that ran out of steps did
   # not recognise the object, so there is nothing to explore for either.
@@ -795,6 +809,27 @@ defmodule Monty.Runtime.Step do
       # training episode, which the module decides from its own mode.
       LearningModuleServer.update_ltm_from_stm(server)
       LearningModuleServer.fixme_update_ground_truth(server)
+    end)
+
+    state
+  end
+
+  # Monty's `_pass_target_info_to_model`: one decision per module, from whether
+  # the experiment names it. It is taken here rather than by the experiment so
+  # that the modules stay processes and the coordinator stays the only one that
+  # talks to them.
+  defp supervise_state(
+         %State{model_id: model_id} = state,
+         target,
+         location_on_model,
+         supervised_ids
+       ) do
+    Enum.each(state.learning_modules, fn lm ->
+      server = Registry.via({:learning_module, model_id, lm.id})
+
+      if lm.id in supervised_ids,
+        do: LearningModuleServer.supervise(server, target, location_on_model),
+        else: LearningModuleServer.clear_hypotheses(server)
     end)
 
     state

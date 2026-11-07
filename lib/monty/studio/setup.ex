@@ -222,7 +222,8 @@ defmodule Monty.Studio.Setup do
       logging: logging(config)
     }
 
-    findings = findings(setup, monty_config, config) ++ resolution_findings(unresolved?)
+    findings =
+      findings(setup, monty_config, config, unresolved?) ++ resolution_findings(unresolved?)
 
     %{setup | findings: findings}
   end
@@ -393,7 +394,11 @@ defmodule Monty.Studio.Setup do
     "tbp.monty.frameworks.models.evidence_matching.learning_module.EvidenceGraphLM" =>
       EvidenceGraphLM,
     "tbp.monty.frameworks.models.no_reset_evidence_matching.NoResetEvidenceGraphLM" =>
-      Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM
+      Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM,
+    "tbp.monty.frameworks.models.displacement_matching.DisplacementGraphLM" =>
+      Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM,
+    "tbp.monty.frameworks.models.graph_matching.GraphLM" =>
+      Monty.Frameworks.Models.GraphMatching.GraphLM
   }
 
   @doc """
@@ -412,7 +417,9 @@ defmodule Monty.Studio.Setup do
   # naming any other runs the base epoch, which is what `MontyExperiment` is.
   @experiment_classes %{
     "MontyObjectRecognitionExperiment" =>
-      Monty.Frameworks.Experiments.ObjectRecognitionExperiments.MontyObjectRecognitionExperiment
+      Monty.Frameworks.Experiments.ObjectRecognitionExperiments.MontyObjectRecognitionExperiment,
+    "MontySupervisedObjectPretrainingExperiment" =>
+      Monty.Frameworks.Experiments.PretrainingExperiments.MontySupervisedObjectPretrainingExperiment
   }
 
   @doc """
@@ -959,6 +966,22 @@ defmodule Monty.Studio.Setup do
   def do_eval(%__MODULE__{phases: phases}), do: Map.get(phases, :eval, true)
 
   @doc """
+  The learning modules a supervised experiment states the answer for.
+
+  Monty's `supervised_lm_ids`, where `"all"` means every module the config wires
+  (`monty_experiment.py::__init__` resolves it the same way, off the config's own
+  keys). An empty list is an experiment that supervises none, which is every
+  recognition config.
+  """
+  @spec supervised_ids(t()) :: [String.t()]
+  def supervised_ids(%__MODULE__{supervised_lm_ids: "all", learning_modules: modules}),
+    do: Enum.map(modules, & &1.id)
+
+  def supervised_ids(%__MODULE__{supervised_lm_ids: ids}) when is_list(ids), do: ids
+
+  def supervised_ids(%__MODULE__{}), do: []
+
+  @doc """
   The epochs a run of this config is, in the order Monty runs them.
 
   Monty's `run()` is `train()` and then `evaluate()`, each with its own mode set
@@ -1147,31 +1170,38 @@ defmodule Monty.Studio.Setup do
   # because a module built from it is what makes a run a run of *this*
   # experiment rather than of a topology that merely looks like it.
   #
-  # Two classes are ported and a config chooses between them by name: the
-  # evidence module, and the no-reset one an unsupervised-inference experiment
-  # runs (`.../no_reset_evidence_matching.py::NoResetEvidenceGraphLM`). A config
-  # naming any other is handed the evidence module, whose own `from_config`
-  # refuses a target it does not know — which is how such a config ends up on the
-  # stand-in and is refused by `module_findings/1` rather than run.
+  # The classes are named once, in `@learning_modules`. A config naming anything
+  # else reaches the stand-in, and the module map — which is where a class is
+  # called `:implemented` — is what refuses the run: a registered class and a
+  # status of `:implemented` are the same fact, and a test holds them together.
   defp learning_module_spec(lm, memory, detailed?) do
-    module = learning_module_module(lm.config)
+    target = Map.get(lm.config, "_target_")
     options = [has_detailed_logger: detailed?]
     options = if memory == :none, do: options, else: [memory: memory] ++ options
 
-    case module.from_config(lm.config, options) do
-      {:ok, state} -> %{id: lm.id, module: module, state: state}
-      {:error, _reason} -> stand_in_learning_module(lm)
+    with {:ok, module} <- learning_module_class(target),
+         {:ok, state} <- module.from_config(lm.config, options) do
+      %{id: lm.id, module: module, state: state}
+    else
+      _unknown_or_refused -> stand_in_learning_module(lm)
     end
   end
 
-  # A module with no pretrained memory is built the way Monty builds one before
-  # loading a state dict into it: with the empty memory the module makes itself,
-  # from its own config's sizes.
-  defp learning_module_module(config) do
-    Map.get(@learning_modules, Map.get(config, "_target_"), EvidenceGraphLM)
-  end
+  @doc """
+  The learning module class a config's `_target_` names.
+
+  An unknown target is `:error` rather than a class that would run something
+  else: a module standing in for another is a run of a different experiment, and
+  the finding that refuses it comes from the module map, which is where the
+  status of every class is written down.
+  """
+  @spec learning_module_class(String.t() | nil) :: {:ok, module()} | :error
+  def learning_module_class(target), do: Map.fetch(@learning_modules, target)
 
   defp stand_in_learning_module(lm) do
+    # Unreachable for a setup that runs: `learning_module_findings/1` refuses any
+    # module this port cannot build. It answers here so that `model_spec/3` has
+    # something to say about a config that will be refused anyway.
     %{
       id: lm.id,
       module: Monty.Simulators.Synthetic.LearningModule,
@@ -1890,13 +1920,98 @@ defmodule Monty.Studio.Setup do
 
   # -- findings -------------------------------------------------------------
 
-  defp findings(setup, monty_config, config) do
+  defp findings(setup, monty_config, config, unresolved?) do
     module_findings(setup) ++
+      learning_module_findings(setup, unresolved?) ++
+      supervision_findings(setup) ++
       connectivity_findings(setup, monty_config) ++
       wiring_findings(setup) ++
       memory_findings(setup) ++
       settings_findings(config)
   end
+
+  # A supervised experiment states the object and pose it was given, and it
+  # reads them off the world's `primary_target`. The stand-in scene renders one
+  # sphere and answers no target, so there is nothing to state — refused before
+  # the first episode rather than after it, which is when the answer is asked
+  # for.
+  defp supervision_findings(%__MODULE__{
+         experiment_class: %{class: "MontySupervisedObjectPretrainingExperiment"},
+         world: :synthetic
+       }) do
+    [
+      Finding.new(
+        :error,
+        :no_target_to_supervise,
+        "A supervised experiment states the object and the pose it was given, and the " <>
+          "stand-in scene cannot say what it showed. Run this experiment against " <>
+          "MuJoCo, whose scene is the one its config names.",
+        "monty_config"
+      )
+    ]
+  end
+
+  defp supervision_findings(%__MODULE__{}), do: []
+
+  # A learning module a config names is either one this port runs or a refusal.
+  # There is no third answer: the stand-in exists so that `model_spec/3` can
+  # answer for an invalid setup, and a run never reaches it, because the finding
+  # here has already refused the run.
+  #
+  # A tree that did not resolve is asked nothing about its values —
+  # `resolution_findings/1` has already said they are shown as written, and every
+  # question here would be answered about strings where numbers were meant.
+  defp learning_module_findings(_setup, true), do: []
+
+  defp learning_module_findings(%__MODULE__{learning_modules: modules}, false) do
+    Enum.flat_map(modules, fn lm ->
+      case unbuildable_reason(lm) do
+        nil -> []
+        reason -> [unbuildable_learning_module_finding(lm, reason)]
+      end
+    end)
+  end
+
+  # Why this module cannot be built, or `nil` when it can.
+  #
+  # A class the module map calls `:planned` is left to `module_findings/1`: the
+  # same fact, said once. A class it calls `:implemented` but this setup has no
+  # module for is a defect in the port, not in the config — and it is refused
+  # rather than stood in for, because the alternative is a run that reports
+  # numbers from a module nobody wrote.
+  defp unbuildable_reason(%{config: config, module: described}) do
+    case learning_module_class(Map.get(config, "_target_")) do
+      {:ok, module} ->
+        case module.from_config(config, []) do
+          {:ok, _state} -> nil
+          {:error, reason} -> reason
+        end
+
+      :error ->
+        if described.status == :implemented, do: :not_registered
+    end
+  end
+
+  defp unbuildable_learning_module_finding(lm, reason) do
+    Finding.new(
+      :error,
+      :learning_module_not_buildable,
+      "This config's learning module cannot be built here: #{why(reason)}. " <>
+        "A stand-in in its place would be a different experiment.",
+      Map.get(lm.config, "_target_")
+    )
+  end
+
+  defp why({:unsupported_match_attribute, attribute}),
+    do: ~s(matching on #{inspect(attribute)} is not ported, only "displacement" is)
+
+  defp why(:no_matching_scheme),
+    do: "a bare graph module has no matching scheme to narrow possible matches with"
+
+  defp why(:not_registered),
+    do: "the module map calls this class implemented and this setup has no module for it"
+
+  defp why(other), do: inspect(other)
 
   # A training epoch used to be refused here, because this application stepped a
   # model and never kept what an episode learned: the run would explore and

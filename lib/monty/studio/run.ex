@@ -40,7 +40,8 @@ defmodule Monty.Studio.Run do
     pending_actions: [],
     positioning: nil,
     policy: nil,
-    counter: nil
+    counter: nil,
+    first_seen: %{}
   ]
 
   @type t :: %__MODULE__{
@@ -54,7 +55,8 @@ defmodule Monty.Studio.Run do
           pending_actions: [Monty.Frameworks.Actions.Action.t()],
           positioning: Monty.Runtime.Positioning.outcome() | nil,
           policy: Monty.Experiment.RecognitionPolicy.t() | nil,
-          counter: Monty.Experiment.RecognitionPolicy.RecognitionCounter.t() | nil
+          counter: Monty.Experiment.RecognitionPolicy.RecognitionCounter.t() | nil,
+          first_seen: %{optional(String.t()) => [number()]}
         }
 
   @doc """
@@ -128,7 +130,11 @@ defmodule Monty.Studio.Run do
              positioning: positioning,
              policy: policy,
              counter: RecognitionCounter.new(mode),
-             steps: Keyword.get(opts, :steps, @default_steps)
+             steps: Keyword.get(opts, :steps, @default_steps),
+             # Where each object stood the first time the experiment showed it.
+             # A later epoch may place it somewhere else, and a graph has to
+             # stay where it was learned.
+             first_seen: Keyword.get(opts, :first_seen, %{})
            }}
 
         {:error, reason} ->
@@ -147,15 +153,25 @@ defmodule Monty.Studio.Run do
   experiment passes both
   (`object_recognition_experiments.py`).
   """
-  @spec set_ground_truth(t()) :: :ok
-  def set_ground_truth(%__MODULE__{model: model, model_id: model_id, interface: interface}) do
+  @spec set_ground_truth(t(), keyword()) :: :ok
+  def set_ground_truth(
+        %__MODULE__{model: model, model_id: model_id, interface: interface},
+        opts \\ []
+      ) do
     world = interface.env
+
+    # The world's own names unless the caller says it has none: Monty's
+    # pretraining passes the target alone, and then no step can name the object
+    # under the patch, which is the truth for an experiment that does not
+    # recognise anything.
+    labels =
+      Keyword.get_lazy(opts, :semantic_id_to_label, fn -> labels(world) end)
 
     target =
       if function_exported?(world.__struct__, :primary_target, 1),
         do: world.__struct__.primary_target(world)
 
-    model.fixme_set_ground_truth(model_id, target, semantic_id_to_label: labels(world))
+    model.fixme_set_ground_truth(model_id, target, semantic_id_to_label: labels)
 
     :ok
   end
@@ -167,6 +183,51 @@ defmodule Monty.Studio.Run do
     if function_exported?(world.__struct__, :semantic_id_to_label, 1),
       do: world.__struct__.semantic_id_to_label(world),
       else: %{}
+  end
+
+  @doc """
+  Monty's `_pass_target_info_to_model`: the episode's answer, stated rather than
+  matched.
+
+  Only a supervised experiment asks for this, and it asks at the end of the
+  episode — after every step has written its own statistics and before the
+  memory is written (`next_memories/3`), which is the order Monty's
+  `post_episode` has.
+
+  The answer includes where the object *first* stood, so a later epoch that
+  places it somewhere else still extends the graph it built the first time. That
+  map travels with the run.
+
+  Every config that supervises modules here names `DisplacementGraphLM`, which
+  answers this; an evidence module has no supervised conclusion in this port
+  yet, and a config that asked for one would fail loudly rather than learn
+  nothing.
+  """
+  @spec supervise(t()) :: {:ok, t()}
+  def supervise(%__MODULE__{setup: setup} = run) do
+    target = target(run) || no_target!(run)
+    object = Map.fetch!(target, "object")
+
+    location_on_model =
+      Map.get_lazy(run.first_seen, object, fn -> Map.fetch!(target, "position") end)
+
+    :ok =
+      run.model.supervise(
+        run.model_id,
+        target,
+        location_on_model,
+        Setup.supervised_ids(setup)
+      )
+
+    {:ok,
+     %{run | first_seen: Map.put_new(run.first_seen, object, Map.fetch!(target, "position"))}}
+  end
+
+  @spec no_target!(t()) :: no_return()
+  defp no_target!(run) do
+    raise ArgumentError,
+          "a supervised episode needs a world that says what it showed, and " <>
+            "#{inspect(run.setup.name)} steps a world that does not"
   end
 
   # Monty's `pre_episode`: the world is reset, then looked at and stepped until

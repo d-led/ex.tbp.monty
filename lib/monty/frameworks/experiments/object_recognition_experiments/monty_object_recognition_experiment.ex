@@ -71,4 +71,23 @@ defmodule Monty.Frameworks.Experiments.ObjectRecognitionExperiments.MontyObjectR
     do: ground_truth.(state)
 
   defp ground_truth(state, _callbacks), do: {:ok, state}
+
+  @doc """
+  Monty's `post_episode`: the base hook, unchanged.
+
+  A recognition episode owes nothing at its end that the callbacks are not
+  already doing — the episode is logged, the memory it produced is written, and
+  those belong to the runner. It is stated here rather than inherited because a
+  module composed by a name in `Setup` has no inheritance, and a class that did
+  not answer would be a class the loop could not call.
+  """
+  @spec post_episode(
+          map(),
+          MontyExperiment.outcome(),
+          [term()],
+          MontyExperiment.callbacks(term(), term())
+        ) ::
+          term()
+  def post_episode(state, outcome, infos, callbacks),
+    do: MontyExperiment.post_episode(state, outcome, infos, callbacks)
 end

@@ -37,5 +37,6 @@ defmodule Monty.Frameworks.Environments.ObjectInitSamplers.RandomRotation do
     {angles, _rng} = Default.angles(rng)
 
     Default.params(angles, Tuple.to_list(sampler.position), Tuple.to_list(sampler.scale))
+    |> Default.with_quat_rotation()
   end
 end

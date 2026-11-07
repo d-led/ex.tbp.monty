@@ -167,6 +167,21 @@ defmodule Monty.Runtime.LearningModuleServer do
   def fixme_update_ground_truth(server),
     do: apply_state(server, & &1.fixme_update_ground_truth(&2))
 
+  @doc """
+  Monty's `_pass_target_info_to_model`: the conclusion an experiment states.
+
+  A pretraining experiment does not match; it knows what it showed the agent.
+  `location_on_model` is where the object stood the first time this experiment
+  showed it, so a graph stays where it was learned.
+  """
+  @spec supervise(server(), map(), [number()]) :: :ok
+  def supervise(server, target, location_on_model),
+    do: apply_state(server, & &1.supervise(&2, target, location_on_model))
+
+  @doc "Drops the hypotheses of a module the experiment does not supervise."
+  @spec clear_hypotheses(server()) :: :ok
+  def clear_hypotheses(server), do: apply_state(server, & &1.clear_hypotheses(&2))
+
   @doc "The module's own state, for tests and the run inspector."
   @spec state(server()) :: term()
   def state(server), do: GenServer.call(server, :state, :infinity)

@@ -1068,6 +1068,11 @@ class World:
                 scale=scale,
                 semantic_id=semantic_id,
             )
+            # Monty's `primary_target` is `{"object": ..., "semantic_id": ...,
+            # **object_params}` (`experiment/environment.py`): every parameter the
+            # object init sampler produced travels with the answer, not only the
+            # three the simulator was handed. The supervision a pretraining
+            # experiment states reads `euler_rotation` and `quat_rotation` off it.
             self._objects.append(
                 {
                     "object": obj["name"],
@@ -1075,6 +1080,11 @@ class World:
                     "position": list(position),
                     "rotation": list(rotation),
                     "scale": list(scale),
+                    **{
+                        key: obj[key]
+                        for key in ("euler_rotation", "quat_rotation")
+                        if key in obj
+                    },
                 }
             )
 

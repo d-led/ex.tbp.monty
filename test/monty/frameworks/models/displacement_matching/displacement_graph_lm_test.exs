@@ -201,5 +201,55 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLMTest d
         DisplacementGraphLM.new(match_attribute: "PPF")
       end
     end
+
+    test "a config asking for it is refused with a reason, not built" do
+      assert DisplacementGraphLM.from_config(%{"match_attribute" => "PPF"}) ==
+               {:error, {:unsupported_match_attribute, "PPF"}}
+    end
+  end
+
+  describe "as a learning module" do
+    # The coordinator reaches a module only through the behaviour's callbacks, so
+    # a class that left one unanswered could not be stepped at all — it would
+    # fail on the first episode rather than on the first line that says so.
+    test "answers every callback the learning module behaviour declares" do
+      missing =
+        for {name, arity} <-
+              Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.behaviour_info(
+                :callbacks
+              ),
+            not function_exported?(DisplacementGraphLM, name, arity),
+            do: {name, arity}
+
+      assert missing == []
+    end
+
+    test "keeps the hypothesis space the memory starts it with" do
+      lm = new_lm(%{"mug" => model("mug")})
+
+      assert GraphLM.get_possible_matches(lm.graph_lm) == ["mug"]
+      assert lm.possible_paths["mug"] == [0, 1, 2]
+
+      # One two-node path per edge, two edges per node: the order is the memory's
+      # own, and what the step is matched against.
+      assert Enum.sort(lm.next_possible_paths["mug"]) ==
+               [[0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1]]
+    end
+
+    test "states a supervised answer about the graph module underneath" do
+      target = %{
+        "object" => "mug",
+        "position" => [0.0, 1.5, 0.0],
+        "euler_rotation" => [0.0, 0.0, 0.0],
+        "quat_rotation" => [1.0, 0.0, 0.0, 0.0],
+        "scale" => [1.0, 1.0, 1.0]
+      }
+
+      supervised = DisplacementGraphLM.supervise(new_lm(%{}), target, [0.0, 1.5, 0.0])
+
+      assert GraphLM.conclusion(supervised.graph_lm) == nil
+      assert supervised.graph_lm.detected_object == "mug"
+      assert supervised.graph_lm.buffer.stats["possible_matches"] == ["mug"]
+    end
   end
 end

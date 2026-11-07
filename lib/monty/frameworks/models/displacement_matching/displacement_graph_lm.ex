@@ -41,6 +41,8 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
   alias Monty.Frameworks.Utils.SpatialArithmetics
   alias Monty.Geometry.Rotation
 
+  use Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
+
   @default_tolerance 0.001
 
   @enforce_keys [:graph_lm, :match_attribute]
@@ -53,6 +55,36 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
             scale_factors: %{}
 
   @type t :: %__MODULE__{}
+
+  @doc """
+  The module a config asks for, as Monty's `__init__` reads its arguments.
+
+  `:memory` is the graphs the module starts from — Monty loads a state dict into
+  a module it has just built, which is the same thing one step earlier. A
+  `match_attribute` this port has not written is an error rather than a
+  different experiment, which is what `new/1` says out loud.
+  """
+  @spec from_config(map(), keyword()) :: {:ok, t()} | {:error, term()}
+  def from_config(config, options \\ []) when is_map(config) do
+    case Map.get(config, "match_attribute", "displacement") do
+      "displacement" ->
+        {:ok,
+         new(
+           k: Map.get(config, "k"),
+           match_attribute: "displacement",
+           tolerance: Map.get(config, "tolerance", @default_tolerance),
+           use_relative_len: Map.get(config, "use_relative_len", false),
+           graph_delta_thresholds: Map.get(config, "graph_delta_thresholds"),
+           learning_module_id: Map.get(config, "learning_module_id", "LM_0"),
+           tolerances: Map.get(config, "tolerances", %{}),
+           has_detailed_logger: Keyword.get(options, :has_detailed_logger, false),
+           memory: Keyword.get(options, :memory)
+         )}
+
+      other ->
+        {:error, {:unsupported_match_attribute, other}}
+    end
+  end
 
   @doc """
   A module with an empty memory.
@@ -80,7 +112,7 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
         GraphLM.new(
           options
           |> Keyword.take([:learning_module_id, :tolerances, :has_detailed_logger, :gsg])
-          |> Keyword.put(:graph_memory, graph_memory(options))
+          |> Keyword.put(:graph_memory, initial_memory(options))
         ),
       match_attribute: match_attribute,
       tolerance: Keyword.get(options, :tolerance, @default_tolerance),
@@ -90,12 +122,19 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
 
   # The edges are the hypothesis: a graph built with no `k` has no neighbours to
   # match a displacement against, so whatever the config says is passed on as it
-  # stands rather than defaulted here.
-  defp graph_memory(options) do
-    GraphMemory.new(
-      k: Keyword.get(options, :k),
-      graph_delta_thresholds: Keyword.get(options, :graph_delta_thresholds)
-    )
+  # stands rather than defaulted here. A memory handed in is the whole memory:
+  # its own `k` and thresholds are what its graphs were built with.
+  defp initial_memory(options) do
+    case Keyword.get(options, :memory) do
+      %GraphMemory{} = memory ->
+        memory
+
+      _none ->
+        GraphMemory.new(
+          k: Keyword.get(options, :k),
+          graph_delta_thresholds: Keyword.get(options, :graph_delta_thresholds)
+        )
+    end
   end
 
   @doc """
@@ -119,9 +158,165 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
   end
 
   @doc "The same, with the buffer and the paths emptied first — Monty's `reset_stm`."
+  @impl true
   @spec reset_stm(t()) :: t()
   def reset_stm(%__MODULE__{} = lm) do
     %{lm | graph_lm: GraphLM.reset_stm(lm.graph_lm)} |> init_from_ltm()
+  end
+
+  # -- what the model and the experiment ask --------------------------------
+  #
+  # Everything below is the graph module's answer, because the buffer, the
+  # hypotheses, the votes and the memory are its fields. Monty inherits these;
+  # a class that composes says instead which module it is answering on behalf
+  # of. They are not optional: the coordinator reaches a module only through
+  # these callbacks, so a class that left one unanswered could not be stepped.
+
+  @doc "Monty's `send_out_vote`: the objects this module knows this one is not."
+  @impl true
+  @spec send_out_vote(t()) :: {MapSet.t(), t()}
+  def send_out_vote(%__MODULE__{} = lm) do
+    {vote, graph_lm} = GraphLM.send_out_vote(lm.graph_lm)
+    {vote, %{lm | graph_lm: graph_lm}}
+  end
+
+  @doc "Monty's `receive_votes`: another module ruling an object out."
+  @impl true
+  @spec receive_votes(term(), t()) :: {:ok, t()}
+  def receive_votes(votes, %__MODULE__{} = lm) do
+    {:ok, graph_lm} = GraphLM.receive_votes(votes, lm.graph_lm)
+    {:ok, %{lm | graph_lm: graph_lm}}
+  end
+
+  @doc "Monty's `update_stats_after_vote`: what a vote round left it believing."
+  @impl true
+  @spec update_stats_after_vote(t()) :: t()
+  def update_stats_after_vote(%__MODULE__{} = lm),
+    do: %{lm | graph_lm: GraphLM.update_stats_after_vote(lm.graph_lm)}
+
+  @doc "Monty's `propose_goals`: what the goal generator last asked for."
+  @impl true
+  @spec propose_goals(t()) :: {[Monty.Cmp.Goal.t()], t()}
+  def propose_goals(%__MODULE__{} = lm) do
+    {goals, graph_lm} = GraphLM.propose_goals(lm.graph_lm)
+    {goals, %{lm | graph_lm: graph_lm}}
+  end
+
+  @doc "Monty's `propose_region`: the region its goals are in."
+  @impl true
+  @spec propose_region(t()) :: {Monty.Cmp.AttentionRegion.t(), t()}
+  def propose_region(%__MODULE__{} = lm) do
+    {region, graph_lm} = GraphLM.propose_region(lm.graph_lm)
+    {region, %{lm | graph_lm: graph_lm}}
+  end
+
+  @doc "Monty's `get_output`: a displacement module publishes no hypothesis."
+  @impl true
+  @spec get_output(t()) :: {nil, t()}
+  def get_output(%__MODULE__{} = lm) do
+    {output, graph_lm} = GraphLM.get_output(lm.graph_lm)
+    {output, %{lm | graph_lm: graph_lm}}
+  end
+
+  @doc "Monty's `_reset_modules_buffers`: drop the observations, keep the memory."
+  @impl true
+  @spec clear_buffers(t()) :: t()
+  def clear_buffers(%__MODULE__{} = lm),
+    do: %{lm | graph_lm: GraphLM.clear_buffers(lm.graph_lm)}
+
+  @doc "Records whether this step's observation reached the module."
+  @impl true
+  @spec add_lm_processing_to_buffer_stats(t(), boolean()) :: t()
+  def add_lm_processing_to_buffer_stats(%__MODULE__{} = lm, processed) do
+    %{lm | graph_lm: GraphLM.add_lm_processing_to_buffer_stats(lm.graph_lm, processed)}
+  end
+
+  @doc "Whether the last buffered observation was one this module processed."
+  @impl true
+  @spec observation_processed?(t()) :: boolean()
+  def observation_processed?(%__MODULE__{} = lm),
+    do: GraphLM.observation_processed?(lm.graph_lm)
+
+  @doc "What this module concluded, as the model reads it."
+  @impl true
+  @spec conclusion(t()) :: GraphLM.terminal_state()
+  def conclusion(%__MODULE__{} = lm), do: GraphLM.conclusion(lm.graph_lm)
+
+  @doc "Sets the conclusion without asking the module to reconsider."
+  @impl true
+  @spec set_terminal_state(t(), GraphLM.terminal_state()) :: t()
+  def set_terminal_state(%__MODULE__{} = lm, terminal_state),
+    do: %{lm | graph_lm: GraphLM.set_terminal_state(lm.graph_lm, terminal_state)}
+
+  @doc "Forgets what the module concluded, keeping what it believes."
+  @impl true
+  @spec clear_conclusion(t()) :: t()
+  def clear_conclusion(%__MODULE__{} = lm),
+    do: %{lm | graph_lm: GraphLM.clear_conclusion(lm.graph_lm)}
+
+  @doc "Names this object without emptying the module's history."
+  @impl true
+  @spec set_primary_target(t(), map() | nil) :: t()
+  def set_primary_target(%__MODULE__{} = lm, primary_target),
+    do: %{lm | graph_lm: GraphLM.set_primary_target(lm.graph_lm, primary_target)}
+
+  @doc "Tells the module whether this episode trains or evaluates."
+  @impl true
+  @spec set_experiment_mode(
+          t(),
+          Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.mode()
+        ) ::
+          t()
+  def set_experiment_mode(%__MODULE__{} = lm, mode),
+    do: %{lm | graph_lm: GraphLM.set_experiment_mode(lm.graph_lm, mode)}
+
+  @doc "The graph memory this module holds, passed to the next episode."
+  @impl true
+  @spec graph_memory(t()) :: GraphMemory.t() | :none
+  def graph_memory(%__MODULE__{} = lm), do: GraphLM.graph_memory(lm.graph_lm)
+
+  @doc "Monty's `update_ltm_from_stm`: a training episode's observations, into memory."
+  @impl true
+  @spec update_ltm_from_stm(t()) :: t()
+  def update_ltm_from_stm(%__MODULE__{} = lm),
+    do: %{lm | graph_lm: GraphLM.update_ltm_from_stm(lm.graph_lm)}
+
+  @doc "Monty's `fixme_reset_ground_truth`: the object this episode is about."
+  @impl true
+  @spec set_target(t(), map() | nil) :: t()
+  def set_target(%__MODULE__{} = lm, primary_target),
+    do: %{lm | graph_lm: GraphLM.set_target(lm.graph_lm, primary_target)}
+
+  @doc "Monty's `fixme_update_ground_truth`: which objects the graph was built from."
+  @impl true
+  @spec fixme_update_ground_truth(t()) :: t()
+  def fixme_update_ground_truth(%__MODULE__{} = lm),
+    do: %{lm | graph_lm: GraphLM.fixme_update_ground_truth(lm.graph_lm)}
+
+  @doc "Records which object the module's sensor is on this step."
+  @impl true
+  @spec set_stepwise_target(t(), String.t() | nil) :: t()
+  def set_stepwise_target(%__MODULE__{} = lm, label),
+    do: %{lm | graph_lm: GraphLM.set_stepwise_target(lm.graph_lm, label)}
+
+  @doc "The supervised conclusion an experiment states, in place of matching one."
+  @spec supervise(t(), map(), [number()]) :: t()
+  def supervise(%__MODULE__{} = lm, target, location_on_model),
+    do: %{lm | graph_lm: GraphLM.supervise(lm.graph_lm, target, location_on_model)}
+
+  @doc "Drops the hypotheses an unsupervised module never earned."
+  @spec clear_hypotheses(t()) :: t()
+  def clear_hypotheses(%__MODULE__{} = lm),
+    do: %{lm | graph_lm: GraphLM.clear_hypotheses(lm.graph_lm)}
+
+  @doc "Monty's `state_dict`: the memory, and which objects it was built from."
+  @spec state_dict(t()) :: map()
+  def state_dict(%__MODULE__{} = lm), do: GraphLM.state_dict(lm.graph_lm)
+
+  @doc "Monty's `load_state_dict`: a memory, and the module state that follows it."
+  @spec load_state_dict(t(), map()) :: t()
+  def load_state_dict(%__MODULE__{} = lm, memento) do
+    %{lm | graph_lm: GraphLM.load_state_dict(lm.graph_lm, memento)} |> init_from_ltm()
   end
 
   # -- the step -------------------------------------------------------------
@@ -134,6 +329,7 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
   `:no_match`.
   """
   @spec matching_step([Monty.Cmp.Message.t()], Monty.Context.t(), t()) :: {:ok, t()}
+  @impl true
   def matching_step(percepts, ctx, %__MODULE__{} = lm) do
     if Monty.Runtime.location_only_step?(percepts) do
       {:ok, lm}
@@ -161,6 +357,7 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
   end
 
   @doc "Monty's `exploratory_step`: keep the observation, match nothing yet."
+  @impl true
   @spec exploratory_step([Monty.Cmp.Message.t()], Monty.Context.t(), t()) :: {:ok, t()}
   def exploratory_step(percepts, ctx, %__MODULE__{} = lm) do
     with {:ok, stepped} <- GraphLM.exploratory_step(percepts, ctx, lm.graph_lm) do
@@ -454,6 +651,7 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
   down" — one place that computes it, and the conclusion the same as Monty's.
   """
   @spec update_terminal_condition(t()) :: {t(), atom() | nil}
+  @impl true
   def update_terminal_condition(%__MODULE__{} = lm) do
     {lm, pose} =
       case GraphLM.get_possible_matches(lm.graph_lm) do

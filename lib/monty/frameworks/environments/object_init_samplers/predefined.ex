@@ -70,6 +70,7 @@ defmodule Monty.Frameworks.Environments.ObjectInitSamplers.Predefined do
       nth(sampler.positions, counter),
       nth(sampler.scales, counter)
     )
+    |> Default.with_quat_rotation()
   end
 
   @doc "How many poses the sampler walks before repeating: Monty's `__len__`."

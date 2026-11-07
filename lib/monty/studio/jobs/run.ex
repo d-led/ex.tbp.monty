@@ -234,7 +234,12 @@ defmodule Monty.Studio.Jobs.Run do
       # What the phase has learned so far, by module. A run is one episode, so
       # this is the memory a training phase carries from one to the next; an
       # evaluation phase writes nothing into it and hands it on unchanged.
-      memories: Setup.memories(opened.setup)
+      memories: Setup.memories(opened.setup),
+      # Where each object stood the first time this run showed it. A supervised
+      # experiment states its answer as "here on the model", and a later epoch
+      # that places the object somewhere else still extends the graph it built
+      # the first time.
+      first_seen: %{}
     }
 
     {outcome, ran, state} =
@@ -392,6 +397,7 @@ defmodule Monty.Studio.Jobs.Run do
            epoch: Map.get(callbacks, :epoch, 0),
            mode: state.mode,
            memory: state.memories,
+           first_seen: state.first_seen,
            has_detailed_logger: Logging.detailed?(state.logging)
          ) do
       {:ok, run} ->
@@ -463,7 +469,10 @@ defmodule Monty.Studio.Jobs.Run do
         record: keep(state.record),
         infos: state.infos ++ Enum.reverse(infos),
         conclusion: conclusion,
-        memories: memories
+        memories: memories,
+        # A supervised episode names where the object stood, and that place is
+        # what every later episode of this run extends (`Run.supervise/1`).
+        first_seen: run.first_seen
     }
   end
 

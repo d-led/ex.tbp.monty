@@ -142,12 +142,11 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
       assert {:ok, preview} =
                Experiments.preview(%{
                  "name" => "mcp_preview",
-                 "base" => "tutorial/first_experiment"
+                 "base" => "test/graph_learning/feature_pred_off_object"
                })
 
-      # Over `DisplacementGraphLM` and a training experiment class, neither
-      # written here. A preview says so rather than composing a run this
-      # application would refuse.
+      # Over `FeatureGraphLM`, which is not written here. A preview says so
+      # rather than composing a run this application would refuse.
       assert Enum.any?(preview.findings, &(&1.code == :modules_not_ported))
     end
 
