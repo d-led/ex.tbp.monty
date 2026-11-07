@@ -166,11 +166,31 @@ already binaries (`Hypotheses.evidence_bytes/1`, `locations`, `poses`),
 `take/2` and `rows_at/2` select with `binary_part/3` rather than walking lists,
 and the displacement — the biggest per-hypothesis arithmetic — is
 `MatcherNif.displaced_locations/3` when the kernel is loaded, with a list-based
-`reference_moved/2` kept for parity. So the next move is not "pack the
-hypotheses"; it is to find _which_ of the remaining walks is the 474 097 maps a
-step. Reading the code does not answer that: the obvious candidates are already
-packed, which is what an `fprof` call graph is for — attribute the `Enum` calls
-to their callers, then batch the one at the top of that list.
+`reference_moved/2` kept for parity.
+
+**And a call graph says where the walks are** (`fprof`, one step, the learning
+module's process only: 2 539 575 calls, 4 357 own units). By accumulated time
+inside that process:
+
+| what                                                   |      accumulated | own |                                calls a step |
+| ------------------------------------------------------ | ---------------: | --: | ------------------------------------------: |
+| `Enum.map/2` and its internals                         | **1 958 (45 %)** | 893 |                                  **25 957** |
+| `MatcherNif.decode/1` → `decode_one/1`                 |       440 (10 %) | 441 |                      862 (≈127 values each) |
+| `Enum.slice/3` → `slice_forward` → `slice_list`        |       420 (10 %) |  32 |                                  **16 293** |
+| `Enum.reduce/3` fold                                   |        399 (9 %) | 399 |                                     199 813 |
+| `Enum.take_list/2`                                     |        306 (7 %) | 306 | 161 250 (144 957 of them its own recursion) |
+| `Enum.filter_list/2`                                   |        257 (6 %) | 257 |                                     102 746 |
+| `Enum.with_index_list/2`                               |        257 (6 %) | 257 |                                     128 370 |
+| `Hypotheses.gather/3` fun                              |        128 (3 %) | 128 |                                     128 320 |
+| `EvidenceSlopeTracker`'s `indices_where`, `remove_hyp` |           51, 51 |     |                             102 656, 25 664 |
+
+So it is **not one hot loop**: it is **~26 000 small `Enum.map`s a step**, each
+over a hypothesis list of about a dozen rows, plus 16 293 `Enum.slice`s that walk
+a list to select from it. Collapsing _one_ of them would be lost in the noise;
+what is worth writing is one pass that answers the questions those 26 000 maps
+are asked — and the `slice`s disappear on their own if selection goes through
+`Hypotheses.take/2`'s `binary_part` instead of list slicing, which is already
+written and used elsewhere.
 
 Two numbers keep the earlier suspicions out of the way: the payload copy is
 **10.5 %** (`gen_server:decode_msg` — the 2.9 MB of observations measured at
