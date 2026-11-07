@@ -1,5 +1,11 @@
 # Status
 
+> **Superseded — read [`handover.md`](handover.md) instead.** This page is the
+> 2026-11-03 hand-over and is kept for its measurements, not for its state. Its
+> "Green right now" is the commit of that day; for what is green and what is
+> open today, `handover.md`'s newest section is the answer. Entries in the table
+> below that have been settled since are struck through in place.
+
 Where the port stands, what to measure next, and what is open. Written
 2026-11-03, at the end of a day in which the machine sat at a load average of 60
 to 90, so the numbers below are the ones that survive load — reductions and
@@ -9,7 +15,7 @@ The order that matters: **benchmark against Monty first, on a quiet machine,
 before changing anything else.** Everything else in this file is a list, not a
 queue.
 
-## Green right now
+## Green right now (as of 2026-11-03 — see `handover.md` for today)
 
 `main` is `b00271d` (the desktop runtime guard). CI on it is **green in every
 job**: `lint`, `types`, all four test partitions, `coverage, CRAP and parity`,
@@ -112,16 +118,22 @@ An experiment built from a class this application has not written is **refused**
 not stood in for. `Setup` reports `:modules_not_ported` as an `:error`, so the
 page disables the run, `mix monty.run` exits 1 with the finding that says why,
 the queue marks the record failed with that sentence, and `Run.start/2` refuses
-the setup before a model is built. The same rule covers a phase this port cannot
-run: `do_train: true` is `:training_not_implemented`, because a training episode
-here would explore and conclude nothing.
+the setup before a model is built. The same rule covered a phase this port could
+not run: `do_train: true` was refused as `:training_not_implemented`, because a
+training episode here would explore and conclude nothing. **That refusal is gone
+(2026-11-06)** — a training phase now carries what each episode learned into the
+next one and a run writes the memory it built; what is open is the science, not
+the loop (see [`training.md`](training.md) §3 and `handover.md` §10.4).
 
 - **84 of Monty's 210 experiments** name at least one such class (67 use a
   `DisplacementGraphLM` group, 34 are pretraining experiments, overlapping), and
   every training tutorial is among them — including `tutorial/first_experiment`,
   which is therefore no longer one of `Catalog.templates/0`. The catalogue still
   lists them: it is Monty's, and a row that says "cannot run here" is a fact
-  about the port worth seeing.
+  about the port worth seeing. *(The unported-class half of this bullet still
+  holds; the "training tutorials are refused" half was retired with
+  `:training_not_implemented` — a training config is now refused only for a
+  class this port has not written.)*
 - Two latent defects surfaced the moment the tests stepped a real learning
   module instead of the stand-in (which kept no hypotheses at all): the detailed
   JSON logger encoded a hypothesis set's raw f64 binary and crashed on
@@ -259,7 +271,7 @@ the one that fails.
 
 | #   | What                                                                                                                                                                                                                                                                                                                                                                                                                                          | Done means                                                                                                                   |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Benchmark against Monty on a quiet machine** — nothing else on this list should come first                                                                                                                                                                                                                                                                                                                                                  | The table from step 1 and step 2 above, side by side, with the ratio stated                                                  |
+| 1   | ~~**Benchmark against Monty on a quiet machine**~~ — **done.** The benchmark has since been run repeatedly; the per-step numbers, the four rejected optimisations and the yardstick (`unsupervised_inference_distinctobj_dist_agent`, 49 617 eval steps at 46 ms) are in [`speed.md`](speed.md) and `handover.md` §16                                                                                                                                                                                                                                                    | The table from step 1 and step 2 above, side by side, with the ratio stated — `speed.md` carries it                           |
 | 2   | **`lazy_html` is one patch behind**: 0.1.14 needs `fine ~> 0.2.0`, and `pythonx 0.4.11` pins `fine ~> 0.1.2`. Verified in a scratch project that it resolves without pythonx, so this is pythonx's constraint                                                                                                                                                                                                                                 | `pythonx` allows `fine 0.2`, then `mix deps.update lazy_html`. Nothing to do before that                                     |
 | 3   | ~~**`.sobelow-skips` is line-anchored.**~~ — **done 2026-11-04.** The four reviewed `DOS.ModuleConcat` findings are marked above their own definitions, which a shifted line cannot drop, and the fingerprint file is empty                                                                                                                                                                                                                   | The marker survives a line inserted above it; `.sobelow-conf` says which placement works                                     |
 | 4   | ~~**`# sobelow_skip` comments did not hold across sobelow versions.**~~ — **done 2026-11-04.** Placement, not the version: inside a function body 0.18.1 ignores the comment, above the `def` it honours it                                                                                                                                                                                                                                   | A short note in `.sobelow-conf`, and four markers verified against 0.18.1                                                    |
@@ -272,7 +284,7 @@ the one that fails.
 | 11  | ~~**The builder's default base cannot run**~~ — **done 2026-11-04.** `Blueprint` starts from `tutorial/first_experiment`, so a new draft inherited the refusal, and the obvious replacement was refused too because `n_eval_epochs: ${constants.rotations_all_count}` was checked as text. It now starts from the first template and resolves that reference before checking the count                                                        | `Blueprint.new/1` with a name alone composes into a setup `Setup.valid?/1` accepts                                           |
 | 12  | ~~**`EvidenceGraphLM.apply_votes/2` has no clause for a sensor module's vote**~~ — **done 2026-11-04.** The payload `receive_votes/2` was handed was never the shape it reads, because `_combine_votes` had not been ported: votes now reach a module keyed by object and moved into its own sensor's frame                                                                                                                                   | `MontyForEvidenceGraphMatching.combine_votes/2` plus two tests that specify the move; `apply_votes/2` is unchanged           |
 | 13  | ~~**`RunHistory.search/1` still carries each run's log.**~~ — **done 2026-11-05.** The two numbers a row draws were counted from the transcript; they are columns written with it now, so a page of runs reads rows and nothing else, and the MCP dry run takes its count from the row                                                                                                                                                        | `steps_done` and `episodes_done` are written by `checkpoint/1`; the /runs badge still says `ep 2/140` out of them            |
-| 14  | **Dependabot flags `glib 0.18.5`** (medium: unsound `Iterator` impls for `VariantStrIter`; fixed in `glib 0.20.0`). Tauri's gtk-rs stack pulls it on Linux, nothing in `src-tauri` calls the affected API, and `0.18` → `0.20` is not semver-compatible in `0.x`, so the bump is `tauri`/`wry`/`tao`'s to make                                                                                                                                | A tauri release on gtk-rs 0.20, then `cargo update -p glib` and a green desktop job                                          |
+| 14  | ~~**Dependabot flags `glib 0.18.5`**~~ — **dispositioned 2026-11-06.** Dismissed as a tolerable risk with the chain verified: `tauri` pins `gtk = "^0.18"`, `gtk 0.18.2` needs `glib = "^0.18"`, and `cargo update -p glib --precise 0.20.0 --dry-run` refuses with exactly that. Linux-target only; clears by itself when tauri adopts gtk 0.19+ (`handover.md` §9)                                                                                    | Re-open the alert if a tauri release moves to gtk-rs 0.20; no action here until then                                         |
 
 ## Where the work stands, in one paragraph
 
