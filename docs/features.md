@@ -1,6 +1,6 @@
 # Features
 
-What this repository does, checked in the tree on 2026-11-05. Every claim links to
+What this repository does, checked in the tree on 2026-11-08. Every claim links to
 the thing that proves it. Anything not built is listed at the end, so nobody has to
 guess. The counts are measured by [`scripts/refresh_features.py`](../scripts/refresh_features.py),
 not recalled — run it after anything lands that can move one.
@@ -11,7 +11,7 @@ not recalled — run it after anything lands that can move one.
   `Monty.Path.File.Class`; a repeated segment collapses, a class repeating the file
   name is dropped. ([rule](module-map.md))
 - **The map is the contract.** 131 Python files (124 `tbp.monty`, 7 `tbp.teleop`),
-  360 classes. Implemented: 48 files / 176 classes. Planned: 79 / 182. Excluded: 4 / 2.
+  338 classes. Implemented: 48 files / 182 classes. Planned: 79 / 154. Excluded: 4 / 2.
   ([`module_map/data.ex`](../lib/monty/module_map/data.ex))
 - `mix monty.module_map.gen` re-derives the map from the checkouts;
   `mix monty.module_map.verify` fails on an unmapped file, an `implemented` entry
@@ -201,7 +201,7 @@ what CI runs.
   tarball, a `.deb` and an AppImage) and Windows x64 (NSIS setup and the portable
   folder) — uploading each to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
-- 2,219 `test` declarations in the suite.
+- 2,445 `test` declarations in the suite.
 
 ## Not built — do not assume these
 

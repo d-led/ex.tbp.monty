@@ -167,6 +167,7 @@ mutated. What follows from that, and what looks wrong upstream, is in
 | [docs/container.md](docs/container.md)                       | how do I run the image? every variable, the volumes, what it reports |
 | [docs/desktop.md](docs/desktop.md)                           | how do I open this as an app? the window, the folder it writes to    |
 | [docs/mcp.md](docs/mcp.md)                                   | `POST /mcp` — ask this app about Monty's docs, roadmap and code      |
+| [docs/readiness.md](docs/readiness.md)                       | which experiments run here, and what each missing class unblocks     |
 | [docs/roadmap.md](docs/roadmap.md)                           | the order the rest of Monty arrives in                               |
 
 ## Licence

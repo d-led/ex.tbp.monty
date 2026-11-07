@@ -122,10 +122,10 @@ reporting zeros that read as a full disk.
 
 ### Asking "how many experiments?"
 
-`monty_list_experiments` is a catalog answer, not a list: the total, the four
-choices counted (`agent`, `modules`, `learning_module`, `model`), and a page of
-the matching experiments. The counts respect the other filters, so one call
-answers "how many surface-agent experiments start from a pretrained model":
+`monty_list_experiments` is a catalog answer, not a list: the total, the five
+choices counted (`ready`, `agent`, `modules`, `learning_module`, `model`), and a
+page of the matching experiments. The counts respect the other filters, so one
+call answers "how many surface-agent experiments start from a pretrained model":
 
 ```json
 {
@@ -138,10 +138,16 @@ answers "how many surface-agent experiments start from a pretrained model":
 9 of 210 experiments match.
 
 Choices, each counted with the other filters applied:
+Runs here?: yes 8 · no 1
 Agent: dist 98 · other 94 · surf 18
 Learning modules: 1 18
 ...
 ```
+
+`ready` is the one to ask first when the question is "what can I run?": `yes`
+keeps the experiments this deployment runs and `no` the ones `Setup`'s findings
+refuse, which is the same answer the experiments page filters on and
+[`docs/readiness.md`](readiness.md) counts.
 
 `monty_describe_experiment` answers the next question — sensors and their count,
 learning modules, the objects the config names (or the sampler that places

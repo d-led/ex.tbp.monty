@@ -18,15 +18,20 @@ Check CI on the commit after this one before believing anything in section 10.
 
 What is left, in order:
 
-1. **Training makes fewer objects than Monty does** — the chart the user
+1. **Which experiments run, and what the rest need** — answered by
+   `mix monty.readiness` and by the page's first facet since §18. The class that
+   alone unblocks the most is `FeatureGraphLM` (10), then two capability gaps in
+   classes that already exist (`DisplacementGraphLM` on PPF, `GraphLM`'s own
+   matching scheme). `docs/readiness.md` has the table and the order.
+2. **Training makes fewer objects than Monty does** — the chart the user
    noticed: Monty's training built three graphs, ours two, from the same six
    training episodes (section 10.4). This is the first thing to look at.
-2. **`GraphLM` + `DisplacementGraphLM`** — the keystone port, 62 experiments
+3. **`GraphLM` + `DisplacementGraphLM`** — the keystone port, 62 experiments
    (section 10.6). Must land as a pair.
-3. **Two decisions still with the user** (10.7): Monty's pytest fixtures in the
+4. **Two decisions still with the user** (10.7): Monty's pytest fixtures in the
    catalogue, and whether Habitat-Sim stays a permanent refusal.
-4. **Performance** (7) is unchanged and still the biggest single win left.
-5. The deferred review of the colocated CSS/JS/hooks, which is written down in
+5. **Performance** (7) is unchanged and still the biggest single win left.
+6. The deferred review of the colocated CSS/JS/hooks, which is written down in
    the repository memory, not here.
 
 ---
@@ -954,3 +959,73 @@ not have (`UnknownObjectType: mug`). They now skip unless the prerequisite is
 present — the convention `host_test.exs` already used — and run on a machine
 that has it. A test that needs data the suite does not carry is a test that has
 to say so.
+
+---
+
+## 18. 2026-11-08: every experiment asked what it needs, and the page says it
+
+The question this answers is _"which experiments still need module translation to
+be able to run?"_ — which used to be answerable only by reading a refusal on each
+page, one experiment at a time, and then counting by hand.
+
+### 18.1 What landed
+
+| commit | what it does                                                                                                      | how it is known                                                                                       |
+| ------ | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| this   | `Monty.Studio.Readiness` — one experiment's answer, the counts, and the classes ranked by what they alone unblock | pure where it can be: `classify/1` and `summarise/1` are tested on a fixture; `catalog/1` is the edge |
+| this   | `mix monty.readiness [--world] [--all] [--json]`                                                                  | 210 experiments in ~2 s, or 0.06 s from the cache                                                     |
+| this   | `/experiments` grows a **Runs here?** facet, so the page opens on the answer                                      | the pill counts respect the other facets, like every other one                                        |
+| this   | `Setup.modules/1` and `Setup.blocking/1` — the classification `module_findings/1` used to keep private            | one home: the refusal text and the survey count the same list                                         |
+| this   | **a bug the facet surfaced**: the list rendered a page of unfiltered rows under every filtered link               | 30 stale rows under `?agent=surf`; now exactly the filtered ones                                      |
+
+That last one is worth its own line: `mount/3` streamed the first page and
+`handle_params/3` then streamed the filtered rows with `reset: true`. In a
+browser the reset replaces the children, but the first paint already carried the
+wrong list, and in the test the merged DOM kept both. Rows are streamed in
+`handle_params/3` alone now, which is where the filters arrive.
+
+### 18.2 The numbers (MuJoCo, the default world)
+
+210 experiments: **87 run here, 123 refused, 0 do not compose**. In the stand-in
+scene it is 122 and 88 — a sphere needs no pretrained memory and cannot be
+refused for showing no target.
+
+`docs/readiness.md` has the full table. The three rows that matter:
+
+- **87 are refused for the world** (`Habitat-Sim`, §10.7's open decision).
+- **53 for a class nothing stands in for**, and the ranking by what each one
+  alone unblocks is `FeatureGraphLM` 10 (21 naming), `MontyBase` 3 (6),
+  `DisplacementGraphLM` 2 (4), `GraphLM` 1, `TwoDSensorModule` 1 (17),
+  `DefaultAttentionSystem` 0 (9), the Saccade and Omniglot environment/interface
+  pairs 0 each.
+- **19 for a missing pretrained library**, which is `/prerequisites`'s job and
+  not a port at all, and **7 for `${constants.rotations_all_count}`**, which is
+  §11's open point 4 and is still true.
+
+### 18.3 The order this suggests, and why it changed
+
+The old order was `GraphLM` → `DisplacementGraphLM` → `FeatureGraphLM` → …,
+written when both of the first two were missing. Both are written now (§17), so
+what is left of them is a **capability inside a class that exists**:
+
+1. `DisplacementGraphLM` refuses `match_attribute: PPF` in its own words —
+   "matching on PPF is not ported, only displacement is". Two MuJoCo experiments
+   and two behind Habitat; a branch to translate, not a module.
+2. `FeatureGraphLM` — ten MuJoCo experiments, the largest single win.
+3. `TwoDSensorModule` + `DefaultAttentionSystem` together, since the Saccade and
+   Omniglot families need both and only one config is blocked by the sensor
+   alone.
+4. `MontyBase` last, because all three of its experiments are Monty's own pytest
+   fixtures and §10.7 has not decided what those are.
+
+### 18.4 What not to trust
+
+- **A count of unported classes as a count of blocked experiments.** One class
+  can block twenty-one experiments (`FeatureGraphLM`) or none
+  (`SaccadeOnImageInterface` is always accompanied by something else).
+- **`blocked_by` as "classes to write".** It now also names a written class that
+  refuses a config — `DisplacementGraphLM`, `GraphLM` — because that is the work
+  too, and the mix task's `learning_module_not_buildable` row is where those
+  show.
+- **The stand-in world's number as the MuJoCo one.** Different refusals, both
+  true, `--world` decides which you are reading.
