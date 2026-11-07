@@ -98,10 +98,18 @@ step sends. One step's observations, as they are handed to the sensor modules:
 
 A float in a list costs four words on the heap, so each of those arrays is four
 times its payload before it is copied, and it is copied into the process that
-reads it. That is the item to work on: the arrays belong in **flat binaries**,
-which is what the native kernels already take for hypotheses (`pose_bytes`,
-`location_bytes`, `values_bytes`), and which would cut that copy about four
-times over.
+reads it.
+
+**That copy is not worth optimising, measured rather than argued**
+(`scripts/probe_copy_cost.exs`, 2026-11-07): one step's observations cost
+**1 582–1 748 µs to hand to a process as nested lists, and 1 µs as flat
+binaries** — 369 439 words against 325, because a binary over 64 bytes is
+reference-counted and shared rather than copied. Against a step of ~275 ms it is
+**under 1 %**, and even if it happened twice per step a full rewrite of the
+worlds, the transform and the sensor modules to carry binaries would buy about
+1 %. The 71.5 % of _allocated words_ under `gen_server:loop/5` is therefore not
+this payload: tprof's word column counts allocation inside the frame, not the
+size of the terms, and it must not be read as "the messages are the cost".
 
 Two things that are _not_ worth doing, measured rather than assumed:
 
