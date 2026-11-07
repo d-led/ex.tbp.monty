@@ -124,6 +124,47 @@ Two things that are _not_ worth doing, measured rather than assumed:
   `DepthTo3DLocations` produces it, and `depth_to_3d_locations_test.exs` asserts
   that it does, so removing it is a parity break dressed as an optimisation.
 
+## Where a step's time actually goes, by function (2026-11-07)
+
+`eprof` over one step with every process profiled — the totals are inflated and
+must not be quoted, but the ranking holds, and it is the ranking that decides
+what to write:
+
+| function                                           |  share | calls/step |
+| -------------------------------------------------- | -----: | ---------: |
+| `Enum`'s map internals                             | 10.8 % |    474 097 |
+| `gen_server:decode_msg/4` — a message is copied in | 10.5 % |         17 |
+| `Enum`'s reduce fold                               |  3.6 % |    248 226 |
+| `KdTreeNif.nearest_many/3`                         |  3.3 % |         10 |
+| `Enum.take_list/2`                                 |  3.0 % |    215 328 |
+| `MatcherNif.decode`'s list comprehension           |  2.4 % |    107 996 |
+| `Enum.with_index_list/2`                           |  2.1 % |    137 859 |
+| `Stream.Reducers.zip_list_heads_tails/3`           |  2.1 % |    173 565 |
+| `Enum.filter_list/2`                               |  2.0 % |    109 430 |
+| `Enum.drop_list/2`                                 |  1.9 % |    274 717 |
+| `Stream.Reducers.zip_list/4`                       |  1.7 % |     55 035 |
+| `Hypotheses`'s `gather/3` fun                      |  1.3 % |    125 120 |
+| `MatcherNif.decode_one/1`                          |  1.2 % |    107 154 |
+| `Enum.count/2`, both frames                        |  2.1 % |     69 636 |
+| `lists:reverse/1`                                  |  1.0 % |    113 250 |
+| `Monty.Geometry.dot/2`                             |  1.1 % |     80 886 |
+
+**About 30 % of a step is generic `Enum`/`lists`/`Stream` machinery, and every
+one of those rows is a pass over the hypothesis arrays.** The primitives those
+passes call are cheap — `Geometry.dot/2` is 6 reductions a call and
+`Geometry.transpose/1` is 6, measured by `scripts/probe_hypothesis_cost.exs`, and
+together they are 2 % of a step. What costs is the walking: 474 097 maps, 274 717
+drops and 215 328 takes a step, each building an intermediate list.
+
+So the change worth writing is **one packed pass over the hypothesis set**
+(evidence, locations, poses and possibility, as the binaries `pose_bytes`,
+`location_bytes`, `values_bytes` already carry), replacing the four or five
+separate walks with one. That is a batched kernel, not a faster `dot`.
+
+Two numbers keep the earlier suspicions out of the way: the payload copy is
+**10.5 %** (`gen_server:decode_msg` — the 2.9 MB of observations measured at
+1.6 ms above), and the hypothesis primitives are **2 %**.
+
 ## What the native kernels have bought
 
 22 M reductions and 212 MB a step before them; 9 M and 85 MB now — from the
