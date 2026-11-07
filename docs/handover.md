@@ -935,3 +935,22 @@ Opened, in the order it blocks work:
    writes `memory/trained/<name>.jsonl.gz`; `Setup.memories/1` loads a memory
    named by the config. Nothing yet points a config at the memory the previous
    run trained, so "train, then evaluate" is two runs and a path.
+
+### 17.4 The gate, watched
+
+`scripts/quality.sh` green (2 453 tests, 19 properties, worst complexity 29.85)
+and `MIX_ENV=test mix dialyzer` at 0 errors at every commit of this section.
+
+CI is **green in every job** on `2bc3ef5` (`42412540254` excepted only in
+`desktop release`, which is skipped without a `v*` tag — §2): `lint`, `types`,
+the four test shards, `coverage, CRAP and parity`, both images, the image index
+and all three desktop bundles. That includes **`image amd64, scan, non-root`,
+green for the first time since §14**: the base image's finding was fixed
+upstream, so §14 needs no exception in `.trivyignore.yaml`.
+
+Two runs went red on the way, both for one reason worth keeping: the supervised
+tests were written against MuJoCo, and `priv/monty_py` loads a YCB mesh CI does
+not have (`UnknownObjectType: mug`). They now skip unless the prerequisite is
+present — the convention `host_test.exs` already used — and run on a machine
+that has it. A test that needs data the suite does not carry is a test that has
+to say so.
