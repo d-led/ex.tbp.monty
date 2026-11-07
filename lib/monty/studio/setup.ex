@@ -1896,6 +1896,57 @@ defmodule Monty.Studio.Setup do
 
   defp last_segment(dotted), do: dotted |> String.split(".") |> List.last()
 
+  @doc """
+  Every class this setup names — the world, the model, the sensors, the learning
+  modules and their collaborators, the motor system, the transforms, the
+  attention system — each with this application's status for it.
+  """
+  @spec modules(t()) :: [module_description()]
+  def modules(%__MODULE__{} = setup), do: all_modules(setup)
+
+  @typedoc """
+  What this setup names that is not simply an Elixir module that runs.
+
+    * `:unwritten` — no module here and nothing standing in for it, so a run is
+      refused;
+    * `:carried` — Monty's MuJoCo classes, which the Python in `priv/monty_py`
+      executes, so a MuJoCo run does run them;
+    * `:shell` — the classes whose job `Monty.Runtime.*` does on purpose;
+    * `:unknown` — a class the module map cannot place at all.
+  """
+  @type blocking :: %{
+          unwritten: [module_description()],
+          carried: [module_description()],
+          shell: [String.t()],
+          unknown: [module_description()]
+        }
+
+  @doc """
+  What this setup names that is not simply an Elixir module that runs.
+
+  The one home of the classification: `module_findings/1` reports it, and a
+  survey counts it, so the page and a count cannot disagree about why an
+  experiment is refused. A class is refused exactly when it is `:unwritten`.
+  """
+  @spec blocking(t()) :: blocking()
+  def blocking(%__MODULE__{} = setup) do
+    modules = all_modules(setup)
+
+    {shell, rest} =
+      modules
+      |> Enum.filter(&(&1.status == :planned))
+      |> Enum.split_with(&StandIns.shell?(&1.class))
+
+    {carried, unwritten} = Enum.split_with(rest, &runs_in_the_world?/1)
+
+    %{
+      unknown: Enum.filter(modules, &(&1.status == :unknown)),
+      unwritten: unwritten,
+      carried: carried,
+      shell: Enum.map(shell, & &1.class)
+    }
+  end
+
   defp all_modules(setup) do
     environment_modules =
       case setup.environment do
@@ -2142,27 +2193,13 @@ defmodule Monty.Studio.Setup do
   # the same table goes into the generated map, so a page and a refusal cannot
   # disagree.
   defp module_findings(setup) do
-    modules = all_modules(setup)
-    unknown = Enum.filter(modules, &(&1.status == :unknown))
+    modules = modules(setup)
+    blocking = blocking(setup)
 
-    planned =
-      for module <- modules,
-          module.status == :planned,
-          not StandIns.shell?(module.class),
-          do: module
-
-    {in_the_world, stand_ins} = Enum.split_with(planned, &runs_in_the_world?/1)
-
-    shell =
-      for module <- modules,
-          module.status == :planned,
-          StandIns.shell?(module.class),
-          do: module.class
-
-    Enum.map(unknown, &unknown_module_finding/1) ++
-      not_ported_finding(Enum.map(stand_ins, & &1.class), length(modules)) ++
-      carried_finding(setup, Enum.map(in_the_world, & &1.class)) ++
-      shell_finding(shell, length(modules)) ++
+    Enum.map(blocking.unknown, &unknown_module_finding/1) ++
+      not_ported_finding(Enum.map(blocking.unwritten, & &1.class), length(modules)) ++
+      carried_finding(setup, Enum.map(blocking.carried, & &1.class)) ++
+      shell_finding(blocking.shell, length(modules)) ++
       world_finding(setup)
   end
 

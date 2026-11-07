@@ -34,11 +34,13 @@ defmodule Monty.Studio.Catalog do
   # Anything else — "the shape most benchmarks use", "the simplest one" — is this
   # studio's opinion, and it has no business being on a page about Monty's own
   # configurations.
-  # Every name here has to run in this application: a template is a suggestion,
-  # and suggesting one whose classes are not written would be suggesting a run
-  # that is refused. `tutorial/first_experiment` is Monty's own first tutorial
-  # and is not here for that reason — it is a training experiment over
-  # `DisplacementGraphLM`, and neither is written here yet.
+  # Every name here has to run in this application *and* in the world it steps by
+  # default: a template is a suggestion, and suggesting one that is refused would
+  # be suggesting a run that does not start. `tutorial/first_experiment` is
+  # Monty's own first tutorial and its classes are written here now, but it is
+  # supervised and the stand-in scene cannot state a target — so it belongs in
+  # the list, where its readiness is shown, and not in a starting point that has
+  # to work wherever this page is served.
   @templates [
     "base_config_10distinctobj_dist_agent",
     "randrot_noise_10distinctobj_5lms_dist_agent"
@@ -76,11 +78,19 @@ defmodule Monty.Studio.Catalog do
   def experiments(opts \\ []) do
     conf_dir = conf_dir(opts)
 
-    case stamp(conf_dir) do
+    case directory_stamp(conf_dir) do
       nil -> read(conf_dir)
       stamp -> cached({__MODULE__, :experiments, stamp}, fn -> read(conf_dir) end)
     end
   end
+
+  @doc """
+  What a cache of anything derived from the catalogue must be keyed on: when the
+  experiment directory was last written, and how many configurations it holds.
+  `nil` when there is no directory to read.
+  """
+  @spec stamp(keyword()) :: term() | nil
+  def stamp(opts \\ []), do: directory_stamp(conf_dir(opts))
 
   defp read(conf_dir) do
     conf_dir
@@ -91,7 +101,7 @@ defmodule Monty.Studio.Catalog do
 
   # When the directory was last written, and how many configs it holds: a copy
   # that is replaced, added to or trimmed moves one of the two.
-  defp stamp(conf_dir) do
+  defp directory_stamp(conf_dir) do
     directory = Path.join(conf_dir, "experiment")
 
     with {:ok, %File.Stat{mtime: mtime}} <- File.stat(directory, time: :posix),
