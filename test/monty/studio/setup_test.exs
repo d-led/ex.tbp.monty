@@ -372,16 +372,22 @@ defmodule Monty.Studio.SetupTest do
     end
 
     test "the tutorial's experiment names only classes this port has written" do
-      # This config used to be the example above: its learning module and then
-      # its supervising experiment class were missing. Both are written, so the
-      # same config runs — and this test is what says so.
-      #
-      # Against MuJoCo, because a supervised episode reads the object and pose it
-      # was given off the world, and the stand-in scene has none to state.
-      setup = setup_for("tutorial/first_experiment", world_simulator: :mujoco)
+      # This config used to be the describe block's example of a refusal: its
+      # learning module and then its supervising experiment class were missing.
+      # Both are written, so nothing about its *classes* refuses it now. What is
+      # left is about the world it would step — a supervised episode reads the
+      # object off the world, and whether a machine has that world is another
+      # question (`:no_target_to_supervise`, the object's meshes).
+      setup = setup_for("tutorial/first_experiment")
 
-      assert Enum.all?(setup.findings, &(&1.level != :error))
-      assert Setup.valid?(setup)
+      refute Enum.any?(
+               setup.findings,
+               &(&1.code in [:modules_not_ported, :learning_module_not_buildable])
+             )
+
+      assert [learning_module] = setup.learning_modules
+      assert learning_module.module.class == "DisplacementGraphLM"
+      assert setup.experiment_class.class == "MontySupervisedObjectPretrainingExperiment"
     end
 
     test "an experiment that trains on one list and evaluates another walks both" do

@@ -15,6 +15,18 @@ defmodule Monty.Frameworks.Experiments.PretrainingExperiments.MontySupervisedObj
 
   use ExUnit.Case, async: false
 
+  # The tutorial's scene is a YCB object, and the meshes are a prerequisite this
+  # suite does not carry (`host_test.exs` says the same about a scene with
+  # objects). A machine with `MONTY_DATA` unpacked runs these; a machine without
+  # skips them, and says so rather than failing on a mesh that is not there.
+  @ycb "ycb_objects_1_0"
+
+  @moduletag skip:
+               if(Monty.Prerequisites.present?(Monty.Prerequisites.get(@ycb)),
+                 do: false,
+                 else: "the YCB meshes (#{@ycb}) are not on this machine"
+               )
+
   alias Monty.Frameworks.Experiments.PretrainingExperiments.MontySupervisedObjectPretrainingExperiment,
     as: Pretraining
 

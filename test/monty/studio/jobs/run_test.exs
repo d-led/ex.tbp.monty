@@ -127,6 +127,14 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert GraphMemory.get_memory_ids(learned) == ["new_object0"]
     end
 
+    # The tutorial's scene is a YCB object, and the meshes are a prerequisite
+    # this suite does not carry: a machine with `MONTY_DATA` unpacked runs this,
+    # one without skips it.
+    @tag skip:
+           if(Monty.Prerequisites.present?(Monty.Prerequisites.get("ycb_objects_1_0")),
+             do: false,
+             else: "the YCB meshes are not on this machine"
+           )
     test "a supervised experiment states the episode's answer, so its memory has the object" do
       # The tutorial is the one config here that learns by being told what it
       # saw: its experiment class states the object and the pose at the end of
