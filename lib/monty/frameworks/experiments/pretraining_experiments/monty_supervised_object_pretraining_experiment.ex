@@ -36,7 +36,7 @@ defmodule Monty.Frameworks.Experiments.PretrainingExperiments.MontySupervisedObj
   """
 
   alias Monty.Frameworks.Experiments.MontyExperiment
-  alias Monty.Studio.Run
+  alias Monty.Studio.{Run, Setup}
 
   @doc """
   Monty's `train()`/`evaluate()`: every epoch, through this class's `pre_episode`.
@@ -128,7 +128,7 @@ defmodule Monty.Frameworks.Experiments.PretrainingExperiments.MontySupervisedObj
   end
 
   defp every_module_supervised?(setup) do
-    supervised = setup |> Monty.Studio.Setup.supervised_ids() |> MapSet.new()
+    supervised = setup |> Setup.supervised_ids() |> MapSet.new()
     wired = setup.learning_modules |> Enum.map(& &1.id) |> MapSet.new()
 
     supervised == wired
