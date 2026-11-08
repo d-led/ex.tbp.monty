@@ -10,7 +10,7 @@ defmodule Monty.Studio.LearnedTest do
   use ExUnit.Case, async: false
 
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
-  alias Monty.Studio.Learned
+  alias Monty.Studio.{Learned, Memory}
   alias Monty.Test.Tmp
 
   # A config that trains: five learning modules, so the naming rule for a
@@ -19,7 +19,11 @@ defmodule Monty.Studio.LearnedTest do
 
   setup do
     _root = Tmp.env_dir("studio-learned", :studio_artifacts_dir)
-    :ok
+    # Both places a memory is written are temporary: a test that trained into the
+    # checkout's own library tree would be a library nobody asked for.
+    libraries = Tmp.env_dir("studio-learned-libraries", :monty_libraries_dir)
+
+    {:ok, libraries: libraries}
   end
 
   describe "a run that trained" do
@@ -48,7 +52,26 @@ defmodule Monty.Studio.LearnedTest do
       run_id = Ecto.UUID.generate()
 
       assert [line | _rest] = Learned.keep(run_id, opened, [{:train, 1}], memories(opened))
-      assert line == "the memory learning_module_0 learned is in #{Learned.dir(run_id)}"
+
+      assert line ==
+               "the memory learning_module_0 learned is in #{Learned.dir(run_id)}, " <>
+                 "and is the library dist_agent_5lm_2obj_train-learning_module_0 (trained)"
+    end
+
+    test "files it where a config that reads the memory will find it", %{libraries: libraries} do
+      # The point of a training run is the run after it: an evaluation config that
+      # names this memory asks `Memory.load_module/3`, which reads the library
+      # tree. A memory kept only in the run's own directory is a memory nothing
+      # finds, so "train it" would train for nothing.
+      {:ok, opened} = Monty.Studio.open(@training)
+      run_id = Ecto.UUID.generate()
+
+      Learned.keep(run_id, opened, [{:train, 1}], memories(opened))
+
+      name = "dist_agent_5lm_2obj_train-learning_module_0"
+
+      assert Memory.releases_for(name, libraries) == [Learned.release()]
+      assert {:ok, _memory} = Memory.load_module(name, Learned.release(), 0, libraries)
     end
   end
 

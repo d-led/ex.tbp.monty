@@ -34,6 +34,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Prerequisites
   alias Monty.Studio.Catalog
   alias Monty.Studio.Finding
+  alias Monty.Studio.Learned
   alias Monty.Studio.Memory
 
   # What a Habitat camera sees across, and so what `DepthTo3DLocations` inverts.
@@ -2196,10 +2197,21 @@ defmodule Monty.Studio.Setup do
   defp another_release(name, release) do
     exported = list(Memory.releases_for(name))
 
-    "It learns from #{exported}'s graphs, not from #{release}'s. This config names " <>
-      "the memory #{release} trained; #{exported} is what this installation has " <>
-      "exported for #{name}.#{unexported(name, release)} The run works — its numbers " <>
-      "are the ones those graphs give."
+    # `trained` is not a Monty release: it is what a run of this application
+    # files what it learned under, and the path the config names
+    # (`…/projects/<run>/pretrained`) is Monty's own output directory, whose
+    # second-to-last segment is a folder rather than a release. Comparing the two
+    # would read as nonsense, so this case says what happened instead.
+    if Memory.releases_for(name) == [Learned.release()] do
+      "It learns from the memory a run here trained (#{Learned.release()}). The path this " <>
+        "config names is Monty's output directory, which this machine does not have. " <>
+        "Nothing to download or train: run it."
+    else
+      "It learns from #{exported}'s graphs, not from #{release}'s. This config names " <>
+        "the memory #{release} trained; #{exported} is what this installation has " <>
+        "exported for #{name}.#{unexported(name, release)} The run works — its numbers " <>
+        "are the ones those graphs give."
+    end
   end
 
   # "a", "a and b", "a, b and c": a list a person reads, not a list a program prints.

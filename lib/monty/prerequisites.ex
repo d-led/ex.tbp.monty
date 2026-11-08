@@ -594,7 +594,13 @@ defmodule Monty.Prerequisites do
             what: "the memory `#{name}`",
             path: memory,
             display: memory_path(path),
-            present?: File.exists?(memory)
+            # The release the config names is asked for first and any other
+            # release will do (`Setup.load_memory/3` falls back to the newest
+            # export), so a memory this application trained satisfies a config
+            # that names Monty's output path. Asking only about the named
+            # release called a memory that would be loaded "missing", and a page
+            # with a missing need disables Run.
+            present?: File.exists?(memory) or Monty.Studio.Memory.releases_for(name) != []
           }
         ]
     end

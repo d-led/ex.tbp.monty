@@ -38,6 +38,17 @@ defmodule Monty.Studio.Learned do
   @doc """
   Writes every module's memory, and returns the lines that describe what it did.
 
+  Two places, and both matter. The run's own directory keeps what *this* run
+  left behind — provenance, and what the page points at. The library tree is
+  where a later config looks (`Setup.memory_for/2` asks `Memory.load_module/3`),
+  so a run that trained is only useful if its memory is there too: without it,
+  "train it" trains and the evaluation config that reads that memory still says
+  it has none.
+
+  The release it is filed under is `trained` — not a Monty release, so a config
+  can never name it by accident, and `Memory.releases_for/1` finds it for a
+  config that names the memory without a release of ours.
+
   A run with no record has nowhere to put them — a throwaway run keeps nothing —
   and a plan with no training phase learned nothing that outlives it: both answer
   `[]`, which says nothing rather than saying that something failed.
@@ -117,12 +128,15 @@ defmodule Monty.Studio.Learned do
   defp keep_one(_run_id, _opened, {_module_id, :none}), do: []
 
   defp keep_one(run_id, opened, {module_id, memory}) do
-    path = dir(run_id)
+    name = library_name(opened, module_id)
 
-    case Memory.save(memory, library_name(opened, module_id), @release, path) do
-      :ok ->
-        ["the memory #{module_id} learned is in #{path}"]
-
+    with :ok <- Memory.save(memory, name, @release, dir(run_id)),
+         :ok <- Memory.save(memory, name, @release, Memory.libraries_dir()) do
+      [
+        "the memory #{module_id} learned is in #{dir(run_id)}, and is the library " <>
+          "#{name} (#{@release})"
+      ]
+    else
       {:error, reason} ->
         # A memory that could not be written is worth a sentence, not a crash: the
         # run itself concluded, and what is lost is what comes after it.

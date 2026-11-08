@@ -14,7 +14,7 @@ defmodule Monty.Studio.MemoryTest do
 
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
-  alias Monty.Studio.{Memory, Setup}
+  alias Monty.Studio.{Learned, Memory, Setup}
   alias Monty.Test.Tmp
 
   @experiment "base_config_10distinctobj_dist_agent"
@@ -182,9 +182,35 @@ defmodule Monty.Studio.MemoryTest do
       refute Setup.valid?(%{setup | findings: Setup.memory_findings(setup)})
     end
 
+    test "says a memory this application trained is its own, not a release of Monty's" do
+      # `…/projects/surf_agent_1lm_2obj_train/pretrained` is Monty's own output
+      # directory: its second-to-last segment is a folder, not a release, so
+      # comparing the two reads as "the memory projects trained".
+      libraries = Tmp.env_dir("memory-trained", :monty_libraries_dir)
+      name = "surf_agent_1lm_2obj_train"
+      :ok = Memory.save(GraphMemory.new(), name, Learned.release(), libraries)
+
+      setup = %Setup{
+        world: :mujoco,
+        model_name_or_path: monty_path("projects", name),
+        learning_modules: [%{id: "learning_module_0"}]
+      }
+
+      assert [%{level: :warning, code: :memory_from_another_release, message: message}] =
+               Setup.memory_findings(setup)
+
+      assert message =~ "a run here trained"
+      refute message =~ "projects trained"
+      assert Setup.valid?(%{setup | findings: Setup.memory_findings(setup)})
+    end
+
     test "names the experiment whose run writes the memory a config reads" do
       # `surf_agent_2obj_eval` reads what `surf_agent_2obj_train` writes, and the
-      # memory is named after the run — not after the config's file.
+      # memory is named after the run — not after the config's file. An empty
+      # library tree, because a machine that has trained this memory would answer
+      # with it rather than with the run that writes it.
+      Tmp.env_dir("libraries-nothing-yet", :monty_libraries_dir)
+
       setup = %Setup{
         world: :mujoco,
         model_name_or_path: monty_path("pretrained_ycb_v14", "surf_agent_1lm_2obj_train")
