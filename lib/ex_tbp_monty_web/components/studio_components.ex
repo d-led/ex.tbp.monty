@@ -487,20 +487,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
       </div>
 
       <div :if={@chart} class="space-y-1 pt-0.5">
-        <%!-- What is drawn, said loudly enough to read without opening the
-        picker. The picker chooses; it is not where a reader looks to find out
-        what the chart they are looking at is — and with a chart a learning
-        module there are six of them, so "which one is this?" is a question the
-        page has to answer above the plot rather than in a dropdown. --%>
-        <div>
-          <h3 id="replay-chart-title" class="text-sm font-medium">
-            {chart_title(@series, @series_id)}
-          </h3>
-          <p id="replay-chart-axes" class="text-[11px] text-base-content/50">
-            vertical: {chart_axis(@series, @series_id)} · horizontal: step
-          </p>
-        </div>
-
         <div class="flex flex-wrap items-center gap-1.5">
           <form id="replay-series" phx-change="replay_series">
             <select name="series" class="select select-xs" aria-label="Series to chart">
@@ -573,11 +559,24 @@ defmodule ExTbpMontyWeb.StudioComponents do
         makes every glyph as wide as the box is wider than the viewBox — and its
         gutter would cost that many stretched pixels of line. A column beside
         the plot costs only the width of the words. --%>
-        <div class="flex gap-1.5">
+        <div class="flex gap-1">
+          <%!-- The value axis is named the way a figure names one: turned, beside
+          its ticks, and not written as a sentence above the plot. --%>
+          <div
+            :if={chart_axis(@series, @series_id) != ""}
+            id="replay-chart-y-name"
+            class="flex h-40 w-3.5 shrink-0 items-center justify-center"
+          >
+            <span
+              class="whitespace-nowrap text-[10px] text-base-content/60"
+              style="writing-mode: vertical-rl; transform: rotate(180deg)"
+            >
+              {chart_axis(@series, @series_id)}
+            </span>
+          </div>
           <div
             id="replay-chart-y-axis"
-            class="relative w-9 shrink-0 text-right font-mono text-[10px] leading-none text-base-content/50"
-            style={"height: #{@chart.height}px"}
+            class="relative h-40 w-9 shrink-0 text-right font-mono text-[10px] leading-none text-base-content/50"
             aria-hidden="true"
           >
             <span
@@ -588,132 +587,137 @@ defmodule ExTbpMontyWeb.StudioComponents do
               {tick.label}
             </span>
           </div>
-          <div
-            id="replay-chart-hover"
-            phx-hook=".ChartHover"
-            data-width={@chart.width}
-            data-height={@chart.height}
-            data-from={@chart.from}
-            data-to={@chart.to}
-            data-samples={chart_samples(@chart, @series, @series_id)}
-            class="relative min-w-0 flex-1 cursor-crosshair touch-none select-none"
-          >
-            <svg
-              id="replay-chart"
-              viewBox={"0 0 #{@chart.width} #{@chart.height}"}
-              preserveAspectRatio="none"
-              class="h-40 w-full rounded-field border border-base-300 bg-base-100"
-              role="img"
-              aria-label="The chosen series over the steps in the window"
+          <div class="min-w-0 flex-1">
+            <div
+              id="replay-chart-hover"
+              phx-hook=".ChartHover"
+              data-width={@chart.width}
+              data-height={@chart.height}
+              data-from={@chart.from}
+              data-to={@chart.to}
+              data-samples={chart_samples(@chart, @series, @series_id)}
+              class="relative cursor-crosshair touch-none select-none"
             >
-              <%!-- The plot's own tint, as Monty's pyview dashboard draws it:
+              <svg
+                id="replay-chart"
+                viewBox={"0 0 #{@chart.width} #{@chart.height}"}
+                preserveAspectRatio="none"
+                class="h-40 w-full rounded-field border border-base-300 bg-base-100"
+                role="img"
+                aria-label="The chosen series over the steps in the window"
+              >
+                <%!-- The plot's own tint, as Monty's pyview dashboard draws it:
             one pale grey inside the axes against the page's own colour. Drawn
             first, behind everything. The SVG *is* the plot here — the value
             labels are HTML beside it — so this fills it entire. --%>
-              <rect
-                x="0"
-                y="0"
-                width={@chart.width}
-                height={@chart.height}
-                fill="var(--chart-plot, #fafafa)"
-              />
-              <%!-- Which episode each stretch of the run is: evidence restarts at
+                <rect
+                  x="0"
+                  y="0"
+                  width={@chart.width}
+                  height={@chart.height}
+                  fill="var(--chart-plot, #fafafa)"
+                />
+                <%!-- Which episode each stretch of the run is: evidence restarts at
             zero at every boundary, so the bands are what makes the rhythm
             countable. Each wears the colour of the object its episode was about
             — the pyview dashboard's fill, at its own 0.08. Drawn over the plot's
             tint and under the lines. --%>
-              <rect
-                :for={band <- @chart.bands}
-                x={band.x}
-                y="0"
-                width={band.width}
-                height={@chart.height}
-                fill={band.colour}
-                fill-opacity="0.08"
-                class="episode-band"
-                data-episode={band.episode}
-              />
-              <%!-- Where one episode ends and the next begins, ruled as well as
+                <rect
+                  :for={band <- @chart.bands}
+                  x={band.x}
+                  y="0"
+                  width={band.width}
+                  height={@chart.height}
+                  fill={band.colour}
+                  fill-opacity="0.08"
+                  class="episode-band"
+                  data-episode={band.episode}
+                />
+                <%!-- Where one episode ends and the next begins, ruled as well as
             tinted: two episodes of the same object are one colour, and the
             boundary between them is still a step the chart must show. --%>
-              <line
-                :for={band <- @chart.bands}
-                :if={band.x > 0}
-                x1={band.x}
-                y1="0"
-                x2={band.x}
-                y2={@chart.height}
-                stroke="currentColor"
-                stroke-opacity="0.18"
-                stroke-dasharray="2 2"
-                vector-effect="non-scaling-stroke"
-              />
-              <%!-- Where the labels beside the plot sit, drawn under the lines so a
-            line is never hidden by a gridline. --%>
-              <g id="replay-chart-gridlines">
                 <line
-                  :for={tick <- @chart.ticks}
-                  x1="0"
-                  y1={tick.y}
-                  x2={@chart.width}
-                  y2={tick.y}
-                  stroke="var(--chart-grid, #e5e7eb)"
-                  stroke-width="1"
+                  :for={band <- @chart.bands}
+                  :if={band.x > 0}
+                  x1={band.x}
+                  y1="0"
+                  x2={band.x}
+                  y2={@chart.height}
+                  stroke="currentColor"
+                  stroke-opacity="0.18"
+                  stroke-dasharray="2 2"
                   vector-effect="non-scaling-stroke"
                 />
-              </g>
-              <%!-- Zero: what evidence is measured from. Every episode starts on
+                <%!-- Where the labels beside the plot sit, drawn under the lines so a
+            line is never hidden by a gridline. --%>
+                <g id="replay-chart-gridlines">
+                  <line
+                    :for={tick <- @chart.ticks}
+                    x1="0"
+                    y1={tick.y}
+                    x2={@chart.width}
+                    y2={tick.y}
+                    stroke="var(--chart-grid, #e5e7eb)"
+                    stroke-width="1"
+                    vector-effect="non-scaling-stroke"
+                  />
+                </g>
+                <%!-- Zero: what evidence is measured from. Every episode starts on
             this line and a hypothesis can be penalised under it, so it is drawn
             heavier than a gridline and below the lines. --%>
-              <line
-                :if={@chart.zero}
-                id="replay-chart-zero"
-                x1="0"
-                y1={@chart.zero}
-                x2={@chart.width}
-                y2={@chart.zero}
-                stroke="currentColor"
-                stroke-opacity="0.4"
-                vector-effect="non-scaling-stroke"
-              />
-              <polyline
-                :for={polyline <- @chart.polylines}
-                id={polyline.id}
-                points={polyline.points}
-                fill="none"
-                stroke={polyline.colour}
-                stroke-width="1.5"
-                stroke-linejoin="round"
-                vector-effect="non-scaling-stroke"
-              />
-              <line
-                :if={@chart.playhead}
-                x1={@chart.playhead}
-                y1="0"
-                x2={@chart.playhead}
-                y2={@chart.height}
-                stroke="currentColor"
-                stroke-opacity="0.35"
-                stroke-dasharray="2 2"
-                vector-effect="non-scaling-stroke"
-              />
-              <%!-- The range a drag is choosing, drawn while the pointer is down
+                <line
+                  :if={@chart.zero}
+                  id="replay-chart-zero"
+                  x1="0"
+                  y1={@chart.zero}
+                  x2={@chart.width}
+                  y2={@chart.zero}
+                  stroke="currentColor"
+                  stroke-opacity="0.4"
+                  vector-effect="non-scaling-stroke"
+                />
+                <polyline
+                  :for={polyline <- @chart.polylines}
+                  id={polyline.id}
+                  points={polyline.points}
+                  fill="none"
+                  stroke={polyline.colour}
+                  stroke-width="1.5"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                />
+                <line
+                  :if={@chart.playhead}
+                  x1={@chart.playhead}
+                  y1="0"
+                  x2={@chart.playhead}
+                  y2={@chart.height}
+                  stroke="currentColor"
+                  stroke-opacity="0.35"
+                  stroke-dasharray="2 2"
+                  vector-effect="non-scaling-stroke"
+                />
+                <%!-- The range a drag is choosing, drawn while the pointer is down
             and gone on release: the zoom is the drag, so the box is feedback
             rather than a state the page has to keep. --%>
-              <rect
-                id="replay-chart-brush"
-                x="0"
-                y="0"
-                width="0"
-                height="0"
-                fill="currentColor"
-                fill-opacity="0.12"
-                stroke="currentColor"
-                stroke-opacity="0.4"
-                vector-effect="non-scaling-stroke"
-                visibility="hidden"
-              />
-            </svg>
+                <rect
+                  id="replay-chart-brush"
+                  x="0"
+                  y="0"
+                  width="0"
+                  height="0"
+                  fill="currentColor"
+                  fill-opacity="0.12"
+                  stroke="currentColor"
+                  stroke-opacity="0.4"
+                  vector-effect="non-scaling-stroke"
+                  visibility="hidden"
+                />
+              </svg>
+            </div>
+            <p id="replay-chart-x-name" class="pt-1 text-center text-[10px] text-base-content/60">
+              step
+            </p>
           </div>
         </div>
 
@@ -740,6 +744,14 @@ defmodule ExTbpMontyWeb.StudioComponents do
         >
           Nothing in this run reported a graph per object, so there is nothing to compare here. A training run builds graphs instead of matching them — what it learns is kept as a memory, and the log says what that memory holds after every episode.
         </p>
+        <%!-- What is drawn, said loudly enough to read without opening the
+        picker — and said under the figure, where a caption belongs. The picker
+        chooses; it is not where a reader looks to find out what the chart they
+        are looking at is, and with a chart a learning module there are six of
+        them. --%>
+        <h3 id="replay-chart-title" class="pt-1 text-center text-sm font-medium">
+          {chart_title(@series, @series_id)}
+        </h3>
         <script :type={Phoenix.LiveView.ColocatedHook} name=".ChartHover">
           // Points are drawn in the SVG's own 0..width units but shown stretched to
           // the width of the box, so a pointer position is turned back into those

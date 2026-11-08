@@ -265,6 +265,15 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     |> List.flatten()
   end
 
+  # Where each element sits in the page, in characters — the order a reader
+  # scrolls through them, which is a property of the page and not of a template.
+  defp order_in_page(html, ids) do
+    Enum.map(ids, fn id ->
+      {at, _length} = :binary.match(html, ~s{id="#{id}"})
+      at
+    end)
+  end
+
   # A finished run that kept what its modules believed: one graph per object,
   # with the strongest evidence the module held for it. This is the shape the
   # chart of every object is drawn from. One map is one step; a list of maps is
@@ -1033,15 +1042,15 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
       view |> element("#replay-series") |> render_change(%{"series" => "duration_us"})
-      assert view |> element("#replay-chart-axes") |> render() =~ "vertical: microseconds"
+      assert view |> element("#replay-chart-y-name") |> render() =~ "microseconds"
 
       # A count is not a duration and evidence is neither: one axis name for all
       # of them would have to be wrong about two.
       view |> element("#replay-series") |> render_change(%{"series" => "votes_used"})
-      assert view |> element("#replay-chart-axes") |> render() =~ "vertical: votes"
+      assert view |> element("#replay-chart-y-name") |> render() =~ "votes"
 
       view |> element("#replay-series") |> render_change(%{"series" => "evidence"})
-      assert view |> element("#replay-chart-axes") |> render() =~ "vertical: evidence"
+      assert view |> element("#replay-chart-y-name") |> render() =~ "evidence"
     end
 
     test "a run that built graphs opens on every object at once", %{conn: conn} do
@@ -1197,8 +1206,9 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
     # A picker is not where a reader looks to find out what the chart they are
     # looking at is — and with six object charts there is a real question to
-    # answer above the plot rather than in a dropdown.
-    test "and the chart says what it shows, above itself, both axes named", %{conn: conn} do
+    # answer about the figure rather than in a dropdown. It is captioned under
+    # it, the way a figure is, and each axis carries its own name.
+    test "and the chart is captioned under the figure, both axes named", %{conn: conn} do
       run = run_believing(%{"mug" => 1.0, "bowl" => 0.4})
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
@@ -1206,8 +1216,17 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert view |> element("#replay-chart-title") |> render() =~
                "Evidence for every object — strongest module"
 
-      assert view |> element("#replay-chart-axes") |> render() =~
-               "vertical: evidence · horizontal: step"
+      assert view |> element("#replay-chart-y-name") |> render() =~ "evidence"
+      assert view |> element("#replay-chart-x-name") |> render() =~ "step"
+
+      # Under the figure, not above it: the caption follows the legend in the
+      # page's own order, so a reader meets the picture first.
+      html = render(view)
+
+      assert [plot, legend, caption] =
+               order_in_page(html, ["replay-chart", "replay-chart-legend", "replay-chart-title"])
+
+      assert plot < legend and legend < caption
 
       view
       |> element("#replay-series")
