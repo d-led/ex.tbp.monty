@@ -89,14 +89,28 @@ defmodule Mix.Tasks.Monty.Run do
       first_seen: %{}
     }
 
-    {infos, history, conclusion, _carried} =
+    {infos, history, conclusion, carried} =
       opened.setup
       |> Monty.Studio.Setup.epoch_plan()
       |> Enum.reduce({[], history, %{}, carried}, fn {mode, epochs}, acc ->
         run_phase(opened, mode, epochs, acc, opts)
       end)
 
+    # What a training phase learned is written down here, through the same seam
+    # the queue's worker uses: a run that trains keeps its memory whichever door
+    # it was started by, and a run with no record keeps nothing.
+    keep_memory(opened, history, carried.memories, opts)
+
     {infos, history, conclusion}
+  end
+
+  defp keep_memory(opened, history, memories, opts) do
+    plan = Monty.Studio.Setup.epoch_plan(opened.setup)
+    run_id = history && history.id
+
+    run_id
+    |> Monty.Studio.Learned.keep(opened, plan, memories)
+    |> Enum.each(fn line -> unless opts[:quiet], do: Mix.shell().info(line) end)
   end
 
   # One phase: a full one is every object it names in every epoch it names, and

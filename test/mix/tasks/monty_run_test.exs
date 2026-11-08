@@ -135,6 +135,29 @@ defmodule Mix.Tasks.Monty.RunTest do
       refute output =~ "step 0 ·"
       assert output =~ "2 steps in"
     end
+
+    test "keeps the memory a training run learned, as the page's worker does" do
+      # The queue's worker wrote the memory at the end of a training phase and the
+      # command line did not, so the same experiment trained on the page and
+      # trained for nothing from a terminal: the graphs died with the process.
+      output =
+        run_and_capture([
+          "tutorial/surf_agent_2obj_unsupervised",
+          "--steps",
+          "3",
+          "--episodes",
+          "1"
+        ])
+
+      run = recorded_run()
+      directory = Monty.Studio.Learned.dir(run.id)
+      assert output =~ "the memory learning_module_0 learned is in #{directory}"
+
+      assert [file] =
+               Path.wildcard(Path.join([directory, Monty.Studio.Learned.release(), "*.jsonl.gz"]))
+
+      assert File.stat!(file).size > 0
+    end
   end
 
   describe "what it refuses" do
