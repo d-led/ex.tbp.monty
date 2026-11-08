@@ -151,17 +151,32 @@ defmodule Monty.Studio.RunHistory do
                 ),
               steps_done:
                 fragment(
-                  "jsonb_array_length(coalesce(?, '[]'::jsonb) || ?::jsonb)",
+                  "coalesce(jsonb_array_length(?), 0) + coalesce(jsonb_array_length(?::jsonb), 0)",
                   run.log,
                   type(^log, :string)
                 ),
+              # Counted over the batch being appended, not the whole transcript:
+              # expanding thousands of steps to count distinct episodes held a
+              # connection for fifteen seconds, and the run waiting on it died
+              # (`Jobs.Run.keep_with_state/1`). Episodes are numbered from zero
+              # and arrive in order, so the highest number in this batch is how
+              # many episodes there have been — one more step in an episode that
+              # is already counted leaves the number alone.
               episodes_done:
                 fragment(
                   """
-                  (select count(distinct coalesce(step->>'episode', ''))
-                     from jsonb_array_elements(coalesce(?, '[]'::jsonb) || ?::jsonb) as step)
+                  greatest(
+                    coalesce(?, 0),
+                    coalesce(
+                      (select max((step->>'episode')::int) + 1
+                         from jsonb_array_elements(coalesce(?::jsonb, '[]'::jsonb))
+                              as step
+                        where step->>'episode' ~ '^[0-9]+$'),
+                      0
+                    )
+                  )
                   """,
-                  run.log,
+                  run.episodes_done,
                   type(^log, :string)
                 ),
               updated_at: ^now
