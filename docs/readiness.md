@@ -3,7 +3,8 @@
 `mix monty.readiness` opens every experiment Monty ships and says what stops
 each one. This page is its answer for the tree in this document, with the order
 the work should go in. Re-run the command rather than quoting these numbers — a
-class that lands moves every row.
+class that lands moves every row, and so does a pull from Monty
+(`mix monty.refresh` does the pull, the copy and this).
 
 ```
 mix monty.readiness            # the counts and the class ranking

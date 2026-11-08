@@ -37,6 +37,35 @@ Three kinds, and the distinction is the one to keep:
   stale with them. It travels with this repository and runs in the interpreter
   the release carries, so nothing has to be installed to step a scene.
 
+## A new Monty landed: one command
+
+```
+mix monty.refresh            # fast-forward the checkout, then everything below
+mix monty.refresh --no-update  # copy the checkout exactly as it stands
+```
+
+The refresh has two halves and both are needed: the **copy** of Monty's files,
+and the **map** from each Python class to the Elixir module that answers for it,
+with the censuses that say which of those a config actually names. Run in this
+order, each a task of its own:
+
+1. `mix monty.inputs` — fast-forward, then copy `conf/`, the snapshots and the
+   licence into `priv/monty/`;
+2. `mix monty.module_map.gen` — rewrite `lib/monty/module_map/data.ex` and the
+   commits it was read from;
+3. `mix monty.target_census` — recompose every experiment and collect the
+   `_target_`s into `priv/monty/target_census.json`;
+4. `mix monty.config.snapshots` — compose every experiment and compare it with
+   Monty's own snapshot;
+5. `mix monty.module_map.verify` — coverage, `implemented` pointing at real
+   modules, `excluded` saying why, no checkout past the map;
+6. `mix monty.readiness` — the numbers, because they moved.
+
+The chain stops at the first step that refuses, whose own message says what to
+do. A census written after a failed copy would describe a tree the map
+disagrees with, which is why they are one command and not six lines in a
+README.
+
 ## What deliberately does not travel
 
 Monty's Python source — that is the thing being ported, and
