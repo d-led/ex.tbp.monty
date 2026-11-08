@@ -15,7 +15,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacementParityT
 
   use ExUnit.Case, async: true
 
-  alias ExTbpMonty.MatcherNif
+  alias ExTbpMonty.Core.MatcherNif
   alias Monty.Frameworks.Utils.KdTree
   alias Monty.Frameworks.Utils.SpatialArithmetics
   alias Monty.Geometry

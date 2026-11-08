@@ -1,4 +1,4 @@
-defmodule ExTbpMonty.MatcherNifTest do
+defmodule ExTbpMonty.Core.MatcherNifTest do
   @moduledoc """
   The native kernel answers what the reference calculator answers.
 
@@ -16,7 +16,7 @@ defmodule ExTbpMonty.MatcherNifTest do
 
   use ExUnit.Case, async: true
 
-  alias ExTbpMonty.MatcherNif
+  alias ExTbpMonty.Core.MatcherNif
 
   alias Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.DefaultFeatureEvidenceCalculator
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory

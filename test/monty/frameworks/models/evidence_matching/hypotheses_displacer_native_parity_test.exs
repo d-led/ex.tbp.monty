@@ -4,7 +4,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerNativePari
 
   One evidence step is run twice over the same graph, the same features and the
   same hypotheses: once with `native_kernels?` on and once with it off, which is
-  the switch `ExTbpMonty.MatcherNif.loaded?/0` reads. The two answers have to be
+  the switch `ExTbpMonty.Core.MatcherNif.loaded?/0` reads. The two answers have to be
   the same numbers, not near enough — the kernel performs the reference's
   arithmetic in the reference's order, so a difference in the last bit is a
   difference in what was computed.
@@ -19,7 +19,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerNativePari
 
   use ExUnit.Case, async: false
 
-  alias ExTbpMonty.MatcherNif
+  alias ExTbpMonty.Core.MatcherNif
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory

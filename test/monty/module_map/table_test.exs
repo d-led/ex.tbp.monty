@@ -37,19 +37,28 @@ defmodule Monty.ModuleMap.TableTest do
       # for it — which is why `AnyLMsMatch` points at `any_lms_match.ex` and not
       # at the `any_l_ms_match.ex` a plain snake-case would give — and a class
       # that is only named at the path its own name gives it.
-      assert Enum.all?(
-               rows(),
-               &String.starts_with?(&1.elixir_url, "#{@repo}/blob/#{@revision}/lib/")
-             )
+      #
+      # Two roots now: the sensorimotor core is a package of its own
+      # (`packages/ex_tbp_monty_core`), and the studio and experiment half stays
+      # in the application (`lib/`). The map records where each file is, so a row
+      # links to the file that exists rather than to one root the map has to
+      # assume.
+      assert Enum.all?(rows(), fn row ->
+               String.starts_with?(row.elixir_url, "#{@repo}/blob/#{@revision}/") and
+                 String.ends_with?(row.elixir_url, ".ex")
+             end)
 
       assert row!("CameraSM").elixir_url ==
-               "#{@repo}/blob/#{@revision}/lib/monty/frameworks/models/sensor_modules/camera_sm.ex"
+               "#{@repo}/blob/#{@revision}/packages/ex_tbp_monty_core/" <>
+                 "lib/monty/frameworks/models/sensor_modules/camera_sm.ex"
 
       assert row!("AnyLMsMatch").elixir_url ==
-               "#{@repo}/blob/#{@revision}/lib/monty/experiment/match_criteria/any_lms_match.ex"
+               "#{@repo}/blob/#{@revision}/packages/ex_tbp_monty_core/" <>
+                 "lib/monty/experiment/match_criteria/any_lms_match.ex"
 
       assert row!("GraphLM").elixir_url ==
-               "#{@repo}/blob/#{@revision}/lib/monty/frameworks/models/graph_matching/graph_lm.ex"
+               "#{@repo}/blob/#{@revision}/packages/ex_tbp_monty_core/" <>
+                 "lib/monty/frameworks/models/graph_matching/graph_lm.ex"
     end
 
     test "link the test beside each file" do

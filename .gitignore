@@ -304,3 +304,7 @@ MUJOCO_LOG.TXT
 # The window wants a `frontendDist` directory to exist; this one is a fallback
 # page that is never shown and is committed on purpose.
 !/src-tauri/dist/
+
+### This package is a project of its own
+/packages/*/deps
+/packages/*/_build

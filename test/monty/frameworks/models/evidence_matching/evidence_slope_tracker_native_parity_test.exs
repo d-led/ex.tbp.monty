@@ -14,7 +14,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTrackerNativePar
 
   use ExUnit.Case, async: false
 
-  alias ExTbpMonty.MatcherNif
+  alias ExTbpMonty.Core.MatcherNif
   alias Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker
 
   setup do

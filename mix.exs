@@ -95,6 +95,12 @@ defmodule ExTbpMonty.MixProject do
 
   defp deps do
     [
+      # The sensorimotor core as a package of its own (`packages/`): the
+      # runtime, the learning and sensor modules, the actions and the port a
+      # world implements. This application is its main user; `examples/` beside
+      # it drives the same code without the studio.
+      {:ex_tbp_monty_core, path: "packages/ex_tbp_monty_core"},
+
       {:phoenix, "~> 1.8.16"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},

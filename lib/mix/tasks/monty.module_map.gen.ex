@@ -1,5 +1,5 @@
 defmodule Mix.Tasks.Monty.ModuleMap.Gen do
-  @shortdoc "Regenerates lib/monty/module_map/data.ex from the Monty and teleop checkouts"
+  @shortdoc "Regenerates the core package's module map from the Monty and teleop checkouts"
 
   @moduledoc """
   Walks the Python packages this application mirrors and writes the map every
@@ -30,7 +30,7 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
   alias Monty.ModuleMap
   alias Monty.ModuleMap.StandIns
 
-  @map_path "lib/monty/module_map/data.ex"
+  @map_path "packages/ex_tbp_monty_core/lib/monty/module_map/data.ex"
 
   @impl true
   def run(args) do

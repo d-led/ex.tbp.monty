@@ -19,7 +19,7 @@ defmodule Monty.Frameworks.Utils.SensorProcessingNativeParityTest do
 
   use ExUnit.Case, async: false
 
-  alias ExTbpMonty.MatcherNif
+  alias ExTbpMonty.Core.MatcherNif
   alias Monty.Frameworks.Utils.SensorProcessing
 
   @width 16
