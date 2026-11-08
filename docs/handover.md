@@ -1913,3 +1913,30 @@ class blocks any experiment on its own. Verified by a run of the config:
 `mix monty.run tutorial/surf_agent_2obj_train --episodes 1 --steps 5` steps,
 learns (`added graph mug for patch`) and says `the memory now holds 1 object and 1
 node`.
+
+## 32. 2026-11-08: the next session starts with what the 147 planned classes are for
+
+Handing over, at your direction: the next session begins with
+[`next-session.md`](next-session.md), which is the brief rather than the work.
+Its question is the one today's numbers raise and do not answer — 119 of 203
+experiments run here (`mix monty.readiness`), no production class blocks one, and
+yet `mix monty.module_map.verify` still counts **147 planned classes** in 50
+files.
+
+What the brief measures, so the next session does not measure it again: only 11
+of the 147 are named by a `_target_` anywhere in Monty's `conf/`, 80 are
+mentioned by no other Python file, and the blocks are the
+`*ActionSampler`/`*Actuator` pairs (28), `simulators/habitat/**` (23), MuJoCo's
+agents and objects (13), the model base classes (12), environments (11), tacto
+(8) and the teleop GUI (15). The two traps are written down with it: a base class
+is not a config choice (`Monty` is mentioned by 34 files, `RuntimeContext` by 23,
+`Observations` by 20), and "Monty has the class" is not "the port must have it" —
+an action crosses `Monty.Simulators.Port` here, and _Simplify Simulator Protocol_
+is completed upstream.
+
+Also settled since §31, in this file's own terms: four commits on the run page
+and the map — a trained model is one library with a module index a memory
+(`5937cbf`), the chart offers a per-module view beside the ensemble's (`ead484b`),
+it names itself and its axes (`66c30db`), and stepping is tested for the first
+time (`ead484b`). Gate on `66c30db`: lint clean, 2 670 tests (63 properties),
+CRAP worst 29.85, dialyzer 0.
