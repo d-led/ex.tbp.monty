@@ -1419,3 +1419,80 @@ one that checked "a sensor class this port has not written gets the stand-in"
 now uses Monty's own test fake (`monty/sensor_module: fake`) — the only sensor
 class in the tree that is still unwritten — and a new case asserts that the
 three-sensor config builds the real 2-D module.
+
+## 23. 2026-11-08: the attention package — seven files, one seam, and nine configs that now want an export
+
+`src/tbp/monty/attention/` is a package rather than a class: a sparse grid, a
+pooler, a decay, a merge, a goal filter, a telemetry and the system that wires
+them. All seven files are ported here, seventeen classes, with the unit cases
+translated one for one. The readiness counts do **not** move — still 100/23 — and
+that is the interesting part: the nine cows compositional and monolithic
+configurations the ranking put behind `DefaultAttentionSystem` were refused for a
+second reason too, the pretrained model. Writing the attention system leaves them
+refused for `no_pretrained_memory` alone, which is a `/prerequisites` export and
+not code.
+
+### 23.1 What attention does
+
+Sensors propose where to look (`AttentionRegion`: locations and weights), the
+goal generator proposes what to do (`Goal`), and the attention system sits
+between them:
+
+    proposed = regions → voxels → one pooled weight per voxel
+    step:  decay(grid) → expire → merge(expired, proposed) → goal filter(goals)
+
+`expire` is what makes the grid a memory rather than an accumulator: a weight
+whose magnitude has decayed below `1e-6` is dropped, so a place that has not been
+looked at for long enough stops being a voxel at all. `merge` is a union in which
+the newer grid wins where they overlap, and the goal filter then reads the merged
+grid: a goal in an inhibited voxel is dropped, a goal outside the grid is dropped
+unless every voxel is inhibited, and a goal without a location is never filtered
+at all — it is not a place, so there is nothing to look up.
+
+### 23.2 Where the port could not be a transcription
+
+**The pandas frame is a map.** Monty's `VoxelGrid` is a `DataFrame` with an
+`(x, y, z)` `MultiIndex`, and its tests can therefore build a malformed frame and
+watch `validate_dataframe` refuse it: no `(x, y, z)` index, a duplicated index, no
+`weight` column, a weight column that is not one dimension. A map cannot hold
+those shapes — a duplicated voxel is simply one entry — so four of the six
+`ValidateDataFrameTest` cases have no counterpart here, and the one rule a map
+*can* break survives as `VoxelGrid.new/3` refusing two weights for one voxel.
+`voxelize_and_bin_points` returns the rows (`{voxel, weight}`) that pandas would
+have grouped; `weights_at_points` answers `nil` for an unoccupied voxel, the NaN
+of this port.
+
+**Nothing mutates.** Monty's decays, telemetry and attention system are objects
+with state they change in place, so its cases can hold a `MagicMock` up to one
+collaborator and assert *that it was called, with what*. Here every step is a
+value: `step/3` answers `{system, goals}`, a decay answers a decayed grid, and the
+telemetry is threaded. Most of `DefaultAttentionSystemTest`'s seventeen cases are
+therefore translated into what the mock was protecting — the grid the step
+produced and what the telemetry recorded — with
+`DefaultAttentionSystemTelemetry` standing in as the recording double. The four
+cases that drive `_voxelize_attention_regions`, a private method there, are read
+off the proposed grid `step/3` hands to the telemetry.
+
+**A one-method protocol is a function.** `WeightPooler`, `VoxelGridWeightDecay`,
+`VoxelGridMerge` and `GoalFilter` are all `Protocol`s over `__call__`, i.e.
+callables with state bound to them. The port writes the contract as a behaviour
+and stores the collaborator as a function (Monty's bound `__call__`), so
+`new/1` turns a decay *value* into one for you. `telemetry` is the exception and
+stays a value, because it is the one collaborator with state of its own.
+
+### 23.3 The gate
+
+`scripts/quality.sh` green — 2 604 tests, 63 properties, worst complexity 29.85,
+unchanged — and `MIX_ENV=test mix dialyzer` at 0. The module map went 195 → **210
+implemented** of 360 classes.
+
+Nine test fixtures moved, the same churn every landed class causes: they had used
+`DefaultAttentionSystem` as _the_ example of a class this port has not written.
+They now name `MontyBase`, which the ranking leads with — and the cows
+compositional configurations are no longer a usable example of "refused because a
+class is missing", so the readiness, setup, MCP and experiments-page cases moved
+to `test/base_config/base_mujoco`, whose `MontyBase` is still unwritten.
+
+`Monty.Attention.Telemetry` has no test of its own in Monty (its telemetry is
+exercised through the attention system there); the three cases in
+`telemetry_test.exs` say so and are marked as intent tests, not translations.

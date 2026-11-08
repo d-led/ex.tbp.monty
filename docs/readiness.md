@@ -64,7 +64,7 @@ cannot disagree.
 | reason                           | refused | postponed | what it is                                                                |
 | -------------------------------- | ------: | --------: | ------------------------------------------------------------------------- |
 | `world_not_carried`              |       0 |        87 | Habitat-Sim — **postponed**, not a blocker                                |
-| `modules_not_ported`             |      12 |        12 | a class nothing here stands in for                                        |
+| `modules_not_ported`             |       3 |        12 | a class nothing here stands in for                                        |
 | `no_pretrained_memory`           |      18 |         1 | the config's model is not exported on this machine                        |
 | `epochs_not_a_count`             |       1 |         6 | `${constants.rotations_all_count}` is not resolved before it is validated |
 | `sm_to_lm_matrix_missing`        |       1 |         5 | Monty's own pytest fixtures: a bare model, not an experiment              |
@@ -90,24 +90,25 @@ class named only by postponed experiments is not ranked at all.
 | ----------------------------- | ----: | -----: | ------------------------------------------------------------------------ |
 | `MontyBase`                   |     3 |      3 | Monty's own model shell — the three are its pytest fixtures              |
 | `GraphLM` (a matching scheme) |     1 |      1 | `tutorial/surf_agent_2obj_train` — `GraphLM` refuses itself upstream too |
-| `DefaultAttentionSystem`      |     0 |      9 | the cows family's compositional configurations, below                    |
 
 The Saccade-on-image and Omniglot environment/interface pairs are gone from this
-table: every config naming them is a Habitat config, so they are postponed.
+table: every config naming them is a Habitat config, so they are postponed. So is
+`DefaultAttentionSystem`: it was ranked at 0 alone and 9 naming, and §23 writes it,
+which leaves the cows compositional configurations refused for the pretrained
+model alone.
 
 ## The order to work in
 
 Done, in this order: **`DisplacementGraphLM` on PPF** (§19),
-**`FeatureGraphLM`** (§20), and the cows family's sensor — the edge detector
-(§21) and **`TwoDSensorModule`** (§22). Ten feature experiments, the three MuJoCo
-PPF configs and eight cows configurations run, and none of those classes is
-ranked any more: the counts went 87 → 100 runnable. What is left, in the order
-worth doing:
+**`FeatureGraphLM`** (§20), the cows family's sensor — the edge detector (§21) and
+**`TwoDSensorModule`** (§22) — and **the attention package** (§23). Ten feature
+experiments, the three MuJoCo PPF configs and eight cows configurations run: the
+counts went 87 → 100 runnable, and the attention classes are not ranked any more.
+What is left, in the order worth doing:
 
-1. **`DefaultAttentionSystem`** — nine of the cows family's compositional
-   configurations name it, and nothing else refuses them once it is written
-   except the pretrained model, which is a `/prerequisites` export rather than
-   code.
+1. **The cows pretrained model** — the nine compositional and monolithic
+   configurations are now refused for `no_pretrained_memory` alone. That is an
+   export through `/prerequisites`, not code.
 2. **`MontyBase`** — three configs, and all three are Monty's pytest fixtures. Do
    this only if the fixtures are to be treated as experiments.
 
