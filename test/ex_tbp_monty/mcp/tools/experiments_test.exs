@@ -347,7 +347,9 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                  @ctx
                )
 
-      assert message =~ "Not downloaded yet"
+      assert message =~ "would not run"
+      assert message =~ "is not on this machine"
+      assert message =~ "Prerequisites page"
       assert message =~ "/prerequisites"
 
       assert RunHistory.search(state: "all", text: @experiment).runs == []

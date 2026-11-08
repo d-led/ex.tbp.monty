@@ -92,7 +92,7 @@ not recalled — run it after anything lands that can move one.
 - `/jobs` — the Oban queue, with cancel (ends at the next step) and kill.
 - `/prerequisites` — data and pretrained models downloaded into Monty's own
   `MONTY_DATA` / `MONTY_MODELS` paths: streamed, written to `<target>.part`, renamed
-  only when the checksum matches — 3 entries in
+  only when the checksum matches — 6 entries in
   [`priv/prerequisites.yaml`](../priv/prerequisites.yaml). A memory is exported by
   reading the pickles, and the page says which model it is reading while it does
   (`reading memory 3/15 · pretrained_ycb_v13/…`), so a first start shows progress
@@ -201,7 +201,7 @@ what CI runs.
   tarball, a `.deb` and an AppImage) and Windows x64 (NSIS setup and the portable
   folder) — uploading each to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
-- 2,528 `test` declarations in the suite.
+- 2,537 `test` declarations in the suite.
 
 ## Not built — do not assume these
 

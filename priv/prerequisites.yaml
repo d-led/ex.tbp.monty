@@ -70,3 +70,44 @@ prerequisites:
     target: pretrained_ycb_v10.tgz
     extract: true
     unpacks_to: pretrained_ycb_v10
+
+  # The compositional objects Monty's cows benchmarks step — the 3-D primitives
+  # with stickers that the family recognises a composition of. Two archives: the
+  # 19 objects of `cows_small` and the 119 of `cows_large`, and `random_locs`
+  # for the evaluation of the large set (docs/overview/benchmark-experiments.md
+  # in Monty's own tree names both).
+  - id: compositional_objects_1_4_mujoco
+    title: Compositional objects (COWS small and large)
+    description: >
+      The 19 and 119 compositional objects the cows family steps, unpacked into
+      ~/tbp/data/compositional_objects_1.4_mujoco. One and a half gigabytes.
+    url: https://tbp-data-public-5e789bd48e75350c.s3.us-east-2.amazonaws.com/tbp.monty/compositional_objects_1.4_mujoco.tgz
+    root: MONTY_DATA
+    target: compositional_objects_1.4_mujoco.tgz
+    extract: true
+    unpacks_to: compositional_objects_1.4_mujoco
+
+  - id: compositional_objects_1_4_random_locs_mujoco
+    title: Compositional objects, random locations
+    description: >
+      The extra episodes a `random_locs` cows evaluation steps, unpacked into
+      ~/tbp/data/compositional_objects_1.4_random_locs_mujoco.
+    url: https://tbp-data-public-5e789bd48e75350c.s3.us-east-2.amazonaws.com/tbp.monty/compositional_objects_1.4_random_locs_mujoco.tgz
+    root: MONTY_DATA
+    target: compositional_objects_1.4_random_locs_mujoco.tgz
+    extract: true
+    unpacks_to: compositional_objects_1.4_random_locs_mujoco
+
+  # The release the cows configurations' `constants.compositional_pretrained_dir`
+  # names (`…/pretrained_compositional_objects_v8`). Thirty-one megabytes, and
+  # without it all eighteen cows configurations are refused for want of a memory.
+  - id: pretrained_compositional_objects_v8
+    title: Pretrained compositional object models (v8)
+    description: >
+      The models the cows family's configurations load, unpacked into
+      ~/tbp/results/monty/pretrained_models/pretrained_compositional_objects_v8.
+    url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_compositional_objects_v8.tgz
+    root: MONTY_MODELS
+    target: pretrained_compositional_objects_v8.tgz
+    extract: true
+    unpacks_to: pretrained_compositional_objects_v8

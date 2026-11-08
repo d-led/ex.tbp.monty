@@ -275,8 +275,18 @@ defmodule Monty.Studio.MemoryTest do
     path = Memory.path_for(name, release, dir)
     File.mkdir_p!(Path.dirname(path))
 
-    record = %{
-      "object_id" => name,
+    record = library_record(0, name)
+
+    File.write!(path, :zlib.gzip(Jason.encode!(record) <> "\n"))
+    path
+  end
+
+  # One record of a library: a node with the four features an evidence module
+  # matches on, in the module the index names.
+  defp library_record(module_index, object_id) do
+    %{
+      "lm_index" => module_index,
+      "object_id" => object_id,
       "input_channel" => "patch",
       "positions" => [[0.0, 0.0, 0.0]],
       "features" => %{
@@ -286,9 +296,27 @@ defmodule Monty.Studio.MemoryTest do
         "principal_curvatures_log" => [[0.0]]
       }
     }
+  end
 
-    File.write!(path, :zlib.gzip(Jason.encode!(record) <> "\n"))
-    path
+  describe "a library that holds one memory per learning module" do
+    test "loads the module the caller asks for, and says how many there are" do
+      dir = Tmp.dir("modules")
+      path = Memory.path_for("heterarchy", "pretrained_cows", dir)
+      File.mkdir_p!(Path.dirname(path))
+
+      # A heterarchy's three memories in one library: the 3-D child, the 2-D
+      # child, and the high-level module. Each record says which it belongs to.
+      records = [library_record(0, "001_cube"), library_record(1, "021_logo_tbp")]
+      File.write!(path, :zlib.gzip(Enum.map_join(records, "\n", &Jason.encode!/1) <> "\n"))
+
+      assert Memory.modules("heterarchy", "pretrained_cows", dir) == 2
+
+      {:ok, child} = Memory.load_module("heterarchy", "pretrained_cows", 0, dir)
+      assert GraphMemory.get_memory_ids(child) == ["001_cube"]
+
+      {:ok, high_level} = Memory.load_module("heterarchy", "pretrained_cows", 1, dir)
+      assert GraphMemory.get_memory_ids(high_level) == ["021_logo_tbp"]
+    end
   end
 
   describe "a directory that holds no libraries" do

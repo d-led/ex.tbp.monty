@@ -1229,14 +1229,19 @@ defmodule Monty.Studio.Setup do
   to look in, or this machine has no exported library for that model from that
   release — and `memory_findings/1` says which, because a run with no memory
   cannot recognise anything however long it runs.
-  """
-  @spec memory_for(t()) :: Monty.Frameworks.Models.GraphMatching.GraphMemory.t() | :none
-  def memory_for(%__MODULE__{model_name_or_path: nil}), do: :none
 
-  def memory_for(%__MODULE__{model_name_or_path: path}) do
+  `module_index` is which learning module of the pretrained model to read: a
+  heterarchy's store holds one memory per module, and the high-level module's is
+  not the child's.
+  """
+  @spec memory_for(t(), non_neg_integer()) ::
+          Monty.Frameworks.Models.GraphMatching.GraphMemory.t() | :none
+  def memory_for(%__MODULE__{model_name_or_path: nil}, _module_index), do: :none
+
+  def memory_for(%__MODULE__{model_name_or_path: path}, module_index) do
     with name when is_binary(name) <- Memory.name_of(path),
          release when is_binary(release) <- Memory.release_of(path) do
-      load_memory(name, release)
+      load_memory(name, release, module_index)
     else
       _absent -> :none
     end
@@ -1245,15 +1250,21 @@ defmodule Monty.Studio.Setup do
   @doc """
   The memory each learning module starts an episode from, by module id.
 
-  One memory for all of them: Monty loads the model's memory once and every
-  learning module matches against the same graphs. A run that learns replaces
-  this map with the one it wrote (`Monty.Studio.Run.memories/1`), which is how a
-  training phase carries what one episode learned into the next.
+  A heterarchy's pretrained model holds one memory per learning module — the 3-D
+  child, the 2-D child, and the high-level module that recognises a composition
+  of the two — so each module reads its own. A model the port exported before the
+  library carried module indices had one memory, which every module read, and
+  that is what a single-module run still gets.
+
+  A run that learns replaces this map with the one it wrote
+  (`Monty.Studio.Run.memories/1`), which is how a training phase carries what one
+  episode learned into the next.
   """
   @spec memories(t()) :: %{optional(atom() | String.t()) => term()}
   def memories(%__MODULE__{learning_modules: modules} = setup) do
-    memory = memory_for(setup)
-    Map.new(modules, &{&1.id, memory})
+    modules
+    |> Enum.with_index()
+    |> Map.new(fn {module, index} -> {module.id, memory_for(setup, index)} end)
   end
 
   # The release the config names, and failing that any release this machine has
@@ -1262,19 +1273,19 @@ defmodule Monty.Studio.Setup do
   # finding promised graphs would make every experiment whose config names a
   # release nobody exported here run with an empty memory: no possible matches,
   # no evidence, nothing to draw, however long it runs.
-  defp load_memory(name, release) do
-    case Memory.load(name, release) do
+  defp load_memory(name, release, module_index) do
+    case Memory.load_module(name, release, module_index) do
       {:ok, memory} -> memory
-      {:error, _not_found} -> newest_exported(name)
+      {:error, _not_found} -> newest_exported(name, module_index)
     end
   end
 
-  defp newest_exported(name) do
+  defp newest_exported(name, module_index) do
     name
     |> Memory.releases_for()
     |> Enum.reverse()
     |> Enum.reduce_while(:none, fn release, _none ->
-      case Memory.load(name, release) do
+      case Memory.load_module(name, release, module_index) do
         {:ok, memory} -> {:halt, memory}
         {:error, _not_found} -> {:cont, :none}
       end
@@ -2310,23 +2321,45 @@ defmodule Monty.Studio.Setup do
     end
   end
 
-  defp object_in_world_findings(%__MODULE__{} = setup) do
-    case object_label(setup) do
-      nil ->
-        [
-          Finding.new(
-            :warning,
-            :world_holds_no_object,
-            "This world has no object in it: none of the meshes this config names is under " <>
-              "#{data_path(setup)}. Download the objects on the Prerequisites page, or the " <>
-              "first sensor that looks for a surface will find nothing.",
-            "environment.env_init_args.data_path"
-          )
-        ]
-
-      _label ->
-        []
+  # An error, not a warning: a MuJoCo run whose data path holds none of the
+  # objects its config names steps a scene with nothing in it. It starts, it
+  # spends the episodes, and every sensor finds no surface — which answers none
+  # of the experiment's question while looking like a result. The fix is a
+  # download, and the Prerequisites page is where it is offered.
+  defp object_in_world_findings(%__MODULE__{environment: %{data_path: path}} = setup)
+       when is_binary(path) do
+    cond do
+      # The directory itself is the first thing to say: a config whose objects
+      # were never downloaded has nothing to look for *in* it, and naming the
+      # directory is what tells a person which archive is missing.
+      not File.dir?(path) -> [missing_data_finding(path)]
+      object_label(setup) == nil -> [no_object_finding(path)]
+      true -> []
     end
+  end
+
+  defp object_in_world_findings(%__MODULE__{}), do: []
+
+  defp missing_data_finding(path) do
+    Finding.new(
+      :error,
+      :world_data_missing,
+      "This world steps from #{path}, which is not on this machine, so the run " <>
+        "cannot start here. Download the objects it needs on the Prerequisites page " <>
+        "(`/prerequisites`).",
+      "environment.env_init_args.data_path"
+    )
+  end
+
+  defp no_object_finding(path) do
+    Finding.new(
+      :error,
+      :world_holds_no_object,
+      "This world has no object in it: none of the meshes this config names is " <>
+        "under #{path}, so the first sensor that looks for a surface would find " <>
+        "nothing. What it needs is on the Prerequisites page (`/prerequisites`).",
+      "environment.env_init_args.data_path"
+    )
   end
 
   defp shell_finding([], _total), do: []

@@ -21,7 +21,7 @@ defmodule Monty.Studio.Pretrained.Tensor do
   does not read, and `Monty.Studio.Pretrained.Torch` says so by name rather than
   decoding the bytes as something they are not.
   """
-  @type element_type :: :f32 | :f64 | :i64
+  @type element_type :: :f32 | :f64 | :i32 | :i64 | :u8
 
   @type t :: %__MODULE__{
           type: element_type(),
@@ -61,8 +61,12 @@ defmodule Monty.Studio.Pretrained.Tensor do
   def element_size(:f64), do: 8
   def element_size(:i64), do: 8
   def element_size(:f32), do: 4
+  def element_size(:i32), do: 4
+  def element_size(:u8), do: 1
 
   defp decode(:f32, <<value::little-float-32>>), do: value
   defp decode(:f64, <<value::little-float-64>>), do: value
   defp decode(:i64, <<value::little-signed-64>>), do: value
+  defp decode(:i32, <<value::little-signed-32>>), do: value
+  defp decode(:u8, <<value::8>>), do: value
 end

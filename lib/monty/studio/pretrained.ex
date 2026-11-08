@@ -43,9 +43,9 @@ defmodule Monty.Studio.Pretrained do
   alias Unpickler.Object
 
   # What the evidence-based learning module matches on, which is the only part of
-  # a pretrained model a graph is matched through.
-  @features ["hsv", "pose_vectors", "pose_fully_defined", "principal_curvatures_log"]
-
+  # a pretrained model a graph is matched through. The export writes every
+  # column a graph holds; which of them a run matches on is the module's own
+  # decision, made when the library is read.
   @model_file Path.join(["pretrained", "model.pt"])
 
   @typedoc """
@@ -230,8 +230,13 @@ defmodule Monty.Studio.Pretrained do
   A record is keyed the way the line it becomes is keyed, so what a reader of
   the library sees is what was built here — no translation in between.
 
-  Monty keeps pretrained learning modules in `lm_dict`, one per module, and the
-  graphs of the first are the memory a single-module run recognises with.
+  Monty keeps pretrained learning modules in `lm_dict`, one per module, and a
+  heterarchy has three of them: the 3-D child, the 2-D child, and the high-level
+  module that recognises a composition of the two. Each is its own memory, so
+  every record carries the `lm_index` it belongs to. Reading only the first, as
+  this did while every released model was a single module, gives three modules
+  the child's memory and nothing the high-level one learned — the sub-machine
+  would answer with confidence about the wrong thing.
   """
   @spec records(term()) :: [map()]
   def records(term), do: term |> stream_records() |> Enum.to_list()
@@ -245,34 +250,53 @@ defmodule Monty.Studio.Pretrained do
   @spec stream_records(term()) :: Enumerable.t()
   def stream_records(term) do
     term
-    |> module_memory()
+    |> module_memories()
     |> Enum.sort()
-    |> Stream.flat_map(fn {object_id, channels} ->
-      channels
+    |> Stream.flat_map(fn {index, memory} ->
+      memory
       |> Enum.sort()
-      |> Stream.map(fn {channel, model} -> record(object_id, channel, model) end)
+      |> Stream.flat_map(fn {object_id, channels} ->
+        channels
+        |> Enum.sort()
+        |> Stream.map(fn {channel, model} -> record(index, object_id, channel, model) end)
+      end)
     end)
   end
 
-  defp record(object_id, channel, model) do
+  defp record(index, object_id, channel, model) do
     graph = graph_of(model)
 
     %{
+      "lm_index" => index,
       "object_id" => object_id,
       "input_channel" => channel,
       "positions" => graph |> Map.fetch!("pos") |> Tensor.rows(),
+      # Every feature the graph holds, not the four this port's evidence kernel
+      # matches on: which of them a memory is matched through is the module's
+      # decision, and a 2-D child's graph has coherence and edge strength where
+      # an evidence module's has pose vectors. Asking for a column that is not
+      # there would stop the export of a whole release on one module.
       "features" =>
-        Map.new(@features, fn name ->
-          [first, last] = graph |> Map.fetch!("feature_mapping") |> Map.fetch!(name)
+        Map.new(graph |> Map.fetch!("feature_mapping"), fn {name, [first, last]} ->
           {name, Tensor.columns(Map.fetch!(graph, "x"), first, last)}
         end)
     }
   end
 
-  defp module_memory(%{"lm_dict" => modules}) when is_list(modules),
-    do: module_memory(hd(modules))
+  # Every module's memory, with the index a run asks for it by. A model written
+  # by a single-module run has one; a heterarchy has one per learning module,
+  # and `lm_dict` is a list in the older shape and a map keyed by index in the
+  # newer one.
+  defp module_memories(%{"lm_dict" => modules}) when is_list(modules) do
+    modules
+    |> Enum.with_index()
+    |> Enum.map(fn {module, index} -> {index, module_memory(module)} end)
+  end
 
-  defp module_memory(%{"lm_dict" => %{0 => module}}), do: module_memory(module)
+  defp module_memories(%{"lm_dict" => modules}) when is_map(modules) do
+    modules |> Enum.sort() |> Enum.map(fn {index, module} -> {index, module_memory(module)} end)
+  end
+
   defp module_memory(%{"graph_memory" => memory}), do: memory
 
   # A model keeps its graph in `_graph`, a torch_geometric `Data`, whose

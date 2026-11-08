@@ -139,17 +139,53 @@ defmodule Monty.Studio.Memory do
 
   `:not_found` is not a failure of the port: it is a model whose pickle has not
   been exported here, and the caller says so as a finding.
+
+  `module_index` is which learning module of the pretrained model the caller
+  wants. A heterarchy's three modules are three memories — the 3-D child, the 2-D
+  child, and the high-level one — and `modules/3` says how many a library holds.
   """
   @spec load(String.t(), String.t(), Path.t()) ::
           {:ok, GraphMemory.t()} | {:error, :not_found | term()}
-  def load(name, release, dir \\ libraries_dir()) do
+  def load(name, release, dir \\ libraries_dir()),
+    do: load_module(name, release, 0, dir)
+
+  @doc """
+  One learning module's memory out of a model's library.
+
+  `module_index` is which module of the pretrained model to read. A heterarchy's
+  three modules are three memories — the 3-D child, the 2-D child, and the
+  high-level one — and `modules/3` says how many a library holds. A library
+  exported before records carried an index holds one memory, which is module 0.
+  """
+  @spec load_module(String.t(), String.t(), non_neg_integer(), Path.t()) ::
+          {:ok, GraphMemory.t()} | {:error, :not_found | term()}
+  def load_module(name, release, module_index, dir \\ libraries_dir()) do
     with true <- model_name?(name),
          true <- is_binary(release),
          path = path_for(name, release, dir),
          true <- File.exists?(path) do
-      {:ok, copy(built(path))}
+      {:ok, copy(built(path, module_index))}
     else
       _absent -> {:error, :not_found}
+    end
+  end
+
+  @doc """
+  How many learning modules' memories a library holds.
+
+  One for a model trained by a single-module run, and one per module for a
+  heterarchy. A config that names more modules than its library holds would be
+  giving two of them the same memory, so the number is asked for before a run.
+  """
+  @spec modules(String.t() | nil, String.t() | nil, Path.t()) :: non_neg_integer() | nil
+  def modules(name, release, dir \\ libraries_dir()) do
+    with true <- model_name?(name),
+         true <- is_binary(release),
+         path = path_for(name, release, dir),
+         true <- File.exists?(path) do
+      index_counts(path) |> map_size()
+    else
+      _absent -> nil
     end
   end
 
@@ -165,12 +201,12 @@ defmodule Monty.Studio.Memory do
   # The decoded memory, built once per path for the life of the node. The key is
   # the path, so pointing `:monty_libraries_dir` somewhere else (as a test that
   # wants no libraries does) is a different cache entry rather than a stale hit.
-  defp built(path) do
-    key = {__MODULE__, :library, path}
+  defp built(path, module_index) do
+    key = {__MODULE__, :library, path, module_index}
 
     case :persistent_term.get(key, nil) do
       nil ->
-        memory = read!(path)
+        memory = read!(path, module_index)
         :persistent_term.put(key, memory)
         memory
 
@@ -280,13 +316,14 @@ defmodule Monty.Studio.Memory do
   # sobelow_skip ["Traversal.FileModule"]
   # The path is a directory from `libraries_dir/0` plus a name `model_name?/1`
   # has checked, so there is no traversal to guard against here.
-  defp read!(path) do
+  defp read!(path, module_index) do
     records =
       path
       |> File.read!()
       |> :zlib.gunzip()
       |> String.split("\n", trim: true)
       |> Enum.map(&decode!/1)
+      |> Enum.filter(&(Map.get(&1, "lm_index", 0) == module_index))
 
     # A memory holds graphs by object and channels under each object, and says
     # which features it matches on per channel. Both come from the export.
@@ -302,15 +339,48 @@ defmodule Monty.Studio.Memory do
       end)
       |> Map.new(fn {object_id, channels} -> {object_id, Map.new(channels)} end)
 
+    # Which features this kernel matches a channel through: the ones it knows,
+    # held by the library. A 2-D child's graphs carry coherence and edge strength
+    # where an evidence module's carry pose vectors, and asking for a column the
+    # graphs do not hold would read absent values as absent evidence — every node
+    # would match nothing for a reason nobody could see.
     features_to_use =
       records
-      |> Enum.map(& &1["input_channel"])
-      |> Enum.uniq()
-      |> Map.new(&{&1, @features})
+      |> Enum.group_by(& &1["input_channel"], &Map.keys(&1["features"]))
+      |> Map.new(fn {channel, name_lists} ->
+        held = name_lists |> List.flatten() |> MapSet.new()
+        {channel, Enum.filter(@features, &MapSet.member?(held, &1))}
+      end)
 
     GraphMemory.new(features_to_use: features_to_use)
     |> GraphMemory.load_state_dict(models)
     |> GraphMemory.initialize_feature_arrays()
+  end
+
+  # Which module memories a library holds, counted once per path: the answer is a
+  # property of the file, and reading a few hundred kilobytes to answer it on
+  # every page render is not.
+  # sobelow_skip ["Traversal.FileModule"]
+  # Same path as `read!/2` is handed: a library from `libraries_dir/0` plus a name
+  # `model_name?/1` has checked, not a request.
+  defp index_counts(path) do
+    key = {__MODULE__, :module_counts, path}
+
+    case :persistent_term.get(key, nil) do
+      nil ->
+        counts =
+          path
+          |> File.read!()
+          |> :zlib.gunzip()
+          |> String.split("\n", trim: true)
+          |> Enum.frequencies_by(&(&1 |> decode!() |> Map.get("lm_index", 0)))
+
+        :persistent_term.put(key, counts)
+        counts
+
+      counts ->
+        counts
+    end
   end
 
   # A graph is positions and one row per node; the column order is the export's

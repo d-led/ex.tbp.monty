@@ -1563,3 +1563,96 @@ unchanged — and `MIX_ENV=test mix dialyzer` at 0. Five fixtures moved: they us
 `MontyBase` as the example of a class this port has not written, and there is no
 longer such a class in a refused config, so they now prove what actually refuses —
 a config naming a name the map cannot place.
+
+## 25. 2026-11-08: the cows memory — three readers nobody had written, and one library that was the same file seven times
+
+Eighteen of the cows family's configurations were refused for `no_pretrained_memory`.
+The ranking called that "a `/prerequisites` export rather than code". It was code:
+exporting the release found three things the reader could not do, and one thing the
+library format could not say.
+
+### 25.1 What the archive holds, and what the reader expected
+
+`pretrained_compositional_objects_v8` is 31 MB and seven models. The export walked
+them and failed on `no function clause matching in Tensor.rows/1`, because that
+release's models are not torch `Data` graphs: each keeps its nodes in a
+`GridObjectModel`, whose graph is a **`NumpyGraph`** — a map of `pos`, `x` and
+`feature_mapping` whose two arrays are numpy, not torch. Three readers were missing:
+
+- **`Monty.Studio.Pretrained.Numpy`** reads a pickled numpy array: `_reconstruct`
+  inside the pickle carries a shape, a dtype code and the raw bytes, which is
+  everything `Tensor` needs. Row-major and column-major are carried as strides
+  (`[columns, 1]` against `[1, rows]`) rather than copied, since `Tensor` already
+  reads through strides. A string array is one more object the walk ignores; a
+  numeric dtype with no decoder is refused by name, because a feature column read as
+  "absent" is a graph that matches nothing for a reason nobody can see.
+- `Tensor` grew `:i32` and `:u8` — a surface model stores a flag as an unsigned
+  byte, and its coordinates are the same `f8` as everywhere else.
+- `graph_of/1` needed no change after all: `NumpyGraph`'s object state is already
+  the map with `x` in it.
+
+### 25.2 The library was one memory, and a heterarchy has three
+
+With the reader working, all seven libraries came out **byte-identical** — md5
+`aa5a6fae…` seven times. That is the export's own trap ("exporting a memory by
+exporting nothing") in a new dress: `module_memory/1` took `lm_dict[0]`, and in
+every cows model module 0 is the same 3-D child. The high-level module — the one
+that recognises a mug with a logo on it — was never exported at all.
+
+So a record now carries `"lm_index"`, `stream_records/1` walks every module, and
+one library holds one memory per module:
+
+- `lm 0` — five 3-D objects with `hsv` and log curvatures,
+- `lm 1` — the two logos with `hsv`,
+- `lm 2` — nineteen compositional objects, fed from `patch_2` _and_ from the two
+  child modules as hierarchy inputs.
+
+`Memory.load_module/4` reads the one a caller asks for, `Memory.modules/3` says how
+many a library holds, and `Memory.load/3` is still `(name, release, dir)` for the
+single-module case — the module index got its own name rather than a third
+positional argument, so a directory and an index cannot be confused.
+
+The features a record carries are now **the ones its graph holds**, not the four
+this port's evidence kernel matches on: a 2-D child's graph has a colour and a pose
+frame and no log curvatures, and asking for a column that is not there stopped the
+export of a whole release on one module. Which of them a memory is _matched_
+through is the module's decision, taken when the library is read.
+
+### 25.3 `Setup.memories/1` was wrong about Monty
+
+It gave every learning module the same memory, and said so as a fact about Monty
+("Monty loads the model's memory once and every learning module matches against the
+same graphs"). Monty's pretrained store is `lm_dict`, one memory per module, and
+`setup_model` hands `lm_dict[i]` to `learning_modules[i]`. Each module now reads its
+own by index — the change that makes a compositional run mean anything, since three
+modules sharing the child's memory is a run answering with confidence about the
+wrong thing.
+
+### 25.4 Two refusals that were promises
+
+Adding the memory made sixteen cows configurations read as runnable while their
+objects — 1.6 GB — are not on this machine. `object_in_world_findings/1` only asked
+whether a config _named_ an object, never whether the object was on disk, so the
+world's own directory was never checked.
+
+- `world_data_missing` (error) — the config's `data_path` is not a directory. This
+  is the 19 that are now refused, and the message points at `/prerequisites`, which
+  now offers `compositional_objects_1.4_mujoco`, its `random_locs` sibling, and
+  `pretrained_compositional_objects_v8` (all three added to
+  `priv/prerequisites.yaml`, so they are fetched and exported by the same saga as
+  every other archive).
+- `world_holds_no_object` (error, was a warning) — the directory is there and none
+  of the meshes the config names is in it.
+
+Both are the reasoning §24 used for an unplaceable class: a run that steps a scene
+with nothing in it spends the episodes and answers none of the experiment's
+question, which looks like a result.
+
+### 25.5 The gate
+
+`scripts/quality.sh` green — 2 614 tests, 63 properties, worst complexity 29.85
+unchanged — and `MIX_ENV=test mix dialyzer` at 0. Readiness is **97 runnable, 26
+refused, 87 postponed**: 100 → 116 when the memory arrived, 116 → 97 when the data
+check told the truth. `no_pretrained_memory` is down to 2. The libraries are in
+`priv/monty/libraries/pretrained_compositional_objects_v8/` (0.8–3.7 MB each, seven
+distinct files).

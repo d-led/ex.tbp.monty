@@ -81,6 +81,20 @@ that used to live in `scripts/`:
 | `pretrained_ycb_v13/surf_agent_1lm_10distinctobj` | 10 | 10 |
 | `pretrained_ycb_v14/surf_agent_1lm_10distinctobj` | 10 | 10 |
 
+Those three are one learning module each. `pretrained_compositional_objects_v8`
+is a heterarchy: seven models, each holding **three memories** — the 3-D child,
+the 2-D child, and the high-level module that recognises a composition of the two
+— and every record carries the `lm_index` it belongs to. `lm 2` of
+`supervised_pre_training_cows_small_compositional` holds nineteen objects, fed
+from `patch_2` and from the two child modules as hierarchy inputs. Reading only
+the first module, as this did while every released model had one, gave three
+modules the child's memory: see hand-over §25.
+
+The release's models keep their nodes in a `GridObjectModel`, whose graph is a
+`NumpyGraph` — `pos` and `x` as numpy arrays rather than torch tensors.
+`Monty.Studio.Pretrained.Numpy` reads those, so the export is the same walk over
+the same map.
+
 Every number equal, not merely close. `torch` is two hundred megabytes of
 numerics this application would never call, so it is not a dependency.
 

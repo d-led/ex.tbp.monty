@@ -186,6 +186,47 @@ defmodule Monty.Studio.PretrainedTest do
     pickle
   end
 
+  describe "a model with several learning modules" do
+    test "exports one memory per module, each record saying which module it belongs to" do
+      # A heterarchy: the 3-D child knows a cube, the 2-D child knows a logo, and
+      # the high-level module knows the composition of them. Three memories, and a
+      # run asks for each by index.
+      term = %{
+        "lm_dict" => %{
+          0 => module_memory("001_cube", "patch_0"),
+          1 => module_memory("021_logo_tbp", "patch_1"),
+          2 => module_memory("024_mug_tbp_horz", "patch_2")
+        }
+      }
+
+      records = Pretrained.records(term)
+
+      assert Enum.map(records, &{&1["lm_index"], &1["object_id"]}) == [
+               {0, "001_cube"},
+               {1, "021_logo_tbp"},
+               {2, "024_mug_tbp_horz"}
+             ]
+    end
+
+    test "writes the features a graph holds, not the four an evidence module matches on" do
+      # A 2-D child's graph has a colour and a frame; it has no log curvatures.
+      graph = %{
+        "pos" => tensor([[0.0, 0.0, 0.0]]),
+        "x" => tensor([[0.5, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0]]),
+        "feature_mapping" => %{
+          "hsv" => [0, 3],
+          "pose_vectors" => [3, 9],
+          "pose_fully_defined" => [9, 10]
+        }
+      }
+
+      assert [record] = Pretrained.records(model(%Object{state: graph}))
+
+      assert Map.keys(record["features"]) |> Enum.sort() ==
+               ["hsv", "pose_fully_defined", "pose_vectors"]
+    end
+  end
+
   # A model of one object in one channel, keeping `graph` where a run would
   # find it — under `lm_dict`, one learning module, one graph memory.
   defp model(graph) do
@@ -219,6 +260,11 @@ defmodule Monty.Studio.PretrainedTest do
       offset: 0,
       storage: storage
     }
+  end
+
+  # One learning module's memory: one object, one channel, one graph.
+  defp module_memory(object_id, channel) do
+    %{"graph_memory" => %{object_id => %{channel => %Object{state: graph_mapping()}}}}
   end
 
   # A library as a previous export left it, `age` seconds old.

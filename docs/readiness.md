@@ -41,8 +41,8 @@ so the postponed count reads the same under `--world synthetic`.
 |                         | MuJoCo (the default) | stand-in scene |
 | ----------------------- | -------------------: | -------------: |
 | experiments Monty ships |                  210 |            210 |
-| run here                |                  100 |             84 |
-| refused                 |                   23 |             39 |
+| run here                |                   97 |             94 |
+| refused                 |                   26 |             29 |
 | not planned             |                   87 |             87 |
 | do not compose at all   |                    0 |              0 |
 
@@ -59,16 +59,18 @@ not the same question as the world a run steps: `mujoco` 123, `habitat` 73,
 through `Setup.engine/1`, the same rule that decides `not planned`, so the two
 cannot disagree.
 
-## Why the 23 are refused
+## Why the 26 are refused
 
 | reason                           | refused | postponed | what it is                                                                        |
 | -------------------------------- | ------: | --------: | --------------------------------------------------------------------------------- |
 | `world_not_carried`              |       0 |        87 | Habitat-Sim — **postponed**, not a blocker                                        |
-| `no_pretrained_memory`           |      18 |         1 | the config's model is not exported on this machine                                |
+| `world_data_missing`             |      19 |         0 | the objects are not downloaded — one archive, and `/prerequisites` offers it      |
+| `no_pretrained_memory`           |       2 |         1 | the config's model is not exported on this machine                                |
 | `epochs_not_a_count`             |       1 |         6 | `${constants.rotations_all_count}` is not resolved before it is validated         |
 | `sm_to_lm_matrix_missing`        |       1 |         5 | Monty's own pytest fixtures: a bare model, not an experiment                      |
 | `learning_module_not_buildable`  |       1 |         0 | the class is written but refuses this config                                      |
 | `unknown_module_class`           |       3 |         3 | a class the module map cannot place — Monty's own test fakes, in the six fixtures |
+| `world_holds_no_object`          |       1 |         0 | the data is there and none of the meshes this config names is in it               |
 | `sensor_agent_mapping_mismatch`  |       0 |         3 | the same fixtures                                                                 |
 | `connection_index_out_of_range`  |       0 |         1 | the same                                                                          |
 | `learning_module_count_mismatch` |       0 |         1 | the same                                                                          |
@@ -76,6 +78,13 @@ cannot disagree.
 `modules_not_ported` is not in the table: **no config is refused for a class this
 port has not written**. What is left of it is 9 postponed experiments, all of them
 Habitat.
+
+The table is about **this machine**. `world_data_missing` is 19 because the cows
+family's objects are not downloaded here; those 19 become runnable once
+`/prerequisites` has fetched `compositional_objects_1.4_mujoco` (1.6 GB), which
+is a download rather than work on the port. §25 is why they are worth asking
+about at all: the memory they load is exported and read, and the run that was
+missing is now one archive away.
 
 An experiment can carry more than one reason, so neither column adds to its
 total. With Habitat postponed, almost all of Monty's pytest fixtures go with it:
@@ -127,6 +136,10 @@ What is left is not a class, in the order worth doing:
 3. **Monty's own pytest fixtures** — the six `test/*` configs name test doubles
    from Monty's `tests/` tree, which no port can have; they are refused and
    should stay so unless the fixtures themselves are ported.
+4. **What the animals need to be stepped** — 19 configurations are refused only
+   for `world_data_missing`, which is the cows objects archive and a download.
+   Running one of them is the parity check the whole port has been waiting for
+   (hand-over §25).
 
 ## Two rules this survey is held to
 

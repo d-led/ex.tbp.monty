@@ -16,7 +16,7 @@ defmodule Monty.Studio.Pretrained.Torch do
   computes with them.
   """
 
-  alias Monty.Studio.Pretrained.Tensor
+  alias Monty.Studio.Pretrained.{Numpy, Tensor}
   alias Unpickler.Object
 
   # torch's storage classes, and the numbers inside them. A class that is not
@@ -117,7 +117,16 @@ defmodule Monty.Studio.Pretrained.Torch do
     {:ok, %{storage | offset: offset, size: dimensions(size), strides: dimensions(strides)}}
   end
 
-  defp object(_other), do: :error
+  # A numpy array settles the same contract as a torch tensor: a shape, a float
+  # or integer type, and the bytes. `Numpy` refuses a dtype it does not know by
+  # name, which is the difference between "add this release" and "matches
+  # nothing for reasons nobody can see".
+  defp object(other) do
+    case Numpy.tensor(other) do
+      {:ok, tensor} -> {:ok, tensor}
+      :error -> :error
+    end
+  end
 
   # torch writes a shape as a tuple, and a `torch.Size` is a tuple too, so both
   # a list and a size object arrive here.
