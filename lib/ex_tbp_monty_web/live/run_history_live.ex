@@ -249,8 +249,17 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # process, and its assigns, alive.
   defp for_run(socket, %{id: id}) do
     case socket.assigns[:run] do
-      %{id: ^id} -> socket
-      _another_run -> assign(socket, series_id: nil, window: nil, step: nil, playing: false)
+      %{id: ^id} ->
+        socket
+
+      _another_run ->
+        assign(socket,
+          series_id: nil,
+          series_chosen: false,
+          window: nil,
+          step: nil,
+          playing: false
+        )
     end
   end
 
@@ -361,7 +370,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     step = step_for(socket, run, step)
     catalog = catalog(socket, run)
     series = charts_of(catalog)
-    series_id = socket.assigns[:series_id] || default_series(series)
+
+    # A reader who has not chosen a chart gets the one a run is judged by: every
+    # object the modules held, as soon as there is one to draw. A run watched
+    # from its first step has no beliefs yet, so the first render can only offer
+    # the single "best evidence" line — and keeping that choice meant the
+    # per-object chart, the reason the page exists, was never drawn for the rest
+    # of the run unless the reader went looking for it in the picker.
+    series_id =
+      if Map.get(socket.assigns, :series_chosen, false) and socket.assigns[:series_id] do
+        socket.assigns.series_id
+      else
+        default_series(series)
+      end
+
     window = window_for(socket, run)
     moment = run |> Replay.at(step) |> with_pictures(run)
     {chart, chart_key, chart_base} = chart_with(socket, catalog, series_id, window, step)
@@ -1221,7 +1243,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp replay("replay_series", %{"series" => id}, socket) do
-    socket |> assign(series_id: id) |> replay_window(socket.assigns.window)
+    socket
+    |> assign(series_id: id, series_chosen: true)
+    |> replay_window(socket.assigns.window)
   end
 
   @impl true

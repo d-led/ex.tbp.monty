@@ -133,6 +133,50 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     })
   end
 
+  # A step that says what a learning module made of it. Beliefs are what the
+  # per-object chart is drawn from, so a run has that chart only once one
+  # arrives — which is the state this file's records are not in.
+  defp publish_beliefs(run_id, step, object) do
+    Monty.Studio.RunStream.publish(run_id, %{
+      entry: %{
+        "step" => step,
+        "episode" => 0,
+        "at" => Monty.Studio.RunLog.now().instant,
+        "goals" => 0,
+        "votes" => %{"sent" => 1, "used" => 1},
+        "percepts" => ["patch"],
+        "inputs" => %{"learning_module_0" => 1},
+        "actions" => 1,
+        "duration_us" => 140,
+        "beliefs" => %{
+          "learning_module_0" => %{"graphs" => %{object => %{"max_evidence" => 5.0}}}
+        }
+      },
+      moment: moment(step),
+      line: nil,
+      observations: %{},
+      sensor_ids: [],
+      number: step,
+      episode: 0,
+      beliefs: %{},
+      centre: nil
+    })
+  end
+
+  describe "the chart a run is opened on" do
+    test "is every object once the run has one, with nobody choosing it",
+         %{conn: conn, run: run} do
+      publish_beliefs(run.id, 0, "mug")
+      publish_beliefs(run.id, 1, "mug")
+      publish_beliefs(run.id, 2, "mug")
+      _ = :sys.get_state(Monty.Studio.RunStream)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#replay-chart-title") |> render() =~ "every object"
+    end
+  end
+
   describe "a run that is still stepping" do
     test "is counted from memory, and is not called stalled", %{conn: conn} do
       # The row is written at an episode boundary, so during an episode it says
