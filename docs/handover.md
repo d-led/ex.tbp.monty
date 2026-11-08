@@ -1054,3 +1054,18 @@ because there is no `v*` tag (§2).
 The acceptance ladder was re-run after `Setup`'s classification became public
 and is unchanged digit for digit: `0.908 (802, 4)` … `11.712 (2342, 1)`,
 `goals 15328`.
+
+### 14.1 It came back, and the fix is one package (2026-11-08)
+
+The same job failed again on `a2a52a1`, one run after it was green: `zlib1g`,
+CVE-2026-76844 and CVE-2026-85091, HIGH, **fixed** in
+`1:1.3.dfsg+really1.3.1-1+deb13u1` while the base image pins `+b1`. Nothing in
+the tree changed between the two runs — this is what §14 describes, an upstream
+fix appearing in the base image's repository.
+
+The runtime stage already names `apt` for the same reason (CVE-2026-109518), so
+`zlib1g` is named beside it. Verified in the base image itself rather than by a
+full build: `docker run --platform linux/amd64 debian:trixie-20261020-slim` →
+`dpkg-query -W zlib1g` after the install says `+deb13u1`. No `.trivyignore.yaml`
+entry: the finding is fixable, and the rule there is that exceptions are for what
+cannot be.

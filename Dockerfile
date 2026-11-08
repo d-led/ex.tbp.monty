@@ -171,11 +171,14 @@ LABEL org.opencontainers.image.title="Elixir TBP Monty" \
 # `apt` is named because the pinned point release carries 3.0.3 and trixie has
 # 3.0.4 for CVE-2026-109518 — a package this image has only because the base
 # image does. Naming it upgrades that pair and nothing else, so the rest of the
-# image is still what the release pinned.
+# image is still what the release pinned. `zlib1g` is named for the same reason:
+# the point release pins `+b1` and trixie has `+deb13u1` for CVE-2026-76844 and
+# CVE-2026-85091 (the amd64 leg's scan failed on exactly that pair on
+# 2026-11-08). Both are base-image packages, so no builder change can fix them.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        apt ca-certificates libstdc++6 openssl libncurses6 libsctp1 locales tzdata \
-       libegl1 libgl1 libosmesa6 \
+       libegl1 libgl1 libosmesa6 zlib1g \
   && rm -rf /var/lib/apt/lists/* \
   && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
   && locale-gen
