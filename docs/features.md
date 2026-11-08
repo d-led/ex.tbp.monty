@@ -201,7 +201,7 @@ what CI runs.
   tarball, a `.deb` and an AppImage) and Windows x64 (NSIS setup and the portable
   folder) — uploading each to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
-- 2,527 `test` declarations in the suite.
+- 2,528 `test` declarations in the suite.
 
 ## Not built — do not assume these
 

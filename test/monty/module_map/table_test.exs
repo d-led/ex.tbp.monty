@@ -132,7 +132,7 @@ defmodule Monty.ModuleMap.TableTest do
       # that saying it a different way never loses a row.
       written = Enum.map(by_written, & &1.class)
       assert written -- Enum.map(by_spoken, & &1.class) == []
-      assert written == ["Monty", "MontyForGraphMatching"]
+      assert written == ["Monty", "MontyForGraphMatching", "MontyBase"]
     end
 
     test "is case-insensitive and takes several words out of order" do

@@ -518,9 +518,15 @@ defmodule Monty.Runtime.Step do
   end
 
   defp propose_regions(%State{model_id: model_id} = state) do
-    learning = Enum.map(learning_servers(state, model_id), &LearningModuleServer.propose_region/1)
     sensors = Enum.map(sensor_servers(state, model_id), &SensorModuleServer.propose_region/1)
-    learning ++ sensors
+    learning = Enum.map(learning_servers(state, model_id), &LearningModuleServer.propose_region/1)
+
+    # Sensors first, then learning modules — Monty's `_pass_goals` order, which
+    # is the other way round from its goals. Nothing reads the order today
+    # (attention pools every weight about a voxel with `min`/`max`, and groups by
+    # voxel before answering), but a difference that nothing reads is still a
+    # difference a later change would inherit.
+    sensors ++ learning
   end
 
   defp step_motor_system(

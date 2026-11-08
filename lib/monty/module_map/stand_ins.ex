@@ -4,12 +4,13 @@ defmodule Monty.ModuleMap.StandIns do
 
   Two things do, and nothing else:
 
-    * **the runtime** does the job of Monty's shell — `Monty`, which owns the
-      sensor modules, the learning modules and the motor system, and
-      `MontyForGraphMatching`, which owns the matching step and the vote round.
-      Here those are processes (`Monty.Runtime.Model`) stepped by
-      `Monty.Runtime.Step`, and the episode belongs to `Monty.Studio.Run`. That
-      is a replacement on purpose, not a hole: the job is done.
+    * **the runtime** does the job of Monty's shell — `Monty`, whose concrete
+      stepping is `MontyBase`, and `MontyForGraphMatching`, which owns the
+      matching step and the vote round. Here those are processes
+      (`Monty.Runtime.Model`) stepped by `Monty.Runtime.Step`, and the episode
+      belongs to `Monty.Studio.Run`. That is a replacement on purpose, not a
+      hole: the job is done — the step order, the goals through the attention
+      system, the vote round, the counters and the terminal decision.
     * **the carried MuJoCo world** — Monty's `MuJoCoSimulator` and its scene
       classes execute here as Python in `priv/monty_py/world.py`, in the
       interpreter this application embeds. The code runs; it is just not Elixir.
@@ -24,7 +25,7 @@ defmodule Monty.ModuleMap.StandIns do
   a page and a refusal cannot disagree about what runs.
   """
 
-  @shell_classes ["Monty", "MontyForGraphMatching"]
+  @shell_classes ["Monty", "MontyBase", "MontyForGraphMatching"]
 
   @shell_stand_ins [
     %{

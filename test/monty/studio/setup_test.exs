@@ -355,19 +355,21 @@ defmodule Monty.Studio.SetupTest do
 
   describe "what is ported" do
     test "an experiment built from classes this port has not written is refused" do
-      # `MontyBase` is the example: the base experiment class every MuJoCo
-      # configuration names, and nothing here stands in for it.
+      # `test/base_config/base_mujoco` is the example: it names Monty's own test
+      # fakes, which live in Monty's `tests/` tree and so are not in the module
+      # map at all — a class nobody can place, which nothing can stand in for.
       setup = setup_for("test/base_config/base_mujoco")
 
-      assert [stand_ins] =
-               for(%{code: :modules_not_ported} = finding <- setup.findings, do: finding)
+      assert [sensor, learning_module] =
+               for(%{code: :unknown_module_class} = finding <- setup.findings, do: finding)
 
       # An error, not an info: no stand-in runs in place of a class this port
       # has not written, so the page disables the run and the task refuses it.
-      assert stand_ins.level == :error
-      assert stand_ins.message =~ "cannot run here"
-      assert stand_ins.message =~ "MontyBase"
-      refute stand_ins.message =~ "MuJoCoSimulator"
+      assert sensor.level == :error
+      assert sensor.message =~ "cannot run here"
+      assert sensor.where =~ "FakeSensorModule"
+      assert learning_module.where =~ "FakeLearningModule"
+      refute sensor.message =~ "MuJoCoSimulator"
 
       refute Setup.valid?(setup)
     end

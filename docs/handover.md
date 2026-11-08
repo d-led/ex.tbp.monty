@@ -1457,14 +1457,14 @@ watch `validate_dataframe` refuse it: no `(x, y, z)` index, a duplicated index, 
 `weight` column, a weight column that is not one dimension. A map cannot hold
 those shapes — a duplicated voxel is simply one entry — so four of the six
 `ValidateDataFrameTest` cases have no counterpart here, and the one rule a map
-*can* break survives as `VoxelGrid.new/3` refusing two weights for one voxel.
+_can_ break survives as `VoxelGrid.new/3` refusing two weights for one voxel.
 `voxelize_and_bin_points` returns the rows (`{voxel, weight}`) that pandas would
 have grouped; `weights_at_points` answers `nil` for an unoccupied voxel, the NaN
 of this port.
 
 **Nothing mutates.** Monty's decays, telemetry and attention system are objects
 with state they change in place, so its cases can hold a `MagicMock` up to one
-collaborator and assert *that it was called, with what*. Here every step is a
+collaborator and assert _that it was called, with what_. Here every step is a
 value: `step/3` answers `{system, goals}`, a decay answers a decayed grid, and the
 telemetry is threaded. Most of `DefaultAttentionSystemTest`'s seventeen cases are
 therefore translated into what the mock was protecting — the grid the step
@@ -1477,7 +1477,7 @@ off the proposed grid `step/3` hands to the telemetry.
 `VoxelGridMerge` and `GoalFilter` are all `Protocol`s over `__call__`, i.e.
 callables with state bound to them. The port writes the contract as a behaviour
 and stores the collaborator as a function (Monty's bound `__call__`), so
-`new/1` turns a decay *value* into one for you. `telemetry` is the exception and
+`new/1` turns a decay _value_ into one for you. `telemetry` is the exception and
 stays a value, because it is the one collaborator with state of its own.
 
 ### 23.3 The gate
@@ -1496,3 +1496,70 @@ to `test/base_config/base_mujoco`, whose `MontyBase` is still unwritten.
 `Monty.Attention.Telemetry` has no test of its own in Monty (its telemetry is
 exercised through the attention system there); the three cases in
 `telemetry_test.exs` say so and are marked as intent tests, not translations.
+
+## 24. 2026-11-08: `MontyBase` was not missing — its job is the runtime's, and a name nobody can place is now refused
+
+The readiness ranking's last class was `MontyBase`: three MuJoCo configurations,
+all of them Monty's pytest fixtures. The question was whether to port it. The
+answer, from reading it against what is already here, is that there is nothing to
+port — and that the three configs were refused for the wrong reason.
+
+### 24.1 What `MontyBase` is, and who does it
+
+`MontyBase` is the concrete stepping of the abstract `Monty`: it owns the module
+lists, runs sensors → outputs → inputs → learning modules → the vote round →
+`_pass_goals` → the motor system, counts the steps, decides the terminal state,
+and answers a state dict. `Monty.Runtime.Model` owns the modules, `Monty.Runtime.Step`
+runs that same sequence, `Monty.Runtime.Step.State` carries the same counts, and
+`Monty.Studio.Run` is the episode. `Monty.ModuleMap.StandIns` already said so for
+`Monty`; `MontyBase` was simply not listed.
+
+It is listed now. The evidence is not the reading, it is a run: with `MontyBase`
+classified, `mix monty.run test/base_config/base_mujoco --episodes 1 --steps 12`
+composes, prints `test/base_config/base_mujoco (monty) — MontyExperiment on
+MontyBase`, and steps (`step 0 · 18.2ms`). The class is the runtime's job, done.
+
+### 24.2 The run then failed, and the failure was the point
+
+It failed two steps later, in the carried MuJoCo world: `get_eval_info_bytes`
+raised `StopIteration` while MuJoCo wrote to stderr. Real, and separate — but the
+preview had also said, twice, that this config names classes **the module map does
+not know**: `tests.unit.frameworks.models.fakes.sensor_modules.FakeSensorModule`
+and `…learning_modules.FakeLearningModule`. They live in Monty's `tests/` tree, so
+no port can have them; `test/base_config/base_mujoco` is a fixture that a port can
+never run.
+
+Those two findings were `:warning`, so the config read as **runnable** the moment
+`MontyBase` stopped refusing it. That is the worse of the two lies: a class that
+cannot even be named is now an **error**, on the same reasoning `not_ported_finding`
+already used — a run under a name nobody can resolve is a run of something else
+wearing the experiment's name. The CLI refuses it before starting and names the
+fake; readiness counts go back to 100 runnable of 210, with `unknown_module_class`
+refused 3 and postponed 3 replacing `modules_not_ported`, which is now **0 refused**
+for the first time: no configuration in Monty's tree is refused for a class this
+port has not written.
+
+`Readiness.blocked_by` names those classes too, so a refusal that is about a name
+is not a refusal with no reason.
+
+### 24.3 `_pass_goals`: one ordering difference, and Monty's case that finds it
+
+`MontyBasePrivateTest` has exactly one case, and it is about `_pass_goals`: the
+goals are the learning modules' then the sensors', the regions are the **sensors'**
+then the learning modules', and the pair goes to the attention system. The
+runtime's `propose_goals/1` already collected goals in Monty's order;
+`propose_regions/1` collected regions the other way round. Nothing reads the order
+today — attention pools every weight about a voxel with `min`/`max` and groups by
+voxel before answering — but a difference nothing reads is a difference the next
+change inherits, so it is Monty's order now, and Monty's case is translated in
+`step_test.exs` to hold it: two sensors and three modules, a recording `attention`
+function in place of the `MagicMock`, and the assertion that what attention
+answers is what the motors were given.
+
+### 24.4 The gate
+
+`scripts/quality.sh` green — 2 605 tests, 63 properties, worst complexity 29.85
+unchanged — and `MIX_ENV=test mix dialyzer` at 0. Five fixtures moved: they used
+`MontyBase` as the example of a class this port has not written, and there is no
+longer such a class in a refused config, so they now prove what actually refuses —
+a config naming a name the map cannot place.

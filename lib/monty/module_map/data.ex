@@ -1773,7 +1773,21 @@ defmodule Monty.ModuleMap.Data do
         %{
           status: :planned,
           elixir: "Monty.Frameworks.Models.MontyBase",
-          python: "MontyBase"
+          python: "MontyBase",
+          stand_in: [
+            %{
+              name: Monty.Runtime.Model,
+              file: "lib/monty/runtime/model.ex",
+              kind: :module,
+              why: "owns the modules a config names, as supervised processes"
+            },
+            %{
+              name: Monty.Runtime.Step,
+              file: "lib/monty/runtime/step.ex",
+              kind: :module,
+              why: "steps them: the matching step, the vote round, the terminal checks"
+            }
+          ]
         }
       ]
     },

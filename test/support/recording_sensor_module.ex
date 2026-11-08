@@ -12,7 +12,14 @@ defmodule Monty.Test.RecordingSensorModule do
 
   def new(opts) do
     Map.merge(
-      %{pass?: true, features?: true, location: [0.0, 0.0, 0.0], notify: self()},
+      %{
+        pass?: true,
+        features?: true,
+        location: [0.0, 0.0, 0.0],
+        goals: [],
+        region: Monty.Cmp.AttentionRegion.empty(),
+        notify: self()
+      },
       Map.new(opts)
     )
   end
@@ -38,6 +45,12 @@ defmodule Monty.Test.RecordingSensorModule do
 
     {percept, state}
   end
+
+  @impl true
+  def propose_goals(state), do: {state.goals, state}
+
+  @impl true
+  def propose_region(state), do: {state.region, state}
 
   @impl true
   def reset(state), do: state

@@ -1925,7 +1925,8 @@ defmodule Monty.Studio.Setup do
     * `:carried` — Monty's MuJoCo classes, which the Python in `priv/monty_py`
       executes, so a MuJoCo run does run them;
     * `:shell` — the classes whose job `Monty.Runtime.*` does on purpose;
-    * `:unknown` — a class the module map cannot place at all.
+    * `:unknown` — a class the module map cannot place at all, which no stand-in
+      can be written for and which is therefore refused too.
   """
   @type blocking :: %{
           unwritten: [module_description()],
@@ -1939,7 +1940,8 @@ defmodule Monty.Studio.Setup do
 
   The one home of the classification: `module_findings/1` reports it, and a
   survey counts it, so the page and a count cannot disagree about why an
-  experiment is refused. A class is refused exactly when it is `:unwritten`.
+  experiment is refused. A class is refused exactly when it is `:unwritten` or
+  `:unknown` — missing, or a name nobody can resolve.
   """
   @spec blocking(t()) :: blocking()
   def blocking(%__MODULE__{} = setup) do
@@ -2230,9 +2232,11 @@ defmodule Monty.Studio.Setup do
 
   defp unknown_module_finding(module) do
     Finding.new(
-      :warning,
+      :error,
       :unknown_module_class,
-      "This config names a class the module map does not know, so nothing here can stand in for it.",
+      "This config names a class the module map does not know, so it cannot run " <>
+        "here: nothing can stand in for a name nothing can place. Monty's own " <>
+        "test fakes are named this way.",
       module.python || module.class
     )
   end

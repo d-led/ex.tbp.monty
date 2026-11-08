@@ -61,23 +61,33 @@ cannot disagree.
 
 ## Why the 23 are refused
 
-| reason                           | refused | postponed | what it is                                                                |
-| -------------------------------- | ------: | --------: | ------------------------------------------------------------------------- |
-| `world_not_carried`              |       0 |        87 | Habitat-Sim — **postponed**, not a blocker                                |
-| `modules_not_ported`             |       3 |        12 | a class nothing here stands in for                                        |
-| `no_pretrained_memory`           |      18 |         1 | the config's model is not exported on this machine                        |
-| `epochs_not_a_count`             |       1 |         6 | `${constants.rotations_all_count}` is not resolved before it is validated |
-| `sm_to_lm_matrix_missing`        |       1 |         5 | Monty's own pytest fixtures: a bare model, not an experiment              |
-| `learning_module_not_buildable`  |       1 |         0 | the class is written but refuses this config                              |
-| `sensor_agent_mapping_mismatch`  |       0 |         3 | the same fixtures                                                         |
-| `connection_index_out_of_range`  |       0 |         1 | the same                                                                  |
-| `learning_module_count_mismatch` |       0 |         1 | the same                                                                  |
+| reason                           | refused | postponed | what it is                                                                        |
+| -------------------------------- | ------: | --------: | --------------------------------------------------------------------------------- |
+| `world_not_carried`              |       0 |        87 | Habitat-Sim — **postponed**, not a blocker                                        |
+| `no_pretrained_memory`           |      18 |         1 | the config's model is not exported on this machine                                |
+| `epochs_not_a_count`             |       1 |         6 | `${constants.rotations_all_count}` is not resolved before it is validated         |
+| `sm_to_lm_matrix_missing`        |       1 |         5 | Monty's own pytest fixtures: a bare model, not an experiment                      |
+| `learning_module_not_buildable`  |       1 |         0 | the class is written but refuses this config                                      |
+| `unknown_module_class`           |       3 |         3 | a class the module map cannot place — Monty's own test fakes, in the six fixtures |
+| `sensor_agent_mapping_mismatch`  |       0 |         3 | the same fixtures                                                                 |
+| `connection_index_out_of_range`  |       0 |         1 | the same                                                                          |
+| `learning_module_count_mismatch` |       0 |         1 | the same                                                                          |
+
+`modules_not_ported` is not in the table: **no config is refused for a class this
+port has not written**. What is left of it is 9 postponed experiments, all of them
+Habitat.
 
 An experiment can carry more than one reason, so neither column adds to its
 total. With Habitat postponed, almost all of Monty's pytest fixtures go with it:
 `sm_to_lm_matrix_missing`, `sensor_agent_mapping_mismatch` and the two index
 checks are now 1, 0, 0 and 0 among the refused — so hand-over §10.7's "should the
 fixtures be in the catalogue?" is a question about a much smaller set.
+
+A fixture that names one of Monty's own test doubles — `FakeSensorModule`,
+`FakeLearningModule` — is refused rather than warned about since §24: the module
+map cannot place the name at all, so there is nothing to look up and nothing to
+stand in for, and a run under a name nobody can resolve would be a run of
+something else.
 
 ## The classes, ranked by what each one alone unblocks
 
@@ -88,29 +98,35 @@ class named only by postponed experiments is not ranked at all.
 
 | class                         | alone | naming | the work                                                                 |
 | ----------------------------- | ----: | -----: | ------------------------------------------------------------------------ |
-| `MontyBase`                   |     3 |      3 | Monty's own model shell — the three are its pytest fixtures              |
 | `GraphLM` (a matching scheme) |     1 |      1 | `tutorial/surf_agent_2obj_train` — `GraphLM` refuses itself upstream too |
 
-The Saccade-on-image and Omniglot environment/interface pairs are gone from this
-table: every config naming them is a Habitat config, so they are postponed. So is
-`DefaultAttentionSystem`: it was ranked at 0 alone and 9 naming, and §23 writes it,
-which leaves the cows compositional configurations refused for the pretrained
-model alone.
+Only one row is left. `MontyBase` and the attention package used to be here, and
+both are written (§23, §24); the Saccade-on-image and Omniglot
+environment/interface pairs are gone because every config naming them is a
+Habitat config, and so is `DefaultAttentionSystem`, which was ranked at 0 alone
+and 9 naming until §23 left the cows compositional configurations refused for
+their pretrained model alone.
 
 ## The order to work in
 
 Done, in this order: **`DisplacementGraphLM` on PPF** (§19),
 **`FeatureGraphLM`** (§20), the cows family's sensor — the edge detector (§21) and
-**`TwoDSensorModule`** (§22) — and **the attention package** (§23). Ten feature
-experiments, the three MuJoCo PPF configs and eight cows configurations run: the
-counts went 87 → 100 runnable, and the attention classes are not ranked any more.
-What is left, in the order worth doing:
+and **`TwoDSensorModule`** (§22) — **the attention package** (§23), and
+**`MontyBase`**, which turned out to be the runtime's job rather than a class to
+write (§24). Ten feature experiments, the three MuJoCo PPF configs and eight cows
+configurations run: the counts went 87 → 100 runnable.
+
+What is left is not a class, in the order worth doing:
 
 1. **The cows pretrained model** — the nine compositional and monolithic
-   configurations are now refused for `no_pretrained_memory` alone. That is an
+   configurations are refused for `no_pretrained_memory` alone. That is an
    export through `/prerequisites`, not code.
-2. **`MontyBase`** — three configs, and all three are Monty's pytest fixtures. Do
-   this only if the fixtures are to be treated as experiments.
+2. **`GraphLM`'s own gap** — `tutorial/surf_agent_2obj_train` names the base
+   `GraphLM`, which refuses matching for a config that leaves the scheme to a
+   subclass. That is a capability to build, not a class to write.
+3. **Monty's own pytest fixtures** — the six `test/*` configs name test doubles
+   from Monty's `tests/` tree, which no port can have; they are refused and
+   should stay so unless the fixtures themselves are ported.
 
 ## Two rules this survey is held to
 

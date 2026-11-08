@@ -161,9 +161,9 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
                  "base" => "test/base_config/base_mujoco"
                })
 
-      # Over `MontyBase`, which is not written here. A preview says so rather
-      # than composing a run this application would refuse.
-      assert Enum.any?(preview.findings, &(&1.code == :modules_not_ported))
+      # Over Monty's own test fakes, which the module map cannot place. A preview
+      # says so rather than composing a run this application would refuse.
+      assert Enum.any?(preview.findings, &(&1.code == :unknown_module_class))
     end
 
     test "reports an option that does not exist instead of silently ignoring it" do

@@ -82,6 +82,13 @@ defmodule Monty.Runtime.StepTest do
     %{possible_states: %{"mug" => [message]}, sensed_pose_rel_body: [location | @identity]}
   end
 
+  # A goal a module proposes, named after the module, so a test can read the
+  # order the goals arrived in off the list.
+  defp goal_from(id) do
+    {:ok, goal} = Cmp.Goal.new(%{sender_id: to_string(id), sender_type: :gsg})
+    goal
+  end
+
   describe "the order of a step" do
     test "sensor modules are asked before learning modules, and the motor system last" do
       model_id = start_model()
@@ -270,6 +277,51 @@ defmodule Monty.Runtime.StepTest do
   end
 
   describe "goals and the motor system" do
+    # Monty's `monty_base_test.py::test_pass_goals_collects_all_goals_from_learning_and_sensor_modules_and_filters_them_through_the_attention_system`,
+    # the whole of `MontyBasePrivateTest`. Monty calls `_pass_goals` directly and
+    # holds a `MagicMock` attention system; here the attention system is the
+    # function the step state carries, so the case reads what it was handed and
+    # what the motor system then received.
+    test "the goals are the learning modules' then the sensors', the regions the sensors' then the modules'" do
+      parent = self()
+      goals = fn id, n -> List.duplicate(goal_from(id), n) end
+      region = fn id -> %Cmp.AttentionRegion{locations: [[0.0, 0.0, 0.0]], weights: [id]} end
+
+      attention = fn given_goals, given_regions ->
+        send(parent, {:attention, given_goals, given_regions})
+        [Enum.at(given_goals, 0)]
+      end
+
+      model_id =
+        start_model(
+          sensor_modules: [
+            sensor_module(:patch, goals: goals.(:patch, 0), region: region.(0)),
+            sensor_module(:view, goals: goals.(:view, 2), region: region.(1))
+          ],
+          learning_modules: [
+            learning_module(:lm_0, goals: goals.(:lm_0, 0), region: region.(2)),
+            learning_module(:lm_1, goals: goals.(:lm_1, 1), region: region.(3)),
+            learning_module(:lm_2, goals: goals.(:lm_2, 2), region: region.(4))
+          ],
+          sm_to_lm: %{lm_0: [:patch], lm_1: [:patch], lm_2: [:view]},
+          attention: attention
+        )
+
+      assert {:ok, [_action], _info} = step(model_id)
+
+      # Learning modules first, then sensors, each in the order they were wired.
+      assert_receive {:attention, given_goals, given_regions}
+      assert Enum.map(given_goals, & &1.sender_id) == ["lm_1", "lm_2", "lm_2", "view", "view"]
+
+      # The other way round for the regions: the sensors propose where they are
+      # looking before the modules do.
+      assert Enum.map(given_regions, &hd(&1.weights)) == [0, 1, 2, 3, 4]
+
+      # What attention answered is what the motors were given.
+      assert_receive {:motor, _percept, [received_goal]}
+      assert received_goal.sender_id == "lm_1"
+    end
+
     test "the motor system receives the first sensor percept and the proposed goals" do
       {:ok, goal} =
         Cmp.Goal.new(%{location: [0.0, 0.0, 0.0], sender_id: "lm_0", sender_type: :gsg})

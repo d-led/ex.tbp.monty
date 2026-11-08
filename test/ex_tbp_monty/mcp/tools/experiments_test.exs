@@ -190,9 +190,10 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                  @ctx
                )
 
-      # That base is over `MontyBase`, which is not written here. The preview is
-      # where a caller finds that out, in the same words the page uses.
-      assert text =~ "- error modules_not_ported"
+      # That base is over Monty's own test fakes, which nothing here can place.
+      # The preview is where a caller finds that out, in the same words the page
+      # uses.
+      assert text =~ "- error unknown_module_class"
       assert preview.yaml =~ "mcp_preview"
     end
 

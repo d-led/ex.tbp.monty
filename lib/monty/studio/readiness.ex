@@ -36,9 +36,10 @@ defmodule Monty.Studio.Readiness do
   can be checked without the world.
 
   `:blocked_by` is the classes a run is refused on: the ones `Setup.blocking/1`
-  calls `:unwritten` — no module here and nothing standing in for one — and the
-  class of a learning module that refuses a config it cannot build, which is a
-  written class with a gap in it rather than a missing one.
+  calls `:unwritten` — no module here and nothing standing in for one — the ones
+  it cannot place at all, whose name is all there is to show, and the class of a
+  learning module that refuses a config it cannot build, which is a written
+  class with a gap in it rather than a missing one.
   """
   @type entry :: %{
           name: String.t(),
@@ -113,9 +114,11 @@ defmodule Monty.Studio.Readiness do
   defp status(_errors, _not_carried_world), do: :not_planned
 
   defp blocked_by(setup, errors) do
-    unwritten = for module <- Setup.blocking(setup).unwritten, do: module.class
+    blocking = Setup.blocking(setup)
+    unwritten = for module <- blocking.unwritten, do: module.class
+    unknown = for module <- blocking.unknown, do: module.python || module.class
 
-    (unwritten ++ unbuildable_classes(errors))
+    (unwritten ++ unknown ++ unbuildable_classes(errors))
     |> Enum.uniq()
     |> Enum.sort()
   end
