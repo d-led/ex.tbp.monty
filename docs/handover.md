@@ -454,12 +454,12 @@ established and what section 3 is trying to extend to crashes — the same
 principle, applied to a process that dies instead of a class that is missing.
 
 Where the two lists above are about _behaviour_, §12 is about the **tests**: what
-referees them, how many of Monty's own cases are translated (22 of 652), and the
-order in which the rest should be done.
+referees them, how many of Monty's own cases are translated (124 of 652 on
+2026-11-08), and the order in which the rest should be done.
 
 ---
 
-## 12. The tests themselves: 22 of Monty's 652 cases are translated — and each translation has been paying
+## 12. The tests themselves: Monty's 652 cases, and what a translation has been paying
 
 The question that opened this was "have we validated all individual components?".
 For the _numbers_ the answer is mostly yes: sixteen Monty recordings referee
@@ -702,9 +702,11 @@ Re-measure the whole tree in one command (from `monty-orig`):
       grep -rq "$n" ../ex.tbp.monty/test/ && echo "$n"
     done | wc -l
 
-It said **11** at the start of the session and **22** at the end: every one of them
-a case in `burst_sampling_test.py`, which is now 22 of its 24. Everything else in
-`tests/unit` — 630 case names — has no counterpart yet.
+It said **11** at the start of that session and **22** at the end: every one of
+them a case in `burst_sampling_test.py`, which is now 22 of its 24. Run again on
+2026-11-08 it says **124** — the attention package, edge detection, salience and
+twelve of `evidence_lm_test.py`'s sixteen (§28) have since cited the case they
+translate. The rest of `tests/unit` — 528 case names — has no counterpart yet.
 
 ### 15.3 The order, and why each step is next
 
@@ -733,7 +735,8 @@ a case in `burst_sampling_test.py`, which is now 22 of its 24. Everything else i
 ### 15.4 What not to trust
 
 - **A hand-written test as parity.** It says what someone intended, not what
-  Monty does. Twenty-two cases are translated; the rest of our suite is not.
+  Monty does. A hundred and twenty-four cases are translated; the rest of our
+  suite is not.
 - **A cancelled or failed leg as green.** The macOS job never starts; the amd64
   image's scan currently fails. Say which leg you mean.
 - **A pending run as proof of an intermediate commit.** `main`'s concurrency
@@ -1714,3 +1717,59 @@ config (1), and a world with nothing in it (1).
 
 Readiness: **97 runnable, 25 refused, 81 postponed** of 203. Gate: 2 618 tests, 63
 properties, worst complexity 29.85 unchanged, dialyzer 0.
+
+## 28. 2026-11-08: twelve of Monty's evidence-LM cases, translated
+
+`tests/unit/frameworks/models/evidence_matching/evidence_lm_test.py` is the file
+the handover has twice named as the next thing (§15.3 item 2), because it is where
+the one measured behavioural difference lives. Twelve of its sixteen cases are now
+`test/monty/frameworks/models/evidence_matching/evidence_lm_test.exs`, one for one.
+
+The fixture came first, from Monty's own `BaseGraphTest`: four percepts that walk a
+corner of space one axis at a time, one pose at every point, so a pose never
+disagrees and only the location says where the sensor was. A module learns those
+four points through `exploratory_step`, is told the object it detected, and stores
+them; a later episode walks them again through `matching_step`.
+
+What the twelve say, in Monty's numbers:
+
+| case                                             | what it pins                                                                                                   |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `object_id_features_are_unique_and_float32_safe` | 77 YCB and 126 compositional names share no id, and each is exact in a float32                                 |
+| `top_two_mlh_ids_without_current_hypotheses`     | a module that has not started matching answers `{nil, nil}`                                                    |
+| `same_sequence_recognition_elm`                  | evidence `1, 3, 5, 7` — one for the pose, one for the features, a step                                         |
+| `reverse_sequence_recognition_elm`               | the same, walked backwards                                                                                     |
+| `offset_sequence_recognition_elm`                | the same, the whole path moved a metre                                                                         |
+| `new_sampling_recognition_elm`                   | the same, two points nudged by a millimetre or two                                                             |
+| `different_locations_not_recognized_elm`         | matches `1, 1, 0, 0` — the second displacement is what fails                                                   |
+| `location_only_step_displaces_hypotheses_elm`    | every hypothesis moves by its pose-rotated displacement; evidence and the MLH index do not change              |
+| `symmetry_recognition`                           | one pose is never chosen, both `0,0,0` and `180,0,180` stay possible, and the ambiguity is counted once a step |
+| `different_features_still_recognized`            | evidence `0, 1, 2, 3`: shape alone, one a step                                                                 |
+| `different_pose_features_not_recognized_elm`     | evidence climbs by one, then falls below one, then below nought, and nothing is left                           |
+| `moving_off_object_and_back_elm`                 | a percept the model drops earns nothing; the object is still recognised afterwards                             |
+
+Two of these are worth reading twice. The **symmetry** case exposes a shape the port
+had never been asked for: `get_possible_poses/2` lists every hypothesis' pose
+without narrowing, so a symmetric object reports its two poses four times each —
+which is Monty's own behaviour, and why its case reads the first and the last entry
+rather than counting. The **pose** case is the port agreeing with Monty on a decay:
+a first percept facing another way leaves evidence `> 1` at the second step, `< 1`
+at the third and `< 0` at the fourth, because the pose the module started from stops
+being possible without the object being wrong.
+
+Four cases are not translated, and they are the four that need a goal generator:
+`hypothesis_testing_proposal_for_id{,_with_transformation}` and
+`..._for_pose{,_with_transformation}`. Each trains two objects (a square and the
+"house" that is a square with one more corner), then asks
+`EvidenceGoalGenerator._compute_graph_mismatch()` which location would tell them
+apart. That needs a two-object fixture and the goal generator's private mismatch
+walk, so it is the next unit rather than this one.
+
+Gate: **2 630 tests, 63 properties**, worst complexity 29.85 unchanged, dialyzer 0.
+CI on `147d517` failed four build jobs and only build jobs, all of them GitHub's own
+504s: `failed to fetch https://github.com/astral-sh/uv/releases/...` while pythonx
+compiled, `Unexpected HTTP response: 504` in `Install Erlang/Elixir`, and
+`Error failed to bundle project: http status: 504` in Tauri's AppImage tooling.
+Three re-runs moved the failures around — `osx-arm64` passed on a re-run — with no
+test, lint, types or coverage job ever failing. Nothing in the tree was changed to
+paper over a CDN.
