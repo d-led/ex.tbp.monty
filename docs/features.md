@@ -11,7 +11,7 @@ not recalled — run it after anything lands that can move one.
   `Monty.Path.File.Class`; a repeated segment collapses, a class repeating the file
   name is dropped. ([rule](module-map.md))
 - **The map is the contract.** 131 Python files (124 `tbp.monty`, 7 `tbp.teleop`),
-  338 classes. Implemented: 48 files / 184 classes. Planned: 79 / 152. Excluded: 4 / 2.
+  338 classes. Implemented: 49 files / 188 classes. Planned: 78 / 148. Excluded: 4 / 2.
   ([`module_map/data.ex`](../lib/monty/module_map/data.ex))
 - `mix monty.module_map.gen` re-derives the map from the checkouts;
   `mix monty.module_map.verify` fails on an unmapped file, an `implemented` entry
@@ -201,7 +201,7 @@ what CI runs.
   tarball, a `.deb` and an AppImage) and Windows x64 (NSIS setup and the portable
   folder) — uploading each to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
-- 2,476 `test` declarations in the suite.
+- 2,490 `test` declarations in the suite.
 
 ## Not built — do not assume these
 
