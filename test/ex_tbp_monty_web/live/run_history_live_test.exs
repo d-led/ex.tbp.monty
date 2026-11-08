@@ -1094,7 +1094,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     test "a run that kept no graphs says why its evidence line is flat", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      assert view |> element("#replay-chart-no-graphs") |> render() =~ "No graphs were kept"
+      note = view |> element("#replay-chart-no-graphs") |> render()
+
+      assert note =~ "nothing to compare here"
+      assert note =~ "builds graphs instead of matching them"
     end
 
     test "a run with graphs does not need the explanation", %{conn: conn} do

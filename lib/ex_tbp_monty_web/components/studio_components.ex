@@ -724,8 +724,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
           id="replay-chart-no-graphs"
           class="text-[11px] text-base-content/50"
         >
-          No graphs were kept for this run, so there is nothing to compare per object —
-          the line above is the strongest evidence there was, which is none.
+          Nothing in this run reported a graph per object, so there is nothing to compare here. A training run builds graphs instead of matching them — what it learns is kept as a memory, not as evidence lines.
         </p>
         <script :type={Phoenix.LiveView.ColocatedHook} name=".ChartHover">
           // Points are drawn in the SVG's own 0..width units but shown stretched to
