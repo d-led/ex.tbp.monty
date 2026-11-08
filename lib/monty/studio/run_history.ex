@@ -694,7 +694,6 @@ defmodule Monty.Studio.RunHistory do
   # Death is not this either: `Monty.Studio.Jobs.Reaper` settles that by looking
   # for a process. And nothing here cancels a run. A quiet record is the page
   # saying so and the run left to finish; whoever owns the process decides.
-  @quiet_seconds 60
 
   @doc """
   How long this run's record has been unchanged, in seconds.
@@ -791,7 +790,7 @@ defmodule Monty.Studio.RunHistory do
   def stalled?(run, now \\ DateTime.utc_now())
 
   def stalled?(%Run{status: "running"} = run, now) do
-    quiet_for(run, now) > @quiet_seconds
+    quiet_for(run, now) > Monty.Studio.Settings.get("run_stale_after_s")
   end
 
   def stalled?(%Run{}, _now), do: false

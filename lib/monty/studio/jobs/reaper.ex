@@ -42,8 +42,6 @@ defmodule Monty.Studio.Jobs.Reaper do
   # waiting. (`retryable`, not `retrying`: that is how the enum is spelled.)
   @waiting ~w(available scheduled retryable)
 
-  @grace_seconds 60
-
   @abandoned "it stopped before it finished — nothing was working on it any more"
 
   @doc """
@@ -83,9 +81,14 @@ defmodule Monty.Studio.Jobs.Reaper do
   end
 
   # Every step a run takes writes its record, whoever is stepping it.
-  defp fresh?(record), do: RunHistory.quiet_for(record) < @grace_seconds
+  defp fresh?(record), do: RunHistory.quiet_for(record) < grace_seconds()
 
-  defp recent?(at), do: DateTime.diff(DateTime.utc_now(), at, :second) < @grace_seconds
+  defp recent?(at), do: DateTime.diff(DateTime.utc_now(), at, :second) < grace_seconds()
+
+  # The threshold is a setting, read through a cache: a claim about somebody
+  # else's process is exactly the number that is wrong on a slow machine, so it
+  # is not something to bake into a module.
+  defp grace_seconds, do: Monty.Studio.Settings.get("job_abandon_after_s")
 
   defp abandon(record) do
     recorded = record.id |> reason_of() |> Failure.explain() |> Failure.recorded()
