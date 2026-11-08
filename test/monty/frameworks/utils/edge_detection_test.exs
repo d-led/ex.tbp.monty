@@ -341,6 +341,17 @@ defmodule Monty.Frameworks.Utils.EdgeDetectionTest do
       assert_in_delta red, 0.299, 1.0e-3
     end
 
+    # Monty's images are a camera's bytes, so its OpenCV call needs no such case.
+    # The stand-in scene renders fractions of one instead, and the two conventions
+    # meet at this fixed point: same brightness, same answer.
+    test "an image rendered as fractions of one is the same grey as the bytes it stands for" do
+      assert ImageOps.to_gray([[[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 0.0]]]) == [[1.0, 0.0]]
+
+      assert [[from_fraction]] = ImageOps.to_gray([[[1.0, 0.0, 0.0, 1.0]]])
+      assert [[from_byte]] = ImageOps.to_gray([[[255, 0, 0, 255]]])
+      assert from_fraction == from_byte
+    end
+
     test "a Sobel derivative of a constant image is zero, borders and all" do
       constant = List.duplicate(List.duplicate(1.0, 8), 8)
 

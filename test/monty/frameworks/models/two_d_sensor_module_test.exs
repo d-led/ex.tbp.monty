@@ -53,11 +53,21 @@ defmodule Monty.Frameworks.Models.TwoDSensorModuleTest do
       end
 
     %{
-      "rgba" => List.duplicate(List.duplicate([128, 128, 128, 255], @patch_size), @patch_size),
+      "rgba" =>
+        Keyword.get(
+          options,
+          :rgba,
+          List.duplicate(List.duplicate([128, 128, 128, 255], @patch_size), @patch_size)
+        ),
       "depth" => List.duplicate(List.duplicate(0.1, @patch_size), @patch_size),
       "semantic_3d" => points,
       "cam_to_world" => identity()
     }
+  end
+
+  # The same image as a camera that renders fractions of one would hand over.
+  defp fractional(rgba) do
+    Enum.map(rgba, fn row -> Enum.map(row, fn pixel -> Enum.map(pixel, &(&1 / 255)) end) end)
   end
 
   defp combine(first, first_scale, second, second_scale) do
@@ -88,6 +98,10 @@ defmodule Monty.Frameworks.Models.TwoDSensorModuleTest do
       )
     )
   end
+
+  # The sensor as a config builds it: the real detector, whose parameters are its
+  # own.
+  defp real, do: TwoDSensorModule.new("test", features: @features)
 
   defp step(sm, observation, options \\ []) do
     TwoDSensorModule.step(
@@ -171,6 +185,34 @@ defmodule Monty.Frameworks.Models.TwoDSensorModuleTest do
       {percept, _two_d} = step(two_d, patch([1.0, 2.0, 3.0]))
 
       assert percept.morphological_features["pose_fully_defined"] == false
+    end
+
+    # No such case in Monty: its images are a camera's bytes, always. The stand-in
+    # scene renders fractions of one, so this is the path that found the detector
+    # shifting a float — and the answer has to be the bytes' answer.
+    test "reads an image rendered as fractions of one as the bytes it stands for" do
+      # A bright half beside a dark one: an edge through the middle of the patch,
+      # so the two readings have something to disagree about.
+      image =
+        for row <- 0..(@patch_size - 1)//1 do
+          for column <- 0..(@patch_size - 1)//1 do
+            if column < div(@patch_size, 2), do: [30, 30, 30, 255], else: [220, 220, 220, 255]
+          end
+        end
+
+      {from_bytes, _two_d} = step(real(), patch([0.0, 0.0, 0.0], rgba: image))
+      {from_fractions, _two_d} = step(real(), patch([0.0, 0.0, 0.0], rgba: fractional(image)))
+
+      # An edge was found, so the comparison is not two zeroes agreeing.
+      assert from_bytes.morphological_features["pose_fully_defined"] == true
+
+      assert from_fractions.morphological_features["pose_fully_defined"] == true
+
+      assert from_fractions.non_morphological_features["edge_strength"] ==
+               from_bytes.non_morphological_features["edge_strength"]
+
+      assert from_fractions.non_morphological_features["coherence"] ==
+               from_bytes.non_morphological_features["coherence"]
     end
   end
 

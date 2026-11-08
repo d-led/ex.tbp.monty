@@ -30,15 +30,33 @@ defmodule Monty.Frameworks.Utils.EdgeDetection.ImageOps do
 
   Alpha is ignored: OpenCV's `COLOR_RGB2GRAY` reads three channels and this
   reads the same three.
+
+  The fixed point is OpenCV's, which takes an 8-bit image. A world that renders
+  fractions of one instead — the stand-in scene does — is scaled here rather
+  than in every consumer: the two conventions meet once, at the fixed point that
+  only speaks the first.
   """
-  @spec to_gray([[non_neg_integer()]]) :: [[float()]]
+  @spec to_gray([[number()]]) :: [[float()]]
   def to_gray(rgba) do
+    scale = if fractional?(rgba), do: 255, else: 1
+
     Enum.map(rgba, fn row ->
       Enum.map(row, fn [red, green, blue | _alpha] ->
-        luma = red * 4899 + green * 9617 + blue * 1868 + 8192
-        bsr(luma, 14) / 255
+        luma = red * scale * 4899 + green * scale * 9617 + blue * scale * 1868 + 8192
+        bsr(round(luma), 14) / 255
       end)
     end)
+  end
+
+  # An image is either a camera's bytes or fractions of one; there is no third
+  # convention, and a brightest channel of at most 1 can only be the second.
+  defp fractional?(rgba) do
+    rgba
+    |> Enum.flat_map(fn row ->
+      Enum.flat_map(row, fn [red, green, blue | _] -> [red, green, blue] end)
+    end)
+    |> Enum.max(fn -> 0 end)
+    |> Kernel.<=(1)
   end
 
   @doc """

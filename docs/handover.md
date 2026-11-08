@@ -1656,3 +1656,33 @@ refused, 87 postponed**: 100 → 116 when the memory arrived, 116 → 97 when th
 check told the truth. `no_pretrained_memory` is down to 2. The libraries are in
 `priv/monty/libraries/pretrained_compositional_objects_v8/` (0.8–3.7 MB each, seven
 distinct files).
+
+## 26. 2026-11-08: the cows run steps, and an image is either bytes or fractions of one
+
+The cows family's objects are not on this machine, so the experiment itself cannot
+run (readiness refuses 19 configurations for `world_data_missing`). What _can_ be
+checked is everything upstream of the world: the three exported memories, the
+model that carries them, and the sensors. `base_infer_cows_small_compositional`
+opened on the stand-in scene runs six steps with
+
+    inputs: %{"learning_module_0" => 1, "learning_module_1" => 1, "learning_module_2" => 1}
+    percepts: ["patch_0", "patch_1", "patch_2", "view_finder"]
+
+— the 3-D child, the 2-D child and the high-level module all fed on every step,
+with the memories §25 exported, and no conclusion, which is right: a sphere is not
+a mug with a logo on it.
+
+That probe found a crash worth keeping. `ImageOps.to_gray/1` is OpenCV's
+fourteen-bit fixed point, which takes an **8-bit** image; the stand-in scene renders
+rgba as **fractions of one** (`synthetic/camera.ex` says so). The fractional image
+reached `:erlang.bsr/2` and raised — the whole step, on the first patch. The two
+conventions now meet once, in `to_gray/1`: an image whose brightest channel is at
+most 1 is fractional and is scaled before the fixed point, and the answer is the
+answer the bytes give. Two cases hold it — one over the conversion itself, one
+through the real detector in `TwoDSensorModule`, asserting that a byte image and its
+fractional twin find the same edge with the same strength.
+
+Monty has no such case because Monty's images are always a camera's bytes. It is
+the stand-in scene that is unusual, and the port's job is to be right on both.
+
+Gate: 2 616 tests, 63 properties, worst complexity 29.85 unchanged, dialyzer 0.
