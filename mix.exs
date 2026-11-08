@@ -16,7 +16,10 @@ defmodule ExTbpMonty.MixProject do
       aliases: aliases(),
       deps: deps(),
       dialyzer: dialyzer(),
-      test_coverage: [summary: [threshold: coverage_threshold()]],
+      test_coverage: [
+        summary: [threshold: coverage_threshold()],
+        ignore_modules: coverage_ignored()
+      ],
       package: package(),
       docs: docs(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
@@ -67,6 +70,22 @@ defmodule ExTbpMonty.MixProject do
       value when value in [nil, ""] -> 85
       value -> String.to_integer(value)
     end
+  end
+
+  # What the coverage gate is not about. A percentage over everything measures
+  # the fixtures as if they were the product: `Monty.Test.*` is what the suite
+  # builds its cases with, so it is exercised *by* the tests and never *through*
+  # them, and its lines dragged the number down while saying nothing about the
+  # code. The desktop entry point runs in its own BEAM (`src-tauri` starts it),
+  # `ExTbpMonty.Release` is a task run from a release, and `ColocatedCSS` is a
+  # macro whose body is a marker. None of them has a caller inside a test run.
+  defp coverage_ignored do
+    [
+      ~r/^Monty\.Test\./,
+      ExTbpMonty.Desktop.Application,
+      ExTbpMonty.Release,
+      ExTbpMontyWeb.ColocatedCSS
+    ]
   end
 
   defp package do

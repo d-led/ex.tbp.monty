@@ -66,5 +66,19 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
       assert has_element?(view, "#setting-db_write_timeout_ms")
       refute has_element?(view, "#system-Database-write-timeout")
     end
+
+    # What an instance says when its configuration declares nothing and the
+    # adapter's own defaults are in force: the page has to say so rather than
+    # leave a blank where a number belongs.
+    test "says when a number is the adapter's default", %{conn: conn} do
+      repo = ExTbpMonty.Database.repo_module()
+      configured = Application.get_env(:ex_tbp_monty, repo)
+      Application.put_env(:ex_tbp_monty, repo, [])
+      on_exit(fn -> Application.put_env(:ex_tbp_monty, repo, configured) end)
+
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      assert render(view) =~ "adapter"
+    end
   end
 end

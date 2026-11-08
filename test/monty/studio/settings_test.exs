@@ -55,4 +55,27 @@ defmodule Monty.Studio.SettingsTest do
       Settings.get("run-refresh-ms")
     end
   end
+
+  # Somebody edited the table by hand, or a later version of this application
+  # stored a value this one cannot read. The default keeps the application
+  # going; a page and a log line say which value it is.
+  test "a value stored in a form this code cannot read falls back to the default" do
+    ExTbpMonty.Repo.insert_all("studio_settings", [
+      %{
+        key: "run_refresh_ms",
+        value: "fast",
+        inserted_at: DateTime.utc_now(),
+        updated_at: DateTime.utc_now()
+      }
+    ])
+
+    Settings.forget()
+
+    assert Settings.get("run_refresh_ms") == 250
+  end
+
+  test "a value that is neither a number nor text is refused" do
+    assert {:error, "Run page update window has to be a whole number"} =
+             Settings.put("run_refresh_ms", nil)
+  end
 end
