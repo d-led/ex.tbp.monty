@@ -498,7 +498,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     every_object = %{
       id: @objects,
       label: "every object (#{length(objects)})",
+      title: "Evidence for every object — strongest module",
       unit: "",
+      axis: "evidence",
       points: []
     }
 
@@ -507,7 +509,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         %{
           id: @module_chart <> module_id,
           label: "objects · #{module_id}",
+          title: "Evidence for every object — as #{module_id} held it",
           unit: "",
+          axis: "evidence",
           points: []
         }
       end

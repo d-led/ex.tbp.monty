@@ -19,11 +19,22 @@ defmodule Monty.Studio.Replay do
 
   @logged_series ["evidence", "percepts", "votes_used", "duration_us"]
 
+  # The value axis of an evidence chart, named where the charts are built so the
+  # page never has to guess what the numbers are.
+  @evidence_axis "evidence"
+
   @type step_number :: integer()
 
   @type point :: %{step: step_number(), value: number(), episode: non_neg_integer() | nil}
 
-  @type series :: %{id: String.t(), label: String.t(), unit: String.t(), points: [point()]}
+  @type series :: %{
+          id: String.t(),
+          label: String.t(),
+          title: String.t(),
+          unit: String.t(),
+          axis: String.t(),
+          points: [point()]
+        }
 
   @typedoc """
   One recorded timestep, ready to draw: the frames it delivered, the report that
@@ -152,7 +163,9 @@ defmodule Monty.Studio.Replay do
     %{
       id: "object:" <> name,
       label: name,
+      title: name,
       unit: "",
+      axis: @evidence_axis,
       points:
         moments
         |> Enum.filter(&(name in object_names(&1, module_id)))
@@ -256,7 +269,9 @@ defmodule Monty.Studio.Replay do
     %{
       id: id,
       label: label_of(id),
+      title: label_of(id),
       unit: unit_of(id),
+      axis: axis_of(id),
       points:
         Enum.map(recorded(run), fn moment ->
           # The episode travels with the point: the chart shades them in turn,
@@ -456,6 +471,15 @@ defmodule Monty.Studio.Replay do
   defp unit_of("sensor:" <> _sensor_id), do: "m"
   defp unit_of("duration_us"), do: "µs"
   defp unit_of(_counted), do: ""
+
+  # What the numbers on the value axis are. Evidence is the score a hypothesis is
+  # ranked by and the one axis a Monty page is read against, so it says
+  # "evidence" rather than nothing; a count says what it counts.
+  defp axis_of("sensor:" <> _sensor_id), do: "metres"
+  defp axis_of("duration_us"), do: "microseconds"
+  defp axis_of("percepts"), do: "percepts"
+  defp axis_of("votes_used"), do: "votes"
+  defp axis_of(_evidence), do: @evidence_axis
 
   defp around(_playhead, 0, first, _last), do: {first, first}
 

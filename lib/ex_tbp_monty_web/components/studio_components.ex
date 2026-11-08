@@ -487,6 +487,20 @@ defmodule ExTbpMontyWeb.StudioComponents do
       </div>
 
       <div :if={@chart} class="space-y-1 pt-0.5">
+        <%!-- What is drawn, said loudly enough to read without opening the
+        picker. The picker chooses; it is not where a reader looks to find out
+        what the chart they are looking at is — and with a chart a learning
+        module there are six of them, so "which one is this?" is a question the
+        page has to answer above the plot rather than in a dropdown. --%>
+        <div>
+          <h3 id="replay-chart-title" class="text-sm font-medium">
+            {chart_title(@series, @series_id)}
+          </h3>
+          <p id="replay-chart-axes" class="text-[11px] text-base-content/50">
+            vertical: {chart_axis(@series, @series_id)} · horizontal: step
+          </p>
+        </div>
+
         <div class="flex flex-wrap items-center gap-1.5">
           <form id="replay-series" phx-change="replay_series">
             <select name="series" class="select select-xs" aria-label="Series to chart">
@@ -1074,6 +1088,26 @@ defmodule ExTbpMontyWeb.StudioComponents do
     case Enum.find(series, &(&1.id == id)) do
       nil -> ""
       found -> found.unit
+    end
+  end
+
+  # A chart's own name, from the series it was built as: the picker's label is a
+  # few words wide, and the title is the sentence.
+  defp chart_title(series, id) do
+    case Enum.find(series, &(&1.id == id)) do
+      nil -> ""
+      %{title: title} -> title
+      found -> found.label
+    end
+  end
+
+  # What the numbers up the side are, in the units the series itself was built
+  # with — evidence is not metres and a duration is not a count.
+  defp chart_axis(series, id) do
+    case Enum.find(series, &(&1.id == id)) do
+      nil -> ""
+      %{axis: axis} -> axis
+      _older -> ""
     end
   end
 

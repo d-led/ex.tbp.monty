@@ -1029,12 +1029,19 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert Enum.any?(samples(view), &(&1["step"] == 1))
     end
 
-    test "a series measured in metres says so", %{conn: conn, run: run} do
+    test "and the value axis is named in that series' own units", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      view |> element("#replay-series") |> render_change(%{"series" => "sensor:patch"})
+      view |> element("#replay-series") |> render_change(%{"series" => "duration_us"})
+      assert view |> element("#replay-chart-axes") |> render() =~ "vertical: microseconds"
 
-      assert Enum.all?(samples(view), &(&1["unit"] == "m"))
+      # A count is not a duration and evidence is neither: one axis name for all
+      # of them would have to be wrong about two.
+      view |> element("#replay-series") |> render_change(%{"series" => "votes_used"})
+      assert view |> element("#replay-chart-axes") |> render() =~ "vertical: votes"
+
+      view |> element("#replay-series") |> render_change(%{"series" => "evidence"})
+      assert view |> element("#replay-chart-axes") |> render() =~ "vertical: evidence"
     end
 
     test "a run that built graphs opens on every object at once", %{conn: conn} do
@@ -1186,6 +1193,30 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       |> render_change(%{"series" => "module:learning_module_0"})
 
       assert Enum.map(samples(view), & &1["value"]) == [1.0, 1.0]
+    end
+
+    # A picker is not where a reader looks to find out what the chart they are
+    # looking at is — and with six object charts there is a real question to
+    # answer above the plot rather than in a dropdown.
+    test "and the chart says what it shows, above itself, both axes named", %{conn: conn} do
+      run = run_believing(%{"mug" => 1.0, "bowl" => 0.4})
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#replay-chart-title") |> render() =~
+               "Evidence for every object — strongest module"
+
+      assert view |> element("#replay-chart-axes") |> render() =~
+               "vertical: evidence · horizontal: step"
+
+      view
+      |> element("#replay-series")
+      |> render_change(%{"series" => "module:learning_module_0"})
+
+      # The title follows the chart: a line drawn from one module's beliefs is a
+      # different claim about the same objects.
+      assert view |> element("#replay-chart-title") |> render() =~
+               "Evidence for every object — as learning_module_0 held it"
     end
   end
 
