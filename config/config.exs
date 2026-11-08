@@ -17,7 +17,25 @@ config :ex_tbp_monty,
 # repos are `Repo.Postgres` and `Repo.SQLite` now, so the directory is named
 # rather than inherited from a module name — with the `priv/` prefix, which is
 # what that option is expected to carry (its default is `priv/repo`).
-config :ex_tbp_monty, ExTbpMonty.Repo.Postgres, priv: "priv/repo"
+config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
+  priv: "priv/repo",
+  # How long a caller may hold a connection before DBConnection gives up on it.
+  # The default is fifteen seconds, and every episode boundary writes the run's
+  # transcript back into its row (`RunHistory.append_steps/4` appends to a jsonb
+  # array, which rewrites the array) — a write that outgrew the default and took
+  # the run's job down with it:
+  #
+  #     (DBConnection.ConnectionError) client #PID<…> (Monty.Studio.Jobs.Run)
+  #     timed out because it queued and checked out the connection for longer
+  #     than 15000ms
+  #
+  # Two minutes is room for the write to finish at the sizes a run reaches here.
+  # It is a stop-gap, not the shape this should have: append-only step rows make
+  # the write O(episode) and this number irrelevant.
+  timeout: 120_000,
+  queue_target: 1_000,
+  queue_interval: 10_000
+
 config :ex_tbp_monty, ExTbpMonty.Repo.SQLite, priv: "priv/repo"
 
 # Where this software lives: the footer links to it with the octocat. A fork

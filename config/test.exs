@@ -22,6 +22,10 @@ config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
   hostname: "localhost",
   database: "ex_tbp_monty_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
+  # A suite wants the opposite of a run: a statement that hangs should fail the
+  # test that issued it, not wait two minutes the way `config/config.exs` lets a
+  # run's episode-boundary write wait.
+  timeout: 15_000,
   pool_size: System.schedulers_online() * 2
 
 # We don't run a server during test. If one is required,
