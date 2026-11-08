@@ -47,6 +47,7 @@ defmodule Monty.Studio.Readiness do
           status: :runnable | :refused | :not_planned | :did_not_compose,
           world: :mujoco | :habitat | nil,
           codes: [atom()],
+          download_offered?: boolean(),
           blocked_by: [String.t()]
         }
 
@@ -210,9 +211,8 @@ defmodule Monty.Studio.Readiness do
   waiting either — saying it was would be a promise a download cannot keep.
   """
   @spec waiting?(entry()) :: boolean()
-  def waiting?(%{status: :refused, codes: codes, download_offered?: offered?})
-      when codes != [],
-      do: offered? && Enum.all?(codes, &(&1 in @downloadable_codes))
+  def waiting?(%{status: :refused, codes: codes, download_offered?: true}) when codes != [],
+    do: Enum.all?(codes, &(&1 in @downloadable_codes))
 
   def waiting?(_entry), do: false
 

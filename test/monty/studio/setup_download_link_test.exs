@@ -75,7 +75,12 @@ defmodule Monty.Studio.SetupDownloadLinkTest do
       |> Enum.find(&(&1.name == @waiting_for_objects))
     end
 
-    assert %{status: :refused, codes: [:world_data_missing]} = entry.()
+    assert %{status: :refused} = missing = entry.()
+
+    # The objects are one thing this machine is missing, not necessarily the
+    # only one: a build without the cows memory says so as well, and the
+    # question here is whether the archive's absence is still among the reasons.
+    assert :world_data_missing in missing.codes
 
     # An unpacked archive holds objects; an empty directory is the mkdir on the
     # way to some, and `Prerequisites.present?/1` counts only what holds
