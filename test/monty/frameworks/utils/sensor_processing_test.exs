@@ -1,7 +1,11 @@
 defmodule Monty.Frameworks.Utils.SensorProcessingTest do
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   alias Monty.Frameworks.Utils.SensorProcessing
+  alias Monty.Geometry.Rotation
+  alias Monty.Geometry.SurfacePoseVectors
+  alias Monty.Math
 
   defmodule Patch do
     @moduledoc false
@@ -309,4 +313,250 @@ defmodule Monty.Frameworks.Utils.SensorProcessingTest do
       assert_in_delta backward_first, :math.pi(), 1.0e-12
     end
   end
+
+  # -- how far along a curved surface a step really went ---------------------
+  #
+  # The cases below translate Monty's `ComputeArcFromTangentProjectionTest` and
+  # `DirectionalCurvatureTest` in
+  # `tests/unit/frameworks/utils/sensor_processing_test.py`, one for one.
+
+  describe "a tangent-plane projection, as an arc" do
+    # test_known_correction
+    test "corrects a chord on a unit circle to its arc" do
+      assert_in_delta SensorProcessing.arc_from_projection(0.5, 1.0), :math.pi() / 6, 1.0e-12
+    end
+
+    # test_out_of_bounds_params_edge_case
+    test "leaves the projection alone when the step reaches the far side of the circle" do
+      assert SensorProcessing.arc_from_projection(1.0, 1.0) == 1.0
+    end
+
+    # test_corrected_length_geq_projection
+    property "never reports less than the projection it was given" do
+      check all(
+              projection <- projection_generator(),
+              curvature <- curvature_generator()
+            ) do
+        arc = SensorProcessing.arc_from_projection(projection, curvature)
+        assert abs(arc) >= abs(projection)
+      end
+    end
+
+    # test_sign_preservation
+    property "keeps the sign of the projection, and a zero projection is zero" do
+      check all(
+              projection <- projection_generator(),
+              curvature <- curvature_generator()
+            ) do
+        arc = SensorProcessing.arc_from_projection(projection, curvature)
+
+        cond do
+          projection > 0.0 -> assert arc > 0.0
+          projection < 0.0 -> assert arc < 0.0
+          true -> assert arc == 0.0
+        end
+      end
+
+      assert SensorProcessing.arc_from_projection(0.0, 2.0) == 0.0
+    end
+
+    # test_negating_projection_negates_result
+    property "is an odd function of the projection" do
+      check all(
+              projection <- projection_generator(),
+              curvature <- curvature_generator()
+            ) do
+        assert SensorProcessing.arc_from_projection(-projection, curvature) ==
+                 -1.0 * SensorProcessing.arc_from_projection(projection, curvature)
+      end
+    end
+
+    # test_curvature_sign_does_not_affect_result
+    property "curves the same way whether the surface is convex or concave" do
+      check all(
+              projection <- projection_generator(),
+              curvature <- curvature_generator()
+            ) do
+        assert SensorProcessing.arc_from_projection(projection, curvature) ==
+                 SensorProcessing.arc_from_projection(projection, -curvature)
+      end
+    end
+
+    # test_flat_bypass_returns_projection
+    property "leaves a projection on a nearly flat surface untouched" do
+      check all({projection, curvature} <- flat_regime_generator()) do
+        assert SensorProcessing.arc_from_projection(projection, curvature) == projection
+      end
+    end
+
+    # test_out_of_bounds_returns_projection
+    property "leaves a projection longer than the radius of curvature untouched" do
+      check all({projection, curvature} <- out_of_bounds_regime_generator()) do
+        assert SensorProcessing.arc_from_projection(projection, curvature) == projection
+      end
+    end
+  end
+
+  describe "a surface's curvature in one direction" do
+    # test_zero_direction_returns_zero
+    property "is nothing in a direction of zero length" do
+      check all(
+              {pc1, pc2} <- orthonormal_pair_generator(),
+              {k1, k2} <- curvature_values_generator()
+            ) do
+        assert SensorProcessing.directional_curvature([0.0, 0.0, 0.0], k1, k2, pc1, pc2) == 0.0
+      end
+    end
+
+    # test_euler_formula
+    property "follows Euler's formula between the two principal directions" do
+      check all(
+              angle <- StreamData.float(min: 0.0, max: 2 * :math.pi()),
+              {k1, k2} <- curvature_values_generator(),
+              {pc1, pc2} <- orthonormal_pair_generator()
+            ) do
+        direction = combine(pc1, :math.cos(angle), pc2, :math.sin(angle))
+
+        expected = k1 * :math.cos(angle) ** 2 + k2 * :math.sin(angle) ** 2
+
+        tolerance =
+          Enum.max([
+            Math.default_tolerance() * abs(k1),
+            Math.default_tolerance() * abs(k2),
+            Math.default_tolerance()
+          ])
+
+        assert_in_delta SensorProcessing.directional_curvature(direction, k1, k2, pc1, pc2),
+                        expected,
+                        tolerance
+      end
+    end
+
+    # test_out_of_plane_movement_raises
+    property "refuses a movement that is not in the plane of the principal directions" do
+      check all({pc1, pc2} <- orthonormal_pair_generator()) do
+        out_of_plane = cross(pc1, pc2)
+
+        assert_raise ArgumentError, ~r/must lie in the plane/, fn ->
+          SensorProcessing.directional_curvature(out_of_plane, 1.0, 2.0, pc1, pc2)
+        end
+      end
+    end
+
+    # test_pcs_not_unit_vectors_raises
+    property "refuses principal directions that are not unit vectors" do
+      check all({pc1, pc2} <- orthonormal_pair_generator()) do
+        assert_raise ArgumentError, ~r/must be unit vectors/, fn ->
+          SensorProcessing.directional_curvature(pc1, 1.0, 2.0, times(pc1, 2.0), pc2)
+        end
+
+        assert_raise ArgumentError, ~r/must be unit vectors/, fn ->
+          SensorProcessing.directional_curvature(pc2, 1.0, 2.0, pc1, times(pc2, 2.0))
+        end
+      end
+    end
+  end
+
+  describe "a 2-D movement on a curved surface" do
+    test "is lengthened along each direction by that direction's curvature" do
+      # Curvature 1 along `x` and 0 along `y`: a decimetre along x becomes
+      # asin(0.5)/1, and the same decimetre along y is on a flat surface, so it
+      # stays a decimetre.
+      curvatures = SurfacePoseVectors.new([0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0])
+
+      assert {arc_u, arc_v} =
+               SensorProcessing.arc_length_corrected_displacement(
+                 0.5,
+                 0.5,
+                 [1.0, 0.0, 0.0],
+                 [0.0, 1.0, 0.0],
+                 [1.0, 0.0],
+                 curvatures
+               )
+
+      assert_in_delta arc_u, :math.pi() / 6, 1.0e-12
+      assert_in_delta arc_v, 0.5, 1.0e-12
+    end
+  end
+
+  # -- the generators the cases above draw from -----------------------------
+
+  @max_projection 0.05
+  @max_curvature 1.0e3
+
+  defp projection_generator do
+    StreamData.one_of([
+      StreamData.float(min: -@max_projection, max: @max_projection),
+      StreamData.constant(0.0)
+    ])
+  end
+
+  defp curvature_generator do
+    StreamData.one_of([
+      StreamData.float(min: -@max_curvature, max: @max_curvature),
+      StreamData.constant(0.0)
+    ])
+  end
+
+  defp curvature_values_generator do
+    gen all(
+          k1 <- StreamData.float(min: -@max_curvature, max: @max_curvature),
+          k2 <- StreamData.float(min: -@max_curvature, max: @max_curvature)
+        ) do
+      # Monty's `assume(k1 >= k2)`: the first principal curvature is the larger.
+      {max(k1, k2), min(k1, k2)}
+    end
+  end
+
+  # Two directions of one orthonormal frame: the rows of a random rotation, so
+  # they are unit and perpendicular by construction rather than by rounding.
+  defp orthonormal_pair_generator do
+    gen all(
+          x <- StreamData.float(min: -1.0, max: 1.0),
+          y <- StreamData.float(min: -1.0, max: 1.0),
+          z <- StreamData.float(min: -1.0, max: 1.0),
+          angle <- StreamData.float(min: -:math.pi(), max: :math.pi()),
+          axis <- StreamData.constant(normalise([x, y, z]))
+        ) do
+      {:ok, rotation} = Rotation.from_axis_angle(axis, angle)
+      [_normal, first, second] = Rotation.to_matrix(rotation)
+      {first, second}
+    end
+  end
+
+  # A tangent-plane movement whose product with its curvature is below Monty's
+  # flat threshold, and one whose product is past the radius of curvature.
+  defp regime_generator(min_product, max_product) do
+    gen all(
+          product <- StreamData.float(min: min_product, max: max_product),
+          curvature <- StreamData.float(min: 0.01, max: @max_curvature),
+          sign <- StreamData.integer(0..1)
+        ) do
+      # A step never reaches further than `@max_projection`, so a product this
+      # large needs a curvature sharp enough to keep the projection inside it.
+      curvature = max(curvature, product / @max_projection)
+      projection = product / curvature
+      if sign == 0, do: {projection, curvature}, else: {-projection, curvature}
+    end
+  end
+
+  defp flat_regime_generator,
+    do: regime_generator(0.0, SensorProcessing.flat_threshold() - 1.0e-6)
+
+  defp out_of_bounds_regime_generator, do: regime_generator(1.0 + 1.0e-6, 2.0)
+
+  defp normalise([x, y, z]) do
+    length = :math.sqrt(x * x + y * y + z * z)
+    if length < 0.1, do: [1.0, 0.0, 0.0], else: [x / length, y / length, z / length]
+  end
+
+  defp combine(first, first_scale, second, second_scale) do
+    first |> Enum.zip(second) |> Enum.map(fn {a, b} -> a * first_scale + b * second_scale end)
+  end
+
+  defp cross([a1, a2, a3], [b1, b2, b3]) do
+    [a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1]
+  end
+
+  defp times(vector, factor), do: Enum.map(vector, &(&1 * factor))
 end

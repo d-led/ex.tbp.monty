@@ -16,9 +16,14 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
       pixels, whose shape operator answers the two principal curvatures and
       their directions.
 
-  Not ported: `surface_normal_naive/2` and `surface_normal_ordinary_least_squares/4`
-  (Monty defaults to total least squares), `directional_curvature/5` and the
-  arc-length helpers, and the point-pair features.
+    * `arc_from_projection/3`, `directional_curvature/5`,
+      `arc_length_corrected_displacement/6`, `unit_vector?/2` and
+      `coplanar?/4` — **ported**: how far along a curved surface a movement
+      really went, which is what a 2-D model is built from.
+
+  Not ported: `surface_normal_naive/2` and
+  `surface_normal_ordinary_least_squares/4` (Monty defaults to total least
+  squares), and `surface_normal_sliding_window/…`.
 
   And one function that file does not have but its module uses:
 
@@ -67,6 +72,131 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
   end
 
   def log_sign(values) when is_list(values), do: Enum.map(values, &log_sign/1)
+
+  # Monty's `FLAT_THRESHOLD`: below this product of curvature and projection, the
+  # arc and the chord differ by less than the noise in either.
+  @flat_threshold 0.001
+
+  @doc "Monty's `FLAT_THRESHOLD`, for a caller that wants to pass its own."
+  @spec flat_threshold() :: float()
+  def flat_threshold, do: @flat_threshold
+
+  @doc """
+  The true distance along a curved surface, from its straight-line projection.
+
+  A sensor that moves along a surface measures a chord in the tangent plane, and
+  a chord is shorter than the arc it subtends. On a circle of curvature `k`,
+  `projection = sin(k · arc) / k`, so the arc is `asin(k · projection) / k` —
+  Monty's `arc_from_projection`.
+
+  Two guards, both about not believing the circle where it cannot apply: a
+  product below `threshold` is flat enough that the correction is noise, and one
+  at or above 1 says the step reached the far side of the circle, which is not a
+  circle any more. Both return the projection unchanged.
+
+      iex> Monty.Frameworks.Utils.SensorProcessing.arc_from_projection(0.5, 1.0)
+      0.5235987755982989
+  """
+  @spec arc_from_projection(number(), number(), number()) :: float()
+  def arc_from_projection(tangent_projection, curvature, threshold \\ @flat_threshold) do
+    projection = tangent_projection * 1.0
+    product = abs(curvature) * abs(projection)
+
+    cond do
+      product < threshold -> projection
+      product >= 1.0 -> projection
+      true -> :math.asin(product) / abs(curvature) * sign_of(projection)
+    end
+  end
+
+  # numpy's `copysign`, which is what makes the sign of the angle follow the
+  # projection rather than the curvature — a concave surface moves backwards.
+  defp sign_of(value) when value < 0, do: -1.0
+  defp sign_of(_value), do: 1.0
+
+  @doc "Whether a vector has unit length, to `tolerance` — Monty's `is_unit_vector`."
+  @spec unit_vector?([number()], float()) :: boolean()
+  def unit_vector?(vector, tolerance \\ 1.0e-6),
+    do: abs(SpatialArithmetics.magnitude(vector) - 1.0) <= tolerance
+
+  @doc """
+  Whether a vector lies in the plane two others span.
+
+  `|v · (b1 × b2)|` against `tolerance`: a direction with any component out of
+  the plane has a curvature that the two principal curvatures do not describe.
+  """
+  @spec coplanar?([number()], [number()], [number()], float()) :: boolean()
+  def coplanar?(basis_1, basis_2, vector, tolerance \\ 1.0e-6) do
+    plane_normal = SpatialArithmetics.cross(basis_1, basis_2)
+    out_of_plane = abs(SpatialArithmetics.dot(vector, plane_normal))
+    out_of_plane <= tolerance
+  end
+
+  @doc """
+  The normal curvature in one direction, from the two principal curvatures.
+
+  Euler's formula, `k(θ) = k₁cos²θ + k₂sin²θ`, where `θ` is the angle between the
+  direction and the first principal direction. It holds only for the *principal*
+  directions, which is why the two guards exist: directions that are not unit
+  vectors, or a movement that is not in their plane, have no answer here and are
+  refused rather than approximated.
+
+  A movement of zero length has no direction, so it curves by nothing.
+  """
+  @spec directional_curvature([number()], float(), float(), [number()], [number()]) :: float()
+  def directional_curvature(movement_direction, k1, k2, pc1_dir, pc2_dir) do
+    unless unit_vector?(pc1_dir) and unit_vector?(pc2_dir) do
+      raise ArgumentError, "The pc1_dir and pc2_dir must be unit vectors."
+    end
+
+    if SpatialArithmetics.magnitude(movement_direction) <= 1.0e-6 do
+      0.0
+    else
+      move_hat = SpatialArithmetics.normalize(movement_direction)
+
+      unless coplanar?(pc1_dir, pc2_dir, move_hat) do
+        raise ArgumentError,
+              "The movement_direction must lie in the plane of pc1_dir and pc2_dir."
+      end
+
+      cos_theta_squared = SpatialArithmetics.dot(move_hat, pc1_dir) ** 2
+      k1 * cos_theta_squared + k2 * (1.0 - cos_theta_squared)
+    end
+  end
+
+  @doc """
+  A 2-D movement on a curved surface, corrected along each basis direction.
+
+  Monty's `arc_length_corrected_displacement`: `{du, dv}` is what a flat surface
+  would have measured, and the answer is how far the sensor really travelled
+  along each direction, given the curvature in that direction. A 2-D model built
+  from the chords instead would shrink every step on a curved patch.
+  """
+  @spec arc_length_corrected_displacement(
+          float(),
+          float(),
+          [number()],
+          [number()],
+          [number()],
+          Monty.Geometry.SurfacePoseVectors.t()
+        ) :: {float(), float()}
+  def arc_length_corrected_displacement(
+        du,
+        dv,
+        basis_u,
+        basis_v,
+        principal_curvatures,
+        curvature_pose_vectors
+      ) do
+    [k1, k2] = principal_curvatures
+    pc1_dir = Monty.Geometry.SurfacePoseVectors.principal_curvature_1(curvature_pose_vectors)
+    pc2_dir = Monty.Geometry.SurfacePoseVectors.principal_curvature_2(curvature_pose_vectors)
+
+    {
+      arc_from_projection(du, directional_curvature(basis_u, k1, k2, pc1_dir, pc2_dir)),
+      arc_from_projection(dv, directional_curvature(basis_v, k1, k2, pc1_dir, pc2_dir))
+    }
+  end
 
   @doc """
   Point pair features: the four numbers that describe how two surface points sit
