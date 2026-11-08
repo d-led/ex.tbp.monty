@@ -355,10 +355,9 @@ defmodule Monty.Studio.SetupTest do
 
   describe "what is ported" do
     test "an experiment built from classes this port has not written is refused" do
-      # `DefaultAttentionSystem` is the example: the attention system the cows
-      # family's compositional configurations name, and nothing here stands in
-      # for it.
-      setup = setup_for("base_infer_cows_small_compositional")
+      # `MontyBase` is the example: the base experiment class every MuJoCo
+      # configuration names, and nothing here stands in for it.
+      setup = setup_for("test/base_config/base_mujoco")
 
       assert [stand_ins] =
                for(%{code: :modules_not_ported} = finding <- setup.findings, do: finding)
@@ -367,7 +366,7 @@ defmodule Monty.Studio.SetupTest do
       # has not written, so the page disables the run and the task refuses it.
       assert stand_ins.level == :error
       assert stand_ins.message =~ "cannot run here"
-      assert stand_ins.message =~ "DefaultAttentionSystem"
+      assert stand_ins.message =~ "MontyBase"
       refute stand_ins.message =~ "MuJoCoSimulator"
 
       refute Setup.valid?(setup)

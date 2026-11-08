@@ -15,11 +15,11 @@ defmodule Monty.Studio.ReadinessTest do
     end
 
     test "an experiment built from classes this port has not written names them" do
-      entry = Readiness.classified("base_infer_cows_large_compositional")
+      entry = Readiness.classified("test/base_config/base_mujoco")
 
       assert entry.status == :refused
       assert entry.codes == [:modules_not_ported]
-      assert "DefaultAttentionSystem" in entry.blocked_by
+      assert "MontyBase" in entry.blocked_by
     end
 
     # A class the map calls written that still refuses a config is the work too —

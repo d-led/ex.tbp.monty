@@ -277,9 +277,9 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
 
     test "an experiment whose classes are missing is on the same side of the divide",
          %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/experiments?ready=no&q=base_infer_cows_large")
+      {:ok, view, _html} = live(conn, ~p"/experiments?ready=no&q=base_mujoco")
 
-      assert "base_infer_cows_large_compositional" in row_names(view)
+      assert "test-base_config-base_mujoco" in row_names(view)
     end
 
     # Habitat is on its way out upstream, so a config that needs it is postponed

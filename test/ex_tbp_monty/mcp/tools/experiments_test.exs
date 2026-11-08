@@ -184,15 +184,14 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                  %{
                    "attributes" => %{
                      "name" => "mcp_preview",
-                     "base" => "base_infer_cows_small_monolithic"
+                     "base" => "test/base_config/base_mujoco"
                    }
                  },
                  @ctx
                )
 
-      # That base is over `TwoDSensorModule`, which is not written here. The
-      # preview is where a caller finds that out, in the same words the page
-      # uses.
+      # That base is over `MontyBase`, which is not written here. The preview is
+      # where a caller finds that out, in the same words the page uses.
       assert text =~ "- error modules_not_ported"
       assert preview.yaml =~ "mcp_preview"
     end

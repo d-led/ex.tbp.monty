@@ -77,7 +77,7 @@ defmodule Monty.ModuleMap.TableTest do
                "#{@repo}/blob/#{@revision}/test/monty/frameworks/models/two_d_sensor_module_test.exs"
 
       # A class that is only named has no module here, so it has no test of ours.
-      assert row!("DefaultAttentionSystem").test_url == nil
+      assert row!("MontyBase").test_url == nil
 
       # `tbp.teleop` ships no tests, so its rows offer none rather than a link
       # to a tree that is not there.
@@ -116,11 +116,11 @@ defmodule Monty.ModuleMap.TableTest do
       # what a reader types when they are looking for work that is left. Every
       # word has to match, so a class and a status it does not have finds
       # nothing.
-      found = Table.filter(rows(), "defaultattentionsystem planned", :all)
+      found = Table.filter(rows(), "montybase planned", :all)
 
-      assert Enum.any?(found, &(&1.class == "DefaultAttentionSystem"))
+      assert Enum.any?(found, &(&1.class == "MontyBase"))
       assert Enum.all?(found, &(&1.status == :planned))
-      assert Table.filter(rows(), "camera defaultattentionsystem", :all) == []
+      assert Table.filter(rows(), "camera montybase", :all) == []
     end
 
     test "finds a module by the way it is written and the way it is said" do

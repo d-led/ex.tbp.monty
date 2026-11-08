@@ -27,23 +27,26 @@ defmodule Monty.ModuleMap.Data do
   @entries [
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Attention.AttentionSystem",
       package: "monty",
       python: "attention/attention_system.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/attention_system.ex",
           elixir: "Monty.Attention.AttentionSystem",
           python: "AttentionSystem"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/attention_system/noop_attention_system.ex",
           elixir: "Monty.Attention.AttentionSystem.NoopAttentionSystem",
           python: "NoopAttentionSystem"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/attention_system/default_attention_system.ex",
           elixir: "Monty.Attention.AttentionSystem.DefaultAttentionSystem",
           python: "DefaultAttentionSystem"
         }
@@ -51,7 +54,7 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Attention.Decay",
       package: "monty",
       python: "attention/decay.py",
@@ -62,12 +65,14 @@ defmodule Monty.ModuleMap.Data do
           python: "VoxelGridWeightDecay"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/decay/noop_decay.ex",
           elixir: "Monty.Attention.Decay.NoopDecay",
           python: "NoopDecay"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/decay/linear_weight_decay.ex",
           elixir: "Monty.Attention.Decay.LinearWeightDecay",
           python: "LinearWeightDecay"
         }
@@ -75,23 +80,26 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Attention.GoalFilter",
       package: "monty",
       python: "attention/goal_filter.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/goal_filter.ex",
           elixir: "Monty.Attention.GoalFilter",
           python: "GoalFilter"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/goal_filter/noop_goal_filter.ex",
           elixir: "Monty.Attention.GoalFilter.NoopGoalFilter",
           python: "NoopGoalFilter"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/goal_filter/hard_goal_filter.ex",
           elixir: "Monty.Attention.GoalFilter.HardGoalFilter",
           python: "HardGoalFilter"
         }
@@ -99,18 +107,20 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Attention.Merge",
       package: "monty",
       python: "attention/merge.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/merge/voxel_grid_merge.ex",
           elixir: "Monty.Attention.Merge.VoxelGridMerge",
           python: "VoxelGridMerge"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/merge/union.ex",
           elixir: "Monty.Attention.Merge.Union",
           python: "Union"
         }
@@ -118,23 +128,26 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Attention.Telemetry",
       package: "monty",
       python: "attention/telemetry.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/telemetry/attention_system_telemetry.ex",
           elixir: "Monty.Attention.Telemetry.AttentionSystemTelemetry",
           python: "AttentionSystemTelemetry"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/telemetry/noop_attention_system_telemetry.ex",
           elixir: "Monty.Attention.Telemetry.NoopAttentionSystemTelemetry",
           python: "NoopAttentionSystemTelemetry"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/telemetry/default_attention_system_telemetry.ex",
           elixir: "Monty.Attention.Telemetry.DefaultAttentionSystemTelemetry",
           python: "DefaultAttentionSystemTelemetry"
         }
@@ -142,13 +155,14 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Attention.VoxelGrid",
       package: "monty",
       python: "attention/voxel_grid.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/voxel_grid.ex",
           elixir: "Monty.Attention.VoxelGrid",
           python: "VoxelGrid"
         }
@@ -156,13 +170,14 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Attention.WeightPooler",
       package: "monty",
       python: "attention/weight_pooler.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/attention/weight_pooler.ex",
           elixir: "Monty.Attention.WeightPooler",
           python: "WeightPooler"
         }

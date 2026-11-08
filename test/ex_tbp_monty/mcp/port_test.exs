@@ -56,7 +56,7 @@ defmodule ExTbpMonty.Mcp.PortTest do
 
       assert status.summary.classes > 100
       assert status.summary.implemented > 0
-      assert Enum.any?(status.planned, &(&1.elixir == "Monty.Attention.AttentionSystem"))
+      assert Enum.any?(status.planned, &(&1.elixir == "Monty.Frameworks.Models.MontyBase"))
     end
   end
 

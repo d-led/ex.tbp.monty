@@ -158,11 +158,11 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
       assert {:ok, preview} =
                Experiments.preview(%{
                  "name" => "mcp_preview",
-                 "base" => "base_infer_cows_small_monolithic"
+                 "base" => "test/base_config/base_mujoco"
                })
 
-      # Over `TwoDSensorModule`, which is not written here. A preview says so
-      # rather than composing a run this application would refuse.
+      # Over `MontyBase`, which is not written here. A preview says so rather
+      # than composing a run this application would refuse.
       assert Enum.any?(preview.findings, &(&1.code == :modules_not_ported))
     end
 
