@@ -100,7 +100,6 @@ defmodule ExTbpMonty.MixProject do
       # world implements. This application is its main user; `examples/` beside
       # it drives the same code without the studio.
       {:ex_tbp_monty_core, path: "packages/ex_tbp_monty_core"},
-
       {:phoenix, "~> 1.8.16"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},
