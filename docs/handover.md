@@ -1773,3 +1773,115 @@ compiled, `Unexpected HTTP response: 504` in `Install Erlang/Elixir`, and
 Three re-runs moved the failures around — `osx-arm64` passed on a re-run — with no
 test, lint, types or coverage job ever failing. Nothing in the tree was changed to
 paper over a CDN.
+
+## 29. 2026-11-08: the page says what it waits for, and what it counts
+
+A reader using the app for an hour found five things wrong with its words, and
+four of them were the same fault: the page said something true about the wrong
+subject.
+
+**"Refused" was two answers.** An experiment whose only obstacle is a file
+`/prerequisites` can fetch is not refused by this port — it is waiting — and the
+difference is what a person does next. `Readiness.waiting?/1` draws the line: every
+finding against the experiment has to be one of the two codes a finished download
+clears (`world_data_missing`, `no_pretrained_memory`) **and** the download has to
+exist, so a directory no archive fills stays a fact about the machine rather than a
+promise. The catalogue says `waiting for prerequisites`, sorts it between runnable
+and refused, and the badges are pastel and coloured by the verdict: emerald runs,
+amber waits, rose cannot, slate is not planned.
+
+Two smaller bugs lived in that corner. The catalogue's cache key did not include
+what is on disk, so a page went on saying waiting after the file had arrived — the
+key carries `downloads_stamp/0` now, and `forget/0` matches the key's first
+elements, so a key that grows cannot strand an entry. And a config's
+`pretrained_dir` reaches the tree as a _quoted_ OmegaConf argument
+(`${path.expanduser:"~/tbp/models/pretrained"}`), so `.../pretrained"` matched no
+library: `Resolvers.argument/1` strips the quotes.
+
+**Every missing thing now has a click.** `Finding.with_link/3` gives a finding the
+action that answers it, `/prerequisites?fetch=<id>` starts that download when the
+owner presses it, and the MCP catalogue entry carries the URL as text so a caller
+without a mouse is not stuck.
+
+**The needs were in the wrong box.** They were listed in a second alert above the
+checks box, in sentences that had to be read twice — "this application can read no
+memory it could start from" — while the box that actually blocks the run said
+nothing. Now the box carries them, one line per need: a `missing` badge, what it
+is, the path on its own line, and the action beside it — a download, `train it`
+when the model's own trainer is in the catalogue, or a link to the page that
+holds the rest. `checks/1` no longer repeats a need as a check.
+
+**A counter that stood still.** The badge said `episode 9 · step 307 / 500` for
+eight episodes, which reads as a run stuck at 307 of 500. Two faults met. The
+number is episode-scoped — the step counter restarts inside every episode, and this
+config's termination (`any1_naivescan_fixed5_tot6000`, `NaiveScan fixed_amount: 5`)
+ends every training episode after exactly 307 steps, whatever the object — so 307
+was right. But `{:episode, n}` did not reset the counter, and the guard that keeps
+the badge from walking backwards inside an episode then discarded every step of
+every later episode: a step is a _smaller_ number than the previous episode's
+total. The episode message resets the count to zero now, which is the restart the
+comment always promised. `progress_from/2` also keeps the live count while a record
+still says `running`, so a reconcile cannot pull the badge back to the last
+checkpoint. The regression test sends the stream of a new episode by hand, because
+a run of two-step episodes lands on the right final number even when every
+intermediate step is dropped — which is why the existing two tests never noticed.
+
+**And the purge a day of runs needs.** "Purge N done" is a scope of its own
+(`Selection`'s `:done`): every finished and stopped run, whatever the page is
+filtered to, named before it goes and confirmed like the others.
+
+Readiness with the archives now in place: **116 run here, 0 waiting, 6 cannot run
+here, 81 not planned** of 203. The 4 that were waiting split two ways — two run,
+and two ask for a memory no archive fills, which is a training run rather than a
+download. `docs/readiness.md` carries the numbers and the six by name.
+
+## 30. 2026-11-08: the graph family's vote round, and a run that says it is alive
+
+`tutorial/dist_agent_5lm_2obj_train` — the config the next training run starts from
+— died on its first step with
+
+    ** (CaseClauseError) no case clause matching: MapSet.new([])
+    monty_for_evidence_graph_matching.ex:74 heard/3
+
+which is a ported module being handed a vote from the other family. Monty has one
+model class driving two kinds of module, and `MontyForGraphMatching._combine_votes`
+branches on the shape of a vote for exactly this reason:
+
+- an **evidence** module names the hypotheses it still believes, with the pose and
+  location each implies — a list, summed;
+- a **graph** module names the objects it has **ruled out** — a set, and what a
+  receiver hears from several sources is the _union_, because one module's doubt is
+  not another's confidence and a sum of sets is not a thing.
+
+`Monty.Frameworks.Models.GraphMatching.MontyForGraphMatching.combine_votes/2` is
+that union, ported; `Runtime.Step.State.combine_votes/2` picks the calculation by
+shape, as Monty's own `_target_` does. The module map is at **211 implemented of
+360** with the class marked implemented. A detail worth keeping: `nil` is not the
+empty set. `nil` is a module with no opinion — or one whose vote missed the
+deadline — while the empty set is a module that considered everything and ruled it
+all in. Union is the same either way, which is why Monty's version is a `reject`.
+
+The same run then taught the second lesson the hard way. It stepped 22 of its 28
+episodes without complaint and was then closed as **failed**: "it stopped before it
+finished — nothing was working on it any more". Nothing had stopped. The diagnosis
+had: every `mix run` used to read the record boots the whole application, so a
+second node ran its own boot-time `Reaper.sweep/0`, could not see the first node's
+registry, and found a record whose last write was a full episode old.
+
+Two things were wrong, and only one of them was mine.
+
+- **The queue worker never said it was alive.** A record is written at episode
+  boundaries — about fifty seconds apart here, and _minutes_ on the 77-object
+  configs — while the Reaper allows a minute of silence. `mix monty.run` has beaten
+  a heartbeat since it was written; the worker that a page starts had no such thing.
+  `RunHistory.heartbeat/2` is now the one place that says it, at most once every ten
+  seconds (`alive/1`, the single small write, is what it calls), and both loops call
+  it. Ten seconds against a minute of grace is six missed beats before a run looks
+  dead.
+- **A second node must not judge the first node's queue.** That is written down in
+  `Reaper`'s moduledoc, and it is why the beat matters: the registry is this node's,
+  the record is everybody's. Reading the database with `psql` while a server is up
+  is the way to look at a run; `mix run` starts an application, queue and reaper
+  included.
+
+Gate: **2 645 tests, 63 properties**, worst complexity 29.85 unchanged, dialyzer 0.

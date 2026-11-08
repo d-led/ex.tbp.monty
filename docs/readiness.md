@@ -49,17 +49,21 @@ so the postponed count reads the same under `--world synthetic`.
 |                           | MuJoCo (the default) | stand-in scene |
 | ------------------------- | -------------------: | -------------: |
 | experiments Monty ships   |                  203 |            203 |
-| run here                  |                  114 |             94 |
-| waiting for prerequisites |                    4 |              0 |
-| cannot run here           |                    4 |             28 |
+| run here                  |                  116 |             94 |
+| waiting for prerequisites |                    0 |              0 |
+| cannot run here           |                    6 |             28 |
 | not planned               |                   81 |             81 |
 | do not compose at all     |                    0 |              0 |
 
-The MuJoCo column moved by seventeen when the cows objects were downloaded:
+The MuJoCo column moved by nineteen when the cows objects were downloaded:
 those configs were waiting for one archive, and `compositional_objects_1.4_mujoco`
-is now unpacked under `$MONTY_DATA`. The four left waiting are the second
-archives — the random-locations cows set and two releases whose memory is not
-exported here.
+is now unpacked under `$MONTY_DATA` — as is the numenta lab scene the last four
+of them named. Nothing is left in the waiting column, and the six that remain are
+**not** waiting for anything: they name a class this port has not written (3), a
+memory no archive fills (2), a learning module that refuses the config it is
+given (1), and a world holding none of the meshes the config names (1). Two of
+the four that used to be called waiting were exactly that — a memory no download
+can produce, because it is what a training run of theirs writes.
 203, not the number of files under `conf/experiment`: seven of those name no
 experiment class at all — they are the group members Monty's own tests compose an
 environment, a sensor module or a learning module from. A configuration with no
@@ -78,34 +82,34 @@ not the same question as the world a run steps: `mujoco` 123, `habitat` 73,
 through `Setup.engine/1`, the same rule that decides `not planned`, so the two
 cannot disagree.
 
-## Why the 4 cannot run here
+## Why the 6 cannot run here
 
 | reason                          | cannot run | postponed | what it is                                                                        |
 | ------------------------------- | ---------: | --------: | --------------------------------------------------------------------------------- |
 | `world_not_carried`             |          0 |        81 | Habitat-Sim — **postponed**, not a blocker                                        |
-| `world_data_missing`            |          2 |         0 | the objects are not downloaded — one archive, and the finding links to it         |
 | `unknown_module_class`          |          3 |         3 | a class the module map cannot place — Monty's own test fakes, in the six fixtures |
 | `no_pretrained_memory`          |          2 |         1 | the config's model is not exported on this machine                                |
 | `learning_module_not_buildable` |          1 |         0 | the class is written but refuses this config                                      |
 | `world_holds_no_object`         |          1 |         0 | the data is there and none of the meshes this config names is in it               |
 
-`modules_not_ported` is not in the table: **no config is stopped for a class this
-port has not written**. What is left of it is 9 postponed experiments, all of them
-Habitat.
+`world_data_missing` is not in the table because no experiment is stopped for it
+any more: the cows objects and the numenta lab scene are unpacked here, and what
+is left of that row is nothing. `modules_not_ported` is missing for the same
+reason as before — **no config is stopped for a class this port has not written**
+— and what is left of it is 9 postponed experiments, all of them Habitat.
 
-The table is about **this machine**, which is why it moved: `world_data_missing`
-was 19 until the cows family's objects were downloaded, and it is 2 now — the
-second archive, `compositional_objects_1.4_random_locs_mujoco` (1.3 GB). §25 is
-why those were worth asking about at all: the memory they load is exported and
-read, so the run was one archive away rather than one feature away. The four rows
-that used to be here (`epochs_not_a_count`, `sm_to_lm_matrix_missing`,
-`sensor_agent_mapping_mismatch`, `learning_module_count_mismatch`) were all about
-the seven group members, and went with them.
+The table is about **this machine**, which is why it moves: `world_data_missing`
+was 19, then 2, and is 0. §25 is why those were worth asking about at all: the
+memory they load is exported and read, so the run was one archive away rather than
+one feature away. The four rows that used to be here (`epochs_not_a_count`,
+`sm_to_lm_matrix_missing`, `sensor_agent_mapping_mismatch`,
+`learning_module_count_mismatch`) were all about the seven group members, and went
+with them.
 
 An experiment can carry more than one reason, so neither column adds to its
 total. With Habitat postponed, almost all of Monty's pytest fixtures go with it:
 `sm_to_lm_matrix_missing`, `sensor_agent_mapping_mismatch` and the two index
-checks are now 1, 0, 0 and 0 among the four that cannot run — so hand-over §10.7's
+checks are now 1, 0, 0 and 0 among the six that cannot run — so hand-over §10.7's
 "should the fixtures be in the catalogue?" is a question about a much smaller
 set.
 

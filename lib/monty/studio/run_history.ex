@@ -243,6 +243,39 @@ defmodule Monty.Studio.RunHistory do
     :ok
   end
 
+  # An episode is minutes of stepping between two writes - a record is written at
+  # its boundaries - and the Reaper judges a run by its silence, which it allows
+  # a minute of. A beat every ten seconds keeps a working run six times inside
+  # that, whatever the length of an episode.
+  @heartbeat_seconds 10
+
+  @doc """
+  Says the run is alive, at most once every ten seconds.
+
+  This is `alive/1` with a clock, for the two loops that step a run — the queue's
+  worker and `mix monty.run` — so that neither has to know how often a run has to
+  speak to keep looking alive.
+
+  The beat is the caller's own: the monotonic second this run last said something,
+  or `nil` for a caller that has not said anything yet, which is what a run that
+  has just started is. It comes back as the beat to carry to the next step. A run
+  with no record (`nil`) has nothing to say, and the beat it is given is the one
+  it gets back.
+  """
+  @spec heartbeat(Run.t() | nil, integer() | nil) :: integer() | nil
+  def heartbeat(nil, beat), do: beat
+
+  def heartbeat(%Run{} = run, beat) do
+    now = System.monotonic_time(:second)
+
+    if is_nil(beat) or now - beat >= @heartbeat_seconds do
+      alive(run)
+      now
+    else
+      beat
+    end
+  end
+
   @doc """
   Closes a run with its summary.
 

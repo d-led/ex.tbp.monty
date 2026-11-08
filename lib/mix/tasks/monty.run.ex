@@ -161,7 +161,7 @@ defmodule Mix.Tasks.Monty.Run do
 
     say_episode(index, scope.episodes, opts)
 
-    beat = System.monotonic_time(:second)
+    beat = nil
     {infos, history, last_run} = step_through(state.run, history, opts, index, [], beat)
 
     # The class states the episode's answer before it is written, and writing it
@@ -253,7 +253,7 @@ defmodule Mix.Tasks.Monty.Run do
     print_step(info, beliefs, episode, opts)
 
     history = append(history, info, observations, beliefs, episode)
-    beat = heartbeat(history, beat)
+    beat = Monty.Studio.RunHistory.heartbeat(history, beat)
     infos = [info | infos]
 
     if Monty.Studio.Run.finished?(next_run) do
@@ -267,24 +267,6 @@ defmodule Mix.Tasks.Monty.Run do
 
   defp append(history, info, observations, beliefs, episode) do
     Monty.Studio.RunLog.append_step(history, info, observations, beliefs, episode: episode)
-  end
-
-  # An episode is minutes of stepping between two writes, and the Reaper judges a
-  # run by its silence. A run being stepped says so, cheaply, rather than looking
-  # abandoned for the length of an episode.
-  @heartbeat_seconds 10
-
-  defp heartbeat(nil, beat), do: beat
-
-  defp heartbeat(history, beat) do
-    now = System.monotonic_time(:second)
-
-    if now - beat >= @heartbeat_seconds do
-      Monty.Studio.RunHistory.alive(history)
-      now
-    else
-      beat
-    end
   end
 
   defp checkpoint(nil), do: nil

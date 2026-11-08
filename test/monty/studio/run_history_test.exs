@@ -162,6 +162,32 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.quiet_for(RunHistory.get(run.id)) < 5
       assert RunHistory.get(run.id).log == []
     end
+
+    test "speaks at most once every ten seconds, so a step is not a write" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = quiet_since(run, 300)
+
+      # The first step of a run has never said anything, so it does; the next
+      # ones carry the beat they were given, and a beat inside the ten seconds
+      # is not another write — a write per step is what streaming the transcript
+      # was doing.
+      beat = RunHistory.heartbeat(run, nil)
+      assert is_integer(beat)
+      assert RunHistory.quiet_for(RunHistory.get(run.id)) < 5
+
+      :ok = quiet_since(run, 300)
+
+      assert RunHistory.heartbeat(run, beat) == beat
+
+      assert RunHistory.quiet_for(RunHistory.get(run.id)) > 299
+    end
+
+    test "a run with no record has nothing to say" do
+      # `mix monty.run` without `--record` steps an experiment with no row at
+      # all: there is nobody to tell, and the beat it carries is unchanged.
+      assert RunHistory.heartbeat(nil, nil) == nil
+      assert RunHistory.heartbeat(nil, 42) == 42
+    end
   end
 
   # A run whose row has said nothing for a while: a step was being taken.

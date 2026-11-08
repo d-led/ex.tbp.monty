@@ -239,7 +239,12 @@ defmodule Monty.Studio.Jobs.Run do
       # experiment states its answer as "here on the model", and a later epoch
       # that places the object somewhere else still extends the graph it built
       # the first time.
-      first_seen: %{}
+      first_seen: %{},
+      # When this run last said it was alive, in monotonic seconds; `nil` until
+      # the first step does. A record is written at episode boundaries and the
+      # Reaper reads a silent record as a dead run, so the steps between two
+      # boundaries have to say something while they work.
+      beat: nil
     }
 
     {outcome, ran, state} =
@@ -573,7 +578,8 @@ defmodule Monty.Studio.Jobs.Run do
       centre: centre_view(run, info.step)
     })
 
-    {:ok, info, %{state | run: run, record: record}}
+    {:ok, info,
+     %{state | run: run, record: record, beat: RunHistory.heartbeat(record, state.beat)}}
   catch
     # A raise and an exit are the same thing here: the step did not produce a
     # report. Both end the episode as a failure, because the alternative — the
