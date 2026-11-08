@@ -183,7 +183,7 @@ defmodule Monty.Studio.RunHistory do
             ]
           ]
         )
-        |> Repo.update_all([])
+        |> Repo.update_all([], timeout: Monty.Studio.Settings.get("db_write_timeout_ms"))
 
       {:ok, stepped}
     else

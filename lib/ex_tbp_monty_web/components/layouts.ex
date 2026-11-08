@@ -248,6 +248,15 @@ defmodule ExTbpMontyWeb.Layouts do
             label="MCP"
             icon="hero-code-bracket-mini"
           />
+          <%!-- What this instance does while it runs, and what it cannot be
+          asked to change without a restart. Last, because it is where a reader
+          goes once, not where they work. --%>
+          <.sidebar_link
+            id="nav-settings"
+            navigate={~p"/settings"}
+            label="Settings"
+            icon="hero-adjustments-horizontal-mini"
+          />
         </nav>
       </div>
     </aside>

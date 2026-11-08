@@ -6,6 +6,12 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
   alias Monty.Studio.Settings
 
   describe "the settings page" do
+    test "is in the menu, not only at its address", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      assert has_element?(view, "#nav-settings")
+    end
+
     test "shows each setting against what it already is", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings")
 
@@ -39,15 +45,21 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
   end
 
   # The difference the page exists to draw: a boot value is shown, because a
-  # page that offered to change it would be lying.
+  # page that offered to change it would be lying — and a per-statement one is a
+  # setting, because it can be passed on the statement.
   describe "this instance" do
-    test "names the database write timeout, and says it needs a restart", %{conn: conn} do
+    test "names the pool settings, and says they need a restart", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings")
 
-      _ = view
-
-      assert has_element?(view, "#system-Database-write-timeout")
+      assert has_element?(view, "#system-Pool-size")
       assert render(view) =~ "a change needs a restart"
+    end
+
+    test "offers the episode write timeout, which a restart is not needed for", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      assert has_element?(view, "#setting-db_write_timeout_ms")
+      refute has_element?(view, "#system-Database-write-timeout")
     end
   end
 end

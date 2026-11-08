@@ -26,11 +26,6 @@ defmodule Monty.Studio.System do
         note: "chosen at boot from the environment"
       },
       %{
-        label: "Database write timeout",
-        value: milliseconds(Keyword.get(config, :timeout)),
-        note: "config/config.exs — a change needs a restart"
-      },
-      %{
         label: "Connection queue target",
         value: milliseconds(Keyword.get(config, :queue_target)),
         note: "config/config.exs — a change needs a restart"

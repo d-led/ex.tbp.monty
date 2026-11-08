@@ -26,13 +26,25 @@ defmodule Monty.Studio.Settings do
   @settings [
     %{
       key: "run_refresh_ms",
-      label: "Run page refresh",
+      label: "Run page update window",
       unit: "ms",
       default: 250,
       range: 50..10_000,
       help:
-        "How long a page showing a live run waits before reading the record " <>
-          "again. Shorter is fresher and costs more: every read rebuilds the page."
+        "How long a burst of run events is coalesced before the page reads the " <>
+          "record again. It is not a poll: the page is woken by the run, and this " <>
+          "is how long it waits for the rest of a burst instead of reading once per step."
+    },
+    %{
+      key: "db_write_timeout_ms",
+      label: "Episode write timeout",
+      unit: "ms",
+      default: 120_000,
+      range: 1_000..600_000,
+      help:
+        "How long the episode-boundary write may take before the database pool " <>
+          "gives up on it. It is passed per statement, so this one takes effect " <>
+          "without a restart — unlike the pool's own settings, which do not."
     }
   ]
 
