@@ -14,7 +14,7 @@ defmodule Monty.Studio.MemoryTest do
 
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
-  alias Monty.Studio.{Learned, Memory, Setup}
+  alias Monty.Studio.{Catalog, Learned, Memory, Setup}
   alias Monty.Test.Tmp
 
   @experiment "base_config_10distinctobj_dist_agent"
@@ -196,7 +196,7 @@ defmodule Monty.Studio.MemoryTest do
         learning_modules: [%{id: "learning_module_0"}]
       }
 
-      assert [%{level: :warning, code: :memory_from_another_release, message: message}] =
+      assert [%{level: :warning, code: :memory_from_another_release, message: message} = found] =
                Setup.memory_findings(setup)
 
       # The file it will read, not the path the config names: the second is
@@ -205,6 +205,14 @@ defmodule Monty.Studio.MemoryTest do
       assert message =~ "trained/#{name}.jsonl.gz"
       assert message =~ "Nothing to download or train"
       refute message =~ "projects"
+
+      # And the experiment that wrote it, as a click: a reader told "a run here
+      # trained this" next wants the run, and its experiment page is where the
+      # runs of it are listed and where another is started. The label is the
+      # experiment's own name, which is what the catalogue calls it.
+      assert %{label: trainer, href: "/experiments/" <> trainer} = found.link
+
+      assert trainer in Enum.map(Catalog.experiments(), & &1.name)
 
       assert Setup.valid?(%{setup | findings: Setup.memory_findings(setup)})
     end

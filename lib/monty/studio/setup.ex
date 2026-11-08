@@ -2151,6 +2151,7 @@ defmodule Monty.Studio.Setup do
             another_release(name, release),
             "model_name_or_path"
           )
+          |> with_trainer_link(name)
         ]
 
       true ->
@@ -2187,6 +2188,23 @@ defmodule Monty.Studio.Setup do
     case Prerequisites.for_model(name, release) do
       nil -> finding
       archive -> Finding.with_link(finding, "Download it", "/prerequisites?fetch=#{archive.id}")
+    end
+  end
+
+  # The experiment whose run wrote a memory this installation trained. A finding
+  # that names the training run and leaves a reader to search the catalogue for
+  # it is half an answer: that experiment's page is where the button to train
+  # another is, and where the runs of it are listed — the two things a reader
+  # asks next — so the link is one click to both. It is labelled with the
+  # experiment's own name, because that is the thing the reader is going to
+  # recognise in the catalogue, not a description of it.
+  defp with_trainer_link(finding, name) do
+    trainer = Catalog.trainer_for(name)
+
+    if Memory.releases_for(name) == [Learned.release()] and is_binary(trainer) do
+      Finding.with_link(finding, trainer, "/experiments/#{trainer}")
+    else
+      finding
     end
   end
 

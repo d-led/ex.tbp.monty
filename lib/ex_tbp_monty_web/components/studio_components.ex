@@ -169,11 +169,12 @@ defmodule ExTbpMontyWeb.StudioComponents do
           <span class={["badge badge-sm mt-0.5", level_class(entry.level)]}>{entry.level}</span>
           <div class="space-y-0.5">
             <p class="text-sm">{entry.finding.message}</p>
-            <p :if={entry.finding.where} class="font-mono text-xs break-all text-base-content/50">
-              {entry.finding.where}
+            <p :if={entry.finding.where} class="text-xs text-base-content/50">
+              in the config: <span class="font-mono break-all">{entry.finding.where}</span>
             </p>
             <.link
               :if={entry.finding.link}
+              id={"finding-#{entry.finding.code}-#{entry.index}-action"}
               href={entry.finding.link.href}
               class="inline-block text-sm link link-primary"
             >
