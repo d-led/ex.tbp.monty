@@ -2450,23 +2450,26 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Frameworks.Utils.EdgeDetection",
       package: "monty",
       python: "frameworks/utils/edge_detection.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/utils/edge_detection/structure_tensor.ex",
           elixir: "Monty.Frameworks.Utils.EdgeDetection.StructureTensor",
           python: "StructureTensor"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/utils/edge_detection/edge_features.ex",
           elixir: "Monty.Frameworks.Utils.EdgeDetection.EdgeFeatures",
           python: "EdgeFeatures"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/utils/edge_detection/edge_detector.ex",
           elixir: "Monty.Frameworks.Utils.EdgeDetection.EdgeDetector",
           python: "EdgeDetector"
         }
@@ -2648,7 +2651,8 @@ defmodule Monty.ModuleMap.Data do
       python: "observations.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/observations/sensor_observation.ex",
           elixir: "Monty.Observations.SensorObservation",
           python: "SensorObservation"
         }
