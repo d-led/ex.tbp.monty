@@ -1036,9 +1036,9 @@ what is left of them is a **capability inside a class that exists**:
   can block twenty-one experiments (`FeatureGraphLM`) or none
   (`SaccadeOnImageInterface` is always accompanied by something else).
 - **`blocked_by` as "classes to write".** It now also names a written class that
-  refuses a config — `DisplacementGraphLM`, `GraphLM` — because that is the work
-  too, and the mix task's `learning_module_not_buildable` row is where those
-  show.
+  refuses a config — `GraphLM` today, and `DisplacementGraphLM` until §19 landed
+  it — because that is the work too, and the mix task's
+  `learning_module_not_buildable` row is where those show.
 - **The stand-in world's number as the MuJoCo one.** Different refusals, both
   true, `--world` decides which you are reading.
 
@@ -1069,3 +1069,110 @@ full build: `docker run --platform linux/amd64 debian:trixie-20261020-slim` →
 `dpkg-query -W zlib1g` after the install says `+deb13u1`. No `.trivyignore.yaml`
 entry: the finding is fixable, and the rule there is that exceptions are for what
 cannot be.
+
+## 19. 2026-11-08: `match_attribute: PPF`, and what the run against Monty did and did not prove
+
+The readiness order's first item is done: `DisplacementGraphLM` matches on point
+pair features, so `test/graph_learning/ppf_pred_mujoco`,
+`test/graph_learning/fixed_actions_ppf_mujoco` (both refused before) and
+`test/graph_building/load_mujoco_for_ppf` run. The class is no longer ranked in
+`docs/readiness.md`; the counts there are 89 / 34 / 87.
+
+### 19.1 What the attribute is
+
+A point-pair feature is four numbers for the step between two sensed locations:
+the length, and three angles — the first location's normal against the step, the
+second's against the step, and the two normals against each other. It replaces
+the three-number displacement, and what it buys is that a _direction_ stops
+mattering: a step has no sign, because `[|d|, angles]` is the same for `A→B` and
+`B→A`. That is exactly what the port shows in
+`displacement_graph_lm_test.exs` — every decimetre edge is kept, in both
+directions, where a displacement keeps the two it was learned with.
+
+The four numbers are `torch_geometric.nn.conv.PointPairFeatures(cat=False)`,
+which is what Monty's `add_ppf_to_graph` calls:
+`[|d|, angle(n_i,d), angle(n_j,d), angle(n_i,n_j)]` with `d = pos_j − pos_i` and
+`angle(u,v) = atan2(‖u×v‖, u·v)`.
+
+### 19.2 Where it had to travel
+
+Four places, and three of them are places a reader would not look for a
+matching change:
+
+- **The object model.** `GraphObjectModel` gains `has_ppf`, set from
+  `object_model_options: [has_ppf: match_attribute == "PPF"]`, and every build
+  and update ends in `with_ppf/1` — the same place Monty calls
+  `add_ppf_to_graph`. `set_graph/2` does it too, because that is where a loaded
+  memory re-derives what it needs; Monty's `load_state_dict` behaviour is the
+  same idea.
+- **A memory that was learned without it.** `DisplacementGraphMemory.with_ppf/2`
+  walks the channels and adds the features to a graph that lacks them, so a PPF
+  module given a displacement-trained memory does not silently match on three
+  numbers where it meant four.
+- **The query.** `DisplacementGraphLM.query/1` reads the buffer's
+  `current_ppf`, and the buffer's `first_displacement_len/1` reads
+  `ppf[1][0]` — index 1, not 0, because the first step has no move to measure and
+  Monty stores a zero row for it.
+- **The relative length.** With `use_relative_len`, Monty divides the query's
+  first component by the buffer's first step, and divides an edge's first
+  component by **the length of the first edge of the path being tested** — not by
+  the edge's own length. The path's scale factor is `scale_factors[graph_id][path_id]`
+  and this port already carried it for displacements; the only new thing is that
+  the first component of a PPF row is where the length lives.
+
+### 19.3 The run, and why it is not parity evidence
+
+Same config on both sides (`test/graph_learning/ppf_pred_mujoco`, seed 42, 3
+train + 3 eval epochs), Monty's own checkout at `760ad174`:
+
+|                    | Monty                                         | this port            |
+| ------------------ | --------------------------------------------- | -------------------- |
+| train              | 6 episodes, 21–24 steps, 5 graphs             | 6 episodes, 6 graphs |
+| eval, rotation 0°  | `no_match`, ruled out at step 1               | `no_match`           |
+| eval, rotation 45° | `correct`, 1 possible match, path `[0 6 4 1]` | `no_match`           |
+| eval, rotation 0°  | `no_match`, ruled out at step 1               | `no_match`           |
+
+Two of three eval verdicts agree, and the third does not — but this experiment
+cannot settle a port's parity either way, and the reason is worth writing down
+before anyone reads the table as a score:
+
+- **The sensor data is not the same data.** Our MuJoCo world is
+  `priv/monty_py/world.py`, not Monty's camera and depth pipeline. The steps'
+  lengths and normals are close and not identical, and this config compares them
+  at `tolerance: 0.001` on all four numbers — so an episode's verdict can flip on
+  a millimetre. Monty's own three eval epochs disagree with each other for the
+  same reason: two different rotations of the same object, one match, two
+  refusals.
+- **The training divergence is the same kind.** Monty ends training with five
+  graphs and we end with six, because Monty matched its second training episode
+  into the first one's graph and we did not. At a tenth-of-a-radian tolerance
+  with a relative length, whether a cube's steps look like a capsule's is a
+  property of the world, not of the comparison.
+- **So the evidence for the port is the fixture, not the episode.** The four
+  numbers are checked against PyG's definition with hand-computable angles
+  (`graph_object_model_test.exs`), and the matching is checked against Monty's
+  own rules read from `displacement_matching.py` — the ratio comparison, the
+  tolerance, the both-directions consequence
+  (`displacement_graph_lm_test.exs`). Monty has **no unit test** for
+  `displacement_matching.py` at all, which is why these are hand-written intent
+  rather than translations, and why the tests say so in their moduledoc.
+
+What a cleaner referee would need: Monty's own percepts for one episode, replayed
+through this port. Monty's recordings do not carry them (§13's lesson again), so
+that is a data-export job rather than a test — worth doing before the next
+learning module, because `FeatureGraphLM` has the same problem.
+
+### 19.4 The gate, and the one test that had to change
+
+`scripts/quality.sh` green (2 491 of 2 492 tests — the one failure was
+`ReadinessTest`'s "a learning module that refuses the config", which used
+`test/graph_learning/ppf_pred` because that config matched on PPF upstream and on
+displacement here; the verdict changed the moment PPF landed). The case now uses
+`tutorial/surf_agent_2obj_train`, which names the base `GraphLM` itself — a class
+this port writes and which refuses to match, as Monty's does. Its assertion on the
+code list became a membership test, because that config also earns
+`no_target_to_supervise` and which other codes it earns is not what the case is
+about.
+
+The acceptance ladder is unchanged digit for digit: `0.908 (802, 4)` …
+`11.712 (2342, 1)`, `goals 15328`.
