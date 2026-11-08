@@ -149,15 +149,40 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   end
 
   @doc """
-  Monty's `GraphLM(**config)`: refused, because a bare graph module cannot match.
+  Monty's `GraphLM(**config)`: a module that learns by being told, and does not
+  match.
 
-  `_compute_possible_matches` is the subclass's in Monty — the base class raises
-  `NotImplementedError` — so a config naming `GraphLM` itself (`graph_1lm.yaml`
-  is one) asks for a module that has nothing to narrow possible matches with.
-  Saying so before a run starts is truer than raising on its second step.
+  The base class is buildable in Monty — `graph_1lm.yaml` names it, and a
+  supervised pretraining run builds it and trains with it, because a supervised
+  episode is handed the object and pose it saw and never asks the module to
+  narrow anything. What the base class cannot do it does *not* do: `_compute_possible_matches`
+  raises `NotImplementedError` upstream, and `compute_possible_matches/4` here
+  answers `{:error, :not_implemented}` — which is where a config that evaluates
+  with this module finds out, instead of at its second step.
+
+  Refusing to build it was this port saying more than Monty does: it turned a
+  module that trains perfectly well into a configuration nobody could run.
   """
-  @spec from_config(map(), keyword()) :: {:error, :no_matching_scheme}
-  def from_config(_config, _options \\ []), do: {:error, :no_matching_scheme}
+  @spec from_config(map(), keyword()) :: {:ok, t()}
+  def from_config(config, options \\ []) when is_map(config) do
+    {:ok,
+     new(
+       graph_memory: memory(options),
+       tolerances: Map.get(config, "tolerances", %{}),
+       learning_module_id: Map.get(config, "learning_module_id", @default_learning_module_id),
+       has_detailed_logger: Keyword.get(options, :has_detailed_logger, false)
+     )}
+  end
+
+  # A memory handed in is what the module starts from — a pretrained library, or
+  # the one the last episode of the phase wrote. With none it starts empty, and
+  # `k` stays whatever the config said rather than being defaulted here.
+  defp memory(options) do
+    case Keyword.get(options, :memory) do
+      %GraphMemory{} = memory -> memory
+      _none -> GraphMemory.new(k: nil, graph_delta_thresholds: nil)
+    end
+  end
 
   defp reset_goal_generator(%__MODULE__{gsg: nil} = lm), do: lm
 

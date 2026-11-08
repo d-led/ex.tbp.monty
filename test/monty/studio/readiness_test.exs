@@ -23,17 +23,16 @@ defmodule Monty.Studio.ReadinessTest do
       assert "tests.unit.frameworks.models.fakes.sensor_modules.FakeSensorModule" in entry.blocked_by
     end
 
-    # A class the map calls written that still refuses a config is the work too —
-    # and it is the cheap kind: the module exists, a capability does not. This one
-    # names `graph_1lm`, which is the base `GraphLM` itself: Monty leaves matching
-    # to a subclass, and this port raises rather than guess.
-    test "a learning module that refuses the config is named as its own blocker" do
+    # The base `GraphLM` is buildable in Monty and trains in a supervised run: an
+    # episode hands it the object it saw, and nothing is matched. It refuses only
+    # where a match would be asked for, which is Monty's own `NotImplementedError`
+    # — so `graph_1lm` is a configuration this port can run, and refusing it here
+    # was the port saying more than Monty does.
+    test "a bare graph module is not a blocker: the tutorial trains with it" do
       entry = Readiness.classified("tutorial/surf_agent_2obj_train")
 
-      # Which other codes a config earns is its own business; the refusal this
-      # case is about is the module's, and the module is named.
-      assert :learning_module_not_buildable in entry.codes
-      assert entry.blocked_by == ["GraphLM"]
+      refute :learning_module_not_buildable in entry.codes
+      refute "GraphLM" in entry.blocked_by
     end
   end
 

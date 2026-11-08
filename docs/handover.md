@@ -1885,3 +1885,31 @@ Two things were wrong, and only one of them was mine.
   included.
 
 Gate: **2 645 tests, 63 properties**, worst complexity 29.85 unchanged, dialyzer 0.
+
+## 31. 2026-11-08: `GraphLM` was refused for a capability it is never asked for
+
+`tutorial/surf_agent_2obj_train` — the training half of the surface-agent
+tutorial, and the run that writes the memory its evaluation half reads — was
+refused with
+
+> This config's learning module cannot be built here: a bare graph module has no
+> matching scheme to narrow possible matches with.
+
+That was true of the _port_ and false of Monty. `GraphLM` is the base class of the
+graph family, `graph_1lm.yaml` names it, and Monty builds it and trains with it:
+a supervised pretraining episode is handed the object and the pose it saw
+(`supervised_lm_ids: all`), so `_compute_possible_matches` — the method every
+subclass answers and the base class raises `NotImplementedError` in — is never
+called. The port had turned "cannot match" into "cannot exist", and with it a
+configuration nobody could run: the last class in `docs/readiness.md`'s ranking.
+
+`GraphLM.from_config/2` builds the module now (its tolerances, its id, the memory
+it is handed). `compute_possible_matches/4` still answers `{:error, :not_implemented}`,
+which is Monty's own refusal at the point where a match is actually asked for, and
+`Setup`'s `:no_matching_scheme` finding is gone because nothing produces it.
+
+Readiness: **117 run here, 0 waiting, 5 cannot, 81 not planned** of 203 — and no
+class blocks any experiment on its own. Verified by a run of the config:
+`mix monty.run tutorial/surf_agent_2obj_train --episodes 1 --steps 5` steps,
+learns (`added graph mug for patch`) and says `the memory now holds 1 object and 1
+node`.

@@ -2090,9 +2090,6 @@ defmodule Monty.Studio.Setup do
   defp why({:unsupported_match_attribute, attribute}),
     do: ~s(matching on #{inspect(attribute)} is not ported, only "displacement" is)
 
-  defp why(:no_matching_scheme),
-    do: "a bare graph module has no matching scheme to narrow possible matches with"
-
   defp why(:not_registered),
     do: "the module map calls this class implemented and this setup has no module for it"
 

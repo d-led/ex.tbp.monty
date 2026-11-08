@@ -111,6 +111,41 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLMTest do
     end
   end
 
+  describe "building from a config" do
+    test "is a module with the config's tolerances and id" do
+      config = %{
+        "tolerances" => %{"patch" => %{"hsv" => [0.1, 1.0]}},
+        "learning_module_id" => "LM_3"
+      }
+
+      assert {:ok, lm} = GraphLM.from_config(config)
+
+      assert lm.learning_module_id == "LM_3"
+      assert lm.tolerances == config["tolerances"]
+    end
+
+    test "starts from the memory it is handed, which is what a pretrained run loads" do
+      memory = Monty.Frameworks.Models.GraphMatching.GraphMemory.new(k: 3)
+
+      assert {:ok, lm} = GraphLM.from_config(%{}, memory: memory)
+
+      assert lm.graph_memory == memory
+    end
+
+    test "is buildable, and refuses only where a match would be asked for" do
+      # Monty's base class raises `NotImplementedError` in
+      # `_compute_possible_matches`, and every subclass answers it instead. That
+      # is a matching step's problem, not a build's: a supervised pretraining run
+      # hands the module the object it saw and never matches.
+      assert {:ok, lm} = GraphLM.from_config(%{})
+
+      ctx = Monty.Context.new(42)
+
+      assert GraphLM.compute_possible_matches(lm, ctx, [], false) ==
+               {:error, :not_implemented}
+    end
+  end
+
   describe "the displacement a step carries" do
     test "the first percept of an episode is a zero displacement" do
       percept = Messages.percept(%{location: [0.1, 0.2, 0.3], sender_id: "patch"})

@@ -49,16 +49,17 @@ so the postponed count reads the same under `--world synthetic`.
 |                           | MuJoCo (the default) | stand-in scene |
 | ------------------------- | -------------------: | -------------: |
 | experiments Monty ships   |                  203 |            203 |
-| run here                  |                  116 |             94 |
+| run here                  |                  117 |             94 |
 | waiting for prerequisites |                    0 |              0 |
-| cannot run here           |                    6 |             28 |
+| cannot run here           |                    5 |             28 |
 | not planned               |                   81 |             81 |
 | do not compose at all     |                    0 |              0 |
 
 The MuJoCo column moved by nineteen when the cows objects were downloaded:
 those configs were waiting for one archive, and `compositional_objects_1.4_mujoco`
 is now unpacked under `$MONTY_DATA` — as is the numenta lab scene the last four
-of them named. Nothing is left in the waiting column, and the six that remain are
+of them named. Nothing is left in the waiting column, and the five that remain
+are
 **not** waiting for anything: they name a class this port has not written (3), a
 memory no archive fills (2), a learning module that refuses the config it is
 given (1), and a world holding none of the meshes the config names (1). Two of
@@ -82,15 +83,14 @@ not the same question as the world a run steps: `mujoco` 123, `habitat` 73,
 through `Setup.engine/1`, the same rule that decides `not planned`, so the two
 cannot disagree.
 
-## Why the 6 cannot run here
+## Why the 5 cannot run here
 
-| reason                          | cannot run | postponed | what it is                                                                        |
-| ------------------------------- | ---------: | --------: | --------------------------------------------------------------------------------- |
-| `world_not_carried`             |          0 |        81 | Habitat-Sim — **postponed**, not a blocker                                        |
-| `unknown_module_class`          |          3 |         3 | a class the module map cannot place — Monty's own test fakes, in the six fixtures |
-| `no_pretrained_memory`          |          2 |         1 | the config's model is not exported on this machine                                |
-| `learning_module_not_buildable` |          1 |         0 | the class is written but refuses this config                                      |
-| `world_holds_no_object`         |          1 |         0 | the data is there and none of the meshes this config names is in it               |
+| reason                  | cannot run | postponed | what it is                                                                        |
+| ----------------------- | ---------: | --------: | --------------------------------------------------------------------------------- |
+| `world_not_carried`     |          0 |        81 | Habitat-Sim — **postponed**, not a blocker                                        |
+| `unknown_module_class`  |          3 |         3 | a class the module map cannot place — Monty's own test fakes, in the six fixtures |
+| `no_pretrained_memory`  |          2 |         1 | the config's model is not exported on this machine                                |
+| `world_holds_no_object` |          1 |         0 | the data is there and none of the meshes this config names is in it               |
 
 `world_data_missing` is not in the table because no experiment is stopped for it
 any more: the cows objects and the numenta lab scene are unpacked here, and what
@@ -109,7 +109,7 @@ with them.
 An experiment can carry more than one reason, so neither column adds to its
 total. With Habitat postponed, almost all of Monty's pytest fixtures go with it:
 `sm_to_lm_matrix_missing`, `sensor_agent_mapping_mismatch` and the two index
-checks are now 1, 0, 0 and 0 among the six that cannot run — so hand-over §10.7's
+checks are now 1, 0, 0 and 0 among the five that cannot run — so hand-over §10.7's
 "should the fixtures be in the catalogue?" is a question about a much smaller
 set.
 
@@ -126,16 +126,18 @@ is that class — writing it and nothing else makes exactly those run. _Naming_ 
 counts the ones that name it while something else stops them too. A class named
 only by postponed experiments is not ranked at all.
 
-| class                         | alone | naming | the work                                                                 |
-| ----------------------------- | ----: | -----: | ------------------------------------------------------------------------ |
-| `GraphLM` (a matching scheme) |     1 |      1 | `tutorial/surf_agent_2obj_train` — `GraphLM` refuses itself upstream too |
+| class | alone | naming | the work                            |
+| ----- | ----: | -----: | ----------------------------------- |
+| —     |     0 |      0 | nothing is blocked by a class alone |
 
-Only one row is left. `MontyBase` and the attention package used to be here, and
+No row is left. `MontyBase` and the attention package used to be here, and
 both are written (§23, §24); the Saccade-on-image and Omniglot
 environment/interface pairs are gone because every config naming them is a
 Habitat config, and so is `DefaultAttentionSystem`, which was ranked at 0 alone
 and 9 naming until §23 left the cows compositional configurations waiting for
-their pretrained model alone.
+their pretrained model alone. `GraphLM` was the last one — `graph_1lm` names the
+base class itself, and a supervised pretraining run trains with it without
+ever matching, so it is buildable now (§31).
 
 ## The order to work in
 

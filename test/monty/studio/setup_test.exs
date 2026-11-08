@@ -4,6 +4,7 @@ defmodule Monty.Studio.SetupTest do
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
+  alias Monty.Frameworks.Models.GraphMatching.GraphLM
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
   alias Monty.Frameworks.Models.SensorModules.{CameraSM, FeatureChangeFilter}
   alias Monty.Frameworks.Models.TwoDSensorModule
@@ -736,19 +737,17 @@ defmodule Monty.Studio.SetupTest do
       assert Enum.any?(spec.sensor_modules, &match?(%{module: Synthetic.SensorModule}, &1))
     end
 
-    test "falls back to the stand-in for a module this port cannot build" do
-      # `graph_1lm` names `GraphLM` itself, which has no matching scheme to
-      # narrow possible matches with — Monty's base class raises
-      # `NotImplementedError` on the second step. The setup is refused rather
-      # than run, so the stand-in is never stepped; the spec still has to answer
-      # for a config that will be refused.
+    test "builds the base graph module a supervised pretraining config names" do
+      # `graph_1lm` names `GraphLM` itself. Monty builds it and trains with it —
+      # a supervised episode is handed the object it saw, and nothing is matched
+      # — so there is nothing to stand in for and nothing to refuse.
       setup = setup_from(%{@base | "monty/learning_module" => "graph_1lm"})
 
       spec = Setup.model_spec(setup, "model_0")
 
-      assert [%{module: Synthetic.LearningModule}] = spec.learning_modules
-      assert :learning_module_not_buildable in Enum.map(setup.findings, & &1.code)
-      refute Setup.valid?(setup)
+      assert [%{module: built}] = spec.learning_modules
+      assert built == GraphLM
+      refute :learning_module_not_buildable in Enum.map(setup.findings, & &1.code)
     end
   end
 end
