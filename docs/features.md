@@ -11,7 +11,7 @@ not recalled — run it after anything lands that can move one.
   `Monty.Path.File.Class`; a repeated segment collapses, a class repeating the file
   name is dropped. ([rule](module-map.md))
 - **The map is the contract.** 131 Python files (124 `tbp.monty`, 7 `tbp.teleop`),
-  338 classes. Implemented: 58 files / 205 classes. Planned: 69 / 131. Excluded: 4 / 2.
+  360 classes. Implemented: 58 files / 211 classes. Planned: 54 / 70. Excluded: 19 / 79.
   ([`module_map/data.ex`](../lib/monty/module_map/data.ex))
 - `mix monty.module_map.gen` re-derives the map from the checkouts;
   `mix monty.module_map.verify` fails on an unmapped file, an `implemented` entry
@@ -92,7 +92,7 @@ not recalled — run it after anything lands that can move one.
 - `/jobs` — the Oban queue, with cancel (ends at the next step) and kill.
 - `/prerequisites` — data and pretrained models downloaded into Monty's own
   `MONTY_DATA` / `MONTY_MODELS` paths: streamed, written to `<target>.part`, renamed
-  only when the checksum matches — 6 entries in
+  only when the checksum matches — 7 entries in
   [`priv/prerequisites.yaml`](../priv/prerequisites.yaml). A memory is exported by
   reading the pickles, and the page says which model it is reading while it does
   (`reading memory 3/15 · pretrained_ycb_v13/…`), so a first start shows progress
@@ -201,7 +201,7 @@ what CI runs.
   tarball, a `.deb` and an AppImage) and Windows x64 (NSIS setup and the portable
   folder) — uploading each to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
-- 2,541 `test` declarations in the suite.
+- 2,593 `test` declarations in the suite.
 
 ## Not built — do not assume these
 
@@ -223,6 +223,8 @@ what CI runs.
   `:studio` queue's limit to the same number, which is Monty's `run_parallel.py`
   arrangement — one process per episode, one object each. Stepping a live world
   is designed, not built. ([parallel-and-live.md](parallel-and-live.md))
-- `tbp.teleop`: 0 of its 7 mapped modules exist (no `lib/teleop/`).
-- `MontyObjectRecognitionExperiment`: upstream's body calls a hook that is `pass`, so
-  it is left planned on purpose.
+- `tbp.teleop`: all 7 of its mapped files are excluded — the matplotlib GUI is
+  LiveView components and events here ([planned-classes.md](planned-classes.md)).
+- Habitat-Sim and tacto: excluded with the reason, because this build carries one
+  engine and a Habitat config is postponed rather than refused
+  ([planned-classes.md](planned-classes.md)).

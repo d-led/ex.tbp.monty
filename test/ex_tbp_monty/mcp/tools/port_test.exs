@@ -4,7 +4,7 @@ defmodule ExTbpMonty.Mcp.Tools.PortTest do
   alias ExTbpMonty.Mcp.Tools.Port
 
   @implemented "tbp.monty.frameworks.models.evidence_matching.learning_module.EvidenceGraphLM"
-  @planned "tbp.monty.simulators.habitat.agents.HabitatAgent"
+  @planned "tbp.monty.frameworks.loggers.wandb_handlers.BasicWandbTableStatsHandler"
 
   describe "monty_lookup_module" do
     test "names the Elixir module a Python class became, and the classes in its file" do

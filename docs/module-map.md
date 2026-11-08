@@ -104,4 +104,7 @@ implemented.
 5. `mix monty.module_map.gen && mix monty.module_map.verify`.
 6. [`scripts/quality.sh`](../scripts/quality.sh).
 
-Marking something `excluded` is allowed; leaving it unexplained is not.
+Marking something `excluded` is allowed; leaving it unexplained is not. A
+verdict of `excluded` is a claim about somebody else's code, so
+[`planned-classes.md`](planned-classes.md) keeps the evidence for each one and
+says which classes are still owed.

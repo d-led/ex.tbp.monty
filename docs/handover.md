@@ -1917,11 +1917,11 @@ node`.
 ## 32. 2026-11-08: the next session starts with what the 147 planned classes are for
 
 Handing over, at your direction: the next session begins with
-[`next-session.md`](next-session.md), which is the brief rather than the work.
-Its question is the one today's numbers raise and do not answer — 119 of 203
-experiments run here (`mix monty.readiness`), no production class blocks one, and
-yet `mix monty.module_map.verify` still counts **147 planned classes** in 50
-files.
+[`planned-classes.md`](planned-classes.md), which answers the question rather
+than asking it (§33). Its question was the one today's numbers raise and do not
+answer — 119 of 203 experiments run here (`mix monty.readiness`), no production
+class blocks one, and yet `mix monty.module_map.verify` still counts **147
+planned classes** in 50 files.
 
 What the brief measures, so the next session does not measure it again: only 11
 of the 147 are named by a `_target_` anywhere in Monty's `conf/`, 80 are
@@ -1940,3 +1940,54 @@ and the map — a trained model is one library with a module index a memory
 it names itself and its axes (`66c30db`), and stepping is tested for the first
 time (`ead484b`). Gate on `66c30db`: lint clean, 2 670 tests (63 properties),
 CRAP worst 29.85, dialyzer 0.
+
+## 33. 2026-11-08: 77 of the 147 planned classes were never work, and the map says so
+
+The session §32 handed over ran, and the question it asked has an answer:
+[`planned-classes.md`](planned-classes.md) is now the verdict document rather
+than the brief. **147 planned → 70**, with 79 excluded and 211 implemented, and
+`mix monty.readiness` did not move — 119 run, 0 waiting, 3 cannot, 81 not
+planned — because none of the 77 is named by a runnable experiment.
+
+The 77, one reason each, in the map's own data:
+
+- **Habitat, 24.** Its six files are bindings to a C++ engine — `SceneNodeControl`
+  subclasses driving magnum scene nodes, a wrapper over `habitat_sim.Simulator`,
+  builders of `CameraSensorSpec`s. Nothing in them is Monty's arithmetic.
+- **Tacto, 8.** The same, and its own test says so: `tests/unit/simulators/tacto/
+tacto_test.py` skips without `habitat_sim`, and `TactoSensor.get_specs` answers
+  a `habitat_sim` type. No config in Monty's tree names tacto.
+- **The action protocols, 28.** Each is a `typing.Protocol` with one signature.
+  Sampling is `ConstantSampler`/`UniformlyDistributedSampler`'s
+  `sample_<action>` functions; acting is the carried world's, across
+  `Monty.Simulators.Port`. The map already gave `ResettableSensorModule` this
+  verdict; `Action`'s own moduledoc said "stay planned" and now points here.
+- **The step hooks, 2.** `StepHook` is a Protocol and `NoOpStepHook` is its
+  no-op, which is what a run with no hook is here by construction; no config in
+  `conf/` names one.
+- **The teleop GUI, 15.** Matplotlib panels, widgets, a live draw loop and two
+  policy adapters that turn a click into an action. This app draws the same
+  things with LiveView components over a run record, and `Monty.ModuleMap`'s own
+  moduledoc already said the namespace exists for the module that _replaces_
+  what a teleop developer wrote.
+
+MuJoCo's 17 stay planned **and carried**: `priv/monty_py/world.py` defines
+`MuJoCoSimulator`, the three agents, `ObjectMetadata` and the six exceptions, so
+those classes run here in Python, and `stand_in:` on each is the record. With the
+two shell classes (`Monty`, `MontyBase`) that is 19 planned that owe nothing; the
+51 that remain are blocked out in `planned-classes.md` — the shapes in
+`abstract_monty_classes.py` and `environments/environment.py` (12), the wandb
+handlers (5), the two-dimensional worlds (6), experiment-side classes (11), and
+17 singles.
+
+Two traps found while measuring, both now pinned: `scripts/refresh_features.py`
+read a `classes:` list with a bracket match, and a class carrying
+`stand_in: [%{…}]` closed the list at the first `]` — the page printed 338
+classes where the map has 360, and under-counted planned by 17. And three test
+fixtures used `HabitatAgent` as "the example of a class this port has not
+written"; they name a wandb handler now, which is owed work rather than a class
+that will never exist.
+
+Gate: lint clean (7 433 mods/funs), 2 670 tests (63 properties), CRAP worst
+29.85, dialyzer 0. `mix monty.module_map.verify`: 131 files, 360 classes — 211
+implemented, 70 planned, 79 excluded.

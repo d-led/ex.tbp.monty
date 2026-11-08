@@ -13,8 +13,10 @@ defmodule Monty.Frameworks.Actions.Action do
 
   Monty's `sample/3` and `act/2` are not here: sampling needs the action
   samplers and acting needs an actuator, and both belong to whatever environment
-  performs the actions. The `*ActionSampler` and `*Actuator` protocols stay
-  planned with them, for the same reason.
+  performs the actions. The `*ActionSampler` and `*Actuator` protocols are
+  therefore `:excluded` in the module map, each with its reason: sampling is the
+  samplers' own `sample_<action>` functions, and acting is the carried world's,
+  reached through `Monty.Simulators.Port`.
   """
 
   @doc """

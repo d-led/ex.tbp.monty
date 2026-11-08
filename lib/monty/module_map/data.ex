@@ -561,12 +561,14 @@ defmodule Monty.ModuleMap.Data do
           python: "Action"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.LookDownActionSampler",
           python: "LookDownActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.LookDownActuator",
           python: "LookDownActuator"
         },
@@ -577,12 +579,14 @@ defmodule Monty.ModuleMap.Data do
           python: "LookDown"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.LookUpActionSampler",
           python: "LookUpActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.LookUpActuator",
           python: "LookUpActuator"
         },
@@ -593,12 +597,14 @@ defmodule Monty.ModuleMap.Data do
           python: "LookUp"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.MoveForwardActionSampler",
           python: "MoveForwardActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.MoveForwardActuator",
           python: "MoveForwardActuator"
         },
@@ -609,12 +615,14 @@ defmodule Monty.ModuleMap.Data do
           python: "MoveForward"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.MoveTangentiallyActionSampler",
           python: "MoveTangentiallyActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.MoveTangentiallyActuator",
           python: "MoveTangentiallyActuator"
         },
@@ -625,12 +633,14 @@ defmodule Monty.ModuleMap.Data do
           python: "MoveTangentially"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.OrientHorizontalActionSampler",
           python: "OrientHorizontalActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.OrientHorizontalActuator",
           python: "OrientHorizontalActuator"
         },
@@ -641,12 +651,14 @@ defmodule Monty.ModuleMap.Data do
           python: "OrientHorizontal"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.OrientVerticalActionSampler",
           python: "OrientVerticalActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.OrientVerticalActuator",
           python: "OrientVerticalActuator"
         },
@@ -657,12 +669,14 @@ defmodule Monty.ModuleMap.Data do
           python: "OrientVertical"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetAgentPitchActionSampler",
           python: "SetAgentPitchActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetAgentPitchActuator",
           python: "SetAgentPitchActuator"
         },
@@ -673,12 +687,14 @@ defmodule Monty.ModuleMap.Data do
           python: "SetAgentPitch"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetAgentPoseActionSampler",
           python: "SetAgentPoseActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetAgentPoseActuator",
           python: "SetAgentPoseActuator"
         },
@@ -689,12 +705,14 @@ defmodule Monty.ModuleMap.Data do
           python: "SetAgentPose"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetSensorPitchActionSampler",
           python: "SetSensorPitchActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetSensorPitchActuator",
           python: "SetSensorPitchActuator"
         },
@@ -705,12 +723,14 @@ defmodule Monty.ModuleMap.Data do
           python: "SetSensorPitch"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetSensorPoseActionSampler",
           python: "SetSensorPoseActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetSensorPoseActuator",
           python: "SetSensorPoseActuator"
         },
@@ -721,12 +741,14 @@ defmodule Monty.ModuleMap.Data do
           python: "SetSensorPose"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetSensorRotationActionSampler",
           python: "SetSensorRotationActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetSensorRotationActuator",
           python: "SetSensorRotationActuator"
         },
@@ -737,12 +759,14 @@ defmodule Monty.ModuleMap.Data do
           python: "SetSensorRotation"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetYawActionSampler",
           python: "SetYawActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.SetYawActuator",
           python: "SetYawActuator"
         },
@@ -753,12 +777,14 @@ defmodule Monty.ModuleMap.Data do
           python: "SetYaw"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.TurnLeftActionSampler",
           python: "TurnLeftActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.TurnLeftActuator",
           python: "TurnLeftActuator"
         },
@@ -769,12 +795,14 @@ defmodule Monty.ModuleMap.Data do
           python: "TurnLeft"
         },
         %{
-          status: :planned,
+          reason: "One `sample_*` signature; the samplers here answer it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.TurnRightActionSampler",
           python: "TurnRightActionSampler"
         },
         %{
-          status: :planned,
+          reason: "One `actuate_*` signature; the carried world performs it",
+          status: :excluded,
           elixir: "Monty.Frameworks.Actions.TurnRightActuator",
           python: "TurnRightActuator"
         },
@@ -1038,12 +1066,16 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/experiments/hooks.py",
       classes: [
         %{
-          status: :planned,
+          reason:
+            "a `Protocol` with one `__call__`, named by no config here: a step's actions go to `Monty.Runtime.Step`",
+          status: :excluded,
           elixir: "Monty.Frameworks.Experiments.Hooks.StepHook",
           python: "StepHook"
         },
         %{
-          status: :planned,
+          reason:
+            "the default hook, which returns the actions unchanged: a run with no hook is that here",
+          status: :excluded,
           elixir: "Monty.Frameworks.Experiments.Hooks.NoOpStepHook",
           python: "NoOpStepHook"
         }
@@ -2748,117 +2780,120 @@ defmodule Monty.ModuleMap.Data do
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "habitat-sim `SceneNodeControl` subclasses driving magnum scene nodes: the code is the engine's",
+      status: :excluded,
       elixir: "Monty.Simulators.Habitat.Actions",
       package: "monty",
       python: "simulators/habitat/actions.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actions.ActuationVecSpec",
           python: "ActuationVecSpec"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actions.SetYaw",
           python: "SetYaw"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actions.SetSensorPitch",
           python: "SetSensorPitch"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actions.SetAgentPitch",
           python: "SetAgentPitch"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actions.SetSensorPose",
           python: "SetSensorPose"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actions.SetSensorRotation",
           python: "SetSensorRotation"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actions.SetAgentPose",
           python: "SetAgentPose"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actions.MoveForward",
           python: "MoveForward"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actions.MoveTangentially",
           python: "MoveTangentially"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actions.OrientHorizontal",
           python: "OrientHorizontal"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actions.OrientVertical",
           python: "OrientVertical"
         }
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "performs actions through habitat-sim's actuator API; here an action crosses `Monty.Simulators.Port` to the world",
+      status: :excluded,
       elixir: "Monty.Simulators.Habitat.Actuator",
       package: "monty",
       python: "simulators/habitat/actuator.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actuator.HabitatActuatorRequirements",
           python: "HabitatActuatorRequirements"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actuator.HabitatActuator",
           python: "HabitatActuator"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actuator.InvalidActionName",
           python: "InvalidActionName"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Actuator.NoActionParameters",
           python: "NoActionParameters"
         }
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "builds habitat-sim agents and scene nodes; the agent belongs to the world, across the port",
+      status: :excluded,
       elixir: "Monty.Simulators.Habitat.Agents",
       package: "monty",
       python: "simulators/habitat/agents.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Agents.HabitatAgent",
           python: "HabitatAgent"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Agents.MultiSensorAgent",
           python: "MultiSensorAgent"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Agents.SingleSensorAgent",
           python: "SingleSensorAgent"
         }
@@ -2872,12 +2907,14 @@ defmodule Monty.ModuleMap.Data do
       python: "simulators/habitat/environment.py",
       classes: [
         %{
-          status: :planned,
+          reason: "habitat-sim agent configuration; nothing this build steps reads it",
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Environment.HabitatAgentArgs",
           python: "HabitatAgentArgs"
         },
         %{
-          status: :planned,
+          reason: "habitat-sim agent configuration; nothing this build steps reads it",
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Environment.AgentConfig",
           python: "AgentConfig"
         },
@@ -2890,38 +2927,39 @@ defmodule Monty.ModuleMap.Data do
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason: "builds `habitat_sim.sensor.CameraSensorSpec`s: the engine's own sensor types",
+      status: :excluded,
       elixir: "Monty.Simulators.Habitat.Sensors",
       package: "monty",
       python: "simulators/habitat/sensors.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Sensors.SensorConfig",
           python: "SensorConfig"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Sensors.RGBDSensorConfig",
           python: "RGBDSensorConfig"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Sensors.SemanticSensorConfig",
           python: "SemanticSensorConfig"
         }
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "a wrapper over `habitat_sim.Simulator`; this build carries one engine and refuses a Habitat config as not planned",
+      status: :excluded,
       elixir: "Monty.Simulators.Habitat.Simulator",
       package: "monty",
       python: "simulators/habitat/simulator.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Habitat.Simulator.HabitatSim",
           python: "HabitatSim"
         }
@@ -3159,67 +3197,70 @@ defmodule Monty.ModuleMap.Data do
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "a habitat-sim agent with tacto fingers; tacto is a tactile simulator for habitat-sim",
+      status: :excluded,
       elixir: "Monty.Simulators.Tacto.Agents",
       package: "monty",
       python: "simulators/tacto/agents.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Tacto.Agents.TactoFingerAgent",
           python: "TactoFingerAgent"
         }
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "tacto sensor specifications for habitat-sim; no config in Monty's tree names tacto",
+      status: :excluded,
       elixir: "Monty.Simulators.Tacto.Config",
       package: "monty",
       python: "simulators/tacto/config.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Tacto.Config.Gel",
           python: "Gel"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Tacto.Config.Camera",
           python: "Camera"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Tacto.Config.Lights",
           python: "Lights"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Tacto.Config.Noise",
           python: "Noise"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Tacto.Config.Force",
           python: "Force"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Tacto.Config.TactoSensorSpec",
           python: "TactoSensorSpec"
         }
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "`TactoSensor.get_specs/1` answers `habitat_sim.sensor.CameraSensorSpec`: the engine's type",
+      status: :excluded,
       elixir: "Monty.Simulators.Tacto.Sensors",
       package: "monty",
       python: "simulators/tacto/sensors.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Simulators.Tacto.Sensors.TactoSensor",
           python: "TactoSensor"
         }
@@ -3281,122 +3322,128 @@ defmodule Monty.ModuleMap.Data do
       classes: []
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "matplotlib widget classes with click and key handlers; the same choices are LiveView events in this app",
+      status: :excluded,
       elixir: "Teleop.Controls",
       package: "teleop",
       python: "controls.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Controls.ActionButtons",
           python: "ActionButtons"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Controls.SpeedSlider",
           python: "SpeedSlider"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Controls.SelectorBar",
           python: "SelectorBar"
         }
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "the step hook that draws the figure and waits for a click; nothing here opens a matplotlib window",
+      status: :excluded,
       elixir: "Teleop.Default",
       package: "teleop",
       python: "default.py",
-      classes: [%{status: :planned, elixir: "Teleop.Default", python: "Default"}]
+      classes: [%{status: :excluded, elixir: "Teleop.Default", python: "Default"}]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "history and selection state for those figures; a run record and the run page's chart views carry them",
+      status: :excluded,
       elixir: "Teleop.Helpers",
       package: "teleop",
       python: "helpers.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Helpers.EvidenceHistory",
           python: "EvidenceHistory"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Helpers.ChannelView",
           python: "ChannelView"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Helpers.FeatureInset",
           python: "FeatureInset"
         }
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason: "matplotlib's live draw loop; frames reach this app's page over LiveView instead",
+      status: :excluded,
       elixir: "Teleop.LivePlotter",
       package: "teleop",
       python: "live_plotter.py",
       classes: [
-        %{status: :planned, elixir: "Teleop.LivePlotter", python: "LivePlotter"}
+        %{status: :excluded, elixir: "Teleop.LivePlotter", python: "LivePlotter"}
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "matplotlib figure sections; this app's panels are LiveView components over a run record",
+      status: :excluded,
       elixir: "Teleop.Panels",
       package: "teleop",
       python: "panels.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Panels.SimulatorPanel",
           python: "SimulatorPanel"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Panels.MontyPanel",
           python: "MontyPanel"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Panels.DetailsPanel",
           python: "DetailsPanel"
         }
       ]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "a matplotlib figure; the run page draws the same series from `Monty.Studio.Replay`",
+      status: :excluded,
       elixir: "Teleop.Plotter",
       package: "teleop",
       python: "plotter.py",
-      classes: [%{status: :planned, elixir: "Teleop.Plotter", python: "Plotter"}]
+      classes: [%{status: :excluded, elixir: "Teleop.Plotter", python: "Plotter"}]
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "adapters that turn a plotter's click into an action; this app has no plotter to adapt",
+      status: :excluded,
       elixir: "Teleop.Policies",
       package: "teleop",
       python: "policies.py",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Policies.InteractivePolicy",
           python: "InteractivePolicy"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Policies.SampledInteractivePolicy",
           python: "SampledInteractivePolicy"
         },
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Teleop.Policies.SurfaceInteractivePolicy",
           python: "SurfaceInteractivePolicy"
         }

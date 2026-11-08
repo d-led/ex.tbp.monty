@@ -532,7 +532,9 @@ defmodule Monty.Studio.SetupTest do
 
     test "a class Monty ships but this port has not written yet is planned" do
       assert %{status: :planned} =
-               Setup.describe_target("tbp.monty.simulators.habitat.agents.HabitatAgent")
+               Setup.describe_target(
+                 "tbp.monty.frameworks.loggers.wandb_handlers.BasicWandbTableStatsHandler"
+               )
     end
 
     test "Monty's HabitatEnvironment is this port's class, out of process" do

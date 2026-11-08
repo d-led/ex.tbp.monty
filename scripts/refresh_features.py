@@ -45,15 +45,16 @@ DEFAULT_PAGE = REPO / "docs" / "features.md"
 def _classes(block: str) -> str:
     """One entry's `classes:` list, however the generator laid it out.
 
-    A class is written over four lines when it was generated, and on one line
-    when a person added an exclusion by hand; both are classes, and both have
-    exactly one `status:` inside the list.
+    Everything after the `classes:` key, which the generator writes last: a
+    class is written over four lines when it was generated and on one line when
+    a person added an exclusion by hand, and either way only statuses follow. A
+    bracket match cannot be used — a class map carries `stand_in: [%{…}]`, so the
+    first `]` closes the stand-in, not the list, and every entry with one lost
+    its remaining classes from the count.
     """
-    wrapped = re.search(r"\n      classes: \[(.*?)\]", block, re.S)
-    if wrapped is not None:
-        return wrapped.group(1)
-    inline = re.search(r"classes: \[(.*?)\]", block, re.S)
-    return inline.group(1) if inline else ""
+    _, key, rest = block.partition("classes: [")
+
+    return rest if key else ""
 
 
 class Counters:
