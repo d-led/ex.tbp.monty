@@ -21,6 +21,7 @@ defmodule Monty.Runtime.Step.State do
 
   alias Monty.Experiment.MatchCriteria
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
+  alias Monty.Frameworks.Models.GraphMatching.MontyForGraphMatching
 
   @default_timeout 5_000
 
@@ -142,12 +143,37 @@ defmodule Monty.Runtime.Step.State do
 
   @doc """
   Monty's default vote routing: a receiver gets the votes of the modules wired
-  to it by `lm_to_lm_vote_matrix`, moved into the frame of its own sensor —
-  `EvidenceGraphModel._combine_votes`, which is where that arithmetic lives.
+  to it by `lm_to_lm_vote_matrix`, mounted in the frame of its own sensor.
+
+  Two calculations, told apart by the shape of a vote exactly as Monty tells them
+  apart (`isinstance(votes_per_lm[0], set)` in `_combine_votes`): a graph module
+  names the objects it ruled out and the answer is their union
+  (`...GraphMatching.MontyForGraphMatching.combine_votes/2`), while an evidence
+  module names the hypotheses it still believes and the answer is that vote moved
+  into the receiver's frame
+  (`...EvidenceMatching.Model.MontyForEvidenceGraphMatching.combine_votes/2`).
+  Reading the shape rather than the config's model class is what lets one runtime
+  step either family — and a run of the graph-matching family used to crash on
+  its first vote round, because the union was never written.
   """
   @spec combine_votes(map(), t()) :: map()
   def combine_votes(votes, %__MODULE__{lm_to_lm_vote: lm_to_lm_vote}) do
-    MontyForEvidenceGraphMatching.combine_votes(votes, lm_to_lm_vote)
+    if graph_votes?(votes) do
+      MontyForGraphMatching.combine_votes(votes, lm_to_lm_vote)
+    else
+      MontyForEvidenceGraphMatching.combine_votes(votes, lm_to_lm_vote)
+    end
+  end
+
+  # A vote is a set when the family rules objects out. A round in which every
+  # module was silent says nothing about which family it is, and both
+  # calculations answer an empty map for it, so silence is read as the evidence
+  # family — the shape that carries the frame arithmetic — and costs nothing.
+  defp graph_votes?(votes) when map_size(votes) == 0, do: false
+
+  defp graph_votes?(votes) do
+    answers = votes |> Map.values() |> Enum.reject(&is_nil/1)
+    answers != [] and Enum.all?(answers, &is_struct(&1, MapSet))
   end
 
   @doc "Monty's `NoopAttentionSystem`: every proposed goal passes."

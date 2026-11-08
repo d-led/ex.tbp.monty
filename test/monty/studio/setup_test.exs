@@ -505,16 +505,23 @@ defmodule Monty.Studio.SetupTest do
       refute :world_not_carried in Enum.map(stand_in.findings, & &1.code)
     end
 
-    test "and says separately that Monty's model and experiment loop are this port's own" do
+    test "and no longer says Monty's vote round is this port's own" do
+      # The finding used to name `MontyForGraphMatching` as a class replaced by
+      # the runtime. Its vote round is ported now
+      # (`...GraphMatching.MontyForGraphMatching.combine_votes/2`), so a config
+      # of that family is told nothing about a missing loop — the part that is
+      # still the runtime's job is the stepping itself.
       setup = setup_for("tutorial/first_experiment")
 
-      assert [shell] =
-               for(%{code: :modules_not_ported_shell} = finding <- setup.findings, do: finding)
+      shells =
+        for(
+          %{code: :modules_not_ported_shell} = finding <- setup.findings,
+          do: finding.message
+        )
 
-      assert shell.level == :info
-      assert shell.message =~ "MontyForGraphMatching"
-      assert shell.message =~ "replaced here, not missing"
-      assert shell.message =~ "Monty.Studio.Run"
+      refute Enum.any?(shells, &(&1 =~ "MontyForGraphMatching"))
+
+      assert setup.experiment_class.class == "MontySupervisedObjectPretrainingExperiment"
     end
 
     test "a class this port has written is reported as ported" do

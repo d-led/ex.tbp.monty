@@ -12,8 +12,11 @@ defmodule Monty.Frameworks.Models.GraphMatching do
     * `Monty.Frameworks.Models.GraphMatching.GraphMemory` — **ported**: the
       library of object models, the feature rows matching compares against, and
       the learning that extends a graph observation by observation.
-
-  Still planned: `MontyForGraphMatching` and `GraphLM`, which arrive with the
-  run itself once the evidence-matching LM exists to drive them.
+    * `Monty.Frameworks.Models.GraphMatching.GraphLM` — **ported**: the learning
+      module this family is built on.
+    * `Monty.Frameworks.Models.GraphMatching.MontyForGraphMatching` — **ported**:
+      the vote round, which for this family is the union of the objects each
+      module ruled out. The runtime does the rest of that class's job
+      (`Monty.Runtime.Step`).
   """
 end

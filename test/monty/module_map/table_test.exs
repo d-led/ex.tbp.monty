@@ -86,7 +86,10 @@ defmodule Monty.ModuleMap.TableTest do
     end
 
     test "carry what stands in for a class the runtime replaces" do
-      shell = row!("MontyForGraphMatching")
+      # `MontyForGraphMatching` is written now (its vote round is
+      # `...GraphMatching.MontyForGraphMatching`); `Monty` is still the runtime's
+      # job, and a row for it has to say which modules do that job.
+      shell = row!("Monty")
 
       assert shell.status == :planned
 
