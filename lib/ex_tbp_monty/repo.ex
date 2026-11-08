@@ -59,6 +59,13 @@ defmodule ExTbpMonty.Repo do
   def update_all(queryable, updates, opts \\ []),
     do: current().update_all(queryable, updates, opts)
 
+  # A table without a schema writes this way: `Monty.Studio.Settings` keeps its
+  # knobs as rows in `studio_settings`, and a row is written or replaced in one
+  # statement rather than read and written back between two callers.
+  @spec insert_all(Ecto.Queryable.t(), [map()] | map(), keyword()) :: {non_neg_integer(), nil}
+  def insert_all(queryable, entries, opts \\ []),
+    do: current().insert_all(queryable, entries, opts)
+
   # Ecto answers a deletion with the rows it could not leave to the database —
   # nil, or the deleted structs when a query returns them — and the count. The
   # spec said `non_neg_integer()`, so a caller matching the count and the rows

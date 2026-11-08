@@ -411,7 +411,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       catalog: catalog,
       chart_key: chart_key,
       chart_base: chart_base,
-      keeping: Map.get(socket.assigns, :keeping)
+      keeping: Map.get(socket.assigns, :keeping),
+      # Read once, when the page opens: it is a setting a person changes, not a
+      # value to ask the database for on every tick of a live run.
+      refresh_ms: Monty.Studio.Settings.get("run_refresh_ms")
     )
   end
 
@@ -1344,7 +1347,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp refresh_later(%{assigns: %{refresh_due: true}} = socket), do: socket
 
   defp refresh_later(socket) do
-    Process.send_after(self(), :refresh_due, @refresh_after_ms)
+    Process.send_after(
+      self(),
+      :refresh_due,
+      Map.get(socket.assigns, :refresh_ms, @refresh_after_ms)
+    )
+
     assign(socket, refresh_due: true)
   end
 

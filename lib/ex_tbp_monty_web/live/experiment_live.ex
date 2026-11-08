@@ -842,6 +842,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
+  # The job says when it is writing an episode back to the database. The run's
+  # own page shows that; this page's line is about the experiment's queue, and a
+  # write is not something it has anything to say about — but the news arrives
+  # here too, on the same topic, so it has to be answered.
+  defp handle_studio({:keeping, _steps}, socket), do: socket
+  defp handle_studio(:kept, socket), do: socket
+
   defp handle_studio({:started, steps}, socket) do
     socket
     |> assign(status: "running", progress: {0, steps}, episode: 0, episode_objects: %{})

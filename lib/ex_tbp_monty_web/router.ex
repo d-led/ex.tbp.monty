@@ -63,6 +63,9 @@ defmodule ExTbpMontyWeb.Router do
     live "/experiments/*name", ExperimentLive, :show
     live "/runs", RunHistoryLive, :index
     live "/runs/:id", RunHistoryLive, :show
+    # What this instance does while it runs, and what it cannot be asked to
+    # change without a restart (`Monty.Studio.Settings`, `Monty.Studio.System`).
+    live "/settings", SettingsLive, :show
     # A file the run wrote — its log, its CSV, its detailed JSON — as it is, so
     # it can be read, diffed or plotted outside this page.
     get "/runs/:id/files/:name", RunFileController, :show
