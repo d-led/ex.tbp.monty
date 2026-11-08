@@ -78,6 +78,42 @@ defmodule Monty.PrerequisitesTest do
     end
   end
 
+  describe "which download fills a directory" do
+    # A run names the directory its objects belong in, and a person reading that
+    # name needs the archive that puts them there — the manifest already knows
+    # where each entry lands, so the answer is read off it rather than guessed
+    # from a file name.
+    test "names the entry that unpacks to a directory, and none for one nothing fills" do
+      Tmp.system_env("MONTY_DATA", Tmp.dir("for-path"))
+
+      cows = Prerequisites.get("compositional_objects_1_4_mujoco")
+
+      assert %{id: "compositional_objects_1_4_mujoco"} =
+               Prerequisites.for_path(Prerequisites.where_it_lands(cows))
+
+      assert Prerequisites.for_path("/somewhere/nothing-unpacks-here") == nil
+    end
+
+    test "reads the archive's own name when an entry does not say where it lands" do
+      data = Tmp.dir("for-path-name")
+      Tmp.system_env("MONTY_DATA", data)
+      manifest = Tmp.file("by-name.yaml")
+
+      File.write!(manifest, """
+      prerequisites:
+        - id: ycb
+          title: YCB
+          url: https://example.test/ycb.tgz
+          root: MONTY_DATA
+          target: ycb_objects_1.0.tgz
+          extract: true
+      """)
+
+      assert %{id: "ycb"} =
+               Prerequisites.for_path(Path.join(data, "ycb_objects_1.0"), manifest)
+    end
+  end
+
   describe "unfinished/0" do
     # A file that is here is finished; one that never arrived is not. The third
     # case is the one that used to be reported as finished: an archive on disk,

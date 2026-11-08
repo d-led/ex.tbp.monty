@@ -348,9 +348,10 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                )
 
       assert message =~ "would not run"
-      assert message =~ "is not on this machine"
-      assert message =~ "Prerequisites page"
-      assert message =~ "/prerequisites"
+      assert message =~ "Not on this machine yet"
+      # A caller that cannot open a page needs the URL it would click: the
+      # finding carries the download, and the message carries the finding.
+      assert message =~ "/prerequisites?fetch=ycb_objects_1_0"
 
       assert RunHistory.search(state: "all", text: @experiment).runs == []
     end

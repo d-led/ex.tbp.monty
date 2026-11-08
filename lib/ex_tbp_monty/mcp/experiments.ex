@@ -587,7 +587,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
         errors =
           opened.setup.findings
           |> Finding.at(:error)
-          |> Enum.map_join("; ", & &1.message)
+          |> Enum.map_join("; ", &with_link/1)
 
         {:error, "`#{opened.name}` would not run: #{errors}"}
 
@@ -598,6 +598,11 @@ defmodule ExTbpMonty.Mcp.Experiments do
         :ok
     end
   end
+
+  # A finding that names an action carries where the action is: a caller that
+  # cannot click needs the URL in the text, or the sentence is a dead end.
+  defp with_link(%{link: nil} = finding), do: finding.message
+  defp with_link(%{link: %{href: href}} = finding), do: "#{finding.message} (#{href})"
 
   # Two kinds of missing need, two fixes: a dataset or a memory is fetched on
   # `/prerequisites`, while an interpreter is configuration — `MONTY_PYTHON` —

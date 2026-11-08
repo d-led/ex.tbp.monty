@@ -259,6 +259,31 @@ defmodule Monty.Prerequisites do
     Path.join(root_path(root), Path.rootname(target))
   end
 
+  @doc """
+  The prerequisite that fills `path`, if one does.
+
+  The other direction from `where_it_lands/1`: a run names a directory — or a
+  file inside one, which is what a config's model path is — and a person reading
+  that name has to be told which download puts files there. The deepest match
+  wins, so an archive that fills `.../ycb` answers before one that fills
+  `.../mujoco`. `nil` when no entry fills it — a directory someone made by hand,
+  or one this application has no archive for — because there is nothing to
+  offer then.
+  """
+  @spec for_path(Path.t(), Path.t()) :: prerequisite() | nil
+  def for_path(path, manifest \\ manifest_path()) do
+    expanded = Path.expand(path)
+
+    all(manifest)
+    |> Enum.filter(&fills?(&1, expanded))
+    |> Enum.max_by(&byte_size(Path.expand(where_it_lands(&1))), fn -> nil end)
+  end
+
+  defp fills?(prerequisite, expanded) do
+    landing = Path.expand(where_it_lands(prerequisite))
+    expanded == landing or String.starts_with?(expanded, landing <> "/")
+  end
+
   @typedoc """
   One file a run reads before it steps, and whether it is there.
 
@@ -511,6 +536,9 @@ defmodule Monty.Prerequisites do
   # question — "are the pickles here?" — and said yes on a volume where nothing
   # had ever been exported, so the page showed a run as possible and the first
   # step failed with "no memory this application can read".
+  # `path` is what has to exist for the need to be satisfied — the library file
+  # this application reads. `display` is the path the *config* wrote, which is
+  # the one a person recognises; a `.jsonl.gz` under `_build` is not.
   defp models_need(%{model_name_or_path: path}) when is_binary(path) and path != "" do
     name = Monty.Studio.Memory.name_of(path)
     release = Monty.Studio.Memory.release_of(path)
@@ -522,12 +550,13 @@ defmodule Monty.Prerequisites do
       release == nil ->
         # A config that names a model but not the release it was trained from:
         # a library from any release satisfies it, and the path worth naming is
-        # the directory the memory would be exported from.
+        # the directory the config wrote.
         [
           %{
             kind: :models,
-            what: "the pretrained memory this config names",
+            what: "the memory `#{name}`",
             path: memory_path(path),
+            display: memory_path(path),
             present?: Monty.Studio.Memory.releases_for(name) != []
           }
         ]
@@ -538,8 +567,9 @@ defmodule Monty.Prerequisites do
         [
           %{
             kind: :models,
-            what: "the pretrained memory this config names",
+            what: "the memory `#{name}`",
             path: memory,
+            display: memory_path(path),
             present?: File.exists?(memory)
           }
         ]

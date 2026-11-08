@@ -300,6 +300,30 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
     """
   end
 
+  # Arriving with a prerequisite named is a link that starts the download it
+  # points at — a finding that says a run is waiting for an archive offers the
+  # click, not the page it lives on. Nothing is started that a click could not
+  # have started: the same conditions the row's button answers to.
+  @impl true
+  def handle_params(%{"fetch" => id}, _uri, socket) do
+    case Enum.find(socket.assigns.prerequisites, &(&1.id == id)) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Unknown prerequisite #{id}")}
+
+      prerequisite ->
+        if downloadable?(
+             socket.assigns.statuses,
+             id,
+             socket.assigns.present[id],
+             socket.assigns.pending[id]
+           ),
+           do: start(socket, prerequisite),
+           else: {:noreply, socket}
+    end
+  end
+
+  def handle_params(_params, _uri, socket), do: {:noreply, socket}
+
   @impl true
   def handle_event("download", %{"id" => id}, socket) do
     case Prerequisites.get(id) do

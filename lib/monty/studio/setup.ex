@@ -31,6 +31,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Geometry.Rotation
   alias Monty.ModuleMap
   alias Monty.ModuleMap.StandIns
+  alias Monty.Prerequisites
   alias Monty.Studio.Finding
   alias Monty.Studio.Memory
 
@@ -2325,28 +2326,29 @@ defmodule Monty.Studio.Setup do
   # objects its config names steps a scene with nothing in it. It starts, it
   # spends the episodes, and every sensor finds no surface — which answers none
   # of the experiment's question while looking like a result. The fix is a
-  # download, and the Prerequisites page is where it is offered.
+  # download, so the finding says which one and links where it starts.
   defp object_in_world_findings(%__MODULE__{environment: %{data_path: path}} = setup)
        when is_binary(path) do
     cond do
       # The directory itself is the first thing to say: a config whose objects
       # were never downloaded has nothing to look for *in* it, and naming the
       # directory is what tells a person which archive is missing.
-      not File.dir?(path) -> [missing_data_finding(path)]
-      object_label(setup) == nil -> [no_object_finding(path)]
+      not File.dir?(path) -> [with_download(missing_data_finding(path), path)]
+      object_label(setup) == nil -> [with_download(no_object_finding(path), path)]
       true -> []
     end
   end
 
   defp object_in_world_findings(%__MODULE__{}), do: []
 
+  # What the run is waiting for, rather than what it is denied: these two are the
+  # differences a download clears, and the link says what to do about it. One
+  # line, because the second line of a warning is the one nobody reads.
   defp missing_data_finding(path) do
     Finding.new(
       :error,
       :world_data_missing,
-      "This world steps from #{path}, which is not on this machine, so the run " <>
-        "cannot start here. Download the objects it needs on the Prerequisites page " <>
-        "(`/prerequisites`).",
+      "Not on this machine yet: #{path}.",
       "environment.env_init_args.data_path"
     )
   end
@@ -2357,9 +2359,38 @@ defmodule Monty.Studio.Setup do
       :world_holds_no_object,
       "This world has no object in it: none of the meshes this config names is " <>
         "under #{path}, so the first sensor that looks for a surface would find " <>
-        "nothing. What it needs is on the Prerequisites page (`/prerequisites`).",
+        "nothing.",
       "environment.env_init_args.data_path"
     )
+  end
+
+  # A finding about a directory a prerequisite fills offers the download itself.
+  # Where no entry fills it, the finding says the directory has to be put there
+  # and points at the page that lists what this application can fetch: a link to
+  # a download that does not exist would be worse than no link at all.
+  defp with_download(%Finding{} = finding, path) do
+    case Prerequisites.for_path(path) do
+      nil ->
+        Finding.with_link(
+          finding,
+          "What this application can download",
+          "/prerequisites"
+        )
+
+      prerequisite ->
+        Finding.with_link(
+          finding,
+          "Download it#{archive_size(prerequisite)}",
+          "/prerequisites?fetch=#{prerequisite.id}"
+        )
+    end
+  end
+
+  defp archive_size(prerequisite) do
+    case Prerequisites.size(prerequisite)[:archive] do
+      nil -> ""
+      bytes -> " (#{Humanizer.bytes(bytes, system: :binary)})"
+    end
   end
 
   defp shell_finding([], _total), do: []

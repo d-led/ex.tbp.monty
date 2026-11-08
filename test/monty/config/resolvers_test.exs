@@ -107,6 +107,13 @@ defmodule Monty.Config.ResolversTest do
       assert dir == Path.expand("~/tbp")
     end
 
+    # Monty writes this one both ways, and the quoted form is a string argument:
+    # the quotes are syntax, so they must not end up in the path.
+    test "path.expanduser takes a quoted argument as the same path" do
+      assert resolve(%{"dir" => ~s(${path.expanduser:"~/tbp/projects/pretrained"})}) ==
+               {:ok, %{"dir" => Path.expand("~/tbp/projects/pretrained")}}
+    end
+
     test "path.tests points inside the Monty checkout's tests directory" do
       assert resolve(%{"file" => "${path.tests:conf/snapshots/a.yaml}"}) ==
                {:ok, %{"file" => "/monty/tests/conf/snapshots/a.yaml"}}

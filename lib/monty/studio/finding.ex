@@ -12,21 +12,36 @@ defmodule Monty.Studio.Finding do
   """
 
   @enforce_keys [:level, :code, :message]
-  defstruct [:level, :code, :message, :where]
+  defstruct [:level, :code, :message, :where, :link]
 
   @type level :: :error | :warning | :info
+
+  @typedoc """
+  Where a reader can act on what a finding says.
+
+  A finding that names a page and leaves a person to find it is a finding that
+  half-answers: "download the objects" without a way to start the download is
+  the same click away as the problem was. `href` is where that click goes.
+  """
+  @type link :: %{label: String.t(), href: String.t()}
 
   @type t :: %__MODULE__{
           level: level(),
           code: atom(),
           message: String.t(),
-          where: String.t() | nil
+          where: String.t() | nil,
+          link: link() | nil
         }
 
   @doc "A finding about `where` — a config path, a module id or a group name."
   @spec new(level(), atom(), String.t(), String.t() | nil) :: t()
   def new(level, code, message, where \\ nil),
     do: %__MODULE__{level: level, code: code, message: message, where: where}
+
+  @doc "The same finding, with a link to the page that fixes it."
+  @spec with_link(t(), String.t(), String.t()) :: t()
+  def with_link(%__MODULE__{} = finding, label, href),
+    do: %{finding | link: %{label: label, href: href}}
 
   @doc "Only the findings at the given level."
   @spec at([t()], level()) :: [t()]

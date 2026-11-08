@@ -39,6 +39,35 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert render(view) =~ "not downloaded"
   end
 
+  # A finding that says a run is waiting for an archive offers the click, and the
+  # click is a URL: arriving with `?fetch=` starts that download, so the link a
+  # reader follows is the download rather than a page to hunt on.
+  describe "arriving with a prerequisite named" do
+    test "starts that download", %{conn: conn} do
+      assert Saga.lookup("tiny") == nil
+
+      {:ok, _view, _html} = live(conn, ~p"/prerequisites?fetch=tiny")
+
+      assert Saga.lookup("tiny") != nil
+    end
+
+    test "says so when the name is not one of the manifest's", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/prerequisites?fetch=nonesuch")
+
+      assert render(view) =~ "Unknown prerequisite"
+      assert Saga.lookup("nonesuch") == nil
+    end
+
+    test "does not start an archive that is already here", %{conn: conn, tmp: tmp} do
+      File.mkdir_p!(Path.join(tmp, "data"))
+      File.write!(Path.join([tmp, "data", "tiny.tgz"]), "already here")
+
+      {:ok, _view, _html} = live(conn, ~p"/prerequisites?fetch=tiny")
+
+      assert Saga.lookup("tiny") == nil
+    end
+  end
+
   # Reading the memory out of an archive's pickles has no bytes to count, so the
   # row says which model the exporter is on and how many there are — otherwise
   # the badge says "reading memory" for minutes and looks stuck.

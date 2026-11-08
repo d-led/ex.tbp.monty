@@ -41,6 +41,23 @@ prerequisites:
     # The archive's name is not the directory it fills.
     unpacks_to: mujoco/objects/ycb
 
+  # The twelve scanned lab objects the monty-meets-world experiments step.
+  # Monty's benchmark page names this archive and this place: it unpacks a
+  # `numenta_lab/` directory into ~/tbp/data/mujoco, which is what
+  # `${MONTY_DATA}/mujoco/numenta_lab` (the data_path
+  # `only_surf_agent_training_numenta_lab_obj` and its siblings name) looks for.
+  - id: numenta_lab_v2_mujoco
+    title: Numenta lab objects (Monty meets world)
+    description: >
+      The twelve photogrammetry objects of the monty-meets-world experiments,
+      unpacked into ~/tbp/data/mujoco/numenta_lab.
+    url: https://tbp-data-public-5e789bd48e75350c.s3.us-east-2.amazonaws.com/tbp.monty/numenta_lab_v2.tgz
+    root: MONTY_DATA
+    target: mujoco/numenta_lab_v2.tgz
+    extract: true
+    # The archive unpacks `numenta_lab/`, not `numenta_lab_v2/`.
+    unpacks_to: mujoco/numenta_lab
+
   # The release Monty's current configs name (`constants.pretrained_dir`), which
   # is the one a run of `base_10simobj_surf_agent` and its siblings loads.
   - id: pretrained_ycb_v14

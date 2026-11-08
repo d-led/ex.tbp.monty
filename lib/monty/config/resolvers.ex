@@ -126,8 +126,28 @@ defmodule Monty.Config.Resolvers do
 
   defp resolve_token(token, root, opts) do
     case Enum.find(@known_prefixes, &String.starts_with?(token, &1)) do
-      nil -> lookup(token, root)
-      prefix -> apply_prefix(prefix, String.replace_prefix(token, prefix, ""), opts)
+      nil ->
+        lookup(token, root)
+
+      prefix ->
+        apply_prefix(prefix, token |> String.replace_prefix(prefix, "") |> argument(), opts)
+    end
+  end
+
+  # `${path.expanduser:"~/tbp/data"}`: the quotes are OmegaConf's syntax for a
+  # string argument, not part of the value. Keeping them put a `"` on the end of
+  # every model path a config wrote that way — `.../pretrained"` — which matched
+  # no memory, so a run that was fine looked as if its model were missing.
+  defp argument(argument) do
+    size = byte_size(argument)
+
+    with true <- size >= 2,
+         first = binary_part(argument, 0, 1),
+         true <- first == binary_part(argument, size - 1, 1),
+         true <- first in ["\"", "'"] do
+      binary_part(argument, 1, size - 2)
+    else
+      _unquoted -> argument
     end
   end
 

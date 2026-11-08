@@ -70,16 +70,21 @@ defmodule Mix.Tasks.Monty.Readiness do
   defp print(survey, all?) do
     Mix.shell().info("""
     #{length(survey.entries)} experiments in Monty's tree
-      runnable here:    #{survey.runnable}
-      refused:          #{survey.refused}
-      not planned:      #{survey.not_planned}  (a world this build does not carry)
-      did not compose:  #{survey.did_not_compose}
+      runs here:                #{survey.runnable}
+      waiting for prerequisites: #{waiting(survey)}
+      cannot run here:          #{survey.refused - waiting(survey)}
+      not planned:              #{survey.not_planned}  (a world this build does not carry)
+      did not compose:          #{survey.did_not_compose}
     """)
 
     print_codes(survey.by_code)
     print_classes(survey.by_class)
     if all?, do: print_refused(survey.entries)
   end
+
+  # An experiment whose only obstacle is a file is not in the same state as one
+  # whose class this port never wrote: the first is a download away.
+  defp waiting(survey), do: Enum.count(survey.entries, &Readiness.waiting?/1)
 
   defp print_codes([]), do: :ok
 
@@ -92,7 +97,7 @@ defmodule Mix.Tasks.Monty.Readiness do
     for %{code: code, refused: refused, postponed: postponed} <- by_code do
       Mix.shell().info(
         "  #{String.pad_trailing(to_string(code), 32)}" <>
-          " refused #{String.pad_leading(to_string(refused), 3)}" <>
+          " cannot run #{String.pad_leading(to_string(refused), 3)}" <>
           "  postponed #{String.pad_leading(to_string(postponed), 3)}"
       )
     end
@@ -104,8 +109,8 @@ defmodule Mix.Tasks.Monty.Readiness do
 
   defp print_classes(by_class) do
     Mix.shell().info("""
-    A class, by the experiments it blocks alone (naming = every refused
-    experiment that names it, including ones another class also blocks):
+    A class, by the experiments it blocks alone (naming = every experiment that
+    cannot run here and names it, including ones another class also blocks):
     """)
 
     for %{class: class, alone: alone, naming: naming} <- by_class do
@@ -123,16 +128,21 @@ defmodule Mix.Tasks.Monty.Readiness do
 
     for entry <- entries, entry.status != :runnable do
       Mix.shell().info(
-        "  #{String.pad_trailing(status_name(entry.status), 16)} #{entry.name} — " <>
+        "  #{String.pad_trailing(status_name(entry), 22)} #{entry.name} — " <>
           Enum.join(entry.codes, ", ")
       )
     end
   end
 
-  defp status_name(:refused), do: "refused"
-  defp status_name(:not_planned), do: "not planned"
-  defp status_name(:did_not_compose), do: "does not compose"
-  defp status_name(_runnable), do: "runs here"
+  defp status_name(entry) do
+    cond do
+      Readiness.waiting?(entry) -> "waiting for prerequisites"
+      entry.status == :refused -> "cannot run here"
+      entry.status == :not_planned -> "not planned"
+      entry.status == :did_not_compose -> "does not compose"
+      true -> "runs here"
+    end
+  end
 
   defp write_json(_survey, nil), do: :ok
 

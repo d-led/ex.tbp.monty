@@ -17,6 +17,7 @@ defmodule Monty.Studio.Readiness do
   both read it, so the page and the count cannot disagree.
   """
 
+  alias Monty.Prerequisites
   alias Monty.Studio
   alias Monty.Studio.{Catalog, Finding, Memory, Setup}
 
@@ -90,6 +91,7 @@ defmodule Monty.Studio.Readiness do
       status: status(errors, Setup.engine(setup)),
       world: Setup.engine(setup),
       codes: errors |> Enum.map(& &1.code) |> Enum.uniq() |> Enum.sort(),
+      download_offered?: download_offered?(errors),
       blocked_by: blocked_by(setup, errors)
     }
   end
@@ -100,6 +102,7 @@ defmodule Monty.Studio.Readiness do
       status: :did_not_compose,
       world: nil,
       codes: [:does_not_compose],
+      download_offered?: false,
       blocked_by: []
     }
   end
@@ -160,7 +163,9 @@ defmodule Monty.Studio.Readiness do
   """
   @spec catalog(keyword()) :: survey()
   def catalog(opts \\ []) do
-    key = {__MODULE__, :catalog, Catalog.stamp(opts), world(opts), libraries_stamp()}
+    key =
+      {__MODULE__, :catalog, Catalog.stamp(opts), world(opts), libraries_stamp(),
+       downloads_stamp()}
 
     case :persistent_term.get(key, nil) do
       nil ->
@@ -174,20 +179,58 @@ defmodule Monty.Studio.Readiness do
   end
 
   @doc """
-  What a page filters on, per experiment: `ready` — `"yes"`, `"no"`, or
-  `"not_planned"` — and `world` — `"mujoco"`, `"habitat"`, or `"other"` for a
-  config naming no simulator this application knows.
+  What a page filters on, per experiment: `ready` — `"yes"`, `"waiting"`,
+  `"no"`, or `"not_planned"` — and `world` — `"mujoco"`, `"habitat"`, or
+  `"other"` for a config naming no simulator this application knows.
+
+  `"waiting"` is a refusal that a download answers: every finding against the
+  experiment is about a file a prerequisite fills, so nothing about this port
+  stands in the way. It is a different thing to a reader than "this build has
+  not written the class your config names", and the two were both called
+  "refused".
   """
   @spec labels(survey()) :: %{String.t() => label()}
   def labels(%{entries: entries}) do
     Map.new(entries, fn entry ->
-      {entry.name, %{ready: verdict(entry.status), world: world_name(entry.world)}}
+      {entry.name, %{ready: verdict(entry), world: world_name(entry.world)}}
     end)
   end
 
-  defp verdict(:runnable), do: "yes"
-  defp verdict(:not_planned), do: "not_planned"
-  defp verdict(_refused), do: "no"
+  # The files a prerequisite fills, and the only two codes a finished download
+  # clears. Everything else is a fact about this build.
+  @downloadable_codes [:world_data_missing, :no_pretrained_memory]
+
+  @doc """
+  Whether an experiment that does not run here is only waiting for files.
+
+  Every finding against it has to be one a download answers, **and** the
+  download has to exist: a directory no archive fills is not something a person
+  waits for, it is something they have to put there, and the two are said
+  differently. A config that also names a class this port has not written is not
+  waiting either — saying it was would be a promise a download cannot keep.
+  """
+  @spec waiting?(entry()) :: boolean()
+  def waiting?(%{status: :refused, codes: codes, download_offered?: offered?})
+      when codes != [],
+      do: offered? && Enum.all?(codes, &(&1 in @downloadable_codes))
+
+  def waiting?(_entry), do: false
+
+  # A download finding carries the link to the archive that answers it; one with
+  # no prerequisite behind it carries the page that lists what is offered.
+  defp download_offered?(errors) do
+    errors
+    |> Enum.filter(&(&1.code in @downloadable_codes))
+    |> Enum.all?(&(&1.link != nil and String.contains?(&1.link.href, "fetch=")))
+  end
+
+  defp verdict(entry) when is_map(entry) do
+    case entry.status do
+      :runnable -> "yes"
+      :not_planned -> "not_planned"
+      _refused -> if waiting?(entry), do: "waiting", else: "no"
+    end
+  end
 
   defp world_name(:mujoco), do: "mujoco"
   defp world_name(:habitat), do: "habitat"
@@ -198,11 +241,19 @@ defmodule Monty.Studio.Readiness do
 
   A test that changes the world (or the libraries directory) under the cache has
   to say so; nothing in production changes either without the key moving.
+
+  Matched on the first two elements rather than on the whole key: the key has
+  grown as the answers' inputs have (libraries, then the archives), and a
+  `forget/0` that only knew today's shape would leave yesterday's entries in
+  `:persistent_term` for the life of the node.
   """
   @spec forget() :: :ok
   def forget do
-    for {{__MODULE__, :catalog, _stamp, _world, _libraries} = key, _value} <-
-          :persistent_term.get(),
+    for {key, _value} <- :persistent_term.get(),
+        is_tuple(key),
+        tuple_size(key) >= 3,
+        elem(key, 0) == __MODULE__,
+        elem(key, 1) == :catalog,
         do: :persistent_term.erase(key)
 
     :ok
@@ -230,6 +281,15 @@ defmodule Monty.Studio.Readiness do
       {:ok, releases} -> {dir, Map.new(releases, &{&1, files_in(Path.join(dir, &1))})}
       _missing -> {dir, :none}
     end
+  end
+
+  # Where the archives land, and whether they are there. A download finishing is
+  # the one event that changes an answer without the config changing: the survey
+  # was cached before the objects arrived and said "waiting" afterwards, which is
+  # the page lying about the disk it is looking at. Read off the manifest rather
+  # than out of a progress message, so a directory unpacked by hand counts too.
+  defp downloads_stamp do
+    Enum.map(Prerequisites.all(), &{&1.id, Prerequisites.present?(&1)})
   end
 
   defp files_in(dir) do

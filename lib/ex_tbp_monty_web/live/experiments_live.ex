@@ -318,7 +318,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
                   :for={facet <- @result.facets}
                   class="py-1.5 pe-3 pl-0 align-middle whitespace-nowrap"
                 >
-                  <span class="badge badge-ghost badge-sm">{column(entry, facet)}</span>
+                  <span class={badge_class(facet, entry)}>{column(entry, facet)}</span>
                 </td>
               </tr>
             </tbody>
@@ -393,6 +393,20 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   defp column(entry, %{key: "agent"}), do: entry.agent
   defp column(entry, %{key: "learning_module"}), do: entry.learning_module
   defp column(entry, %{key: "model"}), do: entry.model
+
+  # The readiness column is the one a reader scans, so it is the one that carries
+  # a colour — pastel, because the row is information rather than a warning. The
+  # other columns are facts about the config and stay neutral.
+  defp badge_class(%{key: "ready"}, entry),
+    do: ["badge badge-sm border", readiness_colour(entry.ready)]
+
+  defp badge_class(_facet, _entry), do: ["badge badge-ghost badge-sm"]
+
+  defp readiness_colour("yes"), do: "bg-emerald-100 text-emerald-900 border-emerald-200"
+  defp readiness_colour("waiting"), do: "bg-amber-100 text-amber-900 border-amber-200"
+  defp readiness_colour("no"), do: "bg-rose-100 text-rose-900 border-rose-200"
+  defp readiness_colour("not_planned"), do: "bg-slate-100 text-slate-700 border-slate-200"
+  defp readiness_colour(_unknown), do: "bg-base-200 text-base-content/70 border-base-300"
 
   defp showing(matching, total) when matching == total, do: "#{total} experiments"
   defp showing(matching, total), do: "#{matching} of #{total} experiments"

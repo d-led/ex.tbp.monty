@@ -64,10 +64,11 @@ defmodule Monty.Studio.Index do
   Builds the index from catalog entries.
 
   `labels` is `Monty.Studio.Readiness.labels/1`: what each experiment is labelled
-  with beyond its own file — `ready` (`"yes"`, `"no"`, `"not_planned"`) and
-  `world` (`"mujoco"`, `"habitat"`, `"other"`). An experiment it does not name is
-  `"unknown"` on both — a page that was not told says so rather than guessing,
-  and a fixture of three experiments need not open all of Monty's.
+  with beyond its own file — `ready` (`"yes"`, `"waiting"`, `"no"`,
+  `"not_planned"`) and `world` (`"mujoco"`, `"habitat"`, `"other"`). An
+  experiment it does not name is `"unknown"` on both — a page that was not told
+  says so rather than guessing, and a fixture of three experiments need not open
+  all of Monty's.
   """
   @spec build([map()], %{optional(String.t()) => map()}) :: t()
   def build(experiments, labels \\ %{}) do
@@ -256,8 +257,8 @@ defmodule Monty.Studio.Index do
     end
   end
 
-  # Readiness first and "yes" before "unknown" before "no": the answer a person
-  # opens this page for is "what can I run".
+  # Readiness first, and in the order a person reads it: what runs, what would
+  # run once a download finishes, what this build cannot run, then the rest.
   defp sort_key("ready", value), do: {0, ready_order(value), value}
 
   # MuJoCo first: it is the world a run steps by default, and the one every
@@ -267,10 +268,11 @@ defmodule Monty.Studio.Index do
   defp sort_key(_key, value), do: {0, 0, value}
 
   defp ready_order("yes"), do: 0
-  defp ready_order("no"), do: 1
-  defp ready_order("unknown"), do: 2
-  defp ready_order("not_planned"), do: 3
-  defp ready_order(_value), do: 4
+  defp ready_order("waiting"), do: 1
+  defp ready_order("no"), do: 2
+  defp ready_order("unknown"), do: 3
+  defp ready_order("not_planned"), do: 4
+  defp ready_order(_value), do: 5
 
   defp world_order("mujoco"), do: 0
   defp world_order("habitat"), do: 1
@@ -278,7 +280,8 @@ defmodule Monty.Studio.Index do
   defp world_order(_unknown), do: 3
 
   defp label_for("ready", "yes"), do: "runs here"
-  defp label_for("ready", "no"), do: "refused"
+  defp label_for("ready", "waiting"), do: "waiting for prerequisites"
+  defp label_for("ready", "no"), do: "cannot run here"
   defp label_for("ready", "not_planned"), do: "not planned"
   defp label_for("world", "mujoco"), do: "MuJoCo"
   defp label_for("world", "habitat"), do: "Habitat"

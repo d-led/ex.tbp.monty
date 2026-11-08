@@ -75,6 +75,32 @@ defmodule Monty.Studio.ReadinessTest do
                "unreadable" => %{ready: "no", world: "other"}
              }
     end
+
+    # A run whose only obstacle is a file is not in the same state as one whose
+    # class this port never wrote, and a reader deciding what to do next needs
+    # the difference more than the two need one word between them.
+    test "says it is waiting when the only thing missing is a download" do
+      survey =
+        Readiness.summarise([
+          entry("needs objects", :refused, [:world_data_missing], []),
+          entry("needs memories", :refused, [:no_pretrained_memory], []),
+          entry(
+            "needs objects and a class",
+            :refused,
+            [
+              :world_data_missing,
+              :unknown_module_class
+            ],
+            ["FakeLearningModule"]
+          )
+        ])
+
+      labels = Readiness.labels(survey)
+
+      assert labels["needs objects"] == %{ready: "waiting", world: "mujoco"}
+      assert labels["needs memories"] == %{ready: "waiting", world: "mujoco"}
+      assert labels["needs objects and a class"] == %{ready: "no", world: "mujoco"}
+    end
   end
 
   describe "the ranking" do
@@ -129,6 +155,13 @@ defmodule Monty.Studio.ReadinessTest do
   end
 
   defp entry(name, status, codes, blocked_by, world \\ :mujoco) do
-    %{name: name, status: status, world: world, codes: codes, blocked_by: blocked_by}
+    %{
+      name: name,
+      status: status,
+      world: world,
+      codes: codes,
+      download_offered?: true,
+      blocked_by: blocked_by
+    }
   end
 end

@@ -207,25 +207,33 @@ defmodule Monty.Studio.IndexTest do
       ready = Enum.find(result.facets, &(&1.key == "ready"))
 
       assert Enum.sort_by(ready.values, & &1.value) == [
-               %{value: "no", label: "refused", count: 1},
+               %{value: "no", label: "cannot run here", count: 1},
                %{value: "unknown", label: "unknown", count: 1}
              ]
     end
 
     test "reads as the question it answers, not as the stored value" do
       assert Index.label("ready", "yes") == "runs here"
-      assert Index.label("ready", "no") == "refused"
+      assert Index.label("ready", "waiting") == "waiting for prerequisites"
+      assert Index.label("ready", "no") == "cannot run here"
       assert Index.label("ready", "not_planned") == "not planned"
     end
 
-    # Three answers, in the order a reader wants them: what I can run, what is
-    # ours to fix, and what has been postponed.
+    # What a person reads, in the order they want it: what I can run, what would
+    # run once a download finishes, what this build cannot run, and what has
+    # been postponed.
     test "offers a postponed experiment its own answer, after the refusals" do
       index =
         Index.build(
           [
             experiment(
               "dist_1lm",
+              "habitat_ycb_dist_agent_semantics0",
+              "evidence_1lm_nn5_dod003",
+              "1lm_1sm"
+            ),
+            experiment(
+              "cows_large",
               "habitat_ycb_dist_agent_semantics0",
               "evidence_1lm_nn5_dod003",
               "1lm_1sm"
@@ -245,6 +253,7 @@ defmodule Monty.Studio.IndexTest do
           ],
           %{
             "dist_1lm" => %{ready: "yes", world: "mujoco"},
+            "cows_large" => %{ready: "waiting", world: "mujoco"},
             "surf_5lm" => %{ready: "no", world: "mujoco"},
             "surf_1lm_scratch" => %{ready: "not_planned", world: "habitat"}
           }
@@ -252,8 +261,14 @@ defmodule Monty.Studio.IndexTest do
 
       ready = Enum.find(index.facets, &(&1.key == "ready"))
 
-      assert Enum.map(ready.values, & &1.label) == ["runs here", "refused", "not planned"]
-      assert Enum.map(ready.values, & &1.value) == ["yes", "no", "not_planned"]
+      assert Enum.map(ready.values, & &1.label) == [
+               "runs here",
+               "waiting for prerequisites",
+               "cannot run here",
+               "not planned"
+             ]
+
+      assert Enum.map(ready.values, & &1.value) == ["yes", "waiting", "no", "not_planned"]
     end
   end
 end
