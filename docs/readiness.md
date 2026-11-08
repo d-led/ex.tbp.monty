@@ -41,8 +41,8 @@ so the postponed count reads the same under `--world synthetic`.
 |                         | MuJoCo (the default) | stand-in scene |
 | ----------------------- | -------------------: | -------------: |
 | experiments Monty ships |                  210 |            210 |
-| run here                |                   89 |             75 |
-| refused                 |                   34 |             48 |
+| run here                |                   99 |             84 |
+| refused                 |                   24 |             39 |
 | not planned             |                   87 |             87 |
 | do not compose at all   |                    0 |              0 |
 
@@ -59,12 +59,12 @@ not the same question as the world a run steps: `mujoco` 123, `habitat` 73,
 through `Setup.engine/1`, the same rule that decides `not planned`, so the two
 cannot disagree.
 
-## Why the 34 are refused
+## Why the 24 are refused
 
 | reason                           | refused | postponed | what it is                                                                |
 | -------------------------------- | ------: | --------: | ------------------------------------------------------------------------- |
 | `world_not_carried`              |       0 |        87 | Habitat-Sim — **postponed**, not a blocker                                |
-| `modules_not_ported`             |      30 |        23 | a class nothing here stands in for                                        |
+| `modules_not_ported`             |      20 |        12 | a class nothing here stands in for                                        |
 | `no_pretrained_memory`           |      18 |         1 | the config's model is not exported on this machine                        |
 | `epochs_not_a_count`             |       1 |         6 | `${constants.rotations_all_count}` is not resolved before it is validated |
 | `sm_to_lm_matrix_missing`        |       1 |         5 | Monty's own pytest fixtures: a bare model, not an experiment              |
@@ -88,7 +88,6 @@ class named only by postponed experiments is not ranked at all.
 
 | class                         | alone | naming | the work                                                                 |
 | ----------------------------- | ----: | -----: | ------------------------------------------------------------------------ |
-| `FeatureGraphLM`              |    10 |     10 | a whole learning module (`feature_matching/graph_matching.py`)           |
 | `MontyBase`                   |     3 |      3 | Monty's own model shell — the three are its pytest fixtures              |
 | `GraphLM` (a matching scheme) |     1 |      1 | `tutorial/surf_agent_2obj_train` — `GraphLM` refuses itself upstream too |
 | `TwoDSensorModule`            |     1 |     17 | a sensor module reading 2-D datasets — the cows family, below            |
@@ -99,22 +98,17 @@ table: every config naming them is a Habitat config, so they are postponed.
 
 ## The order to work in
 
-Done: **`DisplacementGraphLM` on PPF** (2026-11-08) — the two MuJoCo PPF
-configs and `test/graph_building/load_mujoco_for_ppf` run, and the class is no
-longer ranked (hand-over §19). What is ranked now:
+Done, in this order: **`DisplacementGraphLM` on PPF** (§19) and
+**`FeatureGraphLM`** (§20). Ten feature experiments and the three MuJoCo PPF
+configs run, and neither class is ranked any more — the counts went 87 → 99
+runnable. What is left, in the order worth doing:
 
-1. **`FeatureGraphLM`** — ten MuJoCo experiments in one family
-   (`test/graph_learning/feature_pred_mujoco`, `..._off_object_mujoco`,
-   `..._off_object_train_mujoco`, `..._time_out_mujoco`,
-   `feature_uniform_initial_poses_mujoco`, `five_lm_feature_mujoco`,
-   `fixed_actions_feat_mujoco`, and three `test/graph_building/*`). It is the
-   largest single win, and Monty's own tests for it are the spec.
-2. **The cows family** — 17 configs (`base_infer_cows_*`,
+1. **The cows family** — 17 configs (`base_infer_cows_*`,
    `randrot_noise_infer_cows_*`, `supervised_pre_training_cows_*`) need
    `TwoDSensorModule`, 9 of them `DefaultAttentionSystem`, and 16 a pretrained
    cows model. Three things, one family; the sensor is the part to write, and the
    libraries are what `/prerequisites` exports.
-3. **`MontyBase`** — three configs, and all three are Monty's pytest fixtures. Do
+2. **`MontyBase`** — three configs, and all three are Monty's pytest fixtures. Do
    this only if the fixtures are to be treated as experiments.
 
 ## Two rules this survey is held to

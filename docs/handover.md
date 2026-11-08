@@ -1176,3 +1176,98 @@ about.
 
 The acceptance ladder is unchanged digit for digit: `0.908 (802, 4)` …
 `11.712 (2342, 1)`, `goals 15328`.
+
+## 20. 2026-11-08: `FeatureGraphLM`, the readiness order's largest single item
+
+Ten experiments turned on at once: `test/graph_learning/feature_pred_mujoco`
+and its `off_object`, `off_object_train`, `time_out` and
+`feature_uniform_initial_poses` siblings, `five_lm_feature_mujoco`,
+`fixed_actions_feat_mujoco`, and three `test/graph_building/*` configs. The
+counts in `docs/readiness.md` go 89 → 99 runnable, 34 → 24 refused.
+
+### 20.1 What the class is
+
+Twelve hundred lines of Elixir behind two questions per graph per step:
+
+- **Which nodes could I be standing on?** Every node whose stored features lie
+  within the observed value's tolerance, ignoring where those nodes are. This is
+  `FeatureGraphMemory.match_all_node_features/5`, and it is the only place a
+  whole graph is compared against one observation.
+- **Does the move agree with a pose I could be in?** For every path still
+  possible and every rotation still possible on it, turn the observed step by
+  that rotation, land on a place, and keep the path if the nearest node within
+  `max_match_distance` carries the pose the rotation predicted.
+
+Recognition is one object left whose path is unique _and_ whose rotation is
+unique — or, for an object that looks the same from several sides, the same set
+of poses lasting `required_symmetry_evidence` steps. That second condition is
+`_check_for_symmetry`, and it is why the module has a counter instead of a
+comparison: an apple is not one pose, and refusing to conclude would be wrong.
+
+### 20.2 The three places the port had to decide
+
+- **`possible_poses` is parallel to `possible_paths`**, one list of rotations per
+  path, and it lives in the outer struct while the paths stay in the graph
+  module's `possible_paths`, because the paths are what `GraphLM`'s conclusion
+  reads. Monty gets both for free by overriding an attribute; a port that
+  composes has to say which struct owns what.
+- **The comparison takes its tolerances from the module, not from the memory.**
+  Monty's memory holds `features_to_use` _and_ the tolerance numbers, because the
+  module assigns its tolerances to it. This port's `GraphMemory.features_to_use`
+  is a map of feature **names** — what the evidence kernel reads — so
+  `match_all_node_features` is handed the tolerances explicitly, and the memory
+  keeps the names it builds rows for. Two shapes, one source of truth.
+- **A node is its own nearest neighbour on a zero-length step.** A symmetric
+  object is recognised by staying still, which is what the symmetry test in
+  `feature_graph_lm_test.exs` does: two identical observations, then a match.
+
+### 20.3 The run, and what it did and did not prove
+
+Same config both sides (`test/graph_learning/feature_pred_mujoco`, seed 42, 3
+train + 3 eval epochs):
+
+|          | Monty                                                                     | this port                                                |
+| -------- | ------------------------------------------------------------------------- | -------------------------------------------------------- |
+| train    | 4 `no_match` building graphs 0–3, then `new_object0`, `new_object1`       | the same, in the same order                              |
+| eval 1–3 | correct (`new_object0`), correct (`new_object2`), correct (`new_object0`) | match (`new_object0`), `no_match`, match (`new_object0`) |
+| steps    | 158                                                                       | 187                                                      |
+
+This is much closer than the PPF experiment of §19, and for a reason worth
+writing down: a feature match does not compare a _length_. Its tolerances are
+`rgba ±10` out of 255 and angles of 20–40°, so a millimetre of difference between
+our MuJoCo scene and Monty's camera changes which nodes match only at the edges
+— whereas PPF compares a length at 0.001 and a millimetre is decisive. The one
+disagreement, eval epoch 2, is the cube at an unseen rotation: Monty still had a
+path for it, we did not.
+
+The referee's standing limitation is §19's and unchanged: Monty's recordings do
+not carry percepts, so an episode cannot be replayed exactly, and no episode is
+parity evidence. The evidence for the port is the nine cases in
+`feature_graph_lm_test.exs` — hand-written intent, because Monty has no unit test
+for `feature_location_matching.py` either, and the moduledoc says so.
+
+### 20.4 What is documented rather than ported
+
+- **Pose jitter is not ported.** Monty samples `n_samples` extra rotations per
+  aligned pose with `ctx.rng.vonmises`; its only caller passes zero, so there is
+  nothing to sample and no config asks.
+- **Votes are negative only.** Monty's feature module also votes on the
+  locations and rotations it still considers, and prunes its paths with other
+  modules' such votes. This port's model routes one kind of vote. Monty's own
+  comment on that path says it is not being developed further, so the callback
+  answers the negative vote like the other modules and `five_lm_feature_mujoco`
+  narrows on objects only.
+- **The nearest matching node is found by sorting**, not by a k-d tree. Monty's
+  tree wins on graphs of tens of thousands of nodes; these experiments are graphs
+  of hundreds, and a sort is the same answer with nothing to keep consistent.
+
+### 20.5 The gate
+
+`scripts/quality.sh` green — 2 501 tests, 19 properties, worst complexity 29.85 —
+and `MIX_ENV=test mix dialyzer` at 0. Seven tests had to change, and all seven
+had used `FeatureGraphLM` as _the example of a class this port has not written_:
+the module-map table's filter and its "no test link" case, the modules page's two
+filters, `Setup`'s refusal case, and two MCP preview cases. Each now names
+`TwoDSensorModule`, which is still unwritten, and the table case that said "a
+class that is only named has no test of ours" now asserts the new module's own
+test link instead.
