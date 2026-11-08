@@ -102,8 +102,17 @@ defmodule ExTbpMontyWeb.StudioComponents do
     """
   end
 
-  @doc "The findings, worst first, each with what to do about it."
+  @doc """
+  The checks, worst first, each with what to do about it — and what a run is
+  missing.
+
+  `needs` are the files an experiment reads before it steps that are not here —
+  `Monty.Prerequisites.for_setup/1`'s list. They are shown here rather than in a
+  box of their own because they *are* why the run cannot start: two boxes saying
+  it in two ways made a reader check which one was the real one.
+  """
   attr :findings, :list, required: true
+  attr :needs, :list, default: []
   attr :id, :string, default: "setup-findings"
 
   def findings(assigns) do
@@ -116,14 +125,42 @@ defmodule ExTbpMontyWeb.StudioComponents do
     <section id={@id} class="space-y-2">
       <header class="flex items-center justify-between">
         <h2 class="text-lg font-semibold tracking-tight">Checks</h2>
-        <span class={["badge", verdict_class(@grouped)]}>{verdict(@grouped)}</span>
+        <span class={["badge", verdict_class(@grouped)]}>{verdict(@grouped, @needs)}</span>
       </header>
 
-      <p :if={@findings == []} class="text-sm text-base-content/60">
+      <p :if={@findings == [] and @needs == []} class="text-sm text-base-content/60">
         Nothing to report: this config would start.
       </p>
 
       <ul class="space-y-1.5">
+        <li
+          :for={need <- @needs}
+          id={"need-#{need.kind}"}
+          class="rounded-field border border-base-300 bg-base-100 px-2.5 py-1.5"
+        >
+          <div class="flex items-start gap-2">
+            <span class="badge badge-sm mt-0.5 border bg-amber-100 text-amber-900 border-amber-200">
+              missing
+            </span>
+            <div class="min-w-0 space-y-0.5">
+              <p class="text-sm">{need.what}</p>
+              <p
+                :if={need[:display] || need.path}
+                class="font-mono text-xs break-all text-base-content/50"
+              >
+                {need[:display] || need.path}
+              </p>
+              <.link
+                id={"need-#{need.kind}-action"}
+                href={need_action(need).href}
+                class="inline-block text-sm link link-primary"
+              >
+                {need_action(need).label}
+              </.link>
+            </div>
+          </div>
+        </li>
+
         <li
           :for={entry <- @ordered}
           id={"finding-#{entry.finding.code}-#{entry.index}"}
@@ -135,12 +172,27 @@ defmodule ExTbpMontyWeb.StudioComponents do
             <p :if={entry.finding.where} class="font-mono text-xs break-all text-base-content/50">
               {entry.finding.where}
             </p>
+            <.link
+              :if={entry.finding.link}
+              href={entry.finding.link.href}
+              class="inline-block text-sm link link-primary"
+            >
+              {entry.finding.link.label}
+            </.link>
           </div>
         </li>
       </ul>
     </section>
     """
   end
+
+  # What a person can do about one missing need: the archive that fills its
+  # directory, the experiment that would train its model, or the page that lists
+  # everything on offer. Every missing thing has one — a row saying "missing"
+  # and nothing to click is a dead end — so the last clause is a real answer
+  # rather than a guard.
+  defp need_action(%{action: %{label: label, href: href}}), do: %{label: label, href: href}
+  defp need_action(_need), do: %{label: "what it needs", href: "/prerequisites"}
 
   @doc "One labelled value, for the facts strip above the diagram."
   attr :label, :string, required: true
@@ -1062,6 +1114,12 @@ defmodule ExTbpMontyWeb.StudioComponents do
   defp verdict(%{error: errors}) when errors != [], do: "#{length(errors)} error(s)"
   defp verdict(%{warning: warnings}) when warnings != [], do: "#{length(warnings)} warning(s)"
   defp verdict(_clean), do: "ready"
+
+  # A missing file stops a run exactly as an error finding does, so it is counted
+  # as one: a badge saying "ready" over a run whose objects are not here would be
+  # the page's worst lie.
+  defp verdict(grouped, []), do: verdict(grouped)
+  defp verdict(_grouped, needs), do: "#{length(needs)} missing"
 
   defp level_class(:error), do: "badge-error"
   defp level_class(:warning), do: "badge-warning"

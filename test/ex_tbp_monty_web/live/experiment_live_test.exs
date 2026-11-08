@@ -80,26 +80,36 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
 
       # The stand-in reads nothing, so nothing stands in its way.
-      refute has_element?(view, "#needs-prerequisites")
+      refute has_element?(view, "#need-data")
       assert has_element?(view, "#run:not([disabled])")
 
       view |> element("#world-choice") |> render_change(%{"world" => "mujoco"})
 
-      assert has_element?(view, "#needs-prerequisites")
+      assert has_element?(view, "#need-data")
+      assert has_element?(view, "#need-models")
       assert has_element?(view, "#run[disabled]")
 
-      box = view |> element("#needs-prerequisites") |> render()
+      box = view |> element("#setup-findings") |> render()
       assert box =~ "objects this environment loads"
-      assert box =~ "pretrained memory"
+      assert box =~ "the memory `surf_agent_1lm_10distinctobj`"
       refute box =~ "MONTY_PYTHON"
 
+      # One line per need, and a link that starts that need's own download: a
+      # person who has to find the row themselves is the round trip the finding
+      # exists to remove.
       assert view
-             |> element("#needs-prerequisites #download-prerequisites")
+             |> element("#need-data-action")
+             |> render() =~ ~s(href="/prerequisites?fetch=ycb_objects_1_0")
+
+      # The memory has no archive of its own, so its click is the list of what
+      # can be fetched rather than a download that does not exist.
+      assert view
+             |> element("#need-models-action")
              |> render() =~ ~s(href="/prerequisites")
 
-      # The ways out are both named: download them, or step the scene that
-      # reads nothing.
-      assert box =~ "stand-in scene"
+      # The ways out are both named: the download, and the scene that reads
+      # nothing.
+      assert render(view) =~ "stand-in scene"
 
       # Clicking anyway queues nothing.
       assert view |> element("#run[disabled]") |> render() =~ "disabled"
@@ -472,8 +482,10 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       perform_run(view)
 
       # Two episodes of two steps: a page counting the run's whole log would end
-      # at "step 4 / 2", which is not a thing that can happen.
-      assert view |> element("#run-progress") |> render() =~ "step 2 / 2"
+      # at "step 4 / 2", which is not a thing that can happen. The badge names
+      # the episode as well, because this counter restarts inside each one — the
+      # "dive to zero" a reader sees is that restart, not a run going backwards.
+      assert view |> element("#run-progress") |> render() =~ "episode 2 · step 2 / 2"
     end
 
     test "lays a run's episodes end to end, because each one starts again at zero", %{
@@ -492,6 +504,26 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       assert chart =~ "ep 1"
       assert chart =~ "ep 2"
+    end
+
+    test "starts each episode's count at its own first step, however long the last one was",
+         %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=3&episodes=2")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+      run_id = current_run_id(view)
+
+      # The stream of a second episode, as the run's step process sends it: the
+      # episode first, then a step numbered below the one the last episode
+      # ended on. Ignoring the step would leave the badge standing at the old
+      # episode's last number for the rest of the run — the counter a reader
+      # reports as stuck.
+      send(view.pid, {:studio, run_id, {:episode, %{episode: 1, object: "mug"}}})
+      send(view.pid, {:studio, run_id, {:step, step_event(episode: 1, step: 0)}})
+
+      assert view |> element("#run-progress") |> render() =~ "episode 2 · step 1 / 3"
     end
 
     test "zooming draws a stretch of the run, and the whole run is one click away", %{
@@ -848,6 +880,18 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     # The page learns about the run by message; let it drain them.
     _ = :sys.get_state(view.pid)
     :ok
+  end
+
+  # One step, as `Monty.Studio.RunStream` announces it to a page.
+  defp step_event(episode: episode, step: step) do
+    %{
+      line: "step #{step} · percepts patch_0 · votes 1/1",
+      step: step,
+      episode: episode,
+      frames: [],
+      beliefs: %{},
+      centre: nil
+    }
   end
 
   defp current_run_id(view) do

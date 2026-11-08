@@ -24,12 +24,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   alias Monty.Studio.{
     Belief,
+    Catalog,
     Chart,
     Duration,
     Failure,
     Jobs,
     LogFilter,
     Logging,
+    Memory,
     Panel,
     Replay,
     RunHistory,
@@ -94,15 +96,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       episodes: episodes,
       # What a run of this experiment reads off the disk, and which of those is
       # not there yet: the run buttons stay disabled while anything is missing,
-      # and the box under the header names it.
+      # and the checks box names it.
       needs: needs(opened),
-      missing: missing(opened),
+      missing: with_actions(missing(opened)),
       # One run until somebody asks for more: parallelism is a choice made on
       # this page, not something a link should be able to set for them.
       parallelism: 1,
       run_id: nil,
       status: nil,
       progress: {0, steps},
+      # Which episode the step counter is counting inside: it restarts at every
+      # episode, so a badge without it reads as a run going backwards.
+      episode: 0,
       lines: [],
       filter: "",
       summary: nil,
@@ -196,6 +201,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       run_id: record.id,
       status: record.status,
       progress: steps_of_last_episode(record),
+      # The counter restarts inside every episode, so the episode it belongs to
+      # belongs to the run being followed.
+      episode: last_episode(record),
       log_path: record.log_path,
       summary: nil
     )
@@ -308,7 +316,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
       <ExTbpMontyWeb.StudioComponents.diagram :if={@opened.diagram} diagram={@opened.diagram} />
 
-      <ExTbpMontyWeb.StudioComponents.findings findings={@opened.setup.findings} />
+      <ExTbpMontyWeb.StudioComponents.findings
+        findings={checks(@opened.setup.findings)}
+        needs={@missing}
+      />
 
       <p :if={@logging != []} id="logging-notes" class="text-xs text-base-content/70">
         <%= for note <- @logging do %>
@@ -408,7 +419,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             {stop_label(assigns)}
           </button>
           <span :if={@run_id} id="run-progress" class="badge badge-ghost">
-            step {elem(@progress, 0)} / {elem(@progress, 1)}
+            episode {(@episode || 0) + 1} · step {elem(@progress, 0)} / {elem(@progress, 1)}
           </span>
           <.link
             :if={@run_id}
@@ -420,48 +431,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           </.link>
         </header>
 
-        <%!-- Poka-yoke: a run that reads files nobody has downloaded cannot
-        start, so the page says which files before the button is pressed and
-        names the page that fetches them — the button is disabled, the reason is
-        here. A need is not always a download: the interpreter is configuration
-        (`MONTY_PYTHON`), and offering a download for it is offering something
-        that does not exist. A stand-in run reads nothing and never sees this. --%>
-        <div
-          :if={@missing != []}
-          id="needs-prerequisites"
-          class="alert alert-warning alert-soft items-start gap-3"
-          role="status"
-        >
-          <.icon name="hero-exclamation-triangle-mini" class="size-4 mt-0.5" />
-          <div class="space-y-1 text-sm">
-            <p class="font-medium">This run needs something before it can start.</p>
-            <ul class="list-disc space-y-0.5 pl-4">
-              <li :for={need <- @missing}>
-                {need.what}<span :if={need.path}> — <code class="font-mono text-xs">{need.path}</code></span>
-              </li>
-            </ul>
-            <p :if={any_remedy?(@missing, :download)}>
-              <.link id="download-prerequisites" navigate={~p"/prerequisites"} class="link">
-                Download them on the Prerequisites page
-              </.link>
-            </p>
-            <p :if={any_remedy?(@missing, :configure)}>
-              Point <code>MONTY_PYTHON</code> at an interpreter with <code>tbp.monty</code> in
-              it — <code>scripts/run-dev.sh</code> passes it through — and reload this page.
-            </p>
-            <%!-- Whatever the reason, the prerequisites page is where the answer is
-            written down: which file is missing, where it belongs, what the last fetch of
-            it did. A person who has to guess which page to go to is the bug. --%>
-            <p>
-              <.link id="prerequisites-page" navigate={~p"/prerequisites"} class="link">
-                What this needs, and how to get it
-              </.link>
-            </p>
-            <p>
-              Or step this port's stand-in scene instead, which reads nothing from disk.
-            </p>
-          </div>
-        </div>
+        <%!-- Why the run cannot start is in the checks box below, with the
+        missing files, their paths on their own lines and one action each. A
+        second box here said the same thing in other words; what is left is the
+        way out that costs nothing. --%>
+        <p :if={@missing != []} id="needs-hint" class="text-xs text-base-content/70">
+          Or step this port's stand-in scene, which reads nothing from disk.
+        </p>
 
         <%!-- Two kinds of error reach this line — the config's own, which Monty
         would refuse too, and one this port makes ("no implementation here") —
@@ -868,30 +844,51 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   defp handle_studio({:started, steps}, socket) do
     socket
-    |> assign(status: "running", progress: {0, steps}, episode_objects: %{})
+    |> assign(status: "running", progress: {0, steps}, episode: 0, episode_objects: %{})
     |> refresh_runs()
   end
 
   # One episode of the epoch has begun. A run is every object of the experiment
   # in every rotation, so the page says which one it is on — the step counter
   # restarts inside each episode, and a log that did not say so would look like
-  # a run going backwards.
+  # a run going backwards. The badge therefore names the episode and counts
+  # inside it, which is what the number actually is.
+  #
+  # The counter goes back to nought with the episode. A step of the new episode
+  # is a smaller number than the last step of the old one, and the out-of-order
+  # guard below drops small numbers inside the same episode — so a counter that
+  # kept the old episode's last step would swallow every step of the new one and
+  # the badge would stand still at that number for the rest of the run.
   defp handle_studio({:episode, %{episode: index, object: object}}, socket) do
     socket
-    |> assign(episode_objects: Map.put(socket.assigns.episode_objects, index, object))
+    |> assign(
+      episode: index,
+      progress: {0, elem(socket.assigns.progress, 1)},
+      episode_objects: Map.put(socket.assigns.episode_objects, index, object)
+    )
     |> push(nil, "episode #{index + 1}: #{object || "the scene's own object"}", :info)
   end
 
+  # A step of the episode being watched. Two messages can arrive out of order —
+  # the mailbox is not the worker's clock — and taking the last one written to
+  # would let the badge walk backwards inside an episode. The only legitimate
+  # restart is a new episode, which is a different message.
   defp handle_studio(
          {:step, %{line: text, step: step, frames: frames, episode: episode} = event},
          socket
        ) do
-    socket
-    |> push(step, text, :info)
-    |> assign(progress: {step + 1, elem(socket.assigns.progress, 1)})
-    |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
-    |> remember(episode, step, Map.get(event, :beliefs, %{}))
-    |> assign(centre: Map.get(event, :centre))
+    shown = elem(socket.assigns.progress, 0)
+
+    if episode == socket.assigns[:episode] and step + 1 < shown do
+      socket
+    else
+      socket
+      |> push(step, text, :info)
+      |> assign(progress: {step + 1, elem(socket.assigns.progress, 1)})
+      |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
+      |> remember(episode, step, Map.get(event, :beliefs, %{}))
+      |> assign(centre: Map.get(event, :centre))
+    end
   end
 
   defp handle_studio({:finished, _summary}, socket) do
@@ -1079,7 +1076,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         socket
         |> assign(
           status: record.status,
-          progress: steps_of_last_episode(record),
+          progress: progress_from(record, socket.assigns[:progress]),
           log_path: record.log_path,
           summary: if(record.summary == %{}, do: socket.assigns.summary, else: record.summary)
         )
@@ -1089,6 +1086,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
+  # Which step to show. A run that is still going is counted by its own step
+  # messages; the record is written at episode boundaries, so counting its log
+  # answers "the last episode that finished" — and putting that on screen twice a
+  # second is the counter that dived to nought and came back. Only the limit is
+  # re-read while the run is live; a run that has stopped is described by its
+  # record.
+  defp progress_from(%{status: "running", steps: limit}, {count, _old_limit}),
+    do: {count, limit}
+
+  defp progress_from(%{status: "running", steps: limit}, nil), do: {0, limit}
+  defp progress_from(record, _shown), do: steps_of_last_episode(record)
+
   # "step 2 of 12" is about the episode being run: every episode of a run starts
   # its step counter again, so counting a run's whole log against one episode's
   # budget would have the page claim step seven of three.
@@ -1096,6 +1105,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     case List.last(record.log) do
       nil -> {0, record.steps}
       last -> {Enum.count(record.log, &(&1["episode"] == last["episode"])), record.steps}
+    end
+  end
+
+  # The episode the record's log last reached, so the badge starts where the run
+  # is rather than at the first one.
+  defp last_episode(record) do
+    case List.last(record.log) do
+      nil -> 0
+      last -> last["episode"] || 0
     end
   end
 
@@ -1203,6 +1221,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
            run_id: first.id,
            status: "running",
            progress: {0, steps},
+           episode: 0,
            summary: nil,
            lines: [],
            log_path: first.log_path
@@ -1429,7 +1448,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           logging: Logging.open(opened.setup).notes,
           error: nil,
           needs: needs(opened),
-          missing: missing(opened)
+          missing: with_actions(missing(opened))
         )
 
       {:error, reason} ->
@@ -1520,7 +1539,49 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   defp unavailable(_setup, _world), do: ""
 
-  defp any_remedy?(needs, remedy), do: Enum.any?(needs, &(Prerequisites.remedy(&1) == remedy))
+  # A need is not always a download: the interpreter is configuration, and
+  # offering a download for it would be offering something that does not exist.
+  # The two findings the checks box already says as a missing need, dropped so a
+  # reader is not told the same thing twice in two boxes.
+  @said_as_a_need [:world_data_missing, :no_pretrained_memory]
+  defp checks(findings), do: Enum.reject(findings, &(&1.code in @said_as_a_need))
+
+  # Where the click for one need goes: the archive that fills its directory, the
+  # experiment that would train the model it names, or the page that lists what
+  # can be fetched.
+  defp with_actions(needs), do: Enum.map(needs, &Map.put(&1, :action, action_for(&1)))
+
+  defp action_for(%{kind: :models} = need) do
+    case trainer_for(Memory.name_of(need[:display] || need.path)) do
+      nil -> %{label: "prerequisites", href: "/prerequisites"}
+      experiment -> %{label: "train it", href: "/experiments/#{experiment}"}
+    end
+  end
+
+  defp action_for(%{path: path}) when is_binary(path) do
+    case Prerequisites.for_path(path) do
+      nil -> %{label: "prerequisites", href: "/prerequisites"}
+      prerequisite -> %{label: "download", href: "/prerequisites?fetch=#{prerequisite.id}"}
+    end
+  end
+
+  # Every missing thing has something to click. A need with no file of its own is
+  # configuration — an interpreter this application cannot import an engine from —
+  # and the page that says which interpreter it carries and what each needs is
+  # where that is answered.
+  defp action_for(_need), do: %{label: "what it needs", href: "/prerequisites"}
+
+  # The experiment that would produce a memory, if the catalogue has one: a
+  # config reading `dist_agent_5lm_2obj_train` is waiting for another run, not
+  # for a download, and naming that run is the whole answer to "why can this
+  # not start".
+  defp trainer_for(nil), do: nil
+
+  defp trainer_for(name) do
+    Catalog.experiments()
+    |> Enum.find(&(List.last(String.split(&1.name, "/")) == name))
+    |> then(&(&1 && &1.name))
+  end
 
   # Which files a run of this experiment reads before it steps, and which of
   # them are not here. A stand-in run reads nothing, so this is empty for one.
