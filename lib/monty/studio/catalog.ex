@@ -141,6 +141,40 @@ defmodule Monty.Studio.Catalog do
   end
 
   @doc """
+  The experiment that writes the memory of this name, if the catalogue has it.
+
+  A training run files what it learned under its own `run_name` (see
+  `Monty.Studio.Learned`), so a config that reads `surf_agent_1lm_2obj_train` is
+  waiting for the run named `surf_agent_1lm_2obj_train` — `tutorial/surf_agent_2obj_train`,
+  whose file is not called that. Matching the *file* name against the memory
+  would answer "nothing trains this" about a memory one press would produce.
+
+  The run name is the evidence, and it is the only evidence a catalogue entry
+  can offer: what makes an experiment train is its composed phases, and a list of
+  two hundred entries does not compose two hundred configs to answer one
+  question. A name two experiments share answers with the first of them, which is
+  what a reader pressing the button would have chosen anyway.
+  """
+  @spec trainer_for(String.t() | nil, keyword()) :: String.t() | nil
+  def trainer_for(name, opts \\ [])
+
+  def trainer_for(nil, _opts), do: nil
+  def trainer_for(name, _opts) when not is_binary(name), do: nil
+
+  def trainer_for(name, opts) do
+    experiments(opts)
+    |> Enum.find(&(run_name(&1) == name))
+    |> then(&(&1 && &1.name))
+  end
+
+  defp run_name(%{config: config}) do
+    case Map.get(config, "logging") do
+      %{"run_name" => name} when is_binary(name) and name != "" -> name
+      _unnamed -> nil
+    end
+  end
+
+  @doc """
   The options a group offers, sorted.
 
   `monty/learning_module/hypotheses_updater` and its siblings live one level

@@ -1552,9 +1552,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp with_actions(needs), do: Enum.map(needs, &Map.put(&1, :action, action_for(&1)))
 
   defp action_for(%{kind: :models} = need) do
-    case trainer_for(Memory.name_of(need[:display] || need.path)) do
-      nil -> %{label: "prerequisites", href: "/prerequisites"}
-      experiment -> %{label: "train it", href: "/experiments/#{experiment}"}
+    name = Memory.name_of(need[:display] || need.path)
+    release = Memory.release_of(need[:display] || need.path)
+
+    cond do
+      archive = Prerequisites.for_model(name, release) ->
+        %{label: "download", href: "/prerequisites?fetch=#{archive.id}"}
+
+      trainer = Catalog.trainer_for(name) ->
+        %{label: "train it", href: "/experiments/#{trainer}"}
+
+      true ->
+        %{label: "prerequisites", href: "/prerequisites"}
     end
   end
 
@@ -1570,18 +1579,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # and the page that says which interpreter it carries and what each needs is
   # where that is answered.
   defp action_for(_need), do: %{label: "what it needs", href: "/prerequisites"}
-
-  # The experiment that would produce a memory, if the catalogue has one: a
-  # config reading `dist_agent_5lm_2obj_train` is waiting for another run, not
-  # for a download, and naming that run is the whole answer to "why can this
-  # not start".
-  defp trainer_for(nil), do: nil
-
-  defp trainer_for(name) do
-    Catalog.experiments()
-    |> Enum.find(&(List.last(String.split(&1.name, "/")) == name))
-    |> then(&(&1 && &1.name))
-  end
 
   # Which files a run of this experiment reads before it steps, and which of
   # them are not here. A stand-in run reads nothing, so this is empty for one.

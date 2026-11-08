@@ -60,4 +60,21 @@ defmodule Monty.Studio.CatalogTest do
       assert experiment.config["n_train_epochs"] == 3
     end
   end
+
+  describe "which experiment writes a memory" do
+    test "is the run whose name the memory carries, not the file that configures it" do
+      # `tutorial/surf_agent_2obj_train` files what it learns as
+      # `surf_agent_1lm_2obj_train` — the name the evaluation config reads. A
+      # lookup by file name would answer "nothing trains this" about a memory one
+      # press would produce.
+      assert Catalog.trainer_for("surf_agent_1lm_2obj_train") == "tutorial/surf_agent_2obj_train"
+    end
+
+    test "is nobody when no run is named after the memory" do
+      # The models Monty published come out of an archive; no config here trains
+      # one, and the page that offers the archives is where a reader looks.
+      assert Catalog.trainer_for("pretrained_ycb_v14") == nil
+      assert Catalog.trainer_for(nil) == nil
+    end
+  end
 end

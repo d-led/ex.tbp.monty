@@ -28,7 +28,8 @@ defmodule Monty.Prerequisites do
           required(:target) => String.t(),
           optional(:sha256) => String.t() | nil,
           optional(:extract) => boolean(),
-          optional(:unpacks_to) => String.t() | nil
+          optional(:unpacks_to) => String.t() | nil,
+          optional(:provides) => [String.t()]
         }
 
   @doc "Every configured prerequisite."
@@ -41,6 +42,29 @@ defmodule Monty.Prerequisites do
   @doc "One prerequisite by id."
   @spec get(String.t(), Path.t()) :: prerequisite() | nil
   def get(id, manifest \\ manifest_path()), do: Enum.find(all(manifest), &(&1.id == id))
+
+  @doc """
+  The archive that carries a memory, if any does.
+
+  A model archive unpacks a release — `pretrained_ycb_v14` and the models trained
+  from it — so the release is the directory, and `provides` is the list of models
+  the archive is known to hold. Two things follow from knowing it: a config whose
+  memory is inside an archive is told to fetch one, and a config whose memory no
+  archive carries — the model a tutorial's own training run writes — is told to
+  train it instead of being sent to a page of downloads that cannot help.
+  """
+  @spec for_model(String.t() | nil, String.t() | nil, Path.t()) :: prerequisite() | nil
+  def for_model(name, release, manifest \\ manifest_path())
+
+  def for_model(nil, _release, _manifest), do: nil
+  def for_model(_name, nil, _manifest), do: nil
+
+  def for_model(name, release, manifest) do
+    Enum.find(all(manifest), fn prerequisite ->
+      Map.get(prerequisite, :unpacks_to) == release and
+        name in Map.get(prerequisite, :provides, [])
+    end)
+  end
 
   @doc """
   The absolute path a prerequisite belongs at.
@@ -627,7 +651,10 @@ defmodule Monty.Prerequisites do
       # An archive is unpacked where it lands: a prerequisite Monty's docs say
       # to unpack is not in place until it is unpacked.
       extract: Map.get(entry, "extract", false),
-      unpacks_to: Map.get(entry, "unpacks_to")
+      unpacks_to: Map.get(entry, "unpacks_to"),
+      # Which models the archive holds, when it is a model archive. Absent means
+      # nobody wrote the list down, which is not the same as an empty one.
+      provides: Map.get(entry, "provides", [])
     }
   end
 end

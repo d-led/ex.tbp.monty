@@ -153,6 +153,10 @@ defmodule Mix.Tasks.Monty.RunTest do
       directory = Monty.Studio.Learned.dir(run.id)
       assert output =~ "the memory learning_module_0 learned is in #{directory}"
 
+      # A training episode matches nothing, so the memory it built is what it has
+      # to show: the object it explored and the nodes behind it.
+      assert output =~ "the memory now holds 1 object and "
+
       assert [file] =
                Path.wildcard(Path.join([directory, Monty.Studio.Learned.release(), "*.jsonl.gz"]))
 

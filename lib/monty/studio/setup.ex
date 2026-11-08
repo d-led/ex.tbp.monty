@@ -32,6 +32,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.ModuleMap
   alias Monty.ModuleMap.StandIns
   alias Monty.Prerequisites
+  alias Monty.Studio.Catalog
   alias Monty.Studio.Finding
   alias Monty.Studio.Memory
 
@@ -2160,10 +2161,34 @@ defmodule Monty.Studio.Setup do
             :error,
             :no_pretrained_memory,
             "No memory this application can read for #{name}, and a run without " <>
-              "one cannot recognise any object. Fetch it at /prerequisites.",
+              "one cannot recognise any object. #{where_memory_comes_from(name, release)}",
             "model_name_or_path"
           )
+          |> with_memory_link(name, release)
         ]
+    end
+  end
+
+  # Where the memory comes from, said only when it is known. A model an archive
+  # carries is a download; a model a training run writes is not, and sending that
+  # reader to the prerequisites page is a link to a file that is not there.
+  defp where_memory_comes_from(name, release) do
+    cond do
+      archive = Prerequisites.for_model(name, release) ->
+        "It is in #{archive.title}."
+
+      trainer = Catalog.trainer_for(name) ->
+        "It is what a run of #{trainer} writes — train that first."
+
+      true ->
+        "No archive carries it and no experiment here trains it."
+    end
+  end
+
+  defp with_memory_link(finding, name, release) do
+    case Prerequisites.for_model(name, release) do
+      nil -> finding
+      archive -> Finding.with_link(finding, "Download it", "/prerequisites?fetch=#{archive.id}")
     end
   end
 

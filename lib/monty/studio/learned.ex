@@ -20,6 +20,7 @@ defmodule Monty.Studio.Learned do
   this.
   """
 
+  alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Studio.{Artifacts, Memory}
 
   @release "trained"
@@ -55,6 +56,58 @@ defmodule Monty.Studio.Learned do
   @doc "Where a run's memories are written."
   @spec dir(binary()) :: Path.t()
   def dir(run_id), do: Path.join(Artifacts.dir(run_id), "memory")
+
+  @doc """
+  What the memories hold: the objects they know, and the nodes behind them.
+
+  This is the one number a training run has to show for itself. A matching run is
+  judged by evidence climbing per object; a training run matches nothing and
+  reports no evidence at all — what changes as it steps is the memory, so the
+  memory is what a reader is told about. It costs nothing extra here: the runner
+  has the memories in hand at the end of a training episode anyway, and copying
+  them out is what `Run.memories/1` charges for.
+
+  A module that keeps no graph memory is not counted: it holds nothing.
+  """
+  @spec size(%{optional(term()) => term()}) :: %{
+          objects: non_neg_integer(),
+          nodes: non_neg_integer()
+        }
+  def size(memories) do
+    graphs = for {_module_id, %GraphMemory{} = memory} <- memories, do: memory
+
+    objects = graphs |> Enum.flat_map(&GraphMemory.get_memory_ids/1) |> Enum.uniq()
+
+    nodes =
+      graphs
+      |> Enum.flat_map(fn memory ->
+        for graph_id <- GraphMemory.get_memory_ids(memory),
+            do: GraphMemory.get_num_nodes_in_graph(memory, graph_id, nil)
+      end)
+      |> Enum.sum()
+
+    %{objects: length(objects), nodes: nodes}
+  end
+
+  @doc """
+  The same, as the sentence a run says after a training episode.
+
+  Words rather than numbers only, because this is what a person reads while
+  watching a run learn: "2 objects and 3 456 nodes" answers what is happening to
+  it, where "nodes: 3456" is a field.
+  """
+  @spec growth_line(%{optional(term()) => term()}) :: String.t()
+  def growth_line(memories) do
+    %{objects: objects, nodes: nodes} = size(memories)
+
+    "the memory now holds #{count(objects, "object")} and #{count(nodes, "node")}"
+  end
+
+  defp count(1, noun), do: "1 " <> noun
+
+  defp count(number, noun) do
+    number |> Humanizer.delimit() |> Kernel.<>(" " <> noun <> "s")
+  end
 
   defp trains?(plan), do: Enum.any?(plan, fn {mode, _epochs} -> mode == :train end)
 

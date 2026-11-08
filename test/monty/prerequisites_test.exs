@@ -406,4 +406,31 @@ defmodule Monty.PrerequisitesTest do
     File.chmod!(path, 0o755)
     path
   end
+
+  describe "which archive carries a memory" do
+    test "is the archive that unpacks the release and lists the model" do
+      # `pretrained_ycb_v14` is the directory the archive unpacks, and the models
+      # inside it are the ones Monty published — so a config naming one of them
+      # is a download away.
+      assert %{id: "pretrained_ycb_v14"} =
+               Prerequisites.for_model("surf_agent_1lm_10distinctobj", "pretrained_ycb_v14")
+
+      assert %{id: "pretrained_compositional_objects_v8"} =
+               Prerequisites.for_model(
+                 "supervised_pre_training_cows_large_compositional",
+                 "pretrained_compositional_objects_v8"
+               )
+    end
+
+    test "is nobody for a memory no archive lists" do
+      # The tutorial's evaluation config reads what its own training run writes:
+      # there is no archive to fetch, and the page must not pretend otherwise.
+      assert Prerequisites.for_model("surf_agent_1lm_2obj_train", "projects") == nil
+
+      # A model in the right release that the archive does not hold is the same
+      # answer: the archive carries the models it was published with.
+      assert Prerequisites.for_model("a_model_nobody_exported", "pretrained_ycb_v14") == nil
+      assert Prerequisites.for_model(nil, "pretrained_ycb_v14") == nil
+    end
+  end
 end

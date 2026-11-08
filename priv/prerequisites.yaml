@@ -70,6 +70,19 @@ prerequisites:
     target: pretrained_ycb_v14.tgz
     extract: true
     unpacks_to: pretrained_ycb_v14
+    # The models inside the archive, so a config that names one of them is sent
+    # here and a config that names a model no archive carries is sent to the run
+    # that trains it. Read off the export this release produces
+    # (`priv/monty/libraries/pretrained_ycb_v14`).
+    provides:
+      - supervised_pre_training_base
+      - supervised_pre_training_5lms
+      - supervised_pre_training_5lms_all_objects
+      - supervised_pre_training_10distinctobj_vocus2
+      - surf_agent_1lm_10distinctobj
+      - surf_agent_1lm_10similarobj
+      - surf_agent_1lm_77obj
+      - surf_agent_1lm_numenta_lab_obj
 
   # Not what a run needs: the recorded episodes in `test/fixtures` were made
   # with this release (docs/validation.md), so replaying them — the parity tests
@@ -87,6 +100,14 @@ prerequisites:
     target: pretrained_ycb_v10.tgz
     extract: true
     unpacks_to: pretrained_ycb_v10
+    provides:
+      - supervised_pre_training_base
+      - supervised_pre_training_5lms
+      - supervised_pre_training_5lms_all_objects
+      - surf_agent_1lm_10distinctobj
+      - surf_agent_1lm_10similarobj
+      - surf_agent_1lm_77obj
+      - surf_agent_1lm_numenta_lab_obj
 
   # The compositional objects Monty's cows benchmarks step — the 3-D primitives
   # with stickers that the family recognises a composition of. Two archives: the
@@ -128,3 +149,11 @@ prerequisites:
     target: pretrained_compositional_objects_v8.tgz
     extract: true
     unpacks_to: pretrained_compositional_objects_v8
+    provides:
+      - supervised_pre_training_cows_3d_children
+      - supervised_pre_training_cows_large_2d_children
+      - supervised_pre_training_cows_large_compositional
+      - supervised_pre_training_cows_large_monolithic
+      - supervised_pre_training_cows_small_2d_children
+      - supervised_pre_training_cows_small_compositional
+      - supervised_pre_training_cows_small_monolithic

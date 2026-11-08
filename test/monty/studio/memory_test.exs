@@ -161,7 +161,7 @@ defmodule Monty.Studio.MemoryTest do
       assert Setup.valid?(%{setup | findings: Setup.memory_findings(setup)})
     end
 
-    test "refuses a run when no release exports the model, and says where to fetch it" do
+    test "refuses a run when no release exports the model, and says a run writes it" do
       setup = %Setup{
         world: :mujoco,
         model_name_or_path: monty_path("pretrained_ycb_v13", "a_model_nobody_exported")
@@ -172,9 +172,28 @@ defmodule Monty.Studio.MemoryTest do
 
       assert message =~ "a_model_nobody_exported"
       assert message =~ "cannot recognise any object"
-      assert message =~ "/prerequisites"
+
+      # The prerequisites page holds the archives Monty published. A model no
+      # archive carries is not on that page, and sending a reader there is a
+      # link to a file that is not there.
+      assert message =~ "No archive carries it and no experiment here trains it"
+      refute message =~ "prerequisites"
 
       refute Setup.valid?(%{setup | findings: Setup.memory_findings(setup)})
+    end
+
+    test "names the experiment whose run writes the memory a config reads" do
+      # `surf_agent_2obj_eval` reads what `surf_agent_2obj_train` writes, and the
+      # memory is named after the run — not after the config's file.
+      setup = %Setup{
+        world: :mujoco,
+        model_name_or_path: monty_path("pretrained_ycb_v14", "surf_agent_1lm_2obj_train")
+      }
+
+      assert [%{code: :no_pretrained_memory, message: message}] = Setup.memory_findings(setup)
+
+      assert message =~ "tutorial/surf_agent_2obj_train"
+      assert message =~ "train that first"
     end
   end
 

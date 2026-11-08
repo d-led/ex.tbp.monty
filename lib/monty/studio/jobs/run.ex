@@ -382,7 +382,11 @@ defmodule Monty.Studio.Jobs.Run do
         state.mode == :train ->
           log_statistics(run_id, state.logging, run)
           conclusion = Run.conclusion(run)
-          {conclusion, learned(run_id, run, state.memories)}
+          memories = learned(run_id, run, state.memories)
+          # A matching run is judged by evidence climbing per object; a training
+          # run matches nothing, so what it has to show is the memory it built.
+          say(run_id, Learned.growth_line(memories))
+          {conclusion, memories}
 
         true ->
           # An evaluation episode writes nothing, and this reads nothing either:

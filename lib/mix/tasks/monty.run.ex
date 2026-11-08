@@ -191,6 +191,14 @@ defmodule Mix.Tasks.Monty.Run do
       first_seen: last_run.first_seen
     }
 
+    # A training episode has nothing to recognise, so what it has to show for
+    # itself is the memory it just built.
+    if scope.mode == :train do
+      unless opts[:quiet] do
+        Mix.shell().info(Monty.Studio.Learned.growth_line(carried.memories))
+      end
+    end
+
     Monty.Studio.Run.stop(last_run)
 
     # The episode is what a run has to show for itself: the steps of an episode
