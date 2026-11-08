@@ -2195,20 +2195,20 @@ defmodule Monty.Studio.Setup do
   # re-export the model would be asking them to check out this repository — the
   # same page, in a container, has no `scripts/` to run.
   defp another_release(name, release) do
-    exported = list(Memory.releases_for(name))
+    exported = Memory.releases_for(name)
 
     # `trained` is not a Monty release: it is what a run of this application
     # files what it learned under, and the path the config names
     # (`…/projects/<run>/pretrained`) is Monty's own output directory, whose
-    # second-to-last segment is a folder rather than a release. Comparing the two
-    # would read as nonsense, so this case says what happened instead.
-    if Memory.releases_for(name) == [Learned.release()] do
-      "It learns from the memory a run here trained (#{Learned.release()}). The path this " <>
-        "config names is Monty's output directory, which this machine does not have. " <>
+    # second-to-last segment is a folder rather than a release. Naming that path
+    # answers a question nobody asked; naming the file it *will* read answers
+    # the one they did.
+    if exported == [Learned.release()] do
+      "It learns from the memory a run here trained: #{library_file(name)}. " <>
         "Nothing to download or train: run it."
     else
-      "It learns from #{exported}'s graphs, not from #{release}'s. This config names " <>
-        "the memory #{release} trained; #{exported} is what this installation has " <>
+      "It learns from #{list(exported)}'s graphs, not from #{release}'s. This config names " <>
+        "the memory #{release} trained; #{list(exported)} is what this installation has " <>
         "exported for #{name}.#{unexported(name, release)} The run works — its numbers " <>
         "are the ones those graphs give."
     end
@@ -2219,6 +2219,14 @@ defmodule Monty.Studio.Setup do
 
   defp list(many) do
     Enum.map_join(Enum.drop(many, -1), ", ", & &1) <> " and " <> List.last(many)
+  end
+
+  # The library file, relative to the library tree: `trained/<name>.jsonl.gz`.
+  # The absolute path an installed app has runs through `_build` or a release
+  # directory, which is not a name a person recognises — this is.
+  defp library_file(name) do
+    Memory.path_for(name, Learned.release())
+    |> Path.relative_to(Memory.libraries_dir())
   end
 
   # The release this machine has but nobody exported to the format this

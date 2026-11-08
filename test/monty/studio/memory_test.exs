@@ -199,8 +199,13 @@ defmodule Monty.Studio.MemoryTest do
       assert [%{level: :warning, code: :memory_from_another_release, message: message}] =
                Setup.memory_findings(setup)
 
-      assert message =~ "a run here trained"
-      refute message =~ "projects trained"
+      # The file it will read, not the path the config names: the second is
+      # Monty's output directory, and a reader who wanted to know which graphs
+      # they get was being told about a directory that is not here.
+      assert message =~ "trained/#{name}.jsonl.gz"
+      assert message =~ "Nothing to download or train"
+      refute message =~ "projects"
+
       assert Setup.valid?(%{setup | findings: Setup.memory_findings(setup)})
     end
 

@@ -13,11 +13,13 @@ defmodule Monty.Studio.Learned do
   runner says the sentences this returns in its own voice: a worker appends them
   to the run's log, the command line prints them.
 
-  It goes in the run's own directory rather than in the library tree: a library
-  is named by the experiment that loads it (`Monty.Studio.Memory.load/3`), and a
-  run's output is named by the run. `memory/trained/<name>.jsonl.gz` is the
-  format the pretrained libraries are in, so anything that can read one can read
-  this.
+  It goes in two places: the run's own directory, so what this run left behind is
+  still recognisable as this run's, and the library tree, because that is where a
+  later config looks — a run that trained is only useful if the memory it built is
+  one the next config can load. Both are in the format the pretrained libraries
+  are in, so anything that can read one can read the other, and a model of several
+  modules is one library with an index per module rather than one library a module
+  (`Memory.save_all/4`).
   """
 
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
@@ -57,11 +59,7 @@ defmodule Monty.Studio.Learned do
   def keep(nil, _opened, _plan, _memories), do: []
 
   def keep(run_id, opened, plan, memories) do
-    if trains?(plan) do
-      Enum.flat_map(memories, &keep_one(run_id, opened, &1))
-    else
-      []
-    end
+    if trains?(plan), do: keep_run(run_id, opened, memories), else: []
   end
 
   @doc "Where a run's memories are written."
@@ -125,36 +123,58 @@ defmodule Monty.Studio.Learned do
   # A module that keeps no graph memory — the stand-in learning module a config
   # without an evidence model gets — has nothing to write, and the `shell`
   # finding already says so.
-  defp keep_one(_run_id, _opened, {_module_id, :none}), do: []
+  defp keep_run(run_id, opened, memories) do
+    learned =
+      opened.setup.learning_modules
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {module, index} ->
+        case Map.get(memories, module.id) do
+          %GraphMemory{} = memory -> [{index, module.id, memory}]
+          _none -> []
+        end
+      end)
 
-  defp keep_one(run_id, opened, {module_id, memory}) do
-    name = library_name(opened, module_id)
+    case learned do
+      [] -> []
+      learned -> write(run_id, library_name(opened), learned)
+    end
+  end
 
-    with :ok <- Memory.save(memory, name, @release, dir(run_id)),
-         :ok <- Memory.save(memory, name, @release, Memory.libraries_dir()) do
+  defp write(run_id, name, learned) do
+    indexed = Enum.map(learned, fn {index, _module_id, memory} -> {index, memory} end)
+
+    with :ok <- Memory.save_all(indexed, name, @release, dir(run_id)),
+         :ok <- Memory.save_all(indexed, name, @release, Memory.libraries_dir()) do
       [
-        "the memory #{module_id} learned is in #{dir(run_id)}, and is the library " <>
-          "#{name} (#{@release})"
+        "#{subject(learned)} is the library #{name} (#{@release}), " <>
+          "in #{dir(run_id)} and in the libraries"
       ]
     else
       {:error, reason} ->
         # A memory that could not be written is worth a sentence, not a crash: the
         # run itself concluded, and what is lost is what comes after it.
-        ["the memory #{module_id} learned could not be written: #{inspect(reason)}"]
+        ["the memory #{name} could not be written: #{inspect(reason)}"]
     end
+  end
+
+  # One module's memory is that module's; several are the model's, and the model
+  # is what the file is named after.
+  defp subject([{_index, module_id, _memory}]), do: "the memory #{module_id} learned"
+
+  defp subject(learned) do
+    "the memory #{count(length(learned), "module")} learned"
   end
 
   # The name the run's own memory is filed under: the model its config names,
   # which is what a later run of that config would ask for, and the run's own
-  # name when it names none. Two modules in one run are two memories, so the
-  # module id keeps them apart.
-  defp library_name(opened, module_id) do
-    base =
-      Memory.name_of(opened.setup.model_name_or_path) ||
-        sanitise(opened.setup.logging.run_name) || sanitise(opened.name) ||
-        "monty-memory"
-
-    if length(opened.setup.learning_modules) > 1, do: base <> "-" <> module_id, else: base
+  # name when it names none. The model's name and not the module's, because that
+  # is the name the *next* config asks for: a run that filed
+  # `dist_agent_5lm_2obj_train-learning_module_0` … `_4` left five libraries the
+  # evaluation config of the same tutorial never asked for.
+  defp library_name(opened) do
+    Memory.name_of(opened.setup.model_name_or_path) ||
+      sanitise(opened.setup.logging.run_name) || sanitise(opened.name) ||
+      "monty-memory"
   end
 
   # A file name, from a config's own words: anything that is not a letter, a

@@ -10,6 +10,7 @@ defmodule Monty.Studio.LearnedTest do
   use ExUnit.Case, async: false
 
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
+  alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Studio.{Learned, Memory}
   alias Monty.Test.Tmp
 
@@ -27,35 +28,49 @@ defmodule Monty.Studio.LearnedTest do
   end
 
   describe "a run that trained" do
-    test "keeps one memory per learning module, under the run's own name" do
+    test "keeps one library for the model, holding a memory a module" do
+      # A heterarchy's model is five memories and one name: a config that reads
+      # `…/dist_agent_5lm_2obj_train/pretrained/` asks for the model, and the
+      # evaluation config of this tutorial is exactly such a config. Five files
+      # named after each module are five libraries nothing asks for.
       {:ok, opened} = Monty.Studio.open(@training)
       run_id = Ecto.UUID.generate()
 
-      assert length(Learned.keep(run_id, opened, [{:train, 14}], memories(opened))) == 5
+      assert [line] = Learned.keep(run_id, opened, [{:train, 14}], memories(opened))
 
       files =
         Path.wildcard(Path.join([Learned.dir(run_id), Learned.release(), "*.jsonl.gz"]))
         |> Enum.map(&Path.basename/1)
-        |> Enum.sort()
 
-      assert files == [
-               "dist_agent_5lm_2obj_train-learning_module_0.jsonl.gz",
-               "dist_agent_5lm_2obj_train-learning_module_1.jsonl.gz",
-               "dist_agent_5lm_2obj_train-learning_module_2.jsonl.gz",
-               "dist_agent_5lm_2obj_train-learning_module_3.jsonl.gz",
-               "dist_agent_5lm_2obj_train-learning_module_4.jsonl.gz"
-             ]
-    end
-
-    test "says where each memory went, in a line the runner says in its own voice" do
-      {:ok, opened} = Monty.Studio.open(@training)
-      run_id = Ecto.UUID.generate()
-
-      assert [line | _rest] = Learned.keep(run_id, opened, [{:train, 1}], memories(opened))
+      assert files == ["dist_agent_5lm_2obj_train.jsonl.gz"]
 
       assert line ==
-               "the memory learning_module_0 learned is in #{Learned.dir(run_id)}, " <>
-                 "and is the library dist_agent_5lm_2obj_train-learning_module_0 (trained)"
+               "the memory 5 modules learned is the library dist_agent_5lm_2obj_train " <>
+                 "(trained), in #{Learned.dir(run_id)} and in the libraries"
+    end
+
+    test "writes the index of each module, so a module reads back its own memory" do
+      {:ok, opened} = Monty.Studio.open(@training)
+      run_id = Ecto.UUID.generate()
+      [%{id: first}, %{id: second} | _rest] = opened.setup.learning_modules
+
+      kept =
+        memories(opened)
+        |> Map.put(first, remembered("mug"))
+        |> Map.put(second, remembered("bowl"))
+
+      Learned.keep(run_id, opened, [{:train, 1}], kept)
+
+      name = "dist_agent_5lm_2obj_train"
+
+      assert {:ok, first_memory} =
+               Memory.load_module(name, Learned.release(), 0, Learned.dir(run_id))
+
+      assert {:ok, second_memory} =
+               Memory.load_module(name, Learned.release(), 1, Learned.dir(run_id))
+
+      assert GraphMemory.get_memory_ids(first_memory) == ["mug"]
+      assert GraphMemory.get_memory_ids(second_memory) == ["bowl"]
     end
 
     test "files it where a config that reads the memory will find it", %{libraries: libraries} do
@@ -66,12 +81,23 @@ defmodule Monty.Studio.LearnedTest do
       {:ok, opened} = Monty.Studio.open(@training)
       run_id = Ecto.UUID.generate()
 
-      Learned.keep(run_id, opened, [{:train, 1}], memories(opened))
+      # What a training episode leaves: every module knows the objects it saw.
+      learned =
+        opened.setup.learning_modules
+        |> Enum.with_index(fn module, index -> {module.id, remembered("object_#{index}")} end)
+        |> Map.new()
 
-      name = "dist_agent_5lm_2obj_train-learning_module_0"
+      Learned.keep(run_id, opened, [{:train, 1}], learned)
+
+      name = "dist_agent_5lm_2obj_train"
 
       assert Memory.releases_for(name, libraries) == [Learned.release()]
-      assert {:ok, _memory} = Memory.load_module(name, Learned.release(), 0, libraries)
+      assert Memory.modules(name, Learned.release(), libraries) == 5
+
+      for index <- 0..4 do
+        assert {:ok, memory} = Memory.load_module(name, Learned.release(), index, libraries)
+        assert GraphMemory.get_memory_ids(memory) == ["object_#{index}"]
+      end
     end
   end
 
@@ -105,5 +131,14 @@ defmodule Monty.Studio.LearnedTest do
 
   defp memories(opened) do
     Map.new(opened.setup.learning_modules, &{&1.id, GraphMemory.new()})
+  end
+
+  # A memory that knows one object, so which module a record belongs to is
+  # readable from what the file holds.
+  defp remembered(object_id) do
+    positions = [[0.0, 0.0, 0.0], [0.01, 0.0, 0.0]]
+    {:ok, model} = GraphObjectModel.build_model(GraphObjectModel.new(object_id), positions, %{})
+
+    GraphMemory.add_graph_to_memory(GraphMemory.new(), %{"rgba" => model}, object_id)
   end
 end

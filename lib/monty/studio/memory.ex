@@ -258,10 +258,34 @@ defmodule Monty.Studio.Memory do
   continues the training, not to the graph (see `Monty.Studio.Setup.memories/1`).
   """
   @spec save(GraphMemory.t(), String.t(), String.t(), Path.t()) :: :ok | {:error, term()}
-  def save(%GraphMemory{} = memory, name, release, dir \\ libraries_dir()) do
+  def save(%GraphMemory{} = memory, name, release, dir \\ libraries_dir()),
+    do: save_all([{0, memory}], name, release, dir)
+
+  @doc """
+  Writes several modules' memories as one library — a model, not a module.
+
+  A heterarchy's model *is* five memories, and Monty names the model once: a
+  config reads `…/dist_agent_5lm_2obj_train/pretrained/`, a directory holding one
+  file per module. A library file here holds the same thing — one record a graph,
+  each carrying the index of the module it belongs to — which is what
+  `load_module/4` reads one index at a time and `modules/3` counts.
+
+  One file rather than one file per module, because the name a config asks for is
+  the *model's*: a training run that filed
+  `dist_agent_5lm_2obj_train-learning_module_0` … `_4` left five libraries no
+  config asks for, and the evaluation config of the tutorial found none of them.
+  """
+  @spec save_all([{non_neg_integer(), GraphMemory.t()}], String.t(), String.t(), Path.t()) ::
+          :ok | {:error, term()}
+  def save_all(indexed, name, release, dir \\ libraries_dir()) do
     with :ok <- check_name(name),
          :ok <- check_release(release) do
-      write(path_for(name, release, dir), records_of(memory))
+      records =
+        Enum.flat_map(indexed, fn {index, memory} ->
+          Enum.map(records_of(memory), &Map.put(&1, "lm_index", index))
+        end)
+
+      write(path_for(name, release, dir), records)
     end
   end
 

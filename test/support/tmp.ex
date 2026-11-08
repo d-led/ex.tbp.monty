@@ -109,6 +109,49 @@ defmodule Monty.Test.Tmp do
     ExUnit.Callbacks.on_exit(fn -> restore_app_env(key, previous) end)
   end
 
+  @doc """
+  A library tree a test may write into, answering what the installed one answers.
+
+  A run that trains files its memory in the library tree, and a test that trained
+  into the checkout's tree would leave libraries the next config to name one of
+  those models would trust. Pointing the suite at an empty tree instead is the
+  opposite mistake: a config whose model this application ships would then be
+  asked to recognise objects from no memory at all.
+
+  So every release the checkout carries is a directory of symlinks to the same
+  files — 185 MB is not copied — and `trained/` is a real, empty directory: that
+  is the one release a run writes (`Monty.Studio.Learned` files every memory it
+  keeps under it), so a test's memory lands in the temporary tree and a memory
+  the application ships is never written through a link.
+  """
+  @spec libraries(String.t()) :: Path.t()
+  def libraries(prefix \\ "libraries") do
+    # Before the setting moves: what the checkout carries is what is mirrored.
+    carried = carried_libraries()
+    dir = env_dir(prefix, :monty_libraries_dir)
+    trained = Path.join(dir, "trained")
+
+    File.mkdir_p!(trained)
+
+    for release_dir <- Path.wildcard(Path.join(carried, "*")),
+        File.dir?(release_dir),
+        release = Path.basename(release_dir),
+        release != "trained",
+        file <- Path.wildcard(Path.join(release_dir, "*")) do
+      link = Path.join([dir, release, Path.basename(file)])
+
+      File.mkdir_p!(Path.dirname(link))
+      File.ln_s(Path.expand(file), link)
+    end
+
+    dir
+  end
+
+  defp carried_libraries do
+    Application.get_env(:ex_tbp_monty, :monty_libraries_dir) ||
+      Path.join(:code.priv_dir(:ex_tbp_monty), "monty/libraries")
+  end
+
   defp restore_app_env(key, {:ok, value}), do: Application.put_env(:ex_tbp_monty, key, value)
   defp restore_app_env(key, :error), do: Application.delete_env(:ex_tbp_monty, key)
 

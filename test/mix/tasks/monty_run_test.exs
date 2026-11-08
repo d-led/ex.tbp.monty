@@ -7,6 +7,12 @@ defmodule Mix.Tasks.Monty.RunTest do
   setup do
     Mix.shell(Mix.Shell.Process)
 
+    # `monty.run` keeps the memory a training run learned, and keeping it means
+    # the library tree too — writable and temporary here, holding what the
+    # application ships, so a run of a config with a pretrained model still has
+    # its graphs.
+    libraries = Tmp.libraries("run-task-libraries")
+
     # A run history is what this module asserts about, so it starts empty: the
     # table survives between local runs, and "the database is untouched" is a
     # claim about a database nothing else has written to.
@@ -151,7 +157,10 @@ defmodule Mix.Tasks.Monty.RunTest do
 
       run = recorded_run()
       directory = Monty.Studio.Learned.dir(run.id)
-      assert output =~ "the memory learning_module_0 learned is in #{directory}"
+
+      assert output =~
+               "the memory learning_module_0 learned is the library surf_agent_2obj_unsupervised " <>
+                 "(trained), in #{directory}"
 
       # A training episode matches nothing, so the memory it built is what it has
       # to show: the object it explored and the nodes behind it.

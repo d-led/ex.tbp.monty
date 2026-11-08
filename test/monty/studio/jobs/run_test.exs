@@ -22,7 +22,12 @@ defmodule Monty.Studio.Jobs.RunTest do
   setup do
     root = Tmp.env_dir("studio-runs", :studio_artifacts_dir)
 
-    {:ok, root: root}
+    # A run that trains files its memory in the library tree as well as in its
+    # own directory, and the tree is where a config looks — so it is writable and
+    # temporary here, while still holding the libraries this application ships.
+    libraries = Tmp.libraries("studio-runs-libraries")
+
+    {:ok, root: root, libraries: libraries}
   end
 
   defp start_run(steps), do: start_run(@experiment, steps)
@@ -115,7 +120,7 @@ defmodule Monty.Studio.Jobs.RunTest do
 
       assert {:ok, closed} = perform(record)
       assert closed.status == "finished"
-      assert File.read!(closed.log_path) =~ "the memory learning_module_0 learned is in"
+      assert File.read!(closed.log_path) =~ "the memory learning_module_0 learned is the library"
 
       libraries = Path.join(Artifacts.dir(closed.id), "memory")
       assert [file] = Path.wildcard(Path.join(libraries, "**/*.jsonl.gz"))
@@ -170,7 +175,7 @@ defmodule Monty.Studio.Jobs.RunTest do
       {:ok, record} = RunHistory.start(RunLog.attributes(opened, 30, 0, 1, 1))
       assert {:ok, closed} = perform(record)
 
-      assert File.read!(closed.log_path) =~ "the memory learning_module_0 learned is in"
+      assert File.read!(closed.log_path) =~ "the memory learning_module_0 learned is the library"
 
       assert [file] =
                Path.wildcard(
