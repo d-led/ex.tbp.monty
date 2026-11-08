@@ -397,6 +397,8 @@ defmodule Monty.Studio.Setup do
       Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM,
     "tbp.monty.frameworks.models.displacement_matching.DisplacementGraphLM" =>
       Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM,
+    "tbp.monty.frameworks.models.feature_location_matching.FeatureGraphLM" =>
+      Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM,
     "tbp.monty.frameworks.models.graph_matching.GraphLM" =>
       Monty.Frameworks.Models.GraphMatching.GraphLM
   }

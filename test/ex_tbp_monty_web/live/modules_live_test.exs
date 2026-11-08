@@ -54,9 +54,9 @@ defmodule ExTbpMontyWeb.ModulesLiveTest do
     html =
       view
       |> element("#modules-filter")
-      |> render_change(%{"q" => "graphlm planned"})
+      |> render_change(%{"q" => "twodsensormodule planned"})
 
-    assert html =~ "GraphLM"
+    assert html =~ "TwoDSensorModule"
     refute html =~ "CameraSM"
     assert html =~ "classes"
     assert_patch(view)
@@ -76,11 +76,11 @@ defmodule ExTbpMontyWeb.ModulesLiveTest do
   end
 
   test "opens on a filtered view somebody sent", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/modules?q=graphlm&status=planned")
+    {:ok, view, _html} = live(conn, ~p"/modules?q=twodsensormodule&status=planned")
 
     html = render(view)
 
-    assert html =~ "GraphLM"
+    assert html =~ "TwoDSensorModule"
     refute html =~ "CameraSM"
   end
 

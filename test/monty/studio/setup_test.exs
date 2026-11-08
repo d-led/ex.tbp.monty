@@ -354,9 +354,9 @@ defmodule Monty.Studio.SetupTest do
 
   describe "what is ported" do
     test "an experiment built from classes this port has not written is refused" do
-      # `FeatureGraphLM` is the example: a learning module whose matching is not
-      # written here, in an experiment that is otherwise MuJoCo's own.
-      setup = setup_for("test/graph_learning/feature_pred_off_object")
+      # `TwoDSensorModule` is the example: the sensor module the cows family
+      # reads 2-D datasets with, and nothing here stands in for it.
+      setup = setup_for("base_infer_cows_small_monolithic")
 
       assert [stand_ins] =
                for(%{code: :modules_not_ported} = finding <- setup.findings, do: finding)
@@ -365,7 +365,7 @@ defmodule Monty.Studio.SetupTest do
       # has not written, so the page disables the run and the task refuses it.
       assert stand_ins.level == :error
       assert stand_ins.message =~ "cannot run here"
-      assert stand_ins.message =~ "FeatureGraphLM"
+      assert stand_ins.message =~ "TwoDSensorModule"
       refute stand_ins.message =~ "MuJoCoSimulator"
 
       refute Setup.valid?(setup)

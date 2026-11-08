@@ -1644,12 +1644,14 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/models/feature_location_matching.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/models/feature_location_matching/feature_graph_lm.ex",
           elixir: "Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM",
           python: "FeatureGraphLM"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/models/feature_location_matching/feature_graph_memory.ex",
           elixir: "Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphMemory",
           python: "FeatureGraphMemory"
         }

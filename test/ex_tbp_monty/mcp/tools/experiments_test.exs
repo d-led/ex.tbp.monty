@@ -184,13 +184,13 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                  %{
                    "attributes" => %{
                      "name" => "mcp_preview",
-                     "base" => "test/graph_learning/feature_pred_off_object"
+                     "base" => "base_infer_cows_small_monolithic"
                    }
                  },
                  @ctx
                )
 
-      # That base is over `FeatureGraphLM`, which is not written here. The
+      # That base is over `TwoDSensorModule`, which is not written here. The
       # preview is where a caller finds that out, in the same words the page
       # uses.
       assert text =~ "- error modules_not_ported"

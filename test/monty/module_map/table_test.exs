@@ -68,8 +68,12 @@ defmodule Monty.ModuleMap.TableTest do
       assert row!("GraphLM").test_url ==
                "#{@repo}/blob/#{@revision}/test/monty/frameworks/models/graph_matching/graph_lm_test.exs"
 
+      # The feature module landed with its test, and the row links it.
+      assert row!("FeatureGraphLM").test_url ==
+               "#{@repo}/blob/#{@revision}/test/monty/frameworks/models/feature_location_matching/feature_graph_lm_test.exs"
+
       # A class that is only named has no module here, so it has no test of ours.
-      assert row!("FeatureGraphLM").test_url == nil
+      assert row!("TwoDSensorModule").test_url == nil
 
       # `tbp.teleop` ships no tests, so its rows offer none rather than a link
       # to a tree that is not there.
@@ -108,11 +112,11 @@ defmodule Monty.ModuleMap.TableTest do
       # what a reader types when they are looking for work that is left. Every
       # word has to match, so a class and a status it does not have finds
       # nothing.
-      found = Table.filter(rows(), "featuregraphlm planned", :all)
+      found = Table.filter(rows(), "twodsensormodule planned", :all)
 
-      assert Enum.any?(found, &(&1.class == "FeatureGraphLM"))
+      assert Enum.any?(found, &(&1.class == "TwoDSensorModule"))
       assert Enum.all?(found, &(&1.status == :planned))
-      assert Table.filter(rows(), "camera featuregraphlm", :all) == []
+      assert Table.filter(rows(), "camera twodsensormodule", :all) == []
     end
 
     test "finds a module by the way it is written and the way it is said" do
