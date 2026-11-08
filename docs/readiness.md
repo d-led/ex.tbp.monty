@@ -107,7 +107,9 @@ runnable. What is left, in the order worth doing:
    `randrot_noise_infer_cows_*`, `supervised_pre_training_cows_*`) need
    `TwoDSensorModule`, 9 of them `DefaultAttentionSystem`, and 16 a pretrained
    cows model. Three things, one family; the sensor is the part to write, and the
-   libraries are what `/prerequisites` exports.
+   libraries are what `/prerequisites` exports. Its first dependency landed
+   (§21): the edge detector that turns a patch into an angle, with Monty's
+   nineteen cases translated.
 2. **`MontyBase`** — three configs, and all three are Monty's pytest fixtures. Do
    this only if the fixtures are to be treated as experiments.
 
