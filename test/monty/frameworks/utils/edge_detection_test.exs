@@ -370,14 +370,11 @@ defmodule Monty.Frameworks.Utils.EdgeDetectionTest do
   end
 
   defp inspect_patch(detector, rgba, cam_to_world) do
-    EdgeDetector.detect(
-      detector,
-      Monty.Observations.SensorObservation.new(
-        rgba: rgba,
-        depth: EdgeDetectorFixture.flat_depth(@patch_size),
-        cam_to_world: cam_to_world
-      )
-    )
+    EdgeDetector.detect(detector, %{
+      "rgba" => rgba,
+      "depth" => EdgeDetectorFixture.flat_depth(@patch_size),
+      "cam_to_world" => cam_to_world
+    })
   end
 
   defp assert_close(actual, expected) do

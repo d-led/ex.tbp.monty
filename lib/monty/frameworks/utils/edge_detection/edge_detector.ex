@@ -89,8 +89,12 @@ defmodule Monty.Frameworks.Utils.EdgeDetection.EdgeDetector do
   towards strong gradients, aggregate, and then ask the three questions above.
   """
   @spec detect(t(), SensorObservation.t()) :: EdgeFeatures.t()
-  def detect(%__MODULE__{} = detector, %SensorObservation{} = observation) do
-    patch = observation.rgba |> Enum.map(&Enum.map(&1, fn pixel -> Enum.take(pixel, 3) end))
+  def detect(%__MODULE__{} = detector, observation) do
+    patch =
+      observation
+      |> SensorObservation.rgba()
+      |> Enum.map(&Enum.map(&1, fn pixel -> Enum.take(pixel, 3) end))
+
     grayscale = ImageOps.to_gray(patch)
 
     grad_x = ImageOps.sobel(grayscale, :x)
@@ -117,7 +121,7 @@ defmodule Monty.Frameworks.Utils.EdgeDetection.EdgeDetector do
           is_geometric_edge:
             geometric_edge?(
               detector,
-              observation.depth,
+              SensorObservation.depth(observation),
               StructureTensor.edge_angle(tensor),
               center_offset
             ),

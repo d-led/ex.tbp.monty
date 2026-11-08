@@ -6,6 +6,7 @@ defmodule Monty.Studio.SetupTest do
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
   alias Monty.Frameworks.Models.SensorModules.{CameraSM, FeatureChangeFilter}
+  alias Monty.Frameworks.Models.TwoDSensorModule
   alias Monty.SensorModules.SensorModule
   # The Habitat class is still in the map until the sweep that removes it; the
   # specs below name it as a string, so no alias is needed.
@@ -354,9 +355,10 @@ defmodule Monty.Studio.SetupTest do
 
   describe "what is ported" do
     test "an experiment built from classes this port has not written is refused" do
-      # `TwoDSensorModule` is the example: the sensor module the cows family
-      # reads 2-D datasets with, and nothing here stands in for it.
-      setup = setup_for("base_infer_cows_small_monolithic")
+      # `DefaultAttentionSystem` is the example: the attention system the cows
+      # family's compositional configurations name, and nothing here stands in
+      # for it.
+      setup = setup_for("base_infer_cows_small_compositional")
 
       assert [stand_ins] =
                for(%{code: :modules_not_ported} = finding <- setup.findings, do: finding)
@@ -365,7 +367,7 @@ defmodule Monty.Studio.SetupTest do
       # has not written, so the page disables the run and the task refuses it.
       assert stand_ins.level == :error
       assert stand_ins.message =~ "cannot run here"
-      assert stand_ins.message =~ "TwoDSensorModule"
+      assert stand_ins.message =~ "DefaultAttentionSystem"
       refute stand_ins.message =~ "MuJoCoSimulator"
 
       refute Setup.valid?(setup)
@@ -705,11 +707,21 @@ defmodule Monty.Studio.SetupTest do
                Enum.find(spec.sensor_modules, &(&1.id == "view_finder"))
     end
 
-    test "runs the stand-in for a sensor class this port has not written" do
-      # The 2D sensor module of Monty's three-sensor configurations is still to
-      # come, so that config gets the stand-in rather than a camera that quietly
-      # behaves as if it were one.
+    test "builds the 2-D sensor module of Monty's three-sensor configurations" do
+      # This config used to be the example of a sensor class this port had not
+      # written, and got the stand-in. The 2-D module is written, so it is built.
       setup = setup_from(%{@base | "monty/sensor_module" => "3sm_2d3d_dist"})
+
+      spec = Setup.model_spec(setup, "model_0")
+
+      assert Enum.any?(spec.sensor_modules, &match?(%{module: TwoDSensorModule}, &1))
+    end
+
+    test "runs the stand-in for a sensor class this port has not written" do
+      # Monty's own test suite contributes a fake sensor module to the catalogue;
+      # nothing here stands in for it, so the stand-in runs rather than a camera
+      # that quietly behaves as if it were one.
+      setup = setup_from(%{@base | "monty/sensor_module" => "fake"})
 
       spec = Setup.model_spec(setup, "model_0")
 

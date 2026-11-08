@@ -26,6 +26,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Frameworks.Models.NoResetEvidenceMatching.MontyForNoResetEvidenceGraphMatching
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
   alias Monty.Frameworks.Models.SensorModules.CameraSM
+  alias Monty.Frameworks.Models.TwoDSensorModule
   alias Monty.Frameworks.Utils.SpatialArithmetics
   alias Monty.Geometry.Rotation
   alias Monty.ModuleMap
@@ -519,12 +520,13 @@ defmodule Monty.Studio.Setup do
     end
   end
 
-  # The sensor classes Monty's configs name — a patch is a `CameraSM`, a view
-  # finder is a transform-pipeline `ExperimentSensorModule` or a `SalienceSM`
-  # that proposes where to look — and the port's own module for each. One that is
-  # none of them, or one whose pieces this port has not written, is a stand-in.
+  # The sensor classes Monty's configs name — a patch is a `CameraSM`, the 2-D
+  # family's is a `TwoDSensorModule`, a view finder is a transform-pipeline
+  # `ExperimentSensorModule` or a `SalienceSM` that proposes where to look — and
+  # the port's own module for each. One that is none of them, or one whose pieces
+  # this port has not written, is a stand-in.
   defp ported_sensor_module(config) do
-    [CameraSM, ExperimentSensorModule, SalienceSM]
+    [CameraSM, TwoDSensorModule, ExperimentSensorModule, SalienceSM]
     |> Enum.find_value(:not_ported, fn module ->
       case module.from_config(config) do
         {:ok, state} -> {:ok, module, state}

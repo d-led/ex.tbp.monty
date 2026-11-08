@@ -2371,13 +2371,14 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Frameworks.Models.TwoDSensorModule",
       package: "monty",
       python: "frameworks/models/two_d_sensor_module.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/models/two_d_sensor_module.ex",
           elixir: "Monty.Frameworks.Models.TwoDSensorModule",
           python: "TwoDSensorModule"
         }
@@ -2631,13 +2632,14 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Memento",
       package: "monty",
       python: "memento.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/memento/snapshotable.ex",
           elixir: "Monty.Memento.Snapshotable",
           python: "Snapshotable"
         }

@@ -19,7 +19,7 @@ defmodule Monty.Studio.ReadinessTest do
 
       assert entry.status == :refused
       assert entry.codes == [:modules_not_ported]
-      assert "TwoDSensorModule" in entry.blocked_by
+      assert "DefaultAttentionSystem" in entry.blocked_by
     end
 
     # A class the map calls written that still refuses a config is the work too —
