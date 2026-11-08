@@ -45,6 +45,28 @@ defmodule Monty.Studio.Settings do
         "How long the episode-boundary write may take before the database pool " <>
           "gives up on it. It is passed per statement, so this one takes effect " <>
           "without a restart — unlike the pool's own settings, which do not."
+    },
+    %{
+      key: "run_stale_after_s",
+      label: "A run is not progressing after",
+      unit: "s",
+      default: 60,
+      range: 10..3_600,
+      help:
+        "How quiet a running record has to be before its page says it is not " <>
+          "progressing. It is a claim about somebody else's process, so it has to " <>
+          "be longer than the slowest step a run may take."
+    },
+    %{
+      key: "job_abandon_after_s",
+      label: "A run is abandoned after",
+      unit: "s",
+      default: 60,
+      range: 10..3_600,
+      help:
+        "How quiet a record has to be before the reaper decides nobody is " <>
+          "working on it and marks it abandoned. This is the one that ends a run, " <>
+          "so it must not be shorter than the staleness above."
     }
   ]
 
@@ -72,9 +94,17 @@ defmodule Monty.Studio.Settings do
   def get(key) when is_binary(key) do
     row = row!(key)
 
-    case stored(key) do
-      nil -> row.default
-      value -> parse!(row, value)
+    # Read on every render and every tick of a live run, so it is cached: a
+    # setting that cost a database query would make the page it is meant to make
+    # responsive the slowest thing in the studio. `put/2` refreshes the cache.
+    case :persistent_term.get({__MODULE__, key}, :unset) do
+      :unset ->
+        value = read(row)
+        :persistent_term.put({__MODULE__, key}, value)
+        value
+
+      value ->
+        value
     end
   end
 
@@ -157,5 +187,28 @@ defmodule Monty.Studio.Settings do
       on_conflict: [set: [value: Integer.to_string(value), updated_at: now]],
       conflict_target: :key
     )
+
+    :persistent_term.put({__MODULE__, key}, value)
+  end
+
+  defp read(row) do
+    case stored(row.key) do
+      nil -> row.default
+      value -> parse!(row, value)
+    end
+  end
+
+  @doc """
+  Forgets what is cached, so the next read asks the table again.
+
+  The cache is per node and lives for the life of the VM, which is right for a
+  running application and wrong for a test that writes a value: a test that
+  asserts a default has to be able to start from the table rather than from
+  whatever the test before it saved. It is also what a node needs after somebody
+  edits `studio_settings` by hand.
+  """
+  @spec forget() :: :ok
+  def forget do
+    Enum.each(@settings, &:persistent_term.erase({__MODULE__, &1.key}))
   end
 end

@@ -5,6 +5,11 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
 
   alias Monty.Studio.Settings
 
+  setup do
+    Settings.forget()
+    :ok
+  end
+
   describe "the settings page" do
     test "is in the menu, not only at its address", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings")

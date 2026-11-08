@@ -3,6 +3,13 @@ defmodule Monty.Studio.SettingsTest do
 
   alias Monty.Studio.Settings
 
+  # Each test starts from the table: the settings a test saves are cached for the
+  # life of the VM, which a later test would otherwise inherit.
+  setup do
+    Settings.forget()
+    :ok
+  end
+
   describe "a setting nobody has touched" do
     test "is what the application does by default" do
       assert Settings.get("run_refresh_ms") == 250
