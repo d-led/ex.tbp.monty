@@ -67,9 +67,10 @@ defmodule ExTbpMonty.Core.MixProject do
   end
 
   defp description do
-    "Thousand Brains Project Monty's sensorimotor core on the BEAM: " <>
-      "learning modules, hypotheses and evidence, sensor modules, and the port a " <>
-      "world plugs into — for experiments and for live systems."
+    "A rewrite of the Thousand Brains Project's Sensorimotor Learning Framework Monty " <>
+      "for the BEAM: learning modules, evidence and hypotheses, sensor modules, and the " <>
+      "port a world plugs into. Monty for Elixir with a simpler entry point; the main " <>
+      "repository runs experiments in a Phoenix LiveView."
   end
 
   defp package do

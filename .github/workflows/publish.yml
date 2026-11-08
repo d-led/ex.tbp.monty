@@ -35,6 +35,8 @@ env:
 
 permissions:
   contents: read
+  # The gate below asks the API whether this commit's `ci` run passed.
+  actions: read
 
 jobs:
   package:
@@ -42,6 +44,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # A hex release is permanent: a version number spent on a commit whose
+      # gates failed cannot be withdrawn, only retired. This asks about *this*
+      # commit rather than trusting that the tag was pushed from a good branch.
+      - name: The commit's CI is green
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          sha=$(git rev-parse HEAD)
+          conclusion=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=$sha&per_page=1" \
+            --jq '.workflow_runs[0].conclusion // "none"')
+          echo "ci for $sha: $conclusion"
+          [ "$conclusion" = "success" ] || {
+            echo "::error::CI for $sha is '$conclusion' — not publishing"
+            exit 1
+          }
 
       - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
