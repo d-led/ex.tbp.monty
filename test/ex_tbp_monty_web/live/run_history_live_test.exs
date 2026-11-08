@@ -1212,6 +1212,40 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert RunHistory.get(failed.id) != nil
     end
 
+    # Clearing a machine of finished work is a statement about the machine, not
+    # about the filter a person happens to be looking at — so this one counts and
+    # deletes every run that is done, whatever the pills say, and leaves the one
+    # in flight alone.
+    test "purging done runs ignores the filter and keeps what is running", %{conn: conn} do
+      finished = insert_run(%{experiment: "base_a", status: "finished"})
+      stopped = insert_run(%{experiment: "base_b", status: "stopped"})
+      running = insert_run(%{experiment: "base_c", status: "running"})
+      failed = insert_run(%{experiment: "base_d", status: "failed"})
+
+      done_before =
+        RunHistory.ids_matching(state: "finished") ++ RunHistory.ids_matching(state: "stopped")
+
+      {:ok, view, _html} = live(conn, ~p"/runs?#{[state: "failed", q: ""]}")
+
+      assert view |> element("#purge-done") |> render() =~ "Purge #{length(done_before)} done"
+
+      view |> element("#purge-done") |> render_click()
+
+      assert view |> element("#confirm-bulk-delete") |> render() =~
+               "Delete every finished and stopped run?"
+
+      view |> element("#confirm-bulk-delete-button") |> render_click()
+
+      assert render_async(view) =~ "Deleted #{length(done_before)} runs."
+
+      for id <- done_before, do: assert(RunHistory.get(id) == nil)
+
+      assert RunHistory.get(finished.id) == nil
+      assert RunHistory.get(stopped.id) == nil
+      assert RunHistory.get(running.id) != nil
+      assert RunHistory.get(failed.id) != nil
+    end
+
     test "picking rows deletes just the rows picked", %{conn: conn, run: run} do
       first = insert_run(%{experiment: "base_a", status: "failed"})
       second = insert_run(%{experiment: "base_b", status: "finished"})

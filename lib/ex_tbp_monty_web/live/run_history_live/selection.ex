@@ -13,19 +13,22 @@ defmodule ExTbpMontyWeb.RunHistoryLive.Selection do
   @type picked :: MapSet.t(binary())
 
   @typedoc """
-  What a confirmation is about: the runs picked, or every run the filter shows.
+  What a confirmation is about: the runs picked, every run the filter shows, or
+  every run that is done.
 
   The filter is kept whole — state and text — because deleting "all of them" is
   a statement about the list on screen, which is the filter, not the page of it.
+  `:done` is the one scope that ignores the filter, because clearing a machine of
+  finished runs is a statement about the machine.
   """
-  @type scope :: {:ids, [binary()]} | {:matching, keyword()}
+  @type scope :: {:ids, [binary()]} | {:matching, keyword()} | :done
 
   @type question :: %{count: non_neg_integer(), scope: scope()}
 
   @doc "The events this module answers, so the page can hand them all over at once."
   @spec events() :: [String.t()]
   def events do
-    ~w(toggle toggle_all clear_selection ask_delete_selected ask_delete_matching cancel_bulk_delete bulk_delete)
+    ~w(toggle toggle_all clear_selection ask_delete_selected ask_delete_matching ask_purge_done cancel_bulk_delete bulk_delete)
   end
 
   @doc """
@@ -48,6 +51,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive.Selection do
 
   def handle("ask_delete_matching", _params, %{state: state, text: text, total: total}),
     do: {:assign, confirming_bulk: shown_question(state, text, total)}
+
+  def handle("ask_purge_done", _params, %{done: done}),
+    do: {:assign, confirming_bulk: %{count: done, scope: :done}}
 
   def handle("cancel_bulk_delete", _params, _assigns), do: {:assign, confirming_bulk: nil}
 

@@ -109,6 +109,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         do: RunHistory.search(state: state, text: text, page: found.pages),
         else: found
 
+    counts = RunHistory.counts()
+
     socket
     |> assign(
       state: state,
@@ -118,7 +120,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       pages: found.pages,
       per_page: found.per_page,
       total: found.total,
-      counts: RunHistory.counts(),
+      counts: counts,
+      # What the purge button would remove: every run that is done, in every
+      # filter — the count is about the machine, not about the list on screen.
+      done: Map.get(counts, "finished", 0) + Map.get(counts, "stopped", 0),
       page_ids: Enum.map(found.runs, & &1.id),
       # The rows are a stream, and a stream only renders what it is sent: the
       # tick inside a row is drawn from the selection, so a selection change has
@@ -157,8 +162,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp delete_every(socket, scope) do
     ids =
       case scope do
-        {:ids, ids} -> ids
-        {:matching, filter} -> RunHistory.ids_matching(filter)
+        {:ids, ids} ->
+          ids
+
+        {:matching, filter} ->
+          RunHistory.ids_matching(filter)
+
+        :done ->
+          RunHistory.ids_matching(state: "finished") ++ RunHistory.ids_matching(state: "stopped")
       end
 
     page = self()
@@ -580,6 +591,19 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           title="Every run the filter matches, not only this page"
         >
           {matching_delete_label(@state, @text, @total)}
+        </button>
+        <%!-- Clearing a machine of finished work: the filter is not the subject,
+        so this one ignores it — it counts every run that is done, whatever the
+        pills say. --%>
+        <button
+          :if={@done > 0}
+          id="purge-done"
+          phx-click="ask_purge_done"
+          disabled={@deleting != nil}
+          class="btn btn-ghost btn-xs text-error"
+          title="Every finished and stopped run, whatever this page shows"
+        >
+          Purge {@done} done
         </button>
       </div>
 
@@ -1405,6 +1429,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   defp confirming_what(%{scope: {:matching, _filter}}),
     do: "every run this filter matches"
+
+  defp confirming_what(%{scope: :done}), do: "every finished and stopped run"
 
   # What the filter matches, said as what the button does: it deletes every run
   # the filter matches, not the page of them on screen, and the label has to say
