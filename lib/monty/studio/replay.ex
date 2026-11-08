@@ -120,29 +120,50 @@ defmodule Monty.Studio.Replay do
   table. A module that never built a graph contributes nothing, so a run with no
   graphs answers `[]` — and the page says so instead of drawing a flat line at
   zero and calling it evidence.
-  """
-  @spec objects(Run.t()) :: [series()]
-  def objects(%Run{} = run) do
-    moments = recorded(run)
-    names = moments |> Enum.flat_map(&object_names/1) |> Enum.uniq() |> Enum.sort()
 
-    Enum.map(names, fn name ->
-      %{
-        id: "object:" <> name,
-        label: name,
-        unit: "",
-        points:
-          moments
-          |> Enum.filter(&(name in object_names(&1)))
-          |> Enum.map(fn moment ->
-            %{
-              step: moment.position,
-              value: evidence_of(moment, name),
-              episode: episode_of(moment)
-            }
-          end)
-      }
-    end)
+  With a module's id, the same lines from that module's beliefs alone. A
+  heterarchy is five opinions about the same objects and the ensemble's line above
+  them is the strongest of the five, which hides both the four it overruled and
+  the fact that one module recognised the object while the rest timed out: on its
+  own, a module's evidence says which.
+  """
+  @spec objects(Run.t(), String.t() | nil) :: [series()]
+  def objects(%Run{} = run, module_id \\ nil) do
+    moments = recorded(run)
+
+    names =
+      moments |> Enum.flat_map(&object_names(&1, module_id)) |> Enum.uniq() |> Enum.sort()
+
+    Enum.map(names, fn name -> object_series(moments, name, module_id) end)
+  end
+
+  @doc """
+  The learning modules the run reported beliefs for, oldest name first.
+
+  One module here is one chart: which objects it still held, and how strongly,
+  is a question about a module and not about the ensemble.
+  """
+  @spec modules(Run.t()) :: [String.t()]
+  def modules(%Run{} = run) do
+    run |> recorded() |> Enum.flat_map(&module_ids/1) |> Enum.uniq() |> Enum.sort()
+  end
+
+  defp object_series(moments, name, module_id) do
+    %{
+      id: "object:" <> name,
+      label: name,
+      unit: "",
+      points:
+        moments
+        |> Enum.filter(&(name in object_names(&1, module_id)))
+        |> Enum.map(fn moment ->
+          %{
+            step: moment.position,
+            value: evidence_of(moment, name, module_id),
+            episode: episode_of(moment)
+          }
+        end)
+    }
   end
 
   @doc """
@@ -187,28 +208,47 @@ defmodule Monty.Studio.Replay do
     |> Enum.take(count)
   end
 
-  defp object_names(moment) do
+  defp object_names(moment, module_id \\ nil) do
     moment
-    |> modules()
+    |> beliefs(module_id)
     |> Enum.flat_map(fn belief -> belief |> Map.get("graphs", %{}) |> Map.keys() end)
     |> Enum.uniq()
   end
 
-  # An object's evidence on a step: the strongest any module held for it. One
-  # number per object per step is what a line needs, and the best module is the
-  # one whose belief the ensemble acted on.
-  defp evidence_of(moment, name) do
+  # An object's evidence on a step: the strongest any module held for it, or what
+  # one module held when a module is named. One number per object per step is what
+  # a line needs, and the best module is the one whose belief the ensemble acted
+  # on.
+  defp evidence_of(moment, name, module_id \\ nil) do
     moment
-    |> modules()
+    |> beliefs(module_id)
     |> Enum.map(&(&1 |> Map.get("graphs", %{}) |> Map.get(name, %{}) |> Map.get("max_evidence")))
     |> Enum.reject(&is_nil/1)
     |> Enum.max(fn -> 0.0 end)
   end
 
-  defp modules(%{entry: entry}) when is_map(entry),
-    do: entry |> Map.get("beliefs", %{}) |> Map.values()
+  defp beliefs(moment, nil), do: moment |> beliefs_of() |> Map.values()
 
-  defp modules(_moment), do: []
+  defp beliefs(moment, module_id) do
+    moment
+    |> beliefs_of()
+    |> Map.get(module_id)
+    |> case do
+      nil -> []
+      belief -> [belief]
+    end
+  end
+
+  # The entry's beliefs, keyed by the module that held them: the key is the only
+  # place a module's name is written down.
+  defp beliefs_of(%{entry: entry}) when is_map(entry), do: Map.get(entry, "beliefs", %{})
+
+  defp beliefs_of(_moment), do: %{}
+
+  defp module_ids(%{entry: entry}) when is_map(entry),
+    do: entry |> Map.get("beliefs", %{}) |> Map.keys()
+
+  defp module_ids(_moment), do: []
 
   @doc "One series by id, with whatever points the run has for it."
   @spec chart_series(Run.t(), String.t()) :: series()

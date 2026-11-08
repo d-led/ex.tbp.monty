@@ -309,6 +309,69 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     end
   end
 
+  # Stepping is how a person learns what a run does: one press, one step, and the
+  # page has a record to look at. It is a *run* of one step rather than a mode of
+  # the run, so that what a step saw is written down like any other step — and so
+  # that pressing twice is two runs to compare instead of one run that pretends to
+  # have done two.
+  describe "stepping a tutorial experiment one step at a time" do
+    # The tutorial that trains from nothing, so it runs here without an archive on
+    # the machine — and it is the tutorial a person reads first.
+    @tutorial "tutorial/surf_agent_2obj_unsupervised"
+
+    # The database outlives a test, so the runs of this experiment are forgotten
+    # first: "one press, one run" is a claim about the run this test started.
+    setup do
+      _ = ExTbpMonty.Repo.delete_all(from r in RunHistory.Run, where: r.experiment == @tutorial)
+      :ok
+    end
+
+    test "a press of Step records a run of one step, of one episode", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
+
+      assert has_element?(view, "#step:not([disabled])")
+      view |> element("#step") |> render_click()
+
+      assert [run] = RunHistory.list_for(@tutorial)
+      assert run.steps == 1
+      assert run.inputs["episodes"] == 1
+    end
+
+    test "and the step it records is one step of that experiment, not a redraw", %{conn: conn} do
+      # The whole point of the button: the config runs, for one step, and what
+      # that step saw is in the record.
+      {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
+
+      view |> element("#step") |> render_click()
+      perform_run(view)
+
+      [run] = RunHistory.list_for(@tutorial)
+      run = RunHistory.get(run.id)
+
+      assert run.status == "finished"
+      assert run.steps_done == 1
+      assert Enum.map(run.timeline, & &1["step"]) == [0]
+      assert [%{step: 0}] = logged_steps(view)
+    end
+
+    test "a second press is a second run, not one run of two steps", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
+
+      view |> element("#step") |> render_click()
+      perform_run(view)
+
+      # The page has to offer the button again once the run it started is over, or
+      # a person stepping a run would step it once and be stuck.
+      assert has_element?(view, "#step:not([disabled])")
+      view |> element("#step") |> render_click()
+
+      assert [second, first] = RunHistory.list_for(@tutorial)
+      assert first.steps == 1
+      assert second.steps == 1
+      refute first.id == second.id
+    end
+  end
+
   describe "during the run" do
     # A press of Run starts a world stepping, and a second press while it steps is
     # the same world stepped twice — the queue would take it, because its refusal
@@ -462,7 +525,6 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       perform_run(view)
 
       first = chart_points(view)
-      IO.puts("POINTS first=#{first}")
 
       view |> element("#run") |> render_click()
       perform_run(view)
@@ -470,7 +532,6 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # The chart is one run's. Two runs' steps share episode numbers and steps,
       # so a chart that kept the first one's beliefs would draw the second run's
       # points into the first one's line — a history nobody ran.
-      IO.puts("POINTS second=#{chart_points(view)}")
       assert chart_points(view) == first
     end
 

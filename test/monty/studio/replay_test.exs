@@ -264,6 +264,9 @@ defmodule Monty.Studio.ReplayTest do
   end
 
   describe "the objects a run believed in" do
+    # The values of the one line a chart holds, which is its shape.
+    defp values([series]), do: Enum.map(series.points, & &1.value)
+
     # Two objects, one module each, evidence climbing for the object it guesses.
     defp with_graphs(steps) do
       %Run{
@@ -352,6 +355,83 @@ defmodule Monty.Studio.ReplayTest do
       }
 
       assert [%{points: [%{value: 4.5}]}] = Replay.objects(record)
+    end
+
+    test "and one module's own chart is that module's answer, not the strongest" do
+      # One heterarchy, two modules, one object: the ensemble's line is the best
+      # of them, which is why it cannot say that the two disagreed.
+      record = %Run{
+        timeline: Enum.map([0, 1], &moment/1),
+        log: [
+          %{
+            "step" => 0,
+            "beliefs" => %{
+              "learning_module_0" => %{"graphs" => %{"mug" => %{"max_evidence" => 1.5}}},
+              "learning_module_1" => %{"graphs" => %{"mug" => %{"max_evidence" => 4.5}}}
+            }
+          },
+          %{
+            "step" => 1,
+            "beliefs" => %{
+              "learning_module_0" => %{"graphs" => %{"mug" => %{"max_evidence" => 2.5}}},
+              "learning_module_1" => %{"graphs" => %{"mug" => %{"max_evidence" => 5.5}}}
+            }
+          }
+        ]
+      }
+
+      assert values(Replay.objects(record)) == [4.5, 5.5]
+      assert values(Replay.objects(record, "learning_module_0")) == [1.5, 2.5]
+    end
+
+    test "and a module's chart holds only the objects that module held" do
+      # A module that ruled bowl out at once has no line for it: the chart is
+      # about what that module was still weighing, not about the scene.
+      record = %Run{
+        timeline: [moment(0)],
+        log: [
+          %{
+            "step" => 0,
+            "beliefs" => %{
+              "learning_module_0" => %{
+                "graphs" => %{
+                  "mug" => %{"max_evidence" => 1.0},
+                  "bowl" => %{"max_evidence" => 2.0}
+                }
+              },
+              "learning_module_1" => %{"graphs" => %{"mug" => %{"max_evidence" => 3.0}}}
+            }
+          }
+        ]
+      }
+
+      assert Enum.map(Replay.objects(record), & &1.label) == ["bowl", "mug"]
+      assert Enum.map(Replay.objects(record, "learning_module_1"), & &1.label) == ["mug"]
+      assert Replay.objects(record, "learning_module_9") == []
+    end
+
+    test "the modules a run reported are named once each, in order" do
+      record = %Run{
+        timeline: Enum.map([0, 1], &moment/1),
+        log: [
+          %{
+            "step" => 0,
+            "beliefs" => %{
+              "learning_module_1" => %{"graphs" => %{"mug" => %{"max_evidence" => 1.0}}},
+              "learning_module_0" => %{"graphs" => %{"mug" => %{"max_evidence" => 1.0}}}
+            }
+          },
+          %{
+            "step" => 1,
+            "beliefs" => %{
+              "learning_module_1" => %{"graphs" => %{"mug" => %{"max_evidence" => 2.0}}}
+            }
+          }
+        ]
+      }
+
+      assert Replay.modules(record) == ["learning_module_0", "learning_module_1"]
+      assert Replay.modules(run(0..2)) == []
     end
 
     test "a run whose modules built no graphs has nothing to draw" do

@@ -272,6 +272,12 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   defp run_believing(steps) when is_map(steps), do: run_believing([steps])
 
   defp run_believing(steps) do
+    run_believing(steps, fn evidence -> %{"learning_module_0" => evidence} end)
+  end
+
+  # A run of a heterarchy: the same steps, but every module says its own thing
+  # about each object, which is what a run of five modules actually records.
+  defp run_believing(steps, by_module) do
     {:ok, run} =
       RunHistory.start(%{
         experiment: "tutorial/first_experiment",
@@ -284,12 +290,13 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       steps
       |> Enum.with_index()
       |> Enum.reduce(run, fn {evidence, step}, run ->
-        beliefs = %{
-          "learning_module_0" => %{
-            "graphs" =>
-              Map.new(evidence, fn {object, value} -> {object, %{"max_evidence" => value}} end)
-          }
-        }
+        beliefs =
+          evidence
+          |> by_module.()
+          |> Map.new(fn {module, objects} ->
+            {module,
+             %{"graphs" => Map.new(objects, fn {o, v} -> {o, %{"max_evidence" => v}} end)}}
+          end)
 
         entry = %{
           "step" => step,
@@ -1135,6 +1142,50 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert has_element?(view, "#replay-empty")
       refute has_element?(view, "#replay-slider")
+    end
+
+    # Five modules of one heterarchy are five opinions about the same objects,
+    # and the first chart is the strongest of them — which is the right answer
+    # for the ensemble and the wrong one for "did they agree?". A run whose
+    # ensemble recognised the object while four of its modules timed out is
+    # exactly what the one chart cannot say.
+    test "offers a chart a learning module, beside the one of every object", %{conn: conn} do
+      run =
+        run_believing([%{"mug" => 1.0, "bowl" => 0.5}], fn evidence ->
+          %{
+            "learning_module_0" => evidence,
+            "learning_module_1" => %{"bowl" => 0.1}
+          }
+        end)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      picker = view |> element("#replay-series") |> render()
+
+      assert picker =~ "every object (2)"
+      assert picker =~ "objects · learning_module_0"
+      assert picker =~ "objects · learning_module_1"
+    end
+
+    test "and a module's chart is drawn from that module's own evidence", %{conn: conn} do
+      run =
+        run_believing([%{"mug" => 1.0}, %{"mug" => 2.0}], fn _evidence ->
+          %{
+            "learning_module_0" => %{"mug" => 1.0},
+            "learning_module_1" => %{"mug" => 7.0}
+          }
+        end)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      # The ensemble's line is the strongest module's, so it is the 7.0 one.
+      assert Enum.map(samples(view), & &1["value"]) == [7.0, 7.0]
+
+      view
+      |> element("#replay-series")
+      |> render_change(%{"series" => "module:learning_module_0"})
+
+      assert Enum.map(samples(view), & &1["value"]) == [1.0, 1.0]
     end
   end
 

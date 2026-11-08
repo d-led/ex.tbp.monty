@@ -39,6 +39,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # which the picker offers when the run built graphs.
   @objects "objects"
 
+  # The same chart from one module's beliefs alone, named `<prefix><module id>`:
+  # five modules of one heterarchy are five answers, and the chart above them is
+  # the strongest of the five.
+  @module_chart "module:"
+
   @selection_events Selection.events()
 
   # The replay panel's controls, grouped the same way and for the same reason.
@@ -470,6 +475,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         %{
           key: key,
           objects: Replay.objects(run),
+          module_objects: Map.new(Replay.modules(run), &{&1, Replay.objects(run, &1)}),
           series: Replay.series(run),
           best: Replay.best_evidence(run)
         }
@@ -479,10 +485,34 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # The per-object chart is offered first when a run built graphs: a single
   # maximum hides what the episode was actually about, which objects were still
   # in the running and when one of them won.
+  #
+  # Then one chart a module, for the same reason one more step out. A heterarchy
+  # is several opinions about the same objects and the first chart is the
+  # strongest of them, so four modules agreeing less than a fifth is invisible
+  # there — and so is a module that recognised the object while the others timed
+  # out, which is what a run whose ensemble matched and whose modules did not
+  # looks like from the outside.
   defp charts_of(%{objects: [], series: series}), do: series
 
-  defp charts_of(%{objects: objects, series: series}) do
-    [%{id: @objects, label: "every object (#{length(objects)})", unit: "", points: []} | series]
+  defp charts_of(%{objects: objects, module_objects: module_objects, series: series}) do
+    every_object = %{
+      id: @objects,
+      label: "every object (#{length(objects)})",
+      unit: "",
+      points: []
+    }
+
+    per_module =
+      for {module_id, lines} <- Enum.sort(module_objects), lines != [] do
+        %{
+          id: @module_chart <> module_id,
+          label: "objects · #{module_id}",
+          unit: "",
+          points: []
+        }
+      end
+
+    [every_object | per_module] ++ series
   end
 
   # The chart, and what it was drawn from: the lines, the axis and the samples a
@@ -502,6 +532,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp chart_lines(%{objects: objects}, @objects), do: objects
+
+  defp chart_lines(%{module_objects: module_objects}, @module_chart <> module_id),
+    do: Map.get(module_objects, module_id, [])
+
   defp chart_lines(%{series: series}, series_id), do: Enum.filter(series, &(&1.id == series_id))
 
   @impl true
