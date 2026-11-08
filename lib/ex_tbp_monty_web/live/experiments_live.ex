@@ -129,9 +129,9 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
       <header id="intro" class="space-y-2">
         <h1 class="text-3xl font-semibold tracking-tight">Monty experiments</h1>
         <p class="max-w-3xl text-base-content/70">
-          {@result.total} configurations Monty ships. Filter by whether it runs here, agent,
-          module count, learning module or starting point, or open one to see what it wires
-          together.
+          {@result.total} configurations Monty ships. Filter by whether it runs here and in
+          which world, by agent, module count, learning module or starting point, or open one to
+          see what it wires together.
         </p>
       </header>
 
