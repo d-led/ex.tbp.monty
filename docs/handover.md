@@ -1344,3 +1344,78 @@ Both were in `angle_to_pose_2d`, and both were written wrong first:
 `scripts/quality.sh` green — 2 532 tests, 31 properties, worst complexity 29.85 —
 and `MIX_ENV=test mix dialyzer` at 0. The module map now says 193 of Monty's 360
 classes are written.
+
+## 22. 2026-11-08: `TwoDSensorModule`, and a shape correction that came with it
+
+The cows family's last missing class. Eight of its seventeen configurations now
+compose with nothing but this — they also want a pretrained cows model, which is
+a `/prerequisites` export rather than code — and the readiness counts go 99/24 to
+100/23.
+
+### 22.1 What it does, in the order it does it
+
+A surface agent's patch sees a piece of a curved surface. The module reports
+where the sensor is on a _flat_ version of that surface and which way the edge
+under it runs, which is what a 2-D model of a logo needs:
+
+1. **Features**, from the same `ObservationProcessor` every sensor uses.
+2. **The pose is withdrawn** (`pose_fully_defined` set false) and given back only
+   if the edge detector finds an edge through the patch's middle. A _geometric_
+   edge — a crease in the world, from the depth image — does not count: the
+   module is looking for ink, not for where the object ends.
+3. **The tangent frame** follows the surface, transported rather than rebuilt.
+4. **The step is unrolled**: the 3-D movement projected onto the tangent plane,
+   resolved along that plane's basis, and corrected from chord to arc with the
+   curvature frame the sensor fitted _before_ the edge replaced it.
+5. **The noise and the percept filter**, in Monty's order — which matters,
+   because the filter decides whether this percept is new enough to send, and it
+   sees the 2-D location, not the 3-D one.
+
+The first observation of an episode defines the origin: world `x` and `y` with
+`z` set to zero. Monty's own note says why this is only right for a camera whose
+image plane is aligned with world `xy`, and the port repeats it rather than
+papers over it.
+
+### 22.2 The observation was a struct for one commit, and should not have been
+
+The edge detector's commit gave `Monty.Observations.SensorObservation` a struct
+with `rgba`, `depth` and `cam_to_world` fields. That was wrong, and this module
+is what showed it: in this codebase an observation is a **string-keyed map** —
+what `depth_to_3d_locations` writes, what `ObservationProcessor`, `SalienceSM`
+and `on_object_observation` all read — so the struct was a second shape for one
+thing, and `ObservationProcessor.process/2` could not even take it.
+
+It is now a module of named accessors over that map (`rgba/1`, `depth/1`,
+`cam_to_world/1`, `point_cloud/1`), each raising a sentence when the key is
+missing, because a missing `"semantic_3d"` means the depth-to-3D transform did
+not run and not that the observation is empty. The lesson is the one §19 and §20
+keep teaching from the other direction: read what the codebase already passes
+around before giving a Python `TypedDict` an Elixir shape.
+
+### 22.3 How the cases were translated
+
+Monty's `two_d_sensor_module_test.py` patches `_observation_processor.process`
+with a mock and hands the module a hand-built percept. There is no method object
+to patch here, so the cases build a small patch of points and let the **real**
+processor make the percept — closer to the truth than a hand-built one — and
+inject only the edge detector, as `{module, detector}`, the shape the module's
+noise and percept filter already take. `Monty.Test.CannedEdgeDetector` is that
+injected module.
+
+Two assertions had to be re-stated rather than copied. Monty asserts the tangent
+frame is the _same object_ after two steps (`is`); Elixir has no identity to
+compare, and the property that matters is that the _basis did not move_ — a frame
+rebuilt from the second normal would pick a different axis — so that is what the
+case asserts. And Monty's off-object case asserts `msg.displacement["displacement"]`;
+here a message's displacement is a plain field.
+
+### 22.4 The gate
+
+`scripts/quality.sh` green — 2 556 tests, 41 properties, worst complexity 29.85 —
+and `MIX_ENV=test mix dialyzer` at 0. Seven test fixtures moved again: they had
+used `TwoDSensorModule` as _the_ example of a class this port has not written,
+and now name `DefaultAttentionSystem`, which is what the ranking leads with. The
+one that checked "a sensor class this port has not written gets the stand-in"
+now uses Monty's own test fake (`monty/sensor_module: fake`) — the only sensor
+class in the tree that is still unwritten — and a new case asserts that the
+three-sensor config builds the real 2-D module.
