@@ -101,8 +101,24 @@ register() {
 # One bundle: the stylesheet, the scripts, `mix release`, and the window with
 # that release copied inside it. `start-desktop.sh` owns those steps — this
 # script must not have a second version of them.
+#
+# Tauri's bundler downloads its own tooling the first time it bundles — AppImage's
+# `linuxdeploy` on Linux, NSIS and WiX on Windows — from GitHub's release CDN, and
+# that CDN answered `http status: 504` on three consecutive CI runs (2026-11-08)
+# while every other job passed. Bundling is idempotent, so the retry is the honest
+# answer: it costs the minutes a re-run would have cost and fails the same way if
+# the CDN is down for good.
 build_app() {
-  ./scripts/start-desktop.sh --bundle
+  local attempt
+
+  for attempt in 1 2 3; do
+    if ./scripts/start-desktop.sh --bundle; then
+      break
+    fi
+
+    echo "bundling failed (attempt $attempt of 3), retrying in $((attempt * 30))s" >&2
+    sleep $((attempt * 30))
+  done
 
   # macOS answers with the one product this script knows the name of; Linux
   # leaves the window and its release beside each other, which is what the

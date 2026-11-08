@@ -85,9 +85,29 @@ try {
     # One bundle: the stylesheet, the scripts, `mix release`, and the window with
     # that release copied beside it. `start-desktop.ps1` owns those steps - this
     # script must not have a second version of them.
+    #
+    # Tauri's bundler downloads its own tooling the first time it bundles - NSIS
+    # for the installer - from GitHub's release CDN, which answered `http status:
+    # 504` on three consecutive CI runs (2026-11-08) while every other job passed.
+    # Bundling is idempotent, so the retry is the honest answer: it costs the
+    # minutes a re-run would have cost and fails the same way if the CDN is down
+    # for good.
     function Build-App {
-        & (Join-Path $PSScriptRoot 'start-desktop.ps1') -Bundle
-        if ($LASTEXITCODE -ne 0) {
+        $built = $false
+
+        foreach ($attempt in 1..3) {
+            & (Join-Path $PSScriptRoot 'start-desktop.ps1') -Bundle
+
+            if ($LASTEXITCODE -eq 0) {
+                $built = $true
+                break
+            }
+
+            Write-Host "bundling failed (attempt $attempt of 3), retrying in $($attempt * 30)s"
+            Start-Sleep -Seconds ($attempt * 30)
+        }
+
+        if (-not $built) {
             Write-Host 'the build failed; nothing was packaged'
             exit 1
         }

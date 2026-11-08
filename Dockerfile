@@ -108,7 +108,19 @@ RUN mix deps.get --only prod
 # so loudly, by name, when it is missing.
 RUN mkdir config
 COPY config/config.exs config/pythonx.exs config/prod.exs config/
-RUN mix deps.compile
+# `pythonx` fetches `uv`, and the interpreter `uv` builds, from GitHub's release
+# CDN while it compiles; that CDN answered `failed to fetch
+# .../uv-aarch64-unknown-linux-gnu.tar.gz` on three consecutive image builds
+# (2026-11-08) while every other job passed. The compile is idempotent — a
+# half-finished fetch is not kept — so it is retried rather than trusted to a
+# CDN's mood, and it fails the same way if the CDN is down for good.
+RUN ok=0; \
+    for attempt in 1 2 3; do \
+      if mix deps.compile; then ok=1; break; fi; \
+      echo "deps.compile failed (attempt $attempt of 3), retrying" >&2; \
+      sleep $((attempt * 20)); \
+    done; \
+    test "$ok" = 1
 
 COPY priv priv
 COPY lib lib
