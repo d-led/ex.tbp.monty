@@ -195,16 +195,128 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLMTest d
     end
   end
 
-  describe "what is not ported" do
-    test "matching on point pair features is refused rather than matched as something else" do
+  # `match_attribute: "PPF"` matches on four numbers per edge instead of the
+  # displacement: the length and the angles between the line and the two nodes'
+  # normals. Monty has no unit test for this either; the graph side is checked in
+  # `GraphObjectModel` against the transform's own definition, and what is left
+  # here is which of the four a step compares.
+  describe "matching on point pair features" do
+    # The same three nodes on a line, each facing `+z` unless a test says
+    # otherwise, so an edge is the same length with the same three angles — the
+    # shape a surface agent's steps make.
+    defp ppf_model(object_id, normal \\ [0.0, 0.0, 1.0]) do
+      features = %{
+        "rgba" => Enum.map(@line, fn [x | _] -> [x] end),
+        "pose_vectors" => List.duplicate(pose_facing(normal), length(@line))
+      }
+
+      GraphObjectModel.new(object_id, k_n: 2, has_ppf: true)
+      |> GraphObjectModel.build_model(@line, features, 2, nil)
+    end
+
+    # A pose vector row: the normal, then the two directions across it.
+    defp pose_facing([x, y, z]) do
+      across =
+        if abs(z) < 0.5, do: [0.0, 0.0, 1.0], else: [1.0, 0.0, 0.0]
+
+      across = orthogonalise(across, [x, y, z])
+      second = cross([x, y, z], across)
+      [x, y, z] ++ across ++ second
+    end
+
+    defp orthogonalise([ax, ay, az], [x, y, z]) do
+      dot = ax * x + ay * y + az * z
+      [ax - dot * x, ay - dot * y, az - dot * z] |> normalised()
+    end
+
+    defp normalised(vector) do
+      length = :math.sqrt(Enum.sum(Enum.map(vector, &(&1 * &1))))
+      Enum.map(vector, &(&1 / length))
+    end
+
+    defp cross([a1, a2, a3], [b1, b2, b3]) do
+      [a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1]
+    end
+
+    defp ppf_lm(models, overrides \\ []) do
+      lm =
+        DisplacementGraphLM.new(Keyword.merge([k: 2, match_attribute: "PPF"], overrides))
+
+      lm
+      |> Map.put(:graph_lm, %{lm.graph_lm | graph_memory: memory(models)})
+      |> DisplacementGraphLM.init_from_ltm()
+    end
+
+    test "a step of a length and angle the graph has an edge for keeps the object" do
+      lm = ppf_lm(%{"mug" => ppf_model("mug")}) |> step([0.0, 0.0, 0.0]) |> step([0.1, 0.0, 0.0])
+
+      # Every edge a decimetre long reads [0.1, 90°, 90°, 0°], and so does the
+      # step: 0.1 along x under normals of +z. The four one-decimetre edges are
+      # kept, in both directions — which is what the attribute buys, since a
+      # point-pair feature has no sign the way a displacement has.
+      assert possible(lm) == ["mug"]
+      assert lm.possible_paths["mug"] == [[0, 1], [1, 0], [1, 2], [2, 1]]
+    end
+
+    test "a step no edge of the object has rules it out" do
+      lm = ppf_lm(%{"mug" => ppf_model("mug")}) |> step([0.0, 0.0, 0.0]) |> step([0.3, 0.0, 0.0])
+
+      assert possible(lm) == []
+    end
+
+    # What the attribute buys over a displacement: a length alone does not say
+    # which way the surface faces, so two graphs of the same shape are told
+    # apart by the three angles.
+    test "the angles tell two graphs of the same length apart" do
+      models = %{
+        "facing_z" => ppf_model("facing_z"),
+        "facing_x" => ppf_model("facing_x", [1.0, 0.0, 0.0])
+      }
+
+      # The patch's own normal is +z, so the step's four numbers are
+      # [0.1, 90°, 90°, 0°] — an edge of the +z graph, and not of the +x one,
+      # whose edges read [0.1, 0°, 0°, 0°].
+      lm = ppf_lm(models) |> step([0.0, 0.0, 0.0]) |> step([0.1, 0.0, 0.0])
+
+      assert possible(lm) == ["facing_z"]
+    end
+
+    # A scale-invariant module matches a step against an edge by the ratio each
+    # length makes with the first one it saw: Monty divides the query's first
+    # component by the buffer's first step, and an edge's by the length of the
+    # *first edge of the path* being tested. So steps that are the same length as
+    # each other match a graph of decimetres, which no length comparison can.
+    test "a scale-invariant module compares the ratio of lengths, not the lengths" do
+      # Two steps of 0.4: the query reads [1.0, angles]. Every path whose tested
+      # edge is as long as its first edge reads [1.0, angles] too — the paths
+      # starting on a 0.1 edge and still on one, since this graph's edges are all
+      # 0.1 or 0.2.
+      relative =
+        ppf_lm(%{"mug" => ppf_model("mug")}, use_relative_len: true)
+        |> step([0.0, 0.0, 0.0])
+        |> step([0.4, 0.0, 0.0])
+
+      assert possible(relative) == ["mug"]
+
+      # The same two steps compared as lengths: 0.4 is not an edge of this graph,
+      # so nothing can be on it.
+      absolute =
+        ppf_lm(%{"mug" => ppf_model("mug")})
+        |> step([0.0, 0.0, 0.0])
+        |> step([0.4, 0.0, 0.0])
+
+      assert possible(absolute) == []
+    end
+
+    test "an attribute this port has no comparison for is refused rather than matched differently" do
       assert_raise ArgumentError, ~r/is not ported/, fn ->
-        DisplacementGraphLM.new(match_attribute: "PPF")
+        DisplacementGraphLM.new(match_attribute: "normals")
       end
     end
 
-    test "a config asking for it is refused with a reason, not built" do
-      assert DisplacementGraphLM.from_config(%{"match_attribute" => "PPF"}) ==
-               {:error, {:unsupported_match_attribute, "PPF"}}
+    test "a config asking for that is refused with a reason, not built" do
+      assert DisplacementGraphLM.from_config(%{"match_attribute" => "normals"}) ==
+               {:error, {:unsupported_match_attribute, "normals"}}
     end
   end
 

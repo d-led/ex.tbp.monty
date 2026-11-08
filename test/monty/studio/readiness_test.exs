@@ -24,12 +24,15 @@ defmodule Monty.Studio.ReadinessTest do
 
     # A class the map calls written that still refuses a config is the work too —
     # and it is the cheap kind: the module exists, a capability does not. This one
-    # matches on PPF upstream and on displacement here.
+    # names `graph_1lm`, which is the base `GraphLM` itself: Monty leaves matching
+    # to a subclass, and this port raises rather than guess.
     test "a learning module that refuses the config is named as its own blocker" do
-      entry = Readiness.classified("test/graph_learning/ppf_pred")
+      entry = Readiness.classified("tutorial/surf_agent_2obj_train")
 
-      assert entry.codes == [:learning_module_not_buildable]
-      assert entry.blocked_by == ["DisplacementGraphLM"]
+      # Which other codes a config earns is its own business; the refusal this
+      # case is about is the module's, and the module is named.
+      assert :learning_module_not_buildable in entry.codes
+      assert entry.blocked_by == ["GraphLM"]
     end
   end
 

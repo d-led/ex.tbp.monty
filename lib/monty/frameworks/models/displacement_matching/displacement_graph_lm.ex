@@ -26,10 +26,11 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
 
   ## Not ported
 
-  `match_attribute: "PPF"` — matching on point-pair features instead of raw
-  displacements, which also brings relative lengths and a different edge.
-  `new/1` refuses it rather than matching something else, and the tutorial's
-  config asks for `"displacement"`.
+  Nothing of Monty's class is missing: `match_attribute: "displacement"` compares
+  the step's movement with a stored one, and `"PPF"` compares four numbers per
+  edge — the length and the three angles between it and the nodes' normals —
+  which is what makes the match independent of how the object is turned. A
+  config naming a third attribute is refused rather than matched differently.
   """
 
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
@@ -67,11 +68,11 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
   @spec from_config(map(), keyword()) :: {:ok, t()} | {:error, term()}
   def from_config(config, options \\ []) when is_map(config) do
     case Map.get(config, "match_attribute", "displacement") do
-      "displacement" ->
+      attribute when attribute in ["displacement", "PPF"] ->
         {:ok,
          new(
            k: Map.get(config, "k"),
-           match_attribute: "displacement",
+           match_attribute: attribute,
            tolerance: Map.get(config, "tolerance", @default_tolerance),
            use_relative_len: Map.get(config, "use_relative_len", false),
            graph_delta_thresholds: Map.get(config, "graph_delta_thresholds"),
@@ -94,16 +95,18 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
   `:tolerance` is how far an observed displacement may sit from a stored one and
   still be called the same; `:use_relative_len` divides lengths by the first
   displacement, which is scale invariance at the cost of a scale you cannot
-  measure.
+  measure. `:match_attribute` says which of the two comparisons a match makes:
+  `"displacement"` (the default) or `"PPF"`, whose graphs are built with
+  point-pair features on their edges.
   """
   @spec new(keyword()) :: t()
   def new(options \\ []) do
     match_attribute = Keyword.get(options, :match_attribute, "displacement")
 
-    if match_attribute != "displacement" do
+    unless match_attribute in ["displacement", "PPF"] do
       raise ArgumentError,
             "match_attribute #{inspect(match_attribute)} is not ported: only " <>
-              ~s("displacement" is, and matching on point-pair features would be a) <>
+              ~s("displacement" and "PPF" are, and matching on something else would be a) <>
               " different experiment"
     end
 
@@ -112,7 +115,7 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
         GraphLM.new(
           options
           |> Keyword.take([:learning_module_id, :tolerances, :has_detailed_logger, :gsg])
-          |> Keyword.put(:graph_memory, initial_memory(options))
+          |> Keyword.put(:graph_memory, initial_memory(options, match_attribute))
         ),
       match_attribute: match_attribute,
       tolerance: Keyword.get(options, :tolerance, @default_tolerance),
@@ -123,16 +126,18 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
   # The edges are the hypothesis: a graph built with no `k` has no neighbours to
   # match a displacement against, so whatever the config says is passed on as it
   # stands rather than defaulted here. A memory handed in is the whole memory:
-  # its own `k` and thresholds are what its graphs were built with.
-  defp initial_memory(options) do
+  # its own `k` and thresholds are what its graphs were built with, and a PPF
+  # module adds the point-pair features a loaded graph does not carry.
+  defp initial_memory(options, match_attribute) do
     case Keyword.get(options, :memory) do
       %GraphMemory{} = memory ->
-        memory
+        DisplacementGraphMemory.with_ppf(memory, match_attribute)
 
       _none ->
         GraphMemory.new(
           k: Keyword.get(options, :k),
-          graph_delta_thresholds: Keyword.get(options, :graph_delta_thresholds)
+          graph_delta_thresholds: Keyword.get(options, :graph_delta_thresholds),
+          object_model_options: [has_ppf: match_attribute == "PPF"]
         )
     end
   end
@@ -395,20 +400,43 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLM do
   def compute_possible_matches(%__MODULE__{} = lm, _ctx, _observation, false), do: lm
 
   def compute_possible_matches(%__MODULE__{} = lm, _ctx, observation, true) do
-    query = FeatureAtLocationBuffer.current_displacement(lm.graph_lm.buffer)
+    case query(lm) do
+      nil ->
+        lm
 
-    # Monty asks the same question of every graph and then removes the objects
-    # that answered wrongly; an object with nothing left to test answers wrongly.
-    {lm, predictions} =
-      Enum.reduce(GraphLM.get_possible_matches(lm.graph_lm), {lm, %{}}, fn graph_id, {lm, acc} ->
-        {lm, prediction} = predict_using_displacements(lm, query, graph_id)
-        {lm, Map.put(acc, graph_id, prediction)}
-      end)
+      query ->
+        # Monty asks the same question of every graph and then removes the
+        # objects that answered wrongly; an object with nothing left to test
+        # answers wrongly.
+        {lm, predictions} =
+          Enum.reduce(GraphLM.get_possible_matches(lm.graph_lm), {lm, %{}}, fn graph_id,
+                                                                               {lm, acc} ->
+            {lm, prediction} = predict_using_displacements(lm, query, graph_id)
+            {lm, Map.put(acc, graph_id, prediction)}
+          end)
 
-    target = on_object_target(observation)
-
-    keep_the_right_ones(lm, predictions, target)
+        keep_the_right_ones(lm, predictions, on_object_target(observation))
+    end
   end
+
+  # Monty's `_compute_possible_matches` picks the attribute it matches on. For
+  # point-pair features it also scales the *first* component — the edge's length
+  # — when the module is scale-invariant, because a scale changes a length and
+  # not an angle. A step with no first displacement yet has no scale to divide
+  # by; nothing is matched on such a step either way.
+  defp query(%__MODULE__{match_attribute: "PPF"} = lm) do
+    FeatureAtLocationBuffer.current_ppf(lm.graph_lm.buffer)
+    |> relativise(lm, FeatureAtLocationBuffer.first_displacement_len(lm.graph_lm.buffer))
+  end
+
+  defp query(%__MODULE__{} = lm),
+    do: FeatureAtLocationBuffer.current_displacement(lm.graph_lm.buffer)
+
+  defp relativise(ppf, %__MODULE__{use_relative_len: true}, scale)
+       when is_number(scale) and scale != 0.0,
+       do: [hd(ppf) / scale | tl(ppf)]
+
+  defp relativise(ppf, _lm, _scale), do: ppf
 
   defp keep_the_right_ones(lm, predictions, target) do
     still_possible =

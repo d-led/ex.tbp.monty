@@ -89,6 +89,100 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModelTest do
     end
   end
 
+  # A module matching on `"PPF"` compares four numbers per edge — the length and
+  # three angles — so `torch_geometric`'s `PointPairFeatures(cat=False)` replaces
+  # the displacement an ordinary edge carries. There is no Monty test for it: the
+  # numbers below are the transform's own definition read off two nodes a metre
+  # apart with perpendicular normals.
+  describe "point-pair features" do
+    @pi :math.pi()
+
+    # Node 0 at the origin facing +z, node 1 a metre along +x facing +x.
+    defp ppf_model do
+      locations = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]
+
+      features = %{
+        "rgba" => [[0.1], [0.2]],
+        "pose_vectors" => [
+          [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+          [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+        ]
+      }
+
+      {:ok, built} =
+        GraphObjectModel.new("mug", k_n: 0, has_ppf: true)
+        |> GraphObjectModel.build_model(locations, features)
+
+      built
+    end
+
+    test "each edge carries the length and the three angles of the nodes it links" do
+      %{edge_index: {sources, targets}, edge_attr: features} =
+        GraphObjectModel.graph(ppf_model())
+
+      # Both ways round: 0 → 1 and 1 → 0.
+      assert {sources, targets} == {[0, 1], [1, 0]}
+
+      # `d` runs source → target: [1,0,0] one way and [-1,0,0] the other.
+      # From node 0 (normal +z): 90° to the line, 0° for node 1 whose normal is
+      # the line itself, 90° between the normals.
+      assert_close(hd(features), [1.0, @pi / 2, 0.0, @pi / 2])
+
+      # The way back: node 1's normal is against the line (180°), node 0's is
+      # still at 90° to it.
+      assert_close(Enum.at(features, 1), [1.0, @pi, @pi / 2, @pi / 2])
+    end
+
+    test "a model that does not ask for them keeps its displacements" do
+      {:ok, built} =
+        GraphObjectModel.new("mug", k_n: 0)
+        |> GraphObjectModel.build_model(
+          [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+          %{"rgba" => [[0.1], [0.2]], "pose_vectors" => List.duplicate([0.0, 0.0, 1.0], 2)}
+        )
+
+      assert GraphObjectModel.graph(built).edge_attr == [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]]
+      refute built.has_ppf
+    end
+
+    test "a loaded graph without them gets them, the way a pickle arrives" do
+      # What a memory read from a pickle holds: a graph built by a module that
+      # matched on displacements, so its edges are displacements.
+      {:ok, loaded} =
+        GraphObjectModel.new("mug", k_n: 0)
+        |> GraphObjectModel.build_model(
+          [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+          %{"rgba" => [[0.1], [0.2]], "pose_vectors" => List.duplicate([0.0, 0.0, 1.0], 2)}
+        )
+
+      assert length(hd(GraphObjectModel.graph(loaded).edge_attr)) == 3
+
+      {:ok, ppf} =
+        GraphObjectModel.new("mug", k_n: 0, has_ppf: true)
+        |> GraphObjectModel.set_graph(GraphObjectModel.graph(loaded))
+
+      assert length(hd(GraphObjectModel.graph(ppf).edge_attr)) == 4
+    end
+
+    test "a graph with no pose vectors is refused, because a normal is half of every feature" do
+      {:ok, without_normals} =
+        GraphObjectModel.new("mug", k_n: 0)
+        |> GraphObjectModel.build_model(
+          [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+          %{"rgba" => [[0.1], [0.2]]}
+        )
+
+      assert_raise ArgumentError, ~r/surface normal/, fn ->
+        GraphObjectModel.add_ppf_to_graph(without_normals)
+      end
+    end
+
+    defp assert_close(actual, expected) do
+      Enum.zip(actual, expected)
+      |> Enum.each(fn {got, want} -> assert_in_delta(got, want, 1.0e-12) end)
+    end
+  end
+
   describe "finding the nearest nodes" do
     setup do
       locations = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [5.0, 0.0, 0.0], [5.5, 0.0, 0.0]]

@@ -22,12 +22,14 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
     * `edge_index` and `edge_attr` — the neighbour links and the displacement
       from each edge's source to its target.
 
-  ## What is deliberately absent
+  ## Point-pair features
 
-  `add_ppf_to_graph/1` attaches point-pair features to the edges through
-  `torch_geometric`'s transform. Point-pair features belong to displacement
-  matching, which this port does not cover, so there is nothing honest to
-  translate — the field stays nil and `has_ppf` stays false.
+  A displacement module matching on `match_attribute: "PPF"` compares four
+  numbers per edge instead of a displacement, so its model carries
+  `has_ppf: true` and every build ends in `add_ppf_to_graph/1` — Monty's
+  `torch_geometric` transform, translated rather than called. The four are the
+  length of the edge and three angles between it and the two nodes' normals,
+  which is what makes the comparison independent of how the object is turned.
   """
 
   require Logger
@@ -37,6 +39,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Frameworks.Utils.KdTree
   alias Monty.Frameworks.Utils.ObjectModelUtils
+  alias Monty.Frameworks.Utils.SensorProcessing
   alias Monty.Frameworks.Utils.SpatialArithmetics
 
   @enforce_keys [:object_id]
@@ -44,7 +47,8 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
             graph: nil,
             k_n: nil,
             graph_delta_thresholds: nil,
-            location_tree: nil
+            location_tree: nil,
+            has_ppf: false
 
   @type location :: SpatialArithmetics.vector()
   @type graph :: %{required(atom()) => term()}
@@ -56,14 +60,17 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   `:k_n` and `:graph_delta_thresholds` are how the graph will be built, so they
   are the model's rather than the build's: memory knows both when it makes the
   model, and a model extended later must link new nodes the way it linked the
-  old ones.
+  old ones. `:has_ppf` says the edges carry point-pair features instead of
+  displacements, which is a fact about the module that owns the graph — a
+  displacement module matching on `"PPF"` sets it.
   """
   @impl true
   def new(object_id, options \\ []) do
     %__MODULE__{
       object_id: object_id,
       k_n: Keyword.get(options, :k_n),
-      graph_delta_thresholds: Keyword.get(options, :graph_delta_thresholds)
+      graph_delta_thresholds: Keyword.get(options, :graph_delta_thresholds),
+      has_ppf: Keyword.get(options, :has_ppf, false)
     }
   end
 
@@ -101,6 +108,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
         graph_delta_thresholds: graph_delta_thresholds,
         location_tree: tree_of(graph)
     }
+    |> with_ppf()
   end
 
   @doc """
@@ -148,23 +156,84 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
         num_nodes(model)
       )
 
-    {:ok, %{model | graph: graph, location_tree: tree_of(graph)}}
+    {:ok, %{model | graph: graph, location_tree: tree_of(graph)} |> with_ppf()}
   end
 
   @doc "The graph itself, or `nil` before the model has been built."
   @impl true
   def graph(%__MODULE__{graph: graph}), do: graph
 
-  @doc "Replaces the graph, as when a pretrained model is loaded."
+  @doc """
+  Replaces the graph, as when a pretrained model is loaded.
+
+  A point-pair model whose graph arrives without them gets them here: Monty's
+  `DisplacementGraphMemory.load_state_dict` says the same thing for a memory
+  read from a pickle (`if model[input_channel].has_ppf is False:
+  model[...].add_ppf_to_graph()`), and a loaded graph has no PPF edges of its
+  own.
+  """
   @impl true
   def set_graph(%__MODULE__{} = model, graph) do
-    {:ok, %{model | graph: graph, location_tree: tree_of(graph)}}
+    {:ok, %{model | graph: graph, location_tree: tree_of(graph)} |> with_ppf()}
+  end
+
+  @doc """
+  Monty's `add_ppf_to_graph`: every edge's `edge_attr` becomes the point-pair
+  features of the nodes it links, replacing the displacement that was there.
+
+  `torch_geometric`'s `PointPairFeatures(cat=False)`, which is four numbers per
+  edge:
+
+      [ |d|, angle(n_i, d), angle(n_j, d), angle(n_i, n_j) ]
+
+  where `d` runs from the edge's source to its target — the same four
+  `SensorProcessing.point_pair_features/4` computes for a step's movement, so
+  the graph and the query cannot disagree about what a feature is.
+
+  The graph must carry `norm`: a normal is half of every feature, and a module
+  matching on point-pair features without pose vectors has nothing to compare.
+  Monty asserts the same (`assert data.norm is not None`); this raises the
+  sentence instead.
+
+  A graph with no edges gets an empty list rather than an error: there is no
+  feature to compute, and a one-node model is a legitimate first observation.
+  """
+  @spec add_ppf_to_graph(t()) :: t()
+  def add_ppf_to_graph(%__MODULE__{graph: %{} = graph} = model) do
+    %{model | graph: Map.put(graph, :edge_attr, point_pair_features_of(graph)), has_ppf: true}
+  end
+
+  defp with_ppf(%__MODULE__{has_ppf: true} = model), do: add_ppf_to_graph(model)
+  defp with_ppf(%__MODULE__{} = model), do: model
+
+  defp point_pair_features_of(%{norm: nil}) do
+    raise ArgumentError,
+          "a graph matched on point-pair features needs each node's surface normal, " <>
+            "and this one carries no pose vectors: add \"pose_vectors\" to the features " <>
+            "the learning module learns from"
+  end
+
+  defp point_pair_features_of(%{edge_index: nil}), do: []
+
+  defp point_pair_features_of(%{pos: positions, norm: normals, edge_index: {sources, targets}}) do
+    positions = List.to_tuple(positions)
+    normals = List.to_tuple(normals)
+
+    sources
+    |> Enum.zip(targets)
+    |> Enum.map(fn {source, target} ->
+      SensorProcessing.point_pair_features(
+        elem(positions, source),
+        elem(positions, target),
+        elem(normals, source),
+        elem(normals, target)
+      )
+    end)
   end
 
   @doc "One `[x, y, z]` per node."
   @impl true
   def positions(%__MODULE__{graph: %{pos: positions}}), do: positions
-
   @doc "The number of nodes in the graph."
   @impl true
   def num_nodes(%__MODULE__{graph: %{pos: positions}}), do: length(positions)

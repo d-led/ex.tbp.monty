@@ -14,11 +14,11 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphMemory d
   already carries its displacement — a class that had to say so again would be
   saying what the model says.
 
-  Not ported: the point-pair-feature matching (`match_attribute: "PPF"`), which
-  stores four numbers per edge and compares relative lengths. A config that asks
-  for it is refused by `DisplacementGraphLM` rather than run as something else.
+  Monty's subclass also carries `match_attribute`, for one thing only: a memory
+  loaded for a module that matches on point-pair features gets those features
+  added to every graph that lacks them (`with_ppf/2`). Building the features is
+  the model's job, because the model is what knows the graph.
   """
-
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
 
@@ -84,6 +84,40 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphMemory d
     |> Map.get(:edge_attr, [])
     |> Enum.map(fn displacement -> hd(displacement) * 1.0 end)
   end
+
+  @doc """
+  A memory whose graphs carry point-pair features, adding them where a graph has
+  none.
+
+  Monty's `DisplacementGraphMemory.load_state_dict` does this on the way in ("if
+  `model[input_channel].has_ppf is False`: `add_ppf_to_graph()`"), and it has to:
+  a memory read from a pickle was built by a module that matched on
+  displacements, so its `edge_attr` is a displacement. Matching one against a
+  point-pair query would compare a length with a vector and quietly keep the
+  wrong objects.
+
+  A memory for a module that matches on displacements is handed back untouched.
+  """
+  @spec with_ppf(GraphMemory.t(), String.t()) :: GraphMemory.t()
+  def with_ppf(%GraphMemory{} = memory, "PPF") do
+    memory
+    |> GraphMemory.get_all_models_in_memory()
+    |> Enum.reduce(memory, fn {graph_id, channels}, memory ->
+      GraphMemory.add_graph_to_memory(
+        memory,
+        Map.new(channels, fn {channel, model} -> {channel, add_ppf(model)} end),
+        graph_id
+      )
+    end)
+  end
+
+  def with_ppf(%GraphMemory{} = memory, _displacement), do: memory
+
+  defp add_ppf(%GraphObjectModel{has_ppf: true} = model), do: model
+  defp add_ppf(%GraphObjectModel{} = model), do: GraphObjectModel.add_ppf_to_graph(model)
+  # A memory whose model is not a graph (a grid, say) has no edges to give
+  # features to, which is not this function's to decide.
+  defp add_ppf(model), do: model
 
   defp graph(memory, graph_id) do
     memory
