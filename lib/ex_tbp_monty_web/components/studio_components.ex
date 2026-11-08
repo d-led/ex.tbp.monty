@@ -569,7 +569,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
             class="flex h-40 w-4 shrink-0 items-center justify-center"
           >
             <span
-              class="whitespace-nowrap text-xs text-base-content/60"
+              class="whitespace-nowrap text-xs text-base-content/75"
               style="writing-mode: vertical-rl; transform: rotate(180deg)"
             >
               {chart_axis(@series, @series_id)}
@@ -577,7 +577,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
           </div>
           <div
             id="replay-chart-y-axis"
-            class="relative h-40 w-9 shrink-0 text-right font-mono text-[10px] leading-none text-base-content/50"
+            class="relative h-40 w-9 shrink-0 text-right font-mono text-[10px] leading-none text-base-content/75"
             aria-hidden="true"
           >
             <span
@@ -644,9 +644,9 @@ defmodule ExTbpMontyWeb.StudioComponents do
                   y1="0"
                   x2={band.x}
                   y2={@chart.height}
-                  stroke="currentColor"
-                  stroke-opacity="0.18"
-                  stroke-dasharray="2 2"
+                  stroke="#6b7280"
+                  stroke-opacity="0.5"
+                  stroke-dasharray="1 3"
                   vector-effect="non-scaling-stroke"
                 />
                 <%!-- Where the labels beside the plot sit, drawn under the lines so a
@@ -677,16 +677,21 @@ defmodule ExTbpMontyWeb.StudioComponents do
                   stroke-opacity="0.4"
                   vector-effect="non-scaling-stroke"
                 />
-                <polyline
-                  :for={polyline <- @chart.polylines}
-                  id={polyline.id}
-                  points={polyline.points}
-                  fill="none"
-                  stroke={polyline.colour}
-                  stroke-width="1.5"
-                  stroke-linejoin="round"
-                  vector-effect="non-scaling-stroke"
-                />
+                <%!-- The lines are a group of their own because a pan moves them
+            under the hand: the translation is in the chart's own units, and the
+            viewport clips it, so nothing slides out over the axis. --%>
+                <g id="replay-chart-lines">
+                  <polyline
+                    :for={polyline <- @chart.polylines}
+                    id={polyline.id}
+                    points={polyline.points}
+                    fill="none"
+                    stroke={polyline.colour}
+                    stroke-width="1.5"
+                    stroke-linejoin="round"
+                    vector-effect="non-scaling-stroke"
+                  />
+                </g>
                 <line
                   :if={@chart.playhead}
                   x1={@chart.playhead}
@@ -716,8 +721,17 @@ defmodule ExTbpMontyWeb.StudioComponents do
                 />
               </svg>
             </div>
-            <p id="replay-chart-x-name" class="text-center text-xs text-base-content/60">
+            <p id="replay-chart-x-name" class="text-center text-xs text-base-content/75">
               step
+            </p>
+            <%!-- A chart a reader has to be told how to operate is a chart with
+            hidden gestures; the gestures are Plotly's, and saying them costs one
+            line under the axis. --%>
+            <p
+              id="replay-chart-controls"
+              class="text-center text-[11px] text-base-content/50"
+            >
+              drag to zoom · shift-drag to pan · wheel to zoom · double-click for the whole run
             </p>
           </div>
         </div>
@@ -727,7 +741,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
         <ul
           :if={length(@chart.lines) > 1}
           id="replay-chart-legend"
-          class="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-base-content/70"
+          class="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-base-content/80"
         >
           <li :for={line <- @chart.lines} class="flex items-center gap-1">
             <span class="h-0.5 w-3 rounded" style={"background: #{line.colour}"}></span>
@@ -785,6 +799,19 @@ defmodule ExTbpMontyWeb.StudioComponents do
               this.el.addEventListener("pointerup", event => this.endBrush(event))
               this.el.addEventListener("pointercancel", () => this.cancelBrush())
 
+              // The wheel is the first thing a reader tries to look closer, and
+              // it costs no control to find: it zooms about the pointer, so the
+              // step under the hand keeps its place.
+              this.el.addEventListener("wheel", event => this.zoomAtPointer(event), {
+                passive: false
+              })
+
+              // Double-clicking puts the whole run back, as Plotly's charts do:
+              // the way out of a zoom is never a button a reader has to hunt for.
+              this.el.addEventListener("dblclick", () =>
+                this.pushEvent("replay_zoom", {zoom: "all"})
+              )
+
               this.read()
             },
 
@@ -830,11 +857,23 @@ defmodule ExTbpMontyWeb.StudioComponents do
               if (event.button !== 0 || this.to <= this.from) return
 
               const unitX = this.unitX(event)
+
+              // Shift and drag moves the window instead of choosing one: the
+              // same two gestures Plotly gives a reader, so the dashboard this
+              // page is compared against is operated the same way.
+              if (event.shiftKey) {
+                this.pan = {fromUnit: unitX, range: null, moved: false}
+                this.el.classList.add("cursor-grabbing")
+
+                return
+              }
+
               this.brush = {from: unitX, to: unitX, moved: false}
               this.showBrush()
             },
 
             drag(event) {
+              if (this.pan) return this.dragPan(event)
               if (!this.brush) return
 
               const unitX = this.unitX(event)
@@ -857,6 +896,8 @@ defmodule ExTbpMontyWeb.StudioComponents do
             // A drag that went nowhere is a click, and a click already means
             // "show me that step"; only a real drag scopes the window.
             endBrush(_event) {
+              if (this.pan) return this.endPan()
+
               const brush = this.brush
               if (!brush) return
 
@@ -880,6 +921,89 @@ defmodule ExTbpMontyWeb.StudioComponents do
             cancelBrush() {
               const box = this.el.querySelector("#replay-chart-brush")
               if (box) box.setAttribute("visibility", "hidden")
+
+              this.pan = null
+              this.el.classList.remove("cursor-grabbing")
+              this.el.querySelector("#replay-chart-lines")?.removeAttribute("transform")
+            },
+
+            // Shift-drag: the window slides with the hand. The lines move under
+            // the pointer while it is down, and the range that was let go of is
+            // asked for once — dragging is one decision, not one per pixel.
+            dragPan(event) {
+              const by = this.unitX(event) - this.pan.fromUnit
+
+              this.pan.moved = this.pan.moved || Math.abs(by) > 2
+
+              // Dragging right looks earlier in the run, because the plot moves
+              // with the hand.
+              const shift = -(by / Math.max(this.width, 1)) * (this.to - this.from)
+              const from = Math.round(this.from + shift)
+
+              this.pan.range = [from, from + Math.round(this.to - this.from)]
+
+              const lines = this.el.querySelector("#replay-chart-lines")
+              if (lines) lines.setAttribute("transform", `translate(${by} 0)`)
+            },
+
+            endPan() {
+              const pan = this.pan
+
+              this.cancelBrush()
+
+              if (!pan || !pan.moved || !pan.range) return
+
+              // The click that ends a drag is not a seek: the reader moved the
+              // window, not the playhead.
+              this.dragged = true
+
+              this.pushRange(...pan.range)
+            },
+
+            // The wheel zooms about the pointer: the step under it keeps its
+            // place, so looking closer is looking harder at what is already
+            // there rather than walking somewhere else first.
+            zoomAtPointer(event) {
+              if (this.brush || this.pan || this.to <= this.from) return
+
+              event.preventDefault()
+
+              const span = this.to - this.from
+              const anchor = this.positionOf(this.unitX(event))
+              const wanted = Math.max(1, Math.round(span * (event.deltaY < 0 ? 0.5 : 2)))
+              const share = (anchor - this.from) / span
+              const from = Math.round(anchor - share * wanted)
+
+              this.pushRange(from, from + wanted)
+            },
+
+            // A wheel ticks many times before a page can be rebuilt, and every
+            // range asked for is a re-render: the last range wins, a moment
+            // after the wheel stops. Until then the window asked for is the one
+            // the next tick starts from, so three ticks in are three zooms and
+            // not three copies of the first.
+            pushRange(from, to) {
+              if (!(to > from)) return
+
+              this.from = from
+              this.to = to
+              this.pendingRange = [from, to]
+
+              if (this.zoomTimer) return
+
+              this.zoomTimer = setTimeout(() => {
+                this.zoomTimer = null
+
+                const range = this.pendingRange
+                this.pendingRange = null
+
+                if (!range) return
+
+                this.pushEvent("replay_brush", {
+                  from: String(range[0]),
+                  to: String(range[1])
+                })
+              }, 120)
             },
 
             // What the pointer is over, read off the drawn line rather than off
