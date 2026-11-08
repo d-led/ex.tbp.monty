@@ -96,8 +96,18 @@ defmodule Monty.Studio.Catalog do
     conf_dir
     |> Source.experiments()
     |> Enum.map(&experiment_from(&1, conf_dir))
-    |> Enum.reject(&is_nil/1)
+    |> Enum.reject(&(is_nil(&1) or fragment?(&1)))
   end
+
+  # A file under `conf/experiment` is not always an experiment. Monty's own tests
+  # compose the environment, sensor-module and learning-module groups from files
+  # that live there and name no experiment class — seven of them. A configuration
+  # with no class to run is a piece of one, so it is not counted, offered or
+  # refused: refusing it would be inventing an experiment to say it cannot run,
+  # which is what `epochs_not_a_count` used to say about a file that has no
+  # epochs because it has no experiment.
+  defp fragment?(%{experiment_class: nil}), do: true
+  defp fragment?(_experiment), do: false
 
   # When the directory was last written, and how many configs it holds: a copy
   # that is replaced, added to or trimmed moves one of the two.

@@ -1686,3 +1686,31 @@ Monty has no such case because Monty's images are always a camera's bytes. It is
 the stand-in scene that is unusual, and the port's job is to be right on both.
 
 Gate: 2 616 tests, 63 properties, worst complexity 29.85 unchanged, dialyzer 0.
+
+## 27. 2026-11-08: seven files under `conf/experiment` are not experiments
+
+One configuration was refused for `epochs_not_a_count` — `n_train_epochs` was
+`nil` — and the honest answer turned out to be that it has no epochs because it has
+no experiment. Six more files were in the catalogue the same way.
+
+Monty's own tests compose an environment, a sensor module and a learning module out
+of files that live under `conf/experiment` and carry only their group's fragment:
+
+    # @package experiment.config.environment
+    env_init_args:
+      agents: [...]
+
+No `_target_`, no epochs, no experiment. The catalogue listed them because they are
+YAML under the right directory, so it offered seven configurations that are pieces
+of one, and refused the MuJoCo one for an epoch count it never declared.
+
+`Monty.Studio.Catalog.read/1` now drops a file that names no experiment class. The
+catalogue is **203**, not 210 — and four rows leave the reason table with them:
+`epochs_not_a_count`, `sm_to_lm_matrix_missing`, `sensor_agent_mapping_mismatch`
+and `learning_module_count_mismatch` were all about these seven. What the table says
+now is only about experiments somebody could run: objects not downloaded (19), a
+class nobody can place (3), a memory not exported (2), `GraphLM` refusing its own
+config (1), and a world with nothing in it (1).
+
+Readiness: **97 runnable, 25 refused, 81 postponed** of 203. Gate: 2 618 tests, 63
+properties, worst complexity 29.85 unchanged, dialyzer 0.
