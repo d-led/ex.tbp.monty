@@ -410,7 +410,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       catalog_key: catalog.key,
       catalog: catalog,
       chart_key: chart_key,
-      chart_base: chart_base
+      chart_base: chart_base,
+      keeping: Map.get(socket.assigns, :keeping)
     )
   end
 
@@ -945,7 +946,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           <%!-- "Time is not enough": a stamp says when the last step was, not
           whether another is coming. This says both — the run claims to be
           running and nothing has been recorded for longer than a slow step. --%>
-          <span :if={RunHistory.stalled?(@run)} id="run-stalled" class="text-warning">
+          <span :if={@keeping} id="run-keeping" class="text-info">
+            · saving {@keeping} steps to the database
+          </span>
+          <span
+            :if={is_nil(@keeping) and RunHistory.stalled?(@run)}
+            id="run-stalled"
+            class="text-warning"
+          >
             · nothing recorded for {quiet(@run)} — not progressing
           </span>
         </p>
@@ -1265,6 +1273,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # The end of a run is never news to wait on: a page that says "running" for a
   # quarter of a second after the run has stopped is a page lying, however
   # briefly.
+  def handle_info({:studio, _run_id, {:keeping, steps}}, socket),
+    do: {:noreply, assign(socket, keeping: steps)}
+
+  def handle_info({:studio, _run_id, :kept}, socket),
+    do: {:noreply, assign(socket, keeping: nil)}
+
   def handle_info({:studio, _run_id, ending}, socket)
       when is_tuple(ending) and elem(ending, 0) in [:finished, :failed],
       do: refresh_now(socket)

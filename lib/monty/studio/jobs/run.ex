@@ -428,16 +428,29 @@ defmodule Monty.Studio.Jobs.Run do
 
   # Whether the row now holds the steps decides whether the memory may be
   # dropped: it is the only copy until it is written.
+  #
+  # The write is announced because it can take seconds: appending an episode to
+  # the row rewrites the transcript, and a run that is quiet for twenty seconds
+  # while that happens looks exactly like a run that has stopped. Saying "saving
+  # 22 508 steps" is the difference between a slow write and a hang, and it is
+  # the only place that knows which it is.
   defp keep_with_state(record) do
+    publish(record.id, {:keeping, length(record.log)})
+
     case RunHistory.checkpoint(record) do
       {:ok, saved} ->
+        publish(record.id, :kept)
         {saved, true}
 
       {:error, reason} ->
+        publish(record.id, :kept)
         Logger.warning("studio run #{record.id}: cannot write its steps: #{inspect(reason)}")
         {record, false}
     end
   end
+
+  defp publish(run_id, event),
+    do: Phoenix.PubSub.broadcast(ExTbpMonty.PubSub, topic(run_id), {:studio, run_id, event})
 
   # Monty's `model.update_ltm()`: the module decides what a training episode adds
   # to long-term memory. What answers here is the memory the *rest* of the phase

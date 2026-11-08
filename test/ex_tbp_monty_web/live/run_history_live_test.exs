@@ -177,6 +177,24 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     end
   end
 
+  # The write at an episode boundary rewrites the run's transcript, so it can
+  # take longer than the page's idea of a slow step. A run in that state is
+  # working, not stalled, and the page has to be able to say which.
+  describe "a run that is writing an episode back" do
+    test "says it is saving rather than that it is not progressing", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      send(view.pid, {:studio, run.id, {:keeping, 22_508}})
+
+      assert view |> element("#run-keeping") |> render() =~ "saving 22508 steps to the database"
+      refute has_element?(view, "#run-stalled")
+
+      send(view.pid, {:studio, run.id, :kept})
+
+      refute has_element?(view, "#run-keeping")
+    end
+  end
+
   describe "a run that is still stepping" do
     test "is counted from memory, and is not called stalled", %{conn: conn} do
       # The row is written at an episode boundary, so during an episode it says
