@@ -145,9 +145,11 @@ Learning modules: 1 18
 ```
 
 `ready` is the one to ask first when the question is "what can I run?": `yes`
-keeps the experiments this deployment runs and `no` the ones `Setup`'s findings
-refuse, which is the same answer the experiments page filters on and
-[`docs/readiness.md`](readiness.md) counts.
+keeps the experiments this deployment runs, `no` the ones `Setup`'s findings
+refuse, and `not_planned` the ones whose world this build does not carry (Monty's
+Habitat configs). `world` keeps the configs written for one simulator —
+`mujoco`, `habitat`, or `other`. Both are the same answers the experiments page
+filters on and [`docs/readiness.md`](readiness.md) counts.
 
 `monty_describe_experiment` answers the next question — sensors and their count,
 learning modules, the objects the config names (or the sampler that places

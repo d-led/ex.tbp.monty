@@ -393,9 +393,13 @@ in — including the case where the map says `:implemented` and no module answer
 - Monty's pytest fixtures are in our catalogue and are not experiments
   (`test/hierarchy/monty/*`, `test/hierarchy/environment/*`, `test/run*`,
   `test/base_config/base*`, `test/profile/base*`): should the catalogue label
-  them "a Monty test fixture, not an experiment", or keep refusing them?
-- Is Habitat-Sim a permanent refusal, with the stand-in scene offered as the
-  shape-only option? Nothing has changed here; the refusal is honest today.
+  them "a Monty test fixture, not an experiment", or keep refusing them? With
+  Habitat postponed (§18) almost all of them went with it, so this is now a
+  question about a handful of configs.
+- ~~Is Habitat-Sim a permanent refusal?~~ **Answered 2026-11-08: Habitat is on
+  its way out upstream.** A config whose world is not MuJoCo is reported as
+  `not planned` — postponed, not refused — and the page has a **World** facet so
+  those rows can still be read on their own. `docs/readiness.md` has the rule.
 
 ---
 
@@ -970,13 +974,14 @@ page, one experiment at a time, and then counting by hand.
 
 ### 18.1 What landed
 
-| commit | what it does                                                                                                      | how it is known                                                                                       |
-| ------ | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| this   | `Monty.Studio.Readiness` — one experiment's answer, the counts, and the classes ranked by what they alone unblock | pure where it can be: `classify/1` and `summarise/1` are tested on a fixture; `catalog/1` is the edge |
-| this   | `mix monty.readiness [--world] [--all] [--json]`                                                                  | 210 experiments in ~2 s, or 0.06 s from the cache                                                     |
-| this   | `/experiments` grows a **Runs here?** facet, so the page opens on the answer                                      | the pill counts respect the other facets, like every other one                                        |
-| this   | `Setup.modules/1` and `Setup.blocking/1` — the classification `module_findings/1` used to keep private            | one home: the refusal text and the survey count the same list                                         |
-| this   | **a bug the facet surfaced**: the list rendered a page of unfiltered rows under every filtered link               | 30 stale rows under `?agent=surf`; now exactly the filtered ones                                      |
+| commit | what it does                                                                                                           | how it is known                                                                                                    |
+| ------ | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| this   | `Monty.Studio.Readiness` — one experiment's answer, the counts, and the classes ranked by what they alone unblock      | pure where it can be: `classify/1` and `summarise/1` are tested on a fixture; `catalog/1` is the edge              |
+| this   | `mix monty.readiness [--world] [--all] [--json]`                                                                       | 210 experiments in ~2 s, or 0.06 s from the cache                                                                  |
+| this   | `/experiments` grows a **Runs here?** facet, so the page opens on the answer                                           | the pill counts respect the other facets, like every other one                                                     |
+| this   | a second facet, **World** (`Setup.engine/1`), and a third answer, `not planned`, for a world this build does not carry | `?world=habitat` and `?ready=not_planned` narrow to the same rows; the postponed count is 87 under every `--world` |
+| this   | `Setup.modules/1` and `Setup.blocking/1` — the classification `module_findings/1` used to keep private                 | one home: the refusal text and the survey count the same list                                                      |
+| this   | **a bug the facet surfaced**: the list rendered a page of unfiltered rows under every filtered link                    | 30 stale rows under `?agent=surf`; now exactly the filtered ones                                                   |
 
 That last one is worth its own line: `mount/3` streamed the first page and
 `handle_params/3` then streamed the filtered rows with `reset: true`. In a
@@ -986,21 +991,28 @@ wrong list, and in the test the merged DOM kept both. Rows are streamed in
 
 ### 18.2 The numbers (MuJoCo, the default world)
 
-210 experiments: **87 run here, 123 refused, 0 do not compose**. In the stand-in
-scene it is 122 and 88 — a sphere needs no pretrained memory and cannot be
-refused for showing no target.
+210 experiments: **87 run here, 36 refused, 87 postponed, 0 do not compose**. In
+the stand-in scene it is 73 / 50 / 87 / 0 — a sphere refuses more, because a
+supervised experiment cannot state an object it never showed.
 
-`docs/readiness.md` has the full table. The three rows that matter:
+**Habitat is postponed, not refused** (your call, 2026-11-08: it is on its way out
+upstream). This build carries one world — MuJoCo — so a config that names any
+other is `not planned`, and §10.7's first open question is answered by that. The
+postponed set is 87 in every deployment, because it is a fact about the config;
+`--world` still decides the rest.
 
-- **87 are refused for the world** (`Habitat-Sim`, §10.7's open decision).
-- **53 for a class nothing stands in for**, and the ranking by what each one
-  alone unblocks is `FeatureGraphLM` 10 (21 naming), `MontyBase` 3 (6),
-  `DisplacementGraphLM` 2 (4), `GraphLM` 1, `TwoDSensorModule` 1 (17),
-  `DefaultAttentionSystem` 0 (9), the Saccade and Omniglot environment/interface
-  pairs 0 each.
-- **19 for a missing pretrained library**, which is `/prerequisites`'s job and
-  not a port at all, and **7 for `${constants.rotations_all_count}`**, which is
-  §11's open point 4 and is still true.
+`docs/readiness.md` has the full table. The rows that matter:
+
+- **30 of the 36 are refused for a class nothing stands in for**, and the ranking
+  by what each one alone unblocks is `FeatureGraphLM` 10, `MontyBase` 3,
+  `DisplacementGraphLM` 2, `GraphLM` 1, `TwoDSensorModule` 1 (17 naming),
+  `DefaultAttentionSystem` 0 (9). The Saccade and Omniglot families left the
+  ranking entirely: every config naming them is a Habitat config.
+- **18 wait on a missing pretrained library**, which is `/prerequisites`'s job
+  and not a port at all; 16 of those are the cows family, which also wants
+  `TwoDSensorModule`.
+- **1 is `${constants.rotations_all_count}`** among the refused — §11's open
+  point 4, still true, but almost every config it bites is a Habitat fixture.
 
 ### 18.3 The order this suggests, and why it changed
 
@@ -1009,12 +1021,12 @@ written when both of the first two were missing. Both are written now (§17), so
 what is left of them is a **capability inside a class that exists**:
 
 1. `DisplacementGraphLM` refuses `match_attribute: PPF` in its own words —
-   "matching on PPF is not ported, only displacement is". Two MuJoCo experiments
-   and two behind Habitat; a branch to translate, not a module.
-2. `FeatureGraphLM` — ten MuJoCo experiments, the largest single win.
-3. `TwoDSensorModule` + `DefaultAttentionSystem` together, since the Saccade and
-   Omniglot families need both and only one config is blocked by the sensor
-   alone.
+   "matching on PPF is not ported, only displacement is". Two experiments, and it
+   is a branch to translate, not a module.
+2. `FeatureGraphLM` — ten experiments, the largest single win.
+3. The cows family — 17 configs wanting `TwoDSensorModule`, 9 of them
+   `DefaultAttentionSystem`, 16 a pretrained cows library. One family, three
+   things, and the only group that is neither Habitat nor a fixture.
 4. `MontyBase` last, because all three of its experiments are Monty's own pytest
    fixtures and §10.7 has not decided what those are.
 
