@@ -1271,3 +1271,76 @@ filters, `Setup`'s refusal case, and two MCP preview cases. Each now names
 `TwoDSensorModule`, which is still unwritten, and the table case that said "a
 class that is only named has no test of ours" now asserts the new module's own
 test link instead.
+
+## 21. 2026-11-08: the edge detector, and the OpenCV this port does not have
+
+The cows family — 17 configs, the last big group in `docs/readiness.md` — reads
+a 2-D dataset through `TwoDSensorModule`, and that module's first question is
+"which way does the edge at this point run". `edge_detection.py` answers it: a
+structure tensor over Sobel gradients, aggregated over a neighbourhood weighted
+towards the patch's centre, and reported only when it is strong **and** coherent.
+All nineteen of Monty's cases in `tests/unit/frameworks/utils/edge_detection_test.py`
+are translated, ten of them as properties.
+
+### 21.1 Three questions, in the order the module asks them
+
+- **Was anything seen?** A flat patch has no gradient, so the aggregate is zero
+  and there is no edge — not "an edge of strength zero in an arbitrary
+  direction", which is what an unguarded argmax would report.
+- **Is the edge in the middle?** The weighted centroid of the gradient, measured
+  along the edge's normal, is how far the edge is from the patch centre. A patch
+  half full of background has its edge at the rim, and a module that just moved
+  _to_ an edge does not want to hear about a different one.
+- **Is it a crease in the world?** The depth gradient across the brightness edge,
+  in a band 1.5 pixels wide, at its 95th percentile. Ink on a surface and the
+  surface ending against the background look the same in colour and completely
+  different in depth, and a 2-D model built from the first kind is wrong at its
+  border.
+
+### 21.2 What the port had to write that Monty borrows
+
+`cv2.cvtColor`, `cv2.Sobel`, `cv2.GaussianBlur` and `np.percentile`, in
+`...EdgeDetection.ImageOps`. Three details are the whole of the fidelity:
+
+- **Fixed-point luma**, `(4899 R + 9617 G + 1868 B + 8192) >> 14` — 0.299,
+  0.587 and 0.114 in 14 bits.
+- **`BORDER_REFLECT_101`** — `-1` reads `1` and `n` reads `n - 2`, so the patch's
+  rim is a continuation of the surface rather than an edge of its own. A filter
+  that zeroed outside the patch would make every patch's border the strongest
+  feature in it.
+- **A separable Gaussian**, one vector of weights applied to rows then columns,
+  normalised to sum to one.
+
+That these agree with OpenCV closely enough is not asserted — it is measured by
+the five closed-form camera cases and a property over random rotations, both of
+which demand the detected angle within 0.1 rad of the angle the fixture patch was
+cut at.
+
+### 21.3 The two bugs the translation caught
+
+Both were in `angle_to_pose_2d`, and both were written wrong first:
+
+- **The perpendicular has to come from the normalised tangent.** Monty
+  normalises `[u, v, 0]` and then builds `[-v, u, 0]` from _those_ components; the
+  port first used the raw dot products, which is the same only when the tangent
+  frame is exactly orthonormal. The transported-frame case is the one that
+  noticed — 0.38 radians of it.
+- **The signature of a wrong frame is a reflection, not a rotation.** The
+  expected pose in that case is computed in the test by the _other_ spelling of
+  the same formula (`cos·x − sin·y` against production's `cos·x + sin·(−y)`),
+  which is why the case is an independent check rather than a restatement.
+
+### 21.4 Where the cows family stands now
+
+- `StructureTensor`, `EdgeFeatures`, `EdgeDetector`, `Monty.Math`'s tolerance,
+  `TangentFrame` and `project_onto_tangent_plane` — all written.
+- Still missing: `TwoDSensorModule` itself (368 lines, which also wants
+  `arc_length_corrected_displacement` and `Monty.Memento`), `DefaultAttentionSystem`
+  for 9 of the 17 configs, and a pretrained cows model on the machine for 16 —
+  which is what `/prerequisites` exports rather than code.
+
+### 21.5 The gate
+
+`scripts/quality.sh` green — 2 532 tests, 31 properties, worst complexity 29.85 —
+and `MIX_ENV=test mix dialyzer` at 0. The module map now says 193 of Monty's 360
+classes are written.
