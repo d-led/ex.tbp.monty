@@ -486,7 +486,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
         </dl>
       </div>
 
-      <div :if={@chart} class="space-y-1 pt-0.5">
+      <div :if={@chart} class="space-y-0.5 pt-0.5">
         <div class="flex flex-wrap items-center gap-1.5">
           <form id="replay-series" phx-change="replay_series">
             <select name="series" class="select select-xs" aria-label="Series to chart">
@@ -565,10 +565,10 @@ defmodule ExTbpMontyWeb.StudioComponents do
           <div
             :if={chart_axis(@series, @series_id) != ""}
             id="replay-chart-y-name"
-            class="flex h-40 w-3.5 shrink-0 items-center justify-center"
+            class="flex h-40 w-4 shrink-0 items-center justify-center"
           >
             <span
-              class="whitespace-nowrap text-[10px] text-base-content/60"
+              class="whitespace-nowrap text-xs text-base-content/60"
               style="writing-mode: vertical-rl; transform: rotate(180deg)"
             >
               {chart_axis(@series, @series_id)}
@@ -715,7 +715,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
                 />
               </svg>
             </div>
-            <p id="replay-chart-x-name" class="pt-1 text-center text-[10px] text-base-content/60">
+            <p id="replay-chart-x-name" class="text-center text-xs text-base-content/60">
               step
             </p>
           </div>
@@ -749,7 +749,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
         chooses; it is not where a reader looks to find out what the chart they
         are looking at is, and with a chart a learning module there are six of
         them. --%>
-        <h3 id="replay-chart-title" class="pt-1 text-center text-sm font-medium">
+        <h3 id="replay-chart-title" class="text-center text-base font-medium">
           {chart_title(@series, @series_id)}
         </h3>
         <script :type={Phoenix.LiveView.ColocatedHook} name=".ChartHover">
