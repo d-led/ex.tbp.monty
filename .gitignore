@@ -308,3 +308,4 @@ MUJOCO_LOG.TXT
 ### This package is a project of its own
 /packages/*/deps
 /packages/*/_build
+*.tar

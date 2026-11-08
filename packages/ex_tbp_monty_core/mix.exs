@@ -43,8 +43,9 @@ defmodule ExTbpMonty.Core.MixProject do
     [
       # The nearest-neighbour index, feature matching and the curvature fit are
       # the hot loops Elixir cannot make cheap enough (`native/`). Rustler is a
-      # build dependency: the Elixir paths are the reference and the fallback, so
-      # a machine without a Rust toolchain still runs everything, slowly.
+      # build dependency, and the crate is compiled when this package is: the
+      # build therefore wants a Rust toolchain, while the Elixir paths stay the
+      # reference and the fallback for a VM where the NIF cannot be loaded.
       {:rustler, "~> 0.38", runtime: false},
       {:jason, "~> 1.2"},
       # `Monty.Config.Source` and the maps it reads are YAML/JSON, and a
@@ -74,7 +75,19 @@ defmodule ExTbpMonty.Core.MixProject do
   defp package do
     [
       name: "ex_tbp_monty_core",
-      files: ~w(lib priv .formatter.exs mix.exs README.md LICENSE docs),
+      # `native/` is the crates, and it has to travel: `priv/native/*.so` is what
+      # *this* machine built, a NIF is loaded by the BEAM of the machine that
+      # installs the package, and rustler compiles the crate for that platform at
+      # `deps.compile` time. Shipping the binaries instead would hand a Linux host
+      # a macOS library. `priv` is therefore not in the list — only what the
+      # compiler needs to produce it.
+      #
+      # The crates are named file by file rather than as `native`: a Cargo
+      # `target/` directory is a gigabyte of build output no package should
+      # carry, and hex has no way to subtract one from a directory it was given.
+      files:
+        ~w(lib .formatter.exs mix.exs README.md LICENSE
+           native/*/Cargo.toml native/*/Cargo.lock native/*/src),
       maintainers: ["Dmitry Ledentsov"],
       licenses: ["MPL-2.0"],
       links: %{

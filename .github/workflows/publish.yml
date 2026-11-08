@@ -1,0 +1,130 @@
+name: publish
+
+# The core package, published to Hex.
+#
+# It publishes from a tag and only from a tag: `v0.1.0` for a release, and the
+# tag has to be the version in the package's `mix.exs`, because a hex release is
+# permanent — a wrong number can be retired but never withdrawn.
+#
+# "When the build is green" is answered here rather than assumed: this workflow
+# compiles and tests the package itself before it builds the tarball, and it
+# builds the tarball before it publishes it. The application's `ci.yml` gates the
+# container images; this gates the library, and the two do not depend on each
+# other because the library is a package that has to stand on its own — which is
+# also why its own suite is what runs here.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*-rc.*"
+      - "v*.*.*-beta.*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build the tarball and stop (no publish)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ELIXIR_VERSION: "1.20.5"
+  OTP_VERSION: "29.1.2"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: test and build the package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Cache the Rust build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/ex_tbp_monty_core/native/*/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('packages/ex_tbp_monty_core/native/**/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Install the toolchain the NIFs are built with
+        run: rustup toolchain install stable --profile minimal --no-self-update
+
+      - name: Fetch dependencies and compile, warnings are errors
+        working-directory: packages/ex_tbp_monty_core
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
+          mix compile --warnings-as-errors
+
+      - name: Test the package
+        working-directory: packages/ex_tbp_monty_core
+        run: mix test
+
+      - name: The tag and the package agree on the version
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: packages/ex_tbp_monty_core
+        run: |
+          set -e
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(grep -o '@version "[^"]*"' mix.exs | head -1 | cut -d'"' -f2)
+          echo "tag v$tag, package $version"
+          [ "$tag" = "$version" ] || {
+            echo "::error::the tag is v$tag and the package is $version — bump @version or retag"
+            exit 1
+          }
+
+      - name: Build the tarball
+        working-directory: packages/ex_tbp_monty_core
+        run: mix hex.build
+
+      - name: Keep the tarball
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hex-tarball
+          path: packages/ex_tbp_monty_core/ex_tbp_monty_core-*.tar
+          retention-days: 30
+
+  publish:
+    name: publish to Hex
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/') && (github.event_name == 'push' || inputs.dry_run == false)
+    runs-on: ubuntu-latest
+    environment: hex
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Install the toolchain the NIFs are built with
+        run: rustup toolchain install stable --profile minimal --no-self-update
+
+      - name: Fetch dependencies
+        working-directory: packages/ex_tbp_monty_core
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
+
+      # The key belongs to the account that owns the package name. It is the
+      # repository's secret, set by a person, never a value in this file.
+      - name: Publish
+        working-directory: packages/ex_tbp_monty_core
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+        run: mix hex.publish --yes
