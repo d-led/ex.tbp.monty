@@ -33,19 +33,42 @@ defmodule Monty.Studio.ReadinessTest do
     end
   end
 
+  # Habitat is on its way out upstream (2026-11-08), so a config that needs it is
+  # postponed rather than refused: nothing here is missing that anybody means to
+  # write. Read for MuJoCo, because that is the world a run would step — the test
+  # environment's own default is the stand-in scene, which refuses nothing for a
+  # world it does not have.
+  describe "an experiment whose world this build does not carry" do
+    test "is not planned, not refused" do
+      entry = Readiness.classified("test/sensor_module/base", world_simulator: :mujoco)
+
+      assert entry.status == :not_planned
+      assert entry.codes == [:world_not_carried]
+    end
+
+    test "the world outranks the classes it would also need" do
+      entry = Readiness.classified("tutorial/omniglot_training", world_simulator: :mujoco)
+
+      assert entry.status == :not_planned
+      assert "OmniglotEnvironment" in entry.blocked_by
+    end
+  end
+
   describe "what the experiments page filters on" do
-    test "says yes for what runs and no for anything else" do
+    test "says yes for what runs, no for what is refused, and its own word for what is postponed" do
       survey =
         Readiness.summarise([
           entry("runs", :runnable, [], []),
           entry("refused", :refused, [:modules_not_ported], ["FeatureGraphLM"]),
-          entry("unreadable", :did_not_compose, [:does_not_compose], [])
+          entry("postponed", :not_planned, [:world_not_carried], [], :habitat),
+          entry("unreadable", :did_not_compose, [:does_not_compose], [], nil)
         ])
 
-      assert Readiness.verdicts(survey) == %{
-               "runs" => "yes",
-               "refused" => "no",
-               "unreadable" => "no"
+      assert Readiness.labels(survey) == %{
+               "runs" => %{ready: "yes", world: "mujoco"},
+               "refused" => %{ready: "no", world: "mujoco"},
+               "postponed" => %{ready: "not_planned", world: "habitat"},
+               "unreadable" => %{ready: "no", world: "other"}
              }
     end
   end
@@ -70,7 +93,7 @@ defmodule Monty.Studio.ReadinessTest do
     test "a class that only ever shares ranks below one that blocks alone" do
       survey =
         Readiness.summarise([
-          entry("together", :refused, [:modules_not_ported, :world_not_carried], [
+          entry("together", :refused, [:modules_not_ported, :learning_module_not_buildable], [
             "FeatureGraphLM",
             "TwoDSensorModule"
           ]),
@@ -83,9 +106,25 @@ defmodule Monty.Studio.ReadinessTest do
                "TwoDSensorModule"
              ]
     end
+
+    # A class named only by a config whose world is missing is not work anybody has
+    # taken on: ranking it would put the Habitat families at the top of a backlog
+    # they are not in.
+    test "leaves out the classes a postponed experiment names" do
+      survey =
+        Readiness.summarise([
+          entry("postponed", :not_planned, [:world_not_carried, :modules_not_ported], [
+            "SaccadeOnImageEnvironment"
+          ]),
+          entry("refused", :refused, [:modules_not_ported], ["FeatureGraphLM"])
+        ])
+
+      assert Enum.map(survey.by_class, & &1.class) == ["FeatureGraphLM"]
+      assert survey.not_planned == 1
+    end
   end
 
-  defp entry(name, status, codes, blocked_by) do
-    %{name: name, status: status, codes: codes, blocked_by: blocked_by}
+  defp entry(name, status, codes, blocked_by, world \\ :mujoco) do
+    %{name: name, status: status, world: world, codes: codes, blocked_by: blocked_by}
   end
 end

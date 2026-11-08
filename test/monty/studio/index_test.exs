@@ -159,7 +159,10 @@ defmodule Monty.Studio.IndexTest do
             "1lm_1sm"
           )
         ],
-        %{"dist_1lm" => "yes", "surf_5lm" => "no"}
+        %{
+          "dist_1lm" => %{ready: "yes", world: "mujoco"},
+          "surf_5lm" => %{ready: "no", world: "mujoco"}
+        }
       )
     end
 
@@ -167,11 +170,28 @@ defmodule Monty.Studio.IndexTest do
       assert hd(rated().facets).key == "ready"
     end
 
+    test "the world the config names is the second, because it decides the first" do
+      assert Enum.map(rated().facets, & &1.key) |> Enum.take(2) == ["ready", "world"]
+    end
+
     test "a row carries the verdict it was given, and says so when there was none" do
       entries = Map.new(rated().entries, &{&1.name, &1.ready})
 
       assert entries["surf_5lm"] == "no"
       assert entries["surf_1lm_scratch"] == "unknown"
+    end
+
+    test "keeps only the world asked for" do
+      kept = Index.filter(rated(), %{"world" => "mujoco"})
+      dropped = Index.filter(rated(), %{"world" => "habitat"})
+
+      assert kept.matching == 2
+      assert dropped.matching == 0
+    end
+
+    test "says the world in the row's own words" do
+      assert Index.label("world", "mujoco") == "MuJoCo"
+      assert Index.label("world", "habitat") == "Habitat"
     end
 
     test "keeps only what runs here, and only what does not" do
@@ -195,6 +215,45 @@ defmodule Monty.Studio.IndexTest do
     test "reads as the question it answers, not as the stored value" do
       assert Index.label("ready", "yes") == "runs here"
       assert Index.label("ready", "no") == "refused"
+      assert Index.label("ready", "not_planned") == "not planned"
+    end
+
+    # Three answers, in the order a reader wants them: what I can run, what is
+    # ours to fix, and what has been postponed.
+    test "offers a postponed experiment its own answer, after the refusals" do
+      index =
+        Index.build(
+          [
+            experiment(
+              "dist_1lm",
+              "habitat_ycb_dist_agent_semantics0",
+              "evidence_1lm_nn5_dod003",
+              "1lm_1sm"
+            ),
+            experiment(
+              "surf_5lm",
+              "habitat_ycb_surf_agent_semantics0",
+              "evidence_5lm_nn10_dod003",
+              "5lm_5sm"
+            ),
+            experiment(
+              "surf_1lm_scratch",
+              "habitat_ycb_surf_agent_semantics0",
+              "displacement_1lm",
+              "1lm_1sm"
+            )
+          ],
+          %{
+            "dist_1lm" => %{ready: "yes", world: "mujoco"},
+            "surf_5lm" => %{ready: "no", world: "mujoco"},
+            "surf_1lm_scratch" => %{ready: "not_planned", world: "habitat"}
+          }
+        )
+
+      ready = Enum.find(index.facets, &(&1.key == "ready"))
+
+      assert Enum.map(ready.values, & &1.label) == ["runs here", "refused", "not planned"]
+      assert Enum.map(ready.values, & &1.value) == ["yes", "no", "not_planned"]
     end
   end
 end

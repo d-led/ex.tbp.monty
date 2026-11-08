@@ -39,7 +39,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
     {:ok,
      socket
      |> assign(
-       index: Index.build(Catalog.experiments(), verdicts()),
+       index: Index.build(Catalog.experiments(), labels()),
        templates: Catalog.templates(),
        drafts: Drafts.names(),
        filters: %{},
@@ -99,9 +99,10 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
     |> stream(:experiments, entries, reset: true)
   end
 
-  # Whether each experiment runs here, as `Monty.Studio.Readiness` answers it:
-  # cached, because composing two hundred configs is not a page's work.
-  defp verdicts, do: Readiness.catalog() |> Readiness.verdicts()
+  # What each experiment is labelled with — whether it runs here, and the world
+  # its config was written for — as `Monty.Studio.Readiness` answers it. Cached,
+  # because composing two hundred configs is not a page's work.
+  defp labels, do: Readiness.catalog() |> Readiness.labels()
 
   # The parameters `Index` takes, built from what the LiveView holds.
   defp params_of(%{filters: filters, query: query}) do
@@ -387,6 +388,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   # thing in the same words — readiness most of all, where "runs here" is the
   # whole reason the column exists.
   defp column(entry, %{key: "ready"} = facet), do: Index.label(facet.key, entry.ready)
+  defp column(entry, %{key: "world"} = facet), do: Index.label(facet.key, entry.world)
   defp column(entry, %{key: "modules"}), do: "#{entry.modules} lm"
   defp column(entry, %{key: "agent"}), do: entry.agent
   defp column(entry, %{key: "learning_module"}), do: entry.learning_module

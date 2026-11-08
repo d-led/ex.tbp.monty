@@ -53,7 +53,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
   def list(opts \\ []) do
     all = Catalog.experiments()
     chosen = Enum.filter(all, &chosen?(&1, opts))
-    result = chosen |> Index.build(verdicts()) |> Index.filter(facet_params(opts))
+    result = chosen |> Index.build(labels()) |> Index.filter(facet_params(opts))
     {page, truncated?} = window(result.entries, opts)
     by_name = Map.new(chosen, &{&1.name, &1})
 
@@ -540,6 +540,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
     %{
       "q" => opts[:query],
       "ready" => opts[:ready],
+      "world" => opts[:world],
       "agent" => opts[:agent],
       "modules" => opts[:modules],
       "learning_module" => opts[:learning_module],
@@ -547,9 +548,9 @@ defmodule ExTbpMonty.Mcp.Experiments do
     }
   end
 
-  # Whether each experiment runs in this deployment, from the one place that
-  # answers it — the same table the experiments page filters on.
-  defp verdicts, do: Readiness.catalog() |> Readiness.verdicts()
+  # What each experiment is labelled with — whether it runs in this deployment,
+  # and the world its config was written for — from the one place that answers it.
+  defp labels, do: Readiness.catalog() |> Readiness.labels()
 
   defp window(entries, opts) do
     limit = min(opts[:limit] || @default_limit, @max_limit)

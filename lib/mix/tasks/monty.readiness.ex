@@ -16,10 +16,15 @@ defmodule Mix.Tasks.Monty.Readiness do
       mix monty.readiness --json priv/monty/readiness.json
 
   `--world` overrides the world a setup is read for (the application's own
-  choice otherwise, which is MuJoCo). `--all` also lists every refused
-  experiment with its reasons; without it, only the classes are printed. The
+  choice otherwise, which is MuJoCo). `--all` also lists every experiment that
+  does not run, with its reasons; without it, only the classes are printed. The
   answer is `Monty.Studio.Readiness`'s — this task opens the catalogue and
   formats what it says.
+
+  An experiment whose **world** this build does not carry is reported as *not
+  planned* rather than refused: Monty's Habitat-Sim configs are on their way out
+  upstream, so they are postponed, and the class ranking only counts experiments
+  that some port work could make run.
   """
 
   use Mix.Task
@@ -67,6 +72,7 @@ defmodule Mix.Tasks.Monty.Readiness do
     #{length(survey.entries)} experiments in Monty's tree
       runnable here:    #{survey.runnable}
       refused:          #{survey.refused}
+      not planned:      #{survey.not_planned}  (a world this build does not carry)
       did not compose:  #{survey.did_not_compose}
     """)
 
@@ -78,10 +84,17 @@ defmodule Mix.Tasks.Monty.Readiness do
   defp print_codes([]), do: :ok
 
   defp print_codes(by_code) do
-    Mix.shell().info("Why the refusals name what they name:")
+    Mix.shell().info("""
+    Why nothing runs here names what it names (postponed = a world this build
+    does not carry, so not work anybody has taken on):
+    """)
 
-    for %{code: code, count: count} <- by_code do
-      Mix.shell().info("  #{String.pad_trailing(to_string(code), 30)} #{count}")
+    for %{code: code, refused: refused, postponed: postponed} <- by_code do
+      Mix.shell().info(
+        "  #{String.pad_trailing(to_string(code), 32)}" <>
+          " refused #{String.pad_leading(to_string(refused), 3)}" <>
+          "  postponed #{String.pad_leading(to_string(postponed), 3)}"
+      )
     end
 
     Mix.shell().info("")
@@ -106,12 +119,20 @@ defmodule Mix.Tasks.Monty.Readiness do
   end
 
   defp print_refused(entries) do
-    Mix.shell().info("Every refused experiment:")
+    Mix.shell().info("Every experiment that does not run here:")
 
     for entry <- entries, entry.status != :runnable do
-      Mix.shell().info("  #{entry.name} — #{Enum.join(entry.codes, ", ")}")
+      Mix.shell().info(
+        "  #{String.pad_trailing(status_name(entry.status), 16)} #{entry.name} — " <>
+          Enum.join(entry.codes, ", ")
+      )
     end
   end
+
+  defp status_name(:refused), do: "refused"
+  defp status_name(:not_planned), do: "not planned"
+  defp status_name(:did_not_compose), do: "does not compose"
+  defp status_name(_runnable), do: "runs here"
 
   defp write_json(_survey, nil), do: :ok
 

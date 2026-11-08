@@ -55,8 +55,10 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
       assert index.returned == index.matching or index.truncated?
 
       # The choices a person asks about, each with the counts the page shows —
-      # readiness first, because "what can I run here" is the first question.
-      assert Enum.map(index.facets, & &1.key) == ~w(ready agent modules learning_module model)
+      # readiness and the world first, because "what can I run, and in which
+      # world" are the first two questions.
+      assert Enum.map(index.facets, & &1.key) ==
+               ~w(ready world agent modules learning_module model)
 
       agents = Enum.find(index.facets, &(&1.key == "agent"))
       assert Enum.sum(Enum.map(agents.values, & &1.count)) == index.total
@@ -71,13 +73,16 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
     end
 
     # The question a model (or a person) asks before choosing one: what can this
-    # deployment actually run? Every experiment is on exactly one side.
-    test "splits the catalogue into what runs here and what is refused" do
+    # deployment actually run? Every experiment is on exactly one side, and a
+    # postponed one (its world is not carried) is on neither of the first two.
+    test "splits the catalogue into what runs here, what is refused and what is postponed" do
       runs = Experiments.list(ready: "yes")
       refused = Experiments.list(ready: "no")
+      postponed = Experiments.list(ready: "not_planned")
 
-      assert runs.matching + refused.matching == runs.total
+      assert runs.matching + refused.matching + postponed.matching == runs.total
       assert MapSet.disjoint?(names(runs), names(refused))
+      assert MapSet.disjoint?(names(runs), names(postponed))
     end
 
     test "counts the choices with the other filters applied" do

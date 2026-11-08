@@ -250,7 +250,8 @@ defmodule ExTbpMonty.Mcp.Tools do
       "title" => "List experiments (counts and facets)",
       "description" =>
         ~s|How many experiments there are, the choices they make counted, and a page of | <>
-          ~s|the matching ones. `ready` (yes/no: whether this deployment can run it), | <>
+          ~s|the matching ones. `ready` (yes/no/not_planned: whether this deployment runs | <>
+          ~s|it), `world` (mujoco/habitat/other: the simulator its config names), | <>
           ~s|`agent` (dist/surf), `modules` (learning modules, a number), | <>
           ~s|`learning_module`, `model` (pretrained/scratch) and a word `query` | <>
           ~s|are all optional and combine; the counts respect them. This is the tool for | <>
@@ -269,7 +270,11 @@ defmodule ExTbpMonty.Mcp.Tools do
           "ready" => %{
             "type" => "string",
             "description" =>
-              "`yes` for the ones this deployment runs, `no` for the ones it refuses."
+              "`yes` for the ones this deployment runs, `no` for the ones it refuses, `not_planned` for a world it does not carry."
+          },
+          "world" => %{
+            "type" => "string",
+            "description" => "`mujoco`, `habitat`, or `other` — the simulator the config names."
           },
           "modules" => %{
             "type" => "string",

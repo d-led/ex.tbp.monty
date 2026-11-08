@@ -1091,10 +1091,19 @@ defmodule Monty.Studio.Setup do
   def with_seed(%__MODULE__{} = setup, nil), do: setup
   def with_seed(%__MODULE__{} = setup, seed), do: %{setup | seed: seed}
 
-  defp engine(%__MODULE__{environment: %{module: %{class: "MuJoCoSimulator"}}}), do: :mujoco
-  defp engine(%__MODULE__{environment: %{module: %{class: "HabitatEnvironment"}}}), do: :habitat
-  defp engine(%__MODULE__{environment: %{module: %{class: "HabitatSim"}}}), do: :habitat
-  defp engine(%__MODULE__{}), do: nil
+  @doc """
+  The world the **config** was written for: `:mujoco`, `:habitat`, or `nil` when
+  it names no simulator this application knows.
+
+  Not the same question as `world`, which is the world a run of it would step
+  (the operator's choice). This is what the config says, which is what decides
+  whether the work it needs can be checked at all.
+  """
+  @spec engine(t()) :: :mujoco | :habitat | nil
+  def engine(%__MODULE__{environment: %{module: %{class: "MuJoCoSimulator"}}}), do: :mujoco
+  def engine(%__MODULE__{environment: %{module: %{class: "HabitatEnvironment"}}}), do: :habitat
+  def engine(%__MODULE__{environment: %{module: %{class: "HabitatSim"}}}), do: :habitat
+  def engine(%__MODULE__{}), do: nil
 
   # The class the experiment's agent is, from `env_init_args.agents` — which is
   # how Monty's own MuJoCo configs name `SurfaceAgent` or `DistantAgent`.

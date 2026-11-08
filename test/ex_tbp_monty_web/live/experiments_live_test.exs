@@ -215,13 +215,19 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
       end
     end
 
+    # The search reads what a row prints and nothing else. `has_element?` finds
+    # an element whether or not CSS hides it, so the empty row is not proof of an
+    # empty list — the rows are.
     test "a word only a config file knows does not match: the row has to show it",
          %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/experiments")
 
-      view |> element("#experiment-search") |> render_change(%{"q" => "mujoco"})
+      view |> element("#experiment-search") |> render_change(%{"q" => "env_init_args"})
+      assert row_names(view) == []
 
-      assert has_element?(view, "#experiments-empty")
+      # ...and a word the row does show does match it.
+      view |> element("#experiment-search") |> render_change(%{"q" => "mujoco"})
+      assert row_names(view) != []
     end
 
     test "clearing takes every filter away", %{conn: conn} do
@@ -274,6 +280,32 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/experiments?ready=no&q=base_infer_cows_large")
 
       assert "base_infer_cows_large_compositional" in row_names(view)
+    end
+
+    # Habitat is on its way out upstream, so a config that needs it is postponed
+    # rather than refused. Reading it for MuJoCo is what a run would step; the
+    # test environment's own default is the stand-in scene, which reads every
+    # config as if it could run.
+    test "a Habitat experiment is offered as not planned, and not as refused", %{conn: conn} do
+      Tmp.app_env(:world_simulator, :mujoco)
+
+      {:ok, postponed, _html} = live(conn, ~p"/experiments?ready=not_planned&q=omniglot_training")
+      {:ok, refused, _html} = live(conn, ~p"/experiments?ready=no&q=omniglot_training")
+
+      assert row_names(postponed) == ["tutorial-omniglot_training"]
+      assert row_names(refused) == []
+    end
+
+    # The second question after "does it run": which world was it written for.
+    test "...and the world its config names is a filter of its own", %{conn: conn} do
+      {:ok, habitat, _html} = live(conn, ~p"/experiments?world=habitat")
+      {:ok, mujoco, _html} = live(conn, ~p"/experiments?world=mujoco")
+
+      assert has_element?(habitat, "#chip-world-habitat")
+      assert row_names(habitat) != []
+      assert row_names(mujoco) != []
+      assert Enum.all?(row_names(habitat), &(&1 not in row_names(mujoco)))
+      assert "base_config_10distinctobj_dist_agent" in row_names(mujoco)
     end
 
     test "the column says the same thing as the pill that filters it", %{conn: conn} do

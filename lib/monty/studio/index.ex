@@ -29,6 +29,7 @@ defmodule Monty.Studio.Index do
           learning_module: String.t(),
           model: String.t(),
           ready: String.t(),
+          world: String.t(),
           groups: %{optional(String.t()) => String.t()},
           search: String.t()
         }
@@ -52,6 +53,7 @@ defmodule Monty.Studio.Index do
 
   @facets [
     %{key: "ready", label: "Runs here?"},
+    %{key: "world", label: "World"},
     %{key: "agent", label: "Agent"},
     %{key: "modules", label: "Learning modules"},
     %{key: "learning_module", label: "Learning module"},
@@ -61,14 +63,15 @@ defmodule Monty.Studio.Index do
   @doc """
   Builds the index from catalog entries.
 
-  `verdicts` is `Monty.Studio.Readiness.verdicts/1`: `"yes"` for an experiment
-  nothing here refuses, `"no"` for one something does. An experiment it does not
-  name is `"unknown"` — a page that was not told says so rather than guessing,
+  `labels` is `Monty.Studio.Readiness.labels/1`: what each experiment is labelled
+  with beyond its own file — `ready` (`"yes"`, `"no"`, `"not_planned"`) and
+  `world` (`"mujoco"`, `"habitat"`, `"other"`). An experiment it does not name is
+  `"unknown"` on both — a page that was not told says so rather than guessing,
   and a fixture of three experiments need not open all of Monty's.
   """
-  @spec build([map()], %{optional(String.t()) => String.t()}) :: t()
-  def build(experiments, verdicts \\ %{}) do
-    entries = experiments |> Enum.map(&entry(&1, verdicts)) |> Enum.sort_by(& &1.name)
+  @spec build([map()], %{optional(String.t()) => map()}) :: t()
+  def build(experiments, labels \\ %{}) do
+    entries = experiments |> Enum.map(&entry(&1, labels)) |> Enum.sort_by(& &1.name)
 
     %__MODULE__{entries: entries, facets: facets(entries)}
   end
@@ -108,13 +111,15 @@ defmodule Monty.Studio.Index do
 
   # -- entries --------------------------------------------------------------
 
-  defp entry(experiment, verdicts) do
+  defp entry(experiment, labels) do
     groups = experiment.groups
     config = Map.get(experiment, :config) || %{}
+    label = Map.get(labels, experiment.name, %{})
 
     entry = %{
       name: experiment.name,
-      ready: Map.get(verdicts, experiment.name, "unknown"),
+      ready: Map.get(label, :ready, "unknown"),
+      world: Map.get(label, :world, "unknown"),
       agent: agent(groups["environment"]),
       modules: modules(groups["monty/learning_module"], groups["monty/connectivity"]),
       learning_module: learning_module(groups["monty/learning_module"]),
@@ -165,7 +170,14 @@ defmodule Monty.Studio.Index do
   # config whose environment happened to be called `eval_…`, and the list then
   # looked like it had not filtered at all.
   defp searchable(entry) do
-    [entry.name, entry.agent, "#{entry.modules} lm", entry.learning_module, entry.model]
+    [
+      entry.name,
+      entry.agent,
+      "#{entry.modules} lm",
+      entry.learning_module,
+      entry.model,
+      label("world", entry.world)
+    ]
     |> Enum.join(" ")
     |> String.downcase()
   end
@@ -205,6 +217,7 @@ defmodule Monty.Studio.Index do
   end
 
   defp value_of(entry, "ready"), do: entry.ready
+  defp value_of(entry, "world"), do: entry.world
   defp value_of(entry, "agent"), do: entry.agent
   defp value_of(entry, "modules"), do: Integer.to_string(entry.modules)
   defp value_of(entry, "learning_module"), do: entry.learning_module
@@ -247,15 +260,28 @@ defmodule Monty.Studio.Index do
   # opens this page for is "what can I run".
   defp sort_key("ready", value), do: {0, ready_order(value), value}
 
+  # MuJoCo first: it is the world a run steps by default, and the one every
+  # experiment that runs here uses.
+  defp sort_key("world", value), do: {0, world_order(value), value}
+
   defp sort_key(_key, value), do: {0, 0, value}
 
   defp ready_order("yes"), do: 0
-  defp ready_order("unknown"), do: 1
-  defp ready_order("no"), do: 2
-  defp ready_order(_value), do: 3
+  defp ready_order("no"), do: 1
+  defp ready_order("unknown"), do: 2
+  defp ready_order("not_planned"), do: 3
+  defp ready_order(_value), do: 4
+
+  defp world_order("mujoco"), do: 0
+  defp world_order("habitat"), do: 1
+  defp world_order("other"), do: 2
+  defp world_order(_unknown), do: 3
 
   defp label_for("ready", "yes"), do: "runs here"
   defp label_for("ready", "no"), do: "refused"
+  defp label_for("ready", "not_planned"), do: "not planned"
+  defp label_for("world", "mujoco"), do: "MuJoCo"
+  defp label_for("world", "habitat"), do: "Habitat"
 
   defp label_for("modules", "1"), do: "one"
   defp label_for("modules", value), do: value <> " modules"
