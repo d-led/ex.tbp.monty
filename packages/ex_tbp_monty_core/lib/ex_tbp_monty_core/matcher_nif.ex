@@ -173,6 +173,17 @@ defmodule ExTbpMonty.Core.MatcherNif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  One column written into every row of `evidence`: `values` at `offset` in each
+  `stride`-long row, everything else untouched.
+
+  A tracker's windows are a ring and a step writes the same slot in all of them,
+  so this is a copy with a column replaced. `EvidenceSlopeTracker.update/3` is
+  the reference — it walks the same bytes in Elixir when the kernels are off.
+  """
+  def write_slot(_evidence, _values, _offset, _stride),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   One channel's evidence, spread over the whole hypothesis set.
 
   `totals` is `hypotheses` f64, what each hypothesis has earned from the channels

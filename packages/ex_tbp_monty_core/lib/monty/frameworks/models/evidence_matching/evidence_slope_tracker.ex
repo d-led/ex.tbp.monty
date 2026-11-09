@@ -135,8 +135,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
       %{
         tracker
         | evidence:
-            write_slot(tracker.evidence, values, tracker.cursor * 8, tracker.window_size * 8),
-          # Every window shifts by one slot, so the oldest channel count is the
+            write_slot(tracker.evidence, values, tracker.cursor * 8, tracker.window_size * 8),          # Every window shifts by one slot, so the oldest channel count is the
           # one whose evidence the update just overwrote.
           channels: tl(tracker.channels) ++ [channels],
           ages: Enum.map(tracker.ages, &(&1 + 1)),
@@ -259,15 +258,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   # is quadratic in the number of hypotheses and was measurably slower than the
   # list shifting this replaced.
   defp write_slot(evidence, values, offset, stride) do
-    write_slot(evidence, values, offset, stride, [])
+    if MatcherNif.loaded?() do
+      MatcherNif.write_slot(evidence, values, offset, stride)
+    else
+      reference_write_slot(evidence, values, offset, stride, [])
+    end
   end
 
-  defp write_slot(rest, <<>>, _offset, _stride, parts), do: IO.iodata_to_binary([parts, rest])
+  defp reference_write_slot(rest, <<>>, _offset, _stride, parts),
+    do: IO.iodata_to_binary([parts, rest])
 
-  defp write_slot(evidence, <<value::binary-size(8), values::binary>>, offset, stride, parts) do
+  defp reference_write_slot(evidence, <<value::binary-size(8), values::binary>>, offset, stride, parts) do
     <<skipped::binary-size(^offset), _slot::binary-size(8), rest::binary>> = evidence
 
-    write_slot(rest, values, stride - 8, stride, [parts, skipped, value])
+    reference_write_slot(rest, values, stride - 8, stride, [parts, skipped, value])
   end
 
   defp values_bytes(values) when is_binary(values), do: values

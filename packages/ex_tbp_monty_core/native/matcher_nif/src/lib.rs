@@ -867,6 +867,52 @@ fn keep_mask<'a>(
     output.into()
 }
 
+/// One step's evidence written into one slot of every hypothesis' window.
+///
+/// The windows are a ring and a step moves all of them at once, so one column is
+/// written at the same offset in every row and nothing else in the binary moves.
+/// In Elixir that meant a three-part iolist per hypothesis and one flatten over
+/// all of them — 24 words a hypothesis, 19 306 calls a step.
+///
+/// * `evidence` — `rows * stride` bytes: one window per hypothesis.
+/// * `values` — `rows` f64, what this step's evidence was.
+/// * `offset` — where in a row the slot sits.
+/// * `stride` — a row's length in bytes.
+///
+/// The answer is the same bytes with that column replaced, which is what
+/// `EvidenceSlopeTracker.update/3` hands on to the next step.
+#[rustler::nif]
+fn write_slot<'a>(
+    env: Env<'a>,
+    evidence: Binary,
+    values: Binary,
+    offset: u32,
+    stride: u32,
+) -> Binary<'a> {
+    let offset = offset as usize;
+    let stride = stride as usize;
+    let count = evidence.len();
+    let mut output = NewBinary::new(env, count);
+
+    output[0..count].copy_from_slice(evidence.as_slice());
+
+    if stride == 0 {
+        return output.into();
+    }
+
+    let rows = count / stride;
+    // The slot never runs past the end of a row, and a row is at least one slot.
+    let width = 8.min(stride.saturating_sub(offset));
+
+    for row in 0..rows {
+        let from = row * 8;
+        let to = row * stride + offset;
+        output[to..to + width].copy_from_slice(&values.as_slice()[from..from + width]);
+    }
+
+    output.into()
+}
+
 // -- the patch's surface -----------------------------------------------------
 
 /// The principal curvatures at the middle of a patch, and their directions.

@@ -337,6 +337,13 @@ has the slopes, so the column never becomes Elixir terms: `decode_one` fell from
 behind `native_kernels?: false` and two parity tests compare the masks exactly;
 the acceptance ladder is unchanged digit for digit.
 
+**Then the tracker's write (`26a8f73`'s neighbour).** `EvidenceSlopeTracker.update/3`
+wrote one column into every window with a three-part iolist per hypothesis and a
+flatten over all of them — 24 words a hypothesis, 19 306 calls a step.
+`MatcherNif.write_slot/4` is a copy with a column replaced, the Elixir walk stays
+as the reference, and a parity test compares the window bytes at every step of a
+ten-update wrap. `write_slot` is gone from the profile (463 224 words a step).
+
 The same shape is what the rest needs: `MatcherNif.decode/1` still runs 3 286
 times a step at ~24 values each, and
 `HypothesesSelection.ids_to_retain/1`/`ids_to_remove/1` still walk the mask with

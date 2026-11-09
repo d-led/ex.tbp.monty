@@ -98,6 +98,29 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTrackerNativePar
     assert native.mask == [false, false]
   end
 
+  test "the window bytes are the same bytes either way, step after step" do
+    # Ten updates over a window of four: the ring wraps, so the slot written
+    # moves around every row, and the two implementations must agree byte for
+    # byte at every one of them — not only in the slope they end up producing.
+    tracking = fn ->
+      Enum.reduce(
+        1..10,
+        EvidenceSlopeTracker.new(window_size: 4, min_age: 2) |> EvidenceSlopeTracker.add_hyp(3),
+        fn step, tracker ->
+          values = for hypothesis <- 0..2, do: step * 1.0 + hypothesis * 0.5
+          update!(tracker, values, num_channels: rem(step, 3) + 1)
+        end
+      )
+    end
+
+    native = tracking.()
+    reference = with_reference(tracking)
+
+    assert native.evidence == reference.evidence
+    assert native.channels == reference.channels
+    assert native.cursor == reference.cursor
+  end
+
   defp update!(tracker, values, opts \\ []) do
     assert {:ok, tracker} = EvidenceSlopeTracker.update(tracker, values, opts)
     tracker
