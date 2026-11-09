@@ -559,7 +559,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 id="chart-extent"
                 class="join-item border border-base-300 px-2 font-mono text-[11px] leading-6 text-base-content/70"
               >
-                {window_label(@x_window, @chart_extent)}
+                {window_label(@chart_window, @chart_extent)}
               </span>
               <button
                 id="zoom-right"
@@ -736,10 +736,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       if window == socket.assigns[:x_window] do
         socket
       else
+        # Through `assign_charts/2` rather than drawing here: a window a zoom
+        # asks for is still subject to following, and two places computing the
+        # drawn window is how a page comes to draw one stretch and label another.
         socket
         |> assign(x_window: window)
+        |> assign_charts(socket.assigns.beliefs)
         |> assign(
-          charts: charts_of(socket.assigns.beliefs, window, socket.assigns.episode_objects),
           # Full screen survives the steps that arrive while it is on: it is a
           # property of how the page is being read, not of the run.
           expanded: Map.get(socket.assigns, :expanded, false)
@@ -761,9 +764,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # The chart is drawn for a stretch of the run, and zooming means saying which:
   # `in` halves it around the middle, `out` doubles it, `left` and `right` move
   # it by a quarter without changing its width, and `all` is the whole run.
-  # Each is a patch, so the address bar follows the picture.
+  # Each is a patch, so the address bar follows the picture. Zooming starts from
+  # the window on screen rather than the one asked for, so following does not
+  # make the buttons work on a stretch nobody is looking at.
   def handle_event("zoom", %{"how" => how}, socket) do
-    window = zoom(socket.assigns[:x_window], socket.assigns[:chart_extent], how)
+    window = zoom(socket.assigns[:chart_window], socket.assigns[:chart_extent], how)
 
     {:noreply, push_patch(socket, to: experiment_path(socket, window))}
   end
@@ -1025,14 +1030,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
     extent = Chart.extent(longest)
 
+    # The window the chart is drawn for, which is the one asked for except while
+    # following: the label beside the chart names this, so a page that drew one
+    # stretch and said another would be lying about its own picture.
+    window = window_with_follow(socket, extent)
+
     assign(socket,
       beliefs: histories,
-      charts:
-        charts_of(
-          histories,
-          window_with_follow(socket, extent),
-          socket.assigns.episode_objects
-        ),
+      charts: charts_of(histories, window, socket.assigns.episode_objects),
+      chart_window: window,
       chart_extent: extent
     )
   end

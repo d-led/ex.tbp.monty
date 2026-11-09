@@ -616,6 +616,35 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       refute has_element?(view, "#zoom-all:not([disabled])")
     end
 
+    test "a chart that follows the run slides back to the newest step, and stops when told",
+         %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=2")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # Following is what a page opened on a run does by default: a window that
+      # has been zoomed into keeps its width and ends at the newest step, so
+      # moving back by a quarter is undone rather than leaving the run behind.
+      assert has_element?(view, "#follow-latest:checked")
+
+      view |> element("#zoom-in") |> render_click()
+      view |> element("#zoom-left") |> render_click()
+
+      assert view |> element("#chart-extent") |> render() =~ "steps 1–2 of 2"
+
+      # A reader reading an earlier stretch says so, and the window then stays
+      # exactly where they put it.
+      view |> element("#follow-latest") |> render_click()
+
+      refute has_element?(view, "#follow-latest:checked")
+
+      view |> element("#zoom-left") |> render_click()
+
+      assert view |> element("#chart-extent") |> render() =~ "steps 0–1 of 2"
+    end
+
     test "the log filter keeps a line only if every word matches", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
