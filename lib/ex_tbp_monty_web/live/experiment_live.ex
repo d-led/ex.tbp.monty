@@ -129,6 +129,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # Full screen is part of the page, not of the chart: it exists before the
       # first step arrives and outlives the charts being rebuilt by every one.
       expanded: Map.get(socket.assigns, :expanded, false),
+      # Following the newest steps is the default: a page opened on a run that is
+      # still going is a page watching it, not a page reading it.
+      follow: Map.get(socket.assigns, :follow, true),
       chart_extent: {0, 0},
       # The object and the agent in one picture per step: the views a sensor
       # streams say what a camera saw, this says whether there was anything to see.
@@ -598,6 +601,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               >
                 {if @expanded, do: "⤡", else: "⤢"}
               </button>
+              <%!-- The one control the dashboard had that this page did not: while
+              a run is going, a window that is zoomed into should keep showing the
+              newest steps, or the chart quietly falls behind the experiment. --%>
+              <label
+                for="follow-latest"
+                class="ml-2 flex items-center gap-1 text-[11px] text-base-content/70"
+              >
+                <input
+                  type="checkbox"
+                  id="follow-latest"
+                  class="checkbox checkbox-xs"
+                  checked={@follow}
+                  phx-click="follow"
+                /> follow latest steps
+              </label>
             </div>
           </div>
           <div
@@ -752,6 +770,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   def handle_event("expand", _params, socket) do
     {:noreply, assign(socket, :expanded, not Map.get(socket.assigns, :expanded, false))}
+  end
+
+  # Turning following off is how a reader says "leave the window where I put it";
+  # turning it back on slides it to the newest step at the next step to arrive.
+  def handle_event("follow", _params, socket) do
+    follow? = not Map.get(socket.assigns, :follow, true)
+
+    {:noreply, socket |> assign(:follow, follow?) |> assign_charts(socket.assigns.beliefs)}
   end
 
   def handle_event("parallelism", %{"parallelism" => count}, socket) do
@@ -992,18 +1018,34 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # The histories, the chart of the stretch being looked at, and how long the run
   # is so far — the last of those is what zoom and pan move within.
   defp assign_charts(socket, histories) do
-    window = socket.assigns.x_window
-
     longest =
       histories
       |> Map.values()
       |> Enum.max_by(&length/1, fn -> [] end)
 
+    extent = Chart.extent(longest)
+
     assign(socket,
       beliefs: histories,
-      charts: charts_of(histories, window, socket.assigns.episode_objects),
-      chart_extent: Chart.extent(longest)
+      charts:
+        charts_of(
+          histories,
+          window_with_follow(socket, extent),
+          socket.assigns.episode_objects
+        ),
+      chart_extent: extent
     )
+  end
+
+  # "Follow latest", the way the pyview dashboard has it: while it is on, a window
+  # that has been zoomed into keeps its width and slides so that it ends at the
+  # newest step — the run grows and the reader keeps seeing the live end of it.
+  # Off, the window is exactly what was asked for, and the run grows out of view.
+  defp window_with_follow(socket, {_first, last}) do
+    case {Map.get(socket.assigns, :follow, true), socket.assigns.x_window} do
+      {true, {from, to}} -> {max(last - (to - from), 0), last}
+      {_off, window} -> window
+    end
   end
 
   # One chart per module, from the module's own history, drawn for the stretch of
