@@ -146,38 +146,45 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Calculator.De
     # front, and asking it for every column of every row of every node was most
     # of a step's time — a hundred million list steps per step of a 77-object
     # experiment.
+    #
+    # The weights and the weighted evidences are accumulated in the column order
+    # a list of pairs would have been summed in, so the answer is the same float,
+    # without building the pair list — or the list of values before it, or the
+    # three passes `weighted_mean/1` made of it. A node is one walk of its
+    # columns now, and there is one walk per node per channel per step.
     values = List.to_tuple(row)
-    node_values = Enum.map(columns, &value_at(values, &1.index))
 
-    if Enum.any?(node_values, &is_nil/1) do
-      nil
-    else
-      weighted_mean(Enum.zip_with(columns, node_values, &{&1, &2}))
+    case weighted_totals(values, columns, 0.0, 0.0) do
+      nil ->
+        nil
+
+      {total_weight, total} ->
+        if total_weight == 0.0, do: nil, else: total / total_weight
     end
   end
 
   # A row shorter than the features asked for answers nothing there, which is
-  # what reading past the end of a list answered before.
-  defp value_at(values, index) when index < tuple_size(values), do: elem(values, index)
-  defp value_at(_values, _index), do: nil
+  # what reading past the end of a list answered before — and it answers it for
+  # the whole node, as the check over every value did.
+  defp weighted_totals(_values, [], total_weight, total), do: {total_weight, total}
 
-  defp weighted_mean([]), do: nil
+  defp weighted_totals(values, [column | rest], total_weight, total) do
+    case value_at(values, column.index) do
+      nil ->
+        nil
 
-  defp weighted_mean(columns_and_values) do
-    total_weight =
-      columns_and_values
-      |> Enum.map(fn {column, _value} -> column.weight end)
-      |> Enum.sum()
-
-    if total_weight == 0.0 do
-      nil
-    else
-      columns_and_values
-      |> Enum.map(fn {column, value} -> column.weight * column_evidence(column, value) end)
-      |> Enum.sum()
-      |> Kernel./(total_weight)
+      value ->
+        weighted_totals(
+          values,
+          rest,
+          total_weight + column.weight,
+          total + column.weight * column_evidence(column, value)
+        )
     end
   end
+
+  defp value_at(values, index) when index < tuple_size(values), do: elem(values, index)
+  defp value_at(_values, _index), do: nil
 
   defp column_evidence(%{tolerance: tolerance} = column, value) when tolerance == 0.0 do
     # A tolerance of zero is the limit of the falloff below: only an exact
