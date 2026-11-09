@@ -25,6 +25,9 @@ defmodule ExTbpMonty.Application do
       # transcript reaches its page from here, and the database is written when
       # the run settles rather than once per step.
       Monty.Studio.RunStream,
+      # The one process that writes a run's steps: a boundary hands them over and
+      # steps on, so the experiment never waits for Postgres.
+      Monty.Studio.RunWriter,
       # One child per prerequisite download, restarted never: a download either
       # finishes or is started again deliberately.
       {DynamicSupervisor, name: ExTbpMonty.PrerequisitesSupervisor, strategy: :one_for_one},

@@ -226,6 +226,10 @@ defmodule Monty.Studio.RunHistoryTest do
       # was doing.
       beat = RunHistory.heartbeat(run, nil)
       assert is_integer(beat)
+
+      # The beat is a message to the writer, not a write: wait for the writer to
+      # have handled it before asking the row (`AGENTS.md`: no sleeping).
+      _ = :sys.get_state(Monty.Studio.RunWriter)
       assert RunHistory.quiet_for(RunHistory.get(run.id)) < 5
 
       :ok = quiet_since(run, 300)

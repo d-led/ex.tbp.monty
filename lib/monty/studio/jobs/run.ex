@@ -37,6 +37,7 @@ defmodule Monty.Studio.Jobs.Run do
     RunHistory,
     RunLog,
     RunStream,
+    RunWriter,
     Setup,
     Summary
   }
@@ -434,45 +435,26 @@ defmodule Monty.Studio.Jobs.Run do
   # Whether the row now holds the steps decides whether the memory may be
   # dropped: it is the only copy until it is written.
   #
-  # The write is announced because it can take seconds: appending an episode to
-  # the row rewrites the transcript, and a run that is quiet for twenty seconds
-  # while that happens looks exactly like a run that has stopped. Saying "saving
-  # 22 508 steps" is the difference between a slow write and a hang, and it is
-  # the only place that knows which it is.
+  # The write is handed to `RunWriter` rather than made here. Waiting for it was
+  # 3.3 s an episode of a run's 84 (`59613a1c`): the model sat idle while
+  # Postgres rewrote a quarter of a gigabyte, and nothing about the next episode
+  # depended on the answer. The count of what has been handed over moves with the
+  # hand-over, so the same steps are never asked for twice; a write that fails is
+  # the writer's to retry, and the steps are still in memory for the page.
   #
-  # What is written here is the transcript only. The pictures are five times its
-  # size and every one of them would be rewritten by the statement that appends
+  # What crosses is the transcript only. The pictures are five times its size and
+  # every one of them would be rewritten by the statement that appends
   # (`RunHistory.store/3` explains the measurement), so they are written once, as
   # the run settles.
   defp keep_with_state(%{id: id, steps_done: written} = record) do
     {new_log, new_timeline} = RunStream.steps_from(id, written || 0)
-    publish(id, {:keeping, (written || 0) + length(new_log)})
+    handed = (written || 0) + length(new_log)
 
-    case RunHistory.checkpoint_steps(record, new_log, new_timeline, timeline: :skip) do
-      {:ok, saved} ->
-        publish(id, :kept)
-        {saved, true}
+    publish(id, {:keeping, handed})
+    :ok = RunWriter.checkpoint(record, {new_log, new_timeline}, handed)
+    publish(id, :kept)
 
-      {:error, reason} ->
-        publish(id, :kept)
-        Logger.warning("studio run #{record.id}: cannot write its steps: #{inspect(reason)}")
-        {record, false}
-    end
-  rescue
-    # A pool that gives up on a statement raises; it does not return an error.
-    # That used to end the run — the write was slower than the pool's patience, so
-    # a five-thousand-step experiment died at episode seventy-five holding the
-    # steps it had already taken. It is a write that can be tried again at the next
-    # boundary, and the steps are still in memory for the page until it is.
-    error in [DBConnection.ConnectionError, Postgrex.Error] ->
-      publish(record.id, :kept)
-
-      Logger.warning(
-        "studio run #{record.id}: the write was abandoned, and will be tried at the " <>
-          "next episode boundary: #{Exception.message(error)}"
-      )
-
-      {record, false}
+    {%{record | steps_done: handed}, true}
   end
 
   defp publish(run_id, event),
@@ -504,7 +486,7 @@ defmodule Monty.Studio.Jobs.Run do
     {log, timeline} = RunStream.steps(id)
     publish(id, {:keeping, length(log)})
 
-    case RunHistory.store(record, log, timeline) do
+    case RunWriter.store(record, log, timeline) do
       {:ok, saved} ->
         publish(id, :kept)
         {saved, true}

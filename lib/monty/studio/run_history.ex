@@ -373,7 +373,7 @@ defmodule Monty.Studio.RunHistory do
     now = System.monotonic_time(:second)
 
     if is_nil(beat) or now - beat >= @heartbeat_seconds do
-      alive(run)
+      Monty.Studio.RunWriter.alive(run)
       now
     else
       beat
