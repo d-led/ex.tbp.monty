@@ -178,29 +178,13 @@ try {
         }
     }
 
-    # Rustler writes a crate's library into the *package's* `priv/native`. On
-    # Unix the build directory reaches that directory through a link; on Windows
-    # it holds a copy, taken when the package was first compiled, so a library
-    # built afterwards sits in the package and nowhere the release is assembled
-    # from - which is how a release came to be checked and found to carry
-    # neither `kd_tree_nif.dll` nor `matcher_nif.dll`. Copied across per crate,
-    # before the release is built.
-    function Sync-Kernels {
-        $built = 'packages/ex_tbp_monty_core/priv/native'
-        $wanted = "_build/$env:MIX_ENV/lib/ex_tbp_monty_core/priv/native"
-
-        New-Item -ItemType Directory -Force -Path $wanted | Out-Null
-
-        $crates = Get-ChildItem $crate_root -Directory |
-            Where-Object { Test-Path (Join-Path $_.FullName 'Cargo.toml') }
-        foreach ($crate in $crates) {
-            foreach ($suffix in '.dll', '.so') {
-                $file = Join-Path $built "$($crate.Name)$suffix"
-                if (Test-Path $file) { Copy-Item $file $wanted -Force }
-            }
-        }
-    }
-    Sync-Kernels
+    # The libraries are in the build tree already: `deps.compile` copies the
+    # package's `priv` into `_build`, which on Windows is a copy rather than
+    # Unix's link. Copying them across by hand, as this script used to, then
+    # failed on the file Mix had just written and Windows had mapped -
+    # "The process cannot access the file ... because it is being used by
+    # another process" - so the step is gone and the release check below is what
+    # says whether they arrived.
     Invoke-Step 'checking the asset toolchain (installs it once, then finds it)' {
         mix assets.install --if-missing
     }
