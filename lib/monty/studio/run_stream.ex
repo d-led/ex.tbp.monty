@@ -187,13 +187,15 @@ defmodule Monty.Studio.RunStream do
 
   # Every sensor, every step. A queued run has no socket waiting on it, so there
   # is nothing to throttle for; the frames are not thumbnails either — they are
-  # the same drawing a live page would get.
+  # the same drawing a live page would get. The observation carries the pictures
+  # this step already encoded, so `Camera.frame/3` draws them rather than making
+  # its own: a step pays for two PNGs a sensor, not four.
   defp frames_of(step, images) do
     seen = Map.get(step.observations, Environment.agent_id(), %{})
 
     step.sensor_ids
     |> Enum.filter(&Map.has_key?(seen, &1))
-    |> Enum.map(&Camera.frame(&1, seen[&1], step.number, Map.fetch!(images, &1)))
+    |> Enum.map(&Camera.frame(&1, RunLog.drawn(seen[&1], Map.get(images, &1)), step.number))
     |> Enum.map(&Map.take(&1, [:sensor_id, :media_type, :data, :note]))
   end
 

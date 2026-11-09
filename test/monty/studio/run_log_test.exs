@@ -9,6 +9,7 @@ defmodule Monty.Studio.RunLogTest do
 
   use ExUnit.Case, async: true
 
+  alias Monty.Simulators.Synthetic.Camera
   alias Monty.Studio.{RunLog, Summary}
 
   describe "a recorded step" do
@@ -33,6 +34,19 @@ defmodule Monty.Studio.RunLogTest do
       assert %{"depth" => depth, "colour" => colour, "range" => [0.05, 0.05]} = sensor["images"]
       assert <<137, 80, 78, 71, _rest::binary>> = Base.decode64!(depth)
       assert <<137, 80, 78, 71, _rest::binary>> = Base.decode64!(colour)
+    end
+
+    test "and a step's picture is drawn from one encoding, whichever way it is drawn" do
+      # A step is drawn twice — the frame a page shows and the scene a replay
+      # keeps — and both are the same two PNGs. `RunStream` encodes them once and
+      # hands them over in the observation, so the frame must come out the same as
+      # the one drawn from the raw arrays: four PNGs a sensor a step would be two
+      # encodings of the same picture.
+      observation = observations()["agent_id_0"]["patch"]
+      drawn = RunLog.drawn(observation, Camera.images(observation))
+
+      assert Camera.frame("patch", drawn, 7) == Camera.frame("patch", observation, 7)
+      assert Camera.frame("patch", drawn, 7).note == "step 7 · flat at 0.050 m"
     end
   end
 

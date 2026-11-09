@@ -100,8 +100,7 @@ defmodule Monty.Studio.RunLog do
   record's scene are the same two PNGs — so it hands them here instead of having
   them drawn twice.
   """
-  @spec moment(non_neg_integer(), map(), %{optional(String.t()) => Camera.images()}) ::
-          map()
+  @spec moment(non_neg_integer(), map(), %{optional(String.t()) => map()}) :: map()
   def moment(step, observations, images) when is_integer(step) do
     %{
       "step" => step,
@@ -109,35 +108,46 @@ defmodule Monty.Studio.RunLog do
         observations
         |> Map.get(agent_id(), %{})
         |> Map.new(fn {sensor_id, observation} ->
-          sensor_moment({sensor_id, observation}, Map.get(images, sensor_id))
+          {sensor_id, drawn(observation, Map.get(images, sensor_id))}
         end)
     }
   end
 
-  # The arrays a camera answers with, one entry per pixel. They are dropped on
-  # the way into the database — four thousand numbers a step, per sensor, is not
-  # something a history row should carry — and the two *pictures* they make are
-  # kept instead: a few kilobytes of PNG, which is what a page shows anyway. So a
-  # run that has finished still shows what its sensors saw, and a replay is the
-  # episode as it happened rather than a table of numbers.
+  # The arrays a camera answers with, one entry per pixel.
   @camera_arrays ["depth", "rgba", "semantic", "semantic_3d", "sensor_frame_data"]
 
-  defp sensor_moment({sensor_id, observation}, drawn) do
-    images = drawn || Camera.images(observation)
+  @doc """
+  A sensor's observation with its pictures drawn into it.
 
-    recorded =
-      %{
-        "depth" => images.depth,
-        "colour" => images.colour,
-        "range" => images.range && Tuple.to_list(images.range)
-      }
-      |> Map.reject(fn {_key, value} -> is_nil(value) end)
+  The arrays a camera answers with are dropped on the way into a record — four
+  thousand numbers a step, per sensor, is not something a history row should carry
+  — and the two *pictures* they make are kept instead: a few kilobytes of PNG,
+  which is what a page shows anyway. An observation that carries them is what
+  `Camera.frame/3` draws without encoding anything, which is how a step that both
+  records its pictures and shows them pays for one encoding rather than two.
 
+  `images` is what `Camera.images/1` answered for the observation; `nil` draws
+  them here.
+  """
+  @spec drawn(map(), map() | nil) :: map()
+  def drawn(observation, images) do
     kept = Map.drop(observation, @camera_arrays)
+    recorded = recorded(images || Camera.images(observation))
 
     if map_size(recorded) == 0,
-      do: {sensor_id, kept},
-      else: {sensor_id, Map.put(kept, "images", recorded)}
+      do: kept,
+      else: Map.put(kept, "images", recorded)
+  end
+
+  # The shape a record keeps, and the shape `Camera.images/1` reads back: an
+  # observation that carries `"images"` has already been drawn.
+  defp recorded(images) do
+    %{
+      "depth" => images.depth,
+      "colour" => images.colour,
+      "range" => images.range && Tuple.to_list(images.range)
+    }
+    |> Map.reject(fn {_key, value} -> is_nil(value) end)
   end
 
   @doc """

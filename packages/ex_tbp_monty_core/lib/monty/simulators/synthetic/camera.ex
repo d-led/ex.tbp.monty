@@ -30,13 +30,6 @@ defmodule Monty.Simulators.Synthetic.Camera do
           note: String.t()
         }
 
-  @typedoc "The two pictures one sensor's observation makes, and the depth they span."
-  @type images :: %{
-          depth: String.t() | nil,
-          colour: String.t() | nil,
-          range: {float(), float()} | nil
-        }
-
   @doc """
   The view from one sensor at one step.
 
@@ -46,24 +39,12 @@ defmodule Monty.Simulators.Synthetic.Camera do
   they came from — and is shown as it was drawn.
   """
   @spec frame(String.t(), map(), non_neg_integer()) :: frame()
-  def frame(sensor_id, observation, step),
-    do: frame(sensor_id, observation, step, images(observation))
-
-  @doc """
-  The same frame, from pictures somebody has already drawn.
-
-  A step is drawn twice — once for the page watching it and once for the record a
-  replay reads back — and the pictures are the same two PNGs both times. Encoding
-  them twice per sensor per step was four PNGs where two would do, so the caller
-  that draws both passes what it encoded.
-  """
-  @spec frame(String.t(), map(), non_neg_integer(), images()) :: frame()
-  def frame(sensor_id, observation, step, images) do
+  def frame(sensor_id, observation, step) do
     %{
       sensor_id: sensor_id,
       step: step,
       media_type: "text/html",
-      data: markup(sensor_id, images),
+      data: markup(sensor_id, images(observation)),
       location: Map.get(observation, "location", [0.0, 0.0, 0.0]),
       note: note(step, observation)
     }
@@ -77,7 +58,11 @@ defmodule Monty.Simulators.Synthetic.Camera do
   kept their pictures — because a frame that said nothing about what it was
   looking at would be worse than one that says there is nothing.
   """
-  @spec images(map()) :: images()
+  @spec images(map()) :: %{
+          depth: String.t() | nil,
+          colour: String.t() | nil,
+          range: {float(), float()} | nil
+        }
   def images(observation) do
     case Map.get(observation, "images") do
       %{} = recorded ->
