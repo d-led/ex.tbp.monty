@@ -377,16 +377,21 @@ defmodule Monty.Studio.Chart do
   end
 
   # A segment per contiguous run of steps: an object reported on 1, 2 and 4 has
-  # two polylines, and the missing step 3 stays missing. An episode boundary is
-  # always a break, even though the run's x carries on: the evidence did start
-  # again at zero there, and a line joining the two would be a fall nobody saw.
+  # two polylines, and the missing step 3 stays missing.
+  #
+  # An episode boundary is *not* a break by itself. It used to be, on the
+  # argument that joining the last evidence of one episode to the first of the
+  # next draws a fall nobody saw — and it does: that drop at the band's edge is
+  # the reset. What the break cost was a hole in the line at every boundary,
+  # which reads as missing data rather than as a reset, so the line now joins the
+  # two when the steps are adjacent and breaks only where nothing was reported.
   defp segments(points, chart) do
     points
     |> Enum.reduce([], fn {episode, _x, _evidence} = point, segments ->
       case segments do
-        [{same_episode, run} | earlier] ->
-          if episode == same_episode and contiguous?(point, List.last(run)),
-            do: [{same_episode, run ++ [point]} | earlier],
+        [{_same_episode, run} | earlier] ->
+          if contiguous?(point, List.last(run)),
+            do: [{episode, run ++ [point]} | earlier],
             else: [{episode, [point]} | segments]
 
         [] ->
