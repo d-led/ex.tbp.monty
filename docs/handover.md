@@ -1919,7 +1919,7 @@ CI: `cc5c827`, `3238358` and `e78a19f` each closed everything except
 `e78a19f` asks `deps.compile ex_tbp_monty_core --force` for the crates (that is
 what builds them; `mix compile --force` never did), `029df26` removes the hand
 copy that then collided with the file Mix had just written and Windows had
-mapped. A **third** fix — a `Sync-Kernels` that asks whether the two paths are
-the same file (a link) or hold the same bytes (two copies) — was in the working
-tree, uncommitted, at hand-over. Whether the Windows job is green after them is
-the first thing to check.
+mapped. `9f2fb84` puts back a `Sync-Kernels` that copies only what the build tree does
+not have: it asks whether the two paths are the same file (a link) or hold the
+same bytes (two copies), and skips the copy when they are. Whether the Windows
+job is green after those three is the first thing to check.
