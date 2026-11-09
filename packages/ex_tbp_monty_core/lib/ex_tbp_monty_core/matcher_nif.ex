@@ -156,6 +156,23 @@ defmodule ExTbpMonty.Core.MatcherNif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  Which hypotheses a slope threshold keeps, one byte each: `1` kept, `0` not.
+
+  The question a module asks of its slopes is nearly always this one, and asking
+  it here is one crossing instead of two: the slopes never become Elixir terms,
+  so nothing is boxed and nothing is decoded. `evidence`, `channels`, `window`
+  and `cursor` are as `window_slopes/4` takes them, `ages` is one u32 per
+  hypothesis, and the rule is the reference's:
+
+      keep = age < min_age || (slope is not NaN && slope >= threshold)
+
+  `EvidenceSlopeTracker.select_hypotheses/2` is the reference this is held to,
+  and it walks the same bytes in Elixir when the kernels are off.
+  """
+  def keep_mask(_evidence, _channels, _window, _cursor, _ages, _min_age, _threshold),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   One channel's evidence, spread over the whole hypothesis set.
 
   `totals` is `hypotheses` f64, what each hypothesis has earned from the channels

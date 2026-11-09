@@ -59,6 +59,45 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTrackerNativePar
     assert with_reference(fn -> EvidenceSlopeTracker.calculate_slopes(tracker) end) == [nil, nil]
   end
 
+  # The mask is the answer a module acts on, and asking for it in one crossing
+  # is the point of the kernel: the slopes never become Elixir terms. What must
+  # not change is which hypotheses survive, so that is what is compared —
+  # exactly, over a tracker where one hypothesis falls, one rises and one is too
+  # young to remove however it is doing.
+  test "the selection is the same mask either way" do
+    tracker =
+      EvidenceSlopeTracker.new(window_size: 3, min_age: 2)
+      |> EvidenceSlopeTracker.add_hyp(3)
+      |> update!([1.0, 5.0, 1.0])
+      |> update!([2.0, 4.0, 2.0])
+      |> update!([3.0, 3.0, 4.0])
+      |> EvidenceSlopeTracker.add_hyp(1)
+      |> update!([4.0, 2.0, 5.0, 9.0])
+
+    native = EvidenceSlopeTracker.select_hypotheses(tracker, 0.5)
+    reference = with_reference(fn -> EvidenceSlopeTracker.select_hypotheses(tracker, 0.5) end)
+
+    assert native.mask == reference.mask
+    # Rising, falling, rising, and one whose window holds no pair at all.
+    assert native.mask == [true, false, true, true]
+  end
+
+  test "a threshold above every slope keeps exactly the young ones, either way" do
+    tracker =
+      EvidenceSlopeTracker.new(window_size: 3, min_age: 3)
+      |> EvidenceSlopeTracker.add_hyp(2)
+      |> update!([1.0, 3.0])
+      |> update!([2.0, 2.0])
+      |> update!([3.0, 1.0])
+      |> update!([4.0, 0.0])
+
+    native = EvidenceSlopeTracker.select_hypotheses(tracker, 1_000.0)
+    reference = with_reference(fn -> EvidenceSlopeTracker.select_hypotheses(tracker, 1_000.0) end)
+
+    assert native.mask == reference.mask
+    assert native.mask == [false, false]
+  end
+
   defp update!(tracker, values, opts \\ []) do
     assert {:ok, tracker} = EvidenceSlopeTracker.update(tracker, values, opts)
     tracker

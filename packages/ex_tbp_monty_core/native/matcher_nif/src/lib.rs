@@ -780,37 +780,88 @@ fn window_slopes<'a>(
     let mut output = NewBinary::new(env, count * 8);
 
     for hypothesis in 0..count {
-        let row = hypothesis * window * 8;
-        let mut sum = 0.0;
-        let mut observed = 0;
+        let slope = slope_at(evidence.as_slice(), channels.as_slice(), window, cursor, hypothesis);
+        write_f64(&mut output, hypothesis, slope);
+    }
 
-        for slot in 0..window.saturating_sub(1) {
-            let older = f64_at(evidence.as_slice(), row + ((cursor + slot) % window) * 8);
-            let newer = f64_at(evidence.as_slice(), row + ((cursor + slot + 1) % window) * 8);
+    output.into()
+}
 
-            // A slot that was never filled, or a pair that spans the fill
-            // boundary, contributes nothing — Monty's NaN-skipping mean.
-            if older.is_nan() || newer.is_nan() {
-                continue;
-            }
+/// One hypothesis' slope, NaN where its window has no pair of filled slots.
+fn slope_at(
+    evidence: &[u8],
+    channels: &[u8],
+    window: usize,
+    cursor: usize,
+    hypothesis: usize,
+) -> f64 {
+    let row = hypothesis * window * 8;
+    let mut sum = 0.0;
+    let mut observed = 0;
 
-            let channels_here = f64_at(channels.as_slice(), slot * 8);
+    for slot in 0..window.saturating_sub(1) {
+        let older = f64_at(evidence, row + ((cursor + slot) % window) * 8);
+        let newer = f64_at(evidence, row + ((cursor + slot + 1) % window) * 8);
 
-            if channels_here.is_nan() {
-                continue;
-            }
-
-            sum += (newer - older) / channels_here;
-            observed += 1;
+        // A slot that was never filled, or a pair that spans the fill
+        // boundary, contributes nothing — Monty's NaN-skipping mean.
+        if older.is_nan() || newer.is_nan() {
+            continue;
         }
 
-        let slope = if observed == 0 {
-            f64::NAN
-        } else {
-            sum / observed as f64
-        };
+        let channels_here = f64_at(channels, slot * 8);
 
-        write_f64(&mut output, hypothesis, slope);
+        if channels_here.is_nan() {
+            continue;
+        }
+
+        sum += (newer - older) / channels_here;
+        observed += 1;
+    }
+
+    if observed == 0 {
+        f64::NAN
+    } else {
+        sum / observed as f64
+    }
+}
+
+/// Which hypotheses a slope threshold keeps, one byte each: `1` kept, `0` not.
+///
+/// The question a module asks of its slopes is almost always this one, and
+/// answering it here is the difference between two crossings: the slopes never
+/// become Elixir terms, so nothing is boxed and nothing is decoded. The rule is
+/// the reference's, in the reference's order:
+///
+/// `keep = age < min_age || (slope is not NaN && slope >= threshold)`
+///
+/// * `evidence`, `channels`, `window`, `cursor` — as `window_slopes` takes them.
+/// * `ages` — `count` u32, how many updates each hypothesis has survived.
+/// * `min_age` — the age at which a hypothesis may be removed.
+/// * `threshold` — the slope a hypothesis must reach to be kept.
+#[rustler::nif]
+fn keep_mask<'a>(
+    env: Env<'a>,
+    evidence: Binary,
+    channels: Binary,
+    window: u32,
+    cursor: u32,
+    ages: Binary,
+    min_age: u32,
+    threshold: f64,
+) -> Binary<'a> {
+    let window = window as usize;
+    let cursor = cursor as usize;
+    let count = if window == 0 { 0 } else { evidence.len() / (window * 8) };
+
+    let mut output = NewBinary::new(env, count);
+
+    for hypothesis in 0..count {
+        let age = u32_at(ages.as_slice(), hypothesis * 4);
+        let slope = slope_at(evidence.as_slice(), channels.as_slice(), window, cursor, hypothesis);
+        let keep = age < min_age || (!slope.is_nan() && slope >= threshold);
+
+        output[hypothesis] = if keep { 1 } else { 0 };
     }
 
     output.into()

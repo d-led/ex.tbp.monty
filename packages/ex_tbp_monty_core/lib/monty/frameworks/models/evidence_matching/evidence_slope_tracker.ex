@@ -194,18 +194,47 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   """
   @spec select_hypotheses(t(), float()) :: HypothesesSelection.t()
   def select_hypotheses(%__MODULE__{} = tracker, slope_threshold) do
-    slopes = calculate_slopes(tracker)
-    removable = removable_indices_mask(tracker)
-
-    keep =
-      [slopes, removable]
-      |> Enum.zip()
-      |> Enum.map(fn {slope, removable?} ->
-        not removable? or (not is_nil(slope) and slope >= slope_threshold)
-      end)
-
-    HypothesesSelection.new(keep)
+    tracker
+    |> keep_mask(slope_threshold)
+    |> HypothesesSelection.new()
   end
+
+  # The mask, as booleans. A kernel answers it in one crossing — one byte a
+  # hypothesis, the slopes never leaving the kernel — because the module asks
+  # this of every graph on every step and the decode of a slope column, the pair
+  # of it with the ages and the walk over the pairs were three passes over the
+  # hypothesis set each.
+  defp keep_mask(%__MODULE__{} = tracker, slope_threshold) do
+    if MatcherNif.loaded?() do
+      tracker.evidence
+      |> MatcherNif.keep_mask(
+        channels_bytes(tl(tracker.channels)),
+        tracker.window_size,
+        tracker.cursor,
+        ages_bytes(tracker.ages),
+        tracker.min_age,
+        slope_threshold
+      )
+      |> then(fn mask -> for(<<keep::unsigned-8 <- mask>>, do: keep == 1) end)
+    else
+      reference_keep_mask(tracker, slope_threshold)
+    end
+  end
+
+  # The kernel's answer in Elixir, over the same numbers: a hypothesis may be
+  # removed only once it is old enough, and a kept one must be rising.
+  defp reference_keep_mask(%__MODULE__{} = tracker, slope_threshold) do
+    slopes = reference_slopes(tracker.evidence, tl(tracker.channels), tracker.window_size, tracker.cursor)
+
+    [slopes, removable_indices_mask(tracker)]
+    |> Enum.zip()
+    |> Enum.map(fn {slope, removable?} ->
+      not removable? or (not is_nil(slope) and slope >= slope_threshold)
+    end)
+  end
+
+  defp ages_bytes(ages),
+    do: for(age <- ages, into: <<>>, do: <<age::unsigned-32-little>>)
 
   defp keep_where(%__MODULE__{} = tracker, predicate) do
     row_size = tracker.window_size * 8
