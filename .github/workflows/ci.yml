@@ -221,12 +221,16 @@ jobs:
       # the way: `--partitions` exports it to cover/<partition>.coverdata.
       # `CI` also makes the suite write the JUnit report the next step reads.
       - run: mix test --partitions 4 --cover
+        # Named for the step after the next one, which asks whether the suite
+        # was green before deciding a crashed publisher was a flake.
+        id: test
 
       # The results, where a reviewer looks for them: one check per partition,
       # each failing test named and its line linked, and a summary of the
       # quarter's counts. `if: always()` because a failed partition is the one
       # whose results somebody needs.
       - name: Publish this partition's results
+        id: publish
         if: always()
         uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
@@ -240,6 +244,24 @@ jobs:
           fail-on-error: "true"
           # A check run rather than a job summary: it is the same shape as the
           # other checks, and it annotates the failing lines.
+          use-actions-summary: "false"
+
+      # The publisher is not the suite. On 2026-11-09 one partition's publish
+      # step died right after "Listing all files tracked by git" - no error, no
+      # report - with the suite's own "710 passed" a few lines above it, and the
+      # job's whole quarter went red for it. Asked for a second time, but only
+      # where the suite was green: a red suite has decided the job already, and
+      # publishing it twice would only put two of the same check in front of a
+      # reviewer. A publisher that is really broken fails twice and the job says
+      # so.
+      - name: Publish this partition's results, a second time
+        if: steps.publish.outcome == 'failure' && steps.test.outcome == 'success'
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
+        with:
+          name: test results ${{ matrix.partition }}/4 (second attempt)
+          path: junit/junit-${{ matrix.partition }}.xml
+          reporter: java-junit
+          fail-on-error: "true"
           use-actions-summary: "false"
 
       # The raw report, for when a check and its XML disagree.
