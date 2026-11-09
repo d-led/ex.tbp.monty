@@ -4,7 +4,7 @@
 #   scripts/install-rust.sh
 #
 # No arguments, and safe to run at any point: the native kernels are NIFs
-# (`native/kd_tree_nif`, `native/matcher_nif`) and rustler builds them while the
+# (`packages/ex_tbp_monty_core/native/kd_tree_nif`, `.../matcher_nif`) and rustler builds them while the
 # application compiles, so without `cargo` the build stops. A machine that already
 # has one is left alone, which is what makes this usable from a developer's shell,
 # a container build and a CI job that may or may not ship Rust already.

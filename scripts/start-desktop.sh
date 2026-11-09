@@ -184,7 +184,7 @@ run "compiling the desktop build" \
 kernels_missing() {
   local root=$1 crate name
 
-  for crate in native/*/Cargo.toml; do
+  for crate in packages/ex_tbp_monty_core/native/*/Cargo.toml; do
     name=$(basename "$(dirname "$crate")")
     if [[ -z $(find "$root" \( -name "$name.so" -o -name "$name.dll" \) -print -quit 2>/dev/null) ]]; then
       echo "$name"

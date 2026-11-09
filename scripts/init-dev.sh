@@ -45,7 +45,7 @@ command -v docker >/dev/null 2>&1 ||
 # The two toolchains come after the cheap checks, because installing one is a
 # download measured in minutes. Both are build requirements — `mix compile`
 # stops without Elixir, and it stops without Rust too, which is what rustler
-# compiles the nearest-neighbour index (native/kd_tree_nif) with. Each
+# compiles the nearest-neighbour index (packages/ex_tbp_monty_core/native/kd_tree_nif) with. Each
 # installer is a no-op where its own toolchain is already on PATH.
 elixir_bin="$(scripts/install-elixir.sh)"
 if [ -n "$elixir_bin" ]; then

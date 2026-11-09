@@ -45,7 +45,7 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: cargo
-    directory: "/native/kd_tree_nif"
+    directory: "/packages/ex_tbp_monty_core/native/kd_tree_nif"
     schedule:
       interval: weekly
     groups:
@@ -64,7 +64,7 @@ updates:
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   - package-ecosystem: cargo
-    directory: "/native/matcher_nif"
+    directory: "/packages/ex_tbp_monty_core/native/matcher_nif"
     schedule:
       interval: weekly
     groups:
