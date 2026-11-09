@@ -551,3 +551,12 @@ So the order for the next session is: the per-hypothesis passes (an order of
 magnitude is available, and it is the one thing that would put us ahead of
 Python), then the transform chain and the sensor patch maths as kernels or Nx,
 then whatever the profile says about the world.
+
+One thing deliberately left: the run's own page (`/runs/:id`) still reads
+`head/1` — the transcript without the pictures — every two seconds while its run
+is in flight, because it appends the lines it has not shown and redraws the
+replay from them. That is 3 MB at 24 329 steps and about a fortieth of what the
+experiment page was reading, but a transcript that a page re-decodes twice a
+second wants a child table (one row a step, or one an episode) rather than one
+`jsonb` array in one row. Nothing reads the pictures that way: `sensors_at/2`
+asks for the step the slider is on.
