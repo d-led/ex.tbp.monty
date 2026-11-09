@@ -43,7 +43,13 @@ defmodule Monty.Studio.RunLog do
       "votes" => %{"sent" => info.votes.sent, "used" => info.votes.used},
       "goals" => info.goals,
       "actions" => length(info.actions),
-      "duration_us" => info.duration_us
+      "duration_us" => info.duration_us,
+      # The world steps the agent before the model sees anything, and that time
+      # is not the model's: a step's own clock measures the modules only. Without
+      # this the wall clock of a run cannot be split into the simulation it is
+      # and the bookkeeping around it, which is how 772 s of one run came to be
+      # blamed on the studio.
+      "world_us" => Map.get(info, :world_us, 0)
     }
     |> put_beliefs(beliefs)
   end

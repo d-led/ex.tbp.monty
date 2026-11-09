@@ -375,12 +375,16 @@ defmodule Monty.Studio.Run do
   """
   @spec step(t()) :: {:ok, map(), map(), t()}
   def step(%__MODULE__{model: model, model_id: model_id, step: step} = run) do
-    {observations, proprioceptive_state, interface} =
-      Interface.step(run.interface, run.pending_actions)
+    {world_us, {observations, proprioceptive_state, interface}} =
+      :timer.tc(fn -> Interface.step(run.interface, run.pending_actions) end)
 
     ctx = %{Monty.Context.new(run.episode_seed) | step: step}
 
     {:ok, actions, info} = model.step(model_id, observations, proprioceptive_state, ctx)
+
+    # The world's own step is not the model's, and a run cannot be made faster by
+    # reading one number as the other.
+    info = Map.put(info, :world_us, world_us)
 
     # The observations come back with the report so a page can show what the
     # modules saw, not just what they did with it.
