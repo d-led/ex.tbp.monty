@@ -1,7 +1,7 @@
-# Which of the graph reads happen on every step, and how often. cprof counts
-# calls; the question is whether `length/1` over a graph's nodes is in the step.
+# Who decodes the evidence columns. `tprof` keeps no call graph and `cprof` keeps
+# no caller, so this uses `eprof` and names the caller instead of inviting a guess.
 #
-#   MIX_ENV=test mix run scripts/probe_graph_reads.exs
+#   MIX_ENV=test mix run scripts/probe_decode_callers.exs
 
 alias Monty.Runtime.{Model, Registry}
 alias Monty.Simulators.Recording
@@ -16,7 +16,7 @@ Code.require_file("probe_support.exs", __DIR__)
 opened = ProbeSupport.setup(experiment)
 [percepts_per_step | _more] = MontyRecording.episodes!(recording)
 
-id = "probe-reads-#{System.unique_integer([:positive])}"
+id = "probe-decode-#{System.unique_integer([:positive])}"
 spec = Setup.model_spec(opened.setup, id)
 module_id = hd(spec.learning_modules).id
 
@@ -47,20 +47,28 @@ spec =
 
 run = fn -> Model.step(id, %{}, %{}, Monty.Context.new(0)) end
 
-# One step to warm, then the next one counted.
+# One step to warm the code paths, then the next one profiled. The work happens
+# in the model's own processes, not in the caller: a step is a `GenServer.call`,
+# so profiling the caller profiles a process that is asleep.
 {:ok, _actions, _info} = run.()
 
-:cprof.start()
+pids =
+  Enum.flat_map([{:step, id} | Enum.map(spec.learning_modules, &{:learning_module, id, &1.id})], fn key ->
+    key |> Registry.lookup() |> Enum.map(&elem(&1, 0))
+  end) ++
+    Enum.map(spec.sensor_modules, fn sm ->
+      [{pid, _}] = Registry.lookup({:sensor_module, id, sm.id})
+      pid
+    end)
 
+IO.puts("profiling #{length(pids)} of the model's processes")
+
+:eprof.start()
+:eprof.start_profiling(pids)
 {:ok, _actions, info} = run.()
-
-modules = [
-  Monty.Frameworks.Models.ObjectModel.GraphObjectModel,
-  Monty.Frameworks.Models.GraphMatching.GraphMemory,
-  Monty.Frameworks.Models.EvidenceMatching.Hypotheses
-]
-
-Module.concat([Mod]) |> then(fn _ -> :cprof.analyse(:total, limit: 12) end)
+:eprof.stop_profiling()
+:eprof.analyze(:total)
+:eprof.stop()
 
 IO.puts("\nthat step: #{div(info.duration_us, 1000)} ms")
 Model.stop(id)
