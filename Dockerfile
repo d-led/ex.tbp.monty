@@ -52,7 +52,8 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # A Rust toolchain, because compiling this application needs one: the native
-# kernels are NIFs (`native/kd_tree_nif`, `native/matcher_nif`) and rustler
+# kernels are NIFs (`packages/ex_tbp_monty_core/native/kd_tree_nif`,
+# `.../matcher_nif`) and rustler
 # builds them during `mix compile`. This is a requirement of *building*, not of
 # running — the runtime stage carries the release, and the release carries the
 # compiled shared objects. The installer is a script rather than a line here so
@@ -96,7 +97,12 @@ RUN mix local.hex --force \
   && mix local.rebar --force
 
 # Dependencies first: a source change does not re-resolve or re-fetch them.
+#
+# The core is a path dependency (`packages/ex_tbp_monty_core`), so its source has
+# to be here before `deps.get` runs — Mix resolves a path dependency by reading
+# its `mix.exs`, not by fetching anything.
 COPY mix.exs mix.lock ./
+COPY packages packages
 RUN mix deps.get --only prod
 
 # Compile-time configuration decides how dependencies are compiled, so it has
@@ -124,10 +130,9 @@ RUN ok=0; \
 
 COPY priv priv
 COPY lib lib
-# Rustler builds these crates while their Elixir modules (`lib/ex_tbp_monty/*_nif.ex`)
-# compile, so the crates have to be in the image before `mix compile` — without
-# them the compiler stops with "Could not cd to native/kd_tree_nif".
-COPY native native
+# The Rust crates come with `packages packages` above: they are the core's
+# (`packages/ex_tbp_monty_core/native`), and copying things from `lib/*_nif.ex`
+# here means rustler builds them before `mix compile` asks for them.
 # The project's own Mix tasks (`assets.install`, `build.info`): `elixirc_paths`
 # compiles them outside `lib/`, and both are called later in this build.
 COPY mix_tasks mix_tasks

@@ -58,4 +58,6 @@ LICENSE
 
 # The Rust crate's build artefacts: the image compiles its own, and copying a
 # `target/` directory would be hundreds of megabytes of another machine's work.
-native/**/target
+# The crates moved into the core package; their build output is the largest
+# thing in the tree and the image compiles its own.
+packages/*/native/**/target
