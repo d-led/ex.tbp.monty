@@ -1780,21 +1780,7 @@ defmodule Monty.ModuleMap.Data do
           file:
             "packages/ex_tbp_monty_core/lib/monty/frameworks/models/graph_matching/monty_for_graph_matching.ex",
           elixir: "Monty.Frameworks.Models.GraphMatching.MontyForGraphMatching",
-          python: "MontyForGraphMatching",
-          stand_in: [
-            %{
-              name: Monty.Runtime.Model,
-              file: "packages/ex_tbp_monty_core/lib/monty/runtime/model.ex",
-              kind: :module,
-              why: "owns the modules a config names, as supervised processes"
-            },
-            %{
-              name: Monty.Runtime.Step,
-              file: "packages/ex_tbp_monty_core/lib/monty/runtime/step.ex",
-              kind: :module,
-              why: "steps them: the matching step, the vote round, the terminal checks"
-            }
-          ]
+          python: "MontyForGraphMatching"
         },
         %{
           status: :implemented,
@@ -3081,7 +3067,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3093,7 +3080,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3105,7 +3093,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3117,7 +3106,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3129,7 +3119,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3141,7 +3132,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         }
@@ -3162,7 +3154,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3174,7 +3167,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3186,7 +3180,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         }
@@ -3207,7 +3202,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3219,7 +3215,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3231,7 +3228,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3243,7 +3241,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3255,7 +3254,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3267,7 +3267,8 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
@@ -3279,21 +3280,16 @@ defmodule Monty.ModuleMap.Data do
             %{
               path: "priv/monty_py/world.py",
               kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+              why:
+                "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
             }
           ]
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/simulators/mujoco/simulator.ex",
           elixir: "Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator",
-          python: "MuJoCoSimulator",
-          stand_in: [
-            %{
-              path: "priv/monty_py/world.py",
-              kind: :file,
-              why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
-            }
-          ]
+          python: "MuJoCoSimulator"
         }
       ]
     },

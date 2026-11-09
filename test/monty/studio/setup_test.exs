@@ -449,17 +449,22 @@ defmodule Monty.Studio.SetupTest do
       assert Setup.epoch_plan(setup) == [{:train, 10}]
     end
 
-    test "and does not explain itself where Monty's code is what runs" do
+    test "counts Monty's MuJoCo simulator as ported, because it is" do
       {:ok, setup} =
         Setup.from_experiment("tutorial/first_experiment", world_simulator: :mujoco)
 
-      # The MuJoCo classes a run executes are Monty's design, carried out by
-      # this application's own Python: neither a stand-in nor a fact a reader of
-      # the run needs, so nothing is said about them at all.
-      stand_ins = Enum.find(setup.findings, &(&1.code == :modules_not_ported))
+      # The class a config names for the world is written here —
+      # `Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator`, whose scene lives in
+      # `priv/monty_py/world.py` because a renderer is a C library's Python
+      # binding. A port with a different implementation, not a gap, so the count
+      # is whole and nothing on the page asks the reader to explain it away.
+      assert %{implemented: implemented, total: total} = Setup.ported(setup)
+      assert implemented == total
 
-      refute stand_ins && stand_ins.message =~ "MuJoCoSimulator"
-      refute :modules_run_from_monty in Enum.map(setup.findings, & &1.code)
+      refute Enum.any?(
+               setup.findings,
+               &(&1.code in [:modules_not_ported, :modules_not_ported_world])
+             )
     end
 
     test "and warns that a run without Monty's world does not produce Monty's numbers" do
@@ -567,11 +572,12 @@ defmodule Monty.Studio.SetupTest do
                Setup.world(setup_for("tutorial/first_experiment"), :synthetic)
     end
 
-    test "is Monty's own simulator, hosted here, when a run takes it" do
-      # Not a re-implementation: the world is `Monty.Simulators.Mujoco.Environment`,
-      # which builds Monty's `MuJoCoSimulator` from `priv/monty_py` in the
-      # interpreter this application carries.
-      assert %Monty.Simulators.Mujoco.Environment{sensors: sensors} =
+    test "is Monty's own simulator, ported to this build, when a run takes it" do
+      # The world is `Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator`, the
+      # class the config names, ported: the scene it builds comes from
+      # `priv/monty_py`, this application's own script against `mujoco`, in the
+      # interpreter it carries.
+      assert %Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator{sensors: sensors} =
                Setup.world(setup_for("tutorial/first_experiment"), :mujoco)
 
       assert "patch" in sensors

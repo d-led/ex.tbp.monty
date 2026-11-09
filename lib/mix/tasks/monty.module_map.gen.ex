@@ -246,6 +246,13 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
   # What runs instead, where anything does — the fact a reader of the map needs
   # to tell "not written yet" from "replaced on purpose". Written only where
   # there is one, so 358 empty lists do not bury the two answers.
+  #
+  # A class this build has is standing in for nothing: the note answers "what
+  # runs if you do not have it", and a written class makes that question
+  # meaningless. It also made the map look as if the class were still missing
+  # after it was ported.
+  defp put_stand_ins(%{status: :implemented} = entry, _stand_ins), do: entry
+
   defp put_stand_ins(entry, []), do: entry
 
   defp put_stand_ins(entry, stand_ins),

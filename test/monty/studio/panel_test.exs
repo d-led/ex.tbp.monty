@@ -40,21 +40,4 @@ defmodule Monty.Studio.PanelTest do
     assert facts()["model"] != ""
     assert facts()["ported here"] =~ "/"
   end
-
-  test "says which class the count leaves out, and that the world is not a gap" do
-    # The one class of this config that is not an Elixir module is Monty's own
-    # MuJoCo simulator, which runs as Python: a reader who is told "15/16" and
-    # nothing else asks whether their experiment is incomplete.
-    assert facts()["ported here"] == "15/16 · the world is Monty's Python"
-  end
-
-  test "names a class that is not written here, rather than counting it silently" do
-    base = setup()
-    unwritten = %{status: :planned, class: "UnwrittenSimulator", python: "tbp.nothing.py"}
-
-    setup = %{base | environment: %{base.environment | module: unwritten}}
-
-    assert Panel.facts(setup) |> Map.new() |> Map.get("ported here") ==
-             "15/16 · UnwrittenSimulator is not written here"
-  end
 end

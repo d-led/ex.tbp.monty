@@ -49,6 +49,10 @@ Push-Location (Split-Path -Parent $PSScriptRoot)
 try {
     $name = 'ex_tbp_monty'
     $release = "_build/desktop/rel/$name"
+    # The crates are in the core package, not beside the project root. This
+    # script asked for `native` at the root and a Windows package failed on it
+    # with "Cannot find path ...\native because it does not exist".
+    $crate_root = 'packages/ex_tbp_monty_core/native'
     # Two components, not `bin/server.bat`: `Join-Path` keeps the forward slash
     # inside its second argument, and a batch file started that way hands its own
     # `%~dp0` - slashes and all - to the release's launcher, whose `%~dp0..` then
@@ -146,7 +150,7 @@ try {
         param([string]$Root)
 
         $missing = @()
-        $crates = Get-ChildItem native -Directory |
+        $crates = Get-ChildItem $crate_root -Directory |
             Where-Object { Test-Path (Join-Path $_.FullName 'Cargo.toml') }
         foreach ($crate in $crates) {
             $found = Get-ChildItem $Root -Recurse -File -ErrorAction SilentlyContinue |

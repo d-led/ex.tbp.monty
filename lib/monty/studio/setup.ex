@@ -638,9 +638,9 @@ defmodule Monty.Studio.Setup do
   this application's own Python written against MuJoCo — the scene, the agents,
   their cameras and their actuations, mirroring Monty's `MuJoCoSimulator` and its
   agents — run in the interpreter this application carries
-  (`Monty.Simulators.Mujoco.Environment`). So the scene, the agent body and the
-  images are Monty's design and this build's code, and nothing of it is
-  installed or fetched: it travels inside this release.
+  (`Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator`). So the scene, the agent
+  body and the images are Monty's design and this build's code, and nothing of it
+  is installed or fetched: it travels inside this release.
 
   `:synthetic` is this port's sphere, which needs no scene description and no
   interpreter, and whose numbers are nobody's but its own.
@@ -726,7 +726,7 @@ defmodule Monty.Studio.Setup do
   # meshes load from, the agent its `env_init_args` names (class, start pose and
   # per-sensor camera), and the object this episode is about.
   defp mujoco_world(%__MODULE__{} = setup, episode, opts) do
-    Monty.Simulators.Mujoco.Environment.new(
+    Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator.new(
       data_path: data_path(setup),
       agents: [agent_spec(setup)],
       objects: object_specs(setup, episode, opts),
@@ -2291,15 +2291,15 @@ defmodule Monty.Studio.Setup do
   end
 
   # A MuJoCo class is not a stand-in: the world a run steps implements it, in
-  # `priv/monty_py`, so listing it would tell a reader that a scene is missing
-  # when the scene is exactly what ran.
+  # `priv/monty_py`, so listing it as a gap would tell a reader that a scene is
+  # missing when the scene is exactly what ran.
   defp runs_in_the_world?(%{python: python}), do: StandIns.in_the_world?(python)
 
-  # Said only where it is true of the run: a MuJoCo run executes those classes.
-  # A stand-in run does not execute them at all, so it has nothing to report.
-  # A class whose code runs here as copied Python is not a fact about the run:
-  # what a reader needs to know is which world stepped it, and `world` says that
-  # in one word. The note lived on every MuJoCo page and explained ourselves.
+  # Nothing is said here about a world class this build writes in Python. The
+  # class a config names is ported (`Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator`),
+  # so the count is whole and there is nothing to explain; and for any MuJoCo
+  # class still left, `/modules` carries the row that says which file runs it.
+  # A note on every MuJoCo page would be this application explaining itself.
   defp carried_finding(_setup, _classes), do: []
 
   defp unknown_module_finding(module) do

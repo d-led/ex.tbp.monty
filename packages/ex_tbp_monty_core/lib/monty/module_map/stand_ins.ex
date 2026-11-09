@@ -11,9 +11,14 @@ defmodule Monty.ModuleMap.StandIns do
       belongs to `Monty.Studio.Run`. That is a replacement on purpose, not a
       hole: the job is done — the step order, the goals through the attention
       system, the vote round, the counters and the terminal decision.
-    * **the carried MuJoCo world** — Monty's `MuJoCoSimulator` and its scene
-      classes execute here as Python in `priv/monty_py/world.py`, in the
-      interpreter this application embeds. The code runs; it is just not Elixir.
+    * **the MuJoCo world** — Monty's `MuJoCoSimulator`, its agents and its scene
+      objects are written here, in `priv/monty_py/world.py`, against `mujoco`
+      rather than in Elixir: a renderer is a C library with a Python binding, so
+      the scene cannot live in the BEAM. The behaviour is Monty's (the spec, the
+      cameras, the semantic ids, metres and `wxyz` rotations); the code is this
+      application's, and `Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator` is
+      the class a run steps. A Python file is therefore not evidence of an
+      unported class — it is where this port had to stay Python.
 
   A class in neither list has **no** stand-in, and a config naming it is
   refused: an unwritten class is an error rather than a fake run wearing the
@@ -50,7 +55,7 @@ defmodule Monty.ModuleMap.StandIns do
     %{
       kind: :file,
       path: "priv/monty_py/world.py",
-      why: "MuJoCo scene and simulator, carried as Python in the embedded interpreter"
+      why: "MuJoCo scene and simulator, written here in Python for the embedded interpreter"
     }
   ]
 

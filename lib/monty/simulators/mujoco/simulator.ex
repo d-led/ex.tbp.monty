@@ -1,16 +1,35 @@
-defmodule Monty.Simulators.Mujoco.Environment do
+defmodule Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator do
   @moduledoc """
-  The world a MuJoCo experiment steps: Monty's own simulator, hosted here.
+  Monty's `MuJoCoSimulator`: the world a MuJoCo experiment steps.
 
-  Not a re-implementation. `priv/monty_py` is Monty's MuJoCo connector, copied
-  file for file from the pinned revision; `Monty.Simulators.Mujoco.Host` runs it
-  in the interpreter this application carries (`pythonx`), and this module is the
-  value a run threads: it builds the scene from the experiment's own config,
-  hands the model's actions across, and answers what Monty's agents saw.
+  ## Why the code looks nothing like Python's
 
-  So a run steps Monty's `MuJoCoSimulator`, its `SurfaceAgent`, its cameras and
-  its actuations — with no Monty checkout at run time and nothing installed from
-  PyPI, because the code travels inside the release.
+  This class is ported, not missing — and it is not a transliteration either.
+  Monty's version is a Python object holding a `MjSpec`, a set of lights and one
+  renderer per resolution, and it answers the experiment through the containers
+  of the `tbp` package (`Observations`, `AgentState`, `Rotation`). None of those
+  containers exist here, and the ones that matter — the spec, the renderers, the
+  agents' cameras — belong to a C library with a Python binding, so they cannot
+  be Elixir either.
+
+  So the scene lives where it has to: `priv/monty_py/world.py` is this
+  project's own script, written against `mujoco`, `numpy` and
+  `numpy-quaternion`, that builds the spec, drops the renderers when the model
+  changes, loads a mesh per object with its semantic id, and answers plain dicts
+  — because the BEAM reads JSON, not Monty's classes. It is not the file
+  `simulator.py` with a different extension: it is the same behaviour written
+  for an interpreter that is embedded rather than imported.
+  `Monty.Simulators.Mujoco.Host` runs it inside the interpreter this application
+  carries (`pythonx`), and this module is the value a run threads: it builds the
+  scene from the experiment's own config, hands the motor system's actions
+  across, and answers what Monty's agents saw.
+
+  What stayed Monty's is the part that decides the numbers: the shape of the
+  spec, which renderer looks through which camera, how a mesh and its semantic
+  id enter the scene, the `observations` / `states` / `step` / `reset` / `close`
+  surface, the agents' `actuate_*` methods, metres, `wxyz` rotations, and the
+  order of the operations. A run that reads differently from Monty's is a bug in
+  this file, not a difference of language.
 
   ## What it is not
 
@@ -18,8 +37,7 @@ defmodule Monty.Simulators.Mujoco.Environment do
   interface and its positioning procedures are the port's own runtime
   (`Monty.Runtime.*`, `Monty.Studio.Run`), and the transforms between what a
   camera rendered and what a sensor module is given are this port's
-  (`Monty.Frameworks.EnvironmentUtils.Transforms`). Only the world is Monty's
-  code, because only the world is a C library with an opinion about physics.
+  (`Monty.Frameworks.EnvironmentUtils.Transforms`).
 
   ## Positioning
 

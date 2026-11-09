@@ -108,12 +108,18 @@ defmodule Monty.ModuleMap.TableTest do
       assert Enum.all?(shell.stand_ins, & &1.url)
     end
 
-    test "name the carried world for a MuJoCo class, and nothing for a class that is simply not written" do
-      world = row!("MuJoCoSimulator")
+    test "name the Python a class left for later runs in, and nothing for one this build has" do
+      world = row!("MuJoCoAgentFactory")
 
       assert [stand_in] = world.stand_ins
       assert Table.describe(stand_in) == "priv/monty_py/world.py"
       assert stand_in.url == "#{@repo}/blob/#{@revision}/priv/monty_py/world.py"
+
+      # The simulator itself is written here, so there is nothing to stand in
+      # for it: a stand-in answers "what runs if you do not have this", and a
+      # ported class makes the question meaningless.
+      assert row!("MuJoCoSimulator").status == :implemented
+      assert row!("MuJoCoSimulator").stand_ins == []
 
       # `GraphLM` has no stand-in: a config naming a learning module this
       # application has not written is refused, and the table says so by saying
@@ -144,7 +150,7 @@ defmodule Monty.ModuleMap.TableTest do
       # that saying it a different way never loses a row.
       written = Enum.map(by_written, & &1.class)
       assert written -- Enum.map(by_spoken, & &1.class) == []
-      assert written == ["Monty", "MontyForGraphMatching", "MontyBase"]
+      assert written == ["Monty", "MontyBase"]
     end
 
     test "is case-insensitive and takes several words out of order" do

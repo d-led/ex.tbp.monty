@@ -9,7 +9,7 @@ defmodule Monty.Studio.RunPrologueTest do
   The stand-in scene is the instrument: it is a value, so a run of it needs no
   process, no interpreter and no mesh. A MuJoCo run is the same prologue with a
   world that names an object, and that half is specified beside the world it
-  belongs to (`Monty.Simulators.Mujoco.Environment`).
+  belongs to (`Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator`).
   """
 
   use ExUnit.Case, async: false
