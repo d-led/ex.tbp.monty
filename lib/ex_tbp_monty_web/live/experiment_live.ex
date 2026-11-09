@@ -126,6 +126,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # page owns: a zoomed chart is a link that can be kept, and every way of
       # changing it — zoom, pan, reset — is a patch.
       x_window: window,
+      # Full screen is part of the page, not of the chart: it exists before the
+      # first step arrives and outlives the charts being rebuilt by every one.
+      expanded: Map.get(socket.assigns, :expanded, false),
       chart_extent: {0, 0},
       # The object and the agent in one picture per step: the views a sensor
       # streams say what a camera saw, this says whether there was anything to see.
@@ -583,9 +586,28 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               >
                 all
               </button>
+              <%!-- Full screen is an assign, not the browser's Fullscreen API: a
+              run is watched in the middle of something else, and a chart that
+              needs a permission prompt to get bigger does not get bigger. It is
+              a fixed overlay over the page, and clicking it again leaves. --%>
+              <button
+                id="chart-expand"
+                phx-click="expand"
+                class="btn btn-xs join-item"
+                aria-label={if @expanded, do: "leave full screen", else: "full screen"}
+              >
+                {if @expanded, do: "⤡", else: "⤢"}
+              </button>
             </div>
           </div>
-          <div class={["grid gap-2", map_size(@charts) > 1 && "lg:grid-cols-2"]}>
+          <div
+            id="charts"
+            class={[
+              "grid gap-2",
+              map_size(@charts) > 1 && "lg:grid-cols-2",
+              @expanded && "fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
+            ]}
+          >
             <ExTbpMontyWeb.EvidenceChart.evidence_chart
               :for={{module_id, chart} <- @charts}
               module_id={module_id}
@@ -699,7 +721,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         socket
         |> assign(x_window: window)
         |> assign(
-          charts: charts_of(socket.assigns.beliefs, window, socket.assigns.episode_objects)
+          charts: charts_of(socket.assigns.beliefs, window, socket.assigns.episode_objects),
+          # Full screen survives the steps that arrive while it is on: it is a
+          # property of how the page is being read, not of the run.
+          expanded: Map.get(socket.assigns, :expanded, false)
         )
       end
 
@@ -723,6 +748,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     window = zoom(socket.assigns[:x_window], socket.assigns[:chart_extent], how)
 
     {:noreply, push_patch(socket, to: experiment_path(socket, window))}
+  end
+
+  def handle_event("expand", _params, socket) do
+    {:noreply, assign(socket, :expanded, not Map.get(socket.assigns, :expanded, false))}
   end
 
   def handle_event("parallelism", %{"parallelism" => count}, socket) do
