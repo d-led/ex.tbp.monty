@@ -70,6 +70,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # episode.
   defp log_id(entry), do: "log-#{Map.get(entry, "episode") || 0}-#{entry["step"]}"
 
+  # The DOM is not the transcript. A run that stepped 24 329 times sent every
+  # line it ever wrote on every mount — 24 329 list items, each with a clock the
+  # browser has to localise — and the page answered in seventeen seconds, which
+  # is a page the client gives up on and reconnects to, and the reconnect pays
+  # it again. The count beside the panel says how long the run is; the tail is
+  # what a reader opens a finished run to see; the file has the rest.
+  @log_tail 300
+
   @impl true
   def mount(_params, _session, socket) do
     # The list is a stream fed by the record's topic, not by re-reading: a run
@@ -79,7 +87,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
     {:ok,
      socket
-     |> assign(confirming: nil, confirming_bulk: nil, selected: MapSet.new(), deleting: nil)
+     |> assign(
+       confirming: nil,
+       confirming_bulk: nil,
+       selected: MapSet.new(),
+       deleting: nil,
+       log_tail: @log_tail,
+       trimmed_log?: false
+     )
      |> stream_configure(:log, dom_id: &log_id/1)
      |> stream_configure(:runs, dom_id: &"run-#{&1.id}")
      |> stream(:runs, [])
@@ -235,11 +250,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          |> put_run(run)
          |> put_configuration(run)
          |> follow(run)
-         |> stream(:log, run.log, reset: true)
-         |> assign(logged: length(run.log))
+         |> stream(:log, log_tail(run.log), reset: true)
+         |> assign(logged: length(run.log), trimmed_log?: length(run.log) > @log_tail)
          |> assign_replay(run, Replay.last_step(run))}
     end
   end
+
+  defp log_tail(log), do: Enum.take(log, -@log_tail)
 
   # What the reader chose to look at belongs to the run they chose it for: a
   # series, a window and a step are answers about one run. Carrying them to the
@@ -360,7 +377,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     fresh = Enum.drop(run.log, shown)
 
     socket
-    |> assign(logged: shown + length(fresh))
+    |> assign(logged: shown + length(fresh), trimmed_log?: shown + length(fresh) > @log_tail)
     |> stream(:log, fresh)
   end
 
@@ -1041,6 +1058,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
       <section :if={@run} class="space-y-1">
         <h2 class="text-sm font-medium">Log</h2>
+        <p :if={@trimmed_log?} id="run-log-trimmed" class="text-xs text-base-content/60">
+          The last {@log_tail} of {@logged} lines: this page does not carry a
+          whole transcript, and the run's own file has every line of it.
+        </p>
         <ul
           id="run-log"
           phx-update="stream"
