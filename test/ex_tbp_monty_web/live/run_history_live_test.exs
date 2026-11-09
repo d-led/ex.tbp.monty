@@ -193,6 +193,20 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert html =~ "step 1"
     end
+
+    test "and the foot of an episode band asks for exactly that episode", %{conn: conn, run: run} do
+      publish_beliefs(run.id, 0, "mug")
+      publish_beliefs(run.id, 1, "mug")
+      publish_beliefs(run.id, 2, "mug")
+      _ = :sys.get_state(Monty.Studio.RunStream)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      handle = view |> element("#replay-episode-0") |> render()
+
+      assert handle =~ ~s(phx-value-from="0")
+      assert handle =~ ~s(phx-value-to="2")
+    end
   end
 
   describe "a run that is writing an episode back" do

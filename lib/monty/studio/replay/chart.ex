@@ -307,6 +307,11 @@ defmodule Monty.Studio.Replay.Chart do
     %{
       episode: hd(run).episode,
       x: Float.round(x, 2),
+      # The steps the band covers, so the band can be more than a tint: clicking
+      # it is how a reader asks to look at one episode, and that needs both ends
+      # rather than the pixels they were turned into.
+      from: first,
+      to: max(next_start - 1, first),
       # An episode reaches to the step the next one begins at — not to its own
       # last step, which would leave every episode a step short of the next.
       width: Float.round(min(x(next_start, from, to), @width) - x, 2),

@@ -653,6 +653,27 @@ defmodule ExTbpMontyWeb.StudioComponents do
                   data-episode={band.episode}
                   pointer-events="none"
                 />
+                <%!-- The foot of each band is its handle: a strip a reader can
+                click to look at that episode alone. A range, unlike the columns
+                above, which can only say where a click landed — and the reason
+                this exists is that zooming is the one thing a click can ask for
+                that the plot could not answer without a hook. --%>
+                <rect
+                  :for={band <- @chart.bands}
+                  id={"replay-episode-#{band.episode}"}
+                  x={band.x}
+                  y={@chart.height - 6}
+                  width={band.width}
+                  height="6"
+                  fill={band.colour}
+                  fill-opacity="0.45"
+                  class="cursor-zoom-in"
+                  phx-click="replay_brush"
+                  phx-value-from={band.from}
+                  phx-value-to={band.to}
+                >
+                  <title>episode {band.episode} · click to look at it alone</title>
+                </rect>
                 <%!-- Where one episode ends and the next begins, ruled as well as
             tinted: two episodes of the same object are one colour, and the
             boundary between them is still a step the chart must show. --%>
