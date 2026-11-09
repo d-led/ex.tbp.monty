@@ -560,3 +560,30 @@ experiment page was reading, but a transcript that a page re-decodes twice a
 second wants a child table (one row a step, or one an episode) rather than one
 `jsonb` array in one row. Nothing reads the pictures that way: `sensors_at/2`
 asks for the step the slider is on.
+
+### The episode boundary is the experiment, not the port (2026-11-09)
+
+The 1.8 s between two episodes is not a write any more. What `Run.start/2` pays
+for an episode, measured one episode at a time:
+
+| piece                                                                                              |          ms |
+| -------------------------------------------------------------------------------------------------- | ----------: |
+| `Setup.world/3` (the scene, as a value)                                                            |           6 |
+| `Run.start/2` — the scene constructed, the agent positioned, the episode's model processes started | 1 206–1 251 |
+| `Run.conclusion/1` — what the modules said, read out of their processes                            |         277 |
+| `Run.next_memories/3` (eval; a training phase reads its graph here)                                |           0 |
+| `Run.stop/1`                                                                                       |           8 |
+
+Monty pays it too, and the same size: its own run of the same config took
+**32.6 s** of process wall for **19.4 s** of episode step time over ten episodes —
+**1 325 ms an episode** outside the steps, for the same reason (a MuJoCo scene is
+built and the agent moved into view).
+
+So the boundary is not where the port loses to Python, and making it asynchronous
+would be a structural change — episode N+1's scene built while N still steps, two
+worlds alive at once — not an offload of I/O. It is worth doing when the model step
+is fast, because then 1.8 s an episode becomes the largest item left: at today's
+numbers it is 250 s of a 4 400 s run (6 %); after a 6× faster learning module it
+would be ~19 %. `Setup.world(setup, episode, opts)` is a function of the episode
+index and the seed, so a prefetched scene is the same scene; what has to be proved
+is that no drawn number moves.
