@@ -29,10 +29,14 @@ config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
   #     timed out because it queued and checked out the connection for longer
   #     than 15000ms
   #
-  # Two minutes is room for the write to finish at the sizes a run reaches here.
-  # It is a stop-gap, not the shape this should have: append-only step rows make
-  # the write O(episode) and this number irrelevant.
-  timeout: 120_000,
+  # Two minutes of patience made that worse, not better: while the write waits it
+  # holds a connection, the page's reads queue behind it, and the socket misses
+  # enough heartbeats to drop. Thirty seconds is long enough for the write that
+  # succeeds, short enough that the one that will not is given up on — the job
+  # treats that as a retry at the next boundary rather than as the end of the run
+  # (`Jobs.Run.keep_with_state/1`). It is still a stop-gap: append-only step rows
+  # make the write O(episode) and this number irrelevant.
+  timeout: 30_000,
   queue_target: 1_000,
   queue_interval: 10_000
 

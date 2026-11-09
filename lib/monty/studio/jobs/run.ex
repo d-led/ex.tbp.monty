@@ -447,6 +447,21 @@ defmodule Monty.Studio.Jobs.Run do
         Logger.warning("studio run #{record.id}: cannot write its steps: #{inspect(reason)}")
         {record, false}
     end
+  rescue
+    # A pool that gives up on a statement raises; it does not return an error.
+    # That used to end the run — the write was slower than the pool's patience, so
+    # a five-thousand-step experiment died at episode seventy-five holding the
+    # steps it had already taken. It is a write that can be tried again at the next
+    # boundary, and the steps are still in memory for the page until it is.
+    error in [DBConnection.ConnectionError, Postgrex.Error] ->
+      publish(record.id, :kept)
+
+      Logger.warning(
+        "studio run #{record.id}: the write was abandoned, and will be tried at the " <>
+          "next episode boundary: #{Exception.message(error)}"
+      )
+
+      {record, false}
   end
 
   defp publish(run_id, event),
