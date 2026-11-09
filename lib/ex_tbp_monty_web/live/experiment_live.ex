@@ -225,8 +225,28 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       log_path: record.log_path,
       summary: nil
     )
-    |> seed_log(record)
+    |> seed(record.id)
     |> watch()
+  end
+
+  # The record, read once, when this page starts watching a run: the lines it
+  # already printed, the last frame it kept, and the beliefs the chart draws from
+  # before the page arrived. Everything after this arrives as `{:step, …}`
+  # messages, so the poll never reads the transcript again — a run that has
+  # stepped twenty thousand times keeps a quarter of a gigabyte of pictures in
+  # that row, and two of those a second was what an experiment page cost while its
+  # run was trying to step.
+  defp seed(socket, run_id) do
+    case RunHistory.get(run_id) do
+      nil ->
+        socket
+
+      record ->
+        socket
+        |> merge_lines(record)
+        |> merge_frames(record)
+        |> merge_beliefs(record)
+    end
   end
 
   # Everything on the page that belongs to *one* run: the beliefs a chart is drawn
@@ -246,22 +266,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       centre: nil,
       chart_extent: {0, 0},
       beliefs_seeded: false,
-      frames_seeded: false
+      frames_seeded: false,
+      caught_up: false
     )
     |> stream(:frames, [], reset: true)
   end
 
   # The lines a run already printed are in the record; showing the log from the
   # beginning beats showing it from the moment this page opened.
-  defp seed_log(socket, record) do
-    lines =
-      record.log
-      |> Enum.map(&record_line/1)
-      |> Enum.take(-@log_limit)
-
-    assign(socket, lines: lines)
-  end
-
   @impl true
   def render(%{opened: nil} = assigns) do
     ~H"""
@@ -1308,11 +1320,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp reconcile(%{assigns: %{run_id: nil}} = socket), do: socket
 
   defp reconcile(%{assigns: %{run_id: run_id}} = socket) do
-    # The whole row, not `head/1`: the page merges the timeline out of it below
-    # (`Replay.at/2`), and a run without the pictures is a `timeline` of `nil`
-    # rather than an empty one — which the replay walks. Asking for the row
-    # without them is for the callers that only want to know it exists.
-    case RunHistory.get(run_id) do
+    # The state and the counters, not the transcript: an experiment page asked for
+    # the whole row twice a second, and by the end of a twenty-thousand-step run
+    # that row is a quarter of a gigabyte of pictures — read again and again while
+    # the run is trying to step (`RunHistory.progress/1`).
+    case RunHistory.progress(run_id) do
       nil ->
         socket
 
@@ -1324,9 +1336,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           log_path: record.log_path,
           summary: if(record.summary == %{}, do: socket.assigns.summary, else: record.summary)
         )
-        |> merge_lines(record)
-        |> merge_frames(record)
-        |> merge_beliefs(record)
+        |> catch_up(record)
+    end
+  end
+
+  # A run whose steps did not all arrive here: another node's worker wrote the
+  # row, and this page heard nothing of it. The row is written before a line is
+  # broadcast, so the transcript is where a missing message is made good — read
+  # once, when the run has stopped, and without the pictures (`head/1`), which
+  # this page already has from the messages it did hear.
+  defp catch_up(%{assigns: %{caught_up: true}} = socket, _record), do: socket
+  defp catch_up(socket, %{status: "running"}), do: socket
+
+  defp catch_up(socket, record) do
+    case RunHistory.head(record.id) do
+      nil -> socket
+      settled -> socket |> assign(caught_up: true) |> merge_lines(settled)
     end
   end
 
@@ -1340,7 +1365,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     do: {count, limit}
 
   defp progress_from(%{status: "running", steps: limit}, nil), do: {0, limit}
-  defp progress_from(record, _shown), do: steps_of_last_episode(record)
+  # A run that has stopped: the count is the one the page watched up to. A page
+  # that watched none of it followed the record, which seeded the count already.
+  defp progress_from(%{steps: limit}, {count, _old_limit}), do: {count, limit}
+
+  defp progress_from(%{steps: limit, steps_done: done}, nil), do: {done || 0, limit}
 
   # "step 2 of 12" is about the episode being run: every episode of a run starts
   # its step counter again, so counting a run's whole log against one episode's

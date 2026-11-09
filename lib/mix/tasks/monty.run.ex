@@ -293,8 +293,11 @@ defmodule Mix.Tasks.Monty.Run do
 
   defp checkpoint(nil), do: nil
 
+  # The transcript of an episode is worth a write; its pictures are not, because
+  # appending to the row's `timeline` rewrites every picture the run has taken so
+  # far (`RunHistory.store/3`). `finish/2` writes them, once.
   defp checkpoint(history) do
-    {:ok, saved} = Monty.Studio.RunHistory.checkpoint(history)
+    {:ok, saved} = Monty.Studio.RunHistory.checkpoint(history, timeline: :skip)
     saved
   end
 
@@ -327,10 +330,10 @@ defmodule Mix.Tasks.Monty.Run do
   defp finish(nil, _summary), do: nil
 
   defp finish(history, summary) do
+    {:ok, stored} = Monty.Studio.RunHistory.store(history, history.log, history.timeline)
+
     {:ok, history} =
-      history
-      |> checkpoint()
-      |> Monty.Studio.RunHistory.finish(Monty.Studio.RunLog.summary(summary))
+      Monty.Studio.RunHistory.finish(stored, Monty.Studio.RunLog.summary(summary))
 
     history
   end

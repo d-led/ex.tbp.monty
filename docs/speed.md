@@ -466,3 +466,88 @@ reference instead of copied, and one queue that knows what is running. The
 advantage that a GIL-bound Python cannot take at all is the next one: sharding a
 single step's per-graph work across schedulers, described above and **still
 unmeasured**.
+
+## The run of 1:42 h, and what it was paying for (2026-11-09)
+
+Setup: the user's own run of `base_10simobj_surf_agent` on this machine,
+`7339fa92…` — 140 episodes, **42 401 steps, 6 130 s of wall clock**. Its own
+step reports account for 2 720 s of that; the rest was paid outside the steps.
+
+The reference is Monty's Python, run on the same machine on the same config
+(`monty-orig/.venv`, `experiment=base_10simobj_surf_agent`, one epoch), read from
+its own `eval_stats.csv`:
+
+|                            | Monty (Python)              | this port              |
+| -------------------------- | --------------------------- | ---------------------- |
+| steps in the sample        | 1 774 (177 an episode)      | 1 072 (107 an episode) |
+| steps the module was given | 260 — **15 % of the steps** | 6 of 40 — **15 %**     |
+| wall                       | **16.8 s — 9.4 ms a step**  | 104 ms a step          |
+| wall per matching step     | **64 ms**                   | ~420 ms                |
+
+The shape agrees — one matching step in seven, the same evidence scale — so the
+gap is cost, not behaviour.
+
+### Where our 6 130 s went
+
+| what                                        | measured                                 |
+| ------------------------------------------- | ---------------------------------------- |
+| the model step, as the run reported it      | 2 720 s (44 %)                           |
+| between two episodes (139 boundaries)       | **869 s (14 %)**, growing 1.8 s → 9 s    |
+| the fixed cost of a step, outside the model | ~33 ms × 42 401 ≈ 1 400 s (23 %)         |
+| the rest of the tail                        | the page's poll and the writes it fought |
+
+The boundary cost grew with the row, which is the signature of a write that
+rewrites what it appends to: `jsonb || jsonb` is one statement, but Postgres
+still writes the whole value. Measured on that row, appending an **empty** array
+took **14.7 s**. The transcript is 122 B a step and the pictures 10.4 kB, and
+both were appended at every boundary.
+
+The page's poll was the other half: `reconcile/1` read the **whole row twice a
+second** (`RunHistory.get/1`) — 252 MB by the end of that run, per request, while
+the run was trying to step.
+
+### What changed, and what it cost before
+
+| change                                                                      | before                                       |
+| --------------------------------------------------------------------------- | -------------------------------------------- |
+| the page polls the row's scalars (`RunHistory.progress/1`)                  | 252 MB twice a second                        |
+| the transcript is the stream's, not the record's (`RunStream.steps_from/2`) | `log ++ [entry]` per step — O(n²) in the run |
+| a boundary writes the transcript; the settle writes the pictures once       | 14.7 s an append by the end of a run         |
+| beliefs are read only when a module was fed                                 | 5.7 ms on 83 % of the steps                  |
+| a step's pictures are encoded once, in the stream                           | two PNGs a sensor encoded twice              |
+
+The boundary is now the same 1.8 s at episode 1 and at episode 10 (measured: 10
+episodes, 1 072 steps, 114 s wall, 68 ms of model a step), and the row is written
+in one statement as the run settles.
+
+### The actor shell is not the gap
+
+One step's observations are **435 189 words — 3.5 MB** of heap (863 kB on the
+wire). One cross-process copy of them is **0.53 ms**, and a processed step makes
+about twenty `gen:do_call`s. So the messages a step pays are ~2–3 ms of 104 ms:
+**about 3 %**. The shell is the studio, the stop button and the replay, and it is
+not what separates us from Python.
+
+### Where the other 97 % is, per step
+
+| phase                                           | a step the module was given | a step it was not |
+| ----------------------------------------------- | --------------------------: | ----------------: |
+| the world (MuJoCo, in the embedded interpreter) |                     10.2 ms |           10.6 ms |
+| the transform chain (depth → 3-D points)        |                      6.4 ms |            6.4 ms |
+| the model step                                  |                      416 ms |             20 ms |
+
+Monty's _whole_ step is 9.4 ms. Two things follow, both arithmetic:
+
+1. **The floor is 37 ms**, of which 17 ms is world and transforms — work Python
+   does with numpy in under a millisecond. The transform chain is six passes of
+   Elixir closures over 4 096 pixels (`DepthTo3DLocations`, 32 768 `count/4`
+   closure calls a step).
+2. **A processed step is 6× Monty's whole step.** The profile of one: 267 834
+   `Enum.map` iterations, 255 648 `take_list`, 99 966 `Geometry.dot`, 188 MB of
+   garbage — ~60 passes over a hypothesis list of a few thousand. Monty does a
+   handful of numpy ops over an (H, ·) array.
+
+So the order for the next session is: the per-hypothesis passes (an order of
+magnitude is available, and it is the one thing that would put us ahead of
+Python), then the transform chain and the sensor patch maths as kernels or Nx,
+then whatever the profile says about the world.

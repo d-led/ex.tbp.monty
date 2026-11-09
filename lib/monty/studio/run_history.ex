@@ -95,37 +95,131 @@ defmodule Monty.Studio.RunHistory do
   distinct episodes they name — the definitions `steps_run/1` and `episodes_run/1`
   read off a row.
   """
-  @spec checkpoint(Run.t()) :: {:ok, Run.t()} | {:error, term()}
-  def checkpoint(%Run{log: log, timeline: timeline, steps_done: written} = run) do
+  @spec checkpoint(Run.t(), keyword()) :: {:ok, Run.t()} | {:error, term()}
+  def checkpoint(%Run{log: log, timeline: timeline, steps_done: written} = run, opts \\ []) do
     # `steps_done` is the row's own count, written by this function and by
     # nothing else; a record that holds less than it claims has been replaced
     # rather than appended to, and is rewritten whole from its first step.
     written = min(written || 0, length(log))
-    new_log = Enum.drop(log, written)
-    new_timeline = Enum.drop(timeline, written)
-    stepped = %{run | steps_done: length(log), episodes_done: episodes_in(log)}
+    write(run, Enum.drop(log, written), Enum.drop(timeline || [], written), opts)
+  end
 
-    cond do
-      new_log == [] ->
-        {:ok, run}
+  @doc """
+  Writes steps the caller holds elsewhere, from the first the row does not have.
 
-      appendable?() ->
-        append_steps(run, new_log, new_timeline, stepped)
+  A run's transcript lives in `Monty.Studio.RunStream` while it steps: the record
+  in the run's own process is the counters, because appending a step to a list
+  copies the list, and a run of forty thousand steps copied forty thousand lists.
+  A boundary asks the stream for what the row has not written yet and hands it
+  here.
+  """
+  @spec checkpoint_steps(Run.t(), [map()], [map()], keyword()) ::
+          {:ok, Run.t()} | {:error, term()}
+  def checkpoint_steps(%Run{} = run, new_log, new_timeline, opts \\ []),
+    do: write(run, new_log, new_timeline, opts)
 
-      true ->
-        rewrite(run)
+  @doc """
+  Writes a run's whole transcript and its pictures, once, as it settles.
+
+  The one write that carries the `timeline` — the pictures of every step — which
+  a boundary deliberately leaves alone: `||` over two `jsonb` arrays is one
+  statement, but Postgres still writes the whole value it concatenates. Measured
+  on a 24 329-step row, appending an *empty* array took **14.7 s**; a boundary
+  appending its episode's pictures therefore rewrote the row as it stood, and the
+  140 of them a run of `base_10simobj_surf_agent` makes cost it about 1 000 s of
+  its 1:42 h. `store/3` is that write, once, and `checkpoint/2` takes
+  `timeline: :skip`.
+  """
+  @spec store(Run.t(), [map()], [map()]) :: {:ok, Run.t()} | {:error, term()}
+  def store(%Run{} = run, log, timeline) do
+    rewrite(%{
+      run
+      | log: log,
+        timeline: timeline,
+        steps_done: length(log),
+        episodes_done: episodes_in(log)
+    })
+  end
+
+  defp write(%Run{} = run, [], [], _opts), do: {:ok, run}
+
+  defp write(%Run{} = run, new_log, new_timeline, opts) do
+    stepped = %{
+      run
+      | steps_done: (run.steps_done || 0) + length(new_log),
+        episodes_done: episodes_done(run.episodes_done, new_log)
+    }
+
+    if appendable?() do
+      append_steps(run, new_log, new_timeline, stepped, opts)
+    else
+      # An adapter with no append writes the record whole, so it needs the steps
+      # the row already has as well as the batch — and those are in the run's
+      # stream while it steps, because the record in the run's own process is the
+      # counters (see `checkpoint_steps/4`).
+      {log, timeline} = whole_transcript(run, new_log, new_timeline)
+
+      rewrite(%{
+        stepped
+        | log: log,
+          timeline: timeline,
+          steps_done: length(log),
+          episodes_done: episodes_in(log)
+      })
     end
   end
 
-  # Postgres, and only Postgres: `||` over two `jsonb` arrays is one statement
-  # that does not read the array it appends to.
+  # The whole transcript, from wherever it is: the stream, when a run is stepping
+  # and keeps it there; the record itself otherwise — `mix monty.run` fills its own
+  # record, and a run that has settled has already handed its steps over.
+  defp whole_transcript(%Run{id: id} = run, new_log, new_timeline) do
+    case held_steps(id) do
+      {[], []} -> {(run.log || []) ++ new_log, (run.timeline || []) ++ new_timeline}
+      held -> held
+    end
+  end
+
+  defp held_steps(id) do
+    if Process.whereis(Monty.Studio.RunStream),
+      do: Monty.Studio.RunStream.steps(id),
+      else: {[], []}
+  end
+
+  # The highest episode number the batch names, plus one: episodes are numbered
+  # from zero and appended in order, so that is how many there have been. One
+  # more step in an episode already counted leaves the number alone.
+  defp episodes_done(counted, batch) do
+    named = for %{"episode" => episode} <- batch, is_integer(episode), do: episode + 1
+    max(counted || 0, Enum.max(named, fn -> 0 end))
+  end
+
+  # Postgres, and only Postgres: the statement appends without sending what the
+  # row already holds.
   defp appendable?,
     do: ExTbpMonty.Database.repo_module().__adapter__() == Ecto.Adapters.Postgres
 
-  defp append_steps(%Run{id: id}, new_log, new_timeline, stepped) do
+  defp append_steps(%Run{id: id}, new_log, new_timeline, stepped, opts) do
     log = Jason.encode!(new_log)
     timeline = Jason.encode!(new_timeline)
     now = DateTime.utc_now()
+
+    # A boundary leaves the pictures alone: writing them here rewrites the whole
+    # `timeline`, which is the cost `store/3` exists to pay once. A skipped write
+    # assigns the column to itself, which Postgres answers without touching the
+    # value — the row is written, the 250 MB of pictures is not.
+    pictures =
+      if Keyword.get(opts, :timeline, :write) == :skip do
+        dynamic([run], run.timeline)
+      else
+        dynamic(
+          [run],
+          fragment(
+            "coalesce(?, '[]'::jsonb) || ?::jsonb",
+            run.timeline,
+            type(^timeline, :string)
+          )
+        )
+      end
 
     # Whether the run is there to append to, asked as a question rather than read
     # off `update_all`'s answer: that answer is `{count, rows}` on an adapter that
@@ -142,12 +236,6 @@ defmodule Monty.Studio.RunHistory do
                   "coalesce(?, '[]'::jsonb) || ?::jsonb",
                   run.log,
                   type(^log, :string)
-                ),
-              timeline:
-                fragment(
-                  "coalesce(?, '[]'::jsonb) || ?::jsonb",
-                  run.timeline,
-                  type(^timeline, :string)
                 ),
               steps_done:
                 fragment(
@@ -179,6 +267,7 @@ defmodule Monty.Studio.RunHistory do
                   run.episodes_done,
                   type(^log, :string)
                 ),
+              timeline: ^pictures,
               updated_at: ^now
             ]
           ]
@@ -498,6 +587,50 @@ defmodule Monty.Studio.RunHistory do
         |> where([run], run.id == ^uuid)
         |> pictures_less()
         |> List.first()
+
+      :error ->
+        nil
+    end
+  end
+
+  # What a page asks about a run between its steps. Every field here is a scalar
+  # or a small map: a poll costs a row, not a transcript.
+  @progress_fields [
+    :id,
+    :experiment,
+    :status,
+    :steps,
+    :steps_done,
+    :episodes_done,
+    :summary,
+    :log_path,
+    :started_at,
+    :finished_at,
+    :duration_us,
+    :updated_at
+  ]
+
+  @doc """
+  What a page polls for: how the run is doing, without what it said.
+
+  An experiment page asked `get/1` twice a second, which is the transcript *and*
+  the pictures — 252 MB by the end of a 24 329-step run, per request, while the
+  run was trying to step. A poll needs the state, the counters and the ending; the
+  transcript is read once, when the page catches up after the run has stopped.
+  """
+  @spec progress(binary()) :: Run.t() | nil
+  def progress(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        Run
+        |> where([run], run.id == ^uuid)
+        |> select([run], map(run, @progress_fields))
+        |> Repo.all()
+        |> List.first()
+        |> case do
+          nil -> nil
+          fields -> struct(Run, fields)
+        end
 
       :error ->
         nil

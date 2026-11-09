@@ -131,6 +131,59 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.get(run.id).updated_at == written_at
     end
 
+    test "a boundary writes the transcript, and the pictures wait for the settle" do
+      # Appending to a `jsonb` array rewrites the whole array: an *empty* append to
+      # a 24 329-step row took 14.7 s, and a run of 140 episodes paid it 140 times.
+      # A boundary writes the transcript; the pictures are five times its size and
+      # are written once, when the run settles.
+      {:ok, run} = RunHistory.start(@attributes)
+      steps = [%{"step" => 0, "episode" => 0}, %{"step" => 1, "episode" => 0}]
+      moments = [moment(0), moment(1)]
+
+      assert {:ok, saved} =
+               RunHistory.checkpoint_steps(run, steps, moments, timeline: :skip)
+
+      assert saved.steps_done == 2
+      assert Enum.map(RunHistory.get(run.id).log, & &1["step"]) == [0, 1]
+      assert RunHistory.get(run.id).timeline == []
+
+      assert {:ok, settled} = RunHistory.store(saved, steps, moments)
+      assert Enum.map(RunHistory.get(run.id).timeline, & &1["step"]) == [0, 1]
+      assert settled.steps_done == 2
+    end
+
+    test "reads the steps the row does not have, and not the ones it does" do
+      # A boundary asks the stream for what it has not written yet. Asking for the
+      # whole run to throw most of it away is the copy the stream's positions
+      # exist to avoid.
+      {:ok, run} = RunHistory.start(@attributes)
+      Enum.each(0..4, &publish(run.id, &1))
+
+      {log, moments} = Monty.Studio.RunStream.steps(run.id)
+      assert Enum.map(log, & &1["step"]) == [0, 1, 2, 3, 4]
+      assert Enum.map(moments, & &1["step"]) == [0, 1, 2, 3, 4]
+
+      {after_the_first, _moments} = Monty.Studio.RunStream.steps_from(run.id, 1)
+      assert Enum.map(after_the_first, & &1["step"]) == [2, 3, 4]
+      assert Monty.Studio.RunStream.count(run.id) == 5
+    end
+
+    test "a page's poll reads the row without its transcript" do
+      # An experiment page polled the whole record twice a second: 252 MB per
+      # request by the end of a twenty-thousand-step run, while the run was trying
+      # to step. What a poll needs is the state and the counters.
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
+
+      polled = RunHistory.progress(run.id)
+
+      assert polled.status == "running"
+      assert polled.steps_done == 1
+      assert polled.log == []
+      assert polled.timeline == []
+      assert Enum.map(RunHistory.head(run.id).log, & &1["step"]) == [0]
+    end
+
     test "a run closed without its worker still has the steps it took" do
       {:ok, run} = RunHistory.start(@attributes)
 
@@ -210,11 +263,12 @@ defmodule Monty.Studio.RunHistoryTest do
     }
   end
 
-  # A step handed to the stream, the way a worker hands one over.
+  # A step handed to the stream, the way a worker hands one over. The moment is
+  # the stream's to draw (`RunStream.handle_cast/2`), so what a step hands over is
+  # what its sensors saw, not a picture of it.
   defp publish(run_id, step) do
     Monty.Studio.RunStream.publish(run_id, %{
       entry: %{"step" => step, "episode" => 0, "at" => Monty.Studio.RunLog.now().instant},
-      moment: moment(step),
       line: nil,
       observations: %{},
       sensor_ids: [],

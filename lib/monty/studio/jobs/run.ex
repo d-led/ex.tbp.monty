@@ -12,8 +12,9 @@ defmodule Monty.Studio.Jobs.Run do
   A step's own report is not written to the database as it is taken: it goes to
   `Monty.Studio.RunStream`, in memory, which is where the page watching the run
   reads it from — Monty's logger and its dashboard do the same. The row gets the
-  transcript at every episode boundary and once at the end, which keeps a step's
-  cost a function of the step rather than of how long the run has been going.
+  transcript at every episode boundary and the pictures once, when the run
+  settles, which keeps a step's cost a function of the step rather than of how
+  long the run has been going.
 
   Stopping is a message, not a kill: the worker checks its mailbox between
   timesteps, so a stop lands at a step boundary and the summary describes the
@@ -239,7 +240,11 @@ defmodule Monty.Studio.Jobs.Run do
       # the first step does. A record is written at episode boundaries and the
       # Reaper reads a silent record as a dead run, so the steps between two
       # boundaries have to say something while they work.
-      beat: nil
+      beat: nil,
+      # What the learning modules last said they believed. A step they were not
+      # given cannot change it, so this is what such a step reports instead of
+      # asking every module again.
+      beliefs: %{}
     }
 
     {outcome, ran, state} =
@@ -347,7 +352,7 @@ defmodule Monty.Studio.Jobs.Run do
           {:episode, %{episode: episode, object: object, steps: state.record.steps}}
         )
 
-        {:ok, %{state | run: run, episode: episode, episodes_started: episode + 1}}
+        {:ok, %{state | run: run, episode: episode, episodes_started: episode + 1, beliefs: %{}}}
 
       {:error, reason} ->
         {:error, reason}
@@ -434,16 +439,22 @@ defmodule Monty.Studio.Jobs.Run do
   # while that happens looks exactly like a run that has stopped. Saying "saving
   # 22 508 steps" is the difference between a slow write and a hang, and it is
   # the only place that knows which it is.
-  defp keep_with_state(record) do
-    publish(record.id, {:keeping, length(record.log)})
+  #
+  # What is written here is the transcript only. The pictures are five times its
+  # size and every one of them would be rewritten by the statement that appends
+  # (`RunHistory.store/3` explains the measurement), so they are written once, as
+  # the run settles.
+  defp keep_with_state(%{id: id, steps_done: written} = record) do
+    {new_log, new_timeline} = RunStream.steps_from(id, written || 0)
+    publish(id, {:keeping, (written || 0) + length(new_log)})
 
-    case RunHistory.checkpoint(record) do
+    case RunHistory.checkpoint_steps(record, new_log, new_timeline, timeline: :skip) do
       {:ok, saved} ->
-        publish(record.id, :kept)
+        publish(id, :kept)
         {saved, true}
 
       {:error, reason} ->
-        publish(record.id, :kept)
+        publish(id, :kept)
         Logger.warning("studio run #{record.id}: cannot write its steps: #{inspect(reason)}")
         {record, false}
     end
@@ -484,6 +495,37 @@ defmodule Monty.Studio.Jobs.Run do
   defp crashed?({:crashed, _step, _reason}), do: true
   defp crashed?(_outcome), do: false
 
+  # The closing write: the whole transcript and every step's pictures, in one
+  # statement. A boundary writes the transcript alone (see `keep_with_state/1`),
+  # because appending to a `jsonb` array rewrites the array — measured at 14.7 s
+  # for an *empty* append to a 24 329-step row, which is what 140 boundaries of a
+  # run that size were paying.
+  defp store_all(%{id: id} = record) do
+    {log, timeline} = RunStream.steps(id)
+    publish(id, {:keeping, length(log)})
+
+    case RunHistory.store(record, log, timeline) do
+      {:ok, saved} ->
+        publish(id, :kept)
+        {saved, true}
+
+      {:error, reason} ->
+        publish(id, :kept)
+        Logger.warning("studio run #{id}: cannot write its steps: #{inspect(reason)}")
+        {record, false}
+    end
+  rescue
+    error in [DBConnection.ConnectionError, Postgrex.Error] ->
+      publish(id, :kept)
+
+      Logger.warning(
+        "studio run #{id}: the closing write was abandoned, so its steps are only in " <>
+          "memory for whoever is watching: #{Exception.message(error)}"
+      )
+
+      {record, false}
+  end
+
   defp stop_run(nil), do: :ok
 
   defp stop_run(run) do
@@ -513,7 +555,7 @@ defmodule Monty.Studio.Jobs.Run do
   # `MontyExperiment.run_episode_steps/2`, which is Monty's episode loop.
   defp step_once(run_id, %{run: run} = state, sensor_ids) do
     {:ok, info, observations, run} = Run.step(run)
-    beliefs = Run.beliefs(run)
+    beliefs = beliefs_after(info, run, state.beliefs)
 
     # The world's own answer, not the transformations' — the transformed
     # observations say what the model was *given* (poses, curvatures, and for the
@@ -522,18 +564,13 @@ defmodule Monty.Studio.Jobs.Run do
     # which is a replay of blank frames.
     rendered = Run.rendered_observations(run) || observations
 
-    # What the record keeps and what a page draws are built here, once: the step
-    # itself is the only thing that has `info` and `beliefs`.
+    # The step itself is the only thing that has `info` and `beliefs`, so the
+    # record's entry is built here — and everything else a step costs a page, the
+    # pictures included, is `RunStream`'s, handed over rather than waited for.
     entry = RunLog.entry(info, beliefs, episode: state.episode)
-    moment = RunLog.moment(info, rendered)
-    record = RunHistory.append_step(state.record, entry, moment)
 
-    # Everything else a step costs a page — the log line, the pictures, telling
-    # whoever is watching — is `RunStream`'s, and it is handed over, not waited
-    # for.
     RunStream.publish(run_id, %{
       entry: entry,
-      moment: moment,
       line: RunLog.line(entry),
       observations: rendered,
       sensor_ids: sensor_ids,
@@ -543,8 +580,15 @@ defmodule Monty.Studio.Jobs.Run do
       centre: centre_view(run, info.step)
     })
 
+    # The record in this process is the counters: the transcript is the stream's,
+    # and a boundary asks it for what the row has not written yet.
     {:ok, info,
-     %{state | run: run, record: record, beat: RunHistory.heartbeat(record, state.beat)}}
+     %{
+       state
+       | run: run,
+         beliefs: beliefs,
+         beat: RunHistory.heartbeat(state.record, state.beat)
+     }}
   catch
     # A raise and an exit are the same thing here: the step did not produce a
     # report. Both end the episode as a failure, because the alternative — the
@@ -552,6 +596,17 @@ defmodule Monty.Studio.Jobs.Run do
     # and a page nobody trusts. The sentence is built here, where the traceback
     # still exists: formatted later from a bare term, it would have none.
     kind, reason -> step_died(run_id, run, Failure.crashed(kind, reason, __STACKTRACE__))
+  end
+
+  # What the modules hold after a step. A step the learning modules were not given
+  # cannot change what they believe — reading it costs a call per module and a copy
+  # of the module's own numbers, and 83 % of a surface-agent run's steps are that
+  # step — so the beliefs are read when there is something new to read, and the one
+  # read at the start of an episode gives the rest something to carry.
+  defp beliefs_after(info, run, held) do
+    if info.processed? or map_size(held) == 0,
+      do: Run.beliefs(run),
+      else: held
   end
 
   defp step_died(run_id, run, %{"reason" => what} = recorded) do
@@ -594,9 +649,10 @@ defmodule Monty.Studio.Jobs.Run do
 
     say(run_id, closing_line(outcome, infos, summary))
 
-    # The run's steps go into the row once, here, rather than once a step while
-    # it ran. They stay in memory for a page until the row has them.
-    {record, held?} = keep_with_state(record)
+    # The run's steps and its pictures go into the row once, here, rather than
+    # once an episode while it ran. They stay in memory for a page until the row
+    # has them.
+    {record, held?} = store_all(record)
     if held?, do: RunStream.clear(run_id)
 
     case RunHistory.finish(record, stored, status) do

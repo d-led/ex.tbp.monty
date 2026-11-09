@@ -86,11 +86,31 @@ defmodule Monty.Studio.RunLog do
   step that stored them would make the history table the largest thing in the
   database to draw the same dot.
   """
-  @spec moment(map(), map()) :: map()
-  def moment(info, observations) do
+  @spec moment(map() | non_neg_integer(), map()) :: map()
+  def moment(%{step: step}, observations) when is_integer(step),
+    do: moment(step, observations, %{})
+
+  def moment(step, observations) when is_integer(step),
+    do: moment(step, observations, %{})
+
+  @doc """
+  The same scene, from pictures somebody has already drawn.
+
+  `RunStream` encodes a sensor's pictures once per step — the page's frame and the
+  record's scene are the same two PNGs — so it hands them here instead of having
+  them drawn twice.
+  """
+  @spec moment(non_neg_integer(), map(), %{optional(String.t()) => Camera.images()}) ::
+          map()
+  def moment(step, observations, images) when is_integer(step) do
     %{
-      "step" => info.step,
-      "sensors" => observations |> Map.get(agent_id(), %{}) |> Map.new(&sensor_moment/1)
+      "step" => step,
+      "sensors" =>
+        observations
+        |> Map.get(agent_id(), %{})
+        |> Map.new(fn {sensor_id, observation} ->
+          sensor_moment({sensor_id, observation}, Map.get(images, sensor_id))
+        end)
     }
   end
 
@@ -102,8 +122,8 @@ defmodule Monty.Studio.RunLog do
   # episode as it happened rather than a table of numbers.
   @camera_arrays ["depth", "rgba", "semantic", "semantic_3d", "sensor_frame_data"]
 
-  defp sensor_moment({sensor_id, observation}) do
-    images = Camera.images(observation)
+  defp sensor_moment({sensor_id, observation}, drawn) do
+    images = drawn || Camera.images(observation)
 
     recorded =
       %{
