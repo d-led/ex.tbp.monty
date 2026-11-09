@@ -677,66 +677,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
                   data-episode={band.episode}
                   pointer-events="none"
                 />
-                <%!-- The foot of each band is its handle: a strip a reader can
-                click to look at that episode alone. A range, unlike the columns
-                above, which can only say where a click landed — and the reason
-                this exists is that zooming is the one thing a click can ask for
-                that the plot could not answer without a hook.
-
-                Only where it is wide enough to hit. A run of eighty-three
-                episodes across three hundred and twenty units is four units an
-                episode, so drawing every handle painted a ribbon of eighty-three
-                coloured blocks — a colour soup that said nothing and could not be
-                clicked. Wide bands keep their handle; narrow ones keep their tint
-                and their rule, and a reader zooms until the handles appear. --%>
-                <rect
-                  :for={band <- @chart.bands}
-                  :if={band.width >= 6}
-                  id={"replay-episode-#{band.episode}"}
-                  x={band.x}
-                  y={@chart.height - 6}
-                  width={band.width}
-                  height="6"
-                  fill={band.colour}
-                  fill-opacity="0.45"
-                  class="cursor-zoom-in"
-                  phx-click="replay_brush"
-                  phx-value-from={band.from}
-                  phx-value-to={band.to}
-                >
-                  <title>episode {band.episode} · click to look at it alone</title>
-                </rect>
-                <%!-- Where one episode ends and the next begins, ruled as well as
-            tinted: two episodes of the same object are one colour, and the
-            boundary between them is still a step the chart must show. Ruled only
-            where the band is wide enough for the rule to mean a boundary rather
-            than a hatch of eighty-three lines four units apart. --%>
-                <line
-                  :for={band <- @chart.bands}
-                  :if={band.x > 0 and band.width >= 6}
-                  x1={band.x}
-                  y1="0"
-                  x2={band.x}
-                  y2={@chart.height}
-                  stroke="#6b7280"
-                  stroke-opacity="0.5"
-                  stroke-dasharray="1 3"
-                  vector-effect="non-scaling-stroke"
-                />
-                <%!-- Where the labels beside the plot sit, drawn under the lines so a
-            line is never hidden by a gridline. --%>
-                <g id="replay-chart-gridlines">
-                  <line
-                    :for={tick <- @chart.ticks}
-                    x1="0"
-                    y1={tick.y}
-                    x2={@chart.width}
-                    y2={tick.y}
-                    stroke="var(--chart-grid, #e5e7eb)"
-                    stroke-width="1"
-                    vector-effect="non-scaling-stroke"
-                  />
-                </g>
                 <%!-- Zero: what evidence is measured from. Every episode starts on
             this line and a hypothesis can be penalised under it, so it is drawn
             heavier than a gridline and below the lines. --%>
