@@ -691,6 +691,21 @@ defmodule ExTbpMontyWeb.StudioComponents do
                     stroke-linejoin="round"
                     vector-effect="non-scaling-stroke"
                   />
+                  <%!-- A mark per drawn step, each carrying its own sentence in a
+                  `<title>`: the browser shows that on hover, so the readout needs
+                  no JavaScript at all. The circle is transparent and wider than
+                  the line, because a point is easier to point at than a stroke.
+                  Decimation is what makes this affordable — a few hundred marks
+                  per line rather than twenty thousand. --%>
+                  <circle
+                    :for={mark <- chart_marks(@chart, @series, @series_id)}
+                    cx={mark.x}
+                    cy={mark.y}
+                    r="6"
+                    fill="transparent"
+                  >
+                    <title>{mark.label}</title>
+                  </circle>
                 </g>
                 <line
                   :if={@chart.playhead}
@@ -1181,6 +1196,35 @@ defmodule ExTbpMontyWeb.StudioComponents do
   # three hundred and twenty units of chart, so a hover was answered by scanning
   # seven thousand entries to name the one under the cursor, and the entries
   # themselves were seven hundred kilobytes in the page's own attributes.
+  # One mark per drawn point, each with the sentence a hover shows. The sentence
+  # is built here rather than in the browser because it is a sentence about the
+  # data — "mug · #1337 · 16.53" — and the page that says it should be the one
+  # that chose the words, exactly as it is for the tooltip the hook draws.
+  defp chart_marks(chart, series, series_id) do
+    unit = chart_unit(series, series_id)
+    named? = length(chart.lines) > 1
+
+    chart.hover
+    |> nearest_per_unit(chart.width)
+    |> Enum.map(fn %{line: line, x: x, y: y, step: step, value: value} ->
+      %{
+        x: Float.round(x * 1.0, 2),
+        y: Float.round(y * 1.0, 2),
+        label: mark_label(line, step, value, unit, named?)
+      }
+    end)
+  end
+
+  defp mark_label(line, step, value, unit, named?) do
+    name = if named?, do: "#{line} · ", else: ""
+    unit = if unit == "", do: "", else: " #{unit}"
+
+    decimals =
+      if is_float(value), do: :erlang.float_to_binary(value * 1.0, decimals: 2), else: value
+
+    "#{name}##{step} · #{decimals}#{unit}"
+  end
+
   defp chart_samples(chart, series, series_id) do
     unit = chart_unit(series, series_id)
     named? = length(chart.lines) > 1

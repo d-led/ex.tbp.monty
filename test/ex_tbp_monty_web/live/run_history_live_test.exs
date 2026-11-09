@@ -1038,7 +1038,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       # The labels are beside the plot, not in it: text inside an SVG stretched
       # by `preserveAspectRatio="none"` is drawn wider than it is tall.
       plot = view |> element("#replay-chart") |> render()
-      refute plot =~ "1.0"
+      refute plot =~ "<text"
     end
 
     test "the axis names zero when the evidence went under it", %{conn: conn} do
