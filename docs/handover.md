@@ -1,7 +1,8 @@
-# Hand-over — 2026-11-06 (evening), continued 2026-11-07
+# Hand-over — 2026-11-06 (evening), continued through 2026-11-09
 
-The newest section is 16. Sections 1–15 are the previous evening and are still
-right where they name a file, a commit or a measurement.
+The newest section is 34. Sections 1–15 are the evening of 2026-11-06, sections
+16–33 the days after it, and each is still right where it names a file, a commit
+or a measurement.
 
 What is open, what is already known, and where the evidence is. Written for
 whoever picks this up next; every claim below was measured or read, and the
@@ -38,12 +39,8 @@ What is left, in order:
 
 ## 1. CI: the macOS leg was a runner label, not an entitlement — **closed**
 
-`6bd0bfe` changed the desktop matrix's `os: macos-14` to `os: macos-latest` in
-`.github/workflows/ci.yml:648`, and run `42178863188` came back **green in every
-job**, `desktop (ex-tbp-monty-osx-arm64): success` included. So the annotation
-`The configuration 'macos-14-arm64-us-default' is not supported` was the label
-and nothing else; the earlier "account entitlement" reading (in `docs/desktop.md`
-and commit `93397d4`) was wrong and `3f94618` has the correction.
+`os: macos-latest` instead of `macos-14` (`6bd0bfe`); run `42178863188` came back
+green in every job. Nothing to carry forward.
 
 ## 2. No tagged release exists, so "latest binary" means the nightly artifact
 
@@ -61,64 +58,15 @@ Symptom: the run page said _"This run did not finish. It stopped without saying
 why."_ — `Failure.explain(nil)`, the record has no `reason` at all. The
 statistics sat beside it: the desktop database's
 `4b2d9d31-0d2d-44ce-9511-7a496fcd760c` is `failed` with `steps_done: 2383`,
-`episodes_done: 22` and a summary of every number **but** a reason.
 
-The crash itself, reproduced headlessly on `base_10simobj_surf_agent` — same
-stack trace as the studio run that reported it:
+## 3. A crashed step left no sentence on the run — **closed**
 
-```
-** (RuntimeError) an undo jump left the agent turned away from where it started
-    informed_policy.ex:369  assert_undo_jump_was_successful/2   (raise)
-    informed_policy.ex:211  jump_outcome/3
-    informed_policy.ex:194  goal_driven_actions/4
-    surface_policy.ex:201   surface_step/6
-    step.ex:222             Step.handle_call/3
-```
+`Failure.explain/1` said "stopped without saying why" for a record with no
+`reason`. The record now carries it. **One piece of that family is still open**
+and moved to §34.5: `mix monty.run` has its own episode loop and no `catch`, so a
+raise there leaves the record `running` until a page reaps it (the task does exit
+1, so a script sees the failure).
 
-**The earlier reading of this was wrong, and the wrong part is worth keeping.**
-This section used to say the crash happened "between calls" with nobody watching,
-and that the step coordinator should therefore write to `RunHistory` itself. It
-does not: a coordinator computes only during a call, and the caller — the Oban
-worker — was inside `GenServer.call`, so it was handed the exit, `step_once`'s
-`catch` turned it into `{:crashed, step, reason}`, and
-`Monty.Frameworks.Experiments.MontyExperiment` carried it up. The reason _was_
-known. `close/6` then finished the record with `RunLog.summary/1`, which returns
-the numbers and has no field for a reason — so the one thing the run knew was the
-one thing the record did not keep.
-
-**The change** (in the order it happens):
-
-1. `Monty.Runtime.Model.step/4` unwraps a coordinator's death: what
-   `GenServer.call` raises is `{{exception, traceback}, {GenServer, :call, _}}`,
-   and that is re-raised as the exception with the step's own traceback — the
-   frame that actually failed. A model that is not running stays an exit.
-2. `Monty.Studio.Jobs.Run.step_once/3` builds `Failure.crashed(kind, reason,
-__STACKTRACE__)` in its `catch`, **where the traceback still exists** — a
-   reason formatted later from a bare term has none.
-3. `Monty.Studio.Failure.stopped/1` is what a crash becomes however it arrives: a
-   pair already built, an exception, a sentence, or a term (which is the detail,
-   never the answer). `{:target_not_visible, id}` gets its own sentence.
-4. `RunLog.summary/2` merges that pair into the summary, and `close/6` passes it
-   whenever the outcome is `{:crashed, …}`. A record that says `failed` now says
-   why, in the same row a page reads.
-
-**Not done, on purpose**: no `RunHistory` call was added under `lib/monty/runtime/`.
-The coordinator owns processes and routing; the studio owns records. A crash
-reaches the database through the caller, which is the only process that knows
-which run it was stepping.
-
-**Still open in the same family** — recorded so it is not mistaken for fixed:
-`mix monty.run` has its own episode loop and no `catch`, so a raise there leaves
-the record `running` until a page reaps it, with the Reaper's truthful but
-uninformative "it stopped before it finished — nothing was working on it any
-more". The task does exit 1 (reproduced), so a script sees the failure.
-
-## 4. The raise itself: the assertion was too strict here — **closed**
-
-> `InformedPolicy.assert_undo_jump_was_successful/2` raising on
-> `base_10simobj_surf_agent` is either a real bug or an assertion too strict.
-
-It is the second, and the number settles it. Monty compares the quaternions it
 _stored_ — `np.all(state[agent].rotation == self._pre_jump_state.rotation)`, exact
 equality — so it compares one value with itself. An agent's rotation here is
 rebuilt from the world's answer by normalising the quaternion the world reports
@@ -174,47 +122,27 @@ cannot fail that way; the window drains both streams
 
 Proved on a throwaway database
 (`SQLITE_PATH=/tmp/deskdb.sqlite MIX_ENV=desktop`): the handler reads
-`type: :standard_error`, a `Logger.info/1` line lands on stderr and not on
-stdout, and "Failed to write log message" appears nowhere. (The window's own
-console was not opened for this; the stream is the property that changed.)
 
-## 7. Performance: what is left, and how to measure it here
+## 4. The raise itself: the assertion was too strict here — **closed**
 
-Current: **6.85 M reductions/step**, 79 MB of garbage, ~42.5 ms/step on a quiet
-box, 140/140 episodes. Two changes this session: decode as 32-bit halves
-(`e00e058`, −3 %) and `node_poses/4` reading pose vectors by shape instead of
-`Enum.take` + `Enum.slice` (`fc0a063`, −10.5 %). Both ladder-identical.
+`InformedPolicy.assert_undo_jump_was_successful/2` was asserting a rule
+`base_10simobj_surf_agent` does not obey. Relaxed where the config allows it.
 
-- **Read the profile for call counts and words allocated only.** `tprof`'s time
-  column is inflated ~16× by its own tracing (`scripts/probe_tprof_overhead.exs`:
-  24.6 ms by the clock vs 402.7 ms reported for the same loop). Its `callers`
-  report does not exist in tools 4.2.3 (`:tprof.inspect/3` has no clause), so a
-  `pattern`-filtered profile gives counts but no call graph.
-- **Never compare wall clock across machines or loads.** An earlier "823 ms/step,
-  21× Monty" was measured at load average 10.6–14.7 and is withdrawn in
-  `docs/speed.md`; the same steps run at 12–170 ms on an idle box.
-- **What the counts say now**: 26 015 `Enum.map/2` calls averaging ~12 elements
-  (306 k iterations), 9 681 `Enum.take/2` before `fc0a063`, per-hypothesis
-  closures (`spread_against`, `gather`, `keep_where`) about 2× per hypothesis.
-  `Hypotheses.gather/3`, `poses`/`locations`, and the displacer's hot path are
-  **already** binaries and kernels — do not "optimise" them again.
-- **The "next target" this note used to name was a phantom.** It said
-  `SpatialArithmetics.check_orthonormal/1` (`spatial_arithmetics.ex:182`) does a
-  per-hypothesis `mᵀ·m` in the hot loop, on the strength of 12 976
-  `Geometry.transpose/1` and 5 129 `Geometry.mul/2` calls in one step. The
-  function has **no production caller** — `grep -rn check_orthonormal lib/` finds
-  its definition and nothing else, and only
-  `spatial_arithmetics_test.exs:192` calls it. The counts belong to the
-  `align_orthonormal_vectors*` family (`:218`, `:340`, `:468`), `Cmp.Message`'s
-  rotation (`message.ex:187`) and `EvidenceGraphLM`'s pose comparison
-  (`evidence_graph_lm.ex:1260`, `:1441`, `:1605`). This is the trap the memory
-  warns about: a call count read off a profile was attributed to a neighbouring
-  function in the same module, and "optimising" it would have changed nothing.
-  If a cheap win is wanted, measure first and name the _caller_
-  (`MIX_ENV=test mix run scripts/probe_step_cost.exs` for the step's cost), then
-  run the ladder — `mix monty.run base_config_10distinctobj_dist_agent
+per-hypothesis `mᵀ·m` in the hot loop, on the strength of 12 976
+`Geometry.transpose/1` and 5 129 `Geometry.mul/2` calls in one step. The
+function has **no production caller** — `grep -rn check_orthonormal lib/` finds
+its definition and nothing else, and only
+`spatial_arithmetics_test.exs:192` calls it. The counts belong to the
+`align_orthonormal_vectors*` family (`:218`, `:340`, `:468`), `Cmp.Message`'s
+rotation (`message.ex:187`) and `EvidenceGraphLM`'s pose comparison
+(`evidence_graph_lm.ex:1260`, `:1441`, `:1605`). This is the trap the memory
+warns about: a call count read off a profile was attributed to a neighbouring
+function in the same module, and "optimising" it would have changed nothing.
+If a cheap win is wanted, measure first and name the _caller_
+(`MIX_ENV=test mix run scripts/probe_step_cost.exs` for the step's cost), then
+run the ladder — `mix monty.run base_config_10distinctobj_dist_agent
 --episodes 1 --steps 8 --no-record` — which must stay digit for digit:
-  `0.746 (192, 6)` … `6.338 (1429, 2)`, `goals 15065` under `MIX_ENV=test`.
+`0.746 (192, 6)` … `6.338 (1429, 2)`, `goals 15065` under `MIX_ENV=test`.
 
 ## 8. Standing rules this codebase is held to
 
@@ -223,25 +151,11 @@ dialyzer` is the separate types job. `scripts/reformat.sh` formats.
 - Module for module: Python `a/b.py::C` is `Monty.A.B.C`; `mix
 monty.module_map.verify` enforces it. Never rename a mapped module.
 - Functional core, actor shell: only `Monty.Runtime.*` owns processes.
-- Kernel changes keep the Elixir reference path and a parity test; the ladder's
-  eight evidence lines are the acceptance.
-- Tests specify behaviour, no `Process.sleep/1`, no casting an interface to a
-  concrete type to reach test helpers.
 
-## 9. Closed this session (so nobody re-opens them)
+## 5. The experiment page's run list — **closed; the query was sound**
 
-- **Dependabot #1, `glib` (Rust, medium)**: dismissed as a tolerable risk with
-  the verified chain — `tauri 2.12.5` pins `gtk = "^0.18"`, `gtk 0.18.2` needs
-  `glib = "^0.18"`, and `cargo update -p glib --precise 0.20.0 --dry-run`
-  refuses with exactly that. Linux-target only; clears when tauri adopts
-  gtk 0.19+ (needs glib ^0.22). Editing a dismissed alert needs a reopen first
-  (`409` otherwise).
-- **The README's download links**: they exist (three platforms, via
-  `nightly.link`), and all three resolve.
-- **The two screenshots** the README shows were never committed; they are now
-  (`9e4b296`).
-- **The full experiment completing** — twice, with identical step and goal
-  counts (4 789 steps, 4 558 928 goals), once at load 10.6–14.7 and once quiet.
+Both candidates — a name mismatch, and `search/1` reading a column the light row
+no longer selects — were wrong. The query was correct; nothing to carry forward.
 
 ---
 
@@ -259,24 +173,10 @@ monty.module_map.verify` enforces it. Never rename a mapped module.
 | `e87eb53` | the same on the run page (`Replay.Chart.zero`)                                                                                                                                  |
 | `e5ad552` | the map's "unchanged" guard actually fires; the lint formatting CI asked for                                                                                                    |
 
-### 10.2 The module map is tooling now, not a document
+## 6. The desktop sidecar failed every log write before succeeding — **closed**
 
-`lib/monty/module_map/data.ex` is generated and the generator keeps it true:
-`mix test` runs `monty.module_map.gen --best-effort` first, so a machine with the
-checkouts beside it refreshes the map before the suite, and a machine without
-them — CI has neither — keeps the committed map and says so. A package with no
-checkout keeps its entries _and_ its recorded commit; an unchanged map is not
-rewritten (mtime is what makes Mix recompile it); the write goes beside the file
-and is renamed onto it, because `mix test --partitions 4` can start four at once.
-
-Two facts are now in the map that a page cannot invent: `stand_in:` and `file:`.
-The first is written down once, in `Monty.ModuleMap.StandIns` — the two shells
-(`Monty`, `MontyForGraphMatching` → `Monty.Runtime.Model` + `Monty.Runtime.Step`)
-and the 17 MuJoCo classes the carried world in `priv/monty_py/world.py`
-implements — and `verify` fails if a declared stand-in names a module that is not
-there. The second is asked of the compiled module's own `compile_info`, because
-the port does not keep one module per file (`sensor_modules/camera_sm.ex` holds
-`CameraSM`).
+Every console line was preceded by `Failed to write log message to stdout, trying
+stderr`. Fixed in the sidecar's stdout handling.
 
 ### 10.3 `/modules`: 360 classes, four columns, two filters
 
@@ -752,43 +652,21 @@ translate. The rest of `tests/unit` — 528 case names — has no counterpart ye
   (`recording_episode_test.exs`, the MuJoCo `host_test.exs`) time out at a load
   average near 90; run them alone or believe CI.
 
-### 15.5 The two commands that catch most regressions in a minute
+## 14. `image amd64, scan, non-root` — **closed**
 
-    mix test test/monty/pretrained_replay_test.exs   # Monty's own recording
-    mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8
+It was a fixable CRITICAL/HIGH finding in the amd64 base image, not a code
+failure: `Build linux/amd64` succeeded and the scan gate failed. The base image
+moved and the leg is green (`image amd64, scan, non-root  success`, run
+`42628601534`). The rule for a future red scan still applies: bump the base image
+or add a dated entry to `.trivyignore.yaml` — never a blanket suppression.
 
-The first replays a recorded episode and measures the hypothesis space object by
-object; the second must print the eight evidence lines beginning `0.908` and
-ending `11.712`. If either moves, the change under test is the cause.
-
----
-
-## 16. 2026-11-07: the transcript left the database, the chart stopped lying, and the speed work found its target
-
-**State at `ff42f52`.** `./scripts/quality.sh` green (2 438 tests, 19 properties,
-lint, coverage/CRAP/parity, complexity worst 29.85) and `MIX_ENV=test mix
-dialyzer` at 0 errors. CI: `5682859` and `1079af6` were watched to green in every
-job — `types`, `lint`, all four shards, coverage, both images, all three desktop
-builds. `3c43031` and `ff42f52` are documentation-only and were **not** watched;
-check `gh run list --limit 1` before believing this section's gate.
-
-Rocky start, worth reading before the next push: `de96fe7` went out **red** on
-`types` because `scripts/quality.sh` does **not** run dialyzer — CI's `types` job
-does. The first repair (use `update_all`'s bare count) then broke **94 tests** at
-runtime, because Postgres answers `{1, nil}`. The fix asks `Repo.exists?/1` and
-discards the answer, which satisfies both. **Run the gate and dialyzer before
-every push.**
-
-### 16.1 What landed
-
-| Commit                                                | What it does                                                                                                                                  | How it is known                                                                                                                                        |
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `de96fe7`                                             | a run's steps stream from memory through `Monty.Studio.RunStream`; the row is written at every episode boundary and once when the run settles | the row was being rewritten whole per step: 13 MB/step at the tail of an 887-step run, its last hundred steps at 5 s each against 157 ms for its first |
-| `de96fe7`                                             | a run ended out of band keeps its steps: whoever closes it writes what memory holds                                                           | the ended run had recorded `0 steps` while its page drew 55                                                                                            |
-| `de96fe7`                                             | the chart's value axis always spans zero; the axis column's height is rendered with a unit                                                    | in the browser: labels `0, 20, 40`, and the column is 150 px instead of none — the unit-less `height: 150` was why labels piled on one spot            |
-| `5682859`                                             | the write path asks whether the run exists instead of reading `update_all`'s answer                                                           | dialyzer 0 errors and the 94 tests green together                                                                                                      |
-| `4c5e22c`                                             | the chart's view (series, window, step) belongs to the run it was chosen for                                                                  | a series picked for one run no longer follows the reader to the next; a test patches between runs to prove it                                          |
-| `4cd0a5b`, `8d49404`, `1079af6`, `3c43031`, `ff42f52` | `docs/speed.md` carries today's numbers; two instruments added                                                                                | below                                                                                                                                                  |
+| `de96fe7` | a run's steps stream from memory through `Monty.Studio.RunStream`; the row is written at every episode boundary and once when the run settles | the row was being rewritten whole per step: 13 MB/step at the tail of an 887-step run, its last hundred steps at 5 s each against 157 ms for its first |
+| `de96fe7` | a run ended out of band keeps its steps: whoever closes it writes what memory holds | the ended run had recorded `0 steps` while its page drew 55 |
+| `de96fe7` | the chart's value axis always spans zero; the axis column's height is rendered with a unit | in the browser: labels `0, 20, 40`, and the column is 150 px instead of none — the unit-less `height: 150` was why labels piled on one spot |
+| `5682859` | the write path asks whether the run exists instead of reading `update_all`'s answer | dialyzer 0 errors and the 94 tests green together |
+| `4c5e22c` | the chart's view (series, window, step) belongs to the run it was chosen for | a series picked for one run no longer follows the reader to the next; a test patches between runs to prove it |
+| `4cd0a5b`, `8d49404`, `1079af6`, `3c43031`, `ff42f52` | `docs/speed.md` carries today's numbers; two instruments added | below |
 
 ### 16.2 The speed numbers, and the four things they ruled out
 
@@ -810,104 +688,15 @@ steps). `docs/speed.md` has the tables; these are the conclusions:
    of a step.
 4. **Deleting `sensor_frame_data` — refused.** Nothing in this port reads it,
    but Monty's `DepthTo3DLocations` produces it and
-   `depth_to_3d_locations_test.exs` asserts that, so removing it is a parity
-   break.
 
-### 16.3 Where the time actually is, and the one query still owed
+## 15. The state and the order — **superseded by §34**
 
-`eprof` over one step, every process: `Enum` map internals 10.8 %, message copy
-10.5 %, reduce 3.6 %, kd-tree 3.3 %, `take_list` 3.0 %, `MatcherNif.decode`
-3.6 %, `with_index` 2.1 %, `filter` 2.0 %, `drop` 1.9 % — about **30 % in generic
-`Enum`/`lists`/`Stream` passes over the hypothesis arrays**.
+The "state at `2116249`" paragraphs here are three days old, and the open list
+they end with was worked through in §§16–33. **§34 is the current state and the
+current order.** What survives from this section is the acceptance rule, now in
+§8 and in `AGENTS.md`: a ported class's tests come from Monty's own
+`tests/unit/**/test_*.py`, one case for one case.
 
-`fprof` on the learning module's process for one step (2 539 575 calls) turns
-that into callers:
-
-| what                                            |      accumulated |                        calls a step |
-| ----------------------------------------------- | ---------------: | ----------------------------------: |
-| `Enum.map/2`                                    | **1 778 (41 %)** |                          **25 987** |
-| `MatcherNif.decode/1` → `decode_one/1`          |       440 (10 %) |              862 (≈127 values each) |
-| `Enum.slice/3` → `slice_forward` → `slice_list` |       420 (10 %) |                          **16 083** |
-| `Enum.reduce/3` fold                            |        399 (9 %) |                             199 813 |
-| `Enum.take_list/2`                              |        306 (7 %) | 161 250 (144 957 its own recursion) |
-| `Hypotheses.gather/3` fun                       |        128 (3 %) |                             128 320 |
-
-So there is **no single hot loop**: ~26 000 small maps a step over hypothesis
-lists of a dozen rows, plus 16 000 list slices used for selection. **The query
-still owed** is the direct caller of `Enum.slice/3` — its caller block was
-deleted with the 660 MB trace before it was read. One re-trace answers it, and
-then the change is mechanical: select through `Hypotheses.take/2`'s
-`binary_part/3` (already written, used elsewhere) instead of list slicing for the
-10 %, and fuse the maps for the 41 %.
-
-The hypothesis columns are **already packed** — evidence, locations and poses are
-binaries, `take/2` and `rows_at/2` select with `binary_part/3`, and displacement
-is `MatcherNif.displaced_locations/3`. Do not "pack the hypotheses" again.
-
-### 16.4 The yardstick
-
-Monty runs `unsupervised_inference_distinctobj_dist_agent` to completion in
-**0:38:10 — 49 617 eval steps, 99 episodes, 10 epochs, seed 42: 46 ms a step**.
-Its dashboard draws all ten objects on one axis, legend included, evidence
-restarting at each episode boundary. That is what this port is measured against,
-and the chart now opens that way by default (16.1).
-
-### 16.5 What not to trust, added today
-
-- **`scripts/quality.sh` as the whole gate.** It does not run dialyzer. CI's
-  `types` job is separate.
-- **A profiler's word column as the size of a message.** See 16.2(2).
-- **A microbenchmark that sizes its result.** `:erts_debug.size` costs about
-  twenty reductions — more than `Geometry.dot/2` — and the first version of
-  `probe_hypothesis_cost.exs` measured the harness.
-- **A profile's call counts as one step's.** `probe_step_profile.exs` profiles
-  three steps; divide by three.
-- **A measurement taken while another `MIX_ENV=test` process runs.** A stray
-  probe sharing `_build` and the database sandbox made two gate runs look like a
-  94-test regression. Check `ps` before believing a red gate.
-
----
-
-## 17. 2026-11-07 (later): `tutorial/first_experiment` runs, and its graph is Monty's
-
-The hand-over's open item 1 was `GraphLM` + `DisplacementGraphLM` (10.6). Both
-were half-written: the classes existed, the module map called them
-`:implemented`, `Setup` had no entry for either, and `Setup.learning_module_spec`
-silently fell back to `EvidenceGraphLM` or to the synthetic stand-in. The
-tutorial config was refused by its experiment class, so nothing exercised the
-hole. It does now.
-
-### 17.1 What landed
-
-| Commit   | What it does                                                                                                                                                                             | How it is known                                                                                       |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| this one | `DisplacementGraphLM` answers every `LearningModule` callback, built by `from_config/2`; `GraphLM` joins it and refuses itself (`:no_matching_scheme`)                                   | a test asks the behaviour for its callback list and asserts nothing is missing                        |
-| this one | `MontySupervisedObjectPretrainingExperiment` ported: exploring when every module is supervised, the answer stated at `post_episode`, before memory is written                            | the tutorial builds a graph named `mug` in one episode (test + real run)                              |
-| this one | supervision crosses the process boundary: `Run.supervise/1` → `Model` → `Step` → `LearningModuleServer` → `GraphLM.supervise/3` / `clear_hypotheses/1`                                   | `docs/monty-differences.md` §2.20                                                                     |
-| this one | an unbuildable learning module is a **finding**, not a stand-in (`:learning_module_not_buildable`); a supervised experiment on the stand-in scene is refused (`:no_target_to_supervise`) | `setup_test.exs`: `graph_1lm` is refused, `feature_pred_off_object` is refused, the tutorial is valid |
-| this one | the samplers carry `quat_rotation` and `priv/monty_py/world.py` keeps `euler_rotation`/`quat_rotation` in `primary_target`                                                               | Monty's own target is `{"object": …, "semantic_id": …, **object_params}`; ours had no turn to state   |
-| this one | `mix monty.run` begins and ends an episode through the config's **experiment class**, as the queued runner already did                                                                   | before this, a pretraining config ran under this task with no supervision at all                      |
-
-### 17.2 The parity number that matters
-
-Monty's own run of the same config (`uv run python run.py
-experiment=tutorial/first_experiment`, this machine, seed 42) and ours, same
-config, same seed:
-
-|                         | Monty                          | this port                      |
-| ----------------------- | ------------------------------ | ------------------------------ |
-| steps                   | 3                              | 3                              |
-| of which matching       | 0                              | 0                              |
-| policy                  | `is_done`, `time_out_lms`      | done at step 3                 |
-| graphs                  | `mug` / `patch`                | `mug` / `patch`                |
-| nodes                   | 3                              | 3                              |
-| edges                   | 6                              | 6                              |
-| stored features         | 13                             | the same 13 names              |
-| first node, world frame | `[6.50e-05, 1.49994, 0.03907]` | `[2.56e-04, 1.49974, 0.03900]` |
-
-The node and edge counts and the feature set are identical; the first node
-differs at the fourth decimal — sub-millimetre, and it is where the agent's
-sensor ended up, not what the module did with it. That difference is the
 positioning and action stream, and it is the next thing to look at if a graph
 ever grows a different shape.
 
@@ -1991,3 +1780,146 @@ that will never exist.
 Gate: lint clean (7 433 mods/funs), 2 670 tests (63 properties), CRAP worst
 29.85, dialyzer 0. `mix monty.module_map.verify`: 131 files, 360 classes — 211
 implemented, 70 planned, 79 excluded.
+
+## 34. 2026-11-09: the experiment page's charts, and five things a reader caught
+
+This session was one page's charts and the honesty of what they say. Most of it
+came in as bug reports from the user, in this order, and each one turned out to
+be a real defect rather than a preference.
+
+### 34.1 What landed
+
+| Commit                                                | What it fixed                                                                                                                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `438c724`                                             | "follow latest steps" on the experiment chart, and the test that exposed `window_label` disagreeing with what was drawn                                       |
+| `28aaba0`                                             | `MuJoCoSimulator` named 1-to-1 with Python's class, with the "why this looks nothing like it" disclaimer in the source, not in a page note                    |
+| `ef48f75`, `a86d164`                                  | the run page: log tail 300 (24 329 rows were being rendered), `Replay.series/1` from 8 986 ms to 37 ms — the reconnect loop was a page taking 17–25 s per GET |
+| `b23a656`, `4c696b9`, `29859e6`, `cfc015a`            | y-autoscale per chart, no decimation (it doubled every line), episode bands pastel-only, padded series                                                        |
+| `4fb71f4`, `dc52782`, `5dbda71`, `96a4e4e`, `029df26` | per-chart full screen, the budget as a control, one gesture implementation, the two Windows packaging fixes                                                   |
+
+### 34.2 Full screen, and the three attempts it took
+
+The card expanded to `fixed inset-0` and the **chart inside it stayed 960×300**, so
+"full screen" was a small chart in a large box with padding around it. Three
+separate causes, each found by measuring rather than by looking:
+
+1. The card held both `relative` and `fixed`. Tailwind emits `.relative` after
+   `.fixed`, so the card stayed in the grid. One position utility per state now.
+2. Even fixed, the plot kept its ribbon shape, because an SVG with `w-full` and a
+   viewBox can only scale uniformly. The chart is now **drawn for the box**: the
+   hook measures it and sends `{width, height}`, and the server redraws that one
+   module's chart at that size.
+3. On the _second_ expansion the chart was drawn for the **first** box, because
+   the hook remembered the size it had already sent. `measure()` forgets it when
+   the chart leaves full screen.
+
+The lesson, written down because it will recur: `measure()` on the client is
+state that survives a re-render, and anything it remembers must be invalidated by
+the event that removes the thing measured.
+
+### 34.3 "The experiment halts earlier" — it did not
+
+A run of one episode of three steps, of a config whose panel says "2 eval", reads
+exactly like an experiment giving up. The records say otherwise: every such run
+had `inputs: %{"episodes" => 1}`, because the page's address bar carried
+`?episodes=1&steps=3` — put there by this assistant while checking charts, and
+inherited by every later run from that page, since `experiment_path/2` re-emitted
+the budget on every patch.
+
+Two changes:
+
+- the run's budget is a **control on the page** (`#run-budget`): episodes "of N in
+  the config", and the most steps one may take, with the config's own value as the
+  placeholder;
+- a zoom patch emits **the window and nothing else**. A chart link is about the
+  picture; what a run does is decided where it can be seen.
+
+The run at 14:58, with no slice, ran `episodes => 2, episodes_done => 2, steps =>
+59` — the config's episodes are honoured.
+
+### 34.4 Two charts were two implementations
+
+The experiment page and a run's page draw the same kind of chart, and the way a
+reader operates one was written twice: in the run page's `.ChartHover` and again
+in the experiment chart's `.EvidenceChart`. That is why they zoomed by different
+factors (×2 against ×1.33), why only the run page had drag-to-zoom, and why the
+"second full screen" bug had to be fixed in a place only one of them could have.
+
+`assets/js/chart.js` now holds `ChartZoom`; both charts answer to it, and say what
+to call the gestures with data attributes (`data-zoom-event`,
+`data-zoom-all-event`, `data-size-event`, the window and its gutters). Their
+**readouts stay separate on purpose**: the run page names one value, the
+experiment page names every object at that step. Those are different questions.
+
+### 34.5 Still open, in the order they should be done
+
+1. **Two geometry modules for one picture.** `Monty.Studio.Chart` draws ticks and
+   labels inside the SVG with margins; `Monty.Studio.Replay.Chart` draws a
+   full-bleed plot with HTML labels beside it. They produce different structs.
+   The seam is real and small: `Replay.Chart.many/2` already takes
+   `[%{id, label, points: [%{step:, value:, episode:}]}]`, derives bands from the
+   episodes, autoscales to the window, and emits hover samples. `Monty.Studio.Chart`
+   could build those series from beliefs and delete its own drawing; its ~40 tests
+   would move to the module that now owns the behaviour.
+2. **The runs table says the budget, not what happened.** `#experiment-runs-table`
+   draws `run.steps` (the ceiling: `6000`) where the runs page correctly uses
+   `RunHistory.steps_run/1`. Make the cell `31 of 6000`, or the runs page's single
+   number plus the ceiling in a `title`.
+3. **`took` is `0µs` for a run that is still going**, because `duration_us` is only
+   written when a run is closed. Needed: `RunHistory.elapsed_us/2` (`finished_at ||
+now` minus `started_at || inserted_at`) and both pages using it. `0µs` was read
+   as "nothing is happening" — the one thing a live duration must not say.
+4. **Stuck runs are judged by a timer where a process could be asked.** The
+   reaper is already correct — `Run.held?/1` is a registry lookup keyed by run id,
+   and a `running` record with no process and no queued Oban job is abandoned
+   without any timeout. Where a timer remains: the one-minute grace for a job that
+   has just started, and headless runs (`mix monty.run`) that no registry on this
+   node can see. But **the page's** "quiet Ns" badge is `RunHistory.stalled?/1`,
+   which is silence only and cannot tell a slow MuJoCo step from a process that is
+   gone. It should ask the pid (`Process.info(pid, [:status, :current_stacktrace])`)
+   and fall back to the timer only when there is no process to ask.
+5. **The zoom hint lines differ by a word.** The run page says "drag to zoom ·
+   shift-drag to pan · wheel to zoom · double-click for the whole run · each band
+   is one episode…"; the experiment page says "wheel to zoom · double-click for the
+   whole run". With one hook, the same sentence belongs in one place.
+
+6. **`mix monty.run` has no `catch`** (carried from the old §3). Its own episode
+   loop is not wrapped, so a raise there leaves the record `running` until a page
+   reaps it, with the Reaper's truthful but uninformative "it stopped before it
+   finished — nothing was working on it any more". The task does exit 1, so a
+   script sees the failure; the record does not say why.
+7. **The `Enum.slice/3` caller is still owed** (carried from the old §16.3, and
+   still the cheapest 10 % in a step): 420 `Enum.slice/3` calls and 16 083 list
+   slice operations a step, whose direct caller was lost with a 660 MB trace
+   before it was read. One re-trace answers it; the change after that is
+   mechanical — select through `Hypotheses.take/2`'s `binary_part/3`, which is
+   already written and used elsewhere. The hypothesis columns themselves are
+   already packed: do not "pack the hypotheses" again.
+
+### 34.6 Two traps from this session
+
+- **Tailwind emits competing utilities in its own order, not yours.** `relative`
+  and `fixed` in one class list silently loses, and a test of the class string
+  passes while the browser does the wrong thing. Check `getComputedStyle`, not the
+  markup.
+- **`render_hook` payloads are a boundary.** The chart hook sent `String(from)`;
+  `range_window/3` called `round/1` on it and the LiveView died. Numbers are sent
+  now and the handler parses anyway.
+
+### 34.7 The gate at hand-over
+
+`scripts/quality.sh` was last run green on `5dbda71`'s predecessor (lint 4 405
+mods/funs, 2 720 tests, CRAP worst 26.67, complexity ok). After `96a4e4e` the
+compile is warning-free and the two page suites pass (53 + 129), but **the full
+gate was not re-run** — the user asked for a commit and push to hand over. Run it
+first.
+
+CI: `cc5c827`, `3238358` and `e78a19f` each closed everything except
+`desktop (ex-tbp-monty-win-x64)`. Three links in that chain are fixed in order:
+`e78a19f` asks `deps.compile ex_tbp_monty_core --force` for the crates (that is
+what builds them; `mix compile --force` never did), `029df26` removes the hand
+copy that then collided with the file Mix had just written and Windows had
+mapped. A **third** fix — a `Sync-Kernels` that asks whether the two paths are
+the same file (a link) or hold the same bytes (two copies) — was in the working
+tree, uncommitted, at hand-over. Whether the Windows job is green after them is
+the first thing to check.
