@@ -368,6 +368,25 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           >
             <.icon name="hero-play-mini" class="size-4" /> Run it
           </button>
+          <%!-- Stop is about the experiment, not about the run this page
+          happens to be following: a run started from another tab, and the
+          second, third and fourth of a parallel press, are runs of this
+          experiment too. It is here whenever one of them is going, and it stops
+          all of them — a reader who says "stop" means the thing they started,
+          not the one page that was watching it. Beside Run, where a person looks
+          for it: it used to be a ghost at the end of this row, where nobody
+          looking for it found it. Neutral rather than a warning colour — stopping
+          is an ordinary thing to want, not something to be warned about — and the
+          icon says what it is. --%>
+          <button
+            :if={in_flight(assigns) != []}
+            id="stop"
+            phx-click="stop"
+            class="btn btn-outline btn-sm"
+            title="Stop it at its next step"
+          >
+            <.icon name="hero-stop-mini" class="size-4" /> {stop_label(assigns)}
+          </button>
           <%!-- What a run does, as two numbers on the page. The step budget is a
           ceiling, not a target — the experiment's own recognition policy ends
           each episode first, and for a recognition that is about twenty
@@ -465,21 +484,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               </option>
             </select>
           </form>
-          <%!-- Stop is about the experiment, not about the run this page
-          happens to be following: a run started from another tab, and the
-          second, third and fourth of a parallel press, are runs of this
-          experiment too. The button is here whenever one of them is going, and
-          it stops all of them — a reader who says "stop" means the thing they
-          started, not the one page that was watching it. --%>
-          <button
-            :if={in_flight(assigns) != []}
-            id="stop"
-            phx-click="stop"
-            class="btn btn-ghost btn-sm text-warning"
-            title="Stop it at its next step"
-          >
-            {stop_label(assigns)}
-          </button>
           <span :if={@run_id} id="run-progress" class="badge badge-ghost">
             episode {(@episode || 0) + 1} · step {elem(@progress, 0)} / {elem(@progress, 1)}
           </span>

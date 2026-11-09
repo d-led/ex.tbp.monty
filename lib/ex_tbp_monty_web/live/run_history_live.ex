@@ -932,7 +932,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               id={"stop-#{@run.id}"}
               phx-click="stop"
               phx-value-id={@run.id}
-              class="btn btn-ghost btn-xs text-warning"
+              class="btn btn-outline btn-xs"
               title="Stop it at its next step"
             >
               Stop
