@@ -394,7 +394,44 @@ defmodule Monty.Studio.Chart do
       end
     end)
     |> Enum.reverse()
-    |> Enum.map(fn {_episode, run} -> Enum.map_join(run, " ", &points_string(&1, chart)) end)
+    |> Enum.map(fn {_episode, run} ->
+      Enum.map_join(decimate(run, chart), " ", &points_string(&1, chart))
+    end)
+  end
+
+  # A run of steps drawn at one pair per column of the plot.
+  #
+  # The plot is a few hundred units wide and a run of twenty thousand steps is
+  # more samples than it has columns, so a column holds several of them and only
+  # the extremes of that column can be seen. Keeping the extremes — not their
+  # average — is what makes this a saving rather than a lie: a spike up and a drop
+  # down both survive, and the line between two columns is drawn for columns that
+  # had data. Every other sample in the column was invisible when it was sent.
+  @doc """
+  The samples a plot can show, one low and one high per column.
+  """
+  @spec decimate([{term(), number(), number()}], map()) :: [{term(), number(), number()}]
+  def decimate([_one, _two | _rest] = run, chart) do
+    run
+    |> Enum.chunk_by(fn {_episode, x, _evidence} -> x_coordinate(x, chart) |> round() end)
+    |> Enum.flat_map(&extremes/1)
+  end
+
+  def decimate(run, _chart), do: run
+
+  # The first and the last of a column as well as its extremes: those are the
+  # points the next column's line is drawn from, and dropping them would move the
+  # line sideways rather than shorten it. Sorted back into step order, because a
+  # column is a set of samples and a polyline is a sequence of them.
+  defp extremes([single]), do: [single]
+
+  defp extremes(column) do
+    lowest = Enum.min_by(column, fn {_episode, _x, evidence} -> evidence end)
+    highest = Enum.max_by(column, fn {_episode, _x, evidence} -> evidence end)
+
+    [hd(column), lowest, highest, List.last(column)]
+    |> Enum.uniq()
+    |> Enum.sort_by(fn {_episode, x, _evidence} -> x end)
   end
 
   defp contiguous?({_episode, x, _evidence}, {_same_episode, previous, _previous_evidence}),

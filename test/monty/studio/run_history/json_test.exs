@@ -23,7 +23,7 @@ defmodule Monty.Studio.RunHistory.JsonTest do
     test "is refused rather than stored" do
       assert Json.cast("mug") == :error
       assert Json.load(42) == :error
-      assert Json.dump(DateTime.utc_now()) == :error
+      assert Json.dump(:mug) == :error
     end
   end
 
