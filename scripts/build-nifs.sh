@@ -13,6 +13,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# The dependencies first, in their own order: `deps.compile <app> --force`
+# compiles that application alone, and a job that has only fetched its
+# dependencies has no `Rustler` for the crates to `use` — which is how the types
+# job failed on the two NIF modules while every test job built them.
+mix compile
+
 mix deps.compile ex_tbp_monty_core --force
 
 native="_build/${MIX_ENV:-dev}/lib/ex_tbp_monty_core/priv/native"

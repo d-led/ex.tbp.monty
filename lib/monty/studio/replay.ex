@@ -362,11 +362,15 @@ defmodule Monty.Studio.Replay do
     # step, so a moment's place in the sequence is what pairs it with its
     # report — and its episode is what the band on the chart is drawn from.
     #
-    # Both lists are walked once. Asking each position for its entry made a
-    # page's charts quadratic in the run's steps.
-    seen = timeline ++ List.duplicate(%{}, max(length(log) - length(timeline), 0))
+    # Both lists are walked once, and either may be the longer one: a record
+    # written before a step kept its pictures has a log longer than its timeline,
+    # and one whose log lost an entry has a timeline longer than its log. Neither
+    # is a step the other can drop.
+    count = max(length(log), length(timeline))
+    entries = log ++ List.duplicate(nil, count - length(log))
+    seen = timeline ++ List.duplicate(%{}, count - length(timeline))
 
-    log
+    entries
     |> Enum.zip(seen)
     |> Enum.with_index()
     |> Enum.map(fn {{entry, moment}, position} -> moment_of(position, entry, moment) end)
