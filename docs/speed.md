@@ -343,6 +343,37 @@ times a step at ~24 values each, and
 `with_index`, `filter` and `map` — a kernel that answers the indices directly
 would remove both.
 
+## Measured 2026-11-09: a run gets slower as it learns, and it is not the episodes
+
+The question was whether episodes accumulate. They do not — and the run still
+gets slower. From the record of `7339fa92-…` (140 episodes, 42 401 steps,
+`priv/studio_runs/<id>/run.log` has every step's own `duration_us`):
+
+| quarter of the run | steps  | unprocessed step | processed step | hyps at a processed step | max   |
+| ------------------ | ------ | ---------------- | -------------- | ------------------------ | ----- |
+| 1–35               | 10 147 | 4.32 ms          | 278.6 ms       | 892                      | 8 880 |
+| 36–70              | 8 532  | 4.80 ms          | 373.8 ms       | 1 279                    | 8 887 |
+| 71–105             | 11 698 | 5.01 ms          | 352.1 ms       | 761                      | 8 880 |
+| 106–140            | 10 966 | 5.68 ms          | 382.9 ms       | 984                      | 8 936 |
+
+- **The transient state does reset.** In a fresh three-episode run every episode
+  starts at the same hypothesis count (712) and the per-step mean _falls_
+  (38.0 → 36.7 → 30.9 ms). Nothing accumulates per episode.
+- **Hypotheses are not the cause.** The count at a processed step has no trend
+  across the run and the maximum is flat at ~8 900.
+- **What grows is the shared long-term memory.** Every step reads the graphs, so
+  the _unprocessed_ step slows by the same third as the processed one — a step
+  that does no matching still pays for what the run has learned. Episodes are
+  independent in what they hold, not in what they read; that is the experiment's
+  design, and Monty's.
+- Cost of a step therefore rises with nodes per graph, not with the episode
+  index. **The mechanism is not yet proved** — the next measurement is nodes per
+  graph at the start and the end of a run, and which per-step path is linear in
+  it. Two candidates already visible: `GraphObjectModel.num_nodes/1` is
+  `length(positions)` (O(nodes)) and `GraphMemory.get_graph_node_ids/3` builds
+  `0..n-1` as a list, so any per-step caller of either gets slower as the graph
+  grows.
+
 ## Acceptance for any speed change
 
 1. `mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8 --no-record`
