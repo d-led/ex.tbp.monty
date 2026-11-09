@@ -178,13 +178,47 @@ try {
         }
     }
 
-    # The libraries are in the build tree already: `deps.compile` copies the
-    # package's `priv` into `_build`, which on Windows is a copy rather than
-    # Unix's link. Copying them across by hand, as this script used to, then
-    # failed on the file Mix had just written and Windows had mapped -
-    # "The process cannot access the file ... because it is being used by
-    # another process" - so the step is gone and the release check below is what
-    # says whether they arrived.
+    # Rustler writes a crate's library into the *package's* `priv/native`, and
+    # the build tree reaches that directory through Mix's own structure building
+    # (`Mix.Utils.symlink_or_copy`): a link where the platform allows one, a copy
+    # where it does not. A link carries what the crates build by itself. A copy
+    # does not - it is taken when the dependency is compiled, before the crates
+    # are built - so a library built after it sits in the package and nowhere the
+    # release is assembled from.
+    #
+    # Both cases are asked of the contents: through a link the source and the
+    # destination are the same file, and Windows answers copying a file onto
+    # itself with "The process cannot access the file ... because it is being
+    # used by another process"; two copies are compared byte for byte.
+    function Test-SameBytes {
+        param([string]$Left, [string]$Right)
+
+        $left_hash = (Get-FileHash -LiteralPath $Left -Algorithm SHA256).Hash
+        $right_hash = (Get-FileHash -LiteralPath $Right -Algorithm SHA256).Hash
+        return $left_hash -eq $right_hash
+    }
+
+    function Sync-Kernels {
+        $built = 'packages/ex_tbp_monty_core/priv/native'
+        $wanted = "_build/$env:MIX_ENV/lib/ex_tbp_monty_core/priv/native"
+
+        New-Item -ItemType Directory -Force -Path $wanted | Out-Null
+
+        $crates = Get-ChildItem $crate_root -Directory |
+            Where-Object { Test-Path (Join-Path $_.FullName 'Cargo.toml') }
+        foreach ($crate in $crates) {
+            foreach ($suffix in '.dll', '.so') {
+                $file = Join-Path $built "$($crate.Name)$suffix"
+                $target = Join-Path $wanted "$($crate.Name)$suffix"
+                if (-not (Test-Path $file)) { continue }
+                if ((Test-Path $target) -and (Test-SameBytes $file $target)) { continue }
+
+                Copy-Item $file $target -Force
+            }
+        }
+    }
+
+    Invoke-Step 'copying the kernels the crates built into the build tree' { Sync-Kernels }
     Invoke-Step 'checking the asset toolchain (installs it once, then finds it)' {
         mix assets.install --if-missing
     }
