@@ -641,6 +641,36 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       refute has_element?(view, "#zoom-all:not([disabled])")
     end
 
+    test "a wheel zooms into the stretch the pointer is over, not into the middle", %{
+      conn: conn
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=4&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # The chart's own listener says which steps the reader pointed at, because
+      # the middle of a long run is where nothing interesting happened.
+      assert view |> element("#chart-hint") |> render() =~ "wheel to zoom"
+
+      view
+      |> element("#chart-svg-learning_module_0")
+      |> render_hook("zoom", %{"how" => "range", "from" => 1, "to" => 3})
+
+      assert_patch(
+        view,
+        ~p"/experiments/base_config_10distinctobj_dist_agent?#{[episodes: 1, steps: 4, x_from: 1, x_to: 3]}"
+      )
+
+      # Below a step there is nothing to read, so it is not a window.
+      view
+      |> element("#chart-svg-learning_module_0")
+      |> render_hook("zoom", %{"how" => "range", "from" => 2, "to" => 2})
+
+      assert view |> element("#chart-extent") |> render() =~ "steps 1–3"
+    end
+
     test "a chart that follows the run slides back to the newest step, and stops when told",
          %{conn: conn} do
       {:ok, view, _html} =

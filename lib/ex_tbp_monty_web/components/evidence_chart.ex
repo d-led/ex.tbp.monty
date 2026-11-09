@@ -217,6 +217,37 @@ defmodule ExTbpMontyWeb.EvidenceChart do
 
           this.el.addEventListener("mousemove", (event) => this.hover(event))
           this.el.addEventListener("mouseleave", () => this.hide())
+
+          // The same two gestures the run page's chart has: wheel to zoom about
+          // the pointer, double-click for the whole run. Every chart on this page
+          // draws the same steps, so they zoom together — comparing modules means
+          // comparing the same stretch of the run.
+          this.el.addEventListener("wheel", (event) => this.zoom(event), { passive: false })
+          this.el.addEventListener("dblclick", () => this.pushEvent("zoom", { how: "all" }))
+        },
+
+        // The step under the pointer stays under it while the window shrinks:
+        // zooming about the pointer is the gesture a chart is read with, and one
+        // that jumped to the middle loses the place the reader was looking at.
+        zoom(event) {
+          event.preventDefault()
+
+          const chart = this.geometry()
+          const rect = this.el.getBoundingClientRect()
+          const scale = rect.width / chart.width
+          const x = (event.clientX - rect.left) / scale
+          const left = chart.left
+          const plot = chart.width - chart.left - chart.right
+
+          if (x < left || x > left + plot) return
+
+          const span = Math.max(chart.xMax - chart.xMin, 1)
+          const factor = event.deltaY < 0 ? 0.75 : 1 / 0.75
+          const at = chart.xMin + ((x - left) / plot) * span
+          const from = Math.round(at - (at - chart.xMin) * factor)
+          const to = from + Math.max(Math.round(span * factor), 1)
+
+          this.pushEvent("zoom", { how: "range", from: from, to: to })
         },
 
         // The picture changed, the pointer did not: the tooltip keeps saying what

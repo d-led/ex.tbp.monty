@@ -607,6 +607,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                   phx-click="follow"
                 /> follow latest steps
               </label>
+              <%!-- The wheel and the double click leave no trace on the page, so
+              the page says them: the same two gestures the run page's chart has,
+              which is where a reader learns them. --%>
+              <span id="chart-hint" class="ml-2 text-[11px] text-base-content/50">
+                wheel to zoom · double-click for the whole run
+              </span>
             </div>
           </div>
           <div
@@ -621,10 +627,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             <div
               :for={{module_id, chart} <- @charts}
               id={"chart-card-#{module_id}"}
-              class={[
-                "relative rounded-field",
-                @expanded == module_id && "fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
-              ]}
+              class={
+                [
+                  "rounded-field",
+                  # One position utility at a time. `relative` and `fixed` are both
+                  # `.position` declarations, and Tailwind emits `relative` after
+                  # `fixed`, so a class list holding both kept the card where it
+                  # was: expanding it added padding to the grid cell and made the
+                  # chart a little *smaller*, which is what full screen looked
+                  # like. The fixed card is its own containing block, so the
+                  # button beside it needs no `relative` while it is expanded.
+                  if(@expanded == module_id,
+                    do: "fixed inset-0 z-50 overflow-auto bg-base-100 p-4",
+                    else: "relative"
+                  )
+                ]
+              }
             >
               <button
                 id={"chart-expand-#{module_id}"}
@@ -773,6 +791,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # Each is a patch, so the address bar follows the picture. Zooming starts from
   # the window on screen rather than the one asked for, so following does not
   # make the buttons work on a stretch nobody is looking at.
+  def handle_event("zoom", %{"how" => "range"} = params, socket) do
+    # A wheel asks for the stretch under the pointer rather than a direction, so
+    # the window is the caller's — clamped to the run, which is the one thing a
+    # chart cannot see from where it is drawn. A stretch narrower than a step
+    # says nothing, and the picture stays as it is rather than jumping to the
+    # whole run under a reader who only scrolled too hard.
+    case range_window(socket.assigns[:chart_extent], params["from"], params["to"]) do
+      nil -> {:noreply, socket}
+      window -> {:noreply, push_patch(socket, to: experiment_path(socket, window))}
+    end
+  end
+
   def handle_event("zoom", %{"how" => how}, socket) do
     window = zoom(socket.assigns[:chart_window], socket.assigns[:chart_extent], how)
 
@@ -842,6 +872,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   def handle_event("filter", %{"filter" => text}, socket) do
     {:noreply, assign(socket, filter: text)}
+  end
+
+  defp range_window({first, last}, from, to) do
+    {from, to} = {round(from), round(to)}
+
+    if to - from >= 1, do: clamp({from, to}, first, last), else: nil
   end
 
   @impl true
