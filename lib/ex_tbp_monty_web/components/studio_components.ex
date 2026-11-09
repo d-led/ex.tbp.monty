@@ -307,6 +307,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
   attr :recorded, :integer, default: 0
   attr :playing, :boolean, default: false
   attr :follow, :boolean, default: true
+  attr :expanded, :boolean, default: false
   # Whether the run kept any picture at all: a run recorded before a step kept
   # them has none, and that is said in one sentence rather than drawn as a row of
   # empty frames per step.
@@ -314,6 +315,8 @@ defmodule ExTbpMontyWeb.StudioComponents do
   attr :id, :string, default: "replay"
 
   def replay(assigns) do
+    assigns = assign(assigns, :plot_height, if(assigns.expanded, do: "h-[72vh]", else: "h-40"))
+
     ~H"""
     <section id={@id} class="space-y-1.5">
       <header class="flex flex-wrap items-center gap-1.5">
@@ -487,8 +490,26 @@ defmodule ExTbpMontyWeb.StudioComponents do
         </dl>
       </div>
 
-      <div :if={@chart} class="space-y-0.5 pt-0.5">
+      <%!-- Full screen is for reading a shape, not for watching a run: it takes
+      the plot out of the page's columns and gives it the window, and the plot
+      grows with it because the viewBox is stretched, not the pixels. --%>
+      <div
+        :if={@chart}
+        id="replay-chart-panel"
+        class={[
+          "space-y-0.5 pt-0.5",
+          @expanded && "fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
+        ]}
+      >
         <div class="flex flex-wrap items-center gap-1.5">
+          <button
+            id="replay-expand"
+            phx-click="replay_expand"
+            class="btn btn-xs"
+            aria-label={if @expanded, do: "leave full screen", else: "full screen"}
+          >
+            {if @expanded, do: "⤡", else: "⤢"}
+          </button>
           <form id="replay-series" phx-change="replay_series">
             <select name="series" class="select select-xs" aria-label="Series to chart">
               <option :for={series <- @series} value={series.id} selected={series.id == @series_id}>
@@ -566,7 +587,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
           <div
             :if={chart_axis(@series, @series_id) != ""}
             id="replay-chart-y-name"
-            class="flex h-40 w-4 shrink-0 items-center justify-center"
+            class={["flex w-4 shrink-0 items-center justify-center", @plot_height]}
           >
             <span
               class="whitespace-nowrap text-xs text-base-content/75"
@@ -577,7 +598,10 @@ defmodule ExTbpMontyWeb.StudioComponents do
           </div>
           <div
             id="replay-chart-y-axis"
-            class="relative h-40 w-9 shrink-0 text-right font-mono text-[10px] leading-none text-base-content/75"
+            class={[
+              "relative w-9 shrink-0 text-right font-mono text-[10px] leading-none text-base-content/75",
+              @plot_height
+            ]}
             aria-hidden="true"
           >
             <span
@@ -603,7 +627,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
                 id="replay-chart"
                 viewBox={"0 0 #{@chart.width} #{@chart.height}"}
                 preserveAspectRatio="none"
-                class="h-40 w-full rounded-field border border-base-300 bg-base-100"
+                class={["w-full rounded-field border border-base-300 bg-base-100", @plot_height]}
                 role="img"
                 aria-label="The chosen series over the steps in the window"
               >

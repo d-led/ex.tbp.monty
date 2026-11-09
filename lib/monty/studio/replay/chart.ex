@@ -139,13 +139,17 @@ defmodule Monty.Studio.Replay.Chart do
     {from, to} = window(series, Keyword.get(opts, :window))
     visible = Enum.map(series, &%{&1 | points: inside(&1.points, {from, to})})
 
-    # The run's own range, not the window's: see the moduledoc. Zero is always
-    # part of it — evidence is a sum that starts at zero, Monty's own dashboard
-    # draws the axis from there, and an axis that began at the lowest line turns
-    # "40" into "forty above wherever the weakest line happened to be" rather
-    # than forty steps of evidence. The zero line is drawn wherever it is in
-    # range (`zero_y/2`), so the baseline the lines are measured from is named.
-    values = Enum.flat_map(series, fn drawn -> Enum.map(drawn.points, & &1.value) end)
+    # The range of what is drawn, not of the whole run. Reading the whole run's
+    # range meant a zoom was drawn against the tallest episode anywhere: an
+    # episode that ran to 772 flattened the seventy-five that stayed under
+    # sixty, and a stretch of them was a line at the bottom of the box with
+    # nothing in it. Zero is always part of the range — evidence is a sum that
+    # starts at zero, Monty's own dashboard draws the axis from there, and an
+    # axis that began at the lowest line turns "40" into "forty above wherever
+    # the weakest line happened to be" rather than forty steps of evidence. The
+    # zero line is drawn wherever it is in range (`zero_y/2`), so the baseline
+    # the lines are measured from is named.
+    values = Enum.flat_map(visible, fn drawn -> Enum.map(drawn.points, & &1.value) end)
     {lowest, highest} = {Enum.min(values, fn -> 0 end), Enum.max(values, fn -> 0 end)}
 
     # A series whose values never move is drawn across the middle of the plot
@@ -334,54 +338,32 @@ defmodule Monty.Studio.Replay.Chart do
 
   # One drawn line, and the samples a hover over it needs. Both come out of the
   # same walk so that the two can never disagree about where a step was drawn.
+  #
+  # Every sample is drawn. Keeping the extremes of each pixel column instead was
+  # tried, to save the vertices a 24 000-step run spends on a 320-unit plot, and
+  # it doubled every line: a column's lowest and highest sample are the same
+  # x, so the path goes down and back up within one column and the stroke
+  # retraces itself. A chart is read for its shape, and the shape was the thing
+  # that got worse; the page's seconds came from computing the series, not from
+  # drawing them.
   defp line({series, colour}, {from, to}, {min, max}) do
-    kept = decimate(series.points, {from, to})
-
     points =
-      Enum.map(kept, fn point -> {x(point.step, from, to), y(point.value, min, max)} end)
+      Enum.map(series.points, fn point -> {x(point.step, from, to), y(point.value, min, max)} end)
 
     drawn = %{
       id: series.id,
       label: series.label,
       colour: Studio.Chart.colour(series.id, colour),
       points: points,
-      polylines: polylines(kept, points, {from, to})
+      polylines: polylines(series.points, points, {from, to})
     }
 
     samples =
-      Enum.zip_with(kept, points, fn point, {x, y} ->
+      Enum.zip_with(series.points, points, fn point, {x, y} ->
         %{line: series.label, x: x, y: y, step: point.step, value: point.value}
       end)
 
     {drawn, samples}
-  end
-
-  # The plot is 320 units wide, and a run of 24 000 steps puts seventy-five
-  # samples in every one of them: the line lands on the same pixels either way,
-  # and the page paid for the vertices twice — once in the path, and once in the
-  # hover samples it sent with it, which for that run was a quarter of a million
-  # maps across ten lines, and the reason the page took twenty seconds to answer
-  # and the window kept reconnecting to it.
-  #
-  # What survives is what a person can see: in each column, the lowest and the
-  # highest sample — the ones that decide the shape — and the first and last,
-  # because those are where the next column's line is drawn from. A short run
-  # keeps every point it has, one per column.
-  defp decimate(points, {from, to}) do
-    points
-    |> Enum.chunk_by(fn point -> round(x(point.step, from, to)) end)
-    |> Enum.flat_map(&column/1)
-  end
-
-  defp column([single]), do: [single]
-
-  defp column(samples) do
-    lowest = Enum.min_by(samples, & &1.value)
-    highest = Enum.max_by(samples, & &1.value)
-
-    [hd(samples), lowest, highest, List.last(samples)]
-    |> Enum.uniq()
-    |> Enum.sort_by(& &1.step)
   end
 
   # The window is the steps every series has, so a series that starts later does

@@ -47,7 +47,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   @selection_events Selection.events()
 
   # The replay panel's controls, grouped the same way and for the same reason.
-  @replay_events ~w(replay_seek replay_step replay_play replay_pause replay_zoom replay_brush replay_series replay_follow)
+  @replay_events ~w(replay_seek replay_step replay_play replay_pause replay_zoom replay_brush replay_series replay_follow replay_expand)
 
   # How often a page showing a run asks the record what the run is doing. The
   # worker broadcasts every step, so this is the answer to silence: a message
@@ -92,6 +92,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
        confirming_bulk: nil,
        selected: MapSet.new(),
        deleting: nil,
+       expanded: false,
        log_tail: @log_tail,
        trimmed_log?: false
      )
@@ -1053,6 +1054,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           recorded={length(Replay.steps(@run))}
           playing={@playing}
           follow={@follow}
+          expanded={@expanded}
         />
       </section>
 
@@ -1250,6 +1252,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp replay("replay_pause", _params, socket), do: assign(socket, playing: false)
+
+  # A chart that fills the window is how a shape is read: the run page draws it
+  # in a column beside the frames, and a chart in a column is a thumbnail of the
+  # evidence rather than a reading of it.
+  defp replay("replay_expand", _params, socket),
+    do: assign(socket, expanded: not Map.get(socket.assigns, :expanded, false))
 
   # Ticking "follow latest steps" is a request for the newest step, which is the
   # one thing the page should not wait for the next refresh to hear about.

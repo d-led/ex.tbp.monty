@@ -144,6 +144,23 @@ defmodule Monty.Studio.Replay.ChartTest do
       assert chart.min == 0 and chart.max == 3
     end
 
+    test "scales the value axis to the window, not to the tallest step in the run" do
+      # A run with one runaway episode in it: an axis taken from the whole run
+      # drew the other seventy-five episodes as a line at the bottom of a box
+      # whose top belonged to an episode nobody was looking at. Zooming in has
+      # to rescale, or there is no detail to read at any zoom.
+      series = [
+        %{id: "mug", label: "mug", unit: "", points: points([5.0, 10.0, 700.0])}
+      ]
+
+      whole = Chart.many(series)
+      near = Chart.many(series, window: {0, 1})
+
+      assert whole.max == 700
+      assert near.max == 10
+      assert near.min == 0
+    end
+
     test "draws only the steps the window asks for" do
       chart = Chart.new(points([0, 1, 2, 3, 4]), window: {1, 3}, playhead: 2)
 
