@@ -60,6 +60,8 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   # the purpose of masking.
   @distant_on_surface_threshold 1000.0
   @histogram_bins 8
+  # One count per bin, before any depth has been counted.
+  @no_depths_counted List.to_tuple(List.duplicate(0, @histogram_bins))
 
   @enforce_keys [:agent_id, :sensor_ids, :intrinsics]
   defstruct agent_id: nil,
@@ -209,11 +211,12 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   @spec get_on_surface_th([[float()]], [[float()]], float(), float()) :: {float(), boolean()}
   def get_on_surface_th(depth, semantic, min_depth_range, default_threshold) do
     depths = List.flatten(depth)
+    {low, high} = Enum.min_max(depths)
 
-    if Enum.max(depths) - Enum.min(depths) <= min_depth_range do
+    if high - low <= min_depth_range do
       {default_threshold, false}
     else
-      case empty_bins(depths) do
+      case empty_bins(depths, low, high) do
         [] ->
           {default_threshold, false}
 
@@ -398,30 +401,44 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   defp on_surface?(pixel, threshold, false), do: pixel < threshold
   defp on_surface?(pixel, threshold, true), do: pixel > threshold
 
+  # The edges numpy's `linspace` cuts: evenly spaced from the smallest depth to
+  # the largest, and the last one *is* the largest. `low + width * bins` lands an
+  # ulp below it often enough to matter, and a bin's upper edge short of the
+  # largest depth would drop that depth from the histogram altogether.
+  defp edges(low, width, high) do
+    for(index <- 0..(@histogram_bins - 1), do: low + width * index) ++ [high]
+  end
+
   # Numpy's histogram: `bins` counts over `bins + 1` edges from the smallest
-  # depth to the largest, the last bin closed at both ends.
-  defp bin_edges(depths) do
-    low = Enum.min(depths)
-    width = (Enum.max(depths) - low) / @histogram_bins
-    for index <- 0..@histogram_bins, do: low + width * index
+  # depth to the largest, the last bin closed at both ends. The edges are evenly
+  # spaced, so a depth's bin is arithmetic rather than a search of the edges.
+  #
+  # Answered as the lower edges of the empty bins, which is what the caller
+  # needs: a peak either side of one is two surfaces in one view.
+  defp empty_bins(depths, low, high) do
+    width = (high - low) / @histogram_bins
+    edges = List.to_tuple(edges(low, width, high))
+
+    counts =
+      Enum.reduce(depths, @no_depths_counted, fn depth, counts ->
+        index = bin(depth, low, width, edges)
+        put_elem(counts, index, elem(counts, index) + 1)
+      end)
+
+    for index <- 0..(@histogram_bins - 1), elem(counts, index) == 0, do: elem(edges, index)
   end
 
-  # The lower edges of the empty bins: a peak either side of one is two surfaces
-  # in one view.
-  defp empty_bins(depths) do
-    edges = bin_edges(depths)
+  # Numpy counts the interior edges a depth has reached, so a depth sitting
+  # exactly on an edge opens the bin above it. The arithmetic estimate is one
+  # comparison out of step at such an edge, and that is the comparison here.
+  defp bin(depth, low, width, edges) do
+    index = ((depth - low) / width) |> trunc() |> min(@histogram_bins - 1) |> max(0)
 
-    for index <- 0..(@histogram_bins - 1),
-        count(depths, Enum.at(edges, index), Enum.at(edges, index + 1), index) == 0,
-        do: Enum.at(edges, index)
-  end
-
-  defp count(depths, low, high, index) do
-    last? = index == @histogram_bins - 1
-
-    Enum.count(depths, fn depth ->
-      depth >= low and (depth < high or (last? and depth <= high))
-    end)
+    cond do
+      index < @histogram_bins - 1 and depth >= elem(edges, index + 1) -> index + 1
+      index > 0 and depth < elem(edges, index) -> index - 1
+      true -> index
+    end
   end
 
   defp middle_pixel(image) do
