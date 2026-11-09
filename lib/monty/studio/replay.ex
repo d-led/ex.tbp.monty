@@ -119,7 +119,24 @@ defmodule Monty.Studio.Replay do
   """
   @spec series(Run.t()) :: [series()]
   def series(%Run{} = run) do
-    sensor_series(run) ++ Enum.map(@logged_series, &chart_series(run, &1))
+    # One walk for every series: each used to rebuild all the run's moments, and
+    # a moment asked its own position for an entry with `Enum.at/2` — quadratic
+    # in the steps and repeated once per series, which on a 24 329-step run was
+    # nine seconds on every page load.
+    moments = recorded(run)
+
+    ids = Enum.map(sensor_ids(run), &("sensor:" <> &1)) ++ @logged_series
+
+    Enum.map(ids, fn id ->
+      %{
+        id: id,
+        label: label_of(id),
+        title: label_of(id),
+        unit: unit_of(id),
+        axis: axis_of(id),
+        points: Enum.map(moments, &point(&1, id))
+      }
+    end)
   end
 
   @doc """
@@ -272,14 +289,14 @@ defmodule Monty.Studio.Replay do
       title: label_of(id),
       unit: unit_of(id),
       axis: axis_of(id),
-      points:
-        Enum.map(recorded(run), fn moment ->
-          # The episode travels with the point: the chart shades them in turn,
-          # and a step on its own does not say which episode it belonged to.
-          %{step: moment.position, value: value_of(moment, id), episode: episode_of(moment)}
-        end)
+      points: run |> recorded() |> Enum.map(&point(&1, id))
     }
   end
+
+  # The episode travels with the point: the chart shades them in turn, and a
+  # step on its own does not say which episode it belonged to.
+  defp point(moment, id),
+    do: %{step: moment.position, value: value_of(moment, id), episode: episode_of(moment)}
 
   defp episode_of(%{entry: %{"episode" => episode}}) when is_integer(episode), do: episode
   defp episode_of(_moment), do: nil
@@ -338,24 +355,31 @@ defmodule Monty.Studio.Replay do
   # and every theory is still there, and only the frames are missing — which is
   # why a step made from a log-only record is a step with no pictures, not a
   # step that did not happen.
-  defp recorded(%Run{} = run) do
+  defp recorded(%Run{log: log, timeline: timeline}) do
     # A step's own number restarts at zero in every episode, so it cannot address
     # a replay: nine episodes of twelve steps are 108 recorded moments, not
     # twelve. The log and the timeline are appended together, one entry each per
     # step, so a moment's place in the sequence is what pairs it with its
     # report — and its episode is what the band on the chart is drawn from.
-    run
-    |> positions()
-    |> Enum.map(&moment(run, &1))
+    #
+    # Both lists are walked once. Asking each position for its entry made a
+    # page's charts quadratic in the run's steps.
+    seen = timeline ++ List.duplicate(%{}, max(length(log) - length(timeline), 0))
+
+    log
+    |> Enum.zip(seen)
+    |> Enum.with_index()
+    |> Enum.map(fn {{entry, moment}, position} -> moment_of(position, entry, moment) end)
   end
 
   # One position, read from the two lists without walking them all: `at/2` is
   # called on every drag of the slider, and a replay that built every moment to
   # then pick one took a tenth of a second to answer.
   defp moment(%Run{} = run, position) do
-    entry = Enum.at(run.log, position)
-    seen = Enum.at(run.timeline, position) || %{}
+    moment_of(position, Enum.at(run.log, position), Enum.at(run.timeline, position) || %{})
+  end
 
+  defp moment_of(position, entry, seen) do
     %{
       position: position,
       step: Map.get(seen, "step") || (entry || %{})["step"],
@@ -409,12 +433,6 @@ defmodule Monty.Studio.Replay do
     for {sensor_id, observation} <- moment.sensors,
         Camera.pictures?(observation),
         do: Camera.frame(sensor_id, observation, moment.step)
-  end
-
-  defp sensor_series(%Run{} = run) do
-    run
-    |> sensor_ids()
-    |> Enum.map(&chart_series(run, "sensor:" <> &1))
   end
 
   defp sensor_ids(%Run{timeline: timeline}) do

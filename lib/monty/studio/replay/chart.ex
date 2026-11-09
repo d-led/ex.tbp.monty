@@ -335,23 +335,53 @@ defmodule Monty.Studio.Replay.Chart do
   # One drawn line, and the samples a hover over it needs. Both come out of the
   # same walk so that the two can never disagree about where a step was drawn.
   defp line({series, colour}, {from, to}, {min, max}) do
+    kept = decimate(series.points, {from, to})
+
     points =
-      Enum.map(series.points, fn point -> {x(point.step, from, to), y(point.value, min, max)} end)
+      Enum.map(kept, fn point -> {x(point.step, from, to), y(point.value, min, max)} end)
 
     drawn = %{
       id: series.id,
       label: series.label,
       colour: Studio.Chart.colour(series.id, colour),
       points: points,
-      polylines: polylines(series.points, points, {from, to})
+      polylines: polylines(kept, points, {from, to})
     }
 
     samples =
-      Enum.zip_with(series.points, points, fn point, {x, y} ->
+      Enum.zip_with(kept, points, fn point, {x, y} ->
         %{line: series.label, x: x, y: y, step: point.step, value: point.value}
       end)
 
     {drawn, samples}
+  end
+
+  # The plot is 320 units wide, and a run of 24 000 steps puts seventy-five
+  # samples in every one of them: the line lands on the same pixels either way,
+  # and the page paid for the vertices twice — once in the path, and once in the
+  # hover samples it sent with it, which for that run was a quarter of a million
+  # maps across ten lines, and the reason the page took twenty seconds to answer
+  # and the window kept reconnecting to it.
+  #
+  # What survives is what a person can see: in each column, the lowest and the
+  # highest sample — the ones that decide the shape — and the first and last,
+  # because those are where the next column's line is drawn from. A short run
+  # keeps every point it has, one per column.
+  defp decimate(points, {from, to}) do
+    points
+    |> Enum.chunk_by(fn point -> round(x(point.step, from, to)) end)
+    |> Enum.flat_map(&column/1)
+  end
+
+  defp column([single]), do: [single]
+
+  defp column(samples) do
+    lowest = Enum.min_by(samples, & &1.value)
+    highest = Enum.max_by(samples, & &1.value)
+
+    [hd(samples), lowest, highest, List.last(samples)]
+    |> Enum.uniq()
+    |> Enum.sort_by(& &1.step)
   end
 
   # The window is the steps every series has, so a series that starts later does
