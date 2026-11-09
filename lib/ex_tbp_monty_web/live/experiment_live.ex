@@ -94,6 +94,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       error: nil,
       steps: cap(steps, opened.setup),
       episodes: episodes,
+      # What the config itself runs, so the control beside it can say "of 2 in
+      # the config" rather than leaving a reader to compare a number with a
+      # sentence in another panel.
+      episodes_in_config: Setup.episodes(opened.setup),
+      # And the config's own ceiling on one episode, which is what an empty step
+      # field means: the placeholder shows it, so an empty box is a promise
+      # rather than a blank.
+      steps_in_config: cap(nil, opened.setup),
       # What a run of this experiment reads off the disk, and which of those is
       # not there yet: the run buttons stay disabled while anything is missing,
       # and the checks box names it.
@@ -348,12 +356,44 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           >
             <.icon name="hero-play-mini" class="size-4" /> Run it
           </button>
-          <%!-- The number is a ceiling, not a target: the experiment's own
-          recognition policy ends each episode first, and for a recognition that
-          is about twenty matching steps. --%>
-          <span id="run-budget" class="font-mono text-[11px] text-base-content/60">
-            {budget_note(@steps, @episodes)}
-          </span>
+          <%!-- What a run does, as two numbers on the page. The step budget is a
+          ceiling, not a target — the experiment's own recognition policy ends
+          each episode first, and for a recognition that is about twenty
+          matching steps — and the episode count is the whole config unless a
+          reader slices it. Both used to live in the address bar and nowhere
+          else, which is how a page ran one episode of a config that says two
+          and read as the experiment stopping early by itself. --%>
+          <form
+            :if={@opened}
+            id="run-budget"
+            phx-change="budget"
+            class="flex flex-wrap items-center gap-1 font-mono text-[11px] text-base-content/60"
+          >
+            <label for="run-episodes">episodes</label>
+            <input
+              id="run-episodes"
+              type="number"
+              name="episodes"
+              min="1"
+              max={@episodes_in_config}
+              value={@episodes}
+              placeholder={to_string(@episodes_in_config)}
+              class="input input-xs w-16"
+              aria-label="How many of the config's episodes to run"
+            />
+            <span id="run-episodes-note">of {@episodes_in_config} in the config</span>
+            <label for="run-steps" class="ms-2">steps each, at most</label>
+            <input
+              id="run-steps"
+              type="number"
+              name="steps"
+              min="1"
+              value={@steps}
+              placeholder={to_string(@steps_in_config)}
+              class="input input-xs w-24"
+              aria-label="The most steps one episode may take"
+            />
+          </form>
           <button id="step" phx-click="step" class="btn btn-sm" disabled={!startable?(assigns)}>
             <.icon name="hero-forward-mini" class="size-4" /> One step
           </button>
@@ -817,41 +857,39 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     {:noreply, push_patch(socket, to: experiment_path(socket, window))}
   end
 
-  def handle_event("expand", %{"module" => module_id}, socket) do
-    expanded = if Map.get(socket.assigns, :expanded) == module_id, do: nil, else: module_id
-
-    {:noreply,
-     socket
-     |> assign(:expanded, expanded)
-     # The size belongs to the chart that was expanded: another one, or none, is
-     # drawn for its cell until its own browser says how big the screen is.
-     |> assign(:chart_size, nil)
-     |> assign_charts(socket.assigns.beliefs)}
-  end
+  def handle_event("expand", %{"module" => module_id}, socket),
+    do: {:noreply, show_chart(socket, module_id)}
 
   # Escape and the control itself are the same request: leave full screen.
-  def handle_event("collapse", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:expanded, nil)
-     |> assign(:chart_size, nil)
-     |> assign_charts(socket.assigns.beliefs)}
-  end
+  def handle_event("collapse", _params, socket), do: {:noreply, show_chart(socket, nil)}
 
   # The chart filling the screen says how big its box is, because only the
   # browser knows: a picture drawn for a guessed screen is a picture stretched
   # into it, and one drawn for the real box has square labels and an axis as long
   # as it is read.
-  def handle_event("chart-size", params, socket) do
+  def handle_event("chart-size", params, socket), do: {:noreply, size_chart(socket, params)}
+
+  # One chart at a time, drawn for the box it has: the size measured for the
+  # chart that was expanded belongs to it, so another one — or none — goes back
+  # to the size of its cell.
+  defp show_chart(socket, module_id) do
+    expanded = if Map.get(socket.assigns, :expanded) == module_id, do: nil, else: module_id
+
+    socket
+    |> assign(:expanded, expanded)
+    |> assign(:chart_size, nil)
+    |> assign_charts(socket.assigns.beliefs)
+  end
+
+  defp size_chart(socket, params) do
     case measured_size(params) do
       nil ->
-        {:noreply, socket}
+        socket
 
       {module_id, width, height} ->
-        {:noreply,
-         socket
-         |> assign(:chart_size, {module_id, width, height})
-         |> assign_charts(socket.assigns.beliefs)}
+        socket
+        |> assign(:chart_size, {module_id, width, height})
+        |> assign_charts(socket.assigns.beliefs)
     end
   end
 
@@ -865,6 +903,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   def handle_event("parallelism", %{"parallelism" => count}, socket) do
     {:noreply, assign(socket, parallelism: parallelism(%{"parallelism" => count}))}
+  end
+
+  # The two numbers that make a run shorter than the experiment. Set here, by a
+  # reader looking at them, and not by whatever the address bar was carrying: a
+  # run's budget is a decision about the run.
+  def handle_event("budget", params, socket), do: {:noreply, assign_budget(socket, params)}
+
+  defp assign_budget(socket, params) do
+    assign(socket,
+      episodes: count_of(params["episodes"]),
+      steps: cap(count_of(params["steps"]), socket.assigns.opened.setup)
+    )
   end
 
   # A seed this page cannot read is not a seed: the number stays as it was and
@@ -1236,19 +1286,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # Where the page is now, with a chart window in it — the address every zoom
   # and pan patches to.
-  defp experiment_path(socket, window) do
-    query =
-      [episodes: socket.assigns[:episodes], steps: socket.assigns[:steps]]
-      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+  # The address of a zoomed chart: the stretch it draws, and nothing else.
+  #
+  # The run's own budget (`episodes`, `steps`) used to travel here too, which
+  # made a chart link a run setting: zooming a picture rewrote the number of
+  # episodes in the address bar, and every later run on that page kept it. A
+  # window is about the picture; what a run does is a control on the page.
+  defp experiment_path(socket, nil), do: ~p"/experiments/#{socket.assigns.opened.name}"
 
-    query =
-      case window do
-        nil -> query
-        {from, to} -> query ++ [x_from: from, x_to: to]
-      end
-
-    ~p"/experiments/#{socket.assigns.opened.name}?#{query}"
-  end
+  defp experiment_path(socket, {from, to}),
+    do: ~p"/experiments/#{socket.assigns.opened.name}?#{[x_from: from, x_to: to]}"
 
   # What the record says, applied to the page.
   #
@@ -1594,17 +1641,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp cap(nil, setup), do: Setup.max_total_steps(setup) || Monty.Studio.Run.default_steps()
   defp cap(asked, _setup), do: asked
 
-  # What this page will actually run, said beside the Run button. A link carries
-  # a slice of the experiment (`?episodes=1&steps=3`) and every later run from
-  # that page keeps it, so a page that ran a fiftieth of a config without saying
-  # so is a page that looks like the experiment stopped early by itself.
-  defp budget_note(steps, nil),
-    do: "up to #{steps} steps per episode · every episode of the config"
-
-  defp budget_note(steps, 1), do: "up to #{steps} steps per episode · one episode only"
-
-  defp budget_note(steps, episodes),
-    do: "up to #{steps} steps per episode · #{episodes} episodes only"
+  # A number the page was given, or nothing at all — which is what an empty field
+  # means: every episode of the config, and the config's own ceiling on steps.
+  defp count_of(value) do
+    case Integer.parse(to_string(value || "")) do
+      {count, ""} when count > 0 -> count
+      _empty -> nil
+    end
+  end
 
   # `?episodes=N`: a slice of the experiment, for when the whole of it — every
   # object in every rotation — is more than a person wants to wait for now.

@@ -662,9 +662,12 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert view |> element("#chart-extent") |> render() =~ "of 2"
       assert has_element?(view, "#zoom-all:not([disabled])")
 
+      # The patch is the window and nothing else: a chart link used to carry the
+      # run's budget too, so zooming a picture rewrote how many episodes the
+      # experiment would run — a number nobody had asked to change.
       assert_patch(
         view,
-        ~p"/experiments/base_config_10distinctobj_dist_agent?#{[episodes: 2, steps: 2, x_from: 1, x_to: 2]}"
+        ~p"/experiments/base_config_10distinctobj_dist_agent?#{[x_from: 1, x_to: 2]}"
       )
 
       view |> element("#zoom-all") |> render_click()
@@ -692,7 +695,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       assert_patch(
         view,
-        ~p"/experiments/base_config_10distinctobj_dist_agent?#{[episodes: 1, steps: 4, x_from: 1, x_to: 3]}"
+        ~p"/experiments/base_config_10distinctobj_dist_agent?#{[x_from: 1, x_to: 3]}"
       )
 
       # Below a step there is nothing to read, so it is not a window.
@@ -732,21 +735,26 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert view |> element("#chart-extent") |> render() =~ "steps 0–1 of 2"
     end
 
-    test "the page says what it will run before it runs it", %{conn: conn} do
-      # A slice of the experiment arrives in the address bar and every later run
-      # from that page keeps it. Unsaid, a run of one episode of three steps
-      # reads as an experiment that gave up — which is exactly how it was read.
+    test "a run's budget is a control on the page, not something a link decides", %{
+      conn: conn
+    } do
+      # A slice of the experiment used to arrive in the address bar and change
+      # what a run was with nothing on the page saying so: a run of one episode
+      # of three steps, of a config that says two, read as the experiment giving
+      # up. The numbers are now where a reader can see and change them.
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=3&episodes=1")
 
-      assert view |> element("#run-budget") |> render() =~ "up to 3 steps per episode"
-      assert view |> element("#run-budget") |> render() =~ "one episode only"
+      assert view |> element("#run-episodes") |> render() =~ ~s(value="1")
+      assert view |> element("#run-steps") |> render() =~ ~s(value="3")
+      assert view |> element("#run-episodes-note") |> render() =~ "in the config"
 
-      # The whole config, when the page was not handed a slice.
-      {:ok, whole, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+      # The way back to the whole experiment is emptying the field, not editing
+      # an address bar: no slices means the config's own episodes and ceiling.
+      view |> element("#run-budget") |> render_change(%{"episodes" => "", "steps" => ""})
 
-      assert whole |> element("#run-budget") |> render() =~ "every episode of the config"
-      refute whole |> element("#run-budget") |> render() =~ "only"
+      refute view |> element("#run-episodes") |> render() =~ ~s(value="1")
+      refute view |> element("#run-steps") |> render() =~ ~s(value="3")
     end
 
     test "the log filter keeps a line only if every word matches", %{conn: conn} do
@@ -1240,9 +1248,9 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     # limit: the tutorial allows one *matching* step and three exploring ones, so
     # a cap of `max_train_steps` would cut two steps the experiment asked for.
     test "caps an episode at the config's total ceiling", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/experiments/tutorial/first_experiment")
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment")
 
-      assert html =~ "up to 5 steps"
+      assert view |> element("#run-steps") |> render() =~ ~s(value="5")
     end
   end
 end
