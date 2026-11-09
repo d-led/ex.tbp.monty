@@ -613,143 +613,159 @@ defmodule ExTbpMontyWeb.StudioComponents do
             </span>
           </div>
           <div class="min-w-0 flex-1">
+            <%!-- Zooming, panning and double-click-to-reset are `ChartZoom`
+            (`assets/js/chart.js`), the hook the experiment page's charts answer to
+            as well: the same gestures on both, from one implementation. The
+            readout inside is this chart's own — it names one value, where the
+            experiment page's names every object at that step. --%>
             <div
-              id="replay-chart-hover"
-              phx-hook=".ChartHover"
+              id="replay-chart-zoom"
+              phx-hook="ChartZoom"
               data-width={@chart.width}
               data-height={@chart.height}
-              data-from={@chart.from}
-              data-to={@chart.to}
-              data-samples={chart_samples(@chart, @series, @series_id)}
-              class="relative cursor-crosshair touch-none select-none"
+              data-x-min={@chart.from}
+              data-x-max={@chart.to}
+              data-zoom-event="replay_brush"
+              data-zoom-all-event="replay_zoom"
             >
-              <svg
-                id="replay-chart"
-                viewBox={"0 0 #{@chart.width} #{@chart.height}"}
-                preserveAspectRatio="none"
-                class={["w-full rounded-field border border-base-300 bg-base-100", @plot_height]}
-                role="img"
-                aria-label="The chosen series over the steps in the window"
+              <div
+                id="replay-chart-hover"
+                phx-hook=".ChartHover"
+                data-width={@chart.width}
+                data-height={@chart.height}
+                data-from={@chart.from}
+                data-to={@chart.to}
+                data-samples={chart_samples(@chart, @series, @series_id)}
+                class="relative cursor-crosshair touch-none select-none"
               >
-                <%!-- The plot's own tint, as Monty's pyview dashboard draws it:
+                <svg
+                  id="replay-chart"
+                  viewBox={"0 0 #{@chart.width} #{@chart.height}"}
+                  preserveAspectRatio="none"
+                  class={["w-full rounded-field border border-base-300 bg-base-100", @plot_height]}
+                  role="img"
+                  aria-label="The chosen series over the steps in the window"
+                >
+                  <%!-- The plot's own tint, as Monty's pyview dashboard draws it:
             one pale grey inside the axes against the page's own colour. Drawn
             first, behind everything. The SVG *is* the plot here — the value
             labels are HTML beside it — so this fills it entire. --%>
-                <rect
-                  x="0"
-                  y="0"
-                  width={@chart.width}
-                  height={@chart.height}
-                  fill="var(--chart-plot, #fafafa)"
-                />
-                <%!-- The plot as something to click, without a hook: a column per
+                  <rect
+                    x="0"
+                    y="0"
+                    width={@chart.width}
+                    height={@chart.height}
+                    fill="var(--chart-plot, #fafafa)"
+                  />
+                  <%!-- The plot as something to click, without a hook: a column per
                 forty-eighth of the width, each carrying the step it stands for,
                 so a click is an ordinary LiveView event. It sits under the bands
                 and the lines, and those are click-through, so a mark still shows
                 its tooltip and a click in the gap still lands here. --%>
-                <g id="replay-chart-columns">
-                  <rect
-                    :for={column <- chart_columns(@chart)}
-                    id={column.id}
-                    x={column.x}
-                    y="0"
-                    width={column.width}
-                    height={@chart.height}
-                    fill="transparent"
-                    phx-click="replay_seek"
-                    phx-value-step={column.step}
-                  />
-                </g>
-                <%!-- Which episode each stretch of the run is: evidence restarts at
+                  <g id="replay-chart-columns">
+                    <rect
+                      :for={column <- chart_columns(@chart)}
+                      id={column.id}
+                      x={column.x}
+                      y="0"
+                      width={column.width}
+                      height={@chart.height}
+                      fill="transparent"
+                      phx-click="replay_seek"
+                      phx-value-step={column.step}
+                    />
+                  </g>
+                  <%!-- Which episode each stretch of the run is: evidence restarts at
             zero at every boundary, so the bands are what makes the rhythm
             countable. Each wears the colour of the object its episode was about
             — the pyview dashboard's fill, at its own 0.08. Drawn over the plot's
             tint and under the lines. --%>
-                <rect
-                  :for={band <- @chart.bands}
-                  x={band.x}
-                  y="0"
-                  width={band.width}
-                  height={@chart.height}
-                  fill={band.colour}
-                  fill-opacity="0.08"
-                  class="episode-band"
-                  data-episode={band.episode}
-                  pointer-events="none"
-                />
-                <%!-- Zero: what evidence is measured from. Every episode starts on
-            this line and a hypothesis can be penalised under it, so it is drawn
-            heavier than a gridline and below the lines. --%>
-                <line
-                  :if={@chart.zero}
-                  id="replay-chart-zero"
-                  x1="0"
-                  y1={@chart.zero}
-                  x2={@chart.width}
-                  y2={@chart.zero}
-                  stroke="currentColor"
-                  stroke-opacity="0.4"
-                  vector-effect="non-scaling-stroke"
-                />
-                <%!-- The lines are a group of their own because a pan moves them
-            under the hand: the translation is in the chart's own units, and the
-            viewport clips it, so nothing slides out over the axis. --%>
-                <g id="replay-chart-lines">
-                  <polyline
-                    :for={polyline <- @chart.polylines}
-                    id={polyline.id}
-                    points={polyline.points}
-                    fill="none"
-                    stroke={polyline.colour}
-                    stroke-width="1.5"
-                    stroke-linejoin="round"
-                    vector-effect="non-scaling-stroke"
+                  <rect
+                    :for={band <- @chart.bands}
+                    x={band.x}
+                    y="0"
+                    width={band.width}
+                    height={@chart.height}
+                    fill={band.colour}
+                    fill-opacity="0.08"
+                    class="episode-band"
+                    data-episode={band.episode}
                     pointer-events="none"
                   />
-                  <%!-- A mark per drawn step, each carrying its own sentence in a
+                  <%!-- Zero: what evidence is measured from. Every episode starts on
+            this line and a hypothesis can be penalised under it, so it is drawn
+            heavier than a gridline and below the lines. --%>
+                  <line
+                    :if={@chart.zero}
+                    id="replay-chart-zero"
+                    x1="0"
+                    y1={@chart.zero}
+                    x2={@chart.width}
+                    y2={@chart.zero}
+                    stroke="currentColor"
+                    stroke-opacity="0.4"
+                    vector-effect="non-scaling-stroke"
+                  />
+                  <%!-- The lines are a group of their own because a pan moves them
+            under the hand: the translation is in the chart's own units, and the
+            viewport clips it, so nothing slides out over the axis. --%>
+                  <g id="replay-chart-lines">
+                    <polyline
+                      :for={polyline <- @chart.polylines}
+                      id={polyline.id}
+                      points={polyline.points}
+                      fill="none"
+                      stroke={polyline.colour}
+                      stroke-width="1.5"
+                      stroke-linejoin="round"
+                      vector-effect="non-scaling-stroke"
+                      pointer-events="none"
+                    />
+                    <%!-- A mark per drawn step, each carrying its own sentence in a
                   `<title>`: the browser shows that on hover, so the readout needs
                   no JavaScript at all. The circle is transparent and wider than
                   the line, because a point is easier to point at than a stroke.
                   Decimation is what makes this affordable — a few hundred marks
                   per line rather than twenty thousand. --%>
-                  <circle
-                    :for={mark <- chart_marks(@chart, @series, @series_id)}
-                    cx={mark.x}
-                    cy={mark.y}
-                    r="6"
-                    fill="transparent"
-                  >
-                    <title>{mark.label}</title>
-                  </circle>
-                </g>
-                <line
-                  :if={@chart.playhead}
-                  x1={@chart.playhead}
-                  y1="0"
-                  x2={@chart.playhead}
-                  y2={@chart.height}
-                  stroke="currentColor"
-                  stroke-opacity="0.35"
-                  stroke-dasharray="2 2"
-                  vector-effect="non-scaling-stroke"
-                />
-                <%!-- The range a drag is choosing, drawn while the pointer is down
+                    <circle
+                      :for={mark <- chart_marks(@chart, @series, @series_id)}
+                      cx={mark.x}
+                      cy={mark.y}
+                      r="6"
+                      fill="transparent"
+                    >
+                      <title>{mark.label}</title>
+                    </circle>
+                  </g>
+                  <line
+                    :if={@chart.playhead}
+                    x1={@chart.playhead}
+                    y1="0"
+                    x2={@chart.playhead}
+                    y2={@chart.height}
+                    stroke="currentColor"
+                    stroke-opacity="0.35"
+                    stroke-dasharray="2 2"
+                    vector-effect="non-scaling-stroke"
+                  />
+                  <%!-- The range a drag is choosing, drawn while the pointer is down
             and gone on release: the zoom is the drag, so the box is feedback
             rather than a state the page has to keep. --%>
-                <rect
-                  id="replay-chart-brush"
-                  x="0"
-                  y="0"
-                  width="0"
-                  height="0"
-                  fill="currentColor"
-                  fill-opacity="0.12"
-                  stroke="currentColor"
-                  stroke-opacity="0.4"
-                  vector-effect="non-scaling-stroke"
-                  visibility="hidden"
-                />
-              </svg>
+                  <rect
+                    id="replay-chart-brush"
+                    x="0"
+                    y="0"
+                    width="0"
+                    height="0"
+                    fill="currentColor"
+                    fill-opacity="0.12"
+                    stroke="currentColor"
+                    stroke-opacity="0.4"
+                    vector-effect="non-scaling-stroke"
+                    visibility="hidden"
+                  />
+                </svg>
+              </div>
             </div>
             <p id="replay-chart-x-name" class="text-center text-xs text-base-content/75">
               step
@@ -823,25 +839,9 @@ defmodule ExTbpMontyWeb.StudioComponents do
               // the slider below the chart does the same thing, one drag at a time.
               this.el.addEventListener("click", event => this.seek(event))
 
-              // Dragging across the plot is the other way to be told what to
-              // look at: it chooses a range and zooms to it.
-              this.el.addEventListener("pointerdown", event => this.startBrush(event))
-              this.el.addEventListener("pointermove", event => this.drag(event))
-              this.el.addEventListener("pointerup", event => this.endBrush(event))
-              this.el.addEventListener("pointercancel", () => this.cancelBrush())
-
-              // The wheel is the first thing a reader tries to look closer, and
-              // it costs no control to find: it zooms about the pointer, so the
-              // step under the hand keeps its place.
-              this.el.addEventListener("wheel", event => this.zoomAtPointer(event), {
-                passive: false
-              })
-
-              // Double-clicking puts the whole run back, as Plotly's charts do:
-              // the way out of a zoom is never a button a reader has to hunt for.
-              this.el.addEventListener("dblclick", () =>
-                this.pushEvent("replay_zoom", {zoom: "all"})
-              )
+              // Zooming, panning and double-click-to-reset are the shared
+              // `ChartZoom` hook around this box; what is left here is what only
+              // this chart does: the readout, and a click that moves the playhead.
 
               this.read()
             },
@@ -865,7 +865,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
               this.height = Number(this.el.dataset.height || 64)
               this.from = Number(this.el.dataset.from || 0)
               this.to = Number(this.el.dataset.to || 0)
-              this.brush = null
             },
 
             // Where a pointer is across the plot, in the chart's own units.
@@ -883,160 +882,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
               return this.from + fraction * (this.to - this.from)
             },
-
-            startBrush(event) {
-              if (event.button !== 0 || this.to <= this.from) return
-
-              const unitX = this.unitX(event)
-
-              // Shift and drag moves the window instead of choosing one: the
-              // same two gestures Plotly gives a reader, so the dashboard this
-              // page is compared against is operated the same way.
-              if (event.shiftKey) {
-                this.pan = {fromUnit: unitX, range: null, moved: false}
-                this.el.classList.add("cursor-grabbing")
-
-                return
-              }
-
-              this.brush = {from: unitX, to: unitX, moved: false}
-              this.showBrush()
-            },
-
-            drag(event) {
-              if (this.pan) return this.dragPan(event)
-              if (!this.brush) return
-
-              const unitX = this.unitX(event)
-
-              this.brush.to = unitX
-              this.brush.moved = this.brush.moved || Math.abs(unitX - this.brush.from) > 4
-              this.showBrush()
-            },
-
-            showBrush() {
-              const box = this.el.querySelector("#replay-chart-brush")
-              if (!box || !this.brush) return
-
-              box.setAttribute("x", String(Math.min(this.brush.from, this.brush.to)))
-              box.setAttribute("width", String(Math.abs(this.brush.to - this.brush.from)))
-              box.setAttribute("height", String(this.height))
-              box.setAttribute("visibility", "visible")
-            },
-
-            // A drag that went nowhere is a click, and a click already means
-            // "show me that step"; only a real drag scopes the window.
-            endBrush(_event) {
-              if (this.pan) return this.endPan()
-
-              const brush = this.brush
-              if (!brush) return
-
-              this.brush = null
-              this.cancelBrush()
-
-              if (!brush.moved) return
-
-              // The click that ends a drag is not a seek: the reader chose a
-              // range, not a point.
-              this.dragged = true
-
-              const ends = [this.positionOf(brush.from), this.positionOf(brush.to)].map(Math.round)
-
-              this.pushEvent("replay_brush", {
-                from: String(Math.min(...ends)),
-                to: String(Math.max(...ends))
-              })
-            },
-
-            cancelBrush() {
-              const box = this.el.querySelector("#replay-chart-brush")
-              if (box) box.setAttribute("visibility", "hidden")
-
-              this.pan = null
-              this.el.classList.remove("cursor-grabbing")
-              this.el.querySelector("#replay-chart-lines")?.removeAttribute("transform")
-            },
-
-            // Shift-drag: the window slides with the hand. The lines move under
-            // the pointer while it is down, and the range that was let go of is
-            // asked for once — dragging is one decision, not one per pixel.
-            dragPan(event) {
-              const by = this.unitX(event) - this.pan.fromUnit
-
-              this.pan.moved = this.pan.moved || Math.abs(by) > 2
-
-              // Dragging right looks earlier in the run, because the plot moves
-              // with the hand.
-              const shift = -(by / Math.max(this.width, 1)) * (this.to - this.from)
-              const from = Math.round(this.from + shift)
-
-              this.pan.range = [from, from + Math.round(this.to - this.from)]
-
-              const lines = this.el.querySelector("#replay-chart-lines")
-              if (lines) lines.setAttribute("transform", `translate(${by} 0)`)
-            },
-
-            endPan() {
-              const pan = this.pan
-
-              this.cancelBrush()
-
-              if (!pan || !pan.moved || !pan.range) return
-
-              // The click that ends a drag is not a seek: the reader moved the
-              // window, not the playhead.
-              this.dragged = true
-
-              this.pushRange(...pan.range)
-            },
-
-            // The wheel zooms about the pointer: the step under it keeps its
-            // place, so looking closer is looking harder at what is already
-            // there rather than walking somewhere else first.
-            zoomAtPointer(event) {
-              if (this.brush || this.pan || this.to <= this.from) return
-
-              event.preventDefault()
-
-              const span = this.to - this.from
-              const anchor = this.positionOf(this.unitX(event))
-              const wanted = Math.max(1, Math.round(span * (event.deltaY < 0 ? 0.5 : 2)))
-              const share = (anchor - this.from) / span
-              const from = Math.round(anchor - share * wanted)
-
-              this.pushRange(from, from + wanted)
-            },
-
-            // A wheel ticks many times before a page can be rebuilt, and every
-            // range asked for is a re-render: the last range wins, a moment
-            // after the wheel stops. Until then the window asked for is the one
-            // the next tick starts from, so three ticks in are three zooms and
-            // not three copies of the first.
-            pushRange(from, to) {
-              if (!(to > from)) return
-
-              this.from = from
-              this.to = to
-              this.pendingRange = [from, to]
-
-              if (this.zoomTimer) return
-
-              this.zoomTimer = setTimeout(() => {
-                this.zoomTimer = null
-
-                const range = this.pendingRange
-                this.pendingRange = null
-
-                if (!range) return
-
-                this.pushEvent("replay_brush", {
-                  from: String(range[0]),
-                  to: String(range[1])
-                })
-              }, 120)
-            },
-
             // What the pointer is over, read off the drawn line rather than off
             // the nearest stored point: a run of hundreds of steps has points a
             // few pixels apart, and a readout that jumps from one to the next
@@ -1169,13 +1014,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
             },
 
             seek(event) {
-              // The mouse-up of a drag fires a click too, and a drag has already
-              // said what it wanted.
-              if (this.dragged) {
-                this.dragged = false
-                return
-              }
-
               const nearest = this.nearest(event)
               if (!nearest) return
 

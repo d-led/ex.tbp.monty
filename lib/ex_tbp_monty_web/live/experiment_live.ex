@@ -839,13 +839,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # Each is a patch, so the address bar follows the picture. Zooming starts from
   # the window on screen rather than the one asked for, so following does not
   # make the buttons work on a stretch nobody is looking at.
-  def handle_event("zoom", %{"how" => "range"} = params, socket) do
-    # A wheel asks for the stretch under the pointer rather than a direction, so
-    # the window is the caller's — clamped to the run, which is the one thing a
-    # chart cannot see from where it is drawn. A stretch narrower than a step
-    # says nothing, and the picture stays as it is rather than jumping to the
-    # whole run under a reader who only scrolled too hard.
-    case range_window(socket.assigns[:chart_extent], params["from"], params["to"]) do
+  # A drag or a wheel asks for the stretch under the pointer rather than a
+  # direction, so the window is the caller's — clamped to the run, which is the
+  # one thing a chart cannot see from where it is drawn. A stretch narrower than
+  # a step says nothing, and the picture stays as it is rather than jumping to
+  # the whole run under a reader who only scrolled too hard.
+  def handle_event("zoom", %{"from" => from, "to" => to}, socket) do
+    case range_window(socket.assigns[:chart_extent], count_of(from), count_of(to)) do
       nil -> {:noreply, socket}
       window -> {:noreply, push_patch(socket, to: experiment_path(socket, window))}
     end
@@ -869,30 +869,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # as it is read.
   def handle_event("chart-size", params, socket), do: {:noreply, size_chart(socket, params)}
 
-  # One chart at a time, drawn for the box it has: the size measured for the
-  # chart that was expanded belongs to it, so another one — or none — goes back
-  # to the size of its cell.
-  defp show_chart(socket, module_id) do
-    expanded = if Map.get(socket.assigns, :expanded) == module_id, do: nil, else: module_id
-
-    socket
-    |> assign(:expanded, expanded)
-    |> assign(:chart_size, nil)
-    |> assign_charts(socket.assigns.beliefs)
-  end
-
-  defp size_chart(socket, params) do
-    case measured_size(params) do
-      nil ->
-        socket
-
-      {module_id, width, height} ->
-        socket
-        |> assign(:chart_size, {module_id, width, height})
-        |> assign_charts(socket.assigns.beliefs)
-    end
-  end
-
   # Turning following off is how a reader says "leave the window where I put it";
   # turning it back on slides it to the newest step at the next step to arrive.
   def handle_event("follow", _params, socket) do
@@ -909,13 +885,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # reader looking at them, and not by whatever the address bar was carrying: a
   # run's budget is a decision about the run.
   def handle_event("budget", params, socket), do: {:noreply, assign_budget(socket, params)}
-
-  defp assign_budget(socket, params) do
-    assign(socket,
-      episodes: count_of(params["episodes"]),
-      steps: cap(count_of(params["steps"]), socket.assigns.opened.setup)
-    )
-  end
 
   # A seed this page cannot read is not a seed: the number stays as it was and
   # the run keeps the one the setup already had.
@@ -961,9 +930,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     {:noreply, assign(socket, filter: text)}
   end
 
-  defp range_window({first, last}, from, to) do
-    {from, to} = {round(from), round(to)}
+  defp range_window(_extent, nil, _to), do: nil
+  defp range_window(_extent, _from, nil), do: nil
 
+  defp range_window({first, last}, from, to) do
     if to - from >= 1, do: clamp({from, to}, first, last), else: nil
   end
 
@@ -982,6 +952,37 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   defp measured_size(_params), do: nil
+
+  defp assign_budget(socket, params) do
+    assign(socket,
+      episodes: count_of(params["episodes"]),
+      steps: cap(count_of(params["steps"]), socket.assigns.opened.setup)
+    )
+  end
+
+  # One chart at a time, drawn for the box it has: the size measured for the
+  # chart that was expanded belongs to it, so another one — or none — goes back
+  # to the size of its cell.
+  defp show_chart(socket, module_id) do
+    expanded = if Map.get(socket.assigns, :expanded) == module_id, do: nil, else: module_id
+
+    socket
+    |> assign(:expanded, expanded)
+    |> assign(:chart_size, nil)
+    |> assign_charts(socket.assigns.beliefs)
+  end
+
+  defp size_chart(socket, params) do
+    case measured_size(params) do
+      nil ->
+        socket
+
+      {module_id, width, height} ->
+        socket
+        |> assign(:chart_size, {module_id, width, height})
+        |> assign_charts(socket.assigns.beliefs)
+    end
+  end
 
   @impl true
   # A run of this experiment was written down, or settled. The row this page

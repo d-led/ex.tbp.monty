@@ -1278,11 +1278,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     end
   end
 
-  defp replay("replay_zoom", %{"zoom" => zoom}, %{assigns: %{run: run}} = socket) do
-    replay_window(
-      socket,
-      Replay.zoom(run, socket.assigns.window, socket.assigns.step, zoom_of(zoom))
-    )
+  # The shared chart hook asks for the whole run with `how`; this page's own
+  # control asks with `zoom`. Both are the same request.
+  defp replay("replay_zoom", %{"zoom" => zoom}, socket),
+    do: replay("replay_zoom", %{"how" => zoom_of(zoom)}, socket)
+
+  defp replay("replay_zoom", %{"how" => how}, %{assigns: %{run: run}} = socket) do
+    replay_window(socket, Replay.zoom(run, socket.assigns.window, socket.assigns.step, how))
   end
 
   # A drag across the chart chose the range it drew: that is the window now,

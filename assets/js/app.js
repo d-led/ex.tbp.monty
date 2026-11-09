@@ -25,6 +25,10 @@ import { LiveSocket } from "phoenix_live_view";
 import { hooks as colocatedHooks } from "phoenix-colocated/ex_tbp_monty";
 import topbar from "../vendor/topbar";
 import { StudioTour } from "./tour";
+// The gestures a chart answers to: drag a stretch to zoom, shift-drag to pan,
+// the wheel to zoom about the pointer, double-click for the whole run. One
+// implementation, used by both pages that draw a chart of a run.
+import { ChartZoom } from "./chart";
 // Behaviour for the sidebar the layout renders: collapse preference, the drawer
 // on a phone, and the current page marked in the list. Imported for its side
 // effects, because it answers events from the whole document.
@@ -37,7 +41,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
   // No `longPollFallbackMs`: the WebSocket is the transport, and a fallback
   // would turn a blocked or broken upgrade into a page that merely looks slow.
   params: { _csrf_token: csrfToken },
-  hooks: { ...colocatedHooks, StudioTour },
+  hooks: { ...colocatedHooks, StudioTour, ChartZoom },
 });
 
 // Show progress bar on live navigation and form submits

@@ -691,7 +691,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       view
       |> element("#chart-svg-learning_module_0")
-      |> render_hook("zoom", %{"how" => "range", "from" => 1, "to" => 3})
+      |> render_hook("zoom", %{"from" => "1", "to" => "3"})
 
       assert_patch(
         view,
@@ -701,7 +701,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # Below a step there is nothing to read, so it is not a window.
       view
       |> element("#chart-svg-learning_module_0")
-      |> render_hook("zoom", %{"how" => "range", "from" => 2, "to" => 2})
+      |> render_hook("zoom", %{"from" => "2", "to" => "2"})
 
       assert view |> element("#chart-extent") |> render() =~ "steps 1–3"
     end

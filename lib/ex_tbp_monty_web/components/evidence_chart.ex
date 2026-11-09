@@ -45,6 +45,17 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         stroke-width: 0.5;
         opacity: 0.5;
       }
+
+      /* The stretch a drag is choosing, drawn over the plot while the pointer is
+         down: a gesture that says "this much" has to show how much. */
+      .evidence-chart__brush {
+        pointer-events: none;
+        fill: currentColor;
+        fill-opacity: 0.12;
+        stroke: currentColor;
+        stroke-opacity: 0.4;
+        stroke-width: 0.5;
+      }
     </style>
 
     <figure
@@ -70,13 +81,21 @@ defmodule ExTbpMontyWeb.EvidenceChart do
       <%!-- The plot's own box, not the picture's shape: full screen hands the
       chart the height the card has, and the hook tells the server how big that
       is so the picture is drawn for it rather than stretched to fit. A stretched
-      chart squashes its own tick labels; a redrawn one keeps them square. --%>
+      chart squashes its own tick labels; a redrawn one keeps them square.
+
+      The gestures are the shared hook's (`assets/js/chart.js`), the same one the
+      run page's chart answers to: drag a stretch to zoom, shift-drag to pan, the
+      wheel to zoom about the pointer, double-click for the whole run. --%>
       <svg
         id={"chart-svg-#{@module_id}"}
-        phx-hook=".EvidenceChart"
+        phx-hook="ChartZoom"
         viewBox={"0 0 #{@chart.width} #{@chart.height}"}
-        class={["w-full touch-none", @expanded && "min-h-0 flex-1"]}
+        class={["w-full touch-none cursor-crosshair", @expanded && "min-h-0 flex-1"]}
         data-expanded={to_string(@expanded)}
+        data-chart-key={@module_id}
+        data-size-event="chart-size"
+        data-zoom-event="zoom"
+        data-zoom-all-event="zoom"
         role="img"
         aria-label={"evidence per object, step by step and episode by episode, for #{@module_id}"}
         data-x-min={@chart.x_min}
@@ -84,6 +103,10 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         data-y-max={@chart.y_max}
         data-width={@chart.width}
         data-height={@chart.height}
+        data-left={@chart.margin_left}
+        data-right={@chart.margin_right}
+        data-top={@chart.margin_top}
+        data-bottom={@chart.margin_bottom}
         data-margin-left={@chart.margin_left}
         data-margin-right={@chart.margin_right}
         data-margin-top={@chart.margin_top}
@@ -183,23 +206,28 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           class="text-base-content/40"
           data-zero={@chart.zero}
         />
-        <g :for={series <- @chart.series}>
-          <polyline
-            :for={points <- series.points}
-            points={points}
-            fill="none"
-            stroke={series.colour}
-            stroke-width="1.5"
-            data-graph={series.graph_id}
+        <%!-- The lines are one group so that shift-dragging can slide them under
+        the hand. The frame around them — bands, grid, axis labels — stays put:
+        it is what a reader is reading against. --%>
+        <g id={"chart-lines-#{@module_id}"}>
+          <g :for={series <- @chart.series}>
+            <polyline
+              :for={points <- series.points}
+              points={points}
+              fill="none"
+              stroke={series.colour}
+              stroke-width="1.5"
+              data-graph={series.graph_id}
+            />
+          </g>
+          <circle
+            :if={@chart.mlh}
+            cx={@chart.mlh.x}
+            cy={@chart.mlh.y}
+            r="3"
+            fill={@chart.mlh_colour}
           />
         </g>
-        <circle
-          :if={@chart.mlh}
-          cx={@chart.mlh.x}
-          cy={@chart.mlh.y}
-          r="3"
-          fill={@chart.mlh_colour}
-        />
       </svg>
       <ul class="flex flex-wrap gap-x-3 gap-y-1 px-0.5 pb-0.5 text-[11px]">
         <li :for={series <- @chart.series} class="flex items-center gap-1">
@@ -226,6 +254,11 @@ defmodule ExTbpMontyWeb.EvidenceChart do
       // at which step. The numbers are already in the picture — every polyline
       // carries its own points and its object's name — so the crosshair reads
       // them out of the SVG instead of asking the server for a second copy.
+      //
+      // The gestures are not here. Zooming, panning and double-click-to-reset
+      // are `ChartZoom` in `assets/js/chart.js`, shared with the run page's
+      // chart: they are the same gestures, and writing them twice is what made
+      // the two charts zoom by different factors.
       export default {
         mounted() {
           // Where the pointer was, in the page's own pixels. A live chart is
@@ -238,61 +271,6 @@ defmodule ExTbpMontyWeb.EvidenceChart do
 
           this.el.addEventListener("mousemove", (event) => this.hover(event))
           this.el.addEventListener("mouseleave", () => this.hide())
-
-          // The same two gestures the run page's chart has: wheel to zoom about
-          // the pointer, double-click for the whole run. Every chart on this page
-          // draws the same steps, so they zoom together — comparing modules means
-          // comparing the same stretch of the run.
-          this.el.addEventListener("wheel", (event) => this.zoom(event), { passive: false })
-          this.el.addEventListener("dblclick", () => this.pushEvent("zoom", { how: "all" }))
-
-          // Full screen gives the chart a box the server has no way of knowing,
-          // so the box is measured here and sent: the picture is then drawn for
-          // it, at the reader's own screen size, instead of being a shape made
-          // for the grid stretched into a screen.
-          this.measured = null
-          this.measure()
-          window.addEventListener("resize", () => this.measure())
-        },
-
-        // Only an expanded chart has a box of its own to report; in the grid the
-        // chart decides its own height from its shape, and asking the server to
-        // match that would be a circle. The same size is not sent twice, so a
-        // step that redraws the chart does not ask again for what it already has.
-        measure() {
-          if (this.el.dataset.expanded !== "true") return
-
-          const box = this.el.getBoundingClientRect()
-          const size = [Math.round(box.width), Math.round(box.height)]
-          if (size[0] < 200 || size[1] < 120) return
-          if (this.measured && this.measured[0] === size[0] && this.measured[1] === size[1]) return
-
-          this.measured = size
-          this.pushEvent("chart-size", { module: this.el.id.replace("chart-svg-", ""), width: size[0], height: size[1] })
-        },
-
-        // The step under the pointer stays under it while the window shrinks:
-        // zooming about the pointer is the gesture a chart is read with, and one
-        // that jumped to the middle loses the place the reader was looking at.
-        zoom(event) {
-          event.preventDefault()
-
-          const chart = this.geometry()
-          const rect = this.el.getBoundingClientRect()
-          const scale = rect.width / chart.width
-          const x = (event.clientX - rect.left) / scale
-          const left = chart.left
-          const plot = chart.width - chart.left - chart.right
-
-          if (x < left || x > left + plot) return
-
-          const span = Math.max(chart.xMax - chart.xMin, 1)
-          const factor = event.deltaY < 0 ? 0.75 : 1 / 0.75
-          const at = chart.xMin + ((x - left) / plot) * span
-          const from = Math.round(at - (at - chart.xMin) * factor)
-          const to = from + Math.max(Math.round(span * factor), 1)
-
-          this.pushEvent("zoom", { how: "range", from: from, to: to })
         },
 
         // The picture changed, the pointer did not: the tooltip keeps saying what
@@ -300,7 +278,6 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         // has left the chart hides it.
         updated() {
           this.tooltip = this.el.parentElement.querySelector("[data-chart-tooltip]")
-          this.measure()
           if (this.pointer === null) return this.hide()
 
           this.hover(this.pointer)
