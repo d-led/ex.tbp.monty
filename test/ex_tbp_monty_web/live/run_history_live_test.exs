@@ -163,6 +163,50 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     })
   end
 
+  # The picture is the server's, but the gestures are the browser's: one hook
+  # (`assets/js/chart.js`) serves this chart and the experiment page's, and it
+  # reads the window, the size and — the part that rots — the *names* of the
+  # events it must push out of data attributes. Rename one of those and no
+  # picture changes and no other test fails: the chart just stops answering the
+  # wheel. So the contract is asserted here, and the behaviour is driven through
+  # the names the markup gives it rather than the names this test knows.
+  describe "the gesture hook's contract with the chart" do
+    test "the chart is drawn for the window it says it is drawing", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert has_element?(view, "#replay-chart-zoom[phx-hook=ChartZoom]")
+      assert has_element?(view, "#replay-chart-zoom[data-width][data-height]")
+
+      from = told_the_hook(view, "data-x-min")
+      to = told_the_hook(view, "data-x-max")
+
+      assert view |> element("#replay-chart-window") |> render() =~ "steps #{from}–#{to}"
+    end
+
+    test "and answers the events it is told to push", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      # The whole run, then one step of it: a chart that ignores either name
+      # keeps drawing the window it opened on, which is the failure this is for.
+      render_hook(view, told_the_hook(view, "data-zoom-all-event"), %{"how" => "all"})
+      render_hook(view, told_the_hook(view, "data-zoom-event"), %{"from" => 1, "to" => 1})
+
+      assert view |> element("#replay-chart-window") |> render() =~ "steps 1–1"
+      assert has_element?(view, "#replay-chart-zoom[data-x-min='1'][data-x-max='1']")
+    end
+  end
+
+  # What the markup tells the gesture hook, read out of the page: a renamed
+  # attribute is then what fails the test, not an assumption about it.
+  defp told_the_hook(view, attribute) do
+    view
+    |> element("#replay-chart-zoom")
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.attribute(attribute)
+    |> List.first()
+  end
+
   describe "the chart a run is opened on" do
     test "is every object once the run has one, with nobody choosing it",
          %{conn: conn, run: run} do

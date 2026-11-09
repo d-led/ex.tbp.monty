@@ -560,7 +560,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
               class="checkbox checkbox-xs"
             /> follow latest steps
           </label>
-          <span class="text-[11px] text-base-content/50">
+          <span id="replay-chart-window" class="text-[11px] text-base-content/50">
             steps {@chart.from}–{@chart.to} · {format_value(@chart.min)} … {format_value(@chart.max)} {chart_unit(
               @series,
               @series_id
