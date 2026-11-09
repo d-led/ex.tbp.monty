@@ -4,6 +4,6 @@
   "private": true,
   "description": "Browser dependencies for the Monty-on-the-BEAM dashboard",
   "dependencies": {
-    "driver.js": "^1.10.2"
+    "driver.js": "^1.11.0"
   }
 }
