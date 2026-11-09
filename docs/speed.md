@@ -587,3 +587,37 @@ numbers it is 250 s of a 4 400 s run (6 %); after a 6× faster learning module i
 would be ~19 %. `Setup.world(setup, episode, opts)` is a function of the episode
 index and the seed, so a prefetched scene is the same scene; what has to be proved
 is that no drawn number moves.
+
+### What a processed step calls (2026-11-09, `cprof`, one step at 8 376 hypotheses)
+
+`cprof` counts calls, which is the one thing tprof's time column cannot be
+trusted for. One step of `base_10simobj_surf_agent` that the module was given:
+
+| module                             |   calls | largest single item                                                |
+| ---------------------------------- | ------: | ------------------------------------------------------------------ |
+| `Monty.Geometry`                   | 266 577 | `dot/2` 99 966, the `mul/2` closures 100 512, `transpose/1` 16 753 |
+| `...Transforms.DepthTo3DLocations` | 140 263 | ten full-image passes of 8 192 (2 × 4 096 pixels)                  |
+| `Monty.Simulators.Mujoco.Answer`   |  66 561 | decoding the world's arrays                                        |
+| `...Utils.SensorProcessing`        |  45 395 | `cloud_bytes` 16 384, `plane_normal` 11 313                        |
+| `...EvidenceMatching.Hypotheses`   |  42 242 | `pose_bytes`/`location_bytes` 8 376 each                           |
+
+About 560 000 calls for a step that takes ~420 ms, i.e. **~0.75 µs a call**: the
+cost is the per-call allocation of small lists (a 3-element dot allocates a
+3-element list; a 3×3 `mul/2` nine of them), not any single arithmetic hot spot.
+That closes the question the 2026-11-02 note left open ("~130 µs per hypothesis
+is unexplained") — it is ~66 calls a hypothesis at Elixir-term prices.
+
+Two consequences, and they are the work:
+
+1. **The learning module wants one call per pass, not one per hypothesis.** The
+   kernel already exists in this shape (`MatcherNif.displaced_locations/3`,
+   `MatcherNif.neighbour_evidence/10`); what is left per hypothesis is pose
+   evidence, feature evidence and the slope bookkeeping. Batching them changes no
+   number — the parity fixtures are the referee (`evidence_*_native_parity_test.exs`).
+2. **The transform chain wants the same treatment** — `DepthTo3DLocations` makes
+   ten passes over the depth image per step, which is 6.4 ms a step and 270 s of a
+   full run, and is a Nx expression rather than ten closures.
+
+Neither is a cache and neither is a one-line change; both are the "one crossing"
+this document has been pointing at since 2026-11-02, now with the call counts that
+say which passes to cross.
