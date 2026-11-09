@@ -194,6 +194,22 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert html =~ "step 1"
     end
 
+    test "and full screen leaves on Escape, as a full screen anything does",
+         %{conn: conn, run: run} do
+      publish_beliefs(run.id, 0, "mug")
+      _ = :sys.get_state(Monty.Studio.RunStream)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      view |> element("#replay-expand") |> render_click()
+
+      assert view |> element("#replay-chart-panel") |> render() =~ "fixed inset-0"
+
+      view |> element("#replay-panel") |> render_keydown(%{"key" => "Escape"})
+
+      refute view |> element("#replay-chart-panel") |> render() =~ "fixed inset-0"
+    end
+
     test "and each band says which episode it is, without painting a handle under it",
          %{conn: conn, run: run} do
       publish_beliefs(run.id, 0, "mug")

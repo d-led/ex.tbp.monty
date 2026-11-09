@@ -517,6 +517,31 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert chart =~ "is the answer so far"
     end
 
+    test "full screen is one chart's, and Escape leaves it", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # Four learning modules are four opinions: expanding the page's whole grid
+      # gave a reader four small charts in a big box, when the one they clicked
+      # is the one they wanted to read.
+      view |> element("#chart-expand-learning_module_0") |> render_click()
+
+      assert view |> element("#chart-card-learning_module_0") |> render() =~
+               "rounded-field fixed inset-0"
+
+      # Escape is what a full-screen anything answers to, and the control is the
+      # way back for anyone without a keyboard.
+      view |> element("#charts") |> render_keydown(%{"key" => "Escape"})
+
+      refute view |> element("#chart-card-learning_module_0") |> render() =~
+               "rounded-field fixed inset-0"
+
+      assert has_element?(view, "#chart-expand-learning_module_0")
+    end
+
     test "a second Run it draws the second run's chart, not more of the first", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")

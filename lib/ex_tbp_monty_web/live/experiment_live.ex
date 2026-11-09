@@ -128,7 +128,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       x_window: window,
       # Full screen is part of the page, not of the chart: it exists before the
       # first step arrives and outlives the charts being rebuilt by every one.
-      expanded: Map.get(socket.assigns, :expanded, false),
+      expanded: Map.get(socket.assigns, :expanded),
       # Following the newest steps is the default: a page opened on a run that is
       # still going is a page watching it, not a page reading it.
       follow: Map.get(socket.assigns, :follow, true),
@@ -589,18 +589,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               >
                 all
               </button>
-              <%!-- Full screen is an assign, not the browser's Fullscreen API: a
-              run is watched in the middle of something else, and a chart that
-              needs a permission prompt to get bigger does not get bigger. It is
-              a fixed overlay over the page, and clicking it again leaves. --%>
-              <button
-                id="chart-expand"
-                phx-click="expand"
-                class="btn btn-xs join-item"
-                aria-label={if @expanded, do: "leave full screen", else: "full screen"}
-              >
-                {if @expanded, do: "⤡", else: "⤢"}
-              </button>
+              <%!-- Full screen is per chart: four learning modules are four
+              opinions, and the one a reader wants to read is the one they
+              clicked. Escape leaves it, as does the same control. --%>
               <%!-- The one control the dashboard had that this page did not: while
               a run is going, a window that is zoomed into should keep showing the
               newest steps, or the chart quietly falls behind the experiment. --%>
@@ -620,17 +611,32 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           </div>
           <div
             id="charts"
+            phx-window-keydown="collapse"
+            phx-key="Escape"
             class={[
               "grid gap-2",
-              map_size(@charts) > 1 && "lg:grid-cols-2",
-              @expanded && "fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
+              map_size(@charts) > 1 && "lg:grid-cols-2"
             ]}
           >
-            <ExTbpMontyWeb.EvidenceChart.evidence_chart
+            <div
               :for={{module_id, chart} <- @charts}
-              module_id={module_id}
-              chart={chart}
-            />
+              id={"chart-card-#{module_id}"}
+              class={[
+                "relative rounded-field",
+                @expanded == module_id && "fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
+              ]}
+            >
+              <button
+                id={"chart-expand-#{module_id}"}
+                phx-click="expand"
+                phx-value-module={module_id}
+                class="btn btn-xs absolute right-2 top-2 z-10"
+                aria-label={if @expanded == module_id, do: "leave full screen", else: "full screen"}
+              >
+                {if @expanded == module_id, do: "⤡", else: "⤢"}
+              </button>
+              <ExTbpMontyWeb.EvidenceChart.evidence_chart module_id={module_id} chart={chart} />
+            </div>
           </div>
         </section>
 
@@ -745,7 +751,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         |> assign(
           # Full screen survives the steps that arrive while it is on: it is a
           # property of how the page is being read, not of the run.
-          expanded: Map.get(socket.assigns, :expanded, false)
+          expanded: Map.get(socket.assigns, :expanded)
         )
       end
 
@@ -773,9 +779,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     {:noreply, push_patch(socket, to: experiment_path(socket, window))}
   end
 
-  def handle_event("expand", _params, socket) do
-    {:noreply, assign(socket, :expanded, not Map.get(socket.assigns, :expanded, false))}
+  def handle_event("expand", %{"module" => module_id}, socket) do
+    expanded = if Map.get(socket.assigns, :expanded) == module_id, do: nil, else: module_id
+
+    {:noreply, assign(socket, :expanded, expanded)}
   end
+
+  # Escape and the control itself are the same request: leave full screen.
+  def handle_event("collapse", _params, socket), do: {:noreply, assign(socket, :expanded, nil)}
 
   # Turning following off is how a reader says "leave the window where I put it";
   # turning it back on slides it to the newest step at the next step to arrive.

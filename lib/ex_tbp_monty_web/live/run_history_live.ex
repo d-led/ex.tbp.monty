@@ -47,7 +47,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   @selection_events Selection.events()
 
   # The replay panel's controls, grouped the same way and for the same reason.
-  @replay_events ~w(replay_seek replay_step replay_play replay_pause replay_zoom replay_brush replay_series replay_follow replay_expand)
+  @replay_events ~w(replay_seek replay_step replay_play replay_pause replay_zoom replay_brush replay_series replay_follow replay_expand replay_collapse)
 
   # How often a page showing a run asks the record what the run is doing. The
   # worker broadcasts every step, so this is the answer to silence: a message
@@ -1041,7 +1041,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         </div>
       </section>
 
-      <section :if={@run} id="replay-panel" class="space-y-1">
+      <section
+        :if={@run}
+        id="replay-panel"
+        class="space-y-1"
+        phx-window-keydown="replay_collapse"
+        phx-key="Escape"
+      >
         <ExTbpMontyWeb.StudioComponents.replay
           moment={@moment}
           chart={@chart}
@@ -1258,6 +1264,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # evidence rather than a reading of it.
   defp replay("replay_expand", _params, socket),
     do: assign(socket, expanded: not Map.get(socket.assigns, :expanded, false))
+
+  # Escape is the control a full-screen anything answers to.
+  defp replay("replay_collapse", _params, socket), do: assign(socket, expanded: false)
 
   # Ticking "follow latest steps" is a request for the newest step, which is the
   # one thing the page should not wait for the next refresh to hear about.
