@@ -542,6 +542,38 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert has_element?(view, "#chart-expand-learning_module_0")
     end
 
+    test "the chart filling the screen is drawn for the screen's own shape", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # A screen is a shape no server can guess. The page therefore asks the
+      # browser how big the box is and draws the chart for it: a chart stretched
+      # into a box instead squashes its own labels, which is what "full screen"
+      # looked like — a 960x300 ribbon in a window-sized frame.
+      view |> element("#chart-expand-learning_module_0") |> render_click()
+
+      view
+      |> element("#chart-svg-learning_module_0")
+      |> render_hook("chart-size", %{
+        "module" => "learning_module_0",
+        "width" => 900,
+        "height" => 700
+      })
+
+      assert view |> element("#chart-svg-learning_module_0") |> render() =~
+               ~s(viewBox="0 0 900 700")
+
+      # Leaving full screen returns it to the grid's own size, so the chart is
+      # not left drawn for a box that is no longer there.
+      view |> element("#chart-expand-learning_module_0") |> render_click()
+
+      assert view |> element("#chart-svg-learning_module_0") |> render() =~
+               ~s(viewBox="0 0 960 300")
+    end
+
     test "a second Run it draws the second run's chart, not more of the first", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
@@ -698,6 +730,23 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       view |> element("#zoom-left") |> render_click()
 
       assert view |> element("#chart-extent") |> render() =~ "steps 0–1 of 2"
+    end
+
+    test "the page says what it will run before it runs it", %{conn: conn} do
+      # A slice of the experiment arrives in the address bar and every later run
+      # from that page keeps it. Unsaid, a run of one episode of three steps
+      # reads as an experiment that gave up — which is exactly how it was read.
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=3&episodes=1")
+
+      assert view |> element("#run-budget") |> render() =~ "up to 3 steps per episode"
+      assert view |> element("#run-budget") |> render() =~ "one episode only"
+
+      # The whole config, when the page was not handed a slice.
+      {:ok, whole, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      assert whole |> element("#run-budget") |> render() =~ "every episode of the config"
+      refute whole |> element("#run-budget") |> render() =~ "only"
     end
 
     test "the log filter keeps a line only if every word matches", %{conn: conn} do

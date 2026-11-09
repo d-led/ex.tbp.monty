@@ -129,6 +129,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # Full screen is part of the page, not of the chart: it exists before the
       # first step arrives and outlives the charts being rebuilt by every one.
       expanded: Map.get(socket.assigns, :expanded),
+      # The box the expanded chart was given, in the browser's own pixels, once
+      # the browser has said — `{module_id, width, height}` or `nil` while the
+      # chart is still drawn for its cell.
+      chart_size: Map.get(socket.assigns, :chart_size),
       # Following the newest steps is the default: a page opened on a run that is
       # still going is a page watching it, not a page reading it.
       follow: Map.get(socket.assigns, :follow, true),
@@ -347,8 +351,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           <%!-- The number is a ceiling, not a target: the experiment's own
           recognition policy ends each episode first, and for a recognition that
           is about twenty matching steps. --%>
-          <span class="font-mono text-[11px] text-base-content/60">
-            up to {@steps} steps per episode
+          <span id="run-budget" class="font-mono text-[11px] text-base-content/60">
+            {budget_note(@steps, @episodes)}
           </span>
           <button id="step" phx-click="step" class="btn btn-sm" disabled={!startable?(assigns)}>
             <.icon name="hero-forward-mini" class="size-4" /> One step
@@ -638,7 +642,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                   # like. The fixed card is its own containing block, so the
                   # button beside it needs no `relative` while it is expanded.
                   if(@expanded == module_id,
-                    do: "fixed inset-0 z-50 overflow-auto bg-base-100 p-4",
+                    do: "fixed inset-0 z-50 flex flex-col overflow-hidden bg-base-100 p-4",
                     else: "relative"
                   )
                 ]
@@ -653,7 +657,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               >
                 {if @expanded == module_id, do: "⤡", else: "⤢"}
               </button>
-              <ExTbpMontyWeb.EvidenceChart.evidence_chart module_id={module_id} chart={chart} />
+              <ExTbpMontyWeb.EvidenceChart.evidence_chart
+                module_id={module_id}
+                chart={chart}
+                expanded={@expanded == module_id}
+              />
             </div>
           </div>
         </section>
@@ -812,11 +820,40 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   def handle_event("expand", %{"module" => module_id}, socket) do
     expanded = if Map.get(socket.assigns, :expanded) == module_id, do: nil, else: module_id
 
-    {:noreply, assign(socket, :expanded, expanded)}
+    {:noreply,
+     socket
+     |> assign(:expanded, expanded)
+     # The size belongs to the chart that was expanded: another one, or none, is
+     # drawn for its cell until its own browser says how big the screen is.
+     |> assign(:chart_size, nil)
+     |> assign_charts(socket.assigns.beliefs)}
   end
 
   # Escape and the control itself are the same request: leave full screen.
-  def handle_event("collapse", _params, socket), do: {:noreply, assign(socket, :expanded, nil)}
+  def handle_event("collapse", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:expanded, nil)
+     |> assign(:chart_size, nil)
+     |> assign_charts(socket.assigns.beliefs)}
+  end
+
+  # The chart filling the screen says how big its box is, because only the
+  # browser knows: a picture drawn for a guessed screen is a picture stretched
+  # into it, and one drawn for the real box has square labels and an axis as long
+  # as it is read.
+  def handle_event("chart-size", params, socket) do
+    case measured_size(params) do
+      nil ->
+        {:noreply, socket}
+
+      {module_id, width, height} ->
+        {:noreply,
+         socket
+         |> assign(:chart_size, {module_id, width, height})
+         |> assign_charts(socket.assigns.beliefs)}
+    end
+  end
 
   # Turning following off is how a reader says "leave the window where I put it";
   # turning it back on slides it to the newest step at the next step to arrive.
@@ -879,6 +916,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
     if to - from >= 1, do: clamp({from, to}, first, last), else: nil
   end
+
+  # A box the browser measured. A chart narrower than a couple of hundred pixels
+  # cannot carry a labelled axis, and one larger than any display is a mistake,
+  # so a number outside that range is not a size to draw at.
+  defp measured_size(%{"module" => module_id, "width" => width, "height" => height}) do
+    with true <- is_binary(module_id) and module_id != "",
+         {width, ""} <- Integer.parse(to_string(width)),
+         {height, ""} <- Integer.parse(to_string(height)),
+         true <- width in 200..4_000 and height in 120..4_000 do
+      {module_id, width, height}
+    else
+      _ -> nil
+    end
+  end
+
+  defp measured_size(_params), do: nil
 
   @impl true
   # A run of this experiment was written down, or settled. The row this page
@@ -1084,11 +1137,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
     assign(socket,
       beliefs: histories,
-      charts: charts_of(histories, window, socket.assigns.episode_objects),
+      charts: charts_of(histories, window, socket.assigns.episode_objects, chart_size(socket)),
       chart_window: window,
       chart_extent: extent
     )
   end
+
+  # How big the expanded chart's box is, as the browser measured it. A screen is
+  # a shape no server can guess, so the one chart filling it is drawn for the
+  # box it really has; every other chart keeps the size of its cell.
+  defp chart_size(socket), do: Map.get(socket.assigns, :chart_size)
 
   # "Follow latest", the way the pyview dashboard has it: while it is on, a window
   # that has been zoomed into keeps its width and slides so that it ends at the
@@ -1104,11 +1162,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # One chart per module, from the module's own history, drawn for the stretch of
   # the run the page is looking at. The objects by episode travel with it: a band
   # wears the colour of the object its episode was about.
-  defp charts_of(histories, window, episode_objects),
-    do:
-      Map.new(histories, fn {module_id, steps} ->
-        {module_id, Chart.new(steps, window: window, episode_objects: episode_objects)}
-      end)
+  defp charts_of(histories, window, episode_objects, expanded_size) do
+    Map.new(histories, fn {module_id, steps} ->
+      {module_id,
+       Chart.new(
+         steps,
+         [window: window, episode_objects: episode_objects] ++ size_of(module_id, expanded_size)
+       )}
+    end)
+  end
+
+  defp size_of(module_id, {module_id, width, height}), do: [width: width, height: height]
+  defp size_of(_module_id, _expanded), do: []
 
   # Zoom is a parameter, not a mode: `?x_from=12&x_to=30` is the chart of the
   # run between those two moments, and a link holding it can be sent to somebody
@@ -1528,6 +1593,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # recognises anything still ends.
   defp cap(nil, setup), do: Setup.max_total_steps(setup) || Monty.Studio.Run.default_steps()
   defp cap(asked, _setup), do: asked
+
+  # What this page will actually run, said beside the Run button. A link carries
+  # a slice of the experiment (`?episodes=1&steps=3`) and every later run from
+  # that page keeps it, so a page that ran a fiftieth of a config without saying
+  # so is a page that looks like the experiment stopped early by itself.
+  defp budget_note(steps, nil),
+    do: "up to #{steps} steps per episode · every episode of the config"
+
+  defp budget_note(steps, 1), do: "up to #{steps} steps per episode · one episode only"
+
+  defp budget_note(steps, episodes),
+    do: "up to #{steps} steps per episode · #{episodes} episodes only"
 
   # `?episodes=N`: a slice of the experiment, for when the whole of it — every
   # object in every rotation — is more than a person wants to wait for now.

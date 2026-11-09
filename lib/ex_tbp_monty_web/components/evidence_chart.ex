@@ -17,6 +17,10 @@ defmodule ExTbpMontyWeb.EvidenceChart do
 
   attr :module_id, :string, required: true
   attr :chart, :map, required: true
+  # Expanded is the chart filling the screen rather than its cell in the grid.
+  # It is the card's state, not the chart's: the picture is the same run, drawn
+  # in the same units, and only the box it is drawn into changes.
+  attr :expanded, :boolean, default: false
 
   def evidence_chart(assigns) do
     ~H"""
@@ -45,17 +49,34 @@ defmodule ExTbpMontyWeb.EvidenceChart do
 
     <figure
       id={"chart-#{@module_id}"}
-      class="relative rounded-field border border-base-300 bg-base-100 p-2"
+      class={
+        [
+          "relative rounded-field border border-base-300 bg-base-100 p-2",
+          # Full screen is the chart's own size, not the card's: a card filling the
+          # window around a 960x300 ribbon is a small chart with a lot of padding,
+          # which is what "full screen" looked like before. The figure takes the
+          # card's height and the plot takes what the caption and the legend leave.
+          @expanded && "flex h-full min-h-0 flex-col"
+        ]
+      }
     >
-      <figcaption class="flex items-baseline justify-between px-0.5 pb-1 font-mono text-[11px] text-base-content/60">
+      <figcaption class={[
+        "flex items-baseline justify-between px-0.5 pb-1 font-mono text-[11px] text-base-content/60",
+        @expanded && "pr-8"
+      ]}>
         <span>{@module_id}</span>
         <span :if={@chart.mlh}>{@chart.mlh.graph_id} is the answer so far</span>
       </figcaption>
+      <%!-- The plot's own box, not the picture's shape: full screen hands the
+      chart the height the card has, and the hook tells the server how big that
+      is so the picture is drawn for it rather than stretched to fit. A stretched
+      chart squashes its own tick labels; a redrawn one keeps them square. --%>
       <svg
         id={"chart-svg-#{@module_id}"}
         phx-hook=".EvidenceChart"
         viewBox={"0 0 #{@chart.width} #{@chart.height}"}
-        class="w-full touch-none"
+        class={["w-full touch-none", @expanded && "min-h-0 flex-1"]}
+        data-expanded={to_string(@expanded)}
         role="img"
         aria-label={"evidence per object, step by step and episode by episode, for #{@module_id}"}
         data-x-min={@chart.x_min}
@@ -224,6 +245,30 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           // comparing the same stretch of the run.
           this.el.addEventListener("wheel", (event) => this.zoom(event), { passive: false })
           this.el.addEventListener("dblclick", () => this.pushEvent("zoom", { how: "all" }))
+
+          // Full screen gives the chart a box the server has no way of knowing,
+          // so the box is measured here and sent: the picture is then drawn for
+          // it, at the reader's own screen size, instead of being a shape made
+          // for the grid stretched into a screen.
+          this.measured = null
+          this.measure()
+          window.addEventListener("resize", () => this.measure())
+        },
+
+        // Only an expanded chart has a box of its own to report; in the grid the
+        // chart decides its own height from its shape, and asking the server to
+        // match that would be a circle. The same size is not sent twice, so a
+        // step that redraws the chart does not ask again for what it already has.
+        measure() {
+          if (this.el.dataset.expanded !== "true") return
+
+          const box = this.el.getBoundingClientRect()
+          const size = [Math.round(box.width), Math.round(box.height)]
+          if (size[0] < 200 || size[1] < 120) return
+          if (this.measured && this.measured[0] === size[0] && this.measured[1] === size[1]) return
+
+          this.measured = size
+          this.pushEvent("chart-size", { module: this.el.id.replace("chart-svg-", ""), width: size[0], height: size[1] })
         },
 
         // The step under the pointer stays under it while the window shrinks:
@@ -255,6 +300,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         // has left the chart hides it.
         updated() {
           this.tooltip = this.el.parentElement.querySelector("[data-chart-tooltip]")
+          this.measure()
           if (this.pointer === null) return this.hide()
 
           this.hover(this.pointer)
