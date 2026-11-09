@@ -79,9 +79,17 @@ defmodule ExTbpMonty.MixProject do
   # code. The desktop entry point runs in its own BEAM (`src-tauri` starts it),
   # `ExTbpMonty.Release` is a task run from a release, and `ColocatedCSS` is a
   # macro whose body is a marker. None of them has a caller inside a test run.
+  #
+  # `Mix.Tasks.*` is the same fact one step further out: those are entry points a
+  # person or CI invokes from the shell (`mix monty.module_map.verify`,
+  # `mix monty.config.snapshots`, `mix lint.sobelow`), each in its own OS process,
+  # so a test VM can never call them. CI runs them — as commands, and their exit
+  # codes are gates — but they are not measured by a coverage run any more than a
+  # shell script would be.
   defp coverage_ignored do
     [
       ~r/^Monty\.Test\./,
+      ~r/^Mix\.Tasks\./,
       ExTbpMonty.Desktop.Application,
       ExTbpMonty.Release,
       ExTbpMontyWeb.ColocatedCSS
