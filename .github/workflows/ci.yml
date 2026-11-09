@@ -129,6 +129,7 @@ jobs:
       # toolchain. The script is a no-op where one is already installed.
       - run: scripts/install-rust.sh
       - run: mix deps.get
+      - run: scripts/build-nifs.sh
       - run: mix lint
 
   # `mix test --partitions 4` hands each runner a slice of the test *files*, the
@@ -196,6 +197,12 @@ jobs:
       # toolchain. The script is a no-op where one is already installed.
       - run: scripts/install-rust.sh
       - run: mix deps.get
+
+      # The one artefact a restored `_build` cannot be trusted with: `mix
+      # compile` believes a cached tree is up to date and never reruns the
+      # rustler compiler, so a tree without `priv/native/*.so` keeps every test
+      # that touches the accelerators failing. See the script.
+      - run: scripts/build-nifs.sh
 
       # Run history is stored, so the suite needs its table.
       - name: Prepare the database
@@ -287,6 +294,7 @@ jobs:
       # toolchain. The script is a no-op where one is already installed.
       - run: scripts/install-rust.sh
       - run: mix deps.get
+      - run: scripts/build-nifs.sh
 
       # The four exports, side by side in cover/ under the names the partitions
       # wrote — which is what both steps below expect to find there.
@@ -355,6 +363,7 @@ jobs:
       # toolchain. The script is a no-op where one is already installed.
       - run: scripts/install-rust.sh
       - run: mix deps.get
+      - run: scripts/build-nifs.sh
       - run: mix dialyzer
 
   image-amd64:
