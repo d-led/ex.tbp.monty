@@ -618,6 +618,24 @@ defmodule ExTbpMontyWeb.StudioComponents do
                   height={@chart.height}
                   fill="var(--chart-plot, #fafafa)"
                 />
+                <%!-- The plot as something to click, without a hook: a column per
+                forty-eighth of the width, each carrying the step it stands for,
+                so a click is an ordinary LiveView event. It sits under the bands
+                and the lines, and those are click-through, so a mark still shows
+                its tooltip and a click in the gap still lands here. --%>
+                <g id="replay-chart-columns">
+                  <rect
+                    :for={column <- chart_columns(@chart)}
+                    id={column.id}
+                    x={column.x}
+                    y="0"
+                    width={column.width}
+                    height={@chart.height}
+                    fill="transparent"
+                    phx-click="replay_seek"
+                    phx-value-step={column.step}
+                  />
+                </g>
                 <%!-- Which episode each stretch of the run is: evidence restarts at
             zero at every boundary, so the bands are what makes the rhythm
             countable. Each wears the colour of the object its episode was about
@@ -633,6 +651,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
                   fill-opacity="0.08"
                   class="episode-band"
                   data-episode={band.episode}
+                  pointer-events="none"
                 />
                 <%!-- Where one episode ends and the next begins, ruled as well as
             tinted: two episodes of the same object are one colour, and the
@@ -690,6 +709,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
                     stroke-width="1.5"
                     stroke-linejoin="round"
                     vector-effect="non-scaling-stroke"
+                    pointer-events="none"
                   />
                   <%!-- A mark per drawn step, each carrying its own sentence in a
                   `<title>`: the browser shows that on hover, so the readout needs
@@ -1196,6 +1216,26 @@ defmodule ExTbpMontyWeb.StudioComponents do
   # three hundred and twenty units of chart, so a hover was answered by scanning
   # seven thousand entries to name the one under the cursor, and the entries
   # themselves were seven hundred kilobytes in the page's own attributes.
+  # The plot cut into columns a click can land in. Forty-eight is as fine a
+  # choice as the eye can point at on a plot this wide, and it is the step at the
+  # column's middle that a click means, because a click is a request to look
+  # there rather than a measurement.
+  @chart_columns 48
+
+  defp chart_columns(chart) do
+    span = max(chart.to - chart.from, 1)
+    width = chart.width / @chart_columns
+
+    for index <- 0..(@chart_columns - 1) do
+      %{
+        id: "replay-column-#{index}",
+        x: Float.round(index * width, 2),
+        width: Float.round(width, 2),
+        step: chart.from + round((index + 0.5) / @chart_columns * span)
+      }
+    end
+  end
+
   # One mark per drawn point, each with the sentence a hover shows. The sentence
   # is built here rather than in the browser because it is a sentence about the
   # data — "mug · #1337 · 16.53" — and the page that says it should be the one

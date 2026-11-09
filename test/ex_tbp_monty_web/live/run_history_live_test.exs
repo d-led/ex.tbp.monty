@@ -180,6 +180,21 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   # The write at an episode boundary rewrites the run's transcript, so it can
   # take longer than the page's idea of a slow step. A run in that state is
   # working, not stalled, and the page has to be able to say which.
+  # The plot is a set of click targets before it is a picture: every interaction
+  # the hook used to capture is an ordinary LiveView event now, so what a click
+  # means is testable without a browser.
+  describe "clicking the plot" do
+    test "seeks to the step under the pointer, with no hook involved", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert has_element?(view, "#replay-chart-columns #replay-column-47")
+
+      html = view |> element("#replay-column-47") |> render_click()
+
+      assert html =~ "step 1"
+    end
+  end
+
   describe "a run that is writing an episode back" do
     test "says it is saving rather than that it is not progressing", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
