@@ -229,9 +229,16 @@ jobs:
       # each failing test named and its line linked, and a summary of the
       # quarter's counts. `if: always()` because a failed partition is the one
       # whose results somebody needs.
+      #
+      # `continue-on-error` because this step is a publisher, not a verdict: on
+      # 2026-11-09 it died right after "Listing all files tracked by git" with
+      # the suite's own "523 passed" a few lines above it, and the quarter went
+      # red for it. The retry below decides instead - and a publisher that is
+      # really broken fails there, so the job still says so.
       - name: Publish this partition's results
         id: publish
         if: always()
+        continue-on-error: true
         uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           # Not `test n/4`: that is the job's own check, and two checks with one
@@ -255,12 +262,12 @@ jobs:
       # reviewer. A publisher that is really broken fails twice and the job says
       # so.
       #
-      # `failure()` is not decoration: a step `if` that names no status function
-      # implies `success()`, so on 2026-11-09 the retry this exists for was
-      # itself skipped - the job failing while the suite passed is what it is
-      # here to prevent.
+      # `always()` is not decoration: a step `if` that names no status function
+      # implies `success()`. `steps.publish.outcome` is the attempt's own
+      # result even though `continue-on-error` keeps it from failing the job,
+      # so this reads "the publisher crashed, the suite was green".
       - name: Publish this partition's results, a second time
-        if: failure() && steps.publish.outcome == 'failure' && steps.test.outcome == 'success'
+        if: always() && steps.publish.outcome == 'failure' && steps.test.outcome == 'success'
         uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: test results ${{ matrix.partition }}/4 (second attempt)
