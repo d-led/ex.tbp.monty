@@ -46,9 +46,27 @@ defmodule Monty.Studio.Panel do
 
   defp epochs(setup), do: "train #{setup.epochs.train} · eval #{setup.epochs.eval}"
 
+  # "13/14" alone asks a question and leaves the reader with it: which one, and
+  # does it matter? The answer is always one of three, and each is short. The
+  # world is Monty's own Python simulator rather than a missing module; the
+  # episode loop is what `Monty.Runtime.Step` and `Monty.Studio.Run` do instead;
+  # and a class nobody has written is the one that stops a run, which the
+  # findings then name — so this says only what the fraction leaves out.
   defp ported(setup) do
     %{implemented: implemented, total: total} = Setup.ported(setup)
-    "#{implemented}/#{total}"
+    %{carried: carried, shell: shell, unwritten: unwritten} = Setup.blocking(setup)
+
+    ["#{implemented}/#{total}" | reasons(carried, shell, unwritten)]
+    |> Enum.join(" · ")
+  end
+
+  defp reasons(carried, shell, unwritten) do
+    [
+      carried != [] && "the world is Monty's Python",
+      shell != [] && "the episode loop is this app's",
+      unwritten != [] && "#{Enum.map_join(unwritten, ", ", & &1.class)} is not written here"
+    ]
+    |> Enum.filter(&is_binary/1)
   end
 
   # The memory a run starts from, named the way Monty's own panel names it: the
