@@ -139,7 +139,9 @@ defmodule Monty.Studio.RunStream do
 
     :ets.insert(@table, {{run_id, position}, step.entry, moment})
 
-    if step.line, do: say(run_id, step.line)
+    # A step's line is built from its own entry here, so it is always there: the
+    # file and the page are told the same words.
+    say(run_id, step.line)
 
     broadcast(run_id, {:step, announcement(step, frames_of(step, images))})
     {:noreply, %{state | held: Map.put(state.held, run_id, position + 1)}}

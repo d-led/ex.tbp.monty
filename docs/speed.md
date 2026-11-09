@@ -384,8 +384,8 @@ gets slower. From the record of `7339fa92-…` (140 episodes, 42 401 steps,
 ## The step's road to the page is one way (2026-11-09)
 
 A step's transcript is the experiment's record, not its work. The step takes its
-snapshot and hands it over; nothing a page draws is *made* on the step, and
-nothing a page has is *asked for* from the step.
+snapshot and hands it over; nothing a page draws is _made_ on the step, and
+nothing a page has is _asked for_ from the step.
 
 ```
 worker (Jobs.Run)                    presenter (RunStream)          reader
@@ -405,13 +405,13 @@ the far side.
 `scripts/probe_step_ledger.exs` puts a number on each term
 (`base_10simobj_surf_agent`, 15 steps):
 
-| term                            | on the step, before | on the step, now |
-| ------------------------------- | ------------------- | ---------------- |
-| beliefs read (snapshot)         | 612 µs              | 531 µs           |
-| the record's entry              | 509 µs              | —                |
-| the log line                    | 117 µs              | —                |
-| centre view                     | 57 µs               | 161 µs           |
-| the cast (what the copy costs)  | 541 µs              | 543 µs           |
+| term                           | on the step, before | on the step, now |
+| ------------------------------ | ------------------- | ---------------- |
+| beliefs read (snapshot)        | 612 µs              | 531 µs           |
+| the record's entry             | 509 µs              | —                |
+| the log line                   | 117 µs              | —                |
+| centre view                    | 57 µs               | 161 µs           |
+| the cast (what the copy costs) | 541 µs              | 543 µs           |
 
 The presenter now builds the entry and the line from the report in **90 µs**.
 The centre's and the beliefs' figures move by ±100 µs between runs — they are
