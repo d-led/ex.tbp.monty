@@ -28,10 +28,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker.Hypothes
   @spec count(t()) :: non_neg_integer()
   def count(%__MODULE__{mask: mask}), do: length(mask)
 
-  defp indices_where(mask, wanted) do
-    mask
-    |> Enum.with_index()
-    |> Enum.filter(fn {value, _index} -> value == wanted end)
-    |> Enum.map(fn {_value, index} -> index end)
-  end
+  # One pass with the index carried along, rather than `with_index` making a
+  # tuple for every entry so that `filter` can throw most of them away: a module
+  # asks both questions of every graph, every step, and the mask is one entry
+  # per hypothesis.
+  defp indices_where(mask, wanted), do: collect(mask, wanted, 0, [])
+
+  defp collect([], _wanted, _index, found), do: :lists.reverse(found)
+
+  defp collect([value | rest], wanted, index, found) when value == wanted,
+    do: collect(rest, wanted, index + 1, [index | found])
+
+  defp collect([_value | rest], wanted, index, found),
+    do: collect(rest, wanted, index + 1, found)
 end
