@@ -279,40 +279,54 @@ Two vehicles, both keeping the Elixir reference and its parity tests:
 **This is an open decision.** It is written down here rather than half-made in
 the code.
 
-## Measured 2026-11-09: the crossing is half a step, the arithmetic is 1.4 %
+## Measured 2026-11-09: the cost is spread, not concentrated
 
 `MIX_ENV=test mix run scripts/probe_step_profile.exs` — `tprof`, `rootset: :all`,
-one processed step, 497 ms as the step timed itself:
+one processed step, 497 ms as the step timed itself.
 
-| function                                                           | calls   | scheduler time | share      |
-| ------------------------------------------------------------------ | ------- | -------------- | ---------- |
-| `gen:do_call/4`                                                    | 15      | 314 ms         | **27.8 %** |
-| `gen_server:decode_msg/4`                                          | 39      | 135 ms         | **11.9 %** |
-| `erlang:garbage_collect/0`                                         | 1       | 129 ms         | 11.4 %     |
-| `Enum.map/2`'s own closure                                         | 306 052 | 96 ms          | 8.5 %      |
-| `Enum.take_list/2`, `with_index_list/2`, `filter_list/2`           | 360 822 | 70 ms          | 6.2 %      |
-| the NIF answer read back (`decode` comprehension + `decode_one/1`) | 228 446 | 46 ms          | 4.1 %      |
-| `Monty.Geometry.dot/2`                                             | 57 888  | 12 ms          | **1.05 %** |
-| `Monty.Geometry.transpose/1`                                       | 12 976  | 3.5 ms         | 0.31 %     |
+**Read the allocation column, not the time one.** `tprof`'s `call_time` is entry
+to exit, so a blocking `GenServer.call` carries the callee's whole run: the same
+second appears again under everything the callee called. The proof is in the same
+report — `gen:do_call/4` shows 314 ms there and **9 821 words allocated, 0.04 %**
+here. It measures the wait, not the work. Wall clock is for the step's own figure
+(`duration_us`), on a quiet box.
 
-Three things this settles:
+Self-allocated words, one step — what is actually built:
 
-- **A faster matrix multiply cannot move a step.** Every `Geometry` call
-  together is ~1.4 %; `dot/2` is 0.2 µs a call. Handing `transpose` + `mul` to a
-  kernel would buy a rounding error, and `batch_rotate_pose_vectors/2` — the
-  batch API that looked like the obvious target — **has no production caller at
-  all**, only its test. Measured, not assumed: it was written down here as the
-  next kernel and that was wrong.
-- **"One crossing" above is the right direction, and this is its size**: the
-  two `gen` entries are 39 % and the collection that follows them is 11 %. Half
-  the step is state moving between processes, not work being done.
-- **The kernels already answer in the wrong shape.** `decode_one/1` is 112 580
-  calls a step: a binary comes back and the port boxes its values one at a time.
-  Answering in the form the module keeps (as `displaced_locations/3` already
-  does for locations) is worth more than any arithmetic inside the kernel.
+| function                                                                       | calls   | words     | share      |
+| ------------------------------------------------------------------------------ | ------- | --------- | ---------- |
+| reading a kernel's answer back (`MatcherNif.decode_one/1` + its comprehension) | 164 126 | 1 248 498 | **5.66 %** |
+| `Geometry.dot/2` + `transpose/1` + `mul/2`                                     | 90 160  | 883 648   | **4.00 %** |
+| `EvidenceSlopeTracker.write_slot/5`                                            | 19 306  | 463 224   | 2.10 %     |
+| `Enum.map`'s closure                                                           | 254 588 | 457 154   | 2.07 %     |
+| `Hypotheses.gather/3`'s closure                                                | 64 320  | 424 512   | 1.92 %     |
+| `Enum.with_index_list/2`                                                       | 83 676  | 418 080   | 1.89 %     |
+| `Enum.take_list/2`                                                             | 161 272 | 289 936   | 1.31 %     |
 
-So the order is: fewer and narrower crossings first, then the answer shape, and
-only then the arithmetic.
+(`gen_server:loop/5`'s 71.5 % is a process's whole life, its children included —
+a root, not a function.)
+
+What this settles:
+
+- **There is no hot spot to kernel.** The largest single item is 5.7 %, and it is
+  _our own_ readback: a kernel answers in a binary and the port boxes each value
+  one at a time. `Geometry` together is 4 %, `transpose/1` costing 22 words for a
+  3x3 — and `batch_rotate_pose_vectors/2`, which this file named as the next
+  kernel, **has no production caller at all**, only its test. Measured, not
+  assumed; that claim was wrong.
+- **The readback is ten decodes of one column.** `decode_one/1` runs 80 420 times
+  a step and the hypothesis count is 6 432: the same evidence column is decoded
+  at about ten callers per step, each wanting a different statistic (max, second
+  argmax, sum, a zip with indices, the logger's copy). Keeping the column as
+  bytes is right for the kernels; the waste is decoding it afresh at each reader.
+- **Everything else is list plumbing** — `map`, `with_index`, `take`, `gather` —
+  a couple of per cent each, and dozens of passes.
+
+So the remaining cost has the shape the section above already names: a step is
+~500 ms of many small passes over the hypothesis set, not one expensive function.
+The change that matters carries a whole phase across once and hands back the
+columns the module keeps — starting with **one decode per graph per step**,
+threaded to its readers, instead of ten.
 
 ## Acceptance for any speed change
 
