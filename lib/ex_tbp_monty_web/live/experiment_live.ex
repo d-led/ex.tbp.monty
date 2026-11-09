@@ -183,10 +183,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp run_state_class("failed"), do: "badge-error"
   defp run_state_class(_other), do: "badge-ghost"
 
-  # How long the stepping took. A run that has not finished has no answer yet —
-  # a number here would be a number about a different question.
-  defp run_duration(%{duration_us: nil}), do: "—"
-  defp run_duration(%{duration_us: us}), do: Duration.humanize(us)
+  # How long the run has been going, or how long it took. A row that has not
+  # finished has no stored duration — that is written when it closes — and a
+  # nought there was read as "took no time" about a run that was stepping.
+  defp run_duration(run), do: Duration.of_run(run)
 
   # What a page can be set here, read off the run's own record: the rest is the
   # run page's business.
@@ -1118,6 +1118,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
       |> remember(episode, step, Map.get(event, :beliefs, %{}))
       |> assign(centre: Map.get(event, :centre))
+      |> tick()
     end
   end
 
@@ -1132,6 +1133,24 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> push(nil, "the run failed: #{inspect(reason)}", :error)
     |> reconcile()
     |> refresh_runs()
+  end
+
+  # A row of a run that is still going has no stored duration — the record's is
+  # written when it closes — so the elapsed time goes into the row itself as the
+  # steps arrive. It has to be the row: a comprehension re-renders its body when
+  # the *item* changes, and a number worked out in the body from something else
+  # would stand still, which is why a running run's "took" used to freeze.
+  defp tick(%{assigns: %{run_id: nil}} = socket), do: socket
+
+  defp tick(socket) do
+    runs =
+      Enum.map(socket.assigns.runs, fn run ->
+        if run.id == socket.assigns.run_id,
+          do: %{run | duration_us: Duration.elapsed_us(run)},
+          else: run
+      end)
+
+    assign(socket, runs: runs)
   end
 
   defp refresh_runs(%{assigns: %{opened: %{name: name}}} = socket) do

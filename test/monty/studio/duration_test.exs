@@ -32,7 +32,31 @@ defmodule Monty.Studio.DurationTest do
     assert Duration.humanize(3_930_000_000) == "1h 5min"
   end
 
-  test "a run that was never timed still says something" do
-    assert Duration.humanize(nil) == "0µs"
+  test "a run that was never timed says nothing rather than nought" do
+    # A table that printed "0µs" for an untimed run said "this took no time"
+    # about a run that was stepping.
+    assert Duration.humanize(nil) == "—"
+  end
+
+  describe "a run's own duration" do
+    test "is the elapsed time while it is still going" do
+      started = DateTime.add(DateTime.utc_now(), -90, :second)
+
+      # `duration_us` is written when the run closes, so a running row holds the
+      # column's default nought: the answer is how long ago it started.
+      assert Duration.of_run(%{status: "running", started_at: started, duration_us: 0}) ==
+               "1min 30s"
+    end
+
+    test "is what the record says once it has stopped" do
+      started = DateTime.add(DateTime.utc_now(), -3600, :second)
+
+      assert Duration.of_run(%{status: "finished", started_at: started, duration_us: 38_000_000}) ==
+               "38s"
+    end
+
+    test "is a dash for a run with no start and no duration" do
+      assert Duration.of_run(%{status: "failed", started_at: nil, duration_us: 0}) == "—"
+    end
   end
 end

@@ -212,6 +212,27 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       refute has_element?(view, "#experiment-run-#{elsewhere.id}")
     end
 
+    test "a run that is still going says how long it has been going", %{
+      conn: conn,
+      queued: queued
+    } do
+      # `duration_us` is written when a run closes, so the column holds the
+      # schema's nought while the run steps — and the table printed it as "0µs"
+      # for a run hours into its work.
+      {1, _} =
+        ExTbpMonty.Repo.update_all(
+          from(r in Monty.Studio.RunHistory.Run, where: r.id == ^queued.id),
+          set: [started_at: DateTime.add(DateTime.utc_now(), -90, :second)]
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      row = view |> element("#experiment-run-#{queued.id}") |> render()
+
+      assert row =~ "1min 30s"
+      refute row =~ "0µs"
+    end
+
     test "says so when there is nothing yet", %{conn: conn} do
       # An experiment that exists and simply has no runs. The page reads the run
       # history, so "nothing yet" has to mean it: this file starts real runs in

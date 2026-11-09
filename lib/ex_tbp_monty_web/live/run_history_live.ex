@@ -809,7 +809,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                 {RunHistory.steps_run(run)}
               </td>
               <td class="text-right font-mono text-xs whitespace-nowrap">
-                {duration(run.duration_us)}
+                {Duration.of_run(run)}
               </td>
               <%!-- What the run concluded, when it concluded something other
               than using up its budget: the step count alone cannot tell a run
@@ -960,7 +960,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         </div>
         <p class="text-xs text-base-content/60">
           started <ExTbpMontyWeb.LocalTime.local_time at={@run.inserted_at} style={:clock} />
-          · {RunHistory.steps_run(@run)} steps in {episodes_label(@run)} · {duration(@run.duration_us)}
+          · {RunHistory.steps_run(@run)} steps in {episodes_label(@run)} · {Duration.of_run(@run)}
           <span :if={RunHistory.ending(@run)} id="run-ending">
             · {RunHistory.ending(@run)}
           </span>
@@ -1654,8 +1654,6 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp status_class("finished"), do: "badge-success"
   defp status_class("failed"), do: "badge-error"
   defp status_class(_other), do: "badge-ghost"
-
-  defp duration(microseconds), do: Duration.humanize(microseconds)
 
   # How long a run has been quiet, in the unit that answers the question asked.
   defp quiet(run), do: Duration.humanize(RunHistory.quiet_for(run) * 1_000_000)
