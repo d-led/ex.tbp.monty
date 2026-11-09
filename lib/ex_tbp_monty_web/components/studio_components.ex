@@ -681,9 +681,17 @@ defmodule ExTbpMontyWeb.StudioComponents do
                 click to look at that episode alone. A range, unlike the columns
                 above, which can only say where a click landed — and the reason
                 this exists is that zooming is the one thing a click can ask for
-                that the plot could not answer without a hook. --%>
+                that the plot could not answer without a hook.
+
+                Only where it is wide enough to hit. A run of eighty-three
+                episodes across three hundred and twenty units is four units an
+                episode, so drawing every handle painted a ribbon of eighty-three
+                coloured blocks — a colour soup that said nothing and could not be
+                clicked. Wide bands keep their handle; narrow ones keep their tint
+                and their rule, and a reader zooms until the handles appear. --%>
                 <rect
                   :for={band <- @chart.bands}
+                  :if={band.width >= 6}
                   id={"replay-episode-#{band.episode}"}
                   x={band.x}
                   y={@chart.height - 6}
@@ -700,10 +708,12 @@ defmodule ExTbpMontyWeb.StudioComponents do
                 </rect>
                 <%!-- Where one episode ends and the next begins, ruled as well as
             tinted: two episodes of the same object are one colour, and the
-            boundary between them is still a step the chart must show. --%>
+            boundary between them is still a step the chart must show. Ruled only
+            where the band is wide enough for the rule to mean a boundary rather
+            than a hatch of eighty-three lines four units apart. --%>
                 <line
                   :for={band <- @chart.bands}
-                  :if={band.x > 0}
+                  :if={band.x > 0 and band.width >= 6}
                   x1={band.x}
                   y1="0"
                   x2={band.x}
@@ -812,6 +822,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
               class="text-center text-[11px] text-base-content/50"
             >
               drag to zoom · shift-drag to pan · wheel to zoom · double-click for the whole run
+              · each band is one episode, in the colour of the object it was about
             </p>
           </div>
         </div>
