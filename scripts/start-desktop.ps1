@@ -167,11 +167,35 @@ try {
         return $missing
     }
 
-    if (Get-MissingKernels 'priv/native') {
+    if (Get-MissingKernels "_build/$env:MIX_ENV/lib/ex_tbp_monty_core/priv/native") {
         Invoke-Step 'building the native kernels (a cached build can be missing some)' {
             mix compile --force
         }
     }
+
+    # Rustler writes a crate's library into the *package's* `priv/native`. On
+    # Unix the build directory reaches that directory through a link; on Windows
+    # it holds a copy, taken when the package was first compiled, so a library
+    # built afterwards sits in the package and nowhere the release is assembled
+    # from - which is how a release came to be checked and found to carry
+    # neither `kd_tree_nif.dll` nor `matcher_nif.dll`. Copied across per crate,
+    # before the release is built.
+    function Sync-Kernels {
+        $built = 'packages/ex_tbp_monty_core/priv/native'
+        $wanted = "_build/$env:MIX_ENV/lib/ex_tbp_monty_core/priv/native"
+
+        New-Item -ItemType Directory -Force -Path $wanted | Out-Null
+
+        $crates = Get-ChildItem $crate_root -Directory |
+            Where-Object { Test-Path (Join-Path $_.FullName 'Cargo.toml') }
+        foreach ($crate in $crates) {
+            foreach ($suffix in '.dll', '.so') {
+                $file = Join-Path $built "$($crate.Name)$suffix"
+                if (Test-Path $file) { Copy-Item $file $wanted -Force }
+            }
+        }
+    }
+    Sync-Kernels
     Invoke-Step 'checking the asset toolchain (installs it once, then finds it)' {
         mix assets.install --if-missing
     }
