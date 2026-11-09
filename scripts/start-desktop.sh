@@ -192,9 +192,14 @@ kernels_missing() {
   done
 }
 
-if [ -n "$(kernels_missing priv/native)" ]; then
+# Asking where rustler writes, not where the application's copy of it lives: the
+# crates are built by the modules that `use Rustler`, which are in
+# `ex_tbp_monty_core`, and `mix compile --force` recompiles this project and
+# leaves the dependency's beams alone - so it answered "up to date" for a tree
+# whose libraries were the thing that was missing.
+if [ -n "$(kernels_missing packages/ex_tbp_monty_core/priv/native)" ]; then
   run "building the native kernels (a cached build can be missing some)" \
-    env MIX_ENV=desktop mix compile --force
+    env MIX_ENV=desktop mix deps.compile ex_tbp_monty_core --force
 fi
 
 run "checking the asset toolchain (installs it once, then finds it)" \

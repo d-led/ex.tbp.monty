@@ -169,7 +169,12 @@ try {
 
     if (Get-MissingKernels "_build/$env:MIX_ENV/lib/ex_tbp_monty_core/priv/native") {
         Invoke-Step 'building the native kernels (a cached build can be missing some)' {
-            mix compile --force
+            # Asked of the package, not of this project. The crates are built by
+            # the modules that `use Rustler`, and those are in `ex_tbp_monty_core`,
+            # a dependency here: `mix compile --force` recompiles this project's
+            # 168 modules, prints nothing about cargo, and leaves the missing
+            # libraries exactly as missing as they were.
+            mix deps.compile ex_tbp_monty_core --force
         }
     }
 
