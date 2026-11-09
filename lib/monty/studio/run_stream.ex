@@ -12,6 +12,9 @@ defmodule Monty.Studio.RunStream do
 
     * the log file, which this process appends the step's line to — a write per
       step, on the caller's time before;
+    * the record's own shape, which this process builds from the report — the
+      entry a row keeps and the text a log line prints are derived here, so a
+      step spends nothing on either;
     * the pictures, which this process encodes — a JPEG per sensor per step;
     * the database, which a step does not touch at all. `studio_runs` gets the
       transcript at every episode boundary and once when the run settles.
@@ -56,19 +59,20 @@ defmodule Monty.Studio.RunStream do
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
   @doc """
-  Hands one step over: what it reported, what the sensors saw, and enough to
-  draw it.
+  Hands one step over: what it reported, what the modules believed, and what the
+  sensors saw.
 
-  The step is a map with `:entry` (what the record keeps), `:observations` and
-  `:sensor_ids` (what the pictures and the replay's scene are drawn from),
-  `:number`, `:episode`, `:line`, `:beliefs` and `:centre` (what a page draws).
+  The report is a map with `:info` (the coordinator's report of the step), `:at`
+  (the moment it was taken), `:episode`, `:beliefs`, `:observations`,
+  `:sensor_ids` and `:centre`. Everything a page or a row needs is derived from
+  those: the entry, its line, its pictures and its scene.
 
   `cast`, deliberately: a step that waited for this process would be a step
   waiting for a file write and a JPEG, and the point of the arrangement is that
   it does not.
   """
   @spec publish(binary(), map()) :: :ok
-  def publish(run_id, step), do: GenServer.cast(__MODULE__, {:publish, run_id, step})
+  def publish(run_id, report), do: GenServer.cast(__MODULE__, {:publish, run_id, report})
 
   @doc """
   A run's steps in the order it took them, as the pair a record keeps.
@@ -127,7 +131,8 @@ defmodule Monty.Studio.RunStream do
   end
 
   @impl true
-  def handle_cast({:publish, run_id, step}, state) do
+  def handle_cast({:publish, run_id, report}, state) do
+    step = drawn(report)
     images = images_of(step)
     moment = RunLog.moment(step.number, step.observations, images)
     position = Map.get(state.held, run_id, 0)
@@ -158,6 +163,20 @@ defmodule Monty.Studio.RunStream do
   def handle_call({:clear, run_id}, _from, state) do
     :ets.match_delete(@table, {{run_id, :_}, :_, :_})
     {:reply, :ok, %{state | held: Map.delete(state.held, run_id)}}
+  end
+
+  # What a report becomes once the record's shape and the log's text are known.
+  #
+  # A step that wrote its own entry and its own line spent about 600 us a step on
+  # the two, and carried the beliefs twice — as the structs a page draws and as
+  # the string-keyed copy a row keeps — because both travelled. What is derived
+  # here travels once.
+  defp drawn(%{info: info, at: at, episode: episode, beliefs: beliefs} = report) do
+    entry = RunLog.entry(info, beliefs, episode: episode, at: at)
+
+    report
+    |> Map.drop([:info, :at])
+    |> Map.merge(%{entry: entry, line: RunLog.line(entry), number: info.step})
   end
 
   # One encoding per sensor per step, shared by the picture a page draws and the

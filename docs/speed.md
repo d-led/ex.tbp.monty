@@ -381,6 +381,46 @@ gets slower. From the record of `7339fa92-…` (140 episodes, 42 401 steps,
   `0..n-1` as a list, so any per-step caller of either gets slower as the graph
   grows.
 
+## The step's road to the page is one way (2026-11-09)
+
+A step's transcript is the experiment's record, not its work. The step takes its
+snapshot and hands it over; nothing a page draws is *made* on the step, and
+nothing a page has is *asked for* from the step.
+
+```
+worker (Jobs.Run)                    presenter (RunStream)          reader
+  step/1
+    ── beliefs snapshot ─┐
+    ── world's own obs ──┼── one cast ──→ entry, line, PNGs, ETS, ──→ pub-sub
+    ── centre view ──────┤                 log file (in order)         → page
+    ── report ───────────┘
+```
+
+The rule is one cast and no call back. Three things can only be taken by the
+step and are therefore snapshotted there — the beliefs (a later read is a later
+state), the world's own observation (the world has stepped again by the time a
+presenter runs) and the centre view's geometry. Everything else is derived on
+the far side.
+
+`scripts/probe_step_ledger.exs` puts a number on each term
+(`base_10simobj_surf_agent`, 15 steps):
+
+| term                            | on the step, before | on the step, now |
+| ------------------------------- | ------------------- | ---------------- |
+| beliefs read (snapshot)         | 612 µs              | 531 µs           |
+| the record's entry              | 509 µs              | —                |
+| the log line                    | 117 µs              | —                |
+| centre view                     | 57 µs               | 161 µs           |
+| the cast (what the copy costs)  | 541 µs              | 543 µs           |
+
+The presenter now builds the entry and the line from the report in **90 µs**.
+The centre's and the beliefs' figures move by ±100 µs between runs — they are
+allocated right after the cast's copy, so they carry its collection — and on a
+step of 76 ms none of this is a speed win. What the split buys is a boundary
+that cannot grow: the message used to carry the beliefs twice, as the structs a
+page draws and as the string-keyed copy a row keeps, and a step that formatted
+its own text had a second definition of what a step looks like.
+
 ## Acceptance for any speed change
 
 1. `mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8 --no-record`

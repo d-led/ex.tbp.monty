@@ -108,59 +108,39 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
   # A step handed to the stream, the way a worker hands one over: the worker does
   # not write the row per step, so this is the only place the page can learn of
-  # a step until the run's next episode boundary.
+  # a step until the run's next episode boundary. The entry and the line are the
+  # stream's to derive from the report.
   defp publish(run_id, step) do
-    Monty.Studio.RunStream.publish(run_id, %{
-      entry: %{
-        "step" => step,
-        "episode" => 0,
-        "at" => Monty.Studio.RunLog.now().instant,
-        "goals" => 0,
-        "votes" => %{"sent" => 1, "used" => 1},
-        "percepts" => ["patch"],
-        "inputs" => %{"learning_module_0" => 1},
-        "actions" => 1,
-        "duration_us" => 140
-      },
-      moment: moment(step),
-      line: nil,
-      observations: %{},
-      sensor_ids: [],
-      number: step,
-      episode: 0,
-      beliefs: %{},
-      centre: nil
-    })
+    Monty.Studio.RunStream.publish(run_id, report(step, %{}))
   end
 
   # A step that says what a learning module made of it. Beliefs are what the
   # per-object chart is drawn from, so a run has that chart only once one
   # arrives — which is the state this file's records are not in.
   defp publish_beliefs(run_id, step, object) do
-    Monty.Studio.RunStream.publish(run_id, %{
-      entry: %{
-        "step" => step,
-        "episode" => 0,
-        "at" => Monty.Studio.RunLog.now().instant,
-        "goals" => 0,
-        "votes" => %{"sent" => 1, "used" => 1},
-        "percepts" => ["patch"],
-        "inputs" => %{"learning_module_0" => 1},
-        "actions" => 1,
-        "duration_us" => 140,
-        "beliefs" => %{
-          "learning_module_0" => %{"graphs" => %{object => %{"max_evidence" => 5.0}}}
-        }
+    beliefs = %{"learning_module_0" => %{"graphs" => %{object => %{"max_evidence" => 5.0}}}}
+
+    Monty.Studio.RunStream.publish(run_id, report(step, beliefs))
+  end
+
+  defp report(step, beliefs) do
+    %{
+      info: %{
+        step: step,
+        percept_ids: [:patch],
+        inputs: %{learning_module_0: 1},
+        votes: %{sent: 1, used: 1},
+        goals: 0,
+        actions: [:turn_left],
+        duration_us: 140
       },
-      moment: moment(step),
-      line: nil,
+      at: Monty.Studio.RunLog.now().instant,
+      episode: 0,
+      beliefs: beliefs,
       observations: %{},
       sensor_ids: [],
-      number: step,
-      episode: 0,
-      beliefs: %{},
       centre: nil
-    })
+    }
   end
 
   # The picture is the server's, but the gestures are the browser's: one hook

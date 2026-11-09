@@ -547,18 +547,18 @@ defmodule Monty.Studio.Jobs.Run do
     rendered = Run.rendered_observations(run) || observations
 
     # The step itself is the only thing that has `info` and `beliefs`, so the
-    # record's entry is built here — and everything else a step costs a page, the
-    # pictures included, is `RunStream`'s, handed over rather than waited for.
-    entry = RunLog.entry(info, beliefs, episode: state.episode)
-
+    # report is assembled here — and everything a page or a row makes of it, the
+    # entry and the line included, is `RunStream`'s, handed over rather than
+    # waited for. Formatting a step's line here cost 117 us a step and building
+    # its entry another 509 (10 objects, surface agent); both are this
+    # process's to do once the run has moved on.
     RunStream.publish(run_id, %{
-      entry: entry,
-      line: RunLog.line(entry),
-      observations: rendered,
-      sensor_ids: sensor_ids,
-      number: info.step,
+      info: info,
+      at: RunLog.now().instant,
       episode: state.episode,
       beliefs: beliefs,
+      observations: rendered,
+      sensor_ids: sensor_ids,
       centre: centre_view(run, info.step)
     })
 

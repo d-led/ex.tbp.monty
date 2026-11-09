@@ -267,20 +267,32 @@ defmodule Monty.Studio.RunHistoryTest do
     }
   end
 
-  # A step handed to the stream, the way a worker hands one over. The moment is
-  # the stream's to draw (`RunStream.handle_cast/2`), so what a step hands over is
-  # what its sensors saw, not a picture of it.
+  # A step handed to the stream, the way a worker hands one over. The entry the
+  # row keeps and the line the log prints are the stream's to derive
+  # (`RunStream.handle_cast/2`), so what a step hands over is what it reported and
+  # what its sensors saw.
   defp publish(run_id, step) do
     Monty.Studio.RunStream.publish(run_id, %{
-      entry: %{"step" => step, "episode" => 0, "at" => Monty.Studio.RunLog.now().instant},
-      line: nil,
-      observations: %{},
-      sensor_ids: [],
-      number: step,
+      info: report(step),
+      at: Monty.Studio.RunLog.now().instant,
       episode: 0,
       beliefs: %{},
+      observations: %{},
+      sensor_ids: [],
       centre: nil
     })
+  end
+
+  defp report(step) do
+    %{
+      step: step,
+      percept_ids: [:patch],
+      inputs: %{learning_module_0: 1},
+      votes: %{sent: 1, used: 1},
+      goals: 0,
+      actions: [:turn_left],
+      duration_us: 140
+    }
   end
 
   describe "a run that ends" do

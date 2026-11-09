@@ -31,13 +31,19 @@ defmodule Monty.Studio.RunLog do
   index here would file the first evaluation episode with the first training one
   and a chart would draw them as a single episode — a line across the boundary
   where the evidence really did restart (`Jobs.Run.start_episode/5`).
+
+  `:at` is the moment the step was taken. A step hands its report to the process
+  that writes the record (`Monty.Studio.RunStream`), so the entry is built there
+  and the moment has to travel with the report: read here instead, it would be
+  when the record was written, which is indistinguishable on a quiet run and
+  wrong on any other.
   """
   @spec entry(map(), map(), keyword()) :: map()
   def entry(info, beliefs \\ %{}, options \\ []) do
     %{
       "episode" => Keyword.get(options, :episode, 0),
       "step" => info.step,
-      "at" => now().instant,
+      "at" => Keyword.get_lazy(options, :at, fn -> now().instant end),
       "percepts" => Enum.map(info.percept_ids, &to_string/1),
       "inputs" => Map.new(info.inputs, fn {module, count} -> {to_string(module), count} end),
       "votes" => %{"sent" => info.votes.sent, "used" => info.votes.used},
