@@ -325,8 +325,23 @@ What this settles:
 So the remaining cost has the shape the section above already names: a step is
 ~500 ms of many small passes over the hypothesis set, not one expensive function.
 The change that matters carries a whole phase across once and hands back the
-columns the module keeps — starting with **one decode per graph per step**,
-threaded to its readers, instead of ten.
+columns the module keeps.
+
+**Done so far: the slope mask (`d59827f`).** `select_hypotheses/2` asked for the
+slope column, paired it with the ages and walked the pairs — a decode of one
+float per hypothesis and three list passes over the set — to decide one bit per
+hypothesis. `MatcherNif.keep_mask/7` decides it inside the kernel, which already
+has the slopes, so the column never becomes Elixir terms: `decode_one` fell from
+80 420 values a step to 67 556 (the two per-graph slope columns), and the
+`zip`/`map`/`removable` passes are gone. The Elixir path stays as the reference
+behind `native_kernels?: false` and two parity tests compare the masks exactly;
+the acceptance ladder is unchanged digit for digit.
+
+The same shape is what the rest needs: `MatcherNif.decode/1` still runs 3 286
+times a step at ~24 values each, and
+`HypothesesSelection.ids_to_retain/1`/`ids_to_remove/1` still walk the mask with
+`with_index`, `filter` and `map` — a kernel that answers the indices directly
+would remove both.
 
 ## Acceptance for any speed change
 
