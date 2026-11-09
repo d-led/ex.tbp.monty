@@ -538,6 +538,24 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert chart =~ "is the answer so far"
     end
 
+    test "the whole run comes back under the all control", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # "all" is only offered once the address names a window, which is how a
+      # reader gets here: they zoomed in first.
+      view |> element("#zoom-in") |> render_click()
+      view |> element("#zoom-all") |> render_click()
+
+      # "All" is not a window: the address stops naming one, and the chart is
+      # drawn for the whole run again.
+      assert_patch(view, ~p"/experiments/base_config_10distinctobj_dist_agent")
+      assert has_element?(view, "#chart-learning_module_0 svg")
+    end
+
     test "full screen is one chart's, and Escape leaves it", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
