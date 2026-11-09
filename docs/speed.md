@@ -279,6 +279,41 @@ Two vehicles, both keeping the Elixir reference and its parity tests:
 **This is an open decision.** It is written down here rather than half-made in
 the code.
 
+## Measured 2026-11-09: the crossing is half a step, the arithmetic is 1.4 %
+
+`MIX_ENV=test mix run scripts/probe_step_profile.exs` — `tprof`, `rootset: :all`,
+one processed step, 497 ms as the step timed itself:
+
+| function                                                           | calls   | scheduler time | share      |
+| ------------------------------------------------------------------ | ------- | -------------- | ---------- |
+| `gen:do_call/4`                                                    | 15      | 314 ms         | **27.8 %** |
+| `gen_server:decode_msg/4`                                          | 39      | 135 ms         | **11.9 %** |
+| `erlang:garbage_collect/0`                                         | 1       | 129 ms         | 11.4 %     |
+| `Enum.map/2`'s own closure                                         | 306 052 | 96 ms          | 8.5 %      |
+| `Enum.take_list/2`, `with_index_list/2`, `filter_list/2`           | 360 822 | 70 ms          | 6.2 %      |
+| the NIF answer read back (`decode` comprehension + `decode_one/1`) | 228 446 | 46 ms          | 4.1 %      |
+| `Monty.Geometry.dot/2`                                             | 57 888  | 12 ms          | **1.05 %** |
+| `Monty.Geometry.transpose/1`                                       | 12 976  | 3.5 ms         | 0.31 %     |
+
+Three things this settles:
+
+- **A faster matrix multiply cannot move a step.** Every `Geometry` call
+  together is ~1.4 %; `dot/2` is 0.2 µs a call. Handing `transpose` + `mul` to a
+  kernel would buy a rounding error, and `batch_rotate_pose_vectors/2` — the
+  batch API that looked like the obvious target — **has no production caller at
+  all**, only its test. Measured, not assumed: it was written down here as the
+  next kernel and that was wrong.
+- **"One crossing" above is the right direction, and this is its size**: the
+  two `gen` entries are 39 % and the collection that follows them is 11 %. Half
+  the step is state moving between processes, not work being done.
+- **The kernels already answer in the wrong shape.** `decode_one/1` is 112 580
+  calls a step: a binary comes back and the port boxes its values one at a time.
+  Answering in the form the module keeps (as `displaced_locations/3` already
+  does for locations) is worth more than any arithmetic inside the kernel.
+
+So the order is: fewer and narrower crossings first, then the answer shape, and
+only then the arithmetic.
+
 ## Acceptance for any speed change
 
 1. `mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8 --no-record`
