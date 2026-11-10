@@ -923,6 +923,12 @@ Two steps taken, and what each was worth:
   no longer materialised for this path at all; the public
   `get_surface_from_depth/3` still answers the image, from the same decision.
 
-What is left of the transforms is three small lists a pixel — `Geometry.apply/2`,
-`Geometry.add/2` and the tagged row — and those go when the walk moves behind the
-NIF boundary and answers `semantic_3d` as the bytes the sensor module wants anyway.
+- **The frame, destructured once.** The walk then applied the camera's 3×3 to a
+  point and added the offset per pixel — `Geometry.apply/2` and `Geometry.add/2`,
+  two more lists a pixel. The frame's three rows and its offset are read once for
+  the image now, and a pixel's row is built at its final width: **~472 900 →
+  ~290 000 reductions** a step, so **~644 500 → ~290 000 (−55 %)** for the chain.
+
+What is left is one small list a pixel — the tagged row itself — and that goes when
+the walk moves behind the NIF boundary and answers `semantic_3d` as the bytes the
+sensor module wants anyway.

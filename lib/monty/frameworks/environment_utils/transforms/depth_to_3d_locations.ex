@@ -337,8 +337,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   # of those lists was walked again by the stage after it.
   defp place_points(depth, semantic, intrinsic, frame, index, transform) do
     context = %{
-      world?: transform.world_coord and frame != nil,
-      frame: frame,
+      frame: if(transform.world_coord, do: geometry_of(frame), else: nil),
       intrinsic: intrinsic,
       rule: mask_rule(depth, semantic, index, transform),
       all?: transform.get_all_points
@@ -348,6 +347,14 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
 
     {Enum.reverse(tagged), if(context.all?, do: Enum.reverse(sensor), else: nil)}
   end
+
+  # The frame as the walk needs it: its three rows and the offset, destructured
+  # once for the whole image rather than applied and added again per pixel. `nil`
+  # is a point that stays in the sensor's own frame.
+  defp geometry_of(nil), do: nil
+
+  defp geometry_of(%{rotation: [row_0, row_1, row_2], position: position}),
+    do: {row_0, row_1, row_2, position}
 
   defp place_rows([], _semantic_rows, _row, _context, acc), do: acc
 
@@ -376,24 +383,34 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
 
   # `{tagged, sensor}`: the row `semantic_3d` keeps, and the row
   # `sensor_frame_data` keeps — the second only when every point was asked for.
+  # A pixel's place is `(x d fx, y d fy, -d)`, and in the world when the
+  # experiment reads world coordinates; the row is built once, at its final
+  # width, rather than as a point that is then extended.
   defp place_pixel(pixel, on_object, row, column, context, {tagged, sensor} = acc) do
-    # A pixel's place in the sensor's frame, and in the world when the experiment
-    # reads world coordinates — `(x d fx, y d fy, -d)`.
-    point = [
-      across(column, context.intrinsic) * pixel,
-      down(row, context.intrinsic) * pixel,
-      -pixel
-    ]
+    x = across(column, context.intrinsic) * pixel
+    y = down(row, context.intrinsic) * pixel
+    z = -pixel
 
-    placed = if context.world?, do: to_world(point, context.frame), else: point
     on_surface = mask_value(context.rule, pixel, on_object)
+    placed = place_in(context.frame, x, y, z, on_surface)
 
     tagged =
       if context.all? or on_surface != 0.0,
-        do: [placed ++ [on_surface] | tagged],
+        do: [placed | tagged],
         else: tagged
 
-    if context.all?, do: {tagged, [point ++ [on_surface] | sensor]}, else: acc
+    if context.all?, do: {tagged, [[x, y, z, on_surface] | sensor]}, else: acc
+  end
+
+  defp place_in(nil, x, y, z, on_surface), do: [x, y, z, on_surface]
+
+  defp place_in({[a1, a2, a3], [b1, b2, b3], [c1, c2, c3], [x0, y0, z0]}, x, y, z, on_surface) do
+    [
+      a1 * x + a2 * y + a3 * z + x0,
+      b1 * x + b2 * y + b3 * z + y0,
+      c1 * x + c2 * y + c3 * z + z0,
+      on_surface
+    ]
   end
 
   defp depth_image(observation, sensor_id) do
@@ -499,9 +516,6 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
         nil
     end
   end
-
-  defp to_world(point, %{rotation: rotation, position: position}),
-    do: Geometry.add(Geometry.apply(rotation, point), position)
 
   defp cam_to_world(%{rotation: rotation, position: position}) do
     placed = Enum.zip_with([rotation, position], fn [row, offset] -> row ++ [offset] end)
