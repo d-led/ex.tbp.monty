@@ -393,21 +393,28 @@ jobs:
           elixir-version: ${{ env.ELIXIR_VERSION }}
           otp-version: ${{ env.OTP_VERSION }}
 
-      # A PLT is a picture of the modules a build has, and it is keyed by the
-      # lock file — which says nothing about the code in this repository. So a
-      # commit that renames a module in `packages/` or `lib/` left the cache
-      # describing the old names, and dialyzer reported every new one as
-      # unknown: the beams in `_build` were right, the picture of them was not.
-      # The key follows the sources, so a rename rebuilds the picture.
-      - name: Cache deps, build and PLTs
+      # `deps` is keyed by the lock file and may fall back: a change to the
+      # sources fetches nothing new and reuses what it has.
+      - name: Cache deps
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: deps
+          key: ${{ runner.os }}-deps-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-deps-
+
+      # A PLT is a picture of the modules a build has. Key it by the sources
+      # *and* fall back to nothing: with a `restore-keys` prefix this job was
+      # handed the archive made before a rename, `_build` and the picture of
+      # it agreeing with each other and disagreeing with the checkout, so
+      # dialyxir called the PLT up to date and kept reporting every renamed
+      # module as unknown. A source change is a cold PLT instead.
+      - name: Cache the build and the PLTs, keyed by the sources
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            deps
             _build
             priv/plts
-          key: ${{ runner.os }}-plt-${{ hashFiles('mix.lock', 'mix.exs', 'lib/**/*.ex', 'packages/**/mix.exs', 'packages/**/lib/**/*.ex') }}
-          restore-keys: ${{ runner.os }}-plt-
+          key: ${{ runner.os }}-build-${{ hashFiles('mix.lock', 'mix.exs', 'lib/**/*.ex', 'packages/**/mix.exs', 'packages/**/lib/**/*.ex', 'packages/**/native/**/Cargo.toml', 'packages/**/native/**/Cargo.lock') }}
 
       # A NIF is compiled with the application, so the runner needs a Rust
       # toolchain. The script is a no-op where one is already installed.
