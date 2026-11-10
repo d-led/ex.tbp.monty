@@ -45,7 +45,7 @@ defmodule ExTbpMontyWeb.RunFramesControllerTest do
   end
 
   test "says not found for a picture the run does not have", %{conn: conn, run: run} do
-    assert conn |> get("/runs/#{run.id}/frames/frames/12/patch-colour.png") |> response(404)
+    assert conn |> get("/runs/#{run.id}/frames/12/patch-colour.png") |> response(404)
   end
 
   test "says not found for a run that is not there", %{conn: conn, name: name} do

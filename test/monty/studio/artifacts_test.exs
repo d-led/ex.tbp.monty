@@ -72,9 +72,10 @@ defmodule Monty.Studio.ArtifactsTest do
     test "are written under the run's own directory, by step and sensor" do
       id = run_id()
 
-      assert {:ok, "frames/7/patch-depth.png"} = Artifacts.put_frame(id, 7, "patch", "depth", @png)
+      assert {:ok, "7/patch-depth.png"} =
+               Artifacts.put_frame(id, 7, "patch", "depth", @png)
 
-      path = Path.join(Artifacts.dir(id), "frames/7/patch-depth.png")
+      path = Path.join(Artifacts.frames_dir(id), "7/patch-depth.png")
       assert File.read!(path) == Base.decode64!(@png)
     end
 
@@ -86,8 +87,8 @@ defmodule Monty.Studio.ArtifactsTest do
       assert {:ok, path} = Artifacts.frame_path(id, name)
       assert File.read!(path) == Base.decode64!(@png)
 
-      assert Artifacts.frame_path(id, "frames/../../run.log") == :error
-      assert Artifacts.frame_path(id, "frames/3/no-such-sensor-colour.png") == :error
+      assert Artifacts.frame_path(id, "../../run.log") == :error
+      assert Artifacts.frame_path(id, "3/no-such-sensor-colour.png") == :error
     end
 
     test "go with the run when it is deleted" do
@@ -98,7 +99,7 @@ defmodule Monty.Studio.ArtifactsTest do
       Artifacts.forget(id)
 
       refute File.exists?(Artifacts.dir(id))
-      assert Artifacts.frame_path(id, "frames/1/patch-depth.png") == :error
+      assert Artifacts.frame_path(id, "1/patch-depth.png") == :error
     end
   end
 end

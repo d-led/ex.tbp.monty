@@ -4,8 +4,9 @@ defmodule Monty.Studio.RunHistoryTest do
   import Ecto.Query
 
   alias ExTbpMonty.Repo
-  alias Monty.Studio.RunHistory
+  alias Monty.Studio.{Artifacts, RunHistory, RunLog}
   alias Monty.Studio.RunHistory.Run
+  alias Monty.Test.Tmp
 
   @attributes %{
     experiment: "tutorial/first_experiment",
@@ -260,6 +261,62 @@ defmodule Monty.Studio.RunHistoryTest do
   end
 
   # A step's moment: what the sensors were looking at, in Monty's units.
+  describe "a step's pictures" do
+    # Where a step's pictures live is the question that put a twenty-two-
+    # thousand-step run past Postgres's jsonb ceiling: ten kilobytes a step of
+    # PNG inside the record is not a record. They are files of the run's own
+    # directory, and the row names them.
+    setup do
+      Tmp.env_dir("studio-frames", :studio_artifacts_dir)
+      :ok
+    end
+
+    test "are files of the run, named by the row rather than carried in it" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      # A MuJoCo step: keyed by sensor, not wrapped in the agent that holds it.
+      RunLog.record_step(run, step(5), %{
+        "patch_0" => %{
+          "depth" => [[0.05, 0.05], [0.05, 0.05]],
+          "rgba" => [[[0.2, 0.7, 0.2, 1.0], [0.2, 0.7, 0.2, 1.0]]]
+        }
+      })
+
+      %{"patch_0" => %{"images" => images}} = RunHistory.sensors_at(run.id, 0)
+
+      assert images["depth"] == "/runs/#{run.id}/frames/5/patch_0-depth.png"
+      assert images["colour"] == "/runs/#{run.id}/frames/5/patch_0-colour.png"
+
+      assert {:ok, path} = Artifacts.frame_path(run.id, "5/patch_0-depth.png")
+      assert <<137, 80, 78, 71, _rest::binary>> = File.read!(path)
+    end
+
+    test "go with the run, so a deleted run leaves nothing behind" do
+      {:ok, run} = RunHistory.start(@attributes)
+      RunLog.record_step(run, step(1), %{"patch_0" => %{"depth" => [[0.05]]}})
+
+      assert {:ok, path} = Artifacts.frame_path(run.id, "1/patch_0-depth.png")
+      assert File.exists?(path)
+
+      {:ok, _deleted} = RunHistory.delete(run)
+
+      refute File.exists?(path)
+      assert Artifacts.frame_path(run.id, "1/patch_0-depth.png") == :error
+    end
+  end
+
+  defp step(number) do
+    %{
+      step: number,
+      percept_ids: [:patch],
+      inputs: %{lm_0: 1},
+      votes: %{sent: 1, used: 1},
+      goals: 1,
+      actions: [],
+      duration_us: 1
+    }
+  end
+
   defp moment(step) do
     %{
       "step" => step,

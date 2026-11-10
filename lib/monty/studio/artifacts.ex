@@ -144,16 +144,23 @@ defmodule Monty.Studio.Artifacts do
   def frames_dir(run_id), do: Path.join(dir(run_id), "frames")
 
   @doc """
-  Writes one picture of one step, and answers the path a page asks for it at.
+  Writes one picture of one step, and answers its name.
 
-  The path is relative to the run (`frames/<step>/<sensor>-<depth|colour>.png`),
-  so a record that is moved to another host still names its own pictures.
+  The name is relative to the run's `frames` directory
+  (`<step>/<sensor>-<depth|colour>.png`), which is what the route under
+  `/runs/:id/frames/` appends: the record a page reads says
+  `/runs/<id>/frames/12/patch-depth.png`, and there is one `frames` in a URL
+  rather than two.
   """
   @spec put_frame(binary(), non_neg_integer(), String.t(), String.t(), binary()) ::
           {:ok, String.t()} | {:error, term()}
+  # Not a path from a request: the step is an integer and the sensor and kind
+  # are the names a config and a camera gave, inside a run's own directory —
+  # the same confinement `frame_path/2` checks again when the file is read.
+  # sobelow_skip ["Traversal.FileModule"]
   def put_frame(run_id, step, sensor_id, kind, base64) do
-    name = Path.join(["frames", Integer.to_string(step), "#{sensor_id}-#{kind}.png"])
-    path = Path.join(dir(run_id), name)
+    name = Path.join(Integer.to_string(step), "#{sensor_id}-#{kind}.png")
+    path = Path.join(frames_dir(run_id), name)
 
     with :ok <- File.mkdir_p(Path.dirname(path)),
          {:ok, bytes} <- decode64(base64),
@@ -181,7 +188,7 @@ defmodule Monty.Studio.Artifacts do
   """
   @spec frame_path(binary(), String.t()) :: {:ok, Path.t()} | :error
   def frame_path(run_id, name) do
-    base = dir(run_id)
+    base = frames_dir(run_id)
     candidate = Path.expand(Path.join(base, name))
 
     if String.starts_with?(candidate, base <> "/") and File.regular?(candidate),

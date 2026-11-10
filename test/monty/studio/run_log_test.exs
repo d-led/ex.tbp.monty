@@ -48,6 +48,39 @@ defmodule Monty.Studio.RunLogTest do
       assert Camera.frame("patch", drawn, 7) == Camera.frame("patch", observation, 7)
       assert Camera.frame("patch", drawn, 7).note == "step 7 · flat at 0.050 m"
     end
+
+    test "a step from a world that keys its sensors directly is drawn all the same" do
+      # The stand-in scene wraps each sensor in the agent that holds it; a MuJoCo
+      # step arrives keyed by sensor already. Asking for the agent id
+      # unconditionally read nothing there, so the real runs were the ones with
+      # no sensor views at all.
+      moment = RunLog.moment(%{step: 1}, flat_observations())
+
+      assert %{"patch" => %{"images" => %{"depth" => depth, "colour" => colour}}} =
+               moment["sensors"]
+
+      assert <<137, 80, 78, 71, _rest::binary>> = Base.decode64!(depth)
+      assert <<137, 80, 78, 71, _rest::binary>> = Base.decode64!(colour)
+    end
+
+    test "and a step's pictures are named where they were written, not carried" do
+      # A run's step is a row; ten kilobytes of PNG a step is what made a long
+      # run wider than a jsonb value can be. The store writes the file and
+      # answers with where it put it, and that name is what the row keeps.
+      store = fn sensor_id, kind, _png -> {:ok, "/runs/x/frames/4/#{sensor_id}-#{kind}.png"} end
+
+      moment = RunLog.moment(4, flat_observations(), %{}, store)
+
+      assert %{
+               "depth" => "/runs/x/frames/4/patch-depth.png",
+               "colour" => "/runs/x/frames/4/patch-colour.png",
+               "range" => [0.05, 0.05]
+             } = moment["sensors"]["patch"]["images"]
+    end
+  end
+
+  defp flat_observations do
+    %{"patch" => observations()["agent_id_0"]["patch"]}
   end
 
   defp observations do
