@@ -253,21 +253,45 @@ jobs:
           # other checks, and it annotates the failing lines.
           use-actions-summary: "false"
 
-      # The publisher is not the suite. On 2026-11-09 one partition's publish
-      # step died right after "Listing all files tracked by git" - no error, no
-      # report - with the suite's own "710 passed" a few lines above it, and the
-      # job's whole quarter went red for it. Asked for a second time, but only
-      # where the suite was green: a red suite has decided the job already, and
-      # publishing it twice would only put two of the same check in front of a
-      # reviewer. A publisher that is really broken fails twice and the job says
-      # so.
+      # The publisher is not the suite, and it must not decide the job's colour.
       #
+      # Measured over 2026-11-10, three partitions of two runs reported "520
+      # passed", "673 passed" and "774 passed (1 skipped)" in their own logs while
+      # their jobs were red — every one of those reds was this step. What it leaves
+      # behind is a check run stuck `in_progress` with no conclusion at all, which
+      # is why asking it a second time does not help: `test results 1/4` and
+      # `test results 4/4` were both left open by their first attempt.
+      #
+      # So both attempts are allowed to fail, and a failure is said out loud in a
+      # warning annotation instead. Nothing is lost when the publisher is down: the
+      # partition's JUnit XML is an artifact of this run, uploaded below, and a
+      # partition that produced no report at all fails there.
+      - name: Publish this partition's results
+        id: publish
+        if: always()
+        continue-on-error: true
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
+        with:
+          # Not `test n/4`: that is the job's own check, and two checks with one
+          # name is a reviewer guessing which is which.
+          name: test results ${{ matrix.partition }}/4
+          path: junit/junit-${{ matrix.partition }}.xml
+          reporter: java-junit
+          # The check's colour follows what it says. A green check titled "3
+          # failed" would be the one thing a reviewer trusts and should not.
+          fail-on-error: "true"
+          # A check run rather than a job summary: it is the same shape as the
+          # other checks, and it annotates the failing lines.
+          use-actions-summary: "false"
+
       # `always()` is not decoration: a step `if` that names no status function
-      # implies `success()`. `steps.publish.outcome` is the attempt's own
-      # result even though `continue-on-error` keeps it from failing the job,
-      # so this reads "the publisher crashed, the suite was green".
+      # implies `success()`. `steps.publish.outcome` is the attempt's own result
+      # even though `continue-on-error` keeps it from failing the job, so this
+      # reads "the publisher failed, the suite was green".
       - name: Publish this partition's results, a second time
+        id: republish
         if: always() && steps.publish.outcome == 'failure' && steps.test.outcome == 'success'
+        continue-on-error: true
         uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: test results ${{ matrix.partition }}/4 (second attempt)
@@ -276,14 +300,23 @@ jobs:
           fail-on-error: "true"
           use-actions-summary: "false"
 
-      # The raw report, for when a check and its XML disagree.
+      # Said rather than swallowed: a reviewer whose checks tab has no "test
+      # results" entry should find out why in the run's own annotations.
+      - name: Say so when the results could not be published
+        if: always() && steps.publish.outcome == 'failure' && steps.republish.outcome == 'failure'
+        run: |
+          echo "::warning title=The test results were not published::This partition's suite ran and its report is the junit-partial-${{ matrix.partition }} artifact, but neither publish attempt completed — dorny/test-reporter left its check run open. The job's colour is the suite's, not the publisher's."
+
+      # The raw report, for when a check and its XML disagree — and the record that
+      # survives when the publisher cannot publish. A partition that produced no
+      # report at all is a broken run, not a quiet one.
       - name: Keep this partition's report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-partial-${{ matrix.partition }}
           path: junit/junit-${{ matrix.partition }}.xml
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
       - name: Keep this partition's coverage
