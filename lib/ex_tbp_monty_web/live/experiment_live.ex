@@ -2123,18 +2123,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # the experiment's, and whether this deployment has it is a fact about the
   # deployment, not about the config. Only answered when an interpreter was
   # named: "not installed" about a `python3` nobody chose is not a fact.
-  defp unavailable(setup, :habitat) do
-    case Prerequisites.engine(setup) do
-      nil ->
-        ""
-
-      engine ->
-        if Prerequisites.python_configured?() and not Prerequisites.engine_installed?(engine),
-          do: " — not in MONTY_PYTHON",
-          else: ""
-    end
-  end
-
   defp unavailable(_setup, _world), do: ""
 
   # A need is not always a download: the interpreter is configuration, and

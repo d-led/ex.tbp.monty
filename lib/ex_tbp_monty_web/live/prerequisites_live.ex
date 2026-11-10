@@ -516,7 +516,6 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   end
 
   defp engine_label(:mujoco), do: "MuJoCo"
-  defp engine_label(:habitat), do: "Habitat-Sim"
 
   defp installed_label(true), do: "installed"
   defp installed_label(false), do: "not available here"

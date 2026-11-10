@@ -238,7 +238,7 @@ defmodule Monty.PrerequisitesTest do
       Tmp.app_env(:monty_libraries_dir, libraries)
 
       setup = %{
-        world: :habitat,
+        world: :mujoco,
         environment: %{data_path: Path.join(data, "ycb")},
         model_name_or_path: "pretrained_ycb_v13"
       }
@@ -268,7 +268,7 @@ defmodule Monty.PrerequisitesTest do
       Tmp.without_env("MONTY_PYTHON")
 
       needs =
-        Prerequisites.for_setup(%{world: :habitat, model_name_or_path: "pretrained_ycb_v13"})
+        Prerequisites.for_setup(%{world: :mujoco, model_name_or_path: "pretrained_ycb_v13"})
 
       refute Enum.any?(needs, & &1.present?)
       assert Enum.map(needs, & &1.kind) == [:models]
@@ -281,7 +281,7 @@ defmodule Monty.PrerequisitesTest do
     # interpreter this application carries, so a setup that names no data and no
     # memory reads nothing.
     test "a setup that names neither data nor memory needs nothing" do
-      assert Prerequisites.for_setup(%{world: :habitat}) == []
+      assert Prerequisites.for_setup(%{world: :mujoco}) == []
     end
   end
 
@@ -380,7 +380,6 @@ defmodule Monty.PrerequisitesTest do
       on_exit(&Prerequisites.forget_engines/0)
 
       assert Prerequisites.engine_installed?(:mujoco)
-      refute Prerequisites.engine_installed?(:habitat)
     end
 
     # A script or a test may have no interpreter of its own to point at; the
@@ -393,7 +392,7 @@ defmodule Monty.PrerequisitesTest do
       Prerequisites.forget_engines()
       on_exit(&Prerequisites.forget_engines/0)
 
-      assert Prerequisites.engine_installed?(:habitat)
+      assert Prerequisites.engine_installed?(:mujoco)
     end
   end
 

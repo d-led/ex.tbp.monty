@@ -167,9 +167,6 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 
     assert view |> element("#embedded-engine-mujoco") |> render() =~ "MuJoCo: installed"
-
-    assert view |> element("#embedded-engine-habitat") |> render() =~
-             "Habitat-Sim: not available here"
   end
 
   # A download that fills the disk is the failure this page exists to make

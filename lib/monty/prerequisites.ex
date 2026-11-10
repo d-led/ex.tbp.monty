@@ -347,9 +347,11 @@ defmodule Monty.Prerequisites do
   # the memory — the two downloads — so those are what a page names.
   def for_setup(%{world: :mujoco} = setup), do: data_need(setup) ++ models_need(setup)
 
-  def for_setup(%{world: :habitat} = setup) do
-    engine_need(setup) ++ data_need(setup) ++ models_need(setup)
-  end
+  # Monty's own world, stepped by an interpreter outside this build: its engine
+  # is that interpreter's business, so what a page can offer a run of it is the
+  # two downloads. There is no engine to check any more — one this build could
+  # never install was a badge that could only ever say "not available".
+  def for_setup(%{world: :habitat} = setup), do: data_need(setup) ++ models_need(setup)
 
   def for_setup(_setup), do: []
 
@@ -376,13 +378,13 @@ defmodule Monty.Prerequisites do
   while the node runs, and a page that answers "is this available here?" should
   not pay for a subprocess on every render.
   """
-  @spec engine_installed?(:mujoco | :habitat) :: boolean()
-  def engine_installed?(engine) when engine in [:mujoco, :habitat] do
-    key = {@engine_memo, imports_asker(), package(engine)}
+  @spec engine_installed?(:mujoco) :: boolean()
+  def engine_installed?(:mujoco) do
+    key = {@engine_memo, imports_asker(), package(:mujoco)}
 
     case :persistent_term.get(key, :unknown) do
       :unknown ->
-        answer = imports?(package(engine))
+        answer = imports?(package(:mujoco))
         :persistent_term.put(key, answer)
 
         answer
@@ -398,8 +400,8 @@ defmodule Monty.Prerequisites do
   The page that answers "what is available here?" needs both halves: the engine
   a config names, and whether its package is in the interpreter.
   """
-  @spec engines() :: [{:mujoco | :habitat, boolean()}]
-  def engines, do: Enum.map([:mujoco, :habitat], &{&1, engine_installed?(&1)})
+  @spec engines() :: [{:mujoco, boolean()}]
+  def engines, do: [{:mujoco, engine_installed?(:mujoco)}]
 
   @doc """
   Drops the memoised engine answers. The suite calls this: `:persistent_term` is
@@ -407,9 +409,7 @@ defmodule Monty.Prerequisites do
   """
   @spec forget_engines() :: :ok
   def forget_engines do
-    for engine <- [:mujoco, :habitat] do
-      :persistent_term.erase({@engine_memo, imports_asker(), package(engine)})
-    end
+    :persistent_term.erase({@engine_memo, imports_asker(), package(:mujoco)})
 
     :ok
   end
@@ -449,9 +449,8 @@ defmodule Monty.Prerequisites do
   Public because two different interpreters are asked about it: the one the
   world runs in (`engine_installed?/1`) and the one this application carries.
   """
-  @spec package(:mujoco | :habitat) :: String.t()
+  @spec package(:mujoco) :: String.t()
   def package(:mujoco), do: "mujoco"
-  def package(:habitat), do: "habitat_sim"
 
   # Which interpreter answers "can this import?".
   #
@@ -515,30 +514,6 @@ defmodule Monty.Prerequisites do
       _not_a_program -> false
     end
   end
-
-  defp engine_need(setup) do
-    case engine(setup) do
-      # An engine is a package inside the interpreter the world runs in, and that
-      # interpreter is the one `MONTY_PYTHON` names. Without it there is nothing
-      # to answer for: "MuJoCo is missing" about a `python3` nobody chose is how a
-      # machine with MuJoCo installed came to be told it had none.
-      engine when not is_nil(engine) ->
-        [
-          %{
-            kind: :engine,
-            what: "#{engine_name(engine)}, which the world steps",
-            path: nil,
-            present?: engine_installed?(engine)
-          }
-        ]
-
-      nil ->
-        []
-    end
-  end
-
-  defp engine_name(:mujoco), do: "MuJoCo"
-  defp engine_name(:habitat), do: "Habitat-Sim"
 
   defp data_need(%{environment: %{data_path: path}}) when is_binary(path) and path != "" do
     [

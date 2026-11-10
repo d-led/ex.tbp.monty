@@ -37,9 +37,9 @@ defmodule Monty.Studio.Setup do
   alias Monty.Studio.Learned
   alias Monty.Studio.Memory
 
-  # What a Habitat camera sees across, and so what `DepthTo3DLocations` inverts.
-  # Monty's agents take a resolution and a zoom and no field of view.
-  @habitat_hfov 90.0
+  # What Monty's simulator sees across, and so what `DepthTo3DLocations`
+  # inverts. Monty's agents take a resolution and a zoom and no field of view.
+  @default_hfov 90.0
 
   # Where Monty's object samplers put the object when a config names no place:
   # `Predefined` and `RandomRotation` both default to it, and it is the same spot
@@ -647,7 +647,8 @@ defmodule Monty.Studio.Setup do
   `:synthetic` is this port's sphere, which needs no scene description and no
   interpreter, and whose numbers are nobody's but its own.
 
-  A config that names an engine this application does not carry — Habitat-Sim,
+  A config that names a simulator this application does not carry — another
+  engine,
   which exists only as a conda package for another Python and is on its way out
   of Monty — is refused here rather than given MuJoCo's simulator and allowed to
   look as if it ran.
@@ -1440,7 +1441,7 @@ defmodule Monty.Studio.Setup do
     Map.get(config, "train_env_interface_class") || Map.get(config, "eval_env_interface_class")
   end
 
-  # Where a config's simulator puts everything. Habitat gives the agent a
+  # Where a config's simulator puts everything. Monty's own world gives the agent a
   # position through `agents.agent_args`, plus the sensors' offsets relative to
   # the agent; MuJoCo gives `agents` as a list of agent objects carrying each
   # sensor's own config. Either way the agent's own pose is what the scene needs,
@@ -1653,7 +1654,7 @@ defmodule Monty.Studio.Setup do
 
   # What each sensor's camera is, from the agent a config asks its simulator for.
   # `resolutions` and `zooms` are listed in the agent's own sensor order, and the
-  # field of view is the simulator's — 90 degrees for Habitat — unless a config
+  # field of view is the simulator's — 90 degrees by default — unless a config
   # says otherwise, which none of Monty's do.
   defp cameras(config) do
     args = get_in(config, ["environment", "env_init_args"]) || %{}
@@ -1667,7 +1668,7 @@ defmodule Monty.Studio.Setup do
 
   # MuJoCo's agent object names each sensor's config, and the config carries its
   # own resolution and zoom — the same numbers, said one sensor at a time instead
-  # of three parallel lists. Habitat's field of view stays the simulator's.
+  # of three parallel lists. The simulator keeps its own field of view.
   defp cameras_in_objects(%{} = sensor_configs) do
     for {sensor_id, %{} = sensor_config} <- sensor_configs,
         %{"width" => width, "height" => height} = Map.get(sensor_config, "resolution"),
@@ -1676,7 +1677,7 @@ defmodule Monty.Studio.Setup do
        [
          resolution: {width, height},
          zoom: Map.get(sensor_config, "zoom", 1.0),
-         hfov: @habitat_hfov
+         hfov: @default_hfov
        ]}
     end
   end
@@ -1687,7 +1688,7 @@ defmodule Monty.Studio.Setup do
     sensor_ids = List.wrap(Map.get(args, "sensor_ids"))
     resolutions = List.wrap(Map.get(args, "resolutions"))
     zooms = List.wrap(Map.get(args, "zooms"))
-    hfov = Map.get(args, "hfov", @habitat_hfov)
+    hfov = Map.get(args, "hfov", @default_hfov)
 
     for {sensor_id, index} <- Enum.with_index(sensor_ids),
         resolution = Enum.at(resolutions, index),
