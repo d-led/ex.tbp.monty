@@ -44,7 +44,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # A log is a thing a person reads back, not a database: the last few thousand
   # lines are enough to scroll through a run and bounded enough that a runaway
   # experiment cannot take the page with it.
-  @log_limit 2_000
+  @log_limit 300
 
   # How often the picture may be redrawn. `Chart.new/2` reads the run's whole
   # history — measured at 14 ms of a 500-step run and 22 ms of a 7 000-step one,
@@ -1043,7 +1043,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # transcript; what a backlog costs is the drawing of the steps the newest one
   # has already replaced.
   def handle_info({:studio, run_id, {:step, event}}, %{assigns: %{run_id: run_id}} = socket) do
-    {:noreply, handle_steps(drain_steps(run_id, [event]), socket)}
+    {steps, stopped_by} = drain_steps(run_id, [event])
+
+    socket = handle_steps(steps, socket)
+
+    # Whatever stopped the drain is handled now, after the steps that came
+    # before it — it is not put back into the mailbox, where it would land
+    # behind steps it arrived ahead of. An episode's own message is the case
+    # that matters: applied late, the steps of the new episode are counted
+    # against the old one's progress and drawn in the old one's band.
+    socket =
+      case stopped_by do
+        nil -> socket
+        event -> handle_studio(event, socket)
+      end
+
+    {:noreply, socket}
   end
 
   def handle_info({:studio, run_id, event}, %{assigns: %{run_id: run_id}} = socket) do
@@ -1152,29 +1167,31 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> refresh_runs()
   end
 
-  # Every step that has arrived and not been answered yet, oldest first.
+  # Every step that has arrived and not been answered yet, oldest first, and the
+  # message that came after them.
   #
   # `receive ... after 0` is the mailbox read LiveView does not offer: it takes
-  # what is there now and nothing later, which is exactly "am I behind?". Anything
-  # that is not a step of this run is put back — by sending it to ourselves, it
-  # lands behind the steps taken above it, which is the order it was in.
+  # what is there now and nothing later, which is exactly "am I behind?". The
+  # first message that is not a step of this run ends the batch and is answered
+  # by the caller: re-sending it to ourselves would put it behind the steps it
+  # arrived ahead of, and the order of a run's own messages is the order its
+  # episodes happened in.
   defp drain_steps(run_id, acc) do
     receive do
       {:studio, ^run_id, {:step, event}} ->
         drain_steps(run_id, [event | acc])
 
-      other ->
-        send(self(), other)
-        Enum.reverse(acc)
+      {:studio, ^run_id, event} ->
+        {Enum.reverse(acc), event}
     after
-      0 -> Enum.reverse(acc)
+      0 -> {Enum.reverse(acc), nil}
     end
   end
 
-  # A batch of steps: every line, and the last one's picture. Steps of another
-  # episode, and steps a step already shown has overtaken, are dropped exactly as
-  # a single one was — the mailbox is not the worker's clock, and the badge must
-  # not walk backwards inside an episode.
+  # A batch of steps: every line, every step's beliefs, and the last one's
+  # picture. Steps of another episode, and steps a step already shown has
+  # overtaken, are dropped exactly as a single one was — the mailbox is not the
+  # worker's clock, and the badge must not walk backwards inside an episode.
   defp handle_steps(events, socket) do
     shown = elem(socket.assigns.progress, 0)
 
@@ -1196,10 +1213,20 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         |> then(fn socket ->
           Enum.reduce(last.frames, socket, &stream_insert(&2, :frames, &1))
         end)
-        |> remember(last.episode, last.step, Map.get(last, :beliefs, %{}))
+        |> remember_each(fresh)
         |> assign(centre: Map.get(last, :centre))
         |> tick()
     end
+  end
+
+  # Every step of the batch, not only the last one: a backlog is what a page
+  # that has fallen behind receives, and keeping one point of it drew a line with
+  # every fourth point missing — which reads as the run stalling, not as the page
+  # catching up.
+  defp remember_each(socket, events) do
+    Enum.reduce(events, socket, fn event, socket ->
+      remember(socket, event.episode, event.step, Map.get(event, :beliefs, %{}))
+    end)
   end
 
   # A row of a run that is still going has no stored duration — the record's is
@@ -1263,7 +1290,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     histories =
       Enum.reduce(beliefs, socket.assigns.beliefs, fn {module_id, belief}, histories ->
         point = {episode, step, belief}
-        Map.update(histories, to_string(module_id), [point], &(&1 ++ [point]))
+
+        # Newest first. A step adds a point to the history of every module, and
+        # adding it at the end copies the list: thirteen thousand steps copied a
+        # history that had grown to thousands of points, once per step, which is
+        # what made a long run slower than a short one. `Chart.new/2` takes the
+        # points in any order and sorts them itself, so nothing has to reverse.
+        Map.update(histories, to_string(module_id), [point], &[point | &1])
       end)
 
     assign(socket, beliefs: histories) |> redraw_when_due()

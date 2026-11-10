@@ -711,6 +711,78 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       end
     end
 
+    test "a backlog keeps every step, so the line it draws has no gaps", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=5&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+      run_id = current_run_id(view)
+
+      send(view.pid, {:studio, run_id, {:episode, %{episode: 1, object: "mug"}}})
+
+      # Three steps in one batch, which is what a page that has fallen behind
+      # receives. The history has to keep all three: drawing the batch from its
+      # last step alone leaves the other two out, and a line missing every other
+      # point is drawn as separate dashes — what a reader sees as the run
+      # stalling when it is only the page catching up.
+      for step <- 0..2 do
+        send(
+          view.pid,
+          {:studio, run_id,
+           {:step,
+            step_event(episode: 1, step: step, beliefs: %{"learning_module_0" => belief(step)})}}
+        )
+      end
+
+      assert view |> element("#run-progress") |> render() =~ "episode 2 · step 3 / 5"
+
+      # One contiguous run of three points for the three batched steps — and no
+      # one-point dashes anywhere, because a dash is a step the chart was told
+      # about while its neighbour was not.
+      segments = view |> chart_segments()
+      assert 3 in segments
+      refute Enum.any?(segments, &(&1 == 1))
+    end
+
+    test "steps of two episodes are drawn as two runs, never as one", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=5&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+      run_id = current_run_id(view)
+
+      # A backlog can hold the end of one episode and the start of the next. The
+      # evidence of an episode's last step and of the next episode's first are
+      # not neighbours on any line — joined up, they read as the object's beliefs
+      # falling off a cliff at every boundary.
+      for {index, object} <- [{1, "mug"}, {2, "e_cups"}] do
+        send(view.pid, {:studio, run_id, {:episode, %{episode: index, object: object}}})
+
+        for step <- 0..2 do
+          send(
+            view.pid,
+            {:studio, run_id,
+             {:step,
+              step_event(
+                episode: index,
+                step: step,
+                beliefs: %{"learning_module_0" => belief(step)}
+              )}}
+          )
+        end
+      end
+
+      assert view |> element("#run-progress") |> render() =~ "episode 3 · step 3 / 5"
+
+      # Two runs of three, one per episode: a single run of six would be the two
+      # episodes joined across a boundary nobody measured.
+      segments = view |> chart_segments()
+      assert Enum.count(segments, &(&1 == 3)) >= 2
+      refute 6 in segments
+    end
+
     test "zooming draws a stretch of the run, and the whole run is one click away", %{
       conn: conn
     } do
@@ -912,21 +984,22 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       record = running_run()
 
       # A run of this experiment leaves thirteen thousand steps behind, and the
-      # page keeps the last two thousand of them — whether they arrived one at a
-      # time or were already in the record when the page opened. Drawing the whole
-      # transcript on mount is the same page, slower, for lines a reader scrolls
-      # past.
+      # page keeps the last three hundred of them — whether they arrived one at a
+      # time or were already in the record when the page opened. The window is a
+      # screenful and a bit: every line the page holds is a line the browser
+      # keeps, and two thousand of them made the page heavy enough that its
+      # socket stalled while the run carried on.
       {:ok, _stored} = RunHistory.store(record, for(step <- 1..2_050, do: entry(step)), [])
 
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
 
       assert current_run_id(view) == record.id
-      assert view |> element("#log-count") |> render() =~ "2000 of 2000 lines"
+      assert view |> element("#log-count") |> render() =~ "300 of 300 lines"
 
       # The window is the *tail*: the steps at the end of the run are the ones a
       # page opened on it is for.
-      assert view |> visible_lines() |> hd() =~ "step 51 "
+      assert view |> visible_lines() |> hd() =~ "step 1751 "
     end
   end
 
@@ -1174,15 +1247,49 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   end
 
   # One step, as `Monty.Studio.RunStream` announces it to a page.
-  defp step_event(episode: episode, step: step) do
+  defp step_event(options) do
+    episode = Keyword.fetch!(options, :episode)
+    step = Keyword.fetch!(options, :step)
+
     %{
       line: "step #{step} · percepts patch_0 · votes 1/1",
       step: step,
       episode: episode,
       frames: [],
-      beliefs: %{},
+      beliefs: Keyword.get(options, :beliefs, %{}),
       centre: nil
     }
+  end
+
+  # One module's belief, as the chart reads it: `step` of an episode, with the
+  # object's strongest hypothesis that strong.
+  defp belief(step) do
+    %{
+      possible_matches: ["mug"],
+      mlh: nil,
+      graphs: %{
+        "mug" => %{
+          hypotheses: 3,
+          max_evidence: 1.0 + step,
+          within_x_percent: 1,
+          top_evidence: [1.0 + step]
+        }
+      },
+      x_percent_threshold: 0.5,
+      terminal_state: nil,
+      detected_object: nil
+    }
+  end
+
+  # How many segments the module's chart draws, and how long each is. A line
+  # with a gap in it is more than one segment: `Chart` breaks a series where the
+  # steps are not contiguous rather than drawing a line nobody measured.
+  defp chart_segments(view, module_id \\ "learning_module_0") do
+    html = view |> element("#chart-lines-#{module_id}") |> render()
+
+    ~r/points="([^"]*)"/
+    |> Regex.scan(html)
+    |> Enum.map(fn [_, points] -> points |> String.split() |> length() end)
   end
 
   defp current_run_id(view) do
