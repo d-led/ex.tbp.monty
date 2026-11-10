@@ -1241,7 +1241,12 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/loggers/graph_matching_loggers.py",
       classes: [
         %{
-          status: :implemented,
+          reason:
+            "`wandb.Histogram` values are not built: they are wandb's own type, they " <>
+              "only exist when a run has more than one learning module, and the " <>
+              "distributions they carry are the lists this module keeps. Every " <>
+              "numeric and per-LM figure is computed as Monty computes it",
+          status: :partial,
           file:
             "lib/monty/frameworks/loggers/graph_matching_loggers/basic_graph_matching_logger.ex",
           elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger",
@@ -1654,7 +1659,12 @@ defmodule Monty.ModuleMap.Data do
           python: "HypothesisDisplacerTelemetry"
         },
         %{
-          status: :implemented,
+          reason:
+            "the object-orientation channel's evidence is computed but not " <>
+              "dispatched: Monty chooses between location and orientation evidence " <>
+              "by an `isinstance` check nothing here makes " <>
+              "(docs/monty-differences.md §2.21)",
+          status: :partial,
           file:
             "packages/ex_tbp_monty_core/lib/monty/frameworks/models/evidence_matching/hypotheses_displacer.ex",
           elixir: "Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer",
@@ -1740,7 +1750,12 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/models/feature_location_matching.py",
       classes: [
         %{
-          status: :implemented,
+          reason:
+            "the location/rotation votes it also sends, and the pruning from other " <>
+              "modules' location votes, are not ported: this model routes one kind " <>
+              "of vote (the objects a module ruled out), and the pose jitter is not " <>
+              "sampled because the only caller passes zero. The moduledoc says both",
+          status: :partial,
           file:
             "packages/ex_tbp_monty_core/lib/monty/frameworks/models/feature_location_matching/feature_graph_lm.ex",
           elixir: "Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM",
@@ -2466,7 +2481,11 @@ defmodule Monty.ModuleMap.Data do
           python: "SnapshotTelemetry"
         },
         %{
-          status: :implemented,
+          reason:
+            "only total least squares is written: `new(\"OLS\")` and the naive method " <>
+              "Monty also accepts are refused, and no config this application runs " <>
+              "asks for them",
+          status: :partial,
           file:
             "packages/ex_tbp_monty_core/lib/monty/frameworks/models/sensor_modules/surface_normal_method.ex",
           elixir: "Monty.Frameworks.Models.SensorModules.SurfaceNormalMethod",
