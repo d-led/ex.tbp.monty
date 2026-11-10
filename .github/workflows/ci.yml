@@ -421,7 +421,13 @@ jobs:
         with:
           path: priv/plts
           key: ${{ runner.os }}-plt-${{ hashFiles('mix.lock', 'mix.exs', 'packages/**/mix.exs', 'packages/**/lib/**/*.ex', 'packages/**/native/**/Cargo.toml', 'packages/**/native/**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-plt-
+          # No fallback on purpose. A picture is only true of the sources that
+          # made it: restoring an older one after a key miss left the previous
+          # copy of `packages/` in the picture, and dialyzer then read a call to
+          # a function the package had grown as a call to one that does not
+          # exist (`Monty.ModuleMap.written?/1`, added while the picture was
+          # warm). A miss rebuilds it, which is a minute of the job's budget and
+          # the only cost of being right.
 
       # A NIF is compiled with the application, so the runner needs a Rust
       # toolchain. The script is a no-op where one is already installed.
