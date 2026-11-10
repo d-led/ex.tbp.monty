@@ -339,9 +339,10 @@ makes them worth writing down — and three steps is far too few to conclude
 anything, so this is a smoke, not a comparison. The comparison that matters is
 still open: the same episode, run by Monty, step by step.
 
-What comes back is decoded on this side: `Protocol.proprioceptive_state/1` turns
-Monty's maps into the port's `AgentState`/`SensorState` (`wxyz` quaternion to a
-`Monty.Geometry.Rotation`), so the motor system can act on them, and an action
+What comes back is decoded on this side: the `proprioceptive_state` map in
+`Monty.Simulators.Port.Protocol`'s reply becomes the port's
+`AgentState`/`SensorState` (`wxyz` quaternion to a `Monty.Geometry.Rotation`), so
+the motor system can act on them, and an action
 travels the other way because `ActionJSONEncoder` carries a
 `{w, x, y, z}` as the four numbers Monty's `dict(action)` has.
 

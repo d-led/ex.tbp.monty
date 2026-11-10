@@ -16,7 +16,7 @@ defmodule ExTbpMonty.Core.Supervisor do
       terminating its supervisor, so its children cannot outlive the run.
 
   A host that names these differently passes the supervisor name to
-  `Monty.Runtime.Model.stop/2`; nothing else in the core knows a host's names.
+  `Monty.Runtime.Model.stop/1`; nothing else in the core knows a host's names.
   """
 
   use Supervisor

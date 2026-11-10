@@ -955,7 +955,7 @@ wherever a number could differ.
   → [`motor_policies.ex`](../lib/monty/frameworks/models/motor_policies.ex)
 - Actions keep Monty's units (degrees, metres, `wxyz`), deliberately: an action
   built here must be the same object an environment there would perform.
-  → [`lib/monty/frameworks/actions/`](../lib/monty/frameworks/actions)
+  → [`action.ex`](../lib/monty/frameworks/actions/action.ex)
 
 **Why it is deliberate.** Atoms for closed sets, tuples for quaternions, and
 Monty's units throughout: the vocabulary stays Monty's where it would show up in

@@ -312,9 +312,9 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
   @doc """
   The ids of the `count` nodes nearest each of `search_locations`, as bytes.
 
-  See `Monty.Frameworks.Models.ObjectModel.find_nearest_neighbor_ids/3`: this is
-  `find_nearest_neighbors/4` with the decoding left to the reader, for a kernel
-  that wanted the raw answers.
+  See `c:Monty.Frameworks.Models.ObjectModel.find_nearest_neighbor_ids/3`: this
+  is `find_nearest_neighbors/4` with the decoding left to the reader, for a
+  kernel that wanted the raw answers.
   """
   @impl true
   def find_nearest_neighbor_ids(
