@@ -6,6 +6,13 @@ import Config
 # round — see `Monty.Studio.Setup.configured_world/0`.
 config :ex_tbp_monty, world_simulator: :synthetic
 
+# A page in a test has no socket to keep alive, and a test that delivers steps
+# faster than a person can watch expects each one's picture to be drawn. The live
+# page draws at most `@chart_interval` apart, because `Chart.new/2` reads the run's
+# whole history and a real run's steps arrive faster than that — see
+# `ExTbpMontyWeb.ExperimentLive`.
+config :ex_tbp_monty, chart_interval: 0
+
 # The suite runs on the Postgres of the CI service, partitioned by
 # `MIX_TEST_PARTITION`. `ExTbpMonty.Database.repo_module/0` follows
 # `DATABASE_URL` when nothing names a repo, which in a test would be a file.

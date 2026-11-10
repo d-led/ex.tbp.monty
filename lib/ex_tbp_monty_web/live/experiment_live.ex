@@ -46,6 +46,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # experiment cannot take the page with it.
   @log_limit 2_000
 
+  # How often the picture may be redrawn. `Chart.new/2` reads the run's whole
+  # history — measured at 14 ms of a 500-step run and 22 ms of a 7 000-step one,
+  # windowed or not — and a step can arrive faster than that. A page that rebuilt
+  # the chart for every step spends the run drawing and never catches up with its
+  # own mailbox: the heap grows with the backlog, the socket misses its heartbeat,
+  # and the reader sees "lost connection to the server" while the run is fine.
+  #
+  # A test that delivers steps faster than a person can watch sets it to nought:
+  # there is no socket to keep alive, and every step's picture is worth asserting.
+  @chart_interval 250
   @impl true
   def mount(params, _session, socket) do
     # Runs of this experiment arrive as messages, the same way a run's steps do:
@@ -1033,6 +1043,17 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   def handle_info({:studio, _other_run, _event}, socket), do: {:noreply, socket}
 
+  # The drawing a step asked for and could not have yet.
+  def handle_info(:chart_due, socket) do
+    socket =
+      socket
+      |> assign(:chart_pending?, false)
+      |> assign(:chart_drawn_at, System.monotonic_time(:millisecond))
+      |> then(&assign_charts(&1, &1.assigns.beliefs))
+
+    {:noreply, socket}
+  end
+
   # A run is the experiment's, not the page's: two people (or two tabs) looking at
   # the same experiment watch the same run. So a page with nothing to watch asks
   # whether one has started since it opened, and a page whose run has finished
@@ -1209,7 +1230,31 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         Map.update(histories, to_string(module_id), [point], &(&1 ++ [point]))
       end)
 
-    assign_charts(socket, histories)
+    assign(socket, beliefs: histories) |> redraw_when_due()
+  end
+
+  # A step is recorded whatever happens to the picture — that is a cheap append —
+  # but the picture itself is drawn at most `@chart_interval` apart, and a step
+  # that arrives between two drawings asks for one rather than drawing it.
+  defp redraw_when_due(socket) do
+    now = System.monotonic_time(:millisecond)
+
+    if now - Map.get(socket.assigns, :chart_drawn_at, 0) >= chart_interval() do
+      socket
+      |> assign(:chart_drawn_at, now)
+      |> then(&assign_charts(&1, &1.assigns.beliefs))
+    else
+      schedule_redraw(socket)
+    end
+  end
+
+  defp chart_interval, do: Application.get_env(:ex_tbp_monty, :chart_interval, @chart_interval)
+
+  defp schedule_redraw(%{assigns: %{chart_pending?: true}} = socket), do: socket
+
+  defp schedule_redraw(socket) do
+    Process.send_after(self(), :chart_due, chart_interval())
+    assign(socket, :chart_pending?, true)
   end
 
   # The histories, the chart of the stretch being looked at, and how long the run
