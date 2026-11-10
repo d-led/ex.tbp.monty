@@ -393,6 +393,12 @@ jobs:
           elixir-version: ${{ env.ELIXIR_VERSION }}
           otp-version: ${{ env.OTP_VERSION }}
 
+      # A PLT is a picture of the modules a build has, and it is keyed by the
+      # lock file — which says nothing about the code in this repository. So a
+      # commit that renames a module in `packages/` or `lib/` left the cache
+      # describing the old names, and dialyzer reported every new one as
+      # unknown: the beams in `_build` were right, the picture of them was not.
+      # The key follows the sources, so a rename rebuilds the picture.
       - name: Cache deps, build and PLTs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -400,7 +406,7 @@ jobs:
             deps
             _build
             priv/plts
-          key: ${{ runner.os }}-plt-${{ hashFiles('mix.lock') }}
+          key: ${{ runner.os }}-plt-${{ hashFiles('mix.lock', 'mix.exs', 'lib/**/*.ex', 'packages/**/mix.exs', 'packages/**/lib/**/*.ex') }}
           restore-keys: ${{ runner.os }}-plt-
 
       # A NIF is compiled with the application, so the runner needs a Rust
