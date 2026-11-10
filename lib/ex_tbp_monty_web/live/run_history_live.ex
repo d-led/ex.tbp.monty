@@ -1290,8 +1290,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # Stopping a run that is waiting cancels it outright; one that is stepping ends
   # at its next step and writes its own summary. Ending is for a run stuck inside
   # a step, which nothing but ending the process will release.
+  #
+  # The job is looked up again before anything is concluded: the row this page
+  # drew can be older than the queue (a job retried, replaced, or picked up
+  # after the page looked), and a button that says "already finished" about a
+  # run that is stepping is worse than a slow one.
   def handle_event("stop", %{"id" => run_id}, socket) do
-    with %{id: job_id} <- socket.assigns.queue[run_id],
+    with %{id: job_id} <- job_for(socket, run_id),
          {:ok, ended} <- Jobs.cancel(job_id) do
       {:noreply, socket |> put_flash(:info, stopped_message(ended)) |> after_queue_change()}
     else
@@ -1304,7 +1309,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   def handle_event("end_now", %{"id" => run_id}, socket) do
-    with %{id: job_id} <- socket.assigns.queue[run_id],
+    with %{id: job_id} <- job_for(socket, run_id),
          {:ok, _settled} <- Jobs.halt(job_id) do
       {:noreply,
        socket |> put_flash(:info, "Ended: the run stopped where it was.") |> after_queue_change()}
@@ -1357,12 +1362,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp replay("replay_collapse", _params, socket), do: assign(socket, expanded: false)
 
   # Ticking "follow latest steps" is a request for the newest step, which is the
-  # one thing the page should not wait for the next refresh to hear about.
-  defp replay("replay_follow", _params, %{assigns: %{run: run}} = socket) do
-    if Map.get(socket.assigns, :follow, true) do
-      assign(socket, follow: false)
-    else
+  # one thing the page should not wait for the next refresh to hear about. The
+  # tick's own value travels with the click, so a second activation of the same
+  # click cannot put the box back where it was.
+  defp replay("replay_follow", params, %{assigns: %{run: run}} = socket) do
+    if wanted_follow(params, socket) do
       socket |> assign(follow: true) |> replay_to(run, Replay.last_step(run))
+    else
+      assign(socket, follow: false)
     end
   end
 
@@ -1468,6 +1475,17 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # The delete is over: say how many went, and read the list again — the rows
   # are a stream, and deleting is the one change a stream cannot be told about
   # one row at a time when a filter took them all.
+  # What a stale queue row costs: the job a page holds can be one the queue has
+  # since replaced. Asked again before anything is concluded.
+  defp job_for(socket, run_id) do
+    Map.get(socket.assigns.queue, run_id) || Map.get(Jobs.by_run([run_id]), run_id)
+  end
+
+  defp wanted_follow(%{"follow" => value}, _socket) when value in ["true", "false"],
+    do: value == "true"
+
+  defp wanted_follow(_params, socket), do: not Map.get(socket.assigns, :follow, true)
+
   @impl true
   def handle_async(:delete, {:ok, count}, socket) do
     socket = assign(socket, deleting: nil)

@@ -55,7 +55,17 @@ defmodule ExTbpMontyWeb.BuildLive do
         </p>
       </header>
 
-      <.form for={@form} id="blueprint-form" phx-change="change" phx-submit="save" class="space-y-3">
+      <%!-- One compose per paused keystroke, not one per keystroke: the
+      preview is a whole config tree, and typing a name is not a reason to build
+      it forty times. --%>
+      <.form
+        for={@form}
+        id="blueprint-form"
+        phx-change="change"
+        phx-debounce="400"
+        phx-submit="save"
+        class="space-y-3"
+      >
         <div class="grid gap-2 sm:grid-cols-2">
           <.input field={@form[:name]} label="Name" type="text" required />
           <.input

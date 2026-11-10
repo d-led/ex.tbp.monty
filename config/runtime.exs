@@ -33,7 +33,12 @@ config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
 # same time. CI has no dev stack and its service is on the default port, so the
 # test job sets `DB_PORT=5432` rather than relying on a default.
 if config_env() in [:dev, :test] do
-  config :ex_tbp_monty, ExTbpMonty.Repo,
+  # Set on the repo that actually starts. `ExTbpMonty.Repo` is the *delegating*
+  # module — dev and test name `ExTbpMonty.Repo.Postgres` as the one this machine
+  # runs, and a port written on the delegating module is inherited by nothing:
+  # Postgrex then falls back to its own 5432, which on a machine with another
+  # project's Postgres is somebody else's database.
+  config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
     port: String.to_integer(System.get_env("DB_PORT", "6432"))
 end
 

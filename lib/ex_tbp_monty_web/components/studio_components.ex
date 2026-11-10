@@ -520,6 +520,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
               type="checkbox"
               id="replay-follow"
               phx-click="replay_follow"
+              phx-value-follow={to_string(not @follow)}
               checked={@follow}
               class="checkbox checkbox-xs"
             /> follow latest steps

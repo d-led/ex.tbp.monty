@@ -52,6 +52,10 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # one.
       view |> element("#world-choice") |> render_change(%{"world" => "mujoco"})
 
+      # The config is composed beside the page: `render_async/1` waits for the
+      # answer, so the assertions below read the world the reader chose.
+      render_async(view)
+
       # The badge names the engine for the experiment's world — MuJoCo for this
       # experiment — and "stand-in scene" for this port's: the two answers a
       # reader has to tell apart.
@@ -84,6 +88,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert has_element?(view, "#run:not([disabled])")
 
       view |> element("#world-choice") |> render_change(%{"world" => "mujoco"})
+      render_async(view)
 
       assert has_element?(view, "#need-data")
       assert has_element?(view, "#need-models")
@@ -124,6 +129,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
 
       view |> element("#world-choice") |> render_change(%{"world" => "mujoco"})
+      render_async(view)
+
       view |> element("#run") |> render_click()
 
       assert [%{inputs: %{"world" => "mujoco"}} = run | _] =

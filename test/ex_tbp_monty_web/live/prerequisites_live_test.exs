@@ -176,6 +176,9 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
   # visible, so the room it writes into is answered before the click.
   test "the page says how much room is left where the downloads land", %{conn: conn, tmp: tmp} do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
+    # The walk of these directories runs beside the page: `render_async/1` waits
+    # for its answer, which is the state a reader waits for before clicking.
+    render_async(view)
 
     assert view |> element("#occupied-MONTY_DATA") |> render() =~
              "nothing in #{Path.join(tmp, "data")} yet"
@@ -196,7 +199,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     File.write!(Path.join(data, "an-older-release.tgz"), :binary.copy("x", 2048))
 
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
-
+    render_async(view)
     occupied = view |> element("#occupied-MONTY_DATA") |> render()
 
     assert occupied =~ "2.0 KiB in #{data}"

@@ -24,26 +24,32 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
     prerequisites = Prerequisites.all()
 
-    {:ok,
-     assign(socket,
-       prerequisites: prerequisites,
-       # Asked, not assumed: a download that finished while the socket was down
-       # has nothing left to announce, and a page that started every row at
-       # "nothing happening" would show a stale badge until a refresh.
-       statuses: Map.new(prerequisites, &{&1.id, current_status(&1.id)}),
-       present: Map.new(prerequisites, &{&1.id, Prerequisites.present?(&1)}),
-       # An archive can be here with nothing to read beside it: the pickles
-       # arrived, the libraries a run reads did not. That is not "present" to a
-       # reader whose run needs the memory.
-       pending: Map.new(prerequisites, &{&1.id, memory_pending?(&1)}),
-       # Read off the disk rather than out of a download's counters: a bundle that
-       # was here before this page existed still has a size worth knowing.
-       sizes: Map.new(prerequisites, &{&1.id, Prerequisites.size(&1)}),
-       python: EmbeddedPython.version(),
-       wandb: EmbeddedPython.wandb_mode(),
-       engines: Prerequisites.engines(),
-       storage: storage(prerequisites)
-     )}
+    socket =
+      assign(socket,
+        prerequisites: prerequisites,
+        # Asked, not assumed: a download that finished while the socket was down
+        # has nothing left to announce, and a page that started every row at
+        # "nothing happening" would show a stale badge until a refresh.
+        statuses: Map.new(prerequisites, &{&1.id, current_status(&1.id)}),
+        present: Map.new(prerequisites, &{&1.id, Prerequisites.present?(&1)}),
+        # An archive can be here with nothing to read beside it: the pickles
+        # arrived, the libraries a run reads did not. That is not "present" to a
+        # reader whose run needs the memory.
+        pending: Map.new(prerequisites, &{&1.id, memory_pending?(&1)}),
+        # Read off the disk rather than out of a download's counters: a bundle that
+        # was here before this page existed still has a size worth knowing.
+        sizes: Map.new(prerequisites, &{&1.id, Prerequisites.size(&1)}),
+        python: EmbeddedPython.version(),
+        wandb: EmbeddedPython.wandb_mode(),
+        engines: Prerequisites.engines(),
+        # Walking these directories and asking the volume for its room costs what
+        # the disk costs, not what the page costs: it is asked for here and
+        # answered in a task, so the page is usable — downloads included — while
+        # it is measured.
+        storage: nil
+      )
+
+    {:ok, start_async(socket, :space, fn -> storage(prerequisites) end)}
   end
 
   # Where these downloads land: what each directory already holds, and what is
@@ -106,13 +112,20 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
           </p>
           <div id="free-space" class="space-y-1">
             <p
-              :for={root <- @storage.roots}
+              :if={is_nil(@storage)}
+              id="free-space-measuring"
+              class="text-sm text-base-content/50"
+            >
+              Measuring what these directories hold…
+            </p>
+            <p
+              :for={root <- (@storage && @storage.roots) || []}
               id={"occupied-#{root.root}"}
               class="text-sm text-base-content/70"
             >
               {occupied_label(root)}
             </p>
-            <p id="free-space-volume" class="text-sm text-base-content/70">
+            <p :if={@storage} id="free-space-volume" class="text-sm text-base-content/70">
               {room_label(@storage.volumes)}
             </p>
           </div>
@@ -299,6 +312,16 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
     </Layouts.app>
     """
   end
+
+  # What the directories hold, measured by the task `mount/3` started. A walk
+  # that failed says nothing about the files, so the page says nothing about the
+  # space rather than showing a nought.
+  @impl true
+  def handle_async(:space, {:ok, storage}, socket),
+    do: {:noreply, assign(socket, storage: storage)}
+
+  def handle_async(:space, {:exit, _reason}, socket),
+    do: {:noreply, assign(socket, storage: %{roots: [], volumes: []})}
 
   # Arriving with a prerequisite named is a link that starts the download it
   # points at — a finding that says a run is waiting for an archive offers the

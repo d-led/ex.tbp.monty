@@ -680,16 +680,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               <%!-- The one control the dashboard had that this page did not: while
               a run is going, a window that is zoomed into should keep showing the
               newest steps, or the chart quietly falls behind the experiment. --%>
-              <label
-                for="follow-latest"
-                class="ml-2 flex items-center gap-1 text-[11px] text-base-content/70"
-              >
+              <label class="ml-2 flex items-center gap-1 text-[11px] text-base-content/70">
                 <input
                   type="checkbox"
                   id="follow-latest"
                   class="checkbox checkbox-xs"
                   checked={@follow}
                   phx-click="follow"
+                  phx-value-follow={to_string(not @follow)}
                 /> follow latest steps
               </label>
               <%!-- The wheel and the double click leave no trace on the page, so
@@ -927,8 +925,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # Turning following off is how a reader says "leave the window where I put it";
   # turning it back on slides it to the newest step at the next step to arrive.
-  def handle_event("follow", _params, socket) do
-    follow? = not Map.get(socket.assigns, :follow, true)
+  #
+  # The tick's own value travels with the click and is what the page assigns: a
+  # label that wraps its checkbox can deliver the activation twice in a browser,
+  # and a handler that merely inverted the assign would then put the tick back
+  # where it was — which is the box that "sprang back" when it was unticked.
+  def handle_event("follow", params, socket) do
+    follow? = wanted_follow(params, socket)
 
     {:noreply, socket |> assign(:follow, follow?) |> assign_charts(socket.assigns.beliefs)}
   end
@@ -952,8 +955,17 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # workers with different settings cannot disagree about it afterwards.
   def handle_event("world", %{"world" => choice}, socket) do
     case world_of(choice) do
-      nil -> {:noreply, socket}
-      world -> {:noreply, reopened(socket, world)}
+      nil ->
+        {:noreply, socket}
+
+      world ->
+        # Opening a config in another world costs what the config costs, not what
+        # the page costs: it is composed in a task, so the steps still streaming
+        # in are answered while it goes and the socket is never held open for it.
+        name = socket.assigns.opened.name
+
+        {:noreply,
+         start_async(socket, :world, fn -> Studio.open(name, world_simulator: world) end)}
     end
   end
 
@@ -985,6 +997,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   def handle_event("filter", %{"filter" => text}, socket) do
     {:noreply, assign(socket, filter: text)}
   end
+
+  # A tick's own value, or the opposite of what the page shows when a client
+  # sends none (a test, or a page built before this attribute existed).
+  defp wanted_follow(%{"follow" => value}, _socket) when value in ["true", "false"],
+    do: value == "true"
+
+  defp wanted_follow(_params, socket), do: not Map.get(socket.assigns, :follow, true)
 
   defp range_window(_extent, nil, _to), do: nil
   defp range_window(_extent, _from, nil), do: nil
@@ -1092,11 +1111,17 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   def handle_info({:studio, _other_run, _event}, socket), do: {:noreply, socket}
 
   # The staleness check the page asked for when it loaded, answered before
-  # anything the reader can do. A run that turned out to be gone becomes a failed
-  # run with its reason, on screen, without a reload.
+  # anything the reader can do. It is a message to ourselves rather than work in
+  # `mount/3`, so the page paints first; a run that turned out to be gone becomes
+  # a failed run with its reason, on screen, without a reload.
   def handle_info(:reap, socket) do
     {:noreply, after_reap(socket, Reaper.sweep())}
   end
+
+  # A run that turned out to be gone becomes a failed run with its reason, on
+  # screen, without a reload. This and `handle_async(:world, ...)` below are one
+  # group: a callback's clauses belong together, however far the calls that
+  # start them are apart.
 
   # The drawing a step asked for and could not have yet.
   def handle_info(:chart_due, socket) do
@@ -1634,10 +1659,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     if recorded == [] do
       socket
     else
+      # Newest first while merging, then one reverse per module: appending a point
+      # copies the history it grows, and a page opened on a long run has exactly
+      # that many points to merge. Seeding starts from an empty view
+      # (`clear_run_view/1`), so every list here is this record's own.
       histories =
-        Enum.reduce(recorded, socket.assigns.beliefs, fn {module, point}, histories ->
-          Map.update(histories, module, [point], &(&1 ++ [point]))
+        recorded
+        |> Enum.reduce(socket.assigns.beliefs, fn {module, point}, histories ->
+          Map.update(histories, module, [point], &[point | &1])
         end)
+        |> Map.new(fn {module, points} -> {module, Enum.reverse(points)} end)
 
       socket
       |> assign(:beliefs_seeded, true)
@@ -1820,6 +1851,33 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # -- the log ---------------------------------------------------------------
 
+  # The world a reader picks is composed in a task: opening a config costs what
+  # the config costs, not what the page costs, so the steps still arriving are
+  # answered while it goes. The badge, the findings and the record a run leaves
+  # all follow from one open. A failure is said out loud in the flash, because
+  # this page's own lines live in a panel that only exists while a run is being
+  # followed.
+  @impl true
+  def handle_async(:world, {:ok, {:ok, opened}}, socket) do
+    {:noreply,
+     socket
+     |> assign(
+       opened: opened,
+       logging: Logging.open(opened.setup).notes,
+       error: nil,
+       needs: needs(opened),
+       missing: with_actions(missing(opened))
+     )}
+  end
+
+  def handle_async(:world, {:ok, {:error, reason}}, socket) do
+    {:noreply, put_flash(socket, :error, "That world will not open: #{inspect(reason)}")}
+  end
+
+  def handle_async(:world, {:exit, reason}, socket) do
+    {:noreply, put_flash(socket, :error, "Opening that world failed: #{inspect(reason)}")}
+  end
+
   # The page's own closing line. A reconnect is a page that closed and opened
   # again, so the closing half has to be in the log with the reason and how far
   # the page had got — otherwise "it reconnected again" arrives with no time on
@@ -1895,7 +1953,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
-  defp cancel({run, nil}), do: close_orphan(run.id)
+  defp cancel({run, nil}) do
+    # No job in hand: ask the queue once before deciding the run is gone. A
+    # record that still says `running` because the page's queue map was older
+    # than the retry is not an orphan.
+    case Map.get(Jobs.by_run([run.id]), run.id) do
+      nil -> close_orphan(run.id)
+      job -> cancel({run, job})
+    end
+  end
 
   defp stopped([]), do: {"nothing was going", :warning}
 
@@ -1987,26 +2053,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp world_of("mujoco"), do: :mujoco
   defp world_of("synthetic"), do: :synthetic
   defp world_of(_other), do: nil
-
-  # The experiment, re-opened in the world that was just chosen: the badge, the
-  # findings and the record a run leaves all come from the setup, so they follow
-  # from one open rather than from a field patched in three places.
-  defp reopened(socket, world) do
-    case Studio.open(socket.assigns.opened.name, world_simulator: world) do
-      {:ok, opened} ->
-        socket
-        |> assign(
-          opened: opened,
-          logging: Logging.open(opened.setup).notes,
-          error: nil,
-          needs: needs(opened),
-          missing: with_actions(missing(opened))
-        )
-
-      {:error, reason} ->
-        assign(socket, error: reason)
-    end
-  end
 
   # How many episodes to run at once. Eight is a ceiling rather than a judgement
   # about what a machine can do: each run is its own world and its own simulator
