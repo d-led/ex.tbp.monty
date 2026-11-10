@@ -79,9 +79,9 @@ defmodule ExTbpMontyWeb.ModulesLive do
           What of Monty is written here
           <:subtitle>
             Every class the packages of Monty name, and the module this application gives
-            it. {@summary.implemented} of {@summary.classes} are written; the rest are
-            named by a config that cannot run yet, unless the fourth column says what
-            replaces them.
+            it. {@summary.implemented} of {@summary.classes} are written whole and {@summary.partial} are written as far as anything here uses them —
+            `docs/partial-classes.md` says what each one leaves out. The rest are named by
+            a config that cannot run yet, unless the fourth column says what replaces them.
           </:subtitle>
         </.header>
 
@@ -219,9 +219,9 @@ defmodule ExTbpMontyWeb.ModulesLive do
     ~H"""
     <td class="px-3 py-2 font-mono text-[11px] break-words">
       <%!-- Every module is a link, including one that is only named: the name is
-      the contract, and the file it will live in follows from it. A written
-      module reads at full strength; a planned one is dimmer, which is the only
-      difference a reader has to be able to see. --%>
+      the contract, and the file it will live in follows from it. A module this
+      port has reads at full strength, including a partial one: it exists and a
+      config can name it. Only a class with no module here is dimmer. --%>
       <.link
         :if={@row.elixir_url}
         href={@row.elixir_url}
@@ -229,7 +229,7 @@ defmodule ExTbpMontyWeb.ModulesLive do
         rel="noopener noreferrer"
         class={[
           "underline decoration-base-300 decoration-1 underline-offset-2 hover:text-primary",
-          @row.status != :implemented && "text-base-content/50"
+          not ModuleMap.written?(@row.status) && "text-base-content/50"
         ]}
       >
         {@row.elixir}
@@ -258,6 +258,7 @@ defmodule ExTbpMontyWeb.ModulesLive do
       class={[
         "rounded border px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide",
         @status == :implemented && "border-success/60 bg-success text-success-content",
+        @status == :partial && "border-info/60 bg-info text-info-content",
         @status == :planned && "border-warning/60 bg-warning text-warning-content",
         @status == :excluded && "border-base-300 bg-base-300 text-base-content/70"
       ]}

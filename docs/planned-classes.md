@@ -1,8 +1,11 @@
 # What the planned classes are for
 
 `mix monty.module_map.verify` counts every class of Monty's tree and says which
-of them this application has written. Two of the three answers need nothing
-explained — a class whose module is here is `implemented`. The third does:
+of them this application has written. Two of the four answers need nothing
+explained — a class whose module is here is `implemented`, and a class that is
+here only as far as anything uses it is `partial`
+([`partial-classes.md`](partial-classes.md) argues those). Excluded classes are
+argued in their map entries. The fourth does:
 **70 planned classes in 32 files**, while `mix monty.readiness` says 119 of
 Monty's 203 experiments run here and no production class blocks any of them.
 
@@ -11,7 +14,7 @@ class, will it never have it, or does something upstream decide. It replaces the
 brief (`next-session.md`) that asked the question.
 
 ```
-mix monty.module_map.verify     # implemented / planned / excluded, by class
+mix monty.module_map.verify     # implemented / partial / planned / excluded, by class
 mix monty.readiness             # which experiments run, and what stops the rest
 mix monty.module_map.gen        # regenerate after a pull; keeps these decisions
 ```

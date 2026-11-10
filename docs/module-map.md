@@ -74,12 +74,12 @@ question starts there, so it belongs beside the code it describes — not at the
 end of a path handed to a reader.
 
 Each entry carries the Python path, the Elixir module, a status
-(`implemented`, `planned`, `excluded`) and, for exclusions, a reason. The
-verifier checks three things, for both packages:
+(`implemented`, `partial`, `planned`, `excluded`) and, for exclusions and partial
+ports, a reason. The verifier checks three things, for both packages:
 
 - every Python file in a checkout has an entry;
-- every entry marked `implemented` points at a module that exists;
-- every entry marked `excluded` says why.
+- every entry marked `implemented` or `partial` points at a module that exists;
+- every entry marked `excluded` or `partial` says why.
 
 With no checkout it checks the last two only, and says which packages it could
 not check from source rather than pretending it did: the map names the commit it
@@ -108,3 +108,8 @@ Marking something `excluded` is allowed; leaving it unexplained is not. A
 verdict of `excluded` is a claim about somebody else's code, so
 [`planned-classes.md`](planned-classes.md) keeps the evidence for each one and
 says which classes are still owed.
+
+A module that is here but only as far as anything here uses it is `partial`, and
+it makes a claim about _our_ code that has to be checked the same way:
+[`partial-classes.md`](partial-classes.md) argues each one from the module's own
+admission of what it leaves out, and says how the list was swept for.

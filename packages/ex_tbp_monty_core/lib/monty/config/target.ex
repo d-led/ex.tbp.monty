@@ -34,7 +34,7 @@ defmodule Monty.Config.Target do
     python = unwrap(dotted)
 
     case ModuleMap.resolve(python) do
-      {:ok, %{status: :implemented, elixir: elixir}} ->
+      {:ok, %{status: status, elixir: elixir}} when status in [:implemented, :partial] ->
         # The name is the map's own `elixir` field, read from a checked-in file,
         # so the atoms this can create are bounded by
         # `lib/monty/module_map/data.ex` rather than by anything a request says.
@@ -76,7 +76,7 @@ defmodule Monty.Config.Target do
   defp class_reference?(_value), do: false
 
   defp ported?(python) do
-    match?({:ok, %{status: :implemented}}, ModuleMap.resolve(python))
+    match?({:ok, %{status: status}} when status in [:implemented, :partial], ModuleMap.resolve(python))
   end
 
   defp not_ported(elixir, status) do

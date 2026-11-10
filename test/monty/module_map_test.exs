@@ -120,6 +120,15 @@ defmodule Monty.ModuleMapTest do
       assert {:ok, %{status: :implemented}} = ModuleMap.resolve("tbp.monty.cmp.Message")
     end
 
+    test "a class this port has written partly comes back partial, not implemented" do
+      assert {:ok,
+              %{
+                status: :partial,
+                elixir: "Monty.Frameworks.Models.SensorModules.SurfaceNormalMethod"
+              }} =
+               ModuleMap.resolve("tbp.monty.frameworks.models.sensor_modules.SurfaceNormalMethod")
+    end
+
     test "a class nobody wrote comes back unknown rather than guessed at" do
       assert {:ok, %{status: :unknown}} =
                ModuleMap.resolve("tbp.monty.frameworks.models.sensor_modules.NotAClass")
@@ -151,6 +160,32 @@ defmodule Monty.ModuleMapTest do
 
     test "needs none of its own when its whole file is excluded" do
       assert {:ok, _summary} = verify_with([entry(:excluded, [excluded_class("Thing", nil)])])
+    end
+  end
+
+  describe "a partial class" do
+    test "must say what it leaves out, the way an excluded one says why it is gone" do
+      assert {:error, problems} =
+               verify_with([entry(:planned, [partial_class("FeatureGraphLM", nil)])])
+
+      assert problems == [
+               "partial class has no reason: " <>
+                 "monty:frameworks/models/sensor_modules.py::FeatureGraphLM"
+             ]
+    end
+
+    test "counts as written: a config that names it can still run" do
+      assert {:ok, summary} =
+               verify_with([
+                 entry(:planned, [
+                   partial_class("FeatureGraphLM", "the other kind of vote is not ported")
+                 ])
+               ])
+
+      assert summary.partial == 1
+      assert summary.implemented == 0
+      assert ModuleMap.written?(:partial)
+      refute ModuleMap.written?(:planned)
     end
   end
 
@@ -191,6 +226,34 @@ defmodule Monty.ModuleMapTest do
              } =
                decisions
     end
+
+    test "a partial class keeps its shortfall when the map is regenerated" do
+      entries = [
+        %{
+          package: "monty",
+          python: "frameworks/models/sensor_modules.py",
+          status: :planned,
+          classes: [
+            %{
+              python: "SurfaceNormalMethod",
+              status: :partial,
+              elixir: "Monty.Frameworks.Models.SensorModules.SurfaceNormalMethod",
+              reason: "only total least squares is written"
+            }
+          ]
+        }
+      ]
+
+      decisions = Mix.Tasks.Monty.ModuleMap.Gen.carry_decisions(entries)
+
+      assert %{
+               {"monty", "frameworks/models/sensor_modules.py"} => %{
+                 partial_classes: %{
+                   "SurfaceNormalMethod" => "only total least squares is written"
+                 }
+               }
+             } = decisions
+    end
   end
 
   # `verify/1` checks entries against the checkouts; an empty package list
@@ -213,6 +276,16 @@ defmodule Monty.ModuleMapTest do
       python: name,
       elixir: "Monty.Frameworks.Models.SensorModules.#{name}",
       status: :excluded
+    }
+
+    if reason, do: Map.put(class, :reason, reason), else: class
+  end
+
+  defp partial_class(name, reason) do
+    class = %{
+      python: name,
+      elixir: "Monty.Frameworks.Models.SensorModules.#{name}",
+      status: :partial
     }
 
     if reason, do: Map.put(class, :reason, reason), else: class

@@ -91,7 +91,7 @@ defmodule Monty.Studio.Setup do
           class: String.t() | nil,
           python: String.t() | nil,
           elixir: String.t() | nil,
-          status: :implemented | :planned | :excluded | :unknown
+          status: :implemented | :partial | :planned | :excluded | :unknown
         }
 
   @type sensor :: %{
@@ -378,7 +378,9 @@ defmodule Monty.Studio.Setup do
     modules = all_modules(setup)
 
     %{
-      implemented: Enum.count(modules, &(&1.status == :implemented)),
+      # A partial port is here: it runs, with the shortfall written down
+      # (`docs/partial-classes.md`), so it counts as written.
+      implemented: Enum.count(modules, &ModuleMap.written?/1),
       total: length(modules)
     }
   end
@@ -2073,9 +2075,11 @@ defmodule Monty.Studio.Setup do
   end
 
   # A config that names no class at all is `module_findings/1`'s to say; the same
-  # for one the map does not know. Only "implemented, and no module here" is this
-  # clause's.
-  defp not_registered(%{status: :implemented}), do: :not_registered
+  # for one the map does not know. Only "written in the map, and no module here"
+  # is this clause's.
+  defp not_registered(%{status: status} = _described) when status in [:implemented, :partial],
+    do: :not_registered
+
   defp not_registered(_absent_or_unknown), do: nil
 
   defp unbuildable_learning_module_finding(lm, reason) do

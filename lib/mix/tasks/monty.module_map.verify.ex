@@ -8,8 +8,9 @@ defmodule Mix.Tasks.Monty.ModuleMap.Verify do
       mix monty.module_map.verify --source ../monty-orig --teleop-source ../tbp.teleop
 
     * every Python file in a checkout has an entry;
-    * every entry marked `implemented` points at a module that exists;
-    * every entry marked `excluded` says why.
+    * every entry marked `implemented` or `partial` points at a module that
+      exists;
+    * every entry marked `excluded` or `partial` says why.
 
   It also reports a checkout that has moved since the map was generated: the map
   records the commits it was read from, so a `git pull` is a fact about the map
@@ -39,8 +40,9 @@ defmodule Mix.Tasks.Monty.ModuleMap.Verify do
       {:ok, summary} ->
         Mix.shell().info(
           "module map: #{summary.files} files, #{summary.classes} classes — " <>
-            "#{summary.implemented} implemented, #{summary.planned} planned, " <>
-            "#{summary.excluded} excluded, per package: #{inspect(summary.by_package)}"
+            "#{summary.implemented} implemented, #{summary.partial} partial, " <>
+            "#{summary.planned} planned, #{summary.excluded} excluded, " <>
+            "per package: #{inspect(summary.by_package)}"
         )
 
         if summary.unchecked != [] do

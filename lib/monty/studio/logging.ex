@@ -237,9 +237,12 @@ defmodule Monty.Studio.Logging do
 
   # The map says whether a class is ported; the code loader says whether the
   # module it points at is there. Asking both keeps a stale map from becoming a
-  # crash in the middle of a run, and a note instead.
+  # crash in the middle of a run, and a note instead. A class marked `:partial`
+  # is a module a run can use: what is missing is written down beside it, not
+  # absent from the module.
   # sobelow_skip ["DOS.ModuleConcat"]
-  defp described_module(%{status: :implemented, elixir: elixir}) do
+  defp described_module(%{status: status, elixir: elixir})
+       when status in [:implemented, :partial] do
     # The map's own `elixir` field, and the loader check below is what decides
     # whether the module is used at all.
     module = Module.concat([elixir])
