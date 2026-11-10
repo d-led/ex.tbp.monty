@@ -97,6 +97,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     SurfacePoseVectors.new([0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0])
   end
 
+  # The stored surface seen a thirtieth of a turn about its normal. Its frame is a
+  # rotation of 30° and not a symmetric matrix, so the frame's transpose is a
+  # different frame — which is what tells a vote that carries one from a vote that
+  # carries the other.
+  defp turned_pose do
+    half = :math.pi() / 6
+
+    SurfacePoseVectors.new(
+      [0.0, 0.0, 1.0],
+      [Float.round(:math.cos(half), 12), Float.round(:math.sin(half), 12), 0.0],
+      [Float.round(-:math.sin(half), 12), Float.round(:math.cos(half), 12), 0.0]
+    )
+  end
+
   # What the model does for the learning module around every step: it records
   # whether this module was given the observation.
   defp step(lm, percepts, processed \\ true) do
@@ -308,6 +322,27 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert Enum.all?(possible_states["mug"], &(&1.sender_type == :lm))
       assert [location | _rotation_rows] = sensed_pose
       assert length(location) == 3
+    end
+
+    # Monty's #1288: the vote carries the hypothesis' pose as the module stores
+    # it. A receiver turns the sensor displacement by this matrix, so a transposed
+    # one turns it by the inverse rotation and "if I am here, you are there"
+    # arrives pointing somewhere nobody is.
+    test "votes with the hypothesis' pose exactly as it is stored" do
+      lm =
+        learning_module(mug())
+        |> step([percept([0.2, 0.0, 0.0], [0.2], pose: turned_pose())])
+        |> step([percept([0.2, 0.0, 0.0], [0.2], pose: turned_pose())])
+
+      assert {%{possible_states: %{"mug" => [vote | _]}}, _lm} =
+               EvidenceGraphLM.send_out_vote(lm)
+
+      {:ok, %OrientationMatrix{value: value}} = Message.feature(vote, "pose_vectors")
+
+      # Membership says it is one of the poses the module holds. A transposed
+      # frame would be a different one: these poses turn 30°, and their
+      # transposes turn the other way.
+      assert value in Hypotheses.poses(lm.hypotheses["mug"])
     end
 
     test "stays silent when it was not given the observation" do

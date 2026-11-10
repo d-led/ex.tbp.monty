@@ -83,6 +83,24 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   `graph_id` of `nil` means recognition did not settle on an object in time, and
   a memory that learns from a guess is worse than one that learns nothing, so
   nothing is stored.
+
+  How each channel's data is handled falls into one of three cases, and the third
+  is the one that is easy to get wrong:
+
+    1. unknown object — the points are stored as they came, untransformed;
+    2. known object, known channel — the graph is extended, which transforms the
+       points into the model's own frame on the way in (`extend_graph/8`);
+    3. known object, **unknown channel** — a channel first seen in a later
+       episode. It has no graph to be extended, and building one from the
+       untransformed points puts the new channel in the body's frame while every
+       other channel of that object is in the model's: the two then never line up,
+       which is the misalignment of Monty's PR #1280. So the points are
+       transformed here, through the object's detected rotation, before the graph
+       is built.
+
+  Whether the object is known is decided once, before the loop: a channel this
+  call adds must not make the object look like it already had a reference frame
+  for the channels after it (Monty's own note on the same bug).
   """
   @spec update_memory(
           t(),
@@ -91,7 +109,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
           graph_id() | nil,
           [number()],
           [number()],
-          Monty.Geometry.Rotation.t()
+          Monty.Geometry.Rotation.t() | nil
         ) ::
           t()
   def update_memory(
@@ -116,29 +134,88 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
         location_rel_model,
         object_rotation
       ) do
+    object_known? = graph_id in get_memory_ids(memory)
+
+    Logger.info(
+      if(object_known?,
+        do: "#{graph_id} already in memory (#{inspect(get_memory_ids(memory))})",
+        else: "#{graph_id} not in memory (#{inspect(get_memory_ids(memory))})"
+      )
+    )
+
     Enum.reduce(features, memory, fn {input_channel, channel_features}, memory ->
       {channel_features, channel_locations} =
         extract_entries_with_content(channel_features, locations)
 
-      if graph_id in get_memory_ids(memory) and
-           input_channel in get_input_channels_in_graph(memory, graph_id) do
-        Logger.info("#{graph_id} already in memory, extending #{input_channel}")
+      cond do
+        not object_known? ->
+          build_graph(memory, channel_locations, channel_features, graph_id, input_channel)
 
-        extend_graph(
-          memory,
-          channel_locations,
-          channel_features,
-          graph_id,
-          input_channel,
-          object_location_rel_body,
-          location_rel_model,
-          object_rotation
-        )
-      else
-        Logger.info("#{graph_id} not in memory for #{input_channel}, building it")
-        build_graph(memory, channel_locations, channel_features, graph_id, input_channel)
+        input_channel in get_input_channels_in_graph(memory, graph_id) ->
+          extend_graph(
+            memory,
+            channel_locations,
+            channel_features,
+            graph_id,
+            input_channel,
+            object_location_rel_body,
+            location_rel_model,
+            object_rotation
+          )
+
+        true ->
+          {channel_locations, channel_features} =
+            transform_new_channel(
+              channel_locations,
+              channel_features,
+              graph_id,
+              input_channel,
+              object_location_rel_body,
+              location_rel_model,
+              object_rotation
+            )
+
+          build_graph(memory, channel_locations, channel_features, graph_id, input_channel)
       end
     end)
+  end
+
+  # A channel of a known object, seen for the first time: the points have to
+  # reach the model's reference frame before they become nodes, or this channel
+  # will sit in a frame of its own.
+  defp transform_new_channel(
+         channel_locations,
+         channel_features,
+         graph_id,
+         input_channel,
+         _object_location_rel_body,
+         _location_rel_model,
+         nil
+       ) do
+    Logger.warning(
+      "No object rotation for #{graph_id}; adding new channel #{input_channel} " <>
+        "without transforming it into the object's reference frame."
+    )
+
+    {channel_locations, channel_features}
+  end
+
+  defp transform_new_channel(
+         channel_locations,
+         channel_features,
+         _graph_id,
+         _input_channel,
+         object_location_rel_body,
+         location_rel_model,
+         object_rotation
+       ) do
+    SpatialArithmetics.apply_rf_transform_to_points(
+      channel_locations,
+      channel_features,
+      location_rel_model,
+      object_location_rel_body,
+      object_rotation
+    )
   end
 
   @doc """

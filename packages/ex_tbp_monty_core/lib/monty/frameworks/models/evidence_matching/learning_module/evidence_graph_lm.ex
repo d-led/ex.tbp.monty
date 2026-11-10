@@ -1519,9 +1519,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       Message.new(
         location: Hypotheses.location(hypotheses, id),
         morphological_features: %{
-          "pose_vectors" => %OrientationMatrix{
-            value: Geometry.transpose(Hypotheses.pose(hypotheses, id))
-          },
+          # The pose as the hypothesis holds it, not its transpose: a receiver
+          # turns the sensor displacement by this matrix, and a transposed one
+          # turns it by the inverse rotation, so every hypothesis would be heard
+          # in a frame nobody is standing in. Monty's #1288 is this line.
+          "pose_vectors" => %OrientationMatrix{value: Hypotheses.pose(hypotheses, id)},
           "pose_fully_defined" => true
         },
         non_morphological_features: %{},

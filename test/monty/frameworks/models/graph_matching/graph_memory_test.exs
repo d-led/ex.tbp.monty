@@ -32,6 +32,12 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemoryTest do
     |> GraphMemory.initialize_feature_arrays()
   end
 
+  # A quarter turn about z, so a point the body saw at +x lies at -y in the model.
+  defp quarter_turn do
+    {:ok, rotation} = Rotation.from_euler_degrees([0.0, 0.0, 90.0])
+    rotation
+  end
+
   describe "what memory knows" do
     test "objects and their channels can be listed" do
       memory = loaded(%{"mug" => model("mug", 2), "cup" => model("cup", 3)})
@@ -248,6 +254,111 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemoryTest do
         )
 
       assert GraphMemory.get_num_nodes_in_graph(extended, "mug", "patch") == 3
+    end
+
+    # Monty's `GraphMemoryUpdateMemoryTest`. It drives `_build_graph` and
+    # `_extend_graph` with mocks; here the same three cases are read off the
+    # memory afterwards, because where a node ends up is what a caller can see and
+    # what the bug was about.
+
+    # Monty: "test_if_unknown_object_builds_graph_from_features". An unknown
+    # object has no reference frame, so there is nothing to transform into and its
+    # points are stored as they came.
+    test "an unknown object is built from the points as they came, untransformed" do
+      learned =
+        GraphMemory.update_memory(
+          memory(),
+          [[1.0, 0.0, 0.0]],
+          %{
+            "patch" => %{
+              "rgba" => [[0.9]],
+              "pose_fully_defined" => [true],
+              "pose_vectors" => [@pose]
+            }
+          },
+          "mug",
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0],
+          quarter_turn()
+        )
+
+      assert GraphMemory.get_locations_in_graph(learned, "mug", "patch") == [[1.0, 0.0, 0.0]]
+    end
+
+    # Monty: "test_if_known_object_and_known_channel_extends_graph". A channel the
+    # object already has is added to, in one graph, not rebuilt.
+    test "a known object's known channel is extended rather than built again" do
+      memory = loaded(%{"mug" => model("mug", 2)})
+
+      extended =
+        GraphMemory.update_memory(
+          memory,
+          [[1.0, 0.0, 0.0]],
+          %{
+            "patch" => %{
+              "rgba" => [[0.9]],
+              "pose_fully_defined" => [true],
+              "pose_vectors" => [@pose]
+            }
+          },
+          "mug",
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0],
+          quarter_turn()
+        )
+
+      assert GraphMemory.get_num_nodes_in_graph(extended, "mug", "patch") == 3
+      assert GraphMemory.get_input_channels_in_graph(extended, "mug") == ["patch"]
+    end
+
+    # Monty: "test_if_known_object_and_unknown_channel_builds_graph_from_rotated_
+    # features" — a channel first seen in a *later* episode. Without the transform,
+    # this channel's nodes are in the body's frame while the object's other
+    # channels are in the model's, and the two never line up: that misalignment is
+    # PR #1280.
+    test "a known object's new channel is transformed into the object's frame" do
+      # A map of what this experiment reads, with both channels named: the second
+      # one is only in the map because a later episode is about to bring it.
+      memory =
+        GraphMemory.new(features_to_use: %{"patch" => ["rgba"], "view_finder" => ["rgba"]})
+        |> GraphMemory.add_graph_to_memory(%{"patch" => model("mug", 2)}, "mug")
+        |> GraphMemory.initialize_feature_arrays()
+
+      learned =
+        GraphMemory.update_memory(
+          memory,
+          [[1.0, 0.0, 0.0]],
+          %{
+            "view_finder" => %{
+              "rgba" => [[0.9]],
+              "pose_fully_defined" => [true],
+              # Looking along +x: a quarter turn to the left of it is +y.
+              "pose_vectors" => [[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]]
+            }
+          },
+          "mug",
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0],
+          quarter_turn()
+        )
+
+      # The object was seen a quarter turn away from the model, so the point the
+      # body saw at +x is at -y in the model.
+      assert [[x, y, z]] = GraphMemory.get_locations_in_graph(learned, "mug", "view_finder")
+      assert_in_delta x, 0.0, 1.0e-12
+      assert_in_delta y, -1.0, 1.0e-12
+      assert_in_delta z, 0.0, 1.0e-12
+
+      # And the pose travels with the point, or the channel would be in the right
+      # place facing the wrong way. Read off the graph the new channel built,
+      # because the pose features are not among the ones a module compares.
+      assert [[nx, ny, _nz, _, _, _, _, _, _]] =
+               learned
+               |> GraphMemory.get_graph("mug", "view_finder")
+               |> GraphObjectModel.get_values_for_feature("pose_vectors")
+
+      assert_in_delta nx, 0.0, 1.0e-12
+      assert_in_delta ny, -1.0, 1.0e-12
     end
 
     test "an observation the sensor saw nothing in is not learned from" do
