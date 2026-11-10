@@ -821,3 +821,32 @@ Two consequences, and they are the work:
 Neither is a cache and neither is a one-line change; both are the "one crossing"
 this document has been pointing at since 2026-11-02, now with the call counts that
 say which passes to cross.
+
+## A step copied a module's memory into the module (2026-11-10) — 285 ms → 108 ms
+
+`Monty.Runtime.Step.read_conclusions/1` asks each module what it concluded, and it
+built that request as `fn -> LearningModuleServer.query(server, &lm.module.conclusion(&1)) end`
+— a closure over `lm`, the module's _spec_. A spec carries `:state`, and a module
+reading a pretrained memory keeps tens of megabytes there, so the closure carried
+the memory with it: a `GenServer.call` copies its request into the receiving
+process, so every processed step copied the module's own memory into the module and
+threw it away again.
+
+Measured on one recorded step of `base_config_10distinctobj_dist_agent`
+(`scripts/probe_step_profile.exs`, `tprof` `call_memory`): the top row was
+`gen_server:loop/5` at **75.7 % of the step's allocations**, attributable to no
+Elixir function — that copy. Timed at the phase seam (a temporary `:timer.tc`,
+since removed), `advance/1` was 150–230 ms of a 285 ms step, and inside it
+`read_conclusions/1` was 178–230 ms while the projection it asked for answered in
+**0 ms**.
+
+Closing over the module's _name_ instead: **one step 285 → 108 ms** on the same
+probe, and the acceptance ladder digit for digit (the test-env lines `0.746 (192,
+6)` … `6.338 (1429, 2)`, `goals 15065`). `probe_step_phases.exs` agrees — a
+processed step of `base_10simobj_surf_agent` read 711 ms of model time before the
+fix.
+
+The trap to keep: **a closure sent to another process is copied with its whole
+environment.** The coordinator deliberately holds a module's _wiring_ rather than
+its memory, but `Monty.Runtime.Step.State`'s `module_spec` still carries `:state`,
+so nothing handed to a module may close over a spec.

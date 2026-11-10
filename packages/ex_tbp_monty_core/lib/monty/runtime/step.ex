@@ -652,11 +652,18 @@ defmodule Monty.Runtime.Step do
   # possible has concluded `no_match` already. A module here is a process, so the
   # model asks for that one value; `update_terminal_conditions/1` is the other
   # question, and Monty asks it only past an episode's minimum number of steps.
+  #
+  # The request is a closure, and a closure sent to another process is copied
+  # into it: this one therefore closes over the module's *name*, never over the
+  # module's spec. A spec carries the module's state, which for a module reading
+  # a pretrained memory is tens of megabytes, so closing over it copied that
+  # memory into the module's own process on every processed step — measured at
+  # **209 ms of a 285 ms step**, for a projection that answers an atom.
   defp read_conclusions(%State{model_id: model_id} = state) do
     requests =
-      Enum.map(state.learning_modules, fn lm ->
-        server = Registry.via({:learning_module, model_id, lm.id})
-        {lm.id, fn -> LearningModuleServer.query(server, &lm.module.conclusion(&1)) end}
+      Enum.map(state.learning_modules, fn %{id: id, module: module} ->
+        server = Registry.via({:learning_module, model_id, id})
+        {id, fn -> LearningModuleServer.query(server, &module.conclusion(&1)) end}
       end)
 
     %{replies: conclusions} = Barrier.run(requests, state.call_timeout)
