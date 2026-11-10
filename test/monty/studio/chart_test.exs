@@ -134,6 +134,33 @@ defmodule Monty.Studio.ChartTest do
       assert second |> String.split(" ") |> length() == 1
     end
 
+    # A run longer than the plot is wide is drawn from a couple of samples per
+    # column, and that is decided before the gaps are worked out — because the
+    # samples are all a drawing needs, and a page rebuilds ten charts while its
+    # run is stepping. What must survive the cutting is the gap: a step nobody
+    # reported is a step apart whether the run is ten steps long or five
+    # thousand, so the line still breaks there instead of bridging it.
+    test "breaks where a step did not report it, in a run longer than the plot is wide" do
+      steps =
+        for step <- 0..4_999 do
+          graphs = if step == 2_500, do: %{"bowl" => 1.0}, else: %{"mug" => 1.0 + step / 1_000}
+          {0, step, belief(graphs)}
+        end
+
+      mug = steps |> Chart.new() |> Map.fetch!(:series) |> Enum.find(&(&1.graph_id == "mug"))
+
+      assert length(mug.points) == 2
+    end
+
+    test "is carried as a couple of samples per column, not as every step it drew" do
+      steps = for step <- 0..4_999, do: {0, step, belief(%{"mug" => 1.0 + step / 1_000})}
+
+      chart = Chart.new(steps)
+      [mug] = chart.series
+
+      assert length(mug.evidence) <= 2 * chart.width
+    end
+
     test "every object that was ever reported gets one" do
       chart =
         Chart.new([

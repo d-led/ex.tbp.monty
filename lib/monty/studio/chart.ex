@@ -88,7 +88,9 @@ defmodule Monty.Studio.Chart do
   One object's evidence over the run.
 
   `evidence` is `[{x, evidence}]` where `x` counts from the run's first step and
-  does not restart with an episode. `points` is `"x,y x,y …"` for an SVG
+  does not restart with an episode: the samples the line is drawn from, which is
+  every step when the plot is wide enough for them and a couple per column when
+  it is not (`decimate/2`). `points` is `"x,y x,y …"` for an SVG
   `polyline`, one entry per contiguous run of steps: a graph that was reported on
   steps 1, 2 and 4 has two segments, the gap between 2 and 4 is visible, and an
   episode boundary is always a break — a line that continued from one episode's
@@ -173,6 +175,15 @@ defmodule Monty.Studio.Chart do
 
     # Ranked worst first, so the object a run is converging on is drawn last and
     # its line ends on top of the others.
+    #
+    # Each object's points are cut down to what the plot can show here, before
+    # anything is drawn from them: the four hundred units between two pixels are
+    # invisible, so a run of twenty thousand steps is at most a couple of samples
+    # per column per object. Everything below — the gaps, the axis, the strings
+    # a polyline is made of — then works on a few thousand samples rather than on
+    # every step the run ever took, which is the difference between a drawing that
+    # costs a page four hundred milliseconds and one that costs twenty.
+    chart = %__MODULE__{width: width, height: height, x_min: from, x_max: to}
     ranked = evidence_by_object(placed)
     points_by_object = Map.new(ranked)
     objects = Keyword.get(options, :objects) || Enum.map(ranked, &elem(&1, 0))
@@ -188,17 +199,17 @@ defmodule Monty.Studio.Chart do
         points_by_object
       )
 
-    # Every value the chart will draw, flattened once: the floor and the ceiling
-    # are the same list, and computing it twice is how they drift.
-    evidence_values = Enum.map(ranked, fn {_id, points} -> Enum.map(points, &elem(&1, 2)) end)
+    # The lowest and the highest value the chart will draw, in one pass: the
+    # floor and the ceiling are read off the same fold so they cannot drift, and
+    # a run of twenty thousand steps does not build two lists of every value to
+    # throw them away. Cutting the samples down first cannot move either end:
+    # `decimate/2` keeps the lowest and the highest of every column.
+    {worst, best} = extreme_values(ranked)
 
-    chart = %__MODULE__{
-      width: width,
-      height: height,
-      x_min: from,
-      x_max: to,
-      y_min: y_floor(evidence_values),
-      y_max: ceiling(evidence_values)
+    chart = %{
+      chart
+      | y_min: y_floor(worst),
+        y_max: ceiling(best)
     }
 
     # Where the episodes begin, in the SVG's own units: a boundary line for every
@@ -223,11 +234,20 @@ defmodule Monty.Studio.Chart do
       |> Enum.map(fn object_id ->
         points = Map.get(points_by_object, object_id, [])
 
+        # One list of samples per polyline, cut down to what a column can show —
+        # the same lists the line is drawn from and the series carries, so what a
+        # page holds is what it draws and not every step of a long run.
+        drawn = drawn_samples(points, chart)
+
         %{
           graph_id: object_id,
           colour: Map.fetch!(labels, object_id).colour,
-          evidence: Enum.map(points, fn {_episode, x, evidence} -> {x, evidence} end),
-          points: segments(points, chart),
+          evidence:
+            drawn |> Enum.concat() |> Enum.map(fn {_episode, x, evidence} -> {x, evidence} end),
+          points:
+            Enum.map(drawn, fn segment ->
+              Enum.map_join(segment, " ", &points_string(&1, chart))
+            end),
           last: point(List.last(points) |> last_point(chart), chart)
         }
       end)
@@ -366,7 +386,11 @@ defmodule Monty.Studio.Chart do
       end)
 
     by_object
-    |> Map.new(fn {graph_id, points} -> {graph_id, Enum.sort(points)} end)
+    # The steps were put in run order by `stack/1`, so one object's points come
+    # out of the fold back to front — the step that arrived is the one on top.
+    # Reversing is what puts them right again, and it is not a sort: sorting ten
+    # objects of twenty thousand points was a quarter of a drawing.
+    |> Map.new(fn {graph_id, points} -> {graph_id, Enum.reverse(points)} end)
     |> Enum.sort_by(fn {graph_id, points} -> {List.last(points), graph_id} end)
   end
 
@@ -420,14 +444,22 @@ defmodule Monty.Studio.Chart do
     end
   end
 
+  # The lowest and the highest evidence the chart draws, over every object's
+  # points. An empty chart has both at zero, which `ceiling/1` turns into a scale.
+  defp extreme_values(ranked) do
+    Enum.reduce(ranked, {nil, nil}, fn {_graph_id, points}, {worst, best} ->
+      Enum.reduce(points, {worst, best}, fn {_episode, _x, evidence}, {low, high} ->
+        {if(low == nil or evidence < low, do: evidence, else: low),
+         if(high == nil or evidence > high, do: evidence, else: high)}
+      end)
+    end)
+  end
+
   # Rounded up to a whole number so the axis has a unit to label, and never zero:
   # an empty chart still needs a scale to divide by.
-  defp ceiling([]), do: 1.0
+  defp ceiling(nil), do: 1.0
 
-  defp ceiling(all_evidence) do
-    best = all_evidence |> List.flatten() |> Enum.max(fn -> 0.0 end)
-    max(Float.ceil(best), 1.0)
-  end
+  defp ceiling(best), do: max(Float.ceil(best), 1.0)
 
   # Zero, unless the evidence went below it. A hypothesis is penalised as well as
   # rewarded, so a run's evidence really can fall under zero, and an axis pinned
@@ -435,12 +467,9 @@ defmodule Monty.Studio.Chart do
   # themselves across the x axis labels, which is a chart lying about its own
   # scale. The floor is a whole number at or below the lowest point, so ticks
   # stay round and the baseline is still named.
-  defp y_floor([]), do: 0.0
+  defp y_floor(nil), do: 0.0
 
-  defp y_floor(all_evidence) do
-    worst = all_evidence |> List.flatten() |> Enum.min(fn -> 0.0 end)
-    min(Float.floor(worst), 0.0)
-  end
+  defp y_floor(worst), do: min(Float.floor(worst), 0.0)
 
   # A segment per contiguous run of steps: an object reported on 1, 2 and 4 has
   # two polylines, and the missing step 3 stays missing.
@@ -451,13 +480,19 @@ defmodule Monty.Studio.Chart do
   # the reset. What the break cost was a hole in the line at every boundary,
   # which reads as missing data rather than as a reset, so the line now joins the
   # two when the steps are adjacent and breaks only where nothing was reported.
-  defp segments(points, chart) do
+  # The samples each polyline is drawn from: one list per contiguous run of
+  # reported steps, cut down to what the plot's columns can show.
+  #
+  # A gap is a jump in x between two steps the module reported, and it is judged
+  # there — on the steps themselves, not on the samples left after cutting them
+  # down, which sit a column apart and would make every column a break of its own.
+  defp drawn_samples(points, chart) do
     points
     |> Enum.reduce([], fn {episode, _x, _evidence} = point, segments ->
       case segments do
-        [{_same_episode, run} | earlier] ->
-          if contiguous?(point, List.last(run)),
-            do: [{episode, run ++ [point]} | earlier],
+        [{_same_episode, [previous | _] = run} | earlier] ->
+          if contiguous?(point, previous),
+            do: [{episode, [point | run]} | earlier],
             else: [{episode, [point]} | segments]
 
         [] ->
@@ -466,7 +501,11 @@ defmodule Monty.Studio.Chart do
     end)
     |> Enum.reverse()
     |> Enum.map(fn {_episode, run} ->
-      Enum.map_join(decimate(run, chart), " ", &points_string(&1, chart))
+      # Each run is built back to front — the point that arrived is the one on
+      # top — so it is turned round once here. Appending instead copied the run
+      # at every step, which was nine hundred milliseconds of a drawing for a run
+      # of twenty thousand.
+      run |> Enum.reverse() |> decimate(chart)
     end)
   end
 
