@@ -70,6 +70,16 @@ defmodule Monty.Simulators.Synthetic.CameraTest do
     assert frame.note == "step 0 · no image"
   end
 
+  test "a picture kept without its depths says it is the recorded one" do
+    # A replay draws the file a step wrote; the row does not carry the arrays
+    # that would say how far the surface was, and a frame that plainly shows the
+    # object must not claim the sensor saw nothing.
+    frame =
+      Camera.frame("patch", %{"images" => %{"depth" => "/runs/a/frames/6/patch-depth.png"}}, 6)
+
+    assert frame.note == "step 6 · as recorded"
+  end
+
   test "a sensor id is escaped, so a frame is markup a page may render" do
     frame = Camera.frame("<script>alert(1)</script>", observation(), 0)
 

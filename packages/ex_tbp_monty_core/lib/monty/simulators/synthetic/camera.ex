@@ -178,8 +178,12 @@ defmodule Monty.Simulators.Synthetic.Camera do
   defp note(step, observation) do
     case images(observation).range do
       nil ->
+        # A picture without its depths is a kept one: a replay reads the step's
+        # file, and the arrays that would say how far the surface was are the
+        # part the row does not carry. "Saw nothing" was a lie about a frame
+        # that plainly shows the object.
         if has_picture?(observation),
-          do: "step #{step} · saw nothing",
+          do: "step #{step} · as recorded",
           else: "step #{step} · no image"
 
       {low, high} when high - low < 0.001 ->
