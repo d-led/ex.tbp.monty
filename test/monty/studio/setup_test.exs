@@ -226,6 +226,36 @@ defmodule Monty.Studio.SetupTest do
       assert setup.cameras == %{}
     end
 
+    # The other way a config names its cameras: one sensor at a time in an
+    # `agents` map, with the resolutions and the zooms in the agent's own sensor
+    # order rather than beside each sensor. A sensor with no resolution of its
+    # own is a sensor with no camera — there is nothing to render through.
+    test "agents named as a map keep their sensors' resolution and zoom by position" do
+      setup =
+        Setup.new(%{
+          "experiment" => %{
+            "config" => %{
+              "environment" => %{
+                "env_init_args" => %{
+                  "agents" => %{
+                    "agent_args" => %{
+                      "sensor_ids" => ["patch", "view_finder", "unresolved"],
+                      "resolutions" => [[64, 64], [128, 96]],
+                      "zooms" => [10.0]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        })
+
+      assert setup.cameras == %{
+               "patch" => [resolution: {64, 64}, zoom: 10.0, hfov: 90.0],
+               "view_finder" => [resolution: {128, 96}, zoom: 1.0, hfov: 90.0]
+             }
+    end
+
     test "a config Monty ships and this port can run has no errors" do
       setup = setup_for("base_config_10distinctobj_dist_agent")
 
