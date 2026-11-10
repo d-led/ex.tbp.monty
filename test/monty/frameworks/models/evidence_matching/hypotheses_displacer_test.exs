@@ -1,10 +1,13 @@
 defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
+  alias Monty.Frameworks.Utils.SpatialArithmetics
+  alias Monty.Geometry
   alias Monty.Geometry.Rotation
 
   @pose [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -223,4 +226,53 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
       assert telemetry.mlh_prediction_error < 0.5
     end
   end
+
+  # Monty's `ObjectPoseEvidenceTest` — the `` clause of PR #1266: a channel whose
+  # pose is an object orientation is scored by how far two rotations are apart,
+  # scaled so 0° is 1 and 180° is -1.
+  describe "object_pose_evidence/2" do
+    property "maps 0 to π onto 1 to -1, whatever the poses are" do
+      check all(
+              query_poses <- list_of(rotation_matrix(), max_length: 3),
+              axis <- unit_vector(),
+              angle <- StreamData.float(min: 0.0, max: :math.pi())
+            ) do
+        # The stored pose is the query turned by `angle` about `axis`, so the
+        # relative rotation is exactly that angle however the query is turned.
+        turn = Rotation.from_axis_angle(axis, angle) |> elem(1) |> Rotation.to_matrix()
+        node_poses = Enum.map(query_poses, fn query -> [flat(Geometry.mul(query, turn))] end)
+
+        evidence = HypothesesDisplacer.object_pose_evidence(query_poses, node_poses)
+
+        for [earned] <- evidence do
+          # The angle comes off a trace of a product of two rotation matrices,
+          # so it is only nearly exact — at 0° the cosine sits a rounding error
+          # away from 1, and `acos` amplifies that into the seventh decimal.
+          assert_in_delta earned, 1 - 2 * angle / :math.pi(), 1.0e-6
+        end
+      end
+    end
+  end
+
+  defp rotation_matrix do
+    gen all(
+          axis <- unit_vector(),
+          angle <- StreamData.float(min: 0.0, max: 2 * :math.pi())
+        ) do
+      Rotation.from_axis_angle(axis, angle) |> elem(1) |> Rotation.to_matrix()
+    end
+  end
+
+  defp unit_vector do
+    gen all(
+          x <- StreamData.float(min: -1.0, max: 1.0),
+          y <- StreamData.float(min: -1.0, max: 1.0),
+          z <- StreamData.float(min: -1.0, max: 1.0),
+          SpatialArithmetics.magnitude([x, y, z]) > 0.05
+        ) do
+      SpatialArithmetics.normalize([x, y, z])
+    end
+  end
+
+  defp flat([[a, b, c], [d, e, f], [g, h, i]]), do: [a, b, c, d, e, f, g, h, i]
 end

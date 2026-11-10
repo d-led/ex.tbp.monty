@@ -1,5 +1,6 @@
 defmodule Monty.Frameworks.Utils.GraphMatchingUtilsTest do
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Geometry.Rotation
@@ -7,6 +8,7 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtilsTest do
   alias Monty.Math
 
   import GraphMatchingUtils
+  import Monty.Frameworks.Utils.SpatialArithmetics, only: [magnitude: 1, normalize: 1]
 
   @quarter_turn :math.pi() / 2
   @tolerance Math.default_tolerance()
@@ -284,6 +286,61 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtilsTest do
         |> Enum.map(fn direction -> Enum.map(direction, &Float.round(&1, 6)) end)
 
       assert directions == [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]]
+    end
+  end
+
+  # Monty's `EuclideanDistancesTest`. A channel whose pose is an object
+  # orientation has no sensed normal, so its search sphere is a plain distance
+  # (PR #1266), and this is the calibration case that says so in numbers.
+  describe "euclidean_distances/2" do
+    test "two hypotheses with two neighbours each come back as their plain distances" do
+      assert euclidean_distances(
+               [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]],
+               [
+                 [[3.0, 4.0, 0.0], [0.0, 0.0, 2.0]],
+                 [[1.0, 1.0, 1.0], [1.0, 1.0, 0.0]]
+               ]
+             ) == [[5.0, 2.0], [0.0, 1.0]]
+    end
+
+    # Monty's `CustomDistancesTest.test_greater_than_or_equal_to_euclidean_dist`:
+    # flattening a search along the normal can only ever add to a distance.
+    property "a surface distance is never shorter than the plain one" do
+      check all(
+              search_location <- vector(),
+              node_location <- vector(),
+              normal <- unit_vector(),
+              curvature <- StreamData.float(min: 0.0, max: 10.0)
+            ) do
+        euclidean = euclidean_distances([search_location], [[node_location]])
+        custom = custom_distances([[node_location]], [search_location], [normal], curvature)
+
+        [[surface]] = custom
+        [[plain]] = euclidean
+
+        assert surface >= plain - @tolerance
+      end
+    end
+  end
+
+  defp vector do
+    gen all(
+          x <- StreamData.float(min: -5.0, max: 5.0),
+          y <- StreamData.float(min: -5.0, max: 5.0),
+          z <- StreamData.float(min: -5.0, max: 5.0)
+        ) do
+      [x, y, z]
+    end
+  end
+
+  defp unit_vector do
+    gen all(
+          x <- StreamData.float(min: -1.0, max: 1.0),
+          y <- StreamData.float(min: -1.0, max: 1.0),
+          z <- StreamData.float(min: -1.0, max: 1.0),
+          magnitude([x, y, z]) > 0.05
+        ) do
+      normalize([x, y, z])
     end
   end
 

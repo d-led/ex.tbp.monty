@@ -32,6 +32,9 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtils do
   @default_curvature_tolerance_degrees 20
   @curvature_fallback 10
   @default_pose_count 9
+  # Monty's `MINIMUM_CURVATURE`: the room a search keeps off a flat surface's
+  # tangent plane, and what keeps `flatness/1` from dividing by zero.
+  @minimum_curvature 0.5
   @fallback_curvature_key_order [
     "mean_curvature",
     "mean_curvature_sc",
@@ -274,6 +277,11 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtils do
   `|curvature| + 0.5` lets a curved surface search further off that plane than
   a flat one — while the 0.5 keeps a flat surface from collapsing the sphere to
   a disc (and the division from being by zero).
+
+  This is for a channel whose pose is a **surface** pose — a normal and two
+  curvature directions. A channel whose pose is an object orientation has no
+  tangent plane to flatten against, and takes `euclidean_distances/2` instead
+  (Monty's #1266).
   """
   @spec custom_distances(
           [locations()],
@@ -293,15 +301,31 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtils do
   end
 
   @doc """
+  Distances from each hypothesis' search point to its nearest graph nodes.
+
+  Monty's `euclidean_distances`: the plain distance, for a channel whose pose is
+  an object orientation rather than a surface. There is no sensed normal to
+  flatten against, so the surface version's penalty has nothing to act on.
+  """
+  @spec euclidean_distances([[number()]], [locations()]) :: [[float()]]
+  def euclidean_distances(search_locations, nearest_node_locations) do
+    [search_locations, nearest_node_locations]
+    |> Enum.zip()
+    |> Enum.map(fn {search_location, node_locations} ->
+      Enum.map(node_locations, &SpatialArithmetics.magnitude(SpatialArithmetics.subtract(&1, search_location)))
+    end)
+  end
+
+  @doc """
   How far off its tangent plane a curved surface lets a search stray.
 
-  `1 / (|curvature| + 0.5)`: a curved surface searches further off the plane than
-  a flat one, and the 0.5 keeps a flat surface from collapsing the sphere to a
-  disc (and the division from being by zero). One number per channel, handed to
-  `custom_distance/4` for every neighbour of every hypothesis.
+  `1 / (|curvature| + @minimum_curvature)`: a curved surface searches further off
+  the plane than a flat one, and the minimum keeps a flat surface from collapsing
+  the sphere to a disc (and the division from being by zero). One number per
+  channel, handed to `custom_distance/4` for every neighbour of every hypothesis.
   """
   @spec flatness(number()) :: float()
-  def flatness(search_curvature), do: 1 / (abs(search_curvature) + 0.5)
+  def flatness(search_curvature), do: 1 / (abs(search_curvature) + @minimum_curvature)
 
   @doc """
   The distance from one search point to one node, flattened along the normal.

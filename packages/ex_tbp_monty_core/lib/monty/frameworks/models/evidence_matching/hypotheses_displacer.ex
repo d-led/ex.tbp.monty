@@ -596,6 +596,42 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
      features |> Map.fetch!("pose_fully_defined") |> Enum.map(&hd/1) |> List.to_tuple()}
   end
 
+  @doc """
+  Evidence from how far two object orientations are apart, in `[-1, 1]`.
+
+  Monty's `_object_pose_evidence`: the channel's pose is an `OrientationMatrix`
+  rather than a surface, so the comparison is between rotations and not between
+  a normal and a curvature direction. The angle between the hypothesised
+  orientation of the sensed object (`query_poses`) and the stored one comes off
+  the trace of their relative rotation — `trace(R) = 1 + 2 cos θ` — which is one
+  element-wise product per hypothesis and node, and no `Rotation` at all. Scaled
+  linearly so 0° is `1` and 180° is `-1`.
+
+  Rows are hypotheses and columns are the neighbours of each: `query_poses` is
+  `H` orientations of three rows, `node_poses` is `H` lists of `K` stored pose
+  vectors, each nine numbers row by row.
+
+  A channel whose pose is a surface is scored by `pose_evidence/6` instead; this
+  one is what Monty chooses for an object-orientation channel.
+  """
+  @spec object_pose_evidence([[[number()]]], [[[number()]]]) :: [[float()]]
+  def object_pose_evidence(query_poses, node_poses) do
+    query_poses
+    |> Enum.zip(node_poses)
+    |> Enum.map(fn {query, nodes} -> Enum.map(nodes, &object_pose_angle_evidence(query, &1)) end)
+  end
+
+  # `trace(query · nodeᵀ)` is the element-wise product of the two, summed.
+  defp object_pose_angle_evidence([[q1, q2, q3], [q4, q5, q6], [q7, q8, q9]], node) do
+    [n1, n2, n3, n4, n5, n6, n7, n8, n9 | _unread] = node
+
+    trace =
+      q1 * n1 + q2 * n2 + q3 * n3 + q4 * n4 + q5 * n5 + q6 * n6 + q7 * n7 + q8 * n8 + q9 * n9
+
+    angle = :math.acos(Monty.Math.clip((trace - 1) / 2, -1.0, 1.0))
+    1 - 2 * angle / :math.pi()
+  end
+
   # What the pose comparison weighs its two directions: the normal always, the
   # first curvature direction only when the observation defined one.
   defp pose_weights(displacer, input_channel, fully_defined?) do
