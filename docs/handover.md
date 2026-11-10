@@ -1888,13 +1888,40 @@ now` minus `started_at || inserted_at`) and both pages using it. `0µs` was read
    reaps it, with the Reaper's truthful but uninformative "it stopped before it
    finished — nothing was working on it any more". The task does exit 1, so a
    script sees the failure; the record does not say why.
-7. **The `Enum.slice/3` caller is still owed** (carried from the old §16.3, and
-   still the cheapest 10 % in a step): 420 `Enum.slice/3` calls and 16 083 list
-   slice operations a step, whose direct caller was lost with a 660 MB trace
-   before it was read. One re-trace answers it; the change after that is
-   mechanical — select through `Hypotheses.take/2`'s `binary_part/3`, which is
-   already written and used elsewhere. The hypothesis columns themselves are
-   already packed: do not "pack the hypotheses" again.
+7. **The `Enum.slice/3` caller is answered** (`567861d`, 2026-11-10). It was 420
+   `Enum.slice/3` calls and 16 083 slice operations a step: burst sampling asked
+   `GraphMemory.get_rotation_features_at_nodes/4` for the frames of a few hundred
+   nodes, and that walked the graph's whole `x` — one `Enum.slice` per node — then
+   built a tuple of every node's rows. The frames now come from a cache built with
+   the feature rows and dropped by `forget_rows/2,3`; `get_values_for_feature` no
+   longer appears in a matching step's profile at all, and the read went from
+   9 455 µs to 105 µs a step. The hypothesis columns were already packed, as the
+   old note said — the waste was re-reading the graph's, not the hypotheses'.
+8. **The next 10× is one piece of work, not a list.** After the three cuts of
+   2026-11-10 (`567861d`, `22f7f2c`, `1ac30f9`) a matching step of the ten-object
+   distant agent costs 1.6–2.4 M reductions: learning module 0.98–1.75 M, view
+   finder 0.43–0.46 M, patch 0.21 M, coordinator 0.03 M. Inside the learning
+   module nothing is above 6 % any more — fprof's own-time table is `Enum.reduce`
+   plumbing 245, inner `Enum.map` closures 162, `Hypotheses.gather/3` 64,
+   `EvidenceSlopeTracker.keep_where` 26, `remove_hyp` 26, `Hypotheses.bytes/2` 26,
+   `update/3` 19, then six items of 13 or less — and all of it is **~60 Elixir
+   function calls per hypothesis over ~13 000 hypotheses**, against Monty's ~100
+   numpy calls for the same step. The way through is one kernel pass over
+   representations that are already bytes: `Hypotheses.evidence_bytes/1`,
+   `rows_at/2`, `GraphMemory.get_node_arrays/3`, the cached
+   `rotation_features`, and `EvidenceSlopeTracker`'s ring. Two slices, in this
+   order, each measurable on its own:
+   - **burst sampling's construction** — `Hypotheses.new/1` builds ~6 400 rows a
+     step per graph out of `List.duplicate |> Enum.concat` (ACC 84 of the LM's
+     1 092). Given node indices, the rotation rows and the evidence column, the
+     kernel can emit the four binaries directly.
+   - **the gather** — `Hypotheses.take/2` and `rows_at/2` make 64 160
+     `binary_part/3` calls a step (own 64, the largest named item). A kernel
+     gathering f64 rows by index does the same copy without per-index sub-binary
+     calls.
+     Then, if a step is still above a few million reductions, the patch sensor's
+     depth→3D walk (`docs/speed.md`, "the one small list a pixel") is the remaining
+     per-pixel pass.
 
 ### 34.6 Two traps from this session
 
