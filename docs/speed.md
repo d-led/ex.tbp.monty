@@ -879,3 +879,37 @@ Two lessons worth keeping:
   in `emu`, and the step's own processes make no collections at all. eprof traces
   every call, and building a trace message per call inflates the heap until GC
   dominates the table it prints. Quote `:msacc` or reductions for GC, never eprof.
+
+## What the world really costs, and the crossing that does not have to be spent (2026-11-10)
+
+Every probe in this document runs in `MIX_ENV=test`, and `config/test.exs` sets
+`world_simulator: :synthetic` — this port's stand-in scene, one sphere, ray-cast in
+Elixir. A run in the studio or in production steps `:mujoco` (`config/config.exs`,
+and Monty's own snapshot names `tbp.monty.simulators.mujoco.MuJoCoSimulator` for
+`base_10simobj_surf_agent`). So a "world" figure from a test-env probe is the
+stand-in's, not the run's, and no ray caster is on the path of a real step: MuJoCo
+renders in C and we only talk to it.
+
+Measured with the same probe against the MuJoCo world (`world_simulator: :mujoco`
+forced before `Studio.open/1`), per steady-state step of `base_10simobj_surf_agent`:
+
+| stage         |                            cost | what it is                                                                                                                              |
+| ------------- | ------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Python        |                         7–10 ms | MuJoCo steps the scene and renders each camera                                                                                          |
+| the crossing  |                           ~0 ms | `Pythonx.decode` of one **132 KB** binary; the arrays already cross as bytes (`world.py::_answer`: a JSON header, a newline, the bytes) |
+| answer decode |                          1–4 ms | `Monty.Simulators.Mujoco.Answer` — every array's bytes become boxed floats in nested lists                                              |
+| transforms    | 5–7 ms, **~611 000 reductions** | `MissingToMaxDepth` and `DepthTo3DLocations` walking those lists                                                                        |
+
+So roughly half of the world phase is our own materialisation and walking, not the
+scene. Monty spends none of it: its world hands back numpy arrays that are views
+of MuJoCo's buffers, and `DepthTo3DLocations` is numpy arithmetic over them — no
+number is ever unpacked into a Python float, let alone a boxed one. That is the
+shape of the remaining win here: keep the arrays as the bytes they arrived as until
+a kernel consumes them, and make the transform chain one pass over those bytes.
+The lists survive only where a reader needs a shape (the page's frames), and are
+built there.
+
+First step taken: `get_surface_from_depth/3` read the clipped depth image three
+times — built it as an image, walked it row by row to ask "is nothing nearer than
+a metre", then flattened it for the histogram — to answer two questions about it.
+It reads flat once now: **~644 500 → ~611 400 reductions** a step.

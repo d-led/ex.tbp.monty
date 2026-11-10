@@ -178,15 +178,31 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   def get_surface_from_depth(depth, semantic, default_threshold) do
     # Seeing the table goes up to almost a hundred metres, and eight bins over
     # that range would separate nothing, so anything past a metre is a metre.
-    near = Enum.map(depth, fn row -> Enum.map(row, &min(&1, 1.0)) end)
+    #
+    # The clipped image is read once, flat: the two questions that decide this
+    # mask are its smallest and largest value. It used to be built as an image,
+    # walked again row by row to ask "is nothing nearer than a metre", and then
+    # flattened to answer the histogram — three walks of four thousand pixels for
+    # two numbers.
+    near = for row <- depth, pixel <- row, do: min(pixel, 1.0)
+    {low, high} = Enum.min_max(near)
 
-    # Nothing in view is nearer than a metre: asked row by row, because the
-    # answer is only yes or no and flattening the image to ask costs four
-    # thousand list steps.
-    if near |> Enum.all?(fn row -> Enum.all?(row, &(&1 >= 1.0)) end) do
-      Enum.map(near, fn row -> Enum.map(row, fn _pixel -> 0.0 end) end)
+    if low >= 1.0 do
+      Enum.map(depth, fn row -> Enum.map(row, fn _pixel -> 0.0 end) end)
     else
-      {threshold, flip?} = get_on_surface_th(near, semantic, @min_depth_range, default_threshold)
+      {threshold, flip?} =
+        threshold_between(
+          near,
+          low,
+          high,
+          # The clipped image's middle pixel, which is what the threshold was
+          # always measured against.
+          min(middle_pixel(depth), 1.0),
+          semantic,
+          @min_depth_range,
+          default_threshold
+        )
+
       keep(depth, semantic, threshold, flip?)
     end
   end
@@ -226,6 +242,26 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
     depths = List.flatten(depth)
     {low, high} = Enum.min_max(depths)
 
+    threshold_between(
+      depths,
+      low,
+      high,
+      middle_pixel(depth),
+      semantic,
+      min_depth_range,
+      default_threshold
+    )
+  end
+
+  defp threshold_between(
+         depths,
+         low,
+         high,
+         middle_depth,
+         semantic,
+         min_depth_range,
+         default_threshold
+       ) do
     if high - low <= min_depth_range do
       {default_threshold, false}
     else
@@ -235,7 +271,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
 
         empty ->
           threshold = Enum.at(empty, div(length(empty), 2))
-          {threshold, middle_pixel(depth) > threshold and middle_pixel(semantic) > 0.0}
+          {threshold, middle_depth > threshold and middle_pixel(semantic) > 0.0}
       end
     end
   end
