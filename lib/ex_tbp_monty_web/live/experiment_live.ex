@@ -702,10 +702,28 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           </div>
           <div
             id="charts"
-            phx-window-keydown="collapse"
-            phx-key="Escape"
+            phx-hook=".EscapeCollapse"
             class="grid gap-2"
           >
+            <script :type={Phoenix.LiveView.ColocatedHook} name=".EscapeCollapse">
+              // Escape leaves full screen. It is listened for here rather than
+              // declared as `phx-window-keydown` on this element: that binding
+              // never reached the server on this page, and a key that does
+              // nothing is worse than one that was never offered.
+              export default {
+                mounted() {
+                  this.escape = (event) => {
+                    if (event.key === "Escape") this.pushEvent("collapse", {})
+                  }
+
+                  window.addEventListener("keydown", this.escape)
+                },
+
+                destroyed() {
+                  window.removeEventListener("keydown", this.escape)
+                }
+              }
+            </script>
             <div
               :for={{module_id, chart} <- @charts}
               id={"chart-card-#{module_id}"}

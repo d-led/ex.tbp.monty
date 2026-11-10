@@ -223,18 +223,20 @@ defmodule Monty.Studio.Artifacts do
   def frames_at(run_id, step) do
     step_name = Integer.to_string(step)
 
-    with {:ok, names} <- File.ls(Path.join(frames_dir(run_id), step_name)) do
-      names
-      |> Enum.flat_map(&pictured/1)
-      |> Enum.reduce(%{}, fn {sensor_id, kind, name}, sensors ->
-        url = frame_url(run_id, Path.join(step_name, name))
+    case File.ls(Path.join(frames_dir(run_id), step_name)) do
+      {:ok, names} ->
+        names
+        |> Enum.flat_map(&pictured/1)
+        |> Enum.reduce(%{}, fn {sensor_id, kind, name}, sensors ->
+          url = frame_url(run_id, Path.join(step_name, name))
 
-        Map.update(sensors, sensor_id, %{"images" => %{kind => url}}, fn observation ->
-          Map.update(observation, "images", %{kind => url}, &Map.put(&1, kind, url))
+          Map.update(sensors, sensor_id, %{"images" => %{kind => url}}, fn observation ->
+            Map.update(observation, "images", %{kind => url}, &Map.put(&1, kind, url))
+          end)
         end)
-      end)
-    else
-      _no_step -> %{}
+
+      _no_step ->
+        %{}
     end
   end
 

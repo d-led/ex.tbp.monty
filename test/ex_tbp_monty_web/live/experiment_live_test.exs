@@ -572,13 +572,29 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
                "rounded-field fixed inset-0"
 
       # Escape is what a full-screen anything answers to, and the control is the
-      # way back for anyone without a keyboard.
-      view |> element("#charts") |> render_keydown(%{"key" => "Escape"})
+      # way back for anyone without a keyboard. The key is the grid's own hook
+      # (`.EscapeCollapse`), which answers it by sending this event — the key
+      # itself is the browser's, and `phx-window-keydown` did not deliver it.
+      view |> element("#charts") |> render_hook("collapse", %{})
 
       refute view |> element("#chart-card-learning_module_0") |> render() =~
                "rounded-field fixed inset-0"
 
       assert has_element?(view, "#chart-expand-learning_module_0")
+    end
+
+    test "the grid answers Escape itself, because the window binding did not", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      # The hook is what a browser runs; what a test can hold the page to is
+      # that the hook is attached — LiveView names a colocated hook after the
+      # module it was declared in — and that its event is one the page handles,
+      # which the test above drives.
+      assert view |> element("#charts") |> render() =~ "EscapeCollapse"
     end
 
     test "the chart filling the screen is drawn for the screen's own shape", %{conn: conn} do

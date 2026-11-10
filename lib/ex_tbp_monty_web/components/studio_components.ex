@@ -787,6 +787,25 @@ defmodule ExTbpMontyWeb.StudioComponents do
           </li>
         </ul>
 
+        <%!-- The best-evidence line is one number: the strongest evidence any
+        object holds. Which object holds it is the question the chart is asked,
+        and a line cannot answer it — so the figure says it, with the same
+        swatch the per-object charts name their lines with. --%>
+        <p
+          :if={@series_id == "evidence" and @best}
+          id="replay-chart-best"
+          class="flex flex-wrap items-baseline justify-center gap-x-1.5 text-[11px] text-base-content/80"
+        >
+          <span
+            :if={@chart.lines != []}
+            class="h-0.5 w-3 rounded"
+            style={"background: #{hd(@chart.lines).colour}"}
+          ></span>
+          <span class="text-base-content/60">the strongest object in this run is</span>
+          <span id="replay-chart-best-object" class="font-mono">{@best.object}</span>
+          <span class="font-mono text-base-content/60">{format_value(@best.value)}</span>
+        </p>
+
         <%!-- A line at zero is honest, but it is not an answer: a run whose
         modules reported no graphs has nothing to compare per object, and saying
         so is the difference between "nothing happened" and "nothing was kept". --%>

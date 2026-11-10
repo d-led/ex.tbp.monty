@@ -95,25 +95,39 @@ defmodule Mix.Tasks.Monty.ModuleMap.Gen do
 
   # A map that reads the same is not rewritten: the file's mtime is what makes
   # Mix recompile `Monty.ModuleMap.Data`, and `mix test` asks for this on every
-  # run.
+  # run. "Reads the same" is the entries, not the bytes: `inspect/2` writes a
+  # map's keys in the order the map holds them, and an entry built from a
+  # previous run's copy of itself can order them differently from one built from
+  # scratch — the same map, a different file, and a tree that is never clean
+  # after a test run because of it.
   defp write(entries, sources) do
-    # `Code.format_string!/1` does not end a file with a newline; `mix format`
-    # does, and a map the formatter would rewrite fails the lint gate.
-    content = IO.iodata_to_binary([Code.format_string!(render(entries, sources)), "\n"])
+    if reads_the_same?(entries, sources) do
+      :ok
+    else
+      # `Code.format_string!/1` does not end a file with a newline; `mix format`
+      # does, and a map the formatter would rewrite fails the lint gate.
+      content = IO.iodata_to_binary([Code.format_string!(render(entries, sources)), "\n"])
 
-    case File.read(@map_path) do
-      {:ok, ^content} ->
-        :ok
+      case File.read(@map_path) do
+        {:ok, ^content} ->
+          :ok
 
-      _changed_or_absent ->
-        File.mkdir_p!(Path.dirname(@map_path))
-        # Written beside the map and renamed onto it: `mix test --partitions`
-        # starts several processes that all ask for this, and a half-written map
-        # is a compilation error for the next one.
-        temporary = @map_path <> ".tmp"
-        File.write!(temporary, content)
-        File.rename!(temporary, @map_path)
+        _changed_or_absent ->
+          File.mkdir_p!(Path.dirname(@map_path))
+          # Written beside the map and renamed onto it: `mix test --partitions`
+          # starts several processes that all ask for this, and a half-written map
+          # is a compilation error for the next one.
+          temporary = @map_path <> ".tmp"
+          File.write!(temporary, content)
+          File.rename!(temporary, @map_path)
+      end
     end
+  end
+
+  defp reads_the_same?(entries, sources) do
+    Code.ensure_loaded?(Monty.ModuleMap.Data) and
+      Monty.ModuleMap.Data.entries() == entries and
+      Monty.ModuleMap.Data.sources() == sources
   end
 
   defp configure_sources(opts) do
