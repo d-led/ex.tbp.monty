@@ -140,7 +140,7 @@ defmodule Monty.Studio.RunLog do
       "step" => step,
       "sensors" =>
         observations
-        |> Map.get(agent_id(), %{})
+        |> sensors_of()
         |> Map.new(fn {sensor_id, observation} ->
           {sensor_id, drawn(sensor_id, observation, Map.get(images, sensor_id), store)}
         end)
@@ -407,4 +407,21 @@ defmodule Monty.Studio.RunLog do
   end
 
   defp agent_id, do: Monty.Simulators.Synthetic.Environment.agent_id()
+
+  @doc """
+  One step's observations, by sensor id, whichever way the world handed them over.
+
+  A step is reported per agent — the stand-in scene wraps its sensors in the
+  agent that holds them — and a MuJoCo step arrives keyed by sensor already. The
+  record, the pictures and the log all want the sensors, so the unanswered
+  question is asked here rather than three times: an agent id that is not there
+  is a map that was never nested.
+  """
+  @spec sensors_of(map()) :: map()
+  def sensors_of(observations) do
+    case Map.get(observations, agent_id()) do
+      %{} = by_agent -> by_agent
+      _not_nested -> observations
+    end
+  end
 end

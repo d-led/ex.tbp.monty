@@ -49,7 +49,7 @@ defmodule Monty.Studio.RunStream do
 
   require Logger
 
-  alias Monty.Simulators.Synthetic.{Camera, Environment}
+  alias Monty.Simulators.Synthetic.Camera
   alias Monty.Studio.{Artifacts, RunLog}
 
   @table __MODULE__
@@ -195,7 +195,7 @@ defmodule Monty.Studio.RunStream do
   # a step pay for four.
   defp images_of(step) do
     step.observations
-    |> Map.get(Environment.agent_id(), %{})
+    |> RunLog.sensors_of()
     |> Map.new(fn {sensor_id, observation} ->
       {sensor_id, Camera.images(observation)}
     end)
@@ -221,7 +221,7 @@ defmodule Monty.Studio.RunStream do
   # this step already encoded, so `Camera.frame/3` draws them rather than making
   # its own: a step pays for two PNGs a sensor, not four.
   defp frames_of(step, images) do
-    seen = Map.get(step.observations, Environment.agent_id(), %{})
+    seen = RunLog.sensors_of(step.observations)
 
     step.sensor_ids
     |> Enum.filter(&Map.has_key?(seen, &1))
