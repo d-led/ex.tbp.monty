@@ -451,7 +451,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   def set_primary_target(%__MODULE__{} = lm, primary_target) do
     %{
       lm
-      | primary_target: Map.get(primary_target, "object"),
+      | primary_target: Map.get(primary_target, "object_name"),
         primary_target_rotation_quat: Map.get(primary_target, "quat_rotation")
     }
   end
@@ -1918,7 +1918,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   def set_target(%__MODULE__{} = lm, primary_target) do
     %{
       lm
-      | primary_target: Map.get(primary_target, "object"),
+      | primary_target: Map.get(primary_target, "object_name"),
         primary_target_rotation_quat: Map.get(primary_target, "quat_rotation"),
         stepwise_target_object: nil,
         stepwise_targets_list: []

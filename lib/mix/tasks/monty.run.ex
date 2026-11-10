@@ -222,7 +222,7 @@ defmodule Mix.Tasks.Monty.Run do
 
   defp object_of(run) do
     case Monty.Studio.Run.target(run) do
-      %{"object" => object} -> object
+      %{"object_name" => object} -> object
       _no_target -> nil
     end
   end

@@ -206,7 +206,7 @@ defmodule Monty.Studio.Run do
   @spec supervise(t()) :: {:ok, t()}
   def supervise(%__MODULE__{setup: setup} = run) do
     target = target(run) || no_target!(run)
-    object = Map.fetch!(target, "object")
+    object = Map.fetch!(target, "object_name")
 
     location_on_model =
       Map.get_lazy(run.first_seen, object, fn -> Map.fetch!(target, "position") end)

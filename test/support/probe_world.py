@@ -94,7 +94,7 @@ def main(argv):
                     # What the episode is about, as a world that samples an object
                     # would answer it.
                     "primary_target": {
-                        "object": "probe",
+                        "object_name": "probe",
                         "quat_rotation": [0.0, 0.0, 0.0, 1.0],
                     },
                     # The ids the scene was built with, as Monty's own interface

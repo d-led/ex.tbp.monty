@@ -587,7 +587,7 @@ defmodule Monty.Runtime.StepTest do
 
     test "the model can be told which object the episode is about" do
       model_id = start_model()
-      target = %{"object" => "mug", "quat_rotation" => [0.0, 0.0, 0.0, 1.0]}
+      target = %{"object_name" => "mug", "quat_rotation" => [0.0, 0.0, 0.0, 1.0]}
 
       :ok = Model.fixme_set_ground_truth(model_id, target)
 

@@ -51,7 +51,10 @@ defmodule Monty.Frameworks.Models.Mixins.NoResetEvidenceTest do
     {:ok, quarter_turn} = Rotation.from_axis_angle([0.0, 0.0, 1.0], :math.pi() / 2)
 
     lm
-    |> EvidenceGraphLM.set_target(%{"object" => "mug", "quat_rotation" => [1.0, 0.0, 0.0, 0.0]})
+    |> EvidenceGraphLM.set_target(%{
+      "object_name" => "mug",
+      "quat_rotation" => [1.0, 0.0, 0.0, 0.0]
+    })
     |> Map.put(:hypotheses, %{
       "mug" =>
         Hypotheses.new(

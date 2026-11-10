@@ -226,7 +226,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
       inner = lm()
 
       rows =
-        LoggingUtils.stats_per_lm([NoResetEvidenceGraphLM.new(inner)], %{"object" => "mug"},
+        LoggingUtils.stats_per_lm([NoResetEvidenceGraphLM.new(inner)], %{"object_name" => "mug"},
           step: 12,
           matching_steps: 9
         )
@@ -237,7 +237,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
 
   describe "the episode's rows" do
     test "are keyed by module position, and carry the run's counts and the target" do
-      target = %{"object" => "mug", "position" => [0.1, 0.0, 0.0], "scale" => [1.0]}
+      target = %{"object_name" => "mug", "position" => [0.1, 0.0, 0.0], "scale" => [1.0]}
 
       rows =
         LoggingUtils.stats_per_lm([lm(), lm()], target,

@@ -379,7 +379,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
     lm = EvidenceGraphLM.reset_stm(lm)
 
     EvidenceGraphLM.set_primary_target(lm, %{
-      "object" => "placeholder",
+      "object_name" => "placeholder",
       "quat_rotation" => [1.0, 0.0, 0.0, 0.0]
     })
   end

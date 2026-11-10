@@ -695,7 +695,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     test "is named at the start, with the pose it was placed with" do
       lm =
         EvidenceGraphLM.set_target(learning_module(mug()), %{
-          "object" => "mug",
+          "object_name" => "mug",
           "quat_rotation" => [0.0, 0.0, 0.0, 1.0]
         })
 
@@ -712,9 +712,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     test "is forgotten when the next episode names a different one" do
       lm =
         learning_module(mug())
-        |> EvidenceGraphLM.set_target(%{"object" => "mug"})
+        |> EvidenceGraphLM.set_target(%{"object_name" => "mug"})
         |> Map.replace!(:stepwise_target_object, "bowl")
-        |> EvidenceGraphLM.set_target(%{"object" => "bowl"})
+        |> EvidenceGraphLM.set_target(%{"object_name" => "bowl"})
 
       assert lm.primary_target == "bowl"
       assert lm.stepwise_target_object == nil
@@ -740,7 +740,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         learning_module(mug())
         |> EvidenceGraphLM.set_stepwise_target("mug")
 
-      assert EvidenceGraphLM.set_target(lm, %{"object" => "mug"}).stepwise_targets_list == []
+      assert EvidenceGraphLM.set_target(lm, %{"object_name" => "mug"}).stepwise_targets_list == []
     end
   end
 
@@ -749,7 +749,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       lm =
         mug()
         |> learning_module()
-        |> EvidenceGraphLM.set_target(%{"object" => "mug"})
+        |> EvidenceGraphLM.set_target(%{"object_name" => "mug"})
         |> Map.merge(%{mode: :train, detected_object: "mug_graph"})
         |> put_in([Access.key!(:buffer)], charged_buffer())
         |> EvidenceGraphLM.fixme_update_ground_truth()
@@ -768,7 +768,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
           graph_id_to_target: %{"mug_graph" => MapSet.new(["mug_cup"])},
           target_to_graph_id: %{"mug_cup" => MapSet.new(["mug_graph"])}
         })
-        |> EvidenceGraphLM.set_target(%{"object" => "mug"})
+        |> EvidenceGraphLM.set_target(%{"object_name" => "mug"})
         |> put_in([Access.key!(:buffer)], charged_buffer())
         |> EvidenceGraphLM.fixme_update_ground_truth()
 

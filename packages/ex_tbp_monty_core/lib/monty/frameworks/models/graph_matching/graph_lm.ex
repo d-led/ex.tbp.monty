@@ -206,7 +206,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   def set_target(%__MODULE__{} = lm, primary_target) do
     %{
       lm
-      | primary_target: primary_target["object"],
+      | primary_target: primary_target["object_name"],
         primary_target_rotation_quat: primary_target["quat_rotation"],
         stepwise_target_object: nil,
         stepwise_targets_list: []
@@ -234,7 +234,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
     {:ok, rotation} = Rotation.from_quaternion(quaternion(target))
 
     stats = %{
-      "possible_matches" => [target["object"]],
+      "possible_matches" => [target["object_name"]],
       "detected_location_on_model" => location_on_model,
       "detected_location_rel_body" => target["position"],
       "detected_rotation" => target["euler_rotation"],
@@ -243,7 +243,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
 
     %{
       lm
-      | detected_object: target["object"],
+      | detected_object: target["object_name"],
         detected_rotation_r: Rotation.invert(rotation),
         buffer: FeatureAtLocationBuffer.add_overall_stats(lm.buffer, stats)
     }
@@ -257,7 +257,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   defp quaternion(target) do
     raise ArgumentError,
           "a supervised episode needs the target's quat_rotation, and " <>
-            "#{inspect(target["object"])} has none"
+            "#{inspect(target["object_name"])} has none"
   end
 
   @doc """

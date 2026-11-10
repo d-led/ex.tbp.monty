@@ -68,7 +68,7 @@ defmodule Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger
     %{
       "train_episodes" => 0,
       "episode_seed" => 7,
-      "target" => %{"object" => "mug", "position" => [0.1, 0.0, 0.0], "scale" => [1.0]}
+      "target" => %{"object_name" => "mug", "position" => [0.1, 0.0, 0.0], "scale" => [1.0]}
     }
   end
 

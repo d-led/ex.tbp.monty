@@ -1068,14 +1068,13 @@ class World:
                 scale=scale,
                 semantic_id=semantic_id,
             )
-            # Monty's `primary_target` is `{"object": ..., "semantic_id": ...,
-            # **object_params}` (`experiment/environment.py`): every parameter the
-            # object init sampler produced travels with the answer, not only the
-            # three the simulator was handed. The supervision a pretraining
+            # Monty's `primary_target` is `PrimaryTarget` — `object_name`,
+            # `semantic_id`, and every parameter the object init sampler produced —
+            # (`experiment/primary_target.py`): the supervision a pretraining
             # experiment states reads `euler_rotation` and `quat_rotation` off it.
             self._objects.append(
                 {
-                    "object": obj["name"],
+                    "object_name": obj["name"],
                     "semantic_id": added["semantic_id"],
                     "position": list(position),
                     "rotation": list(rotation),
@@ -1102,7 +1101,7 @@ class World:
                 "proprioceptive_state": states,
                 "primary_target": self._objects[0] if self._objects else None,
                 "semantic_id_to_label": {
-                    obj["semantic_id"]: obj["object"] for obj in self._objects
+                    obj["semantic_id"]: obj["object_name"] for obj in self._objects
                 },
             }
         )

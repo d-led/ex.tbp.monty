@@ -342,7 +342,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLMTest do
     # ones a matching episode would have concluded for itself.
     defp target do
       %{
-        "object" => "mug",
+        "object_name" => "mug",
         "position" => [0.0, 1.5, 0.0],
         "euler_rotation" => [0.0, 45.0, 0.0],
         "quat_rotation" => [0.7071067811865476, 0.0, 0.7071067811865475, 0.0],

@@ -63,7 +63,7 @@ defmodule Monty.Experiment.Environment.OneObjectPerEpisodeInterfaceTest do
     assert interface.primary_target == target
     assert interface.current_object == index
     assert OneObjectPerEpisodeInterface.target_semantic_id(interface) == target["semantic_id"]
-    assert OneObjectPerEpisodeInterface.object_name(interface) == target["object"]
+    assert OneObjectPerEpisodeInterface.object_name(interface) == target["object_name"]
   end
 
   test "an episode moves on to the next object, and past the end starts again", %{

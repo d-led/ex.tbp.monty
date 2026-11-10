@@ -104,7 +104,7 @@
    }
   ],
   "primary_target": {
-   "object": "sphere",
+   "object_name": "sphere",
    "semantic_id": 2,
    "position": [
     0.1,
@@ -152,7 +152,7 @@
    }
   ],
   "primary_target": {
-   "object": "cube",
+   "object_name": "cube",
    "semantic_id": 3,
    "position": [
     0.1,
@@ -255,7 +255,7 @@
    }
   ],
   "primary_target": {
-   "object": "cone",
+   "object_name": "cone",
    "semantic_id": 1,
    "position": [
     0.1,

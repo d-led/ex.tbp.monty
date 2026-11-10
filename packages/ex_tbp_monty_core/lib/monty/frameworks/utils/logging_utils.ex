@@ -127,7 +127,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
   @spec target_data_to_dict(map()) :: %{optional(String.t()) => term()}
   def target_data_to_dict(target) do
     %{
-      "primary_target_object" => Map.get(target, "object"),
+      "primary_target_object" => Map.get(target, "object_name"),
       "primary_target_position" => Map.get(target, "position"),
       "primary_target_rotation_euler" => Map.get(target, "euler_rotation"),
       "primary_target_rotation_quat" => Map.get(target, "rotation"),

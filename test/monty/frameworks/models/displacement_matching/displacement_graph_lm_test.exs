@@ -350,7 +350,7 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLMTest d
 
     test "states a supervised answer about the graph module underneath" do
       target = %{
-        "object" => "mug",
+        "object_name" => "mug",
         "position" => [0.0, 1.5, 0.0],
         "euler_rotation" => [0.0, 0.0, 0.0],
         "quat_rotation" => [1.0, 0.0, 0.0, 0.0],

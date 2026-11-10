@@ -1320,13 +1320,13 @@ training episodes as exploration and then reaches into every learning module to
 state the answer the experiment already knows:
 
 ```
-lm.detected_object = target["object"]
-lm.buffer.stats["possible_matches"] = [target["object"]]
-lm.buffer.stats["detected_location_on_model"] = self.first_epoch_object_location[target["object"]]
-lm.buffer.stats["detected_location_rel_body"] = target["position"]
-lm.buffer.stats["detected_rotation"] = target["euler_rotation"]
-lm.detected_rotation_r = Rotation.from_quat(target["quat_rotation"]).inv()
-lm.buffer.stats["detected_scale"] = target["scale"]
+lm.detected_object = target.object_name
+lm.buffer.stats["possible_matches"] = [target.object_name]
+lm.buffer.stats["detected_location_on_model"] = self.first_epoch_object_location[target.object_name]
+lm.buffer.stats["detected_location_rel_body"] = target.position
+lm.buffer.stats["detected_rotation"] = target.euler_rotation
+lm.detected_rotation_r = Rotation.from_quat(target.quat_rotation).inv()
+lm.buffer.stats["detected_scale"] = target.scale
 ```
 
 and, for a module it does not supervise, clears those fields so that
@@ -1360,12 +1360,15 @@ places the object elsewhere still extends the graph it built the first time.
 
 **One repair came with it.** Monty's `Predefined` and `RandomRotation` samplers
 write `quat_rotation` beside `rotation`, the same `wxyz` quaternion under a
-second name, and the world's `primary_target` is
-`{"object": …, "semantic_id": …, **object_params}` — every sampled parameter
-travels with the answer. This port dropped `euler_rotation` and `quat_rotation`
-when it copied a sampled object into its scene, so a target here had no turn to
-state. Both samplers carry `quat_rotation` now, `priv/monty_py/world.py` keeps
-it, and `supervise/3` raises with the object's name if a target still has none.
+second name, and the world's `primary_target` is a `PrimaryTarget` — an
+`object_name`, a `semantic_id` and every sampled parameter
+(`experiment/primary_target.py`) — so every sampled parameter travels with the
+answer. This port dropped `euler_rotation` and `quat_rotation` when it copied a
+sampled object into its scene, so a target here had no turn to state. Both
+samplers carry `quat_rotation` now, `priv/monty_py/world.py` keeps it, and
+`supervise/3` raises with the object's name if a target still has none. The
+target's own key is `object_name` here too, which is what Monty renamed it to
+once the type had a field of that name.
 
 ## 2.21 An object-orientation channel's evidence is ported but not yet dispatched
 

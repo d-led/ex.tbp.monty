@@ -79,7 +79,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsTest do
   describe "a target" do
     test "is named the way a CSV column is" do
       target = %{
-        "object" => "mug",
+        "object_name" => "mug",
         "position" => [0.1, 0.2, 0.3],
         "euler_rotation" => [0.0, 45.0, 0.0],
         "rotation" => [0.0, 0.38, 0.0, 0.92],
@@ -96,7 +96,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsTest do
     end
 
     test "records the pose it has and leaves the rest empty" do
-      assert LoggingUtils.target_data_to_dict(%{"object" => "mug"}) == %{
+      assert LoggingUtils.target_data_to_dict(%{"object_name" => "mug"}) == %{
                "primary_target_object" => "mug",
                "primary_target_position" => nil,
                "primary_target_rotation_euler" => nil,

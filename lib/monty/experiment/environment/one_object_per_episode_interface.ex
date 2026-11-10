@@ -138,7 +138,7 @@ defmodule Monty.Experiment.Environment.OneObjectPerEpisodeInterface do
 
   @doc "The object an episode is about, as the config names it."
   @spec object_name(t()) :: object_name() | nil
-  def object_name(%__MODULE__{primary_target: %{"object" => name}}), do: name
+  def object_name(%__MODULE__{primary_target: %{"object_name" => name}}), do: name
   def object_name(%__MODULE__{}), do: nil
 
   @doc """
@@ -207,7 +207,7 @@ defmodule Monty.Experiment.Environment.OneObjectPerEpisodeInterface do
       interface = %__MODULE__{
         interface
         | current_object: index,
-          primary_target: Map.merge(%{"object" => name, "semantic_id" => id}, params)
+          primary_target: Map.merge(%{"object_name" => name, "semantic_id" => id}, params)
       }
 
       with {:ok, interface} <- place_distractors(interface, object_id) do

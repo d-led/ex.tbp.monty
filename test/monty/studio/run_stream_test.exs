@@ -48,7 +48,10 @@ defmodule Monty.Studio.RunStreamTest do
 
       RunStream.publish(run_id, report(step: 7, at: @moment))
 
-      assert_receive {:studio, ^run_id, {:step, announcement}}
+      # Five seconds, not the default tenth of one: the announcement comes from
+      # the stream's own process, and a suite running sixteen cases at a time can
+      # keep that process waiting. The wait is the answer arriving, not a sleep.
+      assert_receive {:studio, ^run_id, {:step, announcement}}, 5_000
 
       clock = RunLog.at(%{"at" => @moment}).clock
 
@@ -64,7 +67,7 @@ defmodule Monty.Studio.RunStreamTest do
 
       # The broadcast follows the write, so a step the page has heard of is a
       # step the file has too.
-      assert_receive {:studio, ^run_id, {:step, _announcement}}
+      assert_receive {:studio, ^run_id, {:step, _announcement}}, 5_000
 
       assert File.read!(Artifacts.log_path(run_id)) =~ "step 1"
     end

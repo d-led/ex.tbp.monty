@@ -123,7 +123,7 @@ is recognisable instead of being read as this one.
 ```json
 → {"id": 1, "command": "reset", "sensor_ids": ["patch"]}
 ← {"id": 1, "ok": true,
-   "primary_target": {"object": "mug", "rotation": {...}, "position": [...]},
+   "primary_target": {"object_name": "mug", "rotation": {...}, "position": [...]},
    "semantic_id_to_label": {"1": "mug", "2": "bowl"}}
 
 → {"id": 2, "command": "step",

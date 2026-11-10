@@ -139,7 +139,7 @@ defmodule Monty.Frameworks.Models.NoResetEvidenceMatching.MontyForNoResetEvidenc
 
       MontyForNoResetEvidenceGraphMatching.set_ground_truth_state(
         state,
-        %{"object" => "bowl", "quat_rotation" => [1.0, 0.0, 0.0, 0.0]},
+        %{"object_name" => "bowl", "quat_rotation" => [1.0, 0.0, 0.0, 0.0]},
         semantic_id_to_label: %{1 => "bowl"}
       )
 
