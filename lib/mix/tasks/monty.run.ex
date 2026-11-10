@@ -38,6 +38,10 @@ defmodule Mix.Tasks.Monty.Run do
     * `--seed N` — episode seed, overriding the config's
     * `--pretrained-dir DIR` — the release to load pretrained models from, when
       the one the config names is not on this machine
+    * `--world mujoco|synthetic` — which world to step. The default is this
+      host's, and the stand-in scene is not the experiment: a number it reports
+      is not the experiment's, so a run that should be comparable has to say
+      `--world mujoco`
     * `--record` / `--no-record` — whether to write a run history row
     * `--quiet` — findings and summary only, no per-step lines
   """
@@ -52,7 +56,8 @@ defmodule Mix.Tasks.Monty.Run do
     seed: :integer,
     record: :boolean,
     quiet: :boolean,
-    pretrained_dir: :string
+    pretrained_dir: :string,
+    world: :string
   ]
 
   @impl true
@@ -309,11 +314,25 @@ defmodule Mix.Tasks.Monty.Run do
   end
 
   defp open(name, opts) do
-    case Monty.Studio.open(name, pretrained_dir: opts[:pretrained_dir]) do
+    open_options =
+      [pretrained_dir: opts[:pretrained_dir], world_simulator: world(opts[:world])]
+      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+
+    case Monty.Studio.open(name, open_options) do
       {:ok, opened} -> with_seed(opened, opts)
       {:error, reason} -> Mix.raise("could not open #{name}: #{inspect(reason)}")
     end
   end
+
+  # Named here so a misspelling is a refusal rather than a quietly different
+  # world: `--world mujoco` that fell back to the stand-in would report numbers
+  # that look like the experiment's and are not.
+  defp world(nil), do: nil
+  defp world("mujoco"), do: :mujoco
+  defp world("synthetic"), do: :synthetic
+
+  defp world(other),
+    do: Mix.raise("unknown world #{inspect(other)}: mujoco or synthetic")
 
   # The seed is the input a headless run most often varies: a sweep over seeds
   # is the simplest experiment there is.
