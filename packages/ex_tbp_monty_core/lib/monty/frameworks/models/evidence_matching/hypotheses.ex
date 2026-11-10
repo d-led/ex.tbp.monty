@@ -86,7 +86,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
     poses = fields |> Keyword.fetch!(:poses) |> bytes(&pose_bytes/1)
 
     # The poses name every hypothesis; the nodes only one round of them, so the
-    # node block is copied once per round.
+    # node block is copied once per round. `max` keeps the round count defined
+    # for the burst that chose no node at all — no node is no hypothesis, and
+    # copying an empty block however many times leaves it empty.
     hypotheses = div(byte_size(poses), @pose_width * 8)
     nodes = max(div(byte_size(locations), @location_width * 8), 1)
     rounds = div(hypotheses, nodes)
