@@ -60,14 +60,14 @@ defmodule Monty.Studio.Jobs.Reaper do
   end
 
   @doc """
-  Closes `run_id` if nothing is working on it, and answers whether it did.
+  Closes `run_id` if nothing is working on it, and answers `:ok` when it did.
 
   The one-run form of `sweep/0`, for a page that already watches that run. A page
   polls the run it shows, and sweeping every open run on every poll asked the
   database and Oban about runs that page cannot be wrong about; this asks about
   the one it can.
   """
-  @spec reap(String.t()) :: boolean()
+  @spec reap(String.t()) :: :ok | false
   def reap(run_id) do
     case RunHistory.get(run_id) do
       %{status: "running"} = record ->
