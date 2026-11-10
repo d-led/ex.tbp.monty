@@ -145,10 +145,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # Full screen is part of the page, not of the chart: it exists before the
       # first step arrives and outlives the charts being rebuilt by every one.
       expanded: Map.get(socket.assigns, :expanded),
-      # The box the expanded chart was given, in the browser's own pixels, once
-      # the browser has said — `{module_id, width, height}` or `nil` while the
-      # chart is still drawn for its cell.
-      chart_size: Map.get(socket.assigns, :chart_size),
+      # The box each chart was given, in the browser's own pixels, once the
+      # browser has said — `%{module_id => {width, height}}`, empty while a
+      # chart is still drawn for the shape it was built with.
+      chart_sizes: Map.get(socket.assigns, :chart_sizes, %{}),
       # Following the newest steps is the default: a page opened on a run that is
       # still going is a page watching it, not a page reading it.
       follow: Map.get(socket.assigns, :follow, true),
@@ -704,10 +704,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             id="charts"
             phx-window-keydown="collapse"
             phx-key="Escape"
-            class={[
-              "grid gap-2",
-              map_size(@charts) > 1 && "lg:grid-cols-2"
-            ]}
+            class="grid gap-2"
           >
             <div
               :for={{module_id, chart} <- @charts}
@@ -1009,7 +1006,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
     socket
     |> assign(:expanded, expanded)
-    |> assign(:chart_size, nil)
+    |> assign(:chart_sizes, %{})
     |> assign_charts(socket.assigns.beliefs)
   end
 
@@ -1020,7 +1017,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
       {module_id, width, height} ->
         socket
-        |> assign(:chart_size, {module_id, width, height})
+        |> assign(:chart_sizes, Map.put(chart_sizes(socket), module_id, {width, height}))
         |> assign_charts(socket.assigns.beliefs)
     end
   end
@@ -1388,7 +1385,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     window = window_with_follow(socket, extent)
 
     {charts, labels} =
-      charts_of(histories, window, socket.assigns.episode_objects, chart_size(socket), labels)
+      charts_of(histories, window, socket.assigns.episode_objects, chart_sizes(socket), labels)
 
     assign(socket,
       beliefs: histories,
@@ -1402,7 +1399,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # How big the expanded chart's box is, as the browser measured it. A screen is
   # a shape no server can guess, so the one chart filling it is drawn for the
   # box it really has; every other chart keeps the size of its cell.
-  defp chart_size(socket), do: Map.get(socket.assigns, :chart_size)
+  defp chart_sizes(socket), do: Map.get(socket.assigns, :chart_sizes, %{})
 
   # "Follow latest", the way the pyview dashboard has it: while it is on, a window
   # that has been zoomed into keeps its width and slides so that it ends at the
@@ -1441,8 +1438,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     {Map.new(charts), labels}
   end
 
-  defp size_of(module_id, {module_id, width, height}), do: [width: width, height: height]
-  defp size_of(_module_id, _expanded), do: []
+  defp size_of(module_id, sizes) when is_map(sizes) do
+    case Map.get(sizes, module_id) do
+      {width, height} -> [width: width, height: height]
+      _not_measured -> []
+    end
+  end
+
+  defp size_of(_module_id, _sizes), do: []
 
   # Zoom is a parameter, not a mode: `?x_from=12&x_to=30` is the chart of the
   # run between those two moments, and a link holding it can be sent to somebody

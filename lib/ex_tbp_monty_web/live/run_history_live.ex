@@ -486,11 +486,21 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       %{frames: [_ | _]} ->
         moment
 
-      %{position: position} ->
-        Replay.with_pictures(moment, RunHistory.sensors_at(run.id, position))
+      %{position: position, step: step} ->
+        # The row's copy first, and the files when it has none: a run stopped
+        # mid-flight takes the moments the stream had not written yet with it,
+        # and the two pictures of each of those steps are already on disk.
+        Replay.with_pictures(moment, sensors_at(run, position, step))
 
       nil ->
         nil
+    end
+  end
+
+  defp sensors_at(run, position, step) do
+    case RunHistory.sensors_at(run.id, position) do
+      sensors when is_map(sensors) and map_size(sensors) > 0 -> sensors
+      _nothing_recorded -> Monty.Studio.Artifacts.frames_at(run.id, step)
     end
   end
 

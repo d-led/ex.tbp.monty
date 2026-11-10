@@ -90,7 +90,16 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         id={"chart-svg-#{@module_id}"}
         phx-hook=".EvidenceChart"
         viewBox={"0 0 #{@chart.width} #{@chart.height}"}
-        class={["w-full touch-none cursor-crosshair", @expanded && "min-h-0 flex-1"]}
+        class={
+          [
+            "w-full touch-none cursor-crosshair",
+            # The height is the page's, not the picture's: a chart given the whole
+            # width of a column and its own aspect ratio is a chart twice as tall
+            # as it reads well, because the aspect was drawn for half a row.
+            @expanded && "min-h-0 flex-1",
+            !@expanded && "h-52"
+          ]
+        }
         data-expanded={to_string(@expanded)}
         data-chart-key={@module_id}
         data-size-event="chart-size"

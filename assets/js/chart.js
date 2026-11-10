@@ -307,21 +307,15 @@ export const ChartZoom = {
     }, WHEEL_SETTLE_MS);
   },
 
-  // Only an expanded chart has a box of its own to report: in a grid the chart
-  // decides its own height from its shape, and asking the server to match that
-  // would be a circle. The same size is not sent twice, so a step that redraws
-  // the chart does not ask again for what it already has.
+  // A chart is drawn for the box it is in: the height is the card's, and the
+  // width is whatever the column gives it. Asking the server for the shape it
+  // already has would be a circle, which is why the box's height is a decision
+  // the page makes (a class) rather than one the picture makes for itself. The
+  // same size is not sent twice, so a step that redraws the chart does not ask
+  // again for what it already has.
   measure() {
     const event = this.el.dataset.sizeEvent;
     if (!event) return;
-
-    if (this.el.dataset.expanded !== "true") {
-      // Out of full screen, the size that was asked for belonged to that box.
-      // Remembering it is how a second visit to full screen was drawn for the
-      // first one's box.
-      this.measured = null;
-      return;
-    }
 
     const box = this.plot().getBoundingClientRect();
     const size = [Math.round(box.width), Math.round(box.height)];

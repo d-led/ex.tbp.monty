@@ -188,7 +188,11 @@ defmodule Monty.Studio.Artifacts do
   """
   @spec frame_path(binary(), String.t()) :: {:ok, Path.t()} | :error
   def frame_path(run_id, name) do
-    base = frames_dir(run_id)
+    # Expanded on both sides: the artifacts directory is a relative path in dev
+    # (`priv/studio_runs`) and an absolute one on the desktop, and a relative
+    # base compared against an expanded candidate never matches — which made
+    # every picture a 404 while the file sat exactly where it belonged.
+    base = Path.expand(frames_dir(run_id))
     candidate = Path.expand(Path.join(base, name))
 
     if String.starts_with?(candidate, base <> "/") and File.regular?(candidate),
@@ -205,4 +209,52 @@ defmodule Monty.Studio.Artifacts do
   """
   @spec frame_url(binary(), String.t()) :: String.t()
   def frame_url(run_id, name), do: "/runs/#{uuid(run_id)}/frames/#{name}"
+
+  @doc """
+  The pictures one step wrote, by sensor, in the shape a record keeps them.
+
+  A run's row holds its moments only as far as the stream got to write them —
+  a process that dies mid-run takes the transcript with it — while the step's
+  two files were already on disk when it drew them. What the files say is the
+  same thing the row would have said, so a page can draw a step whose moment
+  was lost.
+  """
+  @spec frames_at(binary(), non_neg_integer()) :: map()
+  def frames_at(run_id, step) do
+    step_name = Integer.to_string(step)
+
+    with {:ok, names} <- File.ls(Path.join(frames_dir(run_id), step_name)) do
+      names
+      |> Enum.flat_map(&pictured/1)
+      |> Enum.reduce(%{}, fn {sensor_id, kind, name}, sensors ->
+        url = frame_url(run_id, Path.join(step_name, name))
+
+        Map.update(sensors, sensor_id, %{"images" => %{kind => url}}, fn observation ->
+          Map.update(observation, "images", %{kind => url}, &Map.put(&1, kind, url))
+        end)
+      end)
+    else
+      _no_step -> %{}
+    end
+  end
+
+  # `<sensor>-<depth|colour>.png`, which is what `put_frame/5` wrote. A name that
+  # is neither is not a picture this function can name a sensor for.
+  defp pictured(name) do
+    root = Path.rootname(name)
+
+    cond do
+      not String.ends_with?(name, ".png") ->
+        []
+
+      String.ends_with?(root, "-depth") ->
+        [{String.replace_suffix(root, "-depth", ""), "depth", name}]
+
+      String.ends_with?(root, "-colour") ->
+        [{String.replace_suffix(root, "-colour", ""), "colour", name}]
+
+      true ->
+        []
+    end
+  end
 end

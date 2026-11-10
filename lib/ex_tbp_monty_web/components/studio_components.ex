@@ -461,51 +461,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
         </span>
       </p>
 
-      <div :if={@moment} class="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <div :if={@moment.frames != []} id="replay-frames" class="grid gap-1.5 sm:grid-cols-2">
-          <figure
-            :for={frame <- @moment.frames}
-            id={"replay-frame-#{frame.sensor_id}"}
-            class="rounded-field border border-base-300 bg-base-100 p-1.5 text-base-content"
-          >
-            <figcaption class="flex items-baseline justify-between px-0.5 pb-0.5 text-[11px] text-base-content/60">
-              <span class="font-mono">{frame.sensor_id}</span>
-              <span>{frame.note}</span>
-            </figcaption>
-            <div class="text-base-content/80">{frame.data}</div>
-          </figure>
-        </div>
-
-        <p :if={@moment.frames == []} id="replay-no-pictures" class="text-xs text-base-content/60">
-          {no_pictures(@pictures)}
-        </p>
-
-        <dl :if={@moment.entry} class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
-          <div>
-            <dt class="text-base-content/60">percepts</dt>
-            <dd class="font-mono">{Enum.join(@moment.entry["percepts"], ", ")}</dd>
-          </div>
-          <div>
-            <dt class="text-base-content/60">votes</dt>
-            <dd class="font-mono">
-              {@moment.entry["votes"]["used"]}/{@moment.entry["votes"]["sent"]}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-base-content/60">goals</dt>
-            <dd class="font-mono">{@moment.entry["goals"]}</dd>
-          </div>
-          <div>
-            <dt class="text-base-content/60">actions</dt>
-            <dd class="font-mono">{@moment.entry["actions"]}</dd>
-          </div>
-          <div class="col-span-2">
-            <dt class="text-base-content/60">inputs</dt>
-            <dd class="font-mono break-all">{inputs(@moment.entry)}</dd>
-          </div>
-        </dl>
-      </div>
-
       <%!-- Full screen is for reading a shape, not for watching a run: it takes
       the plot out of the page's columns and gives it the window, and the plot
       grows with it because the viewBox is stretched, not the pixels. --%>
@@ -1062,6 +1017,51 @@ defmodule ExTbpMontyWeb.StudioComponents do
             },
           }
         </script>
+      </div>
+
+      <div :if={@moment} class="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div :if={@moment.frames != []} id="replay-frames" class="grid gap-1.5 sm:grid-cols-2">
+          <figure
+            :for={frame <- @moment.frames}
+            id={"replay-frame-#{frame.sensor_id}"}
+            class="rounded-field border border-base-300 bg-base-100 p-1.5 text-base-content"
+          >
+            <figcaption class="flex items-baseline justify-between px-0.5 pb-0.5 text-[11px] text-base-content/60">
+              <span class="font-mono">{frame.sensor_id}</span>
+              <span>{frame.note}</span>
+            </figcaption>
+            <div class="text-base-content/80">{frame.data}</div>
+          </figure>
+        </div>
+
+        <p :if={@moment.frames == []} id="replay-no-pictures" class="text-xs text-base-content/60">
+          {no_pictures(@pictures)}
+        </p>
+
+        <dl :if={@moment.entry} class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
+          <div>
+            <dt class="text-base-content/60">percepts</dt>
+            <dd class="font-mono">{Enum.join(@moment.entry["percepts"], ", ")}</dd>
+          </div>
+          <div>
+            <dt class="text-base-content/60">votes</dt>
+            <dd class="font-mono">
+              {@moment.entry["votes"]["used"]}/{@moment.entry["votes"]["sent"]}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-base-content/60">goals</dt>
+            <dd class="font-mono">{@moment.entry["goals"]}</dd>
+          </div>
+          <div>
+            <dt class="text-base-content/60">actions</dt>
+            <dd class="font-mono">{@moment.entry["actions"]}</dd>
+          </div>
+          <div class="col-span-2">
+            <dt class="text-base-content/60">inputs</dt>
+            <dd class="font-mono break-all">{inputs(@moment.entry)}</dd>
+          </div>
+        </dl>
       </div>
     </section>
     """
