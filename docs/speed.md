@@ -909,7 +909,20 @@ a kernel consumes them, and make the transform chain one pass over those bytes.
 The lists survive only where a reader needs a shape (the page's frames), and are
 built there.
 
-First step taken: `get_surface_from_depth/3` read the clipped depth image three
-times — built it as an image, walked it row by row to ask "is nothing nearer than
-a metre", then flattened it for the histogram — to answer two questions about it.
-It reads flat once now: **~644 500 → ~611 400 reductions** a step.
+Two steps taken, and what each was worth:
+
+- `get_surface_from_depth/3` read the clipped depth image three times — built it as
+  an image, walked it row by row to ask "is nothing nearer than a metre", then
+  flattened it for the histogram — to answer two questions about it. It reads flat
+  once now: **~644 500 → ~611 400 reductions** a step.
+- **The pixel walk.** `transform_observation/5` built four lists a pixel: the
+  sensor frame's point, the world's (a second `Enum.map` over the first), the
+  mask's image and the tagged row that joins them. One walk now answers, for each
+  pixel, where it is and whether it is on the surface: **~611 400 → ~472 900
+  reductions** a step, and three of those four lists are gone. The mask itself is
+  no longer materialised for this path at all; the public
+  `get_surface_from_depth/3` still answers the image, from the same decision.
+
+What is left of the transforms is three small lists a pixel — `Geometry.apply/2`,
+`Geometry.add/2` and the tagged row — and those go when the walk moves behind the
+NIF boundary and answers `semantic_3d` as the bytes the sensor module wants anyway.

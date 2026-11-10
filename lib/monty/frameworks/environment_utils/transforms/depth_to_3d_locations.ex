@@ -176,35 +176,60 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   """
   @spec get_surface_from_depth([[float()]], [[float()]], float()) :: [[float()]]
   def get_surface_from_depth(depth, semantic, default_threshold) do
-    # Seeing the table goes up to almost a hundred metres, and eight bins over
-    # that range would separate nothing, so anything past a metre is a metre.
-    #
-    # The clipped image is read once, flat: the two questions that decide this
-    # mask are its smallest and largest value. It used to be built as an image,
-    # walked again row by row to ask "is nothing nearer than a metre", and then
-    # flattened to answer the histogram — three walks of four thousand pixels for
-    # two numbers.
+    case surface_threshold(depth, semantic, default_threshold) do
+      :nothing_nearer_than_a_metre ->
+        Enum.map(depth, fn row -> Enum.map(row, fn _pixel -> 0.0 end) end)
+
+      {threshold, flip?} ->
+        keep(depth, semantic, threshold, flip?)
+    end
+  end
+
+  # Which side of which depth is the surface, from the clipped image read flat
+  # once: the two questions that decide it are the clipped image's smallest and
+  # largest value.
+  #
+  # Seeing the table goes up to almost a hundred metres, and eight bins over that
+  # range would separate nothing, so anything past a metre is a metre. When
+  # nothing in view is nearer than a metre there is one surface at most, and no
+  # threshold to find.
+  defp surface_threshold(depth, semantic, default_threshold) do
     near = for row <- depth, pixel <- row, do: min(pixel, 1.0)
     {low, high} = Enum.min_max(near)
 
     if low >= 1.0 do
-      Enum.map(depth, fn row -> Enum.map(row, fn _pixel -> 0.0 end) end)
+      :nothing_nearer_than_a_metre
     else
-      {threshold, flip?} =
-        threshold_between(
-          near,
-          low,
-          high,
-          # The clipped image's middle pixel, which is what the threshold was
-          # always measured against.
-          min(middle_pixel(depth), 1.0),
-          semantic,
-          @min_depth_range,
-          default_threshold
-        )
-
-      keep(depth, semantic, threshold, flip?)
+      threshold_between(
+        near,
+        low,
+        high,
+        # The clipped image's middle pixel, which is what the threshold was
+        # always measured against.
+        min(middle_pixel(depth), 1.0),
+        semantic,
+        @min_depth_range,
+        default_threshold
+      )
     end
+  end
+
+  # What a pixel's mask value is, as the rule the threshold decided: a semantic
+  # sensor that reads objects already knows, and everything else is separated by
+  # depth.
+  defp mask_rule(depth, semantic, index, transform) do
+    if transform.depth_clip_sensors != [] and transform.use_semantic_sensor do
+      :semantic
+    else
+      surface_threshold(depth, semantic, default_threshold(index, transform))
+    end
+  end
+
+  defp mask_value(:semantic, _pixel, on_object), do: on_object
+  defp mask_value(:nothing_nearer_than_a_metre, _pixel, _on_object), do: 0.0
+
+  defp mask_value({threshold, flip?}, pixel, on_object) do
+    if on_surface?(pixel, threshold, flip?) and on_object > 0.0, do: 1.0, else: 0.0
   end
 
   # On the surface *and* on the object: a pixel of the surface in front of the
@@ -282,28 +307,93 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
     depth = depth_image(observation, sensor_id)
     semantic = on_object(observation, depth)
     {depth, semantic} = clip(depth, semantic, index, transform)
-    surface = surface_mask(depth, semantic, index, transform)
-    sensor_frame_data = unproject(depth, Enum.at(transform.intrinsics, index))
+
+    intrinsic = Enum.at(transform.intrinsics, index)
     frame = camera_frame(agent_state, sensor_id)
+    all? = transform.get_all_points
 
-    {points, observation} =
-      if transform.world_coord and frame != nil do
-        {Enum.map(sensor_frame_data, &to_world(&1, frame)),
-         Map.put(observation, "cam_to_world", cam_to_world(frame))}
-      else
-        {sensor_frame_data, observation}
-      end
+    {semantic_3d, sensor_frame_data} =
+      place_points(depth, semantic, intrinsic, frame, index, transform)
 
-    # The mask is flattened once for both sets of points — the world's and the
-    # sensor frame's — because both are tagged with the same mask and flattening
-    # a 64x64 image is four thousand list steps.
-    mask = List.flatten(surface)
+    observation =
+      if transform.world_coord and frame != nil,
+        do: Map.put(observation, "cam_to_world", cam_to_world(frame)),
+        else: observation
 
     observation
     |> Map.put("depth", depth)
     |> put_clipped_semantic(semantic)
-    |> Map.put("semantic_3d", tagged_points(points, mask, transform.get_all_points))
-    |> put_sensor_frame_data(sensor_frame_data, mask, transform.get_all_points)
+    |> Map.put("semantic_3d", semantic_3d)
+    |> put_sensor_frame_data(sensor_frame_data, all?)
+  end
+
+  # Every pixel's place — in the world, and in the sensor's own frame when the
+  # experiment asks for all of them — and whether it is on the surface, built in
+  # one walk.
+  #
+  # Built apart it was four lists per pixel: the sensor frame's point, the
+  # world's, the mask's image and the tagged row that joins them. A 64×64 patch is
+  # four thousand pixels, so one image was sixteen thousand lists a step, and each
+  # of those lists was walked again by the stage after it.
+  defp place_points(depth, semantic, intrinsic, frame, index, transform) do
+    context = %{
+      world?: transform.world_coord and frame != nil,
+      frame: frame,
+      intrinsic: intrinsic,
+      rule: mask_rule(depth, semantic, index, transform),
+      all?: transform.get_all_points
+    }
+
+    {tagged, sensor} = place_rows(depth, semantic, 0, context, {[], []})
+
+    {Enum.reverse(tagged), if(context.all?, do: Enum.reverse(sensor), else: nil)}
+  end
+
+  defp place_rows([], _semantic_rows, _row, _context, acc), do: acc
+
+  defp place_rows([depth_row | depth_rows], [semantic_row | semantic_rows], row, context, acc) do
+    place_rows(
+      depth_rows,
+      semantic_rows,
+      row + 1,
+      context,
+      place_pixels(depth_row, semantic_row, row, 0, context, acc)
+    )
+  end
+
+  defp place_pixels([], _objects, _row, _column, _context, acc), do: acc
+
+  defp place_pixels([pixel | pixels], [on_object | objects], row, column, context, acc) do
+    place_pixels(
+      pixels,
+      objects,
+      row,
+      column + 1,
+      context,
+      place_pixel(pixel, on_object, row, column, context, acc)
+    )
+  end
+
+  # `{tagged, sensor}`: the row `semantic_3d` keeps, and the row
+  # `sensor_frame_data` keeps — the second only when every point was asked for.
+  defp place_pixel(pixel, on_object, row, column, context, {tagged, sensor} = acc) do
+    # A pixel's place in the sensor's frame, and in the world when the experiment
+    # reads world coordinates — `(x d fx, y d fy, -d)`.
+    point = [
+      across(column, context.intrinsic) * pixel,
+      down(row, context.intrinsic) * pixel,
+      -pixel
+    ]
+
+    placed = if context.world?, do: to_world(point, context.frame), else: point
+    on_surface = mask_value(context.rule, pixel, on_object)
+
+    tagged =
+      if context.all? or on_surface != 0.0,
+        do: [placed ++ [on_surface] | tagged],
+        else: tagged
+
+    if context.all?, do: {tagged, [point ++ [on_surface] | sensor]}, else: acc
   end
 
   defp depth_image(observation, sensor_id) do
@@ -324,10 +414,10 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
       else: observation
   end
 
-  defp put_sensor_frame_data(observation, _points, _mask, false), do: observation
+  defp put_sensor_frame_data(observation, _points, false), do: observation
 
-  defp put_sensor_frame_data(observation, points, mask, true),
-    do: Map.put(observation, "sensor_frame_data", tagged_points(points, mask, true))
+  defp put_sensor_frame_data(observation, points, true),
+    do: Map.put(observation, "sensor_frame_data", points)
 
   # The on-object mask: the semantic sensor's own answer when the experiment
   # reads one, and otherwise the depth image's — a pixel a metre away or more is
@@ -369,18 +459,6 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
     end)
   end
 
-  # A surface agent that reads a semantic sensor already knows which pixels are
-  # object, so its clipped mask is used as it is; everything else has to be
-  # separated into surfaces by depth. Both are cases Monty has, and the first is
-  # noted there as one it rarely takes.
-  defp surface_mask(depth, semantic, index, transform) do
-    if transform.depth_clip_sensors != [] and transform.use_semantic_sensor do
-      semantic
-    else
-      get_surface_from_depth(depth, semantic, default_threshold(index, transform))
-    end
-  end
-
   defp default_threshold(index, transform) do
     if index in transform.depth_clip_sensors,
       do: transform.clip_value,
@@ -392,15 +470,6 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   defp intrinsic([{height, width}, zoom, hfov]) do
     fx = :math.tan(radians(hfov) / 2.0) / zoom
     %{height: height, width: width, fx: fx, fy: fx * height / width}
-  end
-
-  # `(x d fx, y d fy, -d)` for every pixel of the image, in Monty's order: row by
-  # row, left to right.
-  defp unproject(depth, intrinsic) do
-    for {row_depths, row} <- Enum.with_index(depth),
-        {pixel, column} <- Enum.with_index(row_depths) do
-      [across(column, intrinsic) * pixel, down(row, intrinsic) * pixel, -pixel]
-    end
   end
 
   defp across(column, %{width: width, fx: fx}), do: grid(column, width) * fx
@@ -437,16 +506,6 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   defp cam_to_world(%{rotation: rotation, position: position}) do
     placed = Enum.zip_with([rotation, position], fn [row, offset] -> row ++ [offset] end)
     placed ++ [[0.0, 0.0, 0.0, 1.0]]
-  end
-
-  # `mask` is the flattened surface mask: a pixel per point, in the order the
-  # points are in.
-  defp tagged_points(points, mask, all?) do
-    tagged = zip_map(points, mask, fn point, on_surface -> point ++ [on_surface] end)
-
-    if all?,
-      do: tagged,
-      else: for([_x, _y, _z, on_surface] = row <- tagged, on_surface != 0.0, do: row)
   end
 
   # -- the depth heuristics --------------------------------------------------
