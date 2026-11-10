@@ -560,11 +560,17 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
 
     point_cloud
     |> Enum.zip(pixel_dist_to_center(n_points, patch_width(n_points), center_id))
-    |> Enum.filter(fn {row, distance} -> distance <= radius and List.last(row) > 0.0 end)
+    |> Enum.filter(fn {row, distance} -> distance <= radius and on_surface?(row) end)
     |> Enum.map(fn {[x, y, z | _rest], _distance} ->
       [x - center_x, y - center_y, z - center_z]
     end)
   end
+
+  # A row is a pixel's place and whether it is on the object: the mask is its
+  # last number, and a patch's rows are four numbers, so it is matched rather
+  # than found.
+  defp on_surface?([_x, _y, _z, mask | _rest]), do: mask > 0.0
+  defp on_surface?(row), do: List.last(row) > 0.0
 
   defp patch_width(n_points), do: n_points |> :math.sqrt() |> round()
 

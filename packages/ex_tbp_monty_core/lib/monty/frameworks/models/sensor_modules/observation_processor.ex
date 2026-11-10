@@ -146,6 +146,12 @@ defmodule Monty.Frameworks.Models.SensorModules.ObservationProcessor do
 
   defp patch_width(points), do: points |> length() |> :math.sqrt() |> round()
 
+  # Whether the pixel is on the surface: the last number on its row. A patch's
+  # rows are four numbers — where the pixel is and whether it is on the object —
+  # so the mask is matched rather than found. `List.last/1` walks the row to
+  # answer a question about its fourth cell, and it is asked twice per pixel per
+  # step, over four thousand pixels.
+  defp on_surface?([_x, _y, _z, mask | _rest]), do: mask > 0.0
   defp on_surface?(row), do: List.last(row) > 0.0
 
   # The share of the patch on the surface the camera is pointed at.
