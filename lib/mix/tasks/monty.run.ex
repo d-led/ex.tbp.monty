@@ -78,9 +78,12 @@ defmodule Mix.Tasks.Monty.Run do
     unless Monty.Studio.Setup.valid?(opened.setup), do: refuse(opened.setup.findings)
 
     history = record(opened, opts)
-    {infos, history, conclusion} = run_phases(opened, opts, history)
+    {infos, history, conclusion, outcomes} = run_phases(opened, opts, history)
 
     summary = summary(infos, opened.setup, conclusion)
+
+    unless opts[:quiet], do: Mix.shell().info(Monty.Studio.Summary.outcomes_line(outcomes))
+
     describe_run(finish(history, summary), summary)
   end
 
@@ -94,10 +97,10 @@ defmodule Mix.Tasks.Monty.Run do
       first_seen: %{}
     }
 
-    {infos, history, conclusion, carried} =
+    {infos, history, conclusion, carried, outcomes} =
       opened.setup
       |> Monty.Studio.Setup.epoch_plan()
-      |> Enum.reduce({[], history, %{}, carried}, fn {mode, epochs}, acc ->
+      |> Enum.reduce({[], history, %{}, carried, %{}}, fn {mode, epochs}, acc ->
         run_phase(opened, mode, epochs, acc, opts)
       end)
 
@@ -106,7 +109,7 @@ defmodule Mix.Tasks.Monty.Run do
     # it was started by, and a run with no record keeps nothing.
     keep_memory(opened, history, carried.memories, opts)
 
-    {infos, history, conclusion}
+    {infos, history, conclusion, outcomes}
   end
 
   defp keep_memory(opened, history, memories, opts) do
@@ -122,19 +125,27 @@ defmodule Mix.Tasks.Monty.Run do
   # an epoch walks *its* phase's objects — a config can train on two and
   # evaluate on one, which is two episodes a training epoch and one an
   # evaluation epoch.
-  defp run_phase(opened, mode, epochs, {infos, history, _conclusion, carried}, opts) do
+  defp run_phase(
+         opened,
+         mode,
+         epochs,
+         {infos, history, _conclusion, carried, outcomes},
+         opts
+       ) do
     objects = length(Monty.Studio.Setup.objects(opened.setup, mode))
     episodes = opts[:episodes] || objects * epochs
     scope = %{mode: mode, steps: steps(opened, opts), episodes: episodes}
 
-    Enum.reduce(0..(episodes - 1)//1, {infos, history, %{}, carried}, fn index,
-                                                                         {infos, history,
-                                                                          _conclusion, carried} ->
-      {episode_infos, history, conclusion, carried} =
-        run_episode(opened, scope, index, objects, history, carried, opts)
+    Enum.reduce(
+      0..(episodes - 1)//1,
+      {infos, history, %{}, carried, outcomes},
+      fn index, {infos, history, _conclusion, carried, outcomes} ->
+        {episode_infos, history, conclusion, carried, outcomes} =
+          run_episode(opened, scope, index, objects, history, carried, outcomes, opts)
 
-      {infos ++ episode_infos, history, conclusion, carried}
-    end)
+        {infos ++ episode_infos, history, conclusion, carried, outcomes}
+      end
+    )
   end
 
   # The safety cap an episode gets when the command names none: the config's own
@@ -155,7 +166,7 @@ defmodule Mix.Tasks.Monty.Run do
   # as the queued runner does it: a class is not a label on a page, and a
   # pretraining config that ran here without its class would explore and learn
   # nothing.
-  defp run_episode(opened, scope, index, objects, history, carried, opts) do
+  defp run_episode(opened, scope, index, objects, history, carried, outcomes, opts) do
     # An epoch walks the phase's objects once, so the flat episode index of the
     # phase is two numbers Monty keeps apart: the epoch, and the episode within
     # it. Both are read — the sampler turns the object once per epoch, and the
@@ -190,6 +201,9 @@ defmodule Mix.Tasks.Monty.Run do
 
     last_run = state.run
     conclusion = Monty.Studio.Run.conclusion(last_run)
+    outcomes = Monty.Studio.Summary.tally(outcomes, conclusion)
+
+    unless opts[:quiet], do: Mix.shell().info(say_outcome(conclusion))
 
     carried = %{
       memories: next_memories(last_run, carried.memories, scope.mode),
@@ -208,7 +222,17 @@ defmodule Mix.Tasks.Monty.Run do
 
     # The episode is what a run has to show for itself: the steps of an episode
     # are worth one write, and the record is the checkpoint, not the transcript.
-    {Enum.reverse(infos), checkpoint(history), conclusion, carried}
+    {Enum.reverse(infos), checkpoint(history), conclusion, carried, outcomes}
+  end
+
+  # What one episode concluded, in the modules' own words, under the line that
+  # said which episode it was. A run of two hundred and sixty-six episodes
+  # reported only the last one's conclusion at the end, so a number a reader could
+  # compare with Monty's was nowhere on the screen.
+  defp say_outcome(conclusion) do
+    conclusion
+    |> Enum.sort()
+    |> Enum.map_join(" · ", fn {module_id, state} -> "#{module_id}: #{state}" end)
   end
 
   # What an experiment class may ask of this task: it does not own the world, the

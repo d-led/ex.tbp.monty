@@ -60,6 +60,48 @@ defmodule Monty.Studio.Summary do
   defp outcome([]), do: %{}
   defp outcome(infos), do: infos |> List.last() |> Map.get(:terminal_states, %{})
 
+  @doc """
+  One episode's conclusion added to the tally of a run's episodes.
+
+  A run of two hundred and sixty-six episodes has two hundred and sixty-six
+  conclusions, and the last one is not the run's answer: whether this port
+  recognises what Monty recognises is a question about the whole tally.
+  `%{module_id => %{outcome => count}}`, with `:match`, `:time_out` and
+  `:no_match` among the outcomes a module can have.
+  """
+  @spec tally(map(), map()) :: map()
+  def tally(tally, conclusion) when is_map(conclusion) do
+    Enum.reduce(conclusion, tally, fn {module_id, state}, tally ->
+      Map.update(tally, module_id, %{state => 1}, fn per_module ->
+        Map.update(per_module, state, 1, &(&1 + 1))
+      end)
+    end)
+  end
+
+  @doc """
+  The tally in one line: what each module concluded, over how many episodes.
+
+  `learning_module_1: match 61 of 66 · time_out 5` — the number a reader can put
+  beside Monty's own, which counts the same episodes.
+  """
+  @spec outcomes_line(map()) :: String.t()
+  def outcomes_line(tally) when map_size(tally) == 0, do: "no episodes concluded"
+
+  def outcomes_line(tally) do
+    tally
+    |> Enum.sort()
+    |> Enum.map_join(" · ", fn {module_id, per_module} ->
+      total = per_module |> Map.values() |> Enum.sum()
+
+      said =
+        per_module
+        |> Enum.sort_by(fn {state, _count} -> {state != :match, state} end)
+        |> Enum.map_join(", ", fn {state, count} -> "#{state} #{count}" end)
+
+      "#{module_id}: #{said} of #{total}"
+    end)
+  end
+
   @doc "Average step duration in microseconds, or `nil` for a run with no steps."
   @spec average_step_us(t()) :: float() | nil
   def average_step_us(%__MODULE__{steps: 0}), do: nil
