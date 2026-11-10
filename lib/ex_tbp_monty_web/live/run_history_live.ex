@@ -252,12 +252,22 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          |> put_configuration(run)
          |> follow(run)
          |> stream(:log, log_tail(run.log), reset: true)
-         |> assign(logged: length(run.log), trimmed_log?: length(run.log) > @log_tail)
+         |> assign(
+           logged: length(run.log),
+           dropped: max(length(run.log) - @log_tail, 0),
+           trimmed_log?: length(run.log) > @log_tail
+         )
          |> assign_replay(run, Replay.last_step(run))}
     end
   end
 
   defp log_tail(log), do: Enum.take(log, -@log_tail)
+
+  # When the run began, as the instant `LocalTime` reads: the page says how long
+  # it has been going beside the plot, and the browser is the only clock that
+  # knows how long ago that was.
+  defp started_at(%{inserted_at: %DateTime{} = at}), do: DateTime.to_iso8601(at)
+  defp started_at(_run), do: nil
 
   # What the reader chose to look at belongs to the run they chose it for: a
   # series, a window and a step are answers about one run. Carrying them to the
@@ -376,10 +386,32 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp append_log(socket, run) do
     shown = socket.assigns[:logged] || 0
     fresh = Enum.drop(run.log, shown)
+    total = shown + length(fresh)
 
     socket
-    |> assign(logged: shown + length(fresh), trimmed_log?: shown + length(fresh) > @log_tail)
+    |> assign(logged: total, trimmed_log?: total > @log_tail)
     |> stream(:log, fresh)
+    |> drop_from_log(run, total)
+  end
+
+  # A window that only ever grows is the transcript again, reached a line at a
+  # time instead of in one mount. Watching a run therefore drops the lines the
+  # window has moved past, as the new ones arrive; only the lines that have just
+  # left are deleted, so following a long run stays one delete a step rather
+  # than one per line already gone.
+  defp drop_from_log(socket, run, total) do
+    dropped = socket.assigns[:dropped] || 0
+    behind = max(total - @log_tail, 0)
+
+    if behind > dropped do
+      socket = assign(socket, dropped: behind)
+
+      run.log
+      |> Enum.slice(dropped, behind - dropped)
+      |> Enum.reduce(socket, &stream_delete(&2, :log, &1))
+    else
+      socket
+    end
   end
 
   # The replay starts where the run ended: a person opening a finished run wants
@@ -1057,6 +1089,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           theories={@theories}
           graphs={@graphs}
           pictures={@pictures}
+          started_at={started_at(@run)}
           recorded={length(Replay.steps(@run))}
           playing={@playing}
           follow={@follow}

@@ -303,6 +303,9 @@ defmodule ExTbpMontyWeb.StudioComponents do
   attr :series_id, :string, default: nil
   attr :best, :map, default: nil
   attr :theories, :list, default: []
+  # When the run began: the page says how long it has been going beside the
+  # plot, because a step count answers how far it got and not how fast.
+  attr :started_at, :string, default: nil
   attr :graphs, :boolean, default: true
   attr :recorded, :integer, default: 0
   attr :playing, :boolean, default: false
@@ -565,6 +568,26 @@ defmodule ExTbpMontyWeb.StudioComponents do
               @series,
               @series_id
             )}
+          </span>
+          <%!-- How long this has been going, where the reader is looking: the
+          step count says how far it got and the clock says how long ago it
+          began, and neither says whether it is keeping pace. The reading is
+          the browser's — see `LocalTime` — because a server's snapshot of "an
+          hour ago" is wrong the moment it is sent. --%>
+          <span
+            :if={@started_at}
+            id="replay-chart-since"
+            phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
+            class="text-[11px] text-base-content/60"
+          >
+            running
+            <ExTbpMontyWeb.LocalTime.local_time
+              at={@started_at}
+              style={:elapsed}
+              class="font-mono tabular-nums text-base-content"
+            />
+            <span class="text-base-content/40">since</span>
+            <ExTbpMontyWeb.LocalTime.local_time at={@started_at} style={:clock} class="tabular-nums" />
           </span>
           <span :if={@best} id="replay-best" class="ms-auto text-[11px] text-base-content/60">
             strongest evidence
@@ -1056,6 +1079,13 @@ defmodule ExTbpMontyWeb.StudioComponents do
   # there rather than a measurement.
   @chart_columns 48
 
+  # A hover mark is per column of the view a pointer can land in — the same grid
+  # a click means a step on. One per point was the whole run: a thousand steps
+  # over twenty lines is twenty thousand marks, four thousand of them drawn, and
+  # a readout that can only be asked one place at a time. Thinned to the
+  # columns, a line carries as many marks as there are places to point at.
+  @marks_per_line @chart_columns
+
   defp chart_columns(chart) do
     span = max(chart.to - chart.from, 1)
     width = chart.width / @chart_columns
@@ -1079,7 +1109,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
     named? = length(chart.lines) > 1
 
     chart.hover
-    |> nearest_per_unit(chart.width)
+    |> nearest_per_unit(@marks_per_line)
     |> Enum.map(fn %{line: line, x: x, y: y, step: step, value: value} ->
       %{
         x: Float.round(x * 1.0, 2),
@@ -1104,7 +1134,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
     named? = length(chart.lines) > 1
 
     chart.hover
-    |> nearest_per_unit(chart.width)
+    |> nearest_per_unit(@samples_per_line)
     |> Enum.map(fn %{line: line, x: x, y: y, step: step, value: value} ->
       %{
         x: Float.round(x * 1.0, 2),
@@ -1122,11 +1152,11 @@ defmodule ExTbpMontyWeb.StudioComponents do
   # Every point per line whose place a pointer could land on, and the last one it
   # could not: a line's shape is kept — its top, its bottom, where it turns — and
   # the steps in between are the ones a pixel cannot separate anyway.
-  defp nearest_per_unit(points, _width) do
+  defp nearest_per_unit(points, per_line) do
     points
     |> Enum.group_by(& &1.line)
     |> Enum.flat_map(fn {_line, drawn} ->
-      Enum.take_every(drawn, max(div(length(drawn), @samples_per_line), 1))
+      Enum.take_every(drawn, max(div(length(drawn), per_line), 1))
     end)
   end
 

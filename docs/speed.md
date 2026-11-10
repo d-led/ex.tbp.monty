@@ -11,12 +11,13 @@ and the _step_ is what is open.
 
 ## How to measure, and what lies
 
-| what                             | how                                                                                     |
-| -------------------------------- | --------------------------------------------------------------------------------------- |
-| work and garbage per step        | `MIX_ENV=test mix run scripts/probe_step_cost.exs [experiment] [steps]`                 |
-| who did the work                 | the same script — it prints reductions per process, labelled by callback module         |
-| allocation per function          | `MIX_ENV=test mix run scripts/probe_step_profile.exs` (tprof over one `Model.step`)     |
-| the whole run, as a user sees it | `mix monty.run <experiment> --episodes 1 --steps 8 --no-record` — the acceptance ladder |
+| what                             | how                                                                                                                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| work and garbage per step        | `MIX_ENV=test mix run scripts/probe_step_cost.exs [experiment] [steps]`                                                                                                     |
+| where in a step it is            | `MIX_ENV=test mix run scripts/probe_step_phases.exs [experiment] [steps]` — the world against the model, and reductions per process, a processed step and a plain one apart |
+| who did the work                 | the same script — it prints reductions per process, labelled by callback module                                                                                             |
+| allocation per function          | `MIX_ENV=test mix run scripts/probe_step_profile.exs` (tprof over one `Model.step`)                                                                                         |
+| the whole run, as a user sees it | `mix monty.run <experiment> --episodes 1 --steps 8 --no-record` — the acceptance ladder                                                                                     |
 
 - **Wall clock is not usable here.** The same step measured 0.6 s, 1.6 s and
   3.2 s in one afternoon depending on what else the machine was doing; a
@@ -420,6 +421,63 @@ step of 76 ms none of this is a speed win. What the split buys is a boundary
 that cannot grow: the message used to carry the beliefs twice, as the structs a
 page draws and as the string-keyed copy a row keeps, and a step that formatted
 its own text had a second definition of what a step looks like.
+
+## Measured 2026-11-10: a processed step is the learning module, a plain one is the sensor module
+
+The step has been measured as a whole until now. Split in two, with the world run
+outside the timer and only `Model.step` inside it — `MIX_ENV=test mix run
+scripts/probe_step_phases.exs base_10simobj_surf_agent 40`:
+
+- **processed step**: world 14 ms, model 288–1 049 ms of wall, and of that a
+  processor's own time (`:erlang.statistics(:scheduler_wall_time_all)`, µs summed
+  over the schedulers, after `:erlang.system_flag(:scheduler_wall_time, true)`)
+  is the same order as the wall — the step is heavy, not starved.
+- **plain step**: world 23 ms, model 7–15 ms.
+
+The model's own step is therefore almost all of a processed step, and the
+renderer and transforms that the sections above chased are a few per cent of it.
+
+Then per process, in reductions, which do not move with the load:
+
+| step          | learning module | coordinator | patch sensor module |
+| ------------- | --------------- | ----------- | ------------------- |
+| processed (1) | 3 292 083       | 1 005 689   | 665 695             |
+| plain (39)    | 378             | 13 723      | 637 878             |
+
+Two things follow, and both change what to optimise next.
+
+1. **In a processed step the tight loop is the learning module**, at 66 % of the
+   step's reductions. The coordinator is second at 20 %: it is not just a router
+   — the vote round and the motor system cost it a fifth of a processed step,
+   against 2 % of a plain one. The sensor module is 13 %.
+2. **A plain step costs about a sixth of a processed one**, and nearly all of it
+   is the sensor module (637 878 of ~652 000 reductions); the learning module is
+   a rounding error in it. How often a processed step comes is the episode's
+   business — one in 40 in this window, one in six in a window of 60 — so quote
+   per-step means and never a total over a mixed window.
+
+Neither "the learning module" nor "the periphery" is the whole answer: a
+processed step is the learning module and the round around it (fix the
+per-hypothesis loop), and a plain step is the sensor module (fix the per-pixel
+and per-point loops).
+
+### Instruments, and what each cannot show
+
+- `:tprof.profile(fun, %{rootset: [pid], …})` does **not** narrow the report to
+  that process — the caller's own rendering still appears in it. To profile one
+  phase, run the other first and replay its inputs: the observations are a
+  function of the seed, and a second run of the same seed reproduces the same
+  processed steps (checked — processed at 0, 14, 26 and 38 in both passes).
+- `:eprof.profile([pid], fun)` counts correctly but puts a process's **idle**
+  time into `gen_server:decode_msg/4` (80 calls at 7.07 ms each over 14 steps).
+  Only compare busy functions within one such table.
+- `Process.info(pid, :current_stacktrace)` sampling reported 84.5 % "waiting" for
+  the learning module while its step was running, because every barrier leaves
+  each module waiting on the others. A sample answers "who is not running",
+  never "who is not the cost".
+- `probe_step_cost.exs` drives `Studio.Run.step`, so its figure includes the
+  world and the first steps of a fresh graph; it is a whole-step number, not a
+  model number.
 
 ## Acceptance for any speed change
 

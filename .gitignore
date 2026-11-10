@@ -309,3 +309,4 @@ MUJOCO_LOG.TXT
 /packages/*/deps
 /packages/*/_build
 *.tar
+fprof.trace

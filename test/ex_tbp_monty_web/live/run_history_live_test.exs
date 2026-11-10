@@ -382,6 +382,15 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     run
   end
 
+  # The log lines the page is holding, oldest first: the window it follows, which
+  # is not the run's whole transcript.
+  defp log_lines(html) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(~s(li[id^="log-0-"]))
+    |> LazyHTML.attribute("id")
+  end
+
   # What the chart carries for the hover to read: one entry per drawn point, with
   # the object it belongs to, the step, what that step was worth, and the unit.
   defp samples(view) do
@@ -691,6 +700,37 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert has_element?(view, "#log-0-0")
       assert view |> element("#run-progress") |> render() =~ "step 1 / 3"
+    end
+
+    # A window that only ever grows is the transcript again, reached a line at a
+    # time instead of in one mount: a run watched for an hour ended with every
+    # step it had taken still in the DOM, and the page stopped keeping up. What
+    # the page follows is the tail — the oldest line leaves as the newest
+    # arrives, and the page stays the size it was.
+    test "keeps the log a window while following, so a long run does not grow it", %{
+      conn: conn
+    } do
+      run = running_run(305)
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      before = log_lines(render(view))
+      oldest = List.first(before)
+      assert oldest
+
+      Enum.reduce(305..307, run, &record_step(&2, &1))
+
+      broadcast(
+        run.id,
+        {:step, %{line: "step 307", step: 307, frames: [], episode: 0, beliefs: %{}}}
+      )
+
+      # The page answers a burst of steps once, on its own clock.
+      send(view.pid, :refresh_due)
+
+      now = log_lines(render(view))
+      assert length(now) == length(before)
+      refute oldest in now
+      assert List.last(now) == "log-0-307"
     end
 
     test "asks again, so a run whose job died stops claiming to be running", %{

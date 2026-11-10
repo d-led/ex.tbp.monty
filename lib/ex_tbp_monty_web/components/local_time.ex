@@ -31,7 +31,7 @@ defmodule ExTbpMontyWeb.LocalTime do
   def hook_name, do: @hook
 
   attr :at, :any, required: true
-  attr :style, :atom, values: [:stamp, :clock], default: :stamp
+  attr :style, :atom, values: [:stamp, :clock, :elapsed], default: :stamp
   attr :class, :string, default: nil
 
   def local_time(assigns) do
@@ -67,28 +67,62 @@ defmodule ExTbpMontyWeb.LocalTime do
       export default {
         mounted() {
           this.localise()
+          this.timer = setInterval(() => this.tick(), 1000)
+        },
+
+        destroyed() {
+          clearInterval(this.timer)
         },
 
         updated() {
           this.localise()
         },
 
+        // Only an interval moves an elapsed time: every clock on the page is a
+        // statement that does not change, and rewriting them all a second at a
+        // time is work nobody asked for.
+        tick() {
+          for (const node of this.el.querySelectorAll('time[data-local-time="elapsed"]')) {
+            this.write(node)
+          }
+        },
+
         localise() {
           for (const node of this.el.querySelectorAll("time[datetime]")) {
-            const at = new Date(node.getAttribute("datetime"))
-            if (Number.isNaN(at.getTime())) continue
+            this.write(node)
+          }
+        },
 
-            node.textContent =
-              node.dataset.localTime === "clock"
-                ? at.toLocaleTimeString(undefined, {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                  })
+        write(node) {
+          const at = new Date(node.getAttribute("datetime"))
+          if (Number.isNaN(at.getTime())) return
+
+          const style = node.dataset.localTime
+
+          node.textContent =
+            style === "clock"
+              ? at.toLocaleTimeString(undefined, {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                })
+              : style === "elapsed"
+                ? this.elapsed(Date.now() - at.getTime())
                 : at.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
 
-            node.title = at.toLocaleString()
-          }
+          node.title = at.toLocaleString()
+        },
+
+        // The two units a run is read in: a minute of stepping is minutes and
+        // seconds, an hour of it is hours and minutes.
+        elapsed(milliseconds) {
+          const seconds = Math.max(0, Math.floor(milliseconds / 1000))
+          if (seconds < 60) return `${seconds} s`
+
+          const minutes = Math.floor(seconds / 60)
+          if (minutes < 60) return `${minutes} m ${seconds % 60} s`
+
+          return `${Math.floor(minutes / 60)} h ${minutes % 60} m`
         },
       }
     </script>
@@ -102,6 +136,10 @@ defmodule ExTbpMontyWeb.LocalTime do
 
   defp fallback(instant, :clock), do: strftime(instant, "%H:%M:%S UTC")
   defp fallback(instant, :stamp), do: strftime(instant, "%Y-%m-%d %H:%M UTC")
+  # How long ago is the reader's clock against the run's, and a snapshot of it
+  # written by the server is wrong a second later. The reading without a script
+  # is the instant itself, beside it.
+  defp fallback(_instant, :elapsed), do: "…"
 
   defp strftime(instant, format) do
     case DateTime.from_iso8601(instant) do
