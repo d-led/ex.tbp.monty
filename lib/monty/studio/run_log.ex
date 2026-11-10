@@ -191,11 +191,12 @@ defmodule Monty.Studio.RunLog do
 
   # A picture the filesystem would not take stays in the record rather than
   # disappearing: a run whose pictures cannot be written is still a run whose
-  # replay shows what it saw, at the cost of a big row.
+  # replay shows what it saw, at the cost of a big row. Anything the store
+  # answers that is not a name is the same answer as a refusal.
   defp picture(base64, kind, sensor_id, store) do
     case store.(sensor_id, kind, base64) do
       {:ok, name} -> name
-      {:error, _reason} -> base64
+      _refused -> base64
     end
   end
 
@@ -373,7 +374,11 @@ defmodule Monty.Studio.RunLog do
   @doc "Appends a step to the record in hand, leaving it unwritten until `RunHistory.checkpoint/1`."
   @spec append_step(RunHistory.Run.t(), map(), map(), map(), keyword()) :: RunHistory.Run.t()
   def append_step(history, info, observations, beliefs \\ %{}, options \\ []) do
-    RunHistory.append_step(history, entry(info, beliefs, options), moment(info, observations))
+    RunHistory.append_step(
+      history,
+      entry(info, beliefs, options),
+      moment(info.step, observations, %{}, store(history, info))
+    )
   end
 
   @doc "Records a step — what was reported, what was seen and what was believed — and returns the row."
@@ -382,10 +387,22 @@ defmodule Monty.Studio.RunLog do
     case RunHistory.record_step(
            history,
            entry(info, beliefs, options),
-           moment(info, observations)
+           moment(info.step, observations, %{}, store(history, info))
          ) do
       {:ok, history} -> history
       {:error, _changeset} -> history
+    end
+  end
+
+  # Where a step's pictures go: a file of the run's own, named by the step and
+  # the sensor. Handing `moment/3` no store keeps them in the row, which is what
+  # made a long run wider than a jsonb value can be — and is why the record a
+  # page reads names a path instead of carrying ten kilobytes a step.
+  defp store(history, info) do
+    fn sensor_id, kind, base64 ->
+      with {:ok, name} <-
+             Monty.Studio.Artifacts.put_frame(history.id, info.step, sensor_id, kind, base64),
+           do: {:ok, Monty.Studio.Artifacts.frame_url(history.id, name)}
     end
   end
 

@@ -156,9 +156,19 @@ defmodule Monty.Studio.Artifacts do
     path = Path.join(dir(run_id), name)
 
     with :ok <- File.mkdir_p(Path.dirname(path)),
-         {:ok, bytes} <- Base.decode64(base64),
+         {:ok, bytes} <- decode64(base64),
          :ok <- File.write(path, bytes) do
       {:ok, name}
+    end
+  end
+
+  # `Base.decode64/1` answers `:error`, not `{:error, _}`: a picture that is not
+  # base64 is refused in the shape this function promises, rather than in the
+  # one a caller who checked for `{:error, _}` would miss.
+  defp decode64(base64) do
+    case Base.decode64(base64) do
+      {:ok, bytes} -> {:ok, bytes}
+      :error -> {:error, :not_base64}
     end
   end
 
