@@ -959,3 +959,21 @@ it at that moment. So the rotations are now built where the feature rows are —
 questions answer in **82 µs** and **105 µs**, and the read is 90–270× cheaper.
 A graph that grows still answers with the new node's frame, which is what
 `graph_memory_test.exs` pins.
+
+## A view's on-object pixels, taken in one walk
+
+The view finder of the distant agent costs 0.67–1.15 M reductions a step, and
+`fprof` on the sensor module alone put **38 %** of it in `Enum.drop_list/2`:
+6 540 calls, each walking to its row and then to its column — that is
+`OnObjectObservation.from/2` reading `location_map[row][column]` and
+`salience_map[row][column]` once per on-object pixel, which is how the same
+reshape reads in numpy (`location_map[on_object_map]`, a gather) but not what a
+list of lists charges for. A thousand on-object pixels in a 64×64 view asked the
+grid for their place twice each, walking the image to answer.
+
+The masks, the locations and the salience are now zipped row by row and taken in
+the same walk that decides which pixels are on the object, so nothing is looked
+up by index: the view finder answers a step in **429 912** reductions where it
+answered 750 656 (step 2), and 441 752 where it answered 746 574 (step 3).
+The reshape itself is unchanged, which the recorded-view parity test
+(`monty_on_object_observation.json`) and the ordering tests pin.

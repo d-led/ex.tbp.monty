@@ -63,21 +63,38 @@ defmodule Monty.Frameworks.Models.Salience.OnObjectObservation do
     half_row = div(rows, 2)
     half_column = div(columns, 2)
 
-    on_object_pixels =
-      for {row, row_index} <- Enum.with_index(on_object_map),
-          {true, column_index} <- Enum.with_index(row),
-          do: {row_index, column_index}
+    {locations, salience} = on_object(on_object_map, location_map, salience_map)
 
     %__MODULE__{
       centre_location:
         if(Enum.at(Enum.at(on_object_map, half_row), half_column),
           do: Enum.at(Enum.at(location_map, half_row), half_column)
         ),
-      locations: Enum.map(on_object_pixels, &at(location_map, &1)),
-      salience: Enum.map(on_object_pixels, &at(salience_map, &1)),
+      locations: locations,
+      salience: salience,
       on_object_map: on_object_map,
       location_map: location_map
     }
+  end
+
+  # Every on-object pixel's place and its salience, taken in the same walk as
+  # the mask that decides which pixels are on the object. Reading them out by
+  # index instead — `locations[row][column]` per pixel, which is how the point
+  # cloud reads in numpy — walks to the row and then to the column for every one
+  # of them: a thousand on-object pixels in a 64×64 view looked up their place
+  # eighteen hundred times a step, and the walks were most of this module's cost.
+  defp on_object(mask, location_map, salience_map) do
+    [mask, location_map, salience_map]
+    |> Enum.zip()
+    |> Enum.flat_map(fn {mask_row, location_row, value_row} ->
+      [mask_row, location_row, value_row]
+      |> Enum.zip()
+      |> Enum.flat_map(fn
+        {true, location, value} -> [{location, value}]
+        {_background, _location, _value} -> []
+      end)
+    end)
+    |> Enum.unzip()
   end
 
   # The image the observation was taken through: its rows and columns are the
@@ -86,6 +103,4 @@ defmodule Monty.Frameworks.Models.Salience.OnObjectObservation do
     rgb = Map.fetch!(observation, "rgba")
     {length(rgb), rgb |> hd() |> length()}
   end
-
-  defp at(grid, {row, column}), do: grid |> Enum.at(row) |> Enum.at(column)
 end
