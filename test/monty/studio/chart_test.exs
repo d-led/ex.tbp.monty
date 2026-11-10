@@ -271,7 +271,7 @@ defmodule Monty.Studio.ChartTest do
     end
   end
 
-  describe "the colour of an object" do
+  describe "the colour and place an object is given" do
     # The pyview dashboard's `getObjectColor`, copied: named objects wear tab10,
     # which is why a line keeps its colour while the lines reorder themselves.
     test "is the palette's, by name, wherever the object ranks" do
@@ -290,6 +290,64 @@ defmodule Monty.Studio.ChartTest do
 
       assert names |> Enum.map(&Chart.colour/1) |> Enum.uniq() |> length() == length(names)
     end
+
+    # A chart is rebuilt on every step and its lines are drawn worst-first, so the
+    # drawing order moves whenever an object overtakes another. What a reader
+    # carries from one step to the next is that the blue line is the same object —
+    # so the colour and the legend place are assigned once, kept in a map, and
+    # handed back in with the next chart. They used to be derived from the
+    # drawing position, which repainted every object each time the ranking moved.
+    test "belongs to the object once it has appeared, not to where it is drawn" do
+      steps = [
+        {0, 1, belief(%{"new_object0" => 1.0, "new_object1" => 2.0})},
+        {0, 2, belief(%{"new_object0" => 3.0, "new_object1" => 2.5})}
+      ]
+
+      chart = Chart.new(steps)
+
+      # A step later: another object appears and the two of them change places.
+      later =
+        Chart.new(
+          steps ++
+            [{0, 3, belief(%{"new_object0" => 2.0, "new_object1" => 4.0, "new_object2" => 1.0})}],
+          labels: chart.labels
+        )
+
+      assert series_ids(later) != series_ids(chart),
+             "the ranking did not move, so this proves nothing"
+
+      assert colour_of(later, "new_object0") == colour_of(chart, "new_object0")
+      assert colour_of(later, "new_object1") == colour_of(chart, "new_object1")
+
+      # The newcomer takes the next free place; nobody else shifts.
+      assert legend_ids(later) == legend_ids(chart) ++ ["new_object2"]
+    end
+
+    test "keeps the legend's order while the lines re-rank" do
+      object_first =
+        Chart.new([
+          {0, 1, belief(%{"new_object0" => 1.0, "new_object1" => 2.0})},
+          {0, 2, belief(%{"new_object0" => 3.0, "new_object1" => 2.5})}
+        ])
+
+      other_first =
+        Chart.new([
+          {0, 1, belief(%{"new_object0" => 1.0, "new_object1" => 2.0})},
+          {0, 2, belief(%{"new_object0" => 2.5, "new_object1" => 3.0})}
+        ])
+
+      assert series_ids(object_first) != series_ids(other_first)
+
+      assert legend_ids(object_first) == legend_ids(other_first)
+    end
+  end
+
+  defp series_ids(chart), do: Enum.map(chart.series, & &1.graph_id)
+
+  defp legend_ids(chart), do: Enum.map(chart.legend, & &1.graph_id)
+
+  defp colour_of(chart, graph_id) do
+    chart.series |> Enum.find(&(&1.graph_id == graph_id)) |> Map.fetch!(:colour)
   end
 
   describe "the axes" do

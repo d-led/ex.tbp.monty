@@ -1215,6 +1215,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # The histories, the chart of the stretch being looked at, and how long the run
   # is so far — the last of those is what zoom and pan move within.
   defp assign_charts(socket, histories) do
+    labels = Map.get(socket.assigns, :chart_labels, %{})
+
     longest =
       histories
       |> Map.values()
@@ -1227,9 +1229,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     # stretch and said another would be lying about its own picture.
     window = window_with_follow(socket, extent)
 
+    {charts, labels} =
+      charts_of(histories, window, socket.assigns.episode_objects, chart_size(socket), labels)
+
     assign(socket,
       beliefs: histories,
-      charts: charts_of(histories, window, socket.assigns.episode_objects, chart_size(socket)),
+      charts: charts,
+      chart_labels: labels,
       chart_window: window,
       chart_extent: extent
     )
@@ -1254,14 +1260,27 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # One chart per module, from the module's own history, drawn for the stretch of
   # the run the page is looking at. The objects by episode travel with it: a band
   # wears the colour of the object its episode was about.
-  defp charts_of(histories, window, episode_objects, expanded_size) do
-    Map.new(histories, fn {module_id, steps} ->
-      {module_id,
-       Chart.new(
-         steps,
-         [window: window, episode_objects: episode_objects] ++ size_of(module_id, expanded_size)
-       )}
-    end)
+  #
+  # Answers the charts and the colours and legend places they gave out. A chart is
+  # rebuilt on every step and its lines are drawn worst-first, so the drawing
+  # order moves; what must not move is which colour an object wears and where it
+  # sits in the legend. `Chart.new/2` takes the assignments it made before and
+  # answers the map it now holds, so a new object takes the next free place and
+  # nothing already on screen is repainted or reshuffled.
+  defp charts_of(histories, window, episode_objects, expanded_size, labels) do
+    {charts, labels} =
+      Enum.map_reduce(histories, labels, fn {module_id, steps}, labels ->
+        chart =
+          Chart.new(
+            steps,
+            [window: window, episode_objects: episode_objects, labels: labels] ++
+              size_of(module_id, expanded_size)
+          )
+
+        {{module_id, chart}, chart.labels}
+      end)
+
+    {Map.new(charts), labels}
   end
 
   defp size_of(module_id, {module_id, width, height}), do: [width: width, height: height]

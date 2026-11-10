@@ -65,6 +65,8 @@ defmodule Monty.Studio.Chart do
             y_max: 1.0,
             zero: 0.0,
             series: [],
+            labels: %{},
+            legend: [],
             ticks: [],
             episode_bands: [],
             episode_starts: [],
@@ -100,6 +102,19 @@ defmodule Monty.Studio.Chart do
           last: {number(), number()}
         }
 
+  @typedoc """
+  Where an object was put the first time the chart saw it: the colour it wears and
+  the place it holds in the legend.
+
+  Assigned once and kept. A chart is rebuilt on every step, so anything derived
+  from the drawing order would be recomputed — and the drawing order is
+  worst-first, which moves whenever one object overtakes another. The caller
+  hands this map back in with the next chart, so a reader's eye is never cheated:
+  the blue line stays the same object and the third row of the legend stays the
+  third object.
+  """
+  @type labels :: %{optional(String.t()) => %{colour: String.t(), position: non_neg_integer()}}
+
   @type t :: %__MODULE__{
           width: number(),
           height: number(),
@@ -113,6 +128,8 @@ defmodule Monty.Studio.Chart do
           y_max: float(),
           zero: number(),
           series: [series()],
+          labels: labels(),
+          legend: [series()],
           ticks: [%{value: float(), y: number(), label: String.t()}],
           episode_bands: [
             %{episode: non_neg_integer(), x: number(), width: number(), colour: String.t()}
@@ -160,6 +177,17 @@ defmodule Monty.Studio.Chart do
     points_by_object = Map.new(ranked)
     objects = Keyword.get(options, :objects) || Enum.map(ranked, &elem(&1, 0))
 
+    # The colour and legend place every object was given when it first appeared,
+    # extended by the ones that have appeared since — in the order the run
+    # reported them, so a page that reloads and rebuilds from the record assigns
+    # the same colours it assigned live.
+    labels =
+      assign_labels(
+        Keyword.get(options, :labels, %{}),
+        objects,
+        points_by_object
+      )
+
     # Every value the chart will draw, flattened once: the floor and the ceiling
     # are the same list, and computing it twice is how they drift.
     evidence_values = Enum.map(ranked, fn {_id, points} -> Enum.map(points, &elem(&1, 2)) end)
@@ -192,19 +220,20 @@ defmodule Monty.Studio.Chart do
 
     series =
       objects
-      |> Enum.with_index()
-      |> Enum.map(fn {object_id, index} ->
+      |> Enum.map(fn object_id ->
         points = Map.get(points_by_object, object_id, [])
 
         %{
           graph_id: object_id,
-          colour: colour(object_id, index),
+          colour: Map.fetch!(labels, object_id).colour,
           evidence: Enum.map(points, fn {_episode, x, evidence} -> {x, evidence} end),
           points: segments(points, chart),
           last: point(List.last(points) |> last_point(chart), chart)
         }
       end)
       |> Enum.reject(&(&1.evidence == []))
+
+    legend = Enum.sort_by(series, &Map.fetch!(labels, &1.graph_id).position)
 
     mlh = mlh(placed, chart)
 
@@ -218,6 +247,8 @@ defmodule Monty.Studio.Chart do
     %{
       chart
       | series: series,
+        labels: labels,
+        legend: legend,
         ticks: ticks(chart),
         # Evidence is measured from zero and can fall under it, so the line it is
         # measured from is drawn: the floor keeps zero inside the range, every
@@ -227,6 +258,36 @@ defmodule Monty.Studio.Chart do
         mlh: mlh,
         mlh_colour: mlh_colour
     }
+  end
+
+  # Every object the chart has not seen before gets the next free legend place,
+  # and with it the colour that place is worth — the same `colour/2` the palette
+  # has always used. The newcomers are taken in the order the run reported them,
+  # not in the drawing order, so a page rebuilt from the record assigns what a
+  # page watching live assigned.
+  defp assign_labels(labels, objects, points_by_object) do
+    newcomers =
+      objects
+      |> Enum.reject(&Map.has_key?(labels, &1))
+      |> Enum.sort_by(fn object_id ->
+        case Map.get(points_by_object, object_id, []) do
+          [{_episode, x, _evidence} | _rest] -> {x, object_id}
+          [] -> {:later, object_id}
+        end
+      end)
+
+    next =
+      labels
+      |> Map.values()
+      |> Enum.map(& &1.position)
+      |> Enum.max(fn -> -1 end)
+      |> Kernel.+(1)
+
+    newcomers
+    |> Enum.with_index(next)
+    |> Enum.reduce(labels, fn {object_id, position}, labels ->
+      Map.put(labels, object_id, %{colour: colour(object_id, position), position: position})
+    end)
   end
 
   defp last_point({_episode, x, evidence}, _chart), do: {x, evidence}

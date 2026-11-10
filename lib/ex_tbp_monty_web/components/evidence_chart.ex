@@ -230,7 +230,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         </g>
       </svg>
       <ul class="flex flex-wrap gap-x-3 gap-y-1 px-0.5 pb-0.5 text-[11px]">
-        <li :for={series <- @chart.series} class="flex items-center gap-1">
+        <li :for={series <- @chart.legend} class="flex items-center gap-1">
           <span
             class="evidence-chart__swatch inline-block size-2 rounded-full"
             style={"--swatch: #{series.colour}"}
