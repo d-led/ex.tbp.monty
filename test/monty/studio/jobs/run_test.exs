@@ -230,7 +230,10 @@ defmodule Monty.Studio.Jobs.RunTest do
     test "keeps the picture each step saw, not the arrays behind it" do
       # What a replay draws is the world's own rendering — a run recorded from
       # the transformed observations has poses in it and no pixels, so a finished
-      # run shows blank frames. The camera arrays themselves stay out of the row.
+      # run shows blank frames. The camera arrays themselves stay out of the row,
+      # and so do the pictures: the row names the file each one was written to,
+      # because ten kilobytes a step is what made a long run wider than a jsonb
+      # value can be.
       {:ok, record} = start_run("base_config_10distinctobj_dist_agent", 2)
       {:ok, closed} = perform(record)
 
@@ -238,8 +241,8 @@ defmodule Monty.Studio.Jobs.RunTest do
       patch = first["sensors"]["patch"]
 
       assert %{"depth" => depth, "colour" => colour, "range" => [low, high]} = patch["images"]
-      assert png?(depth)
-      assert png?(colour)
+      assert picture?(record.id, depth)
+      assert picture?(record.id, colour)
       assert low < high
 
       refute Map.has_key?(patch, "depth")
@@ -370,8 +373,17 @@ defmodule Monty.Studio.Jobs.RunTest do
   end
 
   # A picture a step kept: PNG, base64 because it travels in JSON.
-  defp png?(base64) do
-    match?({:ok, <<0x89, "PNG", _rest::binary>>}, Base.decode64(base64))
+  # The URL a record keeps, read back through the file it names: a picture is
+  # worth keeping only if it is still a PNG when a page asks for it.
+  defp picture?(run_id, url) do
+    with "/runs/" <> rest <- url,
+         [_, name] <- String.split(rest, "/frames/", parts: 2),
+         {:ok, path} <- Monty.Studio.Artifacts.frame_path(run_id, name),
+         <<0x89, "PNG", _rest::binary>> <- File.read!(path) do
+      true
+    else
+      _not_a_picture -> false
+    end
   end
 
   describe "a run that is stopped" do
