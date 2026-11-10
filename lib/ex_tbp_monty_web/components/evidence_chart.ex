@@ -88,7 +88,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
       wheel to zoom about the pointer, double-click for the whole run. --%>
       <svg
         id={"chart-svg-#{@module_id}"}
-        phx-hook="ChartZoom"
+        phx-hook=".EvidenceChart"
         viewBox={"0 0 #{@chart.width} #{@chart.height}"}
         class={["w-full touch-none cursor-crosshair", @expanded && "min-h-0 flex-1"]}
         data-expanded={to_string(@expanded)}
@@ -259,8 +259,19 @@ defmodule ExTbpMontyWeb.EvidenceChart do
       // are `ChartZoom` in `assets/js/chart.js`, shared with the run page's
       // chart: they are the same gestures, and writing them twice is what made
       // the two charts zoom by different factors.
+      import { ChartZoom } from "../../../../../assets/js/chart.js";
+
       export default {
+        // One element carries one hook, so this is the shared gesture hook *with*
+        // the readout added, not a second hook beside it. The zoom came out of
+        // this file into `assets/js/chart.js` because the two charts zoomed by
+        // different factors; what stayed here is what only this chart has, which
+        // is a tooltip.
+        ...ChartZoom,
+
         mounted() {
+          ChartZoom.mounted.call(this)
+
           // Where the pointer was, in the page's own pixels. A live chart is
           // redrawn every step, and almost every redraw happens while somebody is
           // hovering it — a tooltip that is hidden on each one is a tooltip that
@@ -268,6 +279,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           // cursor the moment the chart grows under it.
           this.pointer = null
           this.tooltip = this.el.parentElement.querySelector("[data-chart-tooltip]")
+          if (this.tooltip === null) return
 
           this.el.addEventListener("mousemove", (event) => this.hover(event))
           this.el.addEventListener("mouseleave", () => this.hide())
@@ -277,13 +289,20 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         // is under it, with the numbers from the new picture. Only a pointer that
         // has left the chart hides it.
         updated() {
+          ChartZoom.updated.call(this)
+
           this.tooltip = this.el.parentElement.querySelector("[data-chart-tooltip]")
+          if (this.tooltip === null) return
+
           if (this.pointer === null) return this.hide()
 
           this.hover(this.pointer)
         },
 
-        geometry() {
+        // Named apart from `ChartZoom.geometry/0`: spreading the shared hook
+        // first and declaring this one second would otherwise shadow it, and
+        // every zoom calculation would read a shape it does not know.
+        hoverGeometry() {
           const data = this.el.dataset
 
           return {
@@ -302,7 +321,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         hover(pointer) {
           this.pointer = { clientX: pointer.clientX, clientY: pointer.clientY }
 
-          const chart = this.geometry()
+          const chart = this.hoverGeometry()
           const rect = this.el.getBoundingClientRect()
           const scale = rect.width / chart.width
           const x = (this.pointer.clientX - rect.left) / scale
@@ -342,16 +361,20 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           return rows.sort((a, b) => b.evidence - a.evidence)
         },
 
-        // The x of the reported step closest to `x`. Every line's points are
-        // already in the picture, so the axis needs no second copy of them.
+        // The x of the reported step closest to `x`, taken across the polylines:
+        // a line breaks where a step went unreported, so no single one of them
+        // spans the axis. Each polyline's points are in step order, which is what
+        // lets the nearest be a search rather than a walk — walking cost
+        // `lines × steps` point reads on every pointer move and on every patch,
+        // eleven thousand steps deep, and a chart that reads that much on a hover
+        // is a chart that stops moving rather than one that answers.
         nearestStep(x) {
           let best = null
 
           for (const line of this.el.querySelectorAll("polyline[data-graph]")) {
-            for (let index = 0; index < line.points.numberOfItems; index++) {
-              const pointX = line.points.getItem(index).x
-              if (best === null || Math.abs(pointX - x) < Math.abs(best - x)) best = pointX
-            }
+            const point = nearestPoint(line.points, x)
+            if (!point) continue
+            if (best === null || Math.abs(point.x - x) < Math.abs(best - x)) best = point.x
           }
 
           return best
@@ -421,17 +444,28 @@ defmodule ExTbpMontyWeb.EvidenceChart do
 
       // The point in a polyline whose x is nearest `x`, in the SVG's own
       // units, so nothing has to guess what the browser scaled it to.
-      // Indexed rather than iterated: `SVGPointList` is not an iterable in
+      //
+      // A binary search, because a polyline's points are in step order: a run of
+      // thousands of steps was read point by point for a hover that answers one
+      // place. Indexed rather than iterated: `SVGPointList` is not an iterable in
       // every browser this page is read in.
       function nearestPoint(points, x) {
-        let best = null
+        let low = 0
+        let high = points.numberOfItems - 1
 
-        for (let index = 0; index < points.numberOfItems; index++) {
-          const point = points.getItem(index)
-          if (!best || Math.abs(point.x - x) < Math.abs(best.x - x)) best = point
+        if (high < 0) return null
+
+        while (low < high) {
+          const middle = (low + high) >> 1
+          if (points.getItem(middle).x < x) low = middle + 1
+          else high = middle
         }
 
-        return best
+        const after = points.getItem(low)
+        if (low === 0) return after
+
+        const before = points.getItem(low - 1)
+        return x - before.x <= after.x - x ? before : after
       }
 
       function escape(text) {

@@ -236,16 +236,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # stepped twenty thousand times keeps a quarter of a gigabyte of pictures in
   # that row, and two of those a second was what an experiment page cost while its
   # run was trying to step.
+  #
+  # Read without the pictures (`RunHistory.head/1`): a timeline entry is 11 kB a
+  # step and this page draws one of them — the last — which it asks for on its
+  # own (`sensors_at/2`). Reading the row whole is what made this page take half
+  # a minute to open on a run of thirteen thousand steps, long enough for the
+  # socket to give up and reconnect, and none of the pictures but one was drawn.
   defp seed(socket, run_id) do
-    case RunHistory.get(run_id) do
+    case RunHistory.head(run_id) do
       nil ->
         socket
 
       record ->
         socket
         |> merge_lines(record)
-        |> merge_frames(record)
         |> merge_beliefs(record)
+        |> merge_frames(record)
     end
   end
 
@@ -1442,26 +1448,44 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   # A run that was reported from elsewhere never sent its pictures here, so the
-  # last frame of the record's timeline stands in: what the run saw at its last
-  # step is better than a panel that never filled in.
-  defp merge_frames(socket, record) do
-    if socket.assigns[:frames_seeded] do
-      socket
-    else
-      case Replay.at(record, Replay.last_step(record)) do
-        %{frames: frames} when frames != [] ->
-          socket
-          |> assign(frames_seeded: true)
-          |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
+  # last frame the record kept stands in: what the run saw at its last step is
+  # better than a panel that never filled in.
+  #
+  # The record in hand is the log alone (`RunHistory.head/1`), so the one step's
+  # observations are asked for by name — the same read the run page makes for the
+  # step a reader is looking at.
+  defp merge_frames(%{assigns: %{frames_seeded: true}} = socket, _record), do: socket
 
-        _no_frames ->
-          socket
-      end
+  defp merge_frames(socket, record) do
+    case last_frame(record) do
+      [] ->
+        socket
+
+      frames ->
+        socket
+        |> assign(frames_seeded: true)
+        |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
+    end
+  end
+
+  defp last_frame(record) do
+    with step when not is_nil(step) <- Replay.last_step(record),
+         sensors when is_map(sensors) <- RunHistory.sensors_at(record.id, step),
+         %{frames: frames} <- Replay.at(record, step) |> Replay.with_pictures(sensors) do
+      frames
+    else
+      _nothing_recorded -> []
     end
   end
 
   # Lines already on screen stay where they are; lines the record has and the
   # page does not are the ones that were missed.
+  #
+  # What a record hands over is bounded the way a step's own line is
+  # (`@log_limit`): a run of thirteen thousand steps has thirteen thousand lines
+  # in its record, and a page that drew them all on mount spent the time the log
+  # window exists to save — a window is a window whether the lines arrive one at
+  # a time or all at once.
   defp merge_lines(socket, record) do
     seen = socket.assigns.lines |> Enum.filter(& &1.step) |> length()
 
@@ -1469,7 +1493,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       socket
     else
       chatter = Enum.filter(socket.assigns.lines, &is_nil(&1.step))
-      recorded = Enum.map(record.log, &record_line/1)
+      recorded = record.log |> Enum.map(&record_line/1) |> Enum.take(-@log_limit)
       assign(socket, lines: Enum.sort_by(recorded ++ chatter, & &1.id))
     end
   end

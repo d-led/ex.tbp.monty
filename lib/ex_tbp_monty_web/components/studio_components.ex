@@ -1079,13 +1079,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
   # there rather than a measurement.
   @chart_columns 48
 
-  # A hover mark is per column of the view a pointer can land in — the same grid
-  # a click means a step on. One per point was the whole run: a thousand steps
-  # over twenty lines is twenty thousand marks, four thousand of them drawn, and
-  # a readout that can only be asked one place at a time. Thinned to the
-  # columns, a line carries as many marks as there are places to point at.
-  @marks_per_line @chart_columns
-
   defp chart_columns(chart) do
     span = max(chart.to - chart.from, 1)
     width = chart.width / @chart_columns
@@ -1109,7 +1102,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
     named? = length(chart.lines) > 1
 
     chart.hover
-    |> nearest_per_unit(@marks_per_line)
+    |> nearest_per_unit(@samples_per_line)
     |> Enum.map(fn %{line: line, x: x, y: y, step: step, value: value} ->
       %{
         x: Float.round(x * 1.0, 2),

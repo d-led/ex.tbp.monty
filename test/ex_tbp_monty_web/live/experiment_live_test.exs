@@ -859,10 +859,9 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     test "a page opened on a run that has already stepped draws its replay", %{conn: conn} do
       record = running_run()
 
-      # The row carries the steps a page draws: `reconcile/1` seeds the frames
-      # out of the record, so it reads the whole row. A row read without its
-      # pictures (`head/1`) keeps the log but not the pictures, and the page then
-      # draws a run that stepped and saw nothing.
+      # The record is read without its pictures (`RunHistory.head/1`) — a timeline
+      # entry is 11 kB a step and this page draws one of them — so the frame on
+      # screen was asked for by name, for the last step the run reached.
       {:ok, _stepped} =
         RunHistory.record_step(record, entry(0), %{
           "step" => 0,
@@ -877,6 +876,29 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       poll(view)
 
       assert has_element?(view, "#frames figure")
+    end
+
+    test "opening a long run draws the window of its log, not the whole transcript", %{
+      conn: conn
+    } do
+      record = running_run()
+
+      # A run of this experiment leaves thirteen thousand steps behind, and the
+      # page keeps the last two thousand of them — whether they arrived one at a
+      # time or were already in the record when the page opened. Drawing the whole
+      # transcript on mount is the same page, slower, for lines a reader scrolls
+      # past.
+      {:ok, _stored} = RunHistory.store(record, for(step <- 1..2_050, do: entry(step)), [])
+
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      assert current_run_id(view) == record.id
+      assert view |> element("#log-count") |> render() =~ "2000 of 2000 lines"
+
+      # The window is the *tail*: the steps at the end of the run are the ones a
+      # page opened on it is for.
+      assert view |> visible_lines() |> hd() =~ "step 51 "
     end
   end
 
