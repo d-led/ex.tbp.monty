@@ -378,11 +378,11 @@ defmodule Monty.Studio.Chart do
   # ended. That is what makes the drop back to zero — the thing an episode
   # boundary *is* — visible instead of hidden under the first episode's line.
   defp stack(steps) do
-    {placed, starts, spans, _next} =
+    {chunks, starts, spans, _next} =
       steps
       |> Enum.group_by(&elem(&1, 0))
       |> Enum.sort()
-      |> Enum.reduce({[], [], [], 0}, fn {episode, of_episode}, {placed, starts, spans, base} ->
+      |> Enum.reduce({[], [], [], 0}, fn {episode, of_episode}, {chunks, starts, spans, base} ->
         of_episode = Enum.sort_by(of_episode, &elem(&1, 1))
         first = of_episode |> hd() |> elem(1)
         last = of_episode |> List.last() |> elem(1)
@@ -393,12 +393,17 @@ defmodule Monty.Studio.Chart do
         start = %{episode: episode, x: base, label: "ep #{episode + 1}"}
         span = %{episode: episode, from: base, to: base + (last - first)}
 
+        # An episode is built whole and put aside. Appending it to what the
+        # episodes before it made copies that list once per episode: a run of
+        # eighty episodes copied twenty thousand points eighty times, which was
+        # most of what a drawing cost — and a page draws four times a second.
+        #
         # The next episode begins on this one's last step, not after it: a gap
         # between them is a step the chart would be claiming nobody reported.
-        {placed ++ points, [start | starts], [span | spans], base + (last - first)}
+        {[points | chunks], [start | starts], [span | spans], base + (last - first)}
       end)
 
-    {placed, Enum.reverse(starts), Enum.reverse(spans)}
+    {chunks |> Enum.reverse() |> Enum.concat(), Enum.reverse(starts), Enum.reverse(spans)}
   end
 
   defp last_step([]), do: 1

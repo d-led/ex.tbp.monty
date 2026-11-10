@@ -104,16 +104,26 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   @impl true
   def handle_params(params, _uri, socket) do
-    # Before anything is read: a `running` record whose process is gone is not a
-    # run in flight, and a page that showed it as one would be wrong twice —
-    # about the run and about whether a new one can start.
-    _ = Reaper.sweep()
+    # A `running` record whose process is gone is not a run in flight, and a page
+    # that showed it as one would be wrong twice — about the run and about
+    # whether a new one can start. Settling those is asked for *beside* the page
+    # rather than before it: the check reads every open run and asks Oban about
+    # each, and a page that waits for it shows nothing until it is done, which is
+    # exactly the visit after a restart, when a reader is waiting.
+    if connected?(socket), do: start_reap()
+
+    socket = assign(socket, :params, params)
 
     case socket.assigns.live_action do
       :index -> {:noreply, load_runs(socket, params)}
       :show -> assign_run(params, socket)
     end
   end
+
+  # Asked for here and answered in `handle_info(:reap, ...)`: the check reads
+  # every open run and asks Oban about each, so it belongs after this render and
+  # before anything the reader can do — not in front of the first paint.
+  defp start_reap, do: send(self(), :reap)
 
   # The filter is the address, so a narrowed list can be sent to a colleague and
   # the back button works.
@@ -1335,6 +1345,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   @impl true
   def handle_info(:replay_tick, socket), do: replay_tick(socket)
 
+  # The staleness check this page asked for when it loaded.
+  def handle_info(:reap, socket), do: {:noreply, after_reap(socket, Reaper.sweep())}
+
   # The run said something: a step, the end of it, or a failure. The worker
   # publishes on the run's topic as `{:studio, run_id, event}`, and reading the
   # record again is what keeps one source of truth — the worker writes it, the
@@ -1375,6 +1388,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # A run was written down, or settled. The index draws the record it was told
   # about; the detail page keeps its own place and only asks for its own run.
   def handle_info({:recorded, run}, socket), do: recorded(socket, run)
+
+  # Zero is the ordinary answer to the staleness check and costs nothing.
+  # Anything else means a run this page may be showing has just been settled, so
+  # the page is read again: the broadcast the Reaper sends covers the run a page
+  # is watching, and this covers the list.
   def handle_info({:settled, run}, socket), do: settled(socket, run)
 
   # How far a delete has got. A chunk that finishes after the last one has been
@@ -1388,6 +1406,19 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # A page can outlive the thing that was talking to it: a message for another
   # page, or one that arrived after the run was closed. It is not news.
   def handle_info(_late_message, socket), do: {:noreply, socket}
+
+  # Zero is the ordinary answer to the staleness check and costs nothing. Anything
+  # else means a run this page may be showing has just been settled, so the page
+  # is read again: the broadcast the Reaper sends covers the run a page is
+  # watching, and this covers the list.
+  defp after_reap(socket, closed) when closed > 0 do
+    case socket.assigns.live_action do
+      :index -> load_runs(socket, Map.get(socket.assigns, :params, %{}))
+      :show -> refresh_run(socket, socket.assigns.run.id)
+    end
+  end
+
+  defp after_reap(socket, _closed), do: socket
 
   # The delete is over: say how many went, and read the list again — the rows
   # are a stream, and deleting is the one change a stream cannot be told about
@@ -1508,7 +1539,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp poll_shown_run(
          %{assigns: %{live_action: :show, run: %{id: id, status: "running"}}} = socket
        ) do
-    Reaper.sweep()
+    # One run, asked about — not every open run: a run whose worker died, or whose
+    # job was cancelled out from under it, leaves the word `running` behind, and
+    # closing the record is what stops the page saying it. The record is polled
+    # twice a second, so this has to be the cheap question.
+    _ = Reaper.reap(id)
 
     socket |> refresh_run(id) |> keep_polling()
   end

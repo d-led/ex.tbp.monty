@@ -19,6 +19,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   use ExTbpMontyWeb, :live_view
 
+  require Logger
+
   alias Monty.Prerequisites
   alias Monty.Studio
 
@@ -61,7 +63,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     # Runs of this experiment arrive as messages, the same way a run's steps do:
     # the record is written once, and every page showing it hears about it. No
     # page has to ask the database what changed.
-    if connected?(socket), do: RunHistory.subscribe()
+    socket =
+      if connected?(socket) do
+        RunHistory.subscribe()
+        Logger.info("page opened: #{name_of(params)}", experiment: name_of(params))
+        # The staleness check is asked for here and answered in `handle_info/2`:
+        # it reads every open run and asks Oban about each, and a page that waits
+        # for it before drawing shows nothing until it is done — which, on the
+        # first visit after a restart, is exactly when somebody is waiting. A
+        # message to ourselves is after this render and before anything the
+        # reader can do.
+        send(self(), :reap)
+        socket
+      else
+        socket
+      end
 
     case Studio.open(name_of(params)) do
       {:ok, opened} ->
@@ -120,25 +136,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # One run until somebody asks for more: parallelism is a choice made on
       # this page, not something a link should be able to set for them.
       parallelism: 1,
-      run_id: nil,
-      status: nil,
-      progress: {0, steps},
-      # Which episode the step counter is counting inside: it restarts at every
-      # episode, so a badge without it reads as a run going backwards.
-      episode: 0,
-      lines: [],
       filter: "",
-      summary: nil,
-      log_path: nil,
-      # Per learning module: the beliefs it held, step by step, and the chart a
-      # template draws from them. Kept per module because a run with two modules
-      # has two answers, and averaging them would be a third.
-      beliefs: %{},
-      charts: %{},
-      # Which object each episode was about, by episode: a chart's bands wear the
-      # colour of the object their episode recognised, which is how the pyview
-      # dashboard's own picture reads.
-      episode_objects: %{},
       # Which stretch of the run's own x axis the chart draws, `{from, to}` or
       # `nil` for all of it. It comes from the URL rather than from an assign the
       # page owns: a zoomed chart is a link that can be kept, and every way of
@@ -154,17 +152,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # Following the newest steps is the default: a page opened on a run that is
       # still going is a page watching it, not a page reading it.
       follow: Map.get(socket.assigns, :follow, true),
-      chart_extent: {0, 0},
-      # The object and the agent in one picture per step: the views a sensor
-      # streams say what a camera saw, this says whether there was anything to see.
-      centre: nil,
       # The seed a run here would start from. It is the config's until somebody
       # changes it, which is what makes it worth showing: the number a sweep is
       # about is the one a page can say.
       seed: opened.setup.seed
     )
     |> stream_configure(:frames, dom_id: &"frame-#{&1.sensor_id}")
-    |> stream(:frames, [])
+    |> watching_nothing()
   end
 
   @runs_shown 5
@@ -206,11 +200,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # A run outlives its page, so a page that loads must find the run its
   # experiment is in the middle of instead of pretending nothing is happening.
   defp follow_running(%{assigns: %{opened: %{name: name}}} = socket) do
-    # A record that says `running` may be the only thing left of a run whose node
-    # went away. Settle those before believing one, or this page watches a corpse
-    # and refuses to start the run the reader actually asked for.
-    _ = Reaper.sweep()
-
     case RunHistory.running_for(name) do
       nil -> socket
       record -> follow(socket, record)
@@ -286,6 +275,26 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       caught_up: false
     )
     |> stream(:frames, [], reset: true)
+  end
+
+  # The run part of the page with nothing in it: how a page starts, and where it
+  # returns when the run it was waiting for turns out to be over before it
+  # stepped once. What the reader set themselves — the filter, the window, the
+  # boxes they have opened — is theirs and is left alone.
+  defp watching_nothing(socket) do
+    socket
+    |> clear_run_view()
+    |> assign(
+      run_id: nil,
+      status: nil,
+      progress: {0, socket.assigns.steps},
+      # Which episode the step counter is counting inside: it restarts at every
+      # episode, so a badge without it reads as a run going backwards.
+      episode: 0,
+      lines: [],
+      summary: nil,
+      log_path: nil
+    )
   end
 
   # The lines a run already printed are in the record; showing the log from the
@@ -1067,6 +1076,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   def handle_info({:studio, _other_run, _event}, socket), do: {:noreply, socket}
 
+  # The staleness check the page asked for when it loaded, answered before
+  # anything the reader can do. A run that turned out to be gone becomes a failed
+  # run with its reason, on screen, without a reload.
+  def handle_info(:reap, socket) do
+    {:noreply, after_reap(socket, Reaper.sweep())}
+  end
+
   # The drawing a step asked for and could not have yet.
   def handle_info(:chart_due, socket) do
     socket =
@@ -1092,6 +1108,34 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       {:noreply, socket}
     end
   end
+
+  # Zero is the ordinary answer to the staleness check and costs nothing. A run
+  # that was closed is one this page may be describing as `running`, so it is
+  # read again — the run, and the list of runs this experiment has.
+  defp after_reap(socket, closed) when closed > 0 do
+    socket
+    |> reconcile()
+    |> let_go_of_a_run_that_never_started()
+    |> refresh_runs()
+  end
+
+  defp after_reap(socket, _closed), do: socket
+
+  # A run this page followed because its record said `running`, before it had
+  # stepped once, that the check has now settled: nothing will step it, so
+  # waiting for it would wait for news that cannot come — and it would also
+  # refuse the run the reader opened the page to start. The list of runs below
+  # says how it ended. What a page watched itself stays on screen: that is a run
+  # it can describe.
+  defp let_go_of_a_run_that_never_started(%{assigns: %{run_id: nil}} = socket), do: socket
+
+  defp let_go_of_a_run_that_never_started(
+         %{assigns: %{progress: {0, _}, lines: [], status: status}} = socket
+       )
+       when status != "running",
+       do: watching_nothing(socket)
+
+  defp let_go_of_a_run_that_never_started(socket), do: socket
 
   # A run that this page is not showing, because somebody started it after the
   # page opened.
@@ -1754,6 +1798,23 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   # -- the log ---------------------------------------------------------------
+
+  # The page's own closing line. A reconnect is a page that closed and opened
+  # again, so the closing half has to be in the log with the reason and how far
+  # the page had got — otherwise "it reconnected again" arrives with no time on
+  # it and nothing to compare it against the run's own log.
+  @impl true
+  def terminate(reason, socket) do
+    episode = Map.get(socket.assigns, :episode)
+    {step, _total} = Map.get(socket.assigns, :progress) || {nil, nil}
+
+    Logger.info(
+      "page closed: #{inspect(reason)} at episode #{inspect(episode)} step #{inspect(step)}",
+      run_id: Map.get(socket.assigns, :run_id)
+    )
+
+    :ok
+  end
 
   defp push(socket, step, text, level) do
     line = line(step, text, level, RunLog.now())

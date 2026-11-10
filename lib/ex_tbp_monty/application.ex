@@ -55,6 +55,11 @@ defmodule ExTbpMonty.Application do
         # One log line per request, none for the health probe: Phoenix's own
         # request logger is off in `config :phoenix, :logger`.
         ExTbpMontyWeb.Telemetry.RequestLog.attach()
+        # And one line when a live connection opens and one when it closes, with
+        # its lifetime: the same setting that silences the request logger also
+        # silenced Phoenix's connection lines, which is why a reconnect used to
+        # leave nothing at all in the log.
+        ExTbpMontyWeb.Telemetry.ConnectionLog.attach()
         # A run's record is closed by the job that executes it, and a node that
         # restarts takes those jobs with it: whatever was `running` a moment ago
         # is not running now.

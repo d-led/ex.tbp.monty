@@ -59,6 +59,25 @@ defmodule Monty.Studio.Jobs.Reaper do
     |> length()
   end
 
+  @doc """
+  Closes `run_id` if nothing is working on it, and answers whether it did.
+
+  The one-run form of `sweep/0`, for a page that already watches that run. A page
+  polls the run it shows, and sweeping every open run on every poll asked the
+  database and Oban about runs that page cannot be wrong about; this asks about
+  the one it can.
+  """
+  @spec reap(String.t()) :: boolean()
+  def reap(run_id) do
+    case RunHistory.get(run_id) do
+      %{status: "running"} = record ->
+        if Run.held?(record.id) or alive?(record), do: false, else: abandon(record)
+
+      _not_running ->
+        false
+    end
+  end
+
   # A run is alive if this node holds a process for it, if Oban still has its job
   # queued or freshly started, or if its record has been written to in the last
   # minute.

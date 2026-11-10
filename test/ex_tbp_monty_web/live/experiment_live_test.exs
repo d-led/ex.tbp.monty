@@ -1056,7 +1056,10 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       # The row said `running`, but no job will ever run it and no process holds
       # it. Waiting for news that cannot come is the worst state a page can be
-      # in — and it would also refuse the run the reader came here to start.
+      # in — and it would also refuse the run the reader came here to start. The
+      # check the page asks for when it opens answers before the page is read, so
+      # the corpse is let go: nothing is being watched, and the Run button is
+      # free. How the run ended is in the list of runs below.
       refute has_element?(view, "#open-history")
       assert has_element?(view, "#run")
 

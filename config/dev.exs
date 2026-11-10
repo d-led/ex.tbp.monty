@@ -64,8 +64,12 @@ config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :ex_tbp_monty, dev_routes: true
 
-# Do not include metadata nor timestamps in development logs
-config :logger, :default_formatter, format: "[$level] $message\n"
+# The log is the same line in development as everywhere else: the time and the
+# identifiers, so a line from a page and a line from the run it watches can be
+# put side by side. A development log that drops both is a log nobody can use to
+# answer "when did that happen, and to which run" — which is exactly the
+# question a reconnect asks.
+config :logger, :default_formatter, format: "$time $metadata[$level] $message\n"
 
 # Set a higher stacktrace during development. Avoid configuring such
 # in production as building large stacktraces may be expensive.

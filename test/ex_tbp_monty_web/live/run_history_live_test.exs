@@ -906,8 +906,11 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{abandoned.id}")
 
-      assert RunHistory.get(abandoned.id).status == "failed"
+      # The check runs beside the page rather than in front of it, and the page
+      # reads its answer when it is next drawn — which is what opening the page
+      # is. So the closing has happened by the time the page says what happened.
       assert view |> element("#run-failure") |> render() =~ "stopped before it finished"
+      assert RunHistory.get(abandoned.id).status == "failed"
 
       # Nothing about a killed process is a missing file, so the page does not
       # send the reader to the prerequisites for it.
