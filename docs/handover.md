@@ -1950,3 +1950,71 @@ mapped. `9f2fb84` puts back a `Sync-Kernels` that copies only what the build tre
 not have: it asks whether the two paths are the same file (a link) or hold the
 same bytes (two copies), and skips the copy when they are. Whether the Windows
 job is green after those three is the first thing to check.
+
+## 35. 2026-11-11: the DB port that was set on nothing, and work that leaves the socket
+
+### 35.1 `DB_PORT` was written on a module nobody starts
+
+`config/runtime.exs` set the port on `ExTbpMonty.Repo`, which is the _delegating_
+module. Dev and test name `ExTbpMonty.Repo.Postgres` as the repo this machine
+runs, so the port was inherited by nothing and Postgrex fell back to its own
+**5432** — on this machine the Homebrew cluster, which is why `mix ecto.setup`
+dialled a database this project does not own and `mix test` had been reading a
+different server from the one in `docker-compose.yml`. The port is now set on
+`ExTbpMonty.Repo.Postgres` (`ec468ea`). CI is unaffected: its test job sets
+`DB_PORT=5432`, and its service is on the default port.
+
+Dev and test databases were created and migrated on 6432 as part of the fix. A
+checkout that had pointed at 5432 keeps that data where it was; this is a port
+change, not a migration.
+
+### 35.2 What leaves the LiveView process, and what cannot yet
+
+Moved into `start_async/3`, each verified in the browser:
+
+| Where                         | Was                                              | Is                                               |
+| ----------------------------- | ------------------------------------------------ | ------------------------------------------------ |
+| `ExperimentLive` world switch | `Studio.open/2` inside `handle_event/3`          | a task; failures land in the flash               |
+| `PrerequisitesLive` mount     | `df` (`System.cmd`) + a recursive directory walk | a task, "Measuring what these directories hold…" |
+| `BuildLive` preview           | a whole compose per keystroke                    | `phx-debounce="400"` per typing pause            |
+
+Two traps found doing it:
+
+- **A bare `Task.start` cannot touch the database under the test sandbox.**
+  `cannot invoke sandbox operation with pool DBConnection.ConnectionPool` — use
+  `start_async/3`, which is supervised and carries the ownership the sandbox
+  follows.
+- **`render_async/1` waits for `assign_async`'s loading state, not for a
+  `start_async` a page begins in `handle_info/2`.** It times out at 100 ms by
+  default and returns _without_ the result, so a test that asserted on the async
+  answer was asserting on stale assigns. The stale-run sweep therefore stays
+  synchronous and _after_ the first paint (`send(self(), :reap)`), which is what
+  its two tests pin. Everything else in the table above is a task.
+
+### 35.3 Two reader-visible defects fixed with them
+
+- **"follow latest steps" sprang back when unticked.** The checkbox's handler
+  inverted the assign, so a label that activates its wrapping checkbox twice (the
+  label carried `for=` _and_ wrapped the input) delivered two clicks and put the
+  tick back. The tick now sends the value it means (`phx-value-follow`), on both
+  pages.
+- **Stop could say "already finished" about a run that was stepping.** Both pages
+  read the job out of a queue map fetched when the page was drawn; a retried or
+  replaced job made that map stale. `job_for/2` asks `Jobs.by_run/1` again before
+  anything is concluded, and `cancel({run, nil})` does the same before a record is
+  written off as orphaned.
+- The series picker above the run page's plot overlapped the chart's border: the
+  panel's gap was 2 px, less than a focused control's ring. It is 8 px now, and
+  measured (`select.bottom + 3 < plot.top`).
+
+### 35.4 What is still in the socket, in order of cost
+
+1. `ExperimentLive`'s reap (`Reaper.sweep/0`) — one query per open run, once per
+   page, after the first paint. It cannot move to `start_async` until its two
+   tests can wait on the answer (see 35.2).
+2. `RunHistoryLive`'s `with_steps/1` — `RunStream.steps/1` copies the whole
+   in-memory log on every refresh; `steps_from/2` exists for exactly this.
+3. `catalog/2` rebuilt whenever the log grows — 3 + N passes over the whole log,
+   then `Chart.many/2` over the whole window.
+4. `assign_charts/2` redraws every module at 4 Hz; the throttle is per page, not
+   per module.

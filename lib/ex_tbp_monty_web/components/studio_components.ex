@@ -460,10 +460,16 @@ defmodule ExTbpMontyWeb.StudioComponents do
       <div
         :if={@chart}
         id="replay-chart-panel"
-        class={[
-          "space-y-0.5 pt-0.5",
-          @expanded && "fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
-        ]}
+        class={
+          [
+            # A control in this row is focused the moment a reader touches it, and
+            # its focus ring is drawn outside its box; against the plot's own
+            # border, a two-pixel gap made the picker look as if it lay on top of
+            # the chart. The gap is the ring's width and a little more.
+            "space-y-2 pt-1",
+            @expanded && "fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
+          ]
+        }
       >
         <div class="flex flex-wrap items-center gap-1.5">
           <button
