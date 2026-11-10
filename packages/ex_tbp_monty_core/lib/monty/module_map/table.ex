@@ -35,7 +35,7 @@ defmodule Monty.ModuleMap.Table do
           elixir: String.t(),
           elixir_url: String.t() | nil,
           test_url: String.t() | nil,
-          status: :implemented | :planned | :excluded,
+          status: :implemented | :partial | :planned | :excluded,
           reason: String.t() | nil,
           stand_ins: [map()],
           text: String.t()
@@ -125,7 +125,7 @@ defmodule Monty.ModuleMap.Table do
 
   @doc "The statuses a row can have, in the order the page offers them."
   @spec statuses() :: [atom()]
-  def statuses, do: [:implemented, :planned, :excluded]
+  def statuses, do: [:implemented, :partial, :planned, :excluded]
 
   @doc """
   The status a page should filter by, from what the URL said.
@@ -136,7 +136,7 @@ defmodule Monty.ModuleMap.Table do
   @spec status(String.t() | atom() | nil) :: atom()
   def status(nil), do: :all
   def status(:all), do: :all
-  def status(status) when status in [:implemented, :planned, :excluded], do: status
+  def status(status) when status in [:implemented, :partial, :planned, :excluded], do: status
 
   def status(name) when is_binary(name) do
     Enum.find(statuses(), :all, &(to_string(&1) == name))
@@ -202,8 +202,11 @@ defmodule Monty.ModuleMap.Table do
 
   # Ours, where our tests mirror `lib/` the same way: a written module's test is
   # its own file with `_test.exs` after it. A class that is only named has no
-  # module, so it has no test to point at.
-  defp test_url(_repo, _revision, %{status: status}) when status != :implemented, do: nil
+  # module, so it has no test to point at — a partial one does have one, because
+  # what is written is tested.
+  defp test_url(_repo, _revision, %{status: status}) when status not in [:implemented, :partial],
+    do: nil
+
   defp test_url(nil, _revision, _cls), do: nil
 
   defp test_url(repo, revision, %{elixir: elixir}) do

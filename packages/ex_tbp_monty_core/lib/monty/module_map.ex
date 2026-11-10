@@ -217,6 +217,7 @@ defmodule Monty.ModuleMap do
       files: length(entries),
       classes: length(classes),
       implemented: Map.get(counts, :implemented, 0),
+      partial: Map.get(counts, :partial, 0),
       planned: Map.get(counts, :planned, 0),
       excluded: Map.get(counts, :excluded, 0),
       by_package: classes_by_package(entries)
@@ -275,10 +276,24 @@ defmodule Monty.ModuleMap do
   @spec implemented?(String.t(), keyword()) :: boolean()
   def implemented?(dotted, opts \\ []) do
     case resolve(dotted, opts) do
-      {:ok, %{status: :implemented}} -> true
+      {:ok, %{status: status}} -> written?(status)
       _planned_or_unknown -> false
     end
   end
+
+  @doc """
+  Whether this status is a module this application has.
+
+  Two statuses answer yes. `:implemented` is Monty's class ported whole;
+  `:partial` is one ported as far as anything here uses it, with the shortfall
+  written down beside it (`docs/partial-classes.md`). Both are modules that exist
+  and a config can name, so every question of the form "can this run?" asks this
+  and not the word `implemented` — a partial class that made its config
+  unrunnable would be a port that refuses an experiment it can step.
+  """
+  @spec written?(atom() | %{optional(atom()) => term()}) :: boolean()
+  def written?(%{status: status}), do: written?(status)
+  def written?(status), do: status in [:implemented, :partial]
 
   defp split_target(dotted) do
     case String.split(dotted, ".", trim: true) do
@@ -335,27 +350,29 @@ defmodule Monty.ModuleMap do
 
   defp missing_modules(entries) do
     for entry <- entries,
-        entry.status == :implemented,
+        written?(entry.status),
         not exists?(entry.elixir) do
-      "implemented entry points at a module that does not exist: #{entry.elixir} (#{entry.package}:#{entry.python})"
+      "#{entry.status} entry points at a module that does not exist: #{entry.elixir} (#{entry.package}:#{entry.python})"
     end
   end
 
   defp missing_reasons(entries) do
     entry_problems =
-      for entry <- entries, entry.status == :excluded, unexplained?(entry) do
-        "excluded entry has no reason: #{entry.package}:#{entry.python}"
+      for entry <- entries, entry.status in [:excluded, :partial], unexplained?(entry) do
+        "#{entry.status} entry has no reason: #{entry.package}:#{entry.python}"
       end
 
     # A file-level exclusion covers its classes. Only a class excluded inside a
-    # file this port does write has to say why on its own.
+    # file this port does write has to say why on its own. A partial class always
+    # does: that is the whole content of the status.
     class_problems =
       for entry <- entries,
           entry.status != :excluded,
           class <- entry.classes,
-          class.status == :excluded,
+          class.status in [:excluded, :partial],
           unexplained?(class) do
-        "excluded class has no reason: #{entry.package}:#{entry.python}::#{class.python}"
+        "#{class.status} class has no reason: " <>
+          "#{entry.package}:#{entry.python}::#{class.python}"
       end
 
     entry_problems ++ class_problems
