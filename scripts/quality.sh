@@ -93,6 +93,26 @@ else
   finish
 fi
 
+# A workflow file that does not run is not caught by `mix lint` or by the suite:
+# on 2026-11-10 a duplicated step id made every push's run fail instantly with
+# "This run likely failed because of a workflow file issue" and no jobs at all.
+# `actionlint` names it. Skipped, not failed, on a machine that has no Go tools.
+banner "workflows"
+if ! command -v actionlint >/dev/null 2>&1 && [[ -x "$HOME/go/bin/actionlint" ]]; then
+  PATH="$HOME/go/bin:$PATH"
+fi
+if ! command -v actionlint >/dev/null 2>&1; then
+  record workflows 0 "actionlint not installed, skipped"
+else
+  if actionlint .github/workflows/*.yml >"$report" 2>&1; then
+    record workflows 0 "$(ls .github/workflows/*.yml | wc -l | tr -d ' ') files, found no issues"
+  else
+    tail -n 20 "$report"
+    record workflows 1 "see above"
+    finish
+  fi
+fi
+
 if [[ $fast -eq 1 ]]; then
   finish
 fi
