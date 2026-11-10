@@ -132,10 +132,12 @@ defmodule Monty.Studio.Memory do
   @doc """
   Loads a model's library from a release into a memory, or says it is not there.
 
-  Decoding one of these is six seconds of gunzip and graph building, and a run
-  gets its own copy of the memory anyway — learning writes to it, so two runs
-  must not share one. So the built memory is kept per path and each caller is
-  handed a copy, which costs about twenty milliseconds instead.
+  Decoding one of these is six seconds of gunzip and graph building, so the built
+  memory is kept per path in `:persistent_term` and **handed over, not copied**: a
+  term is immutable, so what a run does with it — building a module's state on top,
+  learning, writing its own library at the end — makes new data and cannot reach
+  what another run reads. Copying it took twenty to forty milliseconds an episode
+  and bought nothing: the copy could not have been the thing that changed.
 
   `:not_found` is not a failure of the port: it is a model whose pickle has not
   been exported here, and the caller says so as a finding.
@@ -164,7 +166,7 @@ defmodule Monty.Studio.Memory do
          true <- is_binary(release),
          path = path_for(name, release, dir),
          true <- File.exists?(path) do
-      {:ok, copy(built(path, module_index))}
+      {:ok, built(path, module_index)}
     else
       _absent -> {:error, :not_found}
     end
@@ -214,8 +216,6 @@ defmodule Monty.Studio.Memory do
         memory
     end
   end
-
-  defp copy(memory), do: memory |> :erlang.term_to_binary() |> :erlang.binary_to_term()
 
   @doc "The libraries that are present, as `release/name`, one per file."
   @spec available_libraries(Path.t()) :: [String.t()]
