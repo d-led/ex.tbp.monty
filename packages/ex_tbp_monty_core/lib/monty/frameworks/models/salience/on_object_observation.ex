@@ -83,19 +83,27 @@ defmodule Monty.Frameworks.Models.Salience.OnObjectObservation do
   # cloud reads in numpy — walks to the row and then to the column for every one
   # of them: a thousand on-object pixels in a 64×64 view looked up their place
   # eighteen hundred times a step, and the walks were most of this module's cost.
-  defp on_object(mask, location_map, salience_map) do
-    [mask, location_map, salience_map]
-    |> Enum.zip()
-    |> Enum.flat_map(fn {mask_row, location_row, value_row} ->
-      [mask_row, location_row, value_row]
-      |> Enum.zip()
-      |> Enum.flat_map(fn
-        {true, location, value} -> [{location, value}]
-        {_background, _location, _value} -> []
-      end)
-    end)
-    |> Enum.unzip()
+  #
+  # The three grids are walked together, a row at a time: `Enum.zip/1` would put
+  # the same walk through a tuple per pixel first, and a view has four thousand.
+  defp on_object(mask, location_map, salience_map),
+    do: on_object(mask, location_map, salience_map, [], [])
+
+  defp on_object([], [], [], locations, salience),
+    do: {Enum.reverse(locations), Enum.reverse(salience)}
+
+  defp on_object([mask_row | mask], [location_row | rows], [value_row | values], locations, salience) do
+    {locations, salience} = on_object_row(mask_row, location_row, value_row, locations, salience)
+    on_object(mask, rows, values, locations, salience)
   end
+
+  defp on_object_row([], [], [], locations, salience), do: {locations, salience}
+
+  defp on_object_row([true | mask], [location | rows], [value | values], locations, salience),
+    do: on_object_row(mask, rows, values, [location | locations], [value | salience])
+
+  defp on_object_row([_background | mask], [_location | rows], [_value | values], locations, salience),
+    do: on_object_row(mask, rows, values, locations, salience)
 
   # The image the observation was taken through: its rows and columns are the
   # grid every other array is reshaped to.

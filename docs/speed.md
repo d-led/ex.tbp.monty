@@ -1017,3 +1017,21 @@ Learning module per step, model reductions: **979 678 → 935 989** (step 2),
 **1 238 544 → 1 187 725** (step 3), **1 749 794 → 1 697 697** (step 4). The
 ladder is still digit-exact (`ev 6.338 (1429, 2)`, `goals 15065`), and the
 burst's own tests — whole pose sets, one per pose on every node — pass unchanged.
+
+## The same walk without a tuple per pixel
+
+The on-object walk above still passed every pixel through `Enum.zip/1` — a tuple
+per pixel, four thousand of them in a 64×64 view, and `Enum.unzip/1` to take them
+apart again. The three grids are walked together now, a row at a time, with the
+two lists built by prepending and reversed once at the end.
+
+The view finder per step: **429 728 → 339 702** reductions (step 2, and stable —
+this process does no other work, so two runs of it agree). The view finder has
+now gone 750 656 → 339 702 (**−55 %**) in three steps of this work, and the
+recorded-view parity test still holds.
+
+A note on measuring: this probe takes `:erlang.process_info(pid, :reductions)`
+deltas around one step, so it also counts whatever else the process answered in
+that window — the learning module's figures vary ±8 % between identical runs,
+while the view finder's do not. The ladder is the determinism check, and it is
+digit-exact: same goals, same hypothesis counts, same evidence, run after run.
