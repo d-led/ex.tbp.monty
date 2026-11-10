@@ -47,6 +47,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
             feature_order: %{},
             feature_rows: %{},
             node_arrays: %{},
+            rotation_features: %{},
             features_to_use: %{}
 
   @type graph_id :: String.t()
@@ -188,6 +189,13 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
               graph_id,
               input_channel,
               node_arrays(memory, graph_id, input_channel)
+            ),
+          rotation_features:
+            put_channel(
+              memory.rotation_features,
+              graph_id,
+              input_channel,
+              rotation_features(memory, graph_id, input_channel)
             )
       }
     end
@@ -335,7 +343,9 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
       | feature_array: drop_channel(memory.feature_array, graph_id, input_channel),
         feature_order: drop_channel(memory.feature_order, graph_id, input_channel),
         feature_rows: drop_channel(memory.feature_rows, graph_id, input_channel),
-        node_arrays: drop_channel(memory.node_arrays, graph_id, input_channel)
+        node_arrays: drop_channel(memory.node_arrays, graph_id, input_channel),
+        rotation_features:
+          drop_channel(memory.rotation_features, graph_id, input_channel)
     }
   end
 
@@ -345,7 +355,8 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
       | feature_array: Map.delete(memory.feature_array, graph_id),
         feature_order: Map.delete(memory.feature_order, graph_id),
         feature_rows: Map.delete(memory.feature_rows, graph_id),
-        node_arrays: Map.delete(memory.node_arrays, graph_id)
+        node_arrays: Map.delete(memory.node_arrays, graph_id),
+        rotation_features: Map.delete(memory.rotation_features, graph_id)
     }
   end
 
@@ -509,14 +520,23 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   it wants the whole set in one place rather than a node at a time — Monty's
   `get_rotation_features_at_all_nodes`, which reshapes the flattened pose
   vectors back into the three directions they are.
+
+  Read from the cache the feature rows come with, and from the graph itself when
+  a graph holds only some of the features (a model built from a fixture).
   """
   @spec get_rotation_features_at_all_nodes(t(), graph_id(), input_channel()) :: [
           [SpatialArithmetics.vector()]
         ]
   def get_rotation_features_at_all_nodes(%__MODULE__{} = memory, graph_id, input_channel) do
-    node_ids = get_graph_node_ids(memory, graph_id, input_channel)
+    case cached_rotation_features(memory, graph_id, input_channel) do
+      nil ->
+        memory
+        |> get_graph_node_ids(graph_id, input_channel)
+        |> then(&get_rotation_features_at_nodes(memory, graph_id, input_channel, &1))
 
-    get_rotation_features_at_nodes(memory, graph_id, input_channel, node_ids)
+      rotations ->
+        Tuple.to_list(rotations)
+    end
   end
 
   @doc """
@@ -526,15 +546,44 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   burst samples rotations from a few hundred nodes of a graph that may hold
   twenty thousand, and reading every node's pose vectors to keep a handful built
   a row list and a tuple for the whole graph on every step, per channel.
+
+  Those rows never change while a graph is being matched — the graph is written
+  once per episode at most — so this answers from a cache built when the graph's
+  rows were: ten graphs of a ten-object library cost 9.5 ms a step to re-read,
+  and 0.2 ms to look up.
   """
   @spec get_rotation_features_at_nodes(t(), graph_id(), input_channel(), [non_neg_integer()]) :: [
           [SpatialArithmetics.vector()]
         ]
   def get_rotation_features_at_nodes(%__MODULE__{} = memory, graph_id, input_channel, node_ids) do
-    memory
-    |> get_features_at_node(graph_id, input_channel, node_ids, ["pose_vectors"])
-    |> Map.fetch!("pose_vectors")
-    |> Enum.map(&Enum.chunk_every(&1, 3))
+    case cached_rotation_features(memory, graph_id, input_channel) do
+      nil ->
+        memory
+        |> get_features_at_node(graph_id, input_channel, node_ids, ["pose_vectors"])
+        |> Map.fetch!("pose_vectors")
+        |> Enum.map(&Enum.chunk_every(&1, 3))
+
+      rotations ->
+        Enum.map(node_ids, &elem(rotations, &1))
+    end
+  end
+
+  defp cached_rotation_features(%__MODULE__{rotation_features: cached}, graph_id, input_channel) do
+    cached |> Map.get(graph_id, %{}) |> Map.get(input_channel)
+  end
+
+  # The pose vectors as the two readers above hand them out: one set of
+  # directions per node, in the graph's own order. `nil` for a graph that does
+  # not store pose vectors, which keeps the reader's own answer for it.
+  defp rotation_features(%__MODULE__{} = memory, graph_id, input_channel) do
+    graph = get_graph(memory, graph_id, input_channel)
+
+    if memory.object_model.has_feature?(graph, "pose_vectors") do
+      graph
+      |> then(&memory.object_model.get_values_for_feature(&1, "pose_vectors"))
+      |> Enum.map(&Enum.chunk_every(&1, 3))
+      |> List.to_tuple()
+    end
   end
 
   @doc "The number of objects in memory."

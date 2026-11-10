@@ -144,6 +144,35 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemoryTest do
              ]
     end
 
+    test "a graph that learns a node hands out that node's frame too" do
+      # The frames a graph stores are kept once and read many times, so a graph
+      # that grows is the case that says whether what is kept follows it.
+      turned = [0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0]
+      memory = loaded(%{"mug" => model("mug", 1)})
+
+      grown =
+        GraphMemory.update_memory(
+          memory,
+          [[1.0, 0.0, 0.0]],
+          %{
+            "patch" => %{
+              "rgba" => [[0.9]],
+              "pose_fully_defined" => [true],
+              "pose_vectors" => [turned]
+            }
+          },
+          "mug",
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0],
+          Rotation.identity()
+        )
+
+      assert GraphMemory.get_rotation_features_at_all_nodes(grown, "mug", "patch") == [
+               [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+               [[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]
+             ]
+    end
+
     test "the rows are also kept as the flat binary a native kernel reads" do
       memory = loaded(%{"mug" => model("mug", 3)})
 

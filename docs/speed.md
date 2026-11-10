@@ -932,3 +932,30 @@ Two steps taken, and what each was worth:
 What is left is one small list a pixel — the tagged row itself — and that goes when
 the walk moves behind the NIF boundary and answers `semantic_3d` as the bytes the
 sensor module wants anyway.
+
+## The rotations a burst samples from, kept once
+
+A matching step of the ten-object distant agent, by process, before and after
+this change (`probe_process_split.exs`, model reductions):
+
+| step | learning module, before |     after | view finder |   patch |
+| ---- | ----------------------: | --------: | ----------: | ------: |
+| 2    |               2 032 340 | 1 476 179 |     750 656 | 217 236 |
+| 3    |               2 318 196 | 1 705 736 |     746 574 | 209 529 |
+| 4    |               3 041 859 | 2 225 588 |     672 073 | 214 494 |
+
+`GraphMemory.get_rotation_features_at_nodes/4` is what burst sampling asks for
+the frames of the nodes it draws from, and it answered by walking the graph's
+whole `x` — one `Enum.slice` per node — then building a tuple of every node's
+rows to read a few hundred of them. Ten graphs of a ten-object library, every
+step: `get_rotation_features_at_all_nodes/3` **21 883 µs**, the subset it
+actually reads **9 455 µs**, per step (`probe_graph_reads.exs`, `:timer.tc` on
+the live graphs).
+
+The frames do not change while a graph is being matched: a graph is written at
+most once an episode, and `forget_rows/2,3` already drops everything derived from
+it at that moment. So the rotations are now built where the feature rows are —
+`build_rows_if_missing/3` — and read by node id out of a tuple: the same two
+questions answer in **82 µs** and **105 µs**, and the read is 90–270× cheaper.
+A graph that grows still answers with the new node's frame, which is what
+`graph_memory_test.exs` pins.
