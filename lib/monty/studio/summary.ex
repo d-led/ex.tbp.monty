@@ -16,6 +16,11 @@ defmodule Monty.Studio.Summary do
   `:time_out`, or `nil` for a module that never answered — because a run that
   stopped after one step and a run that used its whole budget are not the same
   result, and the numbers alone cannot tell them apart.
+
+  `outcomes` is what a run of many episodes owes a reader, which `outcome` cannot
+  say: how many episodes each module matched, timed out or called no match. Two
+  hundred and sixty-six episodes end in a last episode, and the last episode is
+  not the run.
   """
 
   alias Monty.Studio.Setup
@@ -30,7 +35,8 @@ defmodule Monty.Studio.Summary do
             inputs: %{},
             never_updated: [],
             sensor_timeouts: [],
-            outcome: %{}
+            outcome: %{},
+            outcomes: %{}
 
   @type t :: %__MODULE__{}
 
@@ -42,8 +48,8 @@ defmodule Monty.Studio.Summary do
   gives an episode happens after the last report. Left out, the last report's
   own terminal states are used.
   """
-  @spec from_infos([map()], Setup.t() | nil, map() | nil) :: t()
-  def from_infos(infos, setup \\ nil, conclusion \\ nil) do
+  @spec from_infos([map()], Setup.t() | nil, map() | nil, keyword()) :: t()
+  def from_infos(infos, setup \\ nil, conclusion \\ nil, options \\ []) do
     summary = Enum.reduce(infos, %__MODULE__{}, &add_step/2)
 
     %{
@@ -51,7 +57,8 @@ defmodule Monty.Studio.Summary do
       | never_updated: never_updated(summary, setup),
         sensor_timeouts:
           infos |> Enum.flat_map(&Map.get(&1, :sensor_timeouts, [])) |> Enum.uniq(),
-        outcome: if(is_nil(conclusion), do: outcome(infos), else: conclusion)
+        outcome: if(is_nil(conclusion), do: outcome(infos), else: conclusion),
+        outcomes: Keyword.get(options, :outcomes, %{})
     }
   end
 

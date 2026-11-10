@@ -80,7 +80,7 @@ defmodule Mix.Tasks.Monty.Run do
     history = record(opened, opts)
     {infos, history, conclusion, outcomes} = run_phases(opened, opts, history)
 
-    summary = summary(infos, opened.setup, conclusion)
+    summary = summary(infos, opened.setup, conclusion, outcomes)
 
     unless opts[:quiet], do: Mix.shell().info(Monty.Studio.Summary.outcomes_line(outcomes))
 
@@ -367,8 +367,8 @@ defmodule Mix.Tasks.Monty.Run do
     end
   end
 
-  defp summary(infos, setup, conclusion),
-    do: Monty.Studio.Summary.from_infos(infos, setup, conclusion)
+  defp summary(infos, setup, conclusion, outcomes),
+    do: Monty.Studio.Summary.from_infos(infos, setup, conclusion, outcomes: outcomes)
 
   defp finish(nil, _summary), do: nil
 

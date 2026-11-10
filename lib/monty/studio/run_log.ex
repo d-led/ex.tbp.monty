@@ -286,6 +286,13 @@ defmodule Monty.Studio.RunLog do
       "outcome" =>
         Map.new(summary.outcome, fn {id, terminal} ->
           {to_string(id), terminal && to_string(terminal)}
+        end),
+      # And what every episode concluded, counted: the number a reader compares
+      # with Monty's own benchmark, which counts the same episodes. Absent for a
+      # run that predates the tally, which is why it is not spelled out empty.
+      "outcomes" =>
+        Map.new(summary.outcomes, fn {id, per_module} ->
+          {to_string(id), Map.new(per_module, fn {state, count} -> {to_string(state), count} end)}
         end)
     }
     |> Map.merge(failure || %{})

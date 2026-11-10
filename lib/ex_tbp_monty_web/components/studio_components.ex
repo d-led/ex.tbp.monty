@@ -266,9 +266,33 @@ defmodule ExTbpMontyWeb.StudioComponents do
       >
         These learning modules never received input: {Enum.join(@summary["never_updated"], ", ")}
       </p>
+
+      <%!-- What every episode concluded, counted. The outcome above is the last
+      episode's; a run of hundreds of episodes is not described by that one, and
+      this is the number a reader can put beside Monty's own benchmark. --%>
+      <p
+        :if={tally(@summary["outcomes"]) not in [nil, []]}
+        id="run-summary-outcomes"
+        class="text-sm"
+      >
+        Across the run — {tally_line(@summary["outcomes"])}
+      </p>
     </section>
     """
   end
+
+  # The record keeps module ids and outcomes as strings, because that is what a
+  # page and a JSON reader both understand; the tally wants the atoms back to
+  # order them.
+  defp tally(nil), do: nil
+
+  defp tally(outcomes) do
+    Map.new(outcomes, fn {module_id, per_module} ->
+      {module_id, Map.new(per_module, fn {state, count} -> {String.to_atom(state), count} end)}
+    end)
+  end
+
+  defp tally_line(outcomes), do: Monty.Studio.Summary.outcomes_line(tally(outcomes))
 
   @doc "Milliseconds for a duration in microseconds."
   @spec duration(non_neg_integer() | nil) :: String.t()
