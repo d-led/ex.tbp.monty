@@ -134,7 +134,16 @@ defmodule Monty.Studio.RunStream do
   def handle_cast({:publish, run_id, report}, state) do
     step = drawn(report)
     images = images_of(step)
-    moment = RunLog.moment(step.number, step.observations, images)
+
+    # The record keeps where a picture is, not what it is: a step's PNGs were ten
+    # kilobytes of the row, and a run of twenty thousand steps does not fit in a
+    # jsonb value. The page keeps drawing from the bytes it was handed.
+    store = fn sensor_id, kind, base64 ->
+      with {:ok, name} <- Artifacts.put_frame(run_id, step.number, sensor_id, kind, base64),
+           do: {:ok, Artifacts.frame_url(run_id, name)}
+    end
+
+    moment = RunLog.moment(step.number, step.observations, images, store)
     position = Map.get(state.held, run_id, 0)
 
     :ets.insert(@table, {{run_id, position}, step.entry, moment})

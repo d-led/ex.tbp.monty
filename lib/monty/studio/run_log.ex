@@ -113,14 +113,36 @@ defmodule Monty.Studio.RunLog do
   them drawn twice.
   """
   @spec moment(non_neg_integer(), map(), %{optional(String.t()) => map()}) :: map()
-  def moment(step, observations, images) when is_integer(step) do
+  def moment(step, observations, images) when is_integer(step),
+    do: moment(step, observations, images, nil)
+
+  @typedoc """
+  Where a picture goes, and the name it is asked for by afterwards.
+
+  `nil` keeps the picture in the record as the PNG it already is. A run passes
+  `&Artifacts.put_frame/5`, which writes the bytes under the run's own directory
+  and answers `frames/<step>/<sensor>-<kind>.png`.
+  """
+  @type store :: (String.t(), String.t(), String.t() -> {:ok, String.t()} | {:error, term()})
+
+  @doc """
+  The same scene, with each picture written where a run can serve it from.
+
+  A step's two PNGs per sensor are ten kilobytes in the record, and a
+  twenty-thousand-step run passes Postgres's ceiling on a jsonb value; the record
+  keeps the name and the file keeps the bytes. `nil` is the record a test and a
+  page without a run id want: the pictures stay inline.
+  """
+  @spec moment(non_neg_integer(), map(), %{optional(String.t()) => map()}, store() | nil) ::
+          map()
+  def moment(step, observations, images, store) when is_integer(step) do
     %{
       "step" => step,
       "sensors" =>
         observations
         |> Map.get(agent_id(), %{})
         |> Map.new(fn {sensor_id, observation} ->
-          {sensor_id, drawn(observation, Map.get(images, sensor_id))}
+          {sensor_id, drawn(sensor_id, observation, Map.get(images, sensor_id), store)}
         end)
     }
   end
@@ -142,9 +164,11 @@ defmodule Monty.Studio.RunLog do
   them here.
   """
   @spec drawn(map(), map() | nil) :: map()
-  def drawn(observation, images) do
+  def drawn(observation, images), do: drawn(nil, observation, images, nil)
+
+  defp drawn(sensor_id, observation, images, store) do
     kept = Map.drop(observation, @camera_arrays)
-    recorded = recorded(images || Camera.images(observation))
+    recorded = recorded(images || Camera.images(observation), sensor_id, store)
 
     if map_size(recorded) == 0,
       do: kept,
@@ -153,13 +177,26 @@ defmodule Monty.Studio.RunLog do
 
   # The shape a record keeps, and the shape `Camera.images/1` reads back: an
   # observation that carries `"images"` has already been drawn.
-  defp recorded(images) do
+  defp recorded(images, sensor_id, store) do
     %{
-      "depth" => images.depth,
-      "colour" => images.colour,
+      "depth" => picture(images.depth, "depth", sensor_id, store),
+      "colour" => picture(images.colour, "colour", sensor_id, store),
       "range" => images.range && Tuple.to_list(images.range)
     }
     |> Map.reject(fn {_key, value} -> is_nil(value) end)
+  end
+
+  defp picture(nil, _kind, _sensor_id, _store), do: nil
+  defp picture(base64, _kind, _sensor_id, nil), do: base64
+
+  # A picture the filesystem would not take stays in the record rather than
+  # disappearing: a run whose pictures cannot be written is still a run whose
+  # replay shows what it saw, at the cost of a big row.
+  defp picture(base64, kind, sensor_id, store) do
+    case store.(sensor_id, kind, base64) do
+      {:ok, name} -> name
+      {:error, _reason} -> base64
+    end
   end
 
   @doc """

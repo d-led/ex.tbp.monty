@@ -62,4 +62,43 @@ defmodule Monty.Studio.ArtifactsTest do
   test "refuses an id that is not a run id" do
     assert_raise ArgumentError, fn -> Artifacts.files("../../etc") end
   end
+
+  describe "the pictures of a step" do
+    # A one-pixel PNG: the smallest thing that is a file a camera could have
+    # drawn, and the bytes are what makes the assertions about files rather than
+    # about strings.
+    @png "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+    test "are written under the run's own directory, by step and sensor" do
+      id = run_id()
+
+      assert {:ok, "frames/7/patch-depth.png"} = Artifacts.put_frame(id, 7, "patch", "depth", @png)
+
+      path = Path.join(Artifacts.dir(id), "frames/7/patch-depth.png")
+      assert File.read!(path) == Base.decode64!(@png)
+    end
+
+    test "are served from the path a page is given, and only from inside that run" do
+      id = run_id()
+      {:ok, name} = Artifacts.put_frame(id, 3, "view_finder", "colour", @png)
+
+      assert Artifacts.frame_url(id, name) == "/runs/#{id}/frames/#{name}"
+      assert {:ok, path} = Artifacts.frame_path(id, name)
+      assert File.read!(path) == Base.decode64!(@png)
+
+      assert Artifacts.frame_path(id, "frames/../../run.log") == :error
+      assert Artifacts.frame_path(id, "frames/3/no-such-sensor-colour.png") == :error
+    end
+
+    test "go with the run when it is deleted" do
+      id = run_id()
+      {:ok, _name} = Artifacts.put_frame(id, 1, "patch", "depth", @png)
+      assert File.exists?(Artifacts.frames_dir(id))
+
+      Artifacts.forget(id)
+
+      refute File.exists?(Artifacts.dir(id))
+      assert Artifacts.frame_path(id, "frames/1/patch-depth.png") == :error
+    end
+  end
 end

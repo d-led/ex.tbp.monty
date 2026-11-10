@@ -69,6 +69,10 @@ defmodule ExTbpMontyWeb.Router do
     # A file the run wrote — its log, its CSV, its detailed JSON — as it is, so
     # it can be read, diffed or plotted outside this page.
     get "/runs/:id/files/:name", RunFileController, :show
+    # One picture of one step, kept on disk rather than in the record: a glob
+    # because a step's pictures live under `frames/<step>/` in the run's own
+    # directory.
+    get "/runs/:id/frames/*path", RunFramesController, :show
     # The queue a run waits in before it has anything to report.
     # One page for runs: a queued run is a run, and the old address still opens
     # the list a colleague was sent.

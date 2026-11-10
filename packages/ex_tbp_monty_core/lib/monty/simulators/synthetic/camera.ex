@@ -154,12 +154,21 @@ defmodule Monty.Simulators.Synthetic.Camera do
 
   defp image(nil, _kind, _sensor_id), do: ""
 
-  defp image(base64, kind, sensor_id) do
-    ~s(<figure><img src="data:image/png;base64,) <>
-      base64 <>
+  defp image(picture, kind, sensor_id) do
+    ~s(<figure><img src=") <>
+      source(picture) <>
       ~s(" alt="#{escaped(kind)} of #{escaped(sensor_id)}") <>
       ~s( class="w-full rounded-sm bg-base-300 [image-rendering:pixelated]"/></figure>)
   end
+
+  # A picture is either the bytes themselves — what a live step hands the page —
+  # or the path a run keeps them under, which the browser fetches from the run's
+  # own directory. Both arrive as a string in the observation, so the shape of
+  # the string is the whole distinction: a path starts at the root, and anything
+  # else is a base64 PNG.
+  defp source("data:" <> _rest = inline), do: inline
+  defp source("/" <> _path = path), do: path
+  defp source(base64), do: "data:image/png;base64," <> base64
 
   # rgba arrives as four floats from 0 to 1; the fourth is alpha, and a frame of
   # this world is opaque, so it is not carried into the image.

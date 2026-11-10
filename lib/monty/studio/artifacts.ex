@@ -26,8 +26,15 @@ defmodule Monty.Studio.Artifacts do
   """
   @spec dir(binary()) :: Path.t()
   def dir(run_id) do
+    Path.join(root(), uuid(run_id))
+  end
+
+  # The id a path may be built from: a run's id comes from the database, but
+  # nothing here builds a path out of whatever it was handed.
+  @spec uuid(binary()) :: binary()
+  defp uuid(run_id) do
     case Ecto.UUID.cast(run_id) do
-      {:ok, uuid} -> Path.join(root(), uuid)
+      {:ok, uuid} -> uuid
       :error -> raise ArgumentError, "not a run id: #{inspect(run_id)}"
     end
   end
@@ -123,4 +130,62 @@ defmodule Monty.Studio.Artifacts do
       do: {:ok, Path.join(dir(run_id), name)},
       else: :error
   end
+
+  @doc """
+  Where a run's pictures are kept: a directory of its own, beside its log.
+
+  A step's pictures are two PNGs per sensor, and keeping them inside the record
+  cost ten kilobytes a step: that put `base_10simobj_surf_agent` within four
+  percent of Postgres's 256 MB ceiling on a jsonb value, and put one
+  twenty-two-thousand-step run past it, where the store fails and the run has no
+  record at all. The record keeps a name; the bytes are a file.
+  """
+  @spec frames_dir(binary()) :: Path.t()
+  def frames_dir(run_id), do: Path.join(dir(run_id), "frames")
+
+  @doc """
+  Writes one picture of one step, and answers the path a page asks for it at.
+
+  The path is relative to the run (`frames/<step>/<sensor>-<depth|colour>.png`),
+  so a record that is moved to another host still names its own pictures.
+  """
+  @spec put_frame(binary(), non_neg_integer(), String.t(), String.t(), binary()) ::
+          {:ok, String.t()} | {:error, term()}
+  def put_frame(run_id, step, sensor_id, kind, base64) do
+    name = Path.join(["frames", Integer.to_string(step), "#{sensor_id}-#{kind}.png"])
+    path = Path.join(dir(run_id), name)
+
+    with :ok <- File.mkdir_p(Path.dirname(path)),
+         {:ok, bytes} <- Base.decode64(base64),
+         :ok <- File.write(path, bytes) do
+      {:ok, name}
+    end
+  end
+
+  @doc """
+  The file behind a picture's name, or `:error`.
+
+  The name is resolved and then checked to still be inside the run's own
+  directory, so a `..` in it is answered with `:error` rather than a file that
+  was never the run's.
+  """
+  @spec frame_path(binary(), String.t()) :: {:ok, Path.t()} | :error
+  def frame_path(run_id, name) do
+    base = dir(run_id)
+    candidate = Path.expand(Path.join(base, name))
+
+    if String.starts_with?(candidate, base <> "/") and File.regular?(candidate),
+      do: {:ok, candidate},
+      else: :error
+  end
+
+  @doc """
+  Where a page asks for one of those pictures.
+
+  The record keeps this rather than the bytes: it is a few dozen characters,
+  the page fetches the PNG from the run's own directory, and a step costs what
+  its observations cost instead of what its pictures cost.
+  """
+  @spec frame_url(binary(), String.t()) :: String.t()
+  def frame_url(run_id, name), do: "/runs/#{uuid(run_id)}/frames/#{name}"
 end
