@@ -1037,6 +1037,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   def handle_info({:settled, _other}, socket), do: {:noreply, socket}
 
+  # A step, and every step that is already waiting behind it: a page that fell
+  # behind does not have to draw each of them to be right about the last one, and
+  # a run should not wait for its readers. Every line still goes into the
+  # transcript; what a backlog costs is the drawing of the steps the newest one
+  # has already replaced.
+  def handle_info({:studio, run_id, {:step, event}}, %{assigns: %{run_id: run_id}} = socket) do
+    {:noreply, handle_steps(drain_steps(run_id, [event]), socket)}
+  end
+
   def handle_info({:studio, run_id, event}, %{assigns: %{run_id: run_id}} = socket) do
     {:noreply, handle_studio(event, socket)}
   end
@@ -1130,29 +1139,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> push(nil, "episode #{index + 1}: #{object || "the scene's own object"}", :info)
   end
 
-  # A step of the episode being watched. Two messages can arrive out of order —
-  # the mailbox is not the worker's clock — and taking the last one written to
-  # would let the badge walk backwards inside an episode. The only legitimate
-  # restart is a new episode, which is a different message.
-  defp handle_studio(
-         {:step, %{line: text, step: step, frames: frames, episode: episode} = event},
-         socket
-       ) do
-    shown = elem(socket.assigns.progress, 0)
-
-    if episode == socket.assigns[:episode] and step + 1 < shown do
-      socket
-    else
-      socket
-      |> push(step, text, :info)
-      |> assign(progress: {step + 1, elem(socket.assigns.progress, 1)})
-      |> then(fn socket -> Enum.reduce(frames, socket, &stream_insert(&2, :frames, &1)) end)
-      |> remember(episode, step, Map.get(event, :beliefs, %{}))
-      |> assign(centre: Map.get(event, :centre))
-      |> tick()
-    end
-  end
-
   defp handle_studio({:finished, _summary}, socket) do
     # The record is the truth about a finished run; the message only says it is
     # time to look.
@@ -1164,6 +1150,56 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> push(nil, "the run failed: #{inspect(reason)}", :error)
     |> reconcile()
     |> refresh_runs()
+  end
+
+  # Every step that has arrived and not been answered yet, oldest first.
+  #
+  # `receive ... after 0` is the mailbox read LiveView does not offer: it takes
+  # what is there now and nothing later, which is exactly "am I behind?". Anything
+  # that is not a step of this run is put back — by sending it to ourselves, it
+  # lands behind the steps taken above it, which is the order it was in.
+  defp drain_steps(run_id, acc) do
+    receive do
+      {:studio, ^run_id, {:step, event}} ->
+        drain_steps(run_id, [event | acc])
+
+      other ->
+        send(self(), other)
+        Enum.reverse(acc)
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
+  # A batch of steps: every line, and the last one's picture. Steps of another
+  # episode, and steps a step already shown has overtaken, are dropped exactly as
+  # a single one was — the mailbox is not the worker's clock, and the badge must
+  # not walk backwards inside an episode.
+  defp handle_steps(events, socket) do
+    shown = elem(socket.assigns.progress, 0)
+
+    fresh =
+      Enum.reject(events, fn event ->
+        event.episode == socket.assigns[:episode] and event.step + 1 < shown
+      end)
+
+    case fresh do
+      [] ->
+        socket
+
+      fresh ->
+        last = List.last(fresh)
+
+        socket
+        |> push_lines(fresh)
+        |> assign(progress: {last.step + 1, elem(socket.assigns.progress, 1)})
+        |> then(fn socket ->
+          Enum.reduce(last.frames, socket, &stream_insert(&2, :frames, &1))
+        end)
+        |> remember(last.episode, last.step, Map.get(last, :beliefs, %{}))
+        |> assign(centre: Map.get(last, :centre))
+        |> tick()
+    end
   end
 
   # A row of a run that is still going has no stored duration — the record's is
@@ -1689,6 +1725,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp push(socket, step, text, level) do
     line = line(step, text, level, RunLog.now())
     assign(socket, lines: Enum.take(socket.assigns.lines ++ [line], -@log_limit))
+  end
+
+  # The lines of several steps in one append: a backlog of a hundred steps would
+  # otherwise copy the window a hundred times.
+  defp push_lines(socket, events) do
+    at = RunLog.now()
+    lines = Enum.map(events, &line(&1.step, &1.line, :info, at))
+    assign(socket, lines: Enum.take(socket.assigns.lines ++ lines, -@log_limit))
   end
 
   # A recorded step keeps its own instant, and the page writes a clock it can

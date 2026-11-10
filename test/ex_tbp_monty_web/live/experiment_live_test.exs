@@ -683,6 +683,34 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert view |> element("#run-progress") |> render() =~ "episode 2 · step 1 / 3"
     end
 
+    # A page that falls behind does not have to draw every step it missed to be
+    # right about the last one — but nothing it was told may be lost from the
+    # transcript. The steps here arrive in one burst, as a backlog does.
+    test "a backlog of steps is one drawing and every line", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=5&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+      run_id = current_run_id(view)
+
+      # A fresh episode, so the steps below are the newest the page has seen: the
+      # run it watched has already taken its five.
+      send(view.pid, {:studio, run_id, {:episode, %{episode: 1, object: "mug"}}})
+
+      for step <- 0..2 do
+        send(view.pid, {:studio, run_id, {:step, step_event(episode: 1, step: step)}})
+      end
+
+      assert view |> element("#run-progress") |> render() =~ "episode 2 · step 3 / 5"
+
+      texts = view |> rendered_lines() |> Enum.map(& &1.text)
+
+      for step <- 0..2 do
+        assert Enum.any?(texts, &(&1 =~ "step #{step} ·"))
+      end
+    end
+
     test "zooming draws a stretch of the run, and the whole run is one click away", %{
       conn: conn
     } do
