@@ -1002,3 +1002,18 @@ model reductions:
 The eight-step ladder went from 1 695 300 µs to 1 031 952 µs, and the surf agent's
 first step of an episode from 1.03 M to 0.62 M reductions (plain steps unchanged at
 223–237 k, so nothing degrades as episodes accumulate).
+
+## The node block a burst repeats, copied rather than encoded
+
+`Hypotheses.new/1` was asked for one hypothesis per (pose, node) with the nodes
+repeated pose by pose — `List.duplicate(locations, per_node) |> Enum.concat()`
+and the same for evidence — so a graph's few hundred chosen nodes were encoded
+once for every sensed direction: eight rounds at ten graphs, tens of thousands of
+rows of the same values every step. `Hypotheses.per_pose/1` encodes the node
+block once and copies it (`:binary.copy/2`), and takes the pose count from the
+matrices themselves.
+
+Learning module per step, model reductions: **979 678 → 935 989** (step 2),
+**1 238 544 → 1 187 725** (step 3), **1 749 794 → 1 697 697** (step 4). The
+ladder is still digit-exact (`ev 6.338 (1429, 2)`, `goals 15065`), and the
+burst's own tests — whole pose sets, one per pose on every node — pass unchanged.

@@ -357,13 +357,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
     rotations = rotations(updater, graph_id, input_channel, features, top_indices, per_node)
 
-    # One hypothesis per (rotation, node), rotation-major: the order the
-    # rotations were built in, so each location keeps the pose it was given.
-    Hypotheses.new(
-      locations: selected_locations |> List.duplicate(per_node) |> Enum.concat(),
-      poses: rotations,
-      evidence: selected_evidence |> List.duplicate(per_node) |> Enum.concat(),
-      possible: List.duplicate(false, length(rotations))
+    # One hypothesis per (rotation, node): the nodes and their evidence repeat
+    # while the rotations run, so the block is copied rather than encoded over.
+    Hypotheses.per_pose(
+      locations: selected_locations,
+      evidence: selected_evidence,
+      poses: rotations
     )
   end
 

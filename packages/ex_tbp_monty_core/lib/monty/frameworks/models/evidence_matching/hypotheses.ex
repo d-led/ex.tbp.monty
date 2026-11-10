@@ -69,6 +69,37 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   end
 
   @doc """
+  One hypothesis per node per pose — the shape a burst samples in.
+
+  `locations` and `evidence` name the chosen nodes once; `poses` holds one
+  matrix per hypothesis in that order, pose-major, which is what aligning each
+  sensed direction against the nodes produces. The node block is encoded once
+  and copied, where `new/1` would encode the same few hundred nodes once per
+  sensed direction: a burst samples eight poses at each of a few hundred nodes,
+  ten graphs at a time, so that is tens of thousands of rows of the same values
+  every step.
+  """
+  @spec per_pose(keyword()) :: t()
+  def per_pose(fields) do
+    locations = fields |> Keyword.fetch!(:locations) |> bytes(&location_bytes/1)
+    evidence = fields |> Keyword.fetch!(:evidence) |> values_bytes()
+    poses = fields |> Keyword.fetch!(:poses) |> bytes(&pose_bytes/1)
+
+    # The poses name every hypothesis; the nodes only one round of them, so the
+    # node block is copied once per round.
+    hypotheses = div(byte_size(poses), @pose_width * 8)
+    nodes = max(div(byte_size(locations), @location_width * 8), 1)
+    rounds = div(hypotheses, nodes)
+
+    %__MODULE__{
+      locations: :binary.copy(locations, rounds),
+      evidence: :binary.copy(evidence, rounds),
+      poses: poses,
+      possible: List.duplicate(false, hypotheses)
+    }
+  end
+
+  @doc """
   One set of hypotheses from several, in order.
 
   Monty concatenates along the hypothesis axis, so votes from two learning
