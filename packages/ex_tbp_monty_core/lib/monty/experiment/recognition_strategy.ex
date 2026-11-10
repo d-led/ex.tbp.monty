@@ -1,8 +1,8 @@
-defmodule Monty.Experiment.RecognitionPolicy do
+defmodule Monty.Experiment.RecognitionStrategy do
   @moduledoc """
   What counts as "the episode is over".
 
-  Mirrors `tbp/monty/experiment/recognition_policy.py::RecognitionPolicy`. Each
+  Mirrors `tbp/monty/experiment/recognition_strategy.py::RecognitionStrategy`. Each
   learning module decides its own answer; a policy turns those answers, plus the
   step counters, into the one decision the episode loop asks for:
   `%RecognitionResult{is_done: ..., time_out_lms: ..., start_exploring: ...}`.
@@ -12,13 +12,13 @@ defmodule Monty.Experiment.RecognitionPolicy do
   Monty's policies are handed the model and read four things off it. Rather than
   reach into the runtime's processes, a policy here is given those four things as
   a map — that is what keeps the decision logic pure and comparable with Monty's
-  own answers (`scripts/record_monty_recognition_policy.py`). The episode loop is
+  own answers (`scripts/record_monty_recognition_strategy.py`). The episode loop is
   what builds the map, from the model it is holding.
 
   ## Policies are `{module, state}`
 
   Each policy is a module plus the numbers it was configured with, which is how
-  the rest of this port composes behaviour (`Monty.Experiment.RecognitionPolicy.call/3`),
+  the rest of this port composes behaviour (`Monty.Experiment.RecognitionStrategy.call/3`),
   and it means `AnyPolicy` can hold a list of them without knowing what any of
   them are.
 
@@ -29,8 +29,8 @@ defmodule Monty.Experiment.RecognitionPolicy do
   experiment's business, so it is not on this path.
   """
 
-  alias Monty.Experiment.RecognitionPolicy.RecognitionCounter
-  alias Monty.Experiment.RecognitionPolicy.RecognitionResult
+  alias Monty.Experiment.RecognitionStrategy.RecognitionCounter
+  alias Monty.Experiment.RecognitionStrategy.RecognitionResult
   alias Monty.Experiment.RecognitionStatus
 
   @typedoc """
@@ -67,18 +67,18 @@ defmodule Monty.Experiment.RecognitionPolicy do
   """
   @callback call(model(), RecognitionCounter.t(), state :: term()) :: RecognitionResult.t()
 
-  # The classes of `experiment/recognition_policy.py`, by the name a config
-  # writes after `tbp.monty.experiment.recognition_policy.`.
+  # The classes of `experiment/recognition_strategy.py`, by the name a config
+  # writes after `tbp.monty.experiment.recognition_strategy.`.
   @policies %{
-    "AnyPolicy" => Monty.Experiment.RecognitionPolicy.AnyPolicy,
-    "MaxTotalSteps" => Monty.Experiment.RecognitionPolicy.MaxTotalSteps,
-    "MaximumSteps" => Monty.Experiment.RecognitionPolicy.MaximumSteps,
-    "MinEvalMaxTotalSteps" => Monty.Experiment.RecognitionPolicy.MinEvalMaxTotalSteps,
-    "MinimumLMs" => Monty.Experiment.RecognitionPolicy.MinimumLMs,
-    "MontyIsDone" => Monty.Experiment.RecognitionPolicy.MontyIsDone,
-    "NaiveScan" => Monty.Experiment.RecognitionPolicy.NaiveScan,
-    "ObjectRecognition" => Monty.Experiment.RecognitionPolicy.ObjectRecognition,
-    "StepLimit" => Monty.Experiment.RecognitionPolicy.StepLimit
+    "AnyPolicy" => Monty.Experiment.RecognitionStrategy.AnyPolicy,
+    "MaxTotalSteps" => Monty.Experiment.RecognitionStrategy.MaxTotalSteps,
+    "MaximumSteps" => Monty.Experiment.RecognitionStrategy.MaximumSteps,
+    "MinEvalMaxTotalSteps" => Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps,
+    "MinimumLMs" => Monty.Experiment.RecognitionStrategy.MinimumLMs,
+    "MontyIsDone" => Monty.Experiment.RecognitionStrategy.MontyIsDone,
+    "NaiveScan" => Monty.Experiment.RecognitionStrategy.NaiveScan,
+    "ObjectRecognition" => Monty.Experiment.RecognitionStrategy.ObjectRecognition,
+    "StepLimit" => Monty.Experiment.RecognitionStrategy.StepLimit
   }
 
   @doc """
@@ -160,23 +160,23 @@ defmodule Monty.Experiment.RecognitionPolicy do
   # take is a `TypeError` there and a refusal here — a config written for a
   # policy this port has not caught up with must say so.
   @options %{
-    Monty.Experiment.RecognitionPolicy.AnyPolicy => [:policies],
-    Monty.Experiment.RecognitionPolicy.MaxTotalSteps => [:max_total_steps],
-    Monty.Experiment.RecognitionPolicy.MaximumSteps => [:max_train_steps, :max_eval_steps],
-    Monty.Experiment.RecognitionPolicy.MinEvalMaxTotalSteps => [
+    Monty.Experiment.RecognitionStrategy.AnyPolicy => [:policies],
+    Monty.Experiment.RecognitionStrategy.MaxTotalSteps => [:max_total_steps],
+    Monty.Experiment.RecognitionStrategy.MaximumSteps => [:max_train_steps, :max_eval_steps],
+    Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps => [
       :wrapped,
       :min_eval_steps,
       :max_total_steps
     ],
-    Monty.Experiment.RecognitionPolicy.MinimumLMs => [:min_lms],
-    Monty.Experiment.RecognitionPolicy.MontyIsDone => [],
-    Monty.Experiment.RecognitionPolicy.NaiveScan => [:fixed_amount],
-    Monty.Experiment.RecognitionPolicy.ObjectRecognition => [
+    Monty.Experiment.RecognitionStrategy.MinimumLMs => [:min_lms],
+    Monty.Experiment.RecognitionStrategy.MontyIsDone => [],
+    Monty.Experiment.RecognitionStrategy.NaiveScan => [:fixed_amount],
+    Monty.Experiment.RecognitionStrategy.ObjectRecognition => [
       :max_train_steps,
       :max_eval_steps,
       :max_total_steps
     ],
-    Monty.Experiment.RecognitionPolicy.StepLimit => [
+    Monty.Experiment.RecognitionStrategy.StepLimit => [
       :min_train_steps,
       :num_exploring_steps,
       :max_train_steps,

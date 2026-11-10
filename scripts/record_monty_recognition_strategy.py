@@ -7,7 +7,7 @@ port must answer the same three booleans.
 
     MONTY=/path/to/monty-orig
     PYTHONPATH="$MONTY/src" "$CONDA_PREFIX/bin/python" \\
-        scripts/record_monty_recognition_policy.py --out test/fixtures/...json
+        scripts/record_monty_recognition_strategy.py --out test/fixtures/...json
 
 Nothing here needs a simulator or a trained model: a stub model carries the four
 things the policies read.
@@ -26,7 +26,7 @@ import argparse
 import json
 from pathlib import Path
 
-from tbp.monty.experiment.recognition_policy import (
+from tbp.monty.experiment.recognition_strategy import (
     AnyPolicy,
     MaxTotalSteps,
     MaximumSteps,
@@ -262,7 +262,7 @@ def main() -> None:
             refusals[name] = {"raises": "ValueError", "message": str(error)}
 
     output = {
-        "monty": "tbp.monty.experiment.recognition_policy",
+        "monty": "tbp.monty.experiment.recognition_strategy",
         "policies": sorted(policies),
         "recognition_status": {
             "conclusions": [member.value for member in RecognitionConclusion],

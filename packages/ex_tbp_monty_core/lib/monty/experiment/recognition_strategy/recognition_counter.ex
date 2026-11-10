@@ -1,8 +1,8 @@
-defmodule Monty.Experiment.RecognitionPolicy.RecognitionCounter do
+defmodule Monty.Experiment.RecognitionStrategy.RecognitionCounter do
   @moduledoc """
   The episode's counters, and the mode they are counting in.
 
-  Mirrors `tbp/monty/experiment/recognition_policy.py::RecognitionCounter`.
+  Mirrors `tbp/monty/experiment/recognition_strategy.py::RecognitionCounter`.
   `step` counts every timestep; `matching_steps` and `exploring_steps` count only
   the steps where a learning module actually updated, which is why they can lag
   behind `step` — a policy that limits *matching* steps must not be fooled by a

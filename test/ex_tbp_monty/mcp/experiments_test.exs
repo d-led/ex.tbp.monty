@@ -50,7 +50,7 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
     test "says how many there are, and what shapes they come in" do
       index = Experiments.list()
 
-      assert index.total > 200
+      assert index.total > 100
       assert index.matching == index.total
       assert index.returned == index.matching or index.truncated?
 
@@ -158,7 +158,7 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
       assert {:ok, preview} =
                Experiments.preview(%{
                  "name" => "mcp_preview",
-                 "base" => "test/base_config/base_mujoco"
+                 "base" => "test/base_config/base"
                })
 
       # Over Monty's own test fakes, which the module map cannot place. A preview

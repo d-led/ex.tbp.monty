@@ -9,8 +9,6 @@ defmodule Monty.Studio.SetupTest do
   alias Monty.Frameworks.Models.SensorModules.{CameraSM, FeatureChangeFilter}
   alias Monty.Frameworks.Models.TwoDSensorModule
   alias Monty.SensorModules.SensorModule
-  # The Habitat class is still in the map until the sweep that removes it; the
-  # specs below name it as a string, so no alias is needed.
   alias Monty.Simulators.Synthetic
   alias Monty.Studio.{Finding, Setup}
   alias Monty.Test.Tmp
@@ -91,7 +89,7 @@ defmodule Monty.Studio.SetupTest do
     "monty/learning_module" => "evidence_1lm_nn5_dod003",
     "monty/sensor_module" => "camera_dist_delta_salience",
     "monty/connectivity" => "1lm_1sm",
-    "environment" => "habitat_dist_agent_semantics1",
+    "environment" => "mujoco_dist_agent_semantics1",
     "termination" => "any1_objectrecognition_t1000_e500_tot6000",
     "logging" => "silent_warning_train",
     "telemetry" => "warning"
@@ -356,10 +354,10 @@ defmodule Monty.Studio.SetupTest do
 
   describe "what is ported" do
     test "an experiment built from classes this port has not written is refused" do
-      # `test/base_config/base_mujoco` is the example: it names Monty's own test
+      # `test/base_config/base` is the example: it names Monty's own test
       # fakes, which live in Monty's `tests/` tree and so are not in the module
       # map at all — a class nobody can place, which nothing can stand in for.
-      setup = setup_for("test/base_config/base_mujoco")
+      setup = setup_for("test/base_config/base")
 
       assert [sensor, learning_module] =
                for(%{code: :unknown_module_class} = finding <- setup.findings, do: finding)
@@ -395,12 +393,12 @@ defmodule Monty.Studio.SetupTest do
     end
 
     test "an experiment that trains on one list and evaluates another walks both" do
-      # `test/evidence_lm/evidence_mujoco` names two objects for training and one
+      # `test/evidence_lm/evidence` names two objects for training and one
       # for evaluation. Monty builds an interface per phase and walks the one for
       # the mode it is in; a run here that walked the evaluation list in both
       # would be half the experiment — and its second training object would never
       # be shown at all.
-      setup = setup_for("test/evidence_lm/evidence_mujoco")
+      setup = setup_for("test/evidence_lm/evidence")
 
       assert Setup.objects(setup, :train) == ["capsule3DSolid", "cubeSolid"]
       assert Setup.objects(setup, :eval) == ["capsule3DSolid"]
@@ -418,7 +416,7 @@ defmodule Monty.Studio.SetupTest do
     end
 
     test "a config's sampler turns the object from one epoch to the next" do
-      setup = setup_for("test/evidence_lm/evidence_mujoco")
+      setup = setup_for("test/evidence_lm/evidence")
 
       # Monty's `Predefined` defaults to `[(0, 0, 0), (45, 0, 0)]` one per epoch,
       # and a training epoch visits every object once — so the second epoch sees
@@ -431,10 +429,10 @@ defmodule Monty.Studio.SetupTest do
     end
 
     test "a config that names no sampler leaves the object where the scene put it" do
-      # `test/run_mujoco`'s interface names none: the object stays where the
-      # scene places it, in every episode, which is what every experiment this
-      # port ran before the samplers were written did.
-      setup = setup_for("test/run_mujoco")
+      # `test/run`'s interface names none: the object stays where the scene
+      # places it, in every episode, which is what every experiment this port
+      # ran before the samplers were written did.
+      setup = setup_for("test/run")
 
       assert Setup.object_params(setup, 0, epoch: 1, phase: :train) == nil
     end
@@ -490,25 +488,19 @@ defmodule Monty.Studio.SetupTest do
     end
 
     test "and refuses a config whose world is another simulator, before a run starts" do
-      # A MuJoCo run of a Habitat config cannot be the experiment: the scene is
+      # A MuJoCo run of an image config cannot be the experiment: the scene is
       # images another program rendered, and there is no mesh to place. Saying so
       # here disables the run; leaving it to `Setup.world/3` would raise inside
       # the job and leave a failed record for a config the page offered.
-      {:ok, setup} = Setup.from_experiment("test/evidence_lm/evidence", world_simulator: :mujoco)
+      {:ok, setup} =
+        Setup.from_experiment("world_image_on_scanned_model", world_simulator: :mujoco)
 
       assert [world] = for(%{code: :world_not_carried} = f <- setup.findings, do: f)
 
       assert world.level == :error
-      assert world.message =~ "HabitatEnvironment"
+      assert world.message =~ "SaccadeOnImageEnvironment"
       assert world.message =~ "stand-in scene"
       refute Setup.valid?(setup)
-
-      # The stand-in scene is a world this build steps, so the same config is
-      # offered there — as a stand-in run, which the page says out loud.
-      {:ok, stand_in} =
-        Setup.from_experiment("test/evidence_lm/evidence", world_simulator: :synthetic)
-
-      refute :world_not_carried in Enum.map(stand_in.findings, & &1.code)
     end
 
     test "and no longer says Monty's vote round is this port's own" do
@@ -542,11 +534,10 @@ defmodule Monty.Studio.SetupTest do
                )
     end
 
-    test "Monty's HabitatEnvironment is this port's class, out of process" do
-      assert %{
-               status: :implemented,
-               elixir: "Monty.Simulators.Habitat.Environment.HabitatEnvironment"
-             } =
+    test "a target Monty removed is reported as unknown, not guessed" do
+      # Habitat was dropped from Monty in #1286; a config still naming it names
+      # nothing this map can place, which is what `:unknown` says.
+      assert %{status: :unknown} =
                Setup.describe_target(
                  "tbp.monty.simulators.habitat.environment.HabitatEnvironment"
                )
@@ -596,17 +587,17 @@ defmodule Monty.Studio.SetupTest do
     test "and refuses an engine this build does not carry, instead of stepping another" do
       setup = setup_for("tutorial/first_experiment", world_simulator: :mujoco)
 
-      # Habitat-Sim is a conda package for another Python and is on its way out
-      # of Monty; a config that names it must not be handed MuJoCo's world.
-      habitat = %{
+      # Monty still ships worlds this build does not carry — an image stream is
+      # one — and a config that names one must not be handed MuJoCo's world.
+      uncarried = %{
         setup
-        | environment: %{setup.environment | module: %{class: "HabitatEnvironment"}}
+        | environment: %{setup.environment | module: %{class: "SaccadeOnImageEnvironment"}}
       }
 
-      assert Setup.world_name(habitat) ==
-               "HabitatEnvironment (not carried by this application)"
+      assert Setup.world_name(uncarried) ==
+               "SaccadeOnImageEnvironment (not carried by this application)"
 
-      assert_raise ArgumentError, ~r/does not carry/, fn -> Setup.world(habitat) end
+      assert_raise ArgumentError, ~r/does not carry/, fn -> Setup.world(uncarried) end
     end
 
     test "shows the experiment's object to every sensor" do

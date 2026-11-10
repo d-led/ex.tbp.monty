@@ -157,3 +157,27 @@ prerequisites:
       - supervised_pre_training_cows_small_2d_children
       - supervised_pre_training_cows_small_compositional
       - supervised_pre_training_cows_small_monolithic
+
+  # The same seven models, relearned after Monty's #1280: learned points in a
+  # compositional model could land in the wrong frame when a channel arrived in
+  # a later episode, so every cows config names this release now. Without it a
+  # cows run steps the v8 graphs above and says so
+  # (`memory_from_another_release`).
+  - id: pretrained_compositional_objects_v10
+    title: Pretrained compositional object models (v10)
+    description: >
+      The models Monty's cows configurations name since #1280, unpacked into
+      ~/tbp/results/monty/pretrained_models/pretrained_compositional_objects_v10.
+    url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_compositional_objects_v10.tgz
+    root: MONTY_MODELS
+    target: pretrained_compositional_objects_v10.tgz
+    extract: true
+    unpacks_to: pretrained_compositional_objects_v10
+    provides:
+      - supervised_pre_training_cows_3d_children
+      - supervised_pre_training_cows_large_2d_children
+      - supervised_pre_training_cows_large_compositional
+      - supervised_pre_training_cows_large_monolithic
+      - supervised_pre_training_cows_small_2d_children
+      - supervised_pre_training_cows_small_compositional
+      - supervised_pre_training_cows_small_monolithic

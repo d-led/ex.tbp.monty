@@ -15,7 +15,7 @@ defmodule Monty.Studio.Jobs.RunTest do
 
   # The same, in the family Monty's own tests assert on: one object, three train
   # epochs then three evaluation ones, and a config that names no run at all.
-  @unnamed_training_experiment "test/evidence_lm/evidence_mujoco"
+  @unnamed_training_experiment "test/evidence_lm/evidence"
 
   # The queue runs jobs by hand here: what is under test is the run, not Oban's
   # scheduler.
@@ -182,7 +182,7 @@ defmodule Monty.Studio.Jobs.RunTest do
                  Path.join([Artifacts.dir(closed.id), "memory", "trained", "*.jsonl.gz"])
                )
 
-      assert Path.basename(file) == "test-evidence_lm-evidence_mujoco.jsonl.gz"
+      assert Path.basename(file) == "test-evidence_lm-evidence.jsonl.gz"
     end
 
     test "numbers the episodes of a run, and walks each phase's own objects" do
@@ -441,8 +441,9 @@ defmodule Monty.Studio.Jobs.RunTest do
     # showed a run with no steps and no pictures, and the experiment refused to
     # run again because its old run was "already running".
     test "leaves its record failed, with the reason, instead of running for ever" do
-      # A world this build does not carry: the config composes, the page says so,
-      # and a run of it cannot start. What the record owes is the reason.
+      # A world this build does not carry. No page offers one — the only two are
+      # MuJoCo and the stand-in — so this is the guard behind that: an atom that
+      # is not a world must fail the record rather than be stepped as one.
       Tmp.app_env(:world_simulator, :habitat)
 
       {:ok, record} = start_run(2)

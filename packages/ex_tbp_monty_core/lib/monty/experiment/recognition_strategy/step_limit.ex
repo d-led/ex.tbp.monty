@@ -1,8 +1,8 @@
-defmodule Monty.Experiment.RecognitionPolicy.StepLimit do
+defmodule Monty.Experiment.RecognitionStrategy.StepLimit do
   @moduledoc """
   Three limits in one policy: matching, exploring, and when to start exploring.
 
-  Mirrors `tbp/monty/experiment/recognition_policy.py::StepLimit`. Which limit
+  Mirrors `tbp/monty/experiment/recognition_strategy.py::StepLimit`. Which limit
   applies depends on what the model is doing:
 
     * exploring — `exploring_steps` against `num_exploring_steps`;
@@ -12,7 +12,7 @@ defmodule Monty.Experiment.RecognitionPolicy.StepLimit do
     * evaluating — `matching_steps` against `max_eval_steps`.
   """
 
-  alias Monty.Experiment.RecognitionPolicy.RecognitionResult
+  alias Monty.Experiment.RecognitionStrategy.RecognitionResult
 
   @doc """
   A policy with the three limits.
@@ -54,7 +54,7 @@ defmodule Monty.Experiment.RecognitionPolicy.StepLimit do
   end
 
   @doc "The limit that applies to what the model is doing right now."
-  @spec call(map(), Monty.Experiment.RecognitionPolicy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionCounter.t(), map()) ::
           RecognitionResult.t()
   def call(%{is_exploring: true}, counter, state) do
     is_done = counter.exploring_steps >= state.num_exploring_steps

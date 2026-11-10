@@ -121,7 +121,7 @@ defmodule Monty.Runtime.Step do
   answering with the whole thing would copy tens of megabytes per step to
   deliver four values (`docs/monty-differences.md` §2.17).
   """
-  @spec status(server()) :: Monty.Experiment.RecognitionPolicy.model()
+  @spec status(server()) :: Monty.Experiment.RecognitionStrategy.model()
   def status(server), do: GenServer.call(server, :status, :infinity)
 
   @doc """

@@ -1,8 +1,8 @@
-defmodule Monty.Experiment.RecognitionPolicy.NaiveScan do
+defmodule Monty.Experiment.RecognitionStrategy.NaiveScan do
   @moduledoc """
   Done when a naive scan's spiral has completed.
 
-  Mirrors `tbp/monty/experiment/recognition_policy.py::NaiveScan`. The scan moves
+  Mirrors `tbp/monty/experiment/recognition_strategy.py::NaiveScan`. The scan moves
   in fixed steps and turns until it has swept ninety degrees, so the number of
   steps in the spiral is arithmetic on the step size and nothing else:
 
@@ -13,7 +13,7 @@ defmodule Monty.Experiment.RecognitionPolicy.NaiveScan do
   numbers, and the reason this policy exists rather than a plain step ceiling.
   """
 
-  alias Monty.Experiment.RecognitionPolicy.RecognitionResult
+  alias Monty.Experiment.RecognitionStrategy.RecognitionResult
 
   @doc """
   A policy whose ceiling is the spiral's own length.
@@ -33,7 +33,7 @@ defmodule Monty.Experiment.RecognitionPolicy.NaiveScan do
   end
 
   @doc "Done when the spiral is complete."
-  @spec call(map(), Monty.Experiment.RecognitionPolicy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionCounter.t(), map()) ::
           RecognitionResult.t()
   def call(_model, counter, %{step_limit: step_limit}) do
     %RecognitionResult{is_done: counter.step >= step_limit}

@@ -15,8 +15,8 @@ defmodule Monty.ModuleMap.Data do
 
   @sources %{
     "monty" => %{
-      "commit" => "760ad1746feda1368cdbdc5aefe4be5a707de39d",
-      "date" => "2026-10-30T12:59:57-05:00"
+      "commit" => "471b6ab1a6683d211abb7e6a3e86c0e5b1086633",
+      "date" => "2026-11-10T07:02:40-06:00"
     },
     "teleop" => %{
       "commit" => "2476e5c06a23fb8916ccfcd015a93990316bcbdc",
@@ -216,14 +216,6 @@ defmodule Monty.ModuleMap.Data do
       ]
     },
     %{
-      reason: "Hydra config tooling; superseded by Monty.Config",
-      status: :excluded,
-      elixir: "Monty.Conf.CompareSnapshots",
-      package: "monty",
-      python: "conf/compare_snapshots.py",
-      classes: []
-    },
-    %{
       reason:
         "Sensor-mount grid layout; used only by Monty's unit-test resources, not by a config",
       status: :excluded,
@@ -381,98 +373,15 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :implemented,
-      elixir: "Monty.Experiment.RecognitionPolicy",
+      status: :planned,
+      elixir: "Monty.Experiment.PrimaryTarget",
       package: "monty",
-      python: "experiment/recognition_policy.py",
+      python: "experiment/primary_target.py",
       classes: [
         %{
-          status: :implemented,
-          file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy/recognition_counter.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy.RecognitionCounter",
-          python: "RecognitionCounter"
-        },
-        %{
-          status: :implemented,
-          file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy/recognition_result.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy.RecognitionResult",
-          python: "RecognitionResult"
-        },
-        %{
-          status: :implemented,
-          file: "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy",
-          python: "RecognitionPolicy"
-        },
-        %{
-          status: :implemented,
-          file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy/monty_is_done.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy.MontyIsDone",
-          python: "MontyIsDone"
-        },
-        %{
-          status: :implemented,
-          file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy/min_eval_max_total_steps.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy.MinEvalMaxTotalSteps",
-          python: "MinEvalMaxTotalSteps"
-        },
-        %{
-          status: :implemented,
-          file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy/max_total_steps.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy.MaxTotalSteps",
-          python: "MaxTotalSteps"
-        },
-        %{
-          status: :implemented,
-          file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy/maximum_steps.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy.MaximumSteps",
-          python: "MaximumSteps"
-        },
-        %{
-          status: :implemented,
-          file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy/step_limit.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy.StepLimit",
-          python: "StepLimit"
-        },
-        %{
           status: :planned,
-          elixir: "Monty.Experiment.RecognitionPolicy.MatchCriteria",
-          python: "MatchCriteria"
-        },
-        %{
-          status: :implemented,
-          file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy/minimum_lms.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy.MinimumLMs",
-          python: "MinimumLMs"
-        },
-        %{
-          status: :implemented,
-          file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy/naive_scan.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy.NaiveScan",
-          python: "NaiveScan"
-        },
-        %{
-          status: :implemented,
-          file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy/object_recognition.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy.ObjectRecognition",
-          python: "ObjectRecognition"
-        },
-        %{
-          status: :implemented,
-          file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_policy/any_policy.ex",
-          elixir: "Monty.Experiment.RecognitionPolicy.AnyPolicy",
-          python: "AnyPolicy"
+          elixir: "Monty.Experiment.PrimaryTarget",
+          python: "PrimaryTarget"
         }
       ]
     },
@@ -493,6 +402,99 @@ defmodule Monty.ModuleMap.Data do
           file: "lib/monty/experiment/recognition_status.ex",
           elixir: "Monty.Experiment.RecognitionStatus",
           python: "RecognitionStatus"
+        }
+      ]
+    },
+    %{
+      reason: nil,
+      status: :implemented,
+      elixir: "Monty.Experiment.RecognitionStrategy",
+      package: "monty",
+      python: "experiment/recognition_strategy.py",
+      classes: [
+        %{
+          status: :planned,
+          elixir: "Monty.Experiment.RecognitionStrategy.RecognitionContext",
+          python: "RecognitionContext"
+        },
+        %{
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/recognition_result.ex",
+          elixir: "Monty.Experiment.RecognitionStrategy.RecognitionResult",
+          python: "RecognitionResult"
+        },
+        %{
+          status: :implemented,
+          file: "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy.ex",
+          elixir: "Monty.Experiment.RecognitionStrategy",
+          python: "RecognitionStrategy"
+        },
+        %{
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/monty_is_done.ex",
+          elixir: "Monty.Experiment.RecognitionStrategy.MontyIsDone",
+          python: "MontyIsDone"
+        },
+        %{
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/min_eval_max_total_steps.ex",
+          elixir: "Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps",
+          python: "MinEvalMaxTotalSteps"
+        },
+        %{
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/max_total_steps.ex",
+          elixir: "Monty.Experiment.RecognitionStrategy.MaxTotalSteps",
+          python: "MaxTotalSteps"
+        },
+        %{
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/maximum_steps.ex",
+          elixir: "Monty.Experiment.RecognitionStrategy.MaximumSteps",
+          python: "MaximumSteps"
+        },
+        %{
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/step_limit.ex",
+          elixir: "Monty.Experiment.RecognitionStrategy.StepLimit",
+          python: "StepLimit"
+        },
+        %{
+          status: :planned,
+          elixir: "Monty.Experiment.RecognitionStrategy.MatchCriteria",
+          python: "MatchCriteria"
+        },
+        %{
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/minimum_lms.ex",
+          elixir: "Monty.Experiment.RecognitionStrategy.MinimumLMs",
+          python: "MinimumLMs"
+        },
+        %{
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/naive_scan.ex",
+          elixir: "Monty.Experiment.RecognitionStrategy.NaiveScan",
+          python: "NaiveScan"
+        },
+        %{
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/object_recognition.ex",
+          elixir: "Monty.Experiment.RecognitionStrategy.ObjectRecognition",
+          python: "ObjectRecognition"
+        },
+        %{
+          status: :planned,
+          elixir: "Monty.Experiment.RecognitionStrategy.Any",
+          python: "Any"
         }
       ]
     },
@@ -1100,6 +1102,20 @@ defmodule Monty.ModuleMap.Data do
           status: :excluded,
           elixir: "Monty.Frameworks.Experiments.Hooks.NoOpStepHook",
           python: "NoOpStepHook"
+        }
+      ]
+    },
+    %{
+      reason: nil,
+      status: :planned,
+      elixir: "Monty.Frameworks.Experiments.LoggerArgs",
+      package: "monty",
+      python: "frameworks/experiments/logger_args.py",
+      classes: [
+        %{
+          status: :planned,
+          elixir: "Monty.Frameworks.Experiments.LoggerArgs",
+          python: "LoggerArgs"
         }
       ]
     },
@@ -2867,192 +2883,6 @@ defmodule Monty.ModuleMap.Data do
       ]
     },
     %{
-      reason:
-        "habitat-sim `SceneNodeControl` subclasses driving magnum scene nodes: the code is the engine's",
-      status: :excluded,
-      elixir: "Monty.Simulators.Habitat.Actions",
-      package: "monty",
-      python: "simulators/habitat/actions.py",
-      classes: [
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actions.ActuationVecSpec",
-          python: "ActuationVecSpec"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actions.SetYaw",
-          python: "SetYaw"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actions.SetSensorPitch",
-          python: "SetSensorPitch"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actions.SetAgentPitch",
-          python: "SetAgentPitch"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actions.SetSensorPose",
-          python: "SetSensorPose"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actions.SetSensorRotation",
-          python: "SetSensorRotation"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actions.SetAgentPose",
-          python: "SetAgentPose"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actions.MoveForward",
-          python: "MoveForward"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actions.MoveTangentially",
-          python: "MoveTangentially"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actions.OrientHorizontal",
-          python: "OrientHorizontal"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actions.OrientVertical",
-          python: "OrientVertical"
-        }
-      ]
-    },
-    %{
-      reason:
-        "performs actions through habitat-sim's actuator API; here an action crosses `Monty.Simulators.Port` to the world",
-      status: :excluded,
-      elixir: "Monty.Simulators.Habitat.Actuator",
-      package: "monty",
-      python: "simulators/habitat/actuator.py",
-      classes: [
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actuator.HabitatActuatorRequirements",
-          python: "HabitatActuatorRequirements"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actuator.HabitatActuator",
-          python: "HabitatActuator"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actuator.InvalidActionName",
-          python: "InvalidActionName"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Actuator.NoActionParameters",
-          python: "NoActionParameters"
-        }
-      ]
-    },
-    %{
-      reason:
-        "builds habitat-sim agents and scene nodes; the agent belongs to the world, across the port",
-      status: :excluded,
-      elixir: "Monty.Simulators.Habitat.Agents",
-      package: "monty",
-      python: "simulators/habitat/agents.py",
-      classes: [
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Agents.HabitatAgent",
-          python: "HabitatAgent"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Agents.MultiSensorAgent",
-          python: "MultiSensorAgent"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Agents.SingleSensorAgent",
-          python: "SingleSensorAgent"
-        }
-      ]
-    },
-    %{
-      reason: nil,
-      status: :planned,
-      elixir: "Monty.Simulators.Habitat.Environment",
-      package: "monty",
-      python: "simulators/habitat/environment.py",
-      classes: [
-        %{
-          reason: "habitat-sim agent configuration; nothing this build steps reads it",
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Environment.HabitatAgentArgs",
-          python: "HabitatAgentArgs"
-        },
-        %{
-          reason: "habitat-sim agent configuration; nothing this build steps reads it",
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Environment.AgentConfig",
-          python: "AgentConfig"
-        },
-        %{
-          status: :implemented,
-          file: "lib/monty/simulators/habitat/environment/habitat_environment.ex",
-          elixir: "Monty.Simulators.Habitat.Environment.HabitatEnvironment",
-          python: "HabitatEnvironment"
-        }
-      ]
-    },
-    %{
-      reason: "builds `habitat_sim.sensor.CameraSensorSpec`s: the engine's own sensor types",
-      status: :excluded,
-      elixir: "Monty.Simulators.Habitat.Sensors",
-      package: "monty",
-      python: "simulators/habitat/sensors.py",
-      classes: [
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Sensors.SensorConfig",
-          python: "SensorConfig"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Sensors.RGBDSensorConfig",
-          python: "RGBDSensorConfig"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Sensors.SemanticSensorConfig",
-          python: "SemanticSensorConfig"
-        }
-      ]
-    },
-    %{
-      reason:
-        "a wrapper over `habitat_sim.Simulator`; this build carries one engine and refuses a Habitat config as not planned",
-      status: :excluded,
-      elixir: "Monty.Simulators.Habitat.Simulator",
-      package: "monty",
-      python: "simulators/habitat/simulator.py",
-      classes: [
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Habitat.Simulator.HabitatSim",
-          python: "HabitatSim"
-        }
-      ]
-    },
-    %{
       reason: nil,
       status: :planned,
       elixir: "Monty.Simulators.Mujoco.Agents",
@@ -3290,76 +3120,6 @@ defmodule Monty.ModuleMap.Data do
           file: "lib/monty/simulators/mujoco/simulator.ex",
           elixir: "Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator",
           python: "MuJoCoSimulator"
-        }
-      ]
-    },
-    %{
-      reason:
-        "a habitat-sim agent with tacto fingers; tacto is a tactile simulator for habitat-sim",
-      status: :excluded,
-      elixir: "Monty.Simulators.Tacto.Agents",
-      package: "monty",
-      python: "simulators/tacto/agents.py",
-      classes: [
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Tacto.Agents.TactoFingerAgent",
-          python: "TactoFingerAgent"
-        }
-      ]
-    },
-    %{
-      reason:
-        "tacto sensor specifications for habitat-sim; no config in Monty's tree names tacto",
-      status: :excluded,
-      elixir: "Monty.Simulators.Tacto.Config",
-      package: "monty",
-      python: "simulators/tacto/config.py",
-      classes: [
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Tacto.Config.Gel",
-          python: "Gel"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Tacto.Config.Camera",
-          python: "Camera"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Tacto.Config.Lights",
-          python: "Lights"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Tacto.Config.Noise",
-          python: "Noise"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Tacto.Config.Force",
-          python: "Force"
-        },
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Tacto.Config.TactoSensorSpec",
-          python: "TactoSensorSpec"
-        }
-      ]
-    },
-    %{
-      reason:
-        "`TactoSensor.get_specs/1` answers `habitat_sim.sensor.CameraSensorSpec`: the engine's type",
-      status: :excluded,
-      elixir: "Monty.Simulators.Tacto.Sensors",
-      package: "monty",
-      python: "simulators/tacto/sensors.py",
-      classes: [
-        %{
-          status: :excluded,
-          elixir: "Monty.Simulators.Tacto.Sensors.TactoSensor",
-          python: "TactoSensor"
         }
       ]
     },

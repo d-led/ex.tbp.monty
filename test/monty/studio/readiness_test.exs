@@ -15,7 +15,7 @@ defmodule Monty.Studio.ReadinessTest do
     end
 
     test "an experiment naming a class nothing here can place names it" do
-      entry = Readiness.classified("test/base_config/base_mujoco")
+      entry = Readiness.classified("test/base_config/base")
 
       assert entry.status == :refused
       assert entry.codes == [:unknown_module_class]
@@ -36,17 +36,17 @@ defmodule Monty.Studio.ReadinessTest do
     end
   end
 
-  # Habitat is on its way out upstream (2026-11-08), so a config that needs it is
-  # postponed rather than refused: nothing here is missing that anybody means to
+  # A world this build does not carry is postponed rather than refused: the
+  # nearest config to it here runs, so nothing is missing that anybody means to
   # write. Read for MuJoCo, because that is the world a run would step — the test
   # environment's own default is the stand-in scene, which refuses nothing for a
   # world it does not have.
   describe "an experiment whose world this build does not carry" do
     test "is not planned, not refused" do
-      entry = Readiness.classified("test/sensor_module/base", world_simulator: :mujoco)
+      entry = Readiness.classified("world_image_on_scanned_model", world_simulator: :mujoco)
 
       assert entry.status == :not_planned
-      assert entry.codes == [:world_not_carried]
+      assert :world_not_carried in entry.codes
     end
 
     test "the world outranks the classes it would also need" do

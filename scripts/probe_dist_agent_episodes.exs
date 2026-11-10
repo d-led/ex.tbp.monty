@@ -14,7 +14,7 @@
 # episode uses all 43 of Monty's steps without recognising the mug. Chasing that
 # difference is the work; asserting it as behaviour would be the opposite.
 
-alias Monty.Experiment.RecognitionPolicy.{AnyPolicy, MaxTotalSteps}
+alias Monty.Experiment.RecognitionStrategy.{AnyPolicy, MaxTotalSteps}
 alias Monty.Runtime.{Episode, LearningModuleServer, Model, Registry}
 alias Monty.Simulators.Recording
 alias Monty.Simulators.Synthetic.Environment
@@ -31,7 +31,7 @@ setup = opened.setup
 episodes = MontyRecording.episodes!(recording)
 conclusions = MontyRecording.episode_conclusions!(recording)
 
-{:ok, policy} = Setup.recognition_policy(setup)
+{:ok, policy} = Setup.recognition_strategy(setup)
 
 replay = fn percepts ->
   id = "probe-#{System.unique_integer([:positive])}"

@@ -1220,15 +1220,15 @@ handed the model object and reads whatever it likes off it — `model.is_done`,
 telemeters every terminal decision through `logger.info` and `telemeter.info`.
 
 **What this port does.**
-[`Monty.Experiment.RecognitionPolicy`](../lib/monty/experiment/recognition_policy.ex)
+[`Monty.Experiment.RecognitionStrategy`](../lib/monty/experiment/recognition_strategy.ex)
 declares a model _view_ — a map with exactly those four readings, the modules'
 conclusions flattened to a list — and each policy is a `{module, state}` pair
-dispatched by `RecognitionPolicy.call/3`. Constructors answer `{:ok, policy}` or
+dispatched by `RecognitionStrategy.call/3`. Constructors answer `{:ok, policy}` or
 `{:error, message}`, carrying Monty's `ValueError` sentences.
 
 **Why.** The decision is what has to be compared with Monty's, and a decision
 that can reach into live processes is a decision that cannot be recorded and
-replayed. [`scripts/record_monty_recognition_policy.py`](../scripts/record_monty_recognition_policy.py)
+replayed. [`scripts/record_monty_recognition_strategy.py`](../scripts/record_monty_recognition_strategy.py)
 asks Monty's real classes
 448 questions over the same view; the port answers every one of them the same
 way.
@@ -1366,6 +1366,24 @@ travels with the answer. This port dropped `euler_rotation` and `quat_rotation`
 when it copied a sampled object into its scene, so a target here had no turn to
 state. Both samplers carry `quat_rotation` now, `priv/monty_py/world.py` keeps
 it, and `supervise/3` raises with the object's name if a target still has none.
+
+## 2.21 An object-orientation channel's evidence is ported but not yet dispatched
+
+Monty's PR #1266 splits the scored distances in two — `euclidean_distances` for a
+channel whose pose is an object orientation, `custom_distances` for one whose pose
+is a surface — and scores the orientation case with a new
+`_object_pose_evidence`, the angle between two rotation matrices off the trace of
+their relative rotation. Both pieces are here, with their tests translated
+(`GraphMatchingUtils.euclidean_distances/2`,
+`HypothesesDisplacer.object_pose_evidence/2`), and `flatness/1` now names its
+`0.5` as `@minimum_curvature`.
+
+What is not here is the dispatcher that would choose between them. Monty reads it
+from the channel's own pose type (`isinstance`), and every channel this port
+builds so far carries a `SurfacePoseVectors` pose: the sensor modules that send
+an `OrientationMatrix` belong to the `experiment/` layer, which the module map
+still lists as planned. Wiring it before there is a channel to dispatch on would
+be a branch no run can take.
 
 ---
 

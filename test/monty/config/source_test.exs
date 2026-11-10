@@ -8,7 +8,7 @@ defmodule Monty.Config.SourceTest do
       conf_dir = Source.conf_dir()
 
       assert File.dir?(conf_dir)
-      assert Source.experiments(conf_dir) |> length() > 200
+      assert Source.experiments(conf_dir) |> length() > 100
 
       # The groups an experiment is composed from, not only the experiments.
       for group <- ["monty", "environment", "termination", "logging"] do

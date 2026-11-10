@@ -76,7 +76,7 @@ defmodule Monty.Runtime.Model do
     do: Step.detailed(Registry.via({:step, model_id}), projection)
 
   @doc "The four things a recognition policy may read off the model."
-  @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionPolicy.model()
+  @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionStrategy.model()
   def status(model_id), do: Step.status(Registry.via({:step, model_id}))
 
   @doc "Clears short-term memory for a new episode, keeping long-term memory."

@@ -117,7 +117,7 @@ defmodule Monty.Frameworks.Models.NoResetEvidenceMatching.MontyForNoResetEvidenc
   def done?(model_id), do: Model.done?(model_id)
 
   @doc "The four things a recognition policy may read off the model."
-  @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionPolicy.model()
+  @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionStrategy.model()
   def status(model_id), do: Model.status(model_id)
 
   @doc "Clears short-term memory for a new episode, as this class defines it."

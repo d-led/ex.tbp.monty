@@ -18,7 +18,7 @@ defmodule Monty.Studio.Setup do
   """
 
   alias Monty.Experiment.Environment.OneObjectPerEpisodeInterface
-  alias Monty.Experiment.RecognitionPolicy
+  alias Monty.Experiment.RecognitionStrategy
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Frameworks.Environments.ObjectInitSamplers.{Default, Predefined, RandomRotation}
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
@@ -84,7 +84,7 @@ defmodule Monty.Studio.Setup do
             # scene's own place, which is what every run here used to be.
             object_init_sampler: %{train: nil, eval: nil},
             agent_class: nil,
-            recognition_policy: nil,
+            recognition_strategy: nil,
             model_name_or_path: nil
 
   @type module_description :: %{
@@ -197,7 +197,7 @@ defmodule Monty.Studio.Setup do
       objects_by_phase: objects_by_phase(config),
       object_init_sampler: samplers(config),
       agent_class: agent_class_of(config),
-      recognition_policy: Map.get(config, "recognition_policy"),
+      recognition_strategy: Map.get(config, "recognition_strategy"),
       model_name_or_path: Map.get(config, "model_name_or_path"),
       attention_system: describe_target(get_in(monty_config, ["attention_system", "_target_"])),
       monty_args: Map.get(monty_config, "monty_args", %{}),
@@ -220,7 +220,7 @@ defmodule Monty.Studio.Setup do
         eval: Map.get(config, "do_eval", true) != false
       },
       # The `termination` group's limits, which are what ends an episode.
-      termination: termination(Map.get(config, "recognition_policy")),
+      termination: termination(Map.get(config, "recognition_strategy")),
       seed: Map.get(config, "seed"),
       supervised_lm_ids: Map.get(config, "supervised_lm_ids"),
       logging: logging(config)
@@ -1039,7 +1039,7 @@ defmodule Monty.Studio.Setup do
 
   # The `termination` group, as the limits it puts on an episode. Monty's policy
   # validates them when it is built; here they are read, and the policy itself
-  # (`recognition_policy/1`) does the validating.
+  # (`recognition_strategy/1`) does the validating.
   defp termination(%{"_target_" => _policy} = policy) do
     %{
       max_train_steps: Map.get(policy, "max_train_steps"),
@@ -1746,18 +1746,18 @@ defmodule Monty.Studio.Setup do
   @doc """
   The experiment's recognition policy: what counts as the episode being over.
 
-  Monty's `termination` group writes `recognition_policy` into the experiment
+  Monty's `termination` group writes `recognition_strategy` into the experiment
   config, and an experiment that names none gets `MontyIsDone`
   (`monty_experiment.py`). That default is honoured here rather than left to the
   run, so a config without a policy still ends the way it ends in Monty.
   """
-  @spec recognition_policy(t()) ::
-          {:ok, Monty.Experiment.RecognitionPolicy.t()} | {:error, term()}
-  def recognition_policy(%__MODULE__{recognition_policy: nil}),
-    do: RecognitionPolicy.MontyIsDone.new()
+  @spec recognition_strategy(t()) ::
+          {:ok, Monty.Experiment.RecognitionStrategy.t()} | {:error, term()}
+  def recognition_strategy(%__MODULE__{recognition_strategy: nil}),
+    do: RecognitionStrategy.MontyIsDone.new()
 
-  def recognition_policy(%__MODULE__{recognition_policy: config}),
-    do: RecognitionPolicy.from_config(config)
+  def recognition_strategy(%__MODULE__{recognition_strategy: config}),
+    do: RecognitionStrategy.from_config(config)
 
   @doc """
   The semantic id of the object an episode is about.

@@ -1,14 +1,14 @@
-defmodule Monty.Experiment.RecognitionPolicy.MaximumSteps do
+defmodule Monty.Experiment.RecognitionStrategy.MaximumSteps do
   @moduledoc """
   Done once the *matching* steps reach the limit for the current mode.
 
-  Mirrors `tbp/monty/experiment/recognition_policy.py::MaximumSteps`. Two things
+  Mirrors `tbp/monty/experiment/recognition_strategy.py::MaximumSteps`. Two things
   have to hold: the model is not exploring — an exploring step is training, not
   matching — and `model.matching_steps` has reached `max_train_steps` or
   `max_eval_steps`, chosen by mode.
   """
 
-  alias Monty.Experiment.RecognitionPolicy.RecognitionResult
+  alias Monty.Experiment.RecognitionStrategy.RecognitionResult
 
   @doc """
   A policy with a limit for each mode.
@@ -34,7 +34,7 @@ defmodule Monty.Experiment.RecognitionPolicy.MaximumSteps do
   end
 
   @doc "Done when the mode's limit is reached, unless the model is exploring."
-  @spec call(map(), Monty.Experiment.RecognitionPolicy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionCounter.t(), map()) ::
           RecognitionResult.t()
   def call(model, counter, state) do
     is_done = not model.is_exploring and model.matching_steps >= limit(state, counter.mode)

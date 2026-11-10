@@ -41,9 +41,9 @@ defmodule Monty.Runtime.Episode do
   require Logger
 
   alias Monty.Context
-  alias Monty.Experiment.RecognitionPolicy
+  alias Monty.Experiment.RecognitionStrategy
 
-  alias Monty.Experiment.RecognitionPolicy.{
+  alias Monty.Experiment.RecognitionStrategy.{
     AnyPolicy,
     MaxTotalSteps,
     MontyIsDone,
@@ -129,7 +129,7 @@ defmodule Monty.Runtime.Episode do
   # reactions before the check is what makes `start_exploring` reach the next
   # step, and what lets a policy time the lagging modules out and still end.
   defp step_until_done(model_id, environment, ctx, policy, counter, run) do
-    decision = RecognitionPolicy.call(policy, view(model_id), counter)
+    decision = RecognitionStrategy.call(policy, view(model_id), counter)
     apply_reactions(model_id, decision)
 
     if decision.is_done do

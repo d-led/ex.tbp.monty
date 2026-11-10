@@ -1,8 +1,8 @@
-defmodule Monty.Experiment.RecognitionPolicy.AnyPolicy do
+defmodule Monty.Experiment.RecognitionStrategy.AnyPolicy do
   @moduledoc """
   Done when *any* of its policies is, and it stops asking at the first yes.
 
-  Mirrors `tbp/monty/experiment/recognition_policy.py::AnyPolicy`. The result is
+  Mirrors `tbp/monty/experiment/recognition_strategy.py::AnyPolicy`. The result is
   the union of the answers it did get: a `time_out_lms` from an earlier policy
   survives a later one that says done on its own, so combining policies never
   loses a request.
@@ -12,8 +12,8 @@ defmodule Monty.Experiment.RecognitionPolicy.AnyPolicy do
   recording compares the union rather than re-running every member.
   """
 
-  alias Monty.Experiment.RecognitionPolicy
-  alias Monty.Experiment.RecognitionPolicy.RecognitionResult
+  alias Monty.Experiment.RecognitionStrategy
+  alias Monty.Experiment.RecognitionStrategy.RecognitionResult
 
   @doc """
   A policy over `:policies`, in the order they are asked.
@@ -33,10 +33,10 @@ defmodule Monty.Experiment.RecognitionPolicy.AnyPolicy do
   end
 
   @doc "The union of the answers, stopping at the first policy that is done."
-  @spec call(map(), RecognitionPolicy.RecognitionCounter.t(), map()) :: RecognitionResult.t()
+  @spec call(map(), RecognitionStrategy.RecognitionCounter.t(), map()) :: RecognitionResult.t()
   def call(model, counter, %{policies: policies}) do
     Enum.reduce_while(policies, %RecognitionResult{}, fn policy, result ->
-      answer = RecognitionPolicy.call(policy, model, counter)
+      answer = RecognitionStrategy.call(policy, model, counter)
       result = union(result, answer)
 
       if result.is_done, do: {:halt, result}, else: {:cont, result}

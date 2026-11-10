@@ -277,19 +277,20 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
 
     test "an experiment whose classes are missing is on the same side of the divide",
          %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/experiments?ready=no&q=base_mujoco")
+      {:ok, view, _html} = live(conn, ~p"/experiments?ready=no&q=base_config/base")
 
-      assert "test-base_config-base_mujoco" in row_names(view)
+      assert "test-base_config-base" in row_names(view)
     end
 
-    # Habitat is on its way out upstream, so a config that needs it is postponed
-    # rather than refused. Reading it for MuJoCo is what a run would step; the
-    # test environment's own default is the stand-in scene, which reads every
-    # config as if it could run.
-    test "a Habitat experiment is offered as not planned, and not as refused", %{conn: conn} do
+    # A world this build does not carry is postponed rather than refused. Reading
+    # it for MuJoCo is what a run would step; the test environment's own default
+    # is the stand-in scene, which reads every config as if it could run.
+    test "an experiment whose world this build does not carry is not planned", %{conn: conn} do
       Tmp.app_env(:world_simulator, :mujoco)
 
-      {:ok, postponed, _html} = live(conn, ~p"/experiments?ready=not_planned&q=omniglot_training")
+      {:ok, postponed, _html} =
+        live(conn, ~p"/experiments?ready=not_planned&q=omniglot_training")
+
       {:ok, refused, _html} = live(conn, ~p"/experiments?ready=no&q=omniglot_training")
 
       assert row_names(postponed) == ["tutorial-omniglot_training"]
@@ -298,13 +299,13 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
 
     # The second question after "does it run": which world was it written for.
     test "...and the world its config names is a filter of its own", %{conn: conn} do
-      {:ok, habitat, _html} = live(conn, ~p"/experiments?world=habitat")
+      {:ok, images, _html} = live(conn, ~p"/experiments?world=other")
       {:ok, mujoco, _html} = live(conn, ~p"/experiments?world=mujoco")
 
-      assert has_element?(habitat, "#chip-world-habitat")
-      assert row_names(habitat) != []
+      assert has_element?(images, "#chip-world-other")
+      assert row_names(images) != []
       assert row_names(mujoco) != []
-      assert Enum.all?(row_names(habitat), &(&1 not in row_names(mujoco)))
+      assert Enum.all?(row_names(images), &(&1 not in row_names(mujoco)))
       assert "base_config_10distinctobj_dist_agent" in row_names(mujoco)
     end
 

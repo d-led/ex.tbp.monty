@@ -105,13 +105,15 @@ defmodule Monty.ModuleMapTest do
 
   describe "reading a class path out of a config" do
     test "a Monty class resolves to the Elixir module that holds it" do
+      # `RecognitionPolicy` is `RecognitionStrategy` since #1291; the map follows
+      # Monty's file, and the module is at that name in this port.
       assert {:ok,
               %{
-                class: "HabitatEnvironment",
-                elixir: "Monty.Simulators.Habitat.Environment.HabitatEnvironment",
+                class: "ObjectRecognition",
+                elixir: "Monty.Experiment.RecognitionStrategy.ObjectRecognition",
                 status: :implemented
               }} =
-               ModuleMap.resolve("tbp.monty.simulators.habitat.environment.HabitatEnvironment")
+               ModuleMap.resolve("tbp.monty.experiment.recognition_strategy.ObjectRecognition")
     end
 
     test "a class this port has written comes back implemented" do

@@ -1,8 +1,8 @@
-defmodule Monty.Experiment.RecognitionPolicy.RecognitionResult do
+defmodule Monty.Experiment.RecognitionStrategy.RecognitionResult do
   @moduledoc """
   What a policy decided: stop, time out the laggards, or start exploring.
 
-  Mirrors `tbp/monty/experiment/recognition_policy.py::RecognitionResult`. Three
+  Mirrors `tbp/monty/experiment/recognition_strategy.py::RecognitionResult`. Three
   booleans, and the episode loop does three different things with them:
 
     * `is_done` — stop the episode.

@@ -1,7 +1,7 @@
 defmodule Monty.Runtime.EpisodeTest do
   use ExUnit.Case, async: true
 
-  alias Monty.Experiment.RecognitionPolicy.{ObjectRecognition, StepLimit}
+  alias Monty.Experiment.RecognitionStrategy.{ObjectRecognition, StepLimit}
   alias Monty.Runtime.{Episode, Model}
   alias Monty.Test.{RecordingLearningModule, RecordingMotor, RecordingSensorModule}
 

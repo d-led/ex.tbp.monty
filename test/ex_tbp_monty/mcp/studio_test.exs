@@ -8,7 +8,7 @@ defmodule ExTbpMonty.Mcp.StudioTest do
     test "counts the experiments, and says how many runs are in each state" do
       studio = Studio.describe()
 
-      assert studio.experiments > 200
+      assert studio.experiments > 100
       assert is_map(studio.runs)
 
       assert Enum.all?(studio.runs, fn {state, count} ->

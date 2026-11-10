@@ -1,5 +1,5 @@
 {
- "monty": "tbp.monty.experiment.recognition_policy",
+ "monty": "tbp.monty.experiment.recognition_strategy",
  "policies": [
   "AnyPolicy([MaximumSteps, MaxTotalSteps])",
   "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])",

@@ -1,13 +1,13 @@
-defmodule Monty.Experiment.RecognitionPolicy.MaxTotalSteps do
+defmodule Monty.Experiment.RecognitionStrategy.MaxTotalSteps do
   @moduledoc """
   Done at a hard step ceiling, and every lagging module timed out with it.
 
-  Mirrors `tbp/monty/experiment/recognition_policy.py::MaxTotalSteps`. The
+  Mirrors `tbp/monty/experiment/recognition_strategy.py::MaxTotalSteps`. The
   ceiling counts *every* step, not matching ones, so it is what stops an episode
   that is spinning without ever perceiving anything.
   """
 
-  alias Monty.Experiment.RecognitionPolicy.RecognitionResult
+  alias Monty.Experiment.RecognitionStrategy.RecognitionResult
 
   @doc """
   A policy that ends the episode at `:max_total_steps` steps.
@@ -27,7 +27,7 @@ defmodule Monty.Experiment.RecognitionPolicy.MaxTotalSteps do
   end
 
   @doc "Done at the ceiling; a ceiling reached is also a timeout for the modules."
-  @spec call(map(), Monty.Experiment.RecognitionPolicy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionCounter.t(), map()) ::
           RecognitionResult.t()
   def call(_model, counter, %{max_total_steps: max_total_steps}) do
     is_done = counter.step >= max_total_steps

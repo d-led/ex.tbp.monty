@@ -172,7 +172,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
     do: Model.fixme_set_ground_truth(model_id, primary_target, opts)
 
   @doc "The four things a recognition policy may read off the model."
-  @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionPolicy.model()
+  @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionStrategy.model()
   def status(model_id), do: Model.status(model_id)
 
   @doc """

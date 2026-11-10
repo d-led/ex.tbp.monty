@@ -1,8 +1,8 @@
-defmodule Monty.Experiment.RecognitionPolicy.MinEvalMaxTotalSteps do
+defmodule Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps do
   @moduledoc """
   A wrapper that refuses to stop too early, and stops anyway at a ceiling.
 
-  Mirrors `tbp/monty/experiment/recognition_policy.py::MinEvalMaxTotalSteps`. It
+  Mirrors `tbp/monty/experiment/recognition_strategy.py::MinEvalMaxTotalSteps`. It
   exists because a model can recognise an object in three steps, which makes an
   evaluation measure nothing: this holds the episode open until
   `min_eval_steps` matching steps have happened, while still ending it at
@@ -13,8 +13,8 @@ defmodule Monty.Experiment.RecognitionPolicy.MinEvalMaxTotalSteps do
   in every branch, so wrapping changes *when* an episode stops and nothing else.
   """
 
-  alias Monty.Experiment.RecognitionPolicy
-  alias Monty.Experiment.RecognitionPolicy.RecognitionResult
+  alias Monty.Experiment.RecognitionStrategy
+  alias Monty.Experiment.RecognitionStrategy.RecognitionResult
 
   @doc """
   A wrapper around `:wrapped`, which is a policy in the same `{module, state}`
@@ -55,10 +55,10 @@ defmodule Monty.Experiment.RecognitionPolicy.MinEvalMaxTotalSteps do
   The wrapped answer, held back while too little has been seen, or ended at the
   ceiling.
   """
-  @spec call(map(), RecognitionPolicy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), RecognitionStrategy.RecognitionCounter.t(), map()) ::
           RecognitionResult.t()
   def call(model, counter, state) do
-    wrapped = RecognitionPolicy.call(state.wrapped, model, counter)
+    wrapped = RecognitionStrategy.call(state.wrapped, model, counter)
 
     cond do
       model.is_done ->

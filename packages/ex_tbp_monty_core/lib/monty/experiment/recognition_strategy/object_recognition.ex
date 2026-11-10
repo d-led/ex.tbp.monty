@@ -1,8 +1,8 @@
-defmodule Monty.Experiment.RecognitionPolicy.ObjectRecognition do
+defmodule Monty.Experiment.RecognitionStrategy.ObjectRecognition do
   @moduledoc """
   Monty's own object-recognition policy: three ways to finish an episode.
 
-  Mirrors `tbp/monty/experiment/recognition_policy.py::ObjectRecognition`, and is
+  Mirrors `tbp/monty/experiment/recognition_strategy.py::ObjectRecognition`, and is
   what `termination/any1_objectrecognition_t1000_e500_tot6000` configures. In
   Monty's order:
 
@@ -16,7 +16,7 @@ defmodule Monty.Experiment.RecognitionPolicy.ObjectRecognition do
   recognised its object already has one.
   """
 
-  alias Monty.Experiment.RecognitionPolicy.RecognitionResult
+  alias Monty.Experiment.RecognitionStrategy.RecognitionResult
 
   @doc """
   A policy with a matching limit per mode and a total ceiling.
@@ -52,7 +52,7 @@ defmodule Monty.Experiment.RecognitionPolicy.ObjectRecognition do
   end
 
   @doc "The first of the three conditions that holds, in Monty's order."
-  @spec call(map(), Monty.Experiment.RecognitionPolicy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionCounter.t(), map()) ::
           RecognitionResult.t()
   def call(model, counter, state) do
     cond do

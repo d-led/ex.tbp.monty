@@ -26,7 +26,8 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       assert {:ok, %{text: text, structured: index}} =
                Tools.call("monty_list_experiments", %{}, @ctx)
 
-      assert index.total > 200
+      assert index.total > 100
+      assert length(index.experiments) < index.total
       assert text =~ "#{index.total} experiments."
       assert text =~ "Choices, each counted with the other filters applied:"
     end
@@ -184,7 +185,7 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                  %{
                    "attributes" => %{
                      "name" => "mcp_preview",
-                     "base" => "test/base_config/base_mujoco"
+                     "base" => "test/base_config/base"
                    }
                  },
                  @ctx

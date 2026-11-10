@@ -14,8 +14,8 @@ defmodule Monty.Studio.Run do
   """
 
   alias Monty.Experiment.Environment.Interface
-  alias Monty.Experiment.RecognitionPolicy
-  alias Monty.Experiment.RecognitionPolicy.{RecognitionCounter, RecognitionResult}
+  alias Monty.Experiment.RecognitionStrategy
+  alias Monty.Experiment.RecognitionStrategy.{RecognitionCounter, RecognitionResult}
   alias Monty.Frameworks.Experiments.Seed
   alias Monty.Runtime.{LearningModuleServer, Positioning, Registry}
   alias Monty.Studio.{Belief, Setup}
@@ -54,8 +54,8 @@ defmodule Monty.Studio.Run do
           step: non_neg_integer(),
           pending_actions: [Monty.Frameworks.Actions.Action.t()],
           positioning: Monty.Runtime.Positioning.outcome() | nil,
-          policy: Monty.Experiment.RecognitionPolicy.t() | nil,
-          counter: Monty.Experiment.RecognitionPolicy.RecognitionCounter.t() | nil,
+          policy: Monty.Experiment.RecognitionStrategy.t() | nil,
+          counter: Monty.Experiment.RecognitionStrategy.RecognitionCounter.t() | nil,
           first_seen: %{optional(String.t()) => [number()]}
         }
 
@@ -105,7 +105,7 @@ defmodule Monty.Studio.Run do
     model = Setup.model_class(setup)
 
     with {:ok, factories} <- Setup.positioning_procedures(setup),
-         {:ok, policy} <- Setup.recognition_policy(setup),
+         {:ok, policy} <- Setup.recognition_strategy(setup),
          {:ok, interface, positioning} <-
            position(setup, factories, episode, epoch: Keyword.get(opts, :epoch, 0), phase: mode) do
       case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {model, spec}) do
@@ -420,7 +420,7 @@ defmodule Monty.Studio.Run do
   def decision(%__MODULE__{policy: nil}), do: %RecognitionResult{}
 
   def decision(%__MODULE__{policy: policy, counter: counter} = run) do
-    RecognitionPolicy.call(policy, model_view(run), counter)
+    RecognitionStrategy.call(policy, model_view(run), counter)
   end
 
   @doc """
