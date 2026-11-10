@@ -177,10 +177,13 @@ defmodule Monty.Studio.ReplayTest do
 
       assert %{label: "best evidence", unit: ""} = Replay.chart_series(run, "evidence")
 
+      # Who held it travels with the number: a best-evidence line is one value at
+      # a step and a different object in every episode, and a reader who cannot
+      # see whose line it is is reading a shape with no names on it.
       assert Replay.chart_series(run, "evidence").points == [
-               %{step: 0, value: 0.5, episode: nil},
-               %{step: 1, value: 4.0, episode: nil},
-               %{step: 2, value: 9.5, episode: nil}
+               %{step: 0, value: 0.5, episode: nil, object: "mug"},
+               %{step: 1, value: 4.0, episode: nil, object: "mug"},
+               %{step: 2, value: 9.5, episode: nil, object: "mug"}
              ]
     end
 
@@ -190,13 +193,14 @@ defmodule Monty.Studio.ReplayTest do
         log: [believe(entry(0), %{"learning_module_0" => 1.0, "learning_module_1" => 7.0})]
       }
 
-      assert Replay.chart_series(run, "evidence").points == [%{step: 0, value: 7.0, episode: nil}]
+      assert [%{step: 0, value: 7.0, episode: nil, object: "mug"}] =
+               Replay.chart_series(run, "evidence").points
     end
 
     test "say a run believed nothing when no module believed anything" do
       assert Replay.chart_series(run(0..1), "evidence").points == [
-               %{step: 0, value: 0.0, episode: nil},
-               %{step: 1, value: 0.0, episode: nil}
+               %{step: 0, value: 0.0, episode: nil, object: nil},
+               %{step: 1, value: 0.0, episode: nil, object: nil}
              ]
     end
 

@@ -319,6 +319,11 @@ defmodule ExTbpMontyWeb.StudioComponents do
   # When the run began: the page says how long it has been going beside the
   # plot, because a step count answers how far it got and not how fast.
   attr :started_at, :string, default: nil
+
+  attr :running, :boolean,
+    default: false,
+    doc: "whether anything is still stepping this run"
+
   attr :graphs, :boolean, default: true
   attr :recorded, :integer, default: 0
   attr :playing, :boolean, default: false
@@ -382,25 +387,13 @@ defmodule ExTbpMontyWeb.StudioComponents do
         This run recorded no steps, so there is nothing to replay.
       </p>
 
-      <form :if={@moment} id="replay-seek" phx-change="replay_seek" class="px-0.5">
-        <%!-- The slider is drawn from the step the page is showing, so every
-        patch that arrives while a drag is in flight would put the handle back
-        where the server last left it. The hook holds the reader's own value for
-        as long as the pointer is down: the page catches up when the drag ends,
-        not while it is happening. --%>
-        <input
-          type="range"
-          name="step"
-          id="replay-slider"
-          phx-hook=".ReplaySlider"
-          min="0"
-          max={max(@recorded - 1, 0)}
-          value={@moment.position}
-          phx-debounce="120"
-          class="range range-xs range-primary w-full"
-          aria-label="Step"
-        />
-      </form>
+      <.seek
+        :if={@moment}
+        id="replay-seek"
+        slider_id="replay-slider"
+        moment={@moment}
+        recorded={@recorded}
+      />
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".ReplaySlider">
         export default {
@@ -543,7 +536,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
           the browser's — see `LocalTime` — because a server's snapshot of "an
           hour ago" is wrong the moment it is sent. --%>
           <span
-            :if={@started_at}
+            :if={@started_at && @running}
             id="replay-chart-since"
             phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
             class="text-[11px] text-base-content/60"
@@ -556,6 +549,22 @@ defmodule ExTbpMontyWeb.StudioComponents do
             />
             <span class="text-base-content/40">since</span>
             <ExTbpMontyWeb.LocalTime.local_time at={@started_at} style={:clock} class="tabular-nums" />
+          </span>
+          <%!-- Nothing is stepping a run that has stopped, so a clock beside it
+          would count the minutes since somebody killed it and call them the time
+          it has been running. What is worth knowing is when the last step
+          landed: that is what says how long ago it stopped. --%>
+          <span
+            :if={@started_at && !@running}
+            id="replay-chart-stopped"
+            class="text-[11px] text-base-content/60"
+          >
+            last step
+            <ExTbpMontyWeb.LocalTime.local_time
+              at={@moment && @moment.entry && @moment.entry["at"]}
+              style={:clock}
+              class="font-mono tabular-nums text-base-content"
+            />
           </span>
           <span :if={@best} id="replay-best" class="ms-auto text-[11px] text-base-content/60">
             strongest evidence
@@ -781,29 +790,27 @@ defmodule ExTbpMontyWeb.StudioComponents do
           id="replay-chart-legend"
           class="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-base-content/80"
         >
-          <li :for={line <- @chart.lines} class="flex items-center gap-1">
+          <li
+            :for={line <- Enum.uniq_by(@chart.lines, & &1.label)}
+            class="flex items-center gap-1"
+          >
             <span class="h-0.5 w-3 rounded" style={"background: #{line.colour}"}></span>
             <span class="font-mono">{line.label}</span>
           </li>
         </ul>
 
-        <%!-- The best-evidence line is one number: the strongest evidence any
-        object holds. Which object holds it is the question the chart is asked,
-        and a line cannot answer it — so the figure says it, with the same
-        swatch the per-object charts name their lines with. --%>
+        <%!-- The best-evidence line is one number at a step, and a different
+        object holds it in every episode: the figure is drawn in stretches, and
+        the caption says what the colours mean — one object per stretch, in the
+        colour its episode band has, with the hover naming the one under the
+        pointer. Crowning a single object for the whole run would be a lie about
+        every episode but one. --%>
         <p
-          :if={@series_id == "evidence" and @best}
+          :if={@series_id == "evidence" and @chart.lines != []}
           id="replay-chart-best"
-          class="flex flex-wrap items-baseline justify-center gap-x-1.5 text-[11px] text-base-content/80"
+          class="text-center text-[11px] text-base-content/60"
         >
-          <span
-            :if={@chart.lines != []}
-            class="h-0.5 w-3 rounded"
-            style={"background: #{hd(@chart.lines).colour}"}
-          ></span>
-          <span class="text-base-content/60">the strongest object in this run is</span>
-          <span id="replay-chart-best-object" class="font-mono">{@best.object}</span>
-          <span class="font-mono text-base-content/60">{format_value(@best.value)}</span>
+          each stretch is the object that held the strongest evidence then
         </p>
 
         <%!-- A line at zero is honest, but it is not an answer: a run whose
@@ -1038,6 +1045,17 @@ defmodule ExTbpMontyWeb.StudioComponents do
         </script>
       </div>
 
+      <%!-- The same control again, under the figure: the graph and the frames it
+      explains are a screen apart on a tall chart, and a reader who wants the
+      next step should not have to go back to the top of the last one. --%>
+      <.seek
+        :if={@moment}
+        id="replay-seek-below"
+        slider_id="replay-slider-below"
+        moment={@moment}
+        recorded={@recorded}
+      />
+
       <div :if={@moment} class="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div :if={@moment.frames != []} id="replay-frames" class="grid gap-1.5 sm:grid-cols-2">
           <figure
@@ -1131,7 +1149,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
   # that chose the words, exactly as it is for the tooltip the hook draws.
   defp chart_marks(chart, series, series_id) do
     unit = chart_unit(series, series_id)
-    named? = length(chart.lines) > 1
+    named? = length(chart.lines) > 1 or series_id == "evidence"
 
     chart.hover
     |> nearest_per_unit(@samples_per_line)
@@ -1156,7 +1174,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
   defp chart_samples(chart, series, series_id) do
     unit = chart_unit(series, series_id)
-    named? = length(chart.lines) > 1
+    named? = length(chart.lines) > 1 or series_id == "evidence"
 
     chart.hover
     |> nearest_per_unit(@samples_per_line)
@@ -1203,6 +1221,31 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
   # A chart's own name, from the series it was built as: the picker's label is a
   # few words wide, and the title is the sentence.
+  # One step control, drawn twice: above the figure and again under it.
+  defp seek(assigns) do
+    ~H"""
+    <%!-- The slider is drawn from the step the page is showing, so every patch
+    that arrives while a drag is in flight would put the handle back where the
+    server last left it. The hook holds the reader's own value for as long as
+    the pointer is down: the page catches up when the drag ends, not while it is
+    happening. --%>
+    <form id={@id} phx-change="replay_seek" class="px-0.5">
+      <input
+        type="range"
+        name="step"
+        id={@slider_id}
+        phx-hook=".ReplaySlider"
+        min="0"
+        max={max(@recorded - 1, 0)}
+        value={@moment.position}
+        phx-debounce="120"
+        class="range range-xs range-primary w-full"
+        aria-label="Step"
+      />
+    </form>
+    """
+  end
+
   defp chart_title(series, id) do
     case Enum.find(series, &(&1.id == id)) do
       nil -> ""

@@ -504,6 +504,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     end
   end
 
+  # A record that still says "running" is not the same as a run that is: a
+  # process killed mid-flight leaves the row open, and a clock beside it would
+  # count the minutes since it died as time it has been going. `stalled?` is the
+  # page's own answer to "is anything still stepping this", and the reaper is
+  # what closes the record.
+  defp running?(%{status: "running"} = run), do: not RunHistory.stalled?(run)
+  defp running?(_not_running), do: false
+
   defp kept_pictures?(run), do: run.id |> RunHistory.sensors_at(0) |> Replay.kept_pictures?()
 
   # A run that is still stepping moves on without the page. Reading the record
@@ -636,7 +644,33 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp chart_lines(%{module_objects: module_objects}, @module_chart <> module_id),
     do: Map.get(module_objects, module_id, [])
 
+  # The best-evidence line is drawn as one stretch per object: the object holding
+  # the strongest evidence changes with the episode, and a single-coloured line
+  # could not say whose it was at any point on it. Each stretch carries the
+  # object's name, so the colour is the same one its episode band has, the legend
+  # can list the objects it passes through, and a hover names the one under the
+  # pointer.
+  defp chart_lines(%{series: series}, "evidence") do
+    evidence = Enum.filter(series, &(&1.id == "evidence"))
+
+    # A run whose modules kept no graphs has nothing to name: it keeps the one
+    # plain line, and the page says why it is flat rather than drawing nothing.
+    case Enum.flat_map(evidence, &named_stretches/1) do
+      [] -> evidence
+      stretches -> stretches
+    end
+  end
+
   defp chart_lines(%{series: series}, series_id), do: Enum.filter(series, &(&1.id == series_id))
+
+  defp named_stretches(%{points: points}) do
+    points
+    |> Enum.chunk_by(&Map.get(&1, :object))
+    |> Enum.reject(&is_nil(Map.get(hd(&1), :object)))
+    |> Enum.map(fn [first | _] = stretch ->
+      %{id: first.object, label: first.object, points: stretch}
+    end)
+  end
 
   @impl true
   def render(%{live_action: :index} = assigns) do
@@ -1110,6 +1144,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           graphs={@graphs}
           pictures={@pictures}
           started_at={started_at(@run)}
+          running={running?(@run)}
           recorded={length(Replay.steps(@run))}
           playing={@playing}
           follow={@follow}

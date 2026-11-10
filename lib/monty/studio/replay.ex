@@ -293,6 +293,15 @@ defmodule Monty.Studio.Replay do
     }
   end
 
+  # The best-evidence line is one number at a step, and the object it belongs to
+  # is a different one in every episode: a reader who cannot see whose line it is
+  # is reading a shape with no names on it.
+  defp point(moment, "evidence") do
+    {object, value} = winner_of(moment.entry)
+
+    %{step: moment.position, value: value, episode: episode_of(moment), object: object}
+  end
+
   # The episode travels with the point: the chart shades them in turn, and a
   # step on its own does not say which episode it belonged to.
   defp point(moment, id),
@@ -457,17 +466,22 @@ defmodule Monty.Studio.Replay do
   # for any object. That is the curve an episode is judged by — it climbs to the
   # recognition or it does not — and it is what the live page draws while a run is
   # going, so a replay can draw the same one.
-  defp value_of(%{entry: entry}, "evidence"), do: strongest_evidence(entry)
+  defp value_of(%{entry: entry}, "evidence"), do: entry |> winner_of() |> elem(1)
 
-  defp strongest_evidence(nil), do: 0.0
+  # The object the strongest evidence at that step belonged to, and how strong.
+  # Who that is changes with the episode, which is why the line is drawn in
+  # stretches: one colour per object, named in the legend and in the hover.
+  defp winner_of(nil), do: {nil, 0.0}
 
-  defp strongest_evidence(entry) do
+  defp winner_of(entry) do
     entry
     |> Map.get("beliefs", %{})
-    |> Map.values()
-    |> Enum.flat_map(&(&1 |> Map.get("graphs", %{}) |> Map.values()))
-    |> Enum.map(&(Map.get(&1, "max_evidence") || 0.0))
-    |> Enum.max(fn -> 0.0 end)
+    |> Enum.flat_map(fn {_module, belief} ->
+      for {object, graph} <- Map.get(belief, "graphs", %{}) do
+        {object, Map.get(graph, "max_evidence") || 0.0}
+      end
+    end)
+    |> Enum.max_by(&elem(&1, 1), fn -> {nil, 0.0} end)
   end
 
   # Where a sensor was on that step: the `location` the transforms filled in, or
