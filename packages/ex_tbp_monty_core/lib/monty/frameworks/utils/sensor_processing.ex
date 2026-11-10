@@ -341,19 +341,36 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
   # offset (`docs/monty-differences.md` §1.9). The points are already relative to the
   # middle pixel, so that offset is small and the estimate is barely moved; a
   # one-sided neighbourhood is where the difference shows.
+  #
+  # One walk, not nine. Every cell of `Xᵀ X` used to be its own pass over the
+  # neighbourhood, and each of those passes reached into a point by index — a
+  # walk of the row to pick a coordinate out of it, twice per point per cell. All
+  # nine sums are accumulated here together, in the points' own order, so each one
+  # adds the same numbers in the same order as its own walk did and the answer is
+  # unchanged.
   defp plane_normal(points) do
     count = length(points)
-    mean = points |> transpose() |> Enum.map(&(Enum.sum(&1) / count))
-    offset = Enum.map(mean, &(&1 / count))
 
-    scatter =
-      for row <- 0..2 do
-        for column <- 0..2 do
-          # `1/n · Xᵀ X − p_mean · p_meanᵀ`.
-          Enum.sum(for point <- points, do: Enum.at(point, row) * Enum.at(point, column)) / count -
-            Enum.at(offset, row) * Enum.at(offset, column)
-        end
-      end
+    {xx, xy, xz, yy, yz, zz, sum_x, sum_y, sum_z} =
+      Enum.reduce(points, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, fn
+        [x, y, z | _rest], {xx, xy, xz, yy, yz, zz, sum_x, sum_y, sum_z} ->
+          {xx + x * x, xy + x * y, xz + x * z, yy + y * y, yz + y * z, zz + z * z, sum_x + x,
+           sum_y + y, sum_z + z}
+      end)
+
+    offset_x = sum_x / count / count
+    offset_y = sum_y / count / count
+    offset_z = sum_z / count / count
+
+    # `1/n · Xᵀ X − p_mean · p_meanᵀ`, with the six distinct products.
+    scatter = [
+      [xx / count - offset_x * offset_x, xy / count - offset_x * offset_y,
+       xz / count - offset_x * offset_z],
+      [xy / count - offset_y * offset_x, yy / count - offset_y * offset_y,
+       yz / count - offset_y * offset_z],
+      [xz / count - offset_z * offset_x, yz / count - offset_z * offset_y,
+       zz / count - offset_z * offset_z]
+    ]
 
     case LinearAlgebra.symmetric_eigen(scatter) do
       [{_value, normal} | _rest] -> {normal, true}
