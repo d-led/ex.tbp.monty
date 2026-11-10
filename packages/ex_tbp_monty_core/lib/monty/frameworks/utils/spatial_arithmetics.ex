@@ -215,7 +215,26 @@ defmodule Monty.Frameworks.Utils.SpatialArithmetics do
   """
   @spec align_orthonormal_vectors_as_matrix(matrix(), matrix()) :: matrix()
   def align_orthonormal_vectors_as_matrix(m1, m2) do
-    Geometry.mul(Geometry.transpose(m1), m2)
+    # `transpose(m1) · m2`, written out. This is the numeric core of burst
+    # sampling — a step asks for it once per node per sensed direction, six
+    # thousand times in a ten-object step — and the generic product built three
+    # dozen small lists per alignment (a transpose, nine row/column zips, nine
+    # sums) to add nine numbers.
+    #
+    # Each entry is summed in the same order `Geometry.dot/2` summed it, so
+    # every product is the same float as before. The exactness test on a stored
+    # frame that is only nearly orthonormal is what says so.
+    [[a00, a01, a02], [a10, a11, a12], [a20, a21, a22]] = m1
+    [[b00, b01, b02], [b10, b11, b12], [b20, b21, b22]] = m2
+
+    [
+      [a00 * b00 + a10 * b10 + a20 * b20, a00 * b01 + a10 * b11 + a20 * b21,
+       a00 * b02 + a10 * b12 + a20 * b22],
+      [a01 * b00 + a11 * b10 + a21 * b20, a01 * b01 + a11 * b11 + a21 * b21,
+       a01 * b02 + a11 * b12 + a21 * b22],
+      [a02 * b00 + a12 * b10 + a22 * b20, a02 * b01 + a12 * b11 + a22 * b21,
+       a02 * b02 + a12 * b12 + a22 * b22]
+    ]
   end
 
   @doc """

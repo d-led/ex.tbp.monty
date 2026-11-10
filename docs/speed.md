@@ -977,3 +977,28 @@ up by index: the view finder answers a step in **429 912** reductions where it
 answered 750 656 (step 2), and 441 752 where it answered 746 574 (step 3).
 The reshape itself is unchanged, which the recorded-view parity test
 (`monty_on_object_observation.json`) and the ordering tests pin.
+
+## The alignment a burst is made of, written out
+
+`SpatialArithmetics.align_orthonormal_vectors_as_matrix/2` is `transpose(m1) · m2`,
+and burst sampling asks for it once per node per sensed direction: **6 416
+alignments a matching step** in the ten-object distant agent. Through
+`Geometry.mul/2` each one built a transpose, nine row/column zips and nine sums —
+three dozen small lists to add nine numbers — and `fprof` put 156 744 `Enum.map`
+applications a step in that path.
+
+The nine entries are now written as arithmetic, summed in the order `Geometry.dot/2`
+summed them, so every product is the same float: the ladder stays digit-exact
+(`ev 6.338 (1429, 2)`, `goals 15065`) and the exactness test on a stored frame that
+is only nearly orthonormal still holds. Learning module per step, before and after
+model reductions:
+
+| step |    before |     after |
+| ---- | --------: | --------: |
+| 2    | 1 504 035 |   979 678 |
+| 3    | 1 701 700 | 1 238 544 |
+| 4    | 2 227 304 | 1 749 794 |
+
+The eight-step ladder went from 1 695 300 µs to 1 031 952 µs, and the surf agent's
+first step of an episode from 1.03 M to 0.62 M reductions (plain steps unchanged at
+223–237 k, so nothing degrades as episodes accumulate).
