@@ -402,19 +402,26 @@ jobs:
           key: ${{ runner.os }}-deps-${{ hashFiles('mix.lock') }}
           restore-keys: ${{ runner.os }}-deps-
 
-      # A PLT is a picture of the modules a build has. Key it by the sources
-      # *and* fall back to nothing: with a `restore-keys` prefix this job was
-      # handed the archive made before a rename, `_build` and the picture of
-      # it agreeing with each other and disagreeing with the checkout, so
-      # dialyxir called the PLT up to date and kept reporting every renamed
-      # module as unknown. A source change is a cold PLT instead.
-      - name: Cache the build and the PLTs, keyed by the sources
+      # A PLT is a picture of what dialyzer was handed, and what it is handed is
+      # the dependencies: OTP, the hex packages, and the path dependency in
+      # `packages/`. Nothing in `lib/` or `test/` is in it, so the key follows
+      # the dependency sources alone — a commit that renames a module in the
+      # application keeps the picture, and only a change inside `packages/` or
+      # to `mix.lock` rebuilds it, which is the only case where it is wrong.
+      #
+      # `_build` is deliberately *not* cached here. It is what makes the
+      # fallback safe: dialyxir keeps a hash of the beams the picture was made
+      # from, so a restored picture that no longer matches a freshly built
+      # `_build` is rebuilt by dialyxir itself. Restoring `_build` from the same
+      # archive is what broke that — a cached tree that mix believes is current,
+      # beside a picture made from it, agreeing with each other and disagreeing
+      # with the checkout.
+      - name: Cache the PLTs, keyed by the dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            _build
-            priv/plts
-          key: ${{ runner.os }}-build-${{ hashFiles('mix.lock', 'mix.exs', 'lib/**/*.ex', 'packages/**/mix.exs', 'packages/**/lib/**/*.ex', 'packages/**/native/**/Cargo.toml', 'packages/**/native/**/Cargo.lock') }}
+          path: priv/plts
+          key: ${{ runner.os }}-plt-${{ hashFiles('mix.lock', 'mix.exs', 'packages/**/mix.exs', 'packages/**/lib/**/*.ex', 'packages/**/native/**/Cargo.toml', 'packages/**/native/**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-plt-
 
       # A NIF is compiled with the application, so the runner needs a Rust
       # toolchain. The script is a no-op where one is already installed.
