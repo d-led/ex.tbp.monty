@@ -850,3 +850,32 @@ The trap to keep: **a closure sent to another process is copied with its whole
 environment.** The coordinator deliberately holds a module's _wiring_ rather than
 its memory, but `Monty.Runtime.Step.State`'s `module_spec` still carries `:state`,
 so nothing handed to a module may close over a spec.
+
+## A surface normal was nine walks over the patch (2026-11-10) — 641 k → 261 k
+
+`sensor_processing.ex`'s `plane_normal/1` built the scatter matrix `Xᵀ X` one cell
+at a time: nine cells, each its own `Enum.sum(for point <- points, do: …)`, and
+each of those passes reached into a point with `Enum.at(point, row)` and
+`Enum.at(point, column)`. `Enum.at/3` on a list is a slice — it walks the row to
+pick a coordinate out of it — so one surface normal cost two index walks per
+point per cell. A surface agent's neighbourhood is ~1 250 points, which is **22 814
+`Enum.at/3` calls, 45 632 `Enum.take` and 51 930 `Enum.drop` per step**, and they
+are on every step of every run.
+
+All nine sums are now accumulated in one `Enum.reduce` over the points, in the
+points' own order, so each cell adds the same numbers in the same order as its own
+walk did and the answer is unchanged bit for bit. Sensor module reductions on a
+location-only step of `base_10simobj_surf_agent`: **641 240 → 261 321**; the
+acceptance ladder is digit for digit.
+
+Two lessons worth keeping:
+
+- **`Enum.at/2` on a list inside a loop over that list is the expensive shape**, and
+  a `for row <- 0..2, column <- 0..2` around it hides it well. If a pass needs
+  several coordinates of the same point, destructure the point once.
+- **GC is not this port's wall, whatever `:eprof` says.** For the same steps eprof
+  put `erlang:garbage_collect/0` at 73 % of a processed step's time; `:msacc` over
+  six steps says the scheduler spends **1.11 %** of its time in `gc` against 27.9 %
+  in `emu`, and the step's own processes make no collections at all. eprof traces
+  every call, and building a trace message per call inflates the heap until GC
+  dominates the table it prints. Quote `:msacc` or reductions for GC, never eprof.
