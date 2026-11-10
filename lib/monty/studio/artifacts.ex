@@ -13,6 +13,9 @@ defmodule Monty.Studio.Artifacts do
 
   @default_root "priv/studio_runs"
 
+  # The two pictures a sensor draws of a step, as `put_frame/5` names them.
+  @kinds ["depth", "colour"]
+
   @doc "The directory run artifacts are kept under."
   @spec root() :: Path.t()
   def root, do: Application.get_env(:ex_tbp_monty, :studio_artifacts_dir, @default_root)
@@ -243,20 +246,20 @@ defmodule Monty.Studio.Artifacts do
   # `<sensor>-<depth|colour>.png`, which is what `put_frame/5` wrote. A name that
   # is neither is not a picture this function can name a sensor for.
   defp pictured(name) do
-    root = Path.rootname(name)
-
-    cond do
-      not String.ends_with?(name, ".png") ->
-        []
-
-      String.ends_with?(root, "-depth") ->
-        [{String.replace_suffix(root, "-depth", ""), "depth", name}]
-
-      String.ends_with?(root, "-colour") ->
-        [{String.replace_suffix(root, "-colour", ""), "colour", name}]
-
-      true ->
-        []
+    with ".png" <- Path.extname(name),
+         {kind, sensor_id, _suffix} <- split_kind(Path.rootname(name)) do
+      [{sensor_id, kind, name}]
+    else
+      _not_a_picture -> []
     end
+  end
+
+  defp split_kind(root) do
+    Enum.find_value(@kinds, :neither, fn kind ->
+      suffix = "-" <> kind
+
+      if String.ends_with?(root, suffix),
+        do: {kind, String.replace_suffix(root, suffix, ""), suffix}
+    end)
   end
 end

@@ -101,5 +101,45 @@ defmodule Monty.Studio.ArtifactsTest do
       refute File.exists?(Artifacts.dir(id))
       assert Artifacts.frame_path(id, "1/patch-depth.png") == :error
     end
+
+    # The row holds a step's moments only as far as the stream wrote them, so a
+    # page drawing a step the row lost asks the files what was there. What the
+    # files say is the same thing the row would have said.
+    test "a step's pictures are read back by sensor, as a record keeps them" do
+      id = run_id()
+      {:ok, _depth} = Artifacts.put_frame(id, 4, "patch_0", "depth", @png)
+      {:ok, _colour} = Artifacts.put_frame(id, 4, "patch_0", "colour", @png)
+      {:ok, _view} = Artifacts.put_frame(id, 4, "view_finder", "depth", @png)
+      {:ok, _elsewhere} = Artifacts.put_frame(id, 5, "patch_0", "depth", @png)
+
+      assert Artifacts.frames_at(id, 4) == %{
+               "patch_0" => %{
+                 "images" => %{
+                   "depth" => "/runs/#{id}/frames/4/patch_0-depth.png",
+                   "colour" => "/runs/#{id}/frames/4/patch_0-colour.png"
+                 }
+               },
+               "view_finder" => %{
+                 "images" => %{"depth" => "/runs/#{id}/frames/4/view_finder-depth.png"}
+               }
+             }
+    end
+
+    test "a step that wrote nothing is no pictures, not an error" do
+      assert Artifacts.frames_at(run_id(), 0) == %{}
+    end
+
+    test "and names only what is a picture: a stray file is not a sensor's" do
+      id = run_id()
+      step = Path.join(Artifacts.frames_dir(id), "7")
+      File.mkdir_p!(step)
+      File.write!(Path.join(step, "notes.txt"), "not a picture")
+      File.write!(Path.join(step, "patch-depth.json"), "{}")
+      {:ok, _png} = Artifacts.put_frame(id, 7, "patch", "depth", @png)
+
+      assert Artifacts.frames_at(id, 7) == %{
+               "patch" => %{"images" => %{"depth" => "/runs/#{id}/frames/7/patch-depth.png"}}
+             }
+    end
   end
 end
