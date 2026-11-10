@@ -191,12 +191,22 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   # On the surface *and* on the object: a pixel of the surface in front of the
   # one the camera is pointed at is still not part of it.
   defp keep(depth, semantic, threshold, flip?) do
-    Enum.zip_with([depth, semantic], fn [depth_row, semantic_row] ->
-      Enum.zip_with([depth_row, semantic_row], fn [pixel, on_object] ->
+    zip_map(depth, semantic, fn depth_row, semantic_row ->
+      zip_map(depth_row, semantic_row, fn pixel, on_object ->
         if on_surface?(pixel, threshold, flip?) and on_object > 0.0, do: 1.0, else: 0.0
       end)
     end)
   end
+
+  # Two equally shaped lists, element by element, which is the two-list case of
+  # `Enum.zip_with/2` — same order, same length (the shorter list decides) —
+  # without its machinery. A step walks a 64x64 patch through here pixel by
+  # pixel, and for each one the generic zipper built the list of the two, a
+  # reversed accumulator and two `lists:all` checks; the zipping alone was a
+  # fifth of a transform's time.
+  defp zip_map([a | as], [b | bs], fun), do: [fun.(a, b) | zip_map(as, bs, fun)]
+  defp zip_map([], _b, _fun), do: []
+  defp zip_map(_a, [], _fun), do: []
 
   @doc """
   The depth threshold that separates two surfaces in the view, and which side of
@@ -307,10 +317,10 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   end
 
   defp clip_objects(depth, semantic, clip_value) do
-    Enum.zip_with([depth, semantic], fn [depth_row, semantic_row] ->
-      Enum.zip_with([depth_row, semantic_row], fn
-        [pixel, _on_object] when pixel >= clip_value -> 0.0
-        [_pixel, on_object] -> on_object
+    zip_map(depth, semantic, fn depth_row, semantic_row ->
+      zip_map(depth_row, semantic_row, fn
+        pixel, _on_object when pixel >= clip_value -> 0.0
+        _pixel, on_object -> on_object
       end)
     end)
   end
@@ -387,7 +397,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
 
   defp tagged_points(points, surface, all?) do
     tagged =
-      Enum.zip_with([points, List.flatten(surface)], fn [point, on_surface] ->
+      zip_map(points, List.flatten(surface), fn point, on_surface ->
         point ++ [on_surface]
       end)
 
