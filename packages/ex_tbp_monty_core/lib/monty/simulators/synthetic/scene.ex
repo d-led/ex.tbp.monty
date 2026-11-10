@@ -24,6 +24,7 @@ defmodule Monty.Simulators.Synthetic.Scene do
   """
 
   alias Monty.Frameworks.Utils.SpatialArithmetics
+  alias Monty.Geometry
   alias Monty.Geometry.Rotation
 
   @centre [0.0, 0.0, 0.0]
@@ -125,10 +126,16 @@ defmodule Monty.Simulators.Synthetic.Scene do
         Keyword.get(options, :zoom, 1.0)
       )
 
+    # The camera's rotation as a matrix, once for the whole image: a ray is
+    # turned by the same rotation as every other ray, and `Rotation.apply/2`
+    # on a single vector builds that matrix again for each one — a thousand of
+    # them for a 32x32 frame, and a matrix each on a 64x64 one.
+    matrix = Rotation.to_matrix(rotation)
+
     rows =
       for row <- 0..(height - 1) do
         for column <- 0..(width - 1) do
-          ray(origin, rotation, row, column, {height, width}, {fx, fy})
+          ray(origin, matrix, row, column, {height, width}, {fx, fy})
           |> then(&observation_of_ray(scene, &1))
         end
       end
@@ -169,11 +176,13 @@ defmodule Monty.Simulators.Synthetic.Scene do
   defp resolution(size) when is_integer(size) and size > 0, do: {size, size}
 
   # The ray through a pixel, and how much shorter the depth along the sensor's
-  # axis is than the distance along the ray.
-  defp ray(origin, rotation, row, column, {height, width}, {fx, fy}) do
+  # axis is than the distance along the ray. `matrix` is the camera's rotation,
+  # already turned into one: `Geometry.apply/2` is the same three dot products
+  # `Rotation.apply/2` makes, without rebuilding the matrix for every pixel.
+  defp ray(origin, matrix, row, column, {height, width}, {fx, fy}) do
     across = across(column, width) * fx
     down = down(row, height) * fy
-    direction = Rotation.apply(rotation, SpatialArithmetics.normalize([across, down, -1.0]))
+    direction = Geometry.apply(matrix, SpatialArithmetics.normalize([across, down, -1.0]))
 
     {origin, direction, 1.0 / :math.sqrt(1.0 + across * across + down * down)}
   end
