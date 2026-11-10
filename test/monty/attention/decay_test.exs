@@ -6,7 +6,7 @@ defmodule Monty.Attention.DecayTest do
   a decayed grid, so each case reads the result instead of the argument.
 
   `VoxelGridWeightDecay` (the one-method `Protocol`) has no case of its own in
-  Monty — it has no body to test — and here it is the `decay/1` behaviour both
+  Monty — it has no body to test — and here it is the `decay/2` behaviour both
   implementations adopt.
   """
 

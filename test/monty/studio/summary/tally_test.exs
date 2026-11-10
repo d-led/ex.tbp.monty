@@ -36,5 +36,11 @@ defmodule Monty.Studio.Summary.TallyTest do
     test "a run that concluded nothing says so rather than showing an empty line" do
       assert Summary.outcomes_line(%{}) == "no episodes concluded"
     end
+
+    test "reads the record's own spellings, where every key is a string" do
+      recorded = %{"lm_0" => %{"time_out" => 3, "match" => 7}}
+
+      assert Summary.outcomes_line(recorded) == "lm_0: match 7, time_out 3 of 10"
+    end
   end
 end

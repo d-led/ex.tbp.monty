@@ -90,6 +90,10 @@ defmodule Monty.Studio.Summary do
 
   `learning_module_1: match 61 of 66 · time_out 5` — the number a reader can put
   beside Monty's own, which counts the same episodes.
+
+  A state is read as it is written: `:match` from a running tally, `"match"`
+  from the record, which keeps strings because that is what a page and a JSON
+  reader both understand. It leads the others in either spelling.
   """
   @spec outcomes_line(map()) :: String.t()
   def outcomes_line(tally) when map_size(tally) == 0, do: "no episodes concluded"
@@ -102,12 +106,14 @@ defmodule Monty.Studio.Summary do
 
       said =
         per_module
-        |> Enum.sort_by(fn {state, _count} -> {state != :match, state} end)
+        |> Enum.sort_by(fn {state, _count} -> {not matched?(state), to_string(state)} end)
         |> Enum.map_join(", ", fn {state, count} -> "#{state} #{count}" end)
 
       "#{module_id}: #{said} of #{total}"
     end)
   end
+
+  defp matched?(state), do: to_string(state) == "match"
 
   @doc "Average step duration in microseconds, or `nil` for a run with no steps."
   @spec average_step_us(t()) :: float() | nil

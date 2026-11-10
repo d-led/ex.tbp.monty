@@ -6,7 +6,7 @@ defmodule Monty.Attention.Decay.NoopDecay do
   being looked for does not move and the sensor's attention should not fade.
   """
 
-  @behaviour Monty.Attention.Decay
+  @behaviour Monty.Attention.Decay.VoxelGridWeightDecay
 
   defstruct []
 
@@ -18,6 +18,6 @@ defmodule Monty.Attention.Decay.NoopDecay do
   The decay itself is the first argument, as it is for every decay, and there is
   nothing in it to read: this decay is the decision not to have one.
   """
-  @impl Monty.Attention.Decay
+  @impl Monty.Attention.Decay.VoxelGridWeightDecay
   def decay(%__MODULE__{}, %Monty.Attention.VoxelGrid{} = grid), do: grid
 end

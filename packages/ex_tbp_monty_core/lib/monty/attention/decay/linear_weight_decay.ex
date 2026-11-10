@@ -10,9 +10,10 @@ defmodule Monty.Attention.Decay.LinearWeightDecay do
   by forgetting.
   """
 
-  @behaviour Monty.Attention.Decay
+  @behaviour Monty.Attention.Decay.VoxelGridWeightDecay
 
   alias Monty.Attention.{Decay, VoxelGrid}
+  alias Monty.Attention.Decay.VoxelGridWeightDecay
 
   @enforce_keys [:rate]
   defstruct [:rate]
@@ -35,7 +36,7 @@ defmodule Monty.Attention.Decay.LinearWeightDecay do
   end
 
   @doc "A grid in which every weight has moved one step toward zero."
-  @impl Monty.Attention.Decay
+  @impl VoxelGridWeightDecay
   def decay(%__MODULE__{rate: rate}, %VoxelGrid{} = grid) do
     if VoxelGrid.size(grid) == 0 or rate == 0.0 do
       grid

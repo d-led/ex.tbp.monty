@@ -62,7 +62,8 @@ defmodule Monty.ModuleMap.Data do
       python: "attention/decay.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "packages/ex_tbp_monty_core/lib/monty/attention/decay/voxel_grid_weight_decay.ex",
           elixir: "Monty.Attention.Decay.VoxelGridWeightDecay",
           python: "VoxelGridWeightDecay"
         },
