@@ -180,7 +180,10 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
     # that range would separate nothing, so anything past a metre is a metre.
     near = Enum.map(depth, fn row -> Enum.map(row, &min(&1, 1.0)) end)
 
-    if Enum.all?(List.flatten(near), &(&1 >= 1.0)) do
+    # Nothing in view is nearer than a metre: asked row by row, because the
+    # answer is only yes or no and flattening the image to ask costs four
+    # thousand list steps.
+    if near |> Enum.all?(fn row -> Enum.all?(row, &(&1 >= 1.0)) end) do
       Enum.map(near, fn row -> Enum.map(row, fn _pixel -> 0.0 end) end)
     else
       {threshold, flip?} = get_on_surface_th(near, semantic, @min_depth_range, default_threshold)
@@ -255,11 +258,16 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
         {sensor_frame_data, observation}
       end
 
+    # The mask is flattened once for both sets of points — the world's and the
+    # sensor frame's — because both are tagged with the same mask and flattening
+    # a 64x64 image is four thousand list steps.
+    mask = List.flatten(surface)
+
     observation
     |> Map.put("depth", depth)
     |> put_clipped_semantic(semantic)
-    |> Map.put("semantic_3d", tagged_points(points, surface, transform.get_all_points))
-    |> put_sensor_frame_data(sensor_frame_data, surface, transform.get_all_points)
+    |> Map.put("semantic_3d", tagged_points(points, mask, transform.get_all_points))
+    |> put_sensor_frame_data(sensor_frame_data, mask, transform.get_all_points)
   end
 
   defp depth_image(observation, sensor_id) do
@@ -280,10 +288,10 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
       else: observation
   end
 
-  defp put_sensor_frame_data(observation, _points, _surface, false), do: observation
+  defp put_sensor_frame_data(observation, _points, _mask, false), do: observation
 
-  defp put_sensor_frame_data(observation, points, surface, true),
-    do: Map.put(observation, "sensor_frame_data", tagged_points(points, surface, true))
+  defp put_sensor_frame_data(observation, points, mask, true),
+    do: Map.put(observation, "sensor_frame_data", tagged_points(points, mask, true))
 
   # The on-object mask: the semantic sensor's own answer when the experiment
   # reads one, and otherwise the depth image's — a pixel a metre away or more is
@@ -395,11 +403,10 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
     placed ++ [[0.0, 0.0, 0.0, 1.0]]
   end
 
-  defp tagged_points(points, surface, all?) do
-    tagged =
-      zip_map(points, List.flatten(surface), fn point, on_surface ->
-        point ++ [on_surface]
-      end)
+  # `mask` is the flattened surface mask: a pixel per point, in the order the
+  # points are in.
+  defp tagged_points(points, mask, all?) do
+    tagged = zip_map(points, mask, fn point, on_surface -> point ++ [on_surface] end)
 
     if all?,
       do: tagged,
