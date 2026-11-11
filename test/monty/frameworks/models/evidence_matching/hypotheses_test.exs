@@ -87,6 +87,33 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
 
       assert Hypotheses.min_evidence(Hypotheses.empty()) == nil
     end
+
+    # The hypotheses still in the running: the best, less the module's band, and
+    # everything strictly above that — Monty's
+    # `np.where(evidence > max - max / 100 * x_percent)[0]`.
+    test "keeps the hypotheses inside the band under the best" do
+      set = hypothesis_set([10.0, 8.9, 9.5, 1.0])
+
+      assert Hypotheses.indices_within(set, 10.0, 0.0) == [0, 2]
+      assert Hypotheses.indices_within(set, 50.0, 0.0) == [0, 1, 2]
+    end
+
+    test "keeps none while the best is below the object threshold" do
+      assert Hypotheses.indices_within(hypothesis_set([4.0, 3.9]), 10.0, 5.0) == []
+      assert Hypotheses.indices_within(Hypotheses.empty(), 10.0, 0.0) == []
+    end
+
+    # numpy's answer, not Elixir's: `np.max` of a column holding a NaN is a NaN,
+    # so nothing is above a band that cannot be computed. The port used to raise
+    # here, subtracting from a `nil`.
+    test "keeps none when a hypothesis has no evidence at all" do
+      set = %Hypotheses{
+        hypothesis_set([10.0, 9.9])
+        | evidence: bytes([10.0]) <> MatcherNif.not_a_number() <> bytes([9.9])
+      }
+
+      assert Hypotheses.indices_within(set, 10.0, 0.0) == []
+    end
   end
 
   describe "concatenating" do

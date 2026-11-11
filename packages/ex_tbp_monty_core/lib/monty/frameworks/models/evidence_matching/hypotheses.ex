@@ -199,6 +199,57 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   end
 
   @doc """
+  The indices of the hypotheses within `percentage` per cent of the best one.
+
+  Monty's `get_possible_hypothesis_ids`: `np.where(evidence > max - max / 100 *
+  x_percent_threshold)`, once the best clears `floor`. A learning module asks
+  once per object per step, so it is answered from the bytes.
+
+  Two edges are numpy's rather than Elixir's, and they are the reason the answer
+  is stated here: a column with a NaN in it has no best at all — `np.max`
+  propagates the NaN, every comparison against one is false — so nothing is
+  possible; and the band is strict, so a hypothesis exactly at the threshold is
+  out.
+  """
+  @spec indices_within(t(), float(), number()) :: [non_neg_integer()]
+  def indices_within(%__MODULE__{evidence: <<>>}, _percentage, _floor), do: []
+
+  def indices_within(%__MODULE__{} = hypotheses, percentage, floor) do
+    if MatcherNif.loaded?() do
+      hypotheses
+      |> evidence_bytes()
+      |> MatcherNif.indices_within(percentage, floor)
+      |> index_list()
+    else
+      hypotheses
+      |> evidence()
+      |> within_fraction(percentage, floor)
+    end
+  end
+
+  # The reference, in numpy's terms: no best when any value is a NaN, and a
+  # strict band under the best.
+  defp within_fraction(values, percentage, floor) do
+    if Enum.any?(values, &is_nil/1) do
+      []
+    else
+      best = Enum.max(values)
+
+      if best > floor do
+        threshold = best - best / 100 * percentage
+
+        for {value, index} <- Enum.with_index(values), value > threshold, do: index
+      else
+        []
+      end
+    end
+  end
+
+  @doc "Indices as Elixir values, read out of the u32 bytes a kernel answers with."
+  @spec index_list(binary()) :: [non_neg_integer()]
+  def index_list(bytes), do: for(<<index::32-little <- bytes>>, do: index)
+
+  @doc """
   The lowest evidence any hypothesis holds — the threshold that updates them all.
 
   `evidence_threshold_config: "all"` asks this once per graph per step, and the

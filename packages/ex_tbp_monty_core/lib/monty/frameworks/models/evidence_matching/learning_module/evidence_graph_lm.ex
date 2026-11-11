@@ -1094,16 +1094,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   """
   @spec get_possible_hypothesis_ids(t(), graph_id()) :: [non_neg_integer()]
   def get_possible_hypothesis_ids(%__MODULE__{} = lm, object_id) do
-    evidence = Hypotheses.evidence(Map.fetch!(lm.hypotheses, object_id))
-    max_evidence = Enum.max(evidence)
-
-    if max_evidence > lm.object_evidence_threshold do
-      threshold = max_evidence - max_evidence / 100 * lm.x_percent_threshold
-
-      for {value, index} <- Enum.with_index(evidence), value > threshold, do: index
-    else
-      []
-    end
+    # The whole question — the best of the column, the band under it, and which
+    # hypotheses are inside it — is one pass over the bytes. It used to decode
+    # the column, take a maximum of the values and filter them again, once per
+    # object per step.
+    lm.hypotheses
+    |> Map.fetch!(object_id)
+    |> Hypotheses.indices_within(lm.x_percent_threshold, lm.object_evidence_threshold)
   end
 
   @doc """

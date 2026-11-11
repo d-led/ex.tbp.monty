@@ -252,6 +252,17 @@ defmodule ExTbpMonty.Core.MatcherNif do
   def indices_at_least(_evidence, _threshold), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  The hypotheses whose evidence is within `percentage` per cent of the best.
+
+  Monty's `np.where(evidence > max - max / 100 * x_percent_threshold)`, once the
+  best clears `floor` — the module's object evidence threshold. Asked once per
+  object per step. The answer is `k` u32 indices: none when the column is empty,
+  when the best does not clear `floor`, or when any value is a NaN, because
+  `np.max` propagates a NaN and every comparison against one is false.
+  """
+  def indices_within(_evidence, _percentage, _floor), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   The first index holding the highest value of a column — numpy's `argmax`.
 
   `column` is `n` f64; the answer is one u32. The reference is

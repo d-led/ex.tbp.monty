@@ -197,6 +197,35 @@ defmodule ExTbpMonty.Core.MatcherNifTest do
     end
   end
 
+  describe "the hypotheses still in the running" do
+    # Monty asks `np.where(evidence > max - max / 100 * x_percent)[0]` once per
+    # object per step, after checking the best clears the object threshold.
+    test "are the ones inside the band under the best" do
+      # best 10.0, 10 % band → threshold 9.0, strict: 9.0 itself is out.
+      column = bytes([10.0, 9.0, 9.5, 1.0, 9.0001])
+
+      assert MatcherNif.indices_within(column, 10.0, 0.0) |> ids() == [0, 2, 4]
+    end
+
+    test "are none while the best is below the object threshold" do
+      column = bytes([4.0, 3.9, 1.0])
+
+      assert MatcherNif.indices_within(column, 10.0, 5.0) |> ids() == []
+    end
+
+    # `np.max` propagates a NaN and every comparison against one is false, so a
+    # column with a gap in it has no best at all — not "the best of the rest".
+    test "are none when the column holds a value that is not a number" do
+      column = bytes([10.0, 9.9]) <> MatcherNif.not_a_number()
+
+      assert MatcherNif.indices_within(column, 10.0, 0.0) |> ids() == []
+    end
+
+    test "are none for an empty column" do
+      assert MatcherNif.indices_within(<<>>, 10.0, 0.0) |> ids() == []
+    end
+  end
+
   describe "the runner-up hypothesis" do
     # The answer is what `argsort(evidence)[-2]` answers in Monty, which Elixir
     # spells as a sort by `{value, index}` and the element before the last — so
@@ -237,6 +266,8 @@ defmodule ExTbpMonty.Core.MatcherNifTest do
       assert MatcherNif.second_argmax_index(bytes([1.0])) == nil
     end
   end
+
+  defp ids(bytes), do: Monty.Frameworks.Models.EvidenceMatching.Hypotheses.index_list(bytes)
 
   defp indices(values), do: for(index <- values, into: <<>>, do: <<index::32-little>>)
 

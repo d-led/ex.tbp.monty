@@ -709,6 +709,61 @@ fn indices_at_least<'a>(env: Env<'a>, evidence: Binary, threshold: f64) -> Binar
     output.into()
 }
 
+/// The hypotheses whose evidence is within `percentage` per cent of the best.
+///
+/// Monty's `get_possible_hypothesis_ids`: `np.where(evidence > max - max / 100 *
+/// x_percent_threshold)`, once the best is above the module's object threshold.
+/// A learning module asks this every step, per object, to decide what is still
+/// possible — and answering it by decoding the column, taking a maximum and
+/// filtering the values was a decode per step per graph.
+///
+/// * `evidence` — `m` f64, one value per hypothesis.
+/// * `percentage` — the width of the band below the best, in per cent.
+/// * `floor` — the evidence the best must exceed for there to be any answer.
+///
+/// The answer is `k` u32: the indices in order, and none at all when the column
+/// is shorter than one value, when the best does not clear `floor`, or when any
+/// value is a NaN — `np.max` propagates a NaN, and every comparison against one
+/// is false, so Monty answers "nothing is possible" there. The band is strict:
+/// a hypothesis exactly at `max - max * percentage / 100` is out, as `np.where`
+/// with `>` leaves it out.
+#[rustler::nif]
+fn indices_within<'a>(env: Env<'a>, evidence: Binary, percentage: f64, floor: f64) -> Binary<'a> {
+    let count = evidence.len() / 8;
+    let mut best = f64::NEG_INFINITY;
+
+    for index in 0..count {
+        let value = f64_at(evidence.as_slice(), index * 8);
+
+        if value.is_nan() {
+            return NewBinary::new(env, 0).into();
+        }
+
+        if value > best {
+            best = value;
+        }
+    }
+
+    if count == 0 || best <= floor {
+        return NewBinary::new(env, 0).into();
+    }
+
+    let threshold = best - best / 100.0 * percentage;
+
+    let chosen: Vec<u32> = (0..count)
+        .filter(|index| f64_at(evidence.as_slice(), index * 8) > threshold)
+        .map(|index| index as u32)
+        .collect();
+
+    let mut output = NewBinary::new(env, chosen.len() * 4);
+
+    for (position, index) in chosen.iter().enumerate() {
+        output[position * 4..(position + 1) * 4].copy_from_slice(&index.to_le_bytes());
+    }
+
+    output.into()
+}
+
 /// The evidence column after this step: `past · past_weight + present · present_weight`.
 ///
 /// It also answers what the most likely hypothesis earned this step, because the

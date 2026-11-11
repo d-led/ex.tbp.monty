@@ -2293,3 +2293,32 @@ keeps that id — its standard deviation is 0 and its evidence is not negative �
 `mix monty.run` of the same experiment (3 episodes, 60 steps, clean), so it is the
 probe's fixture rather than the studio. The sentinel should never survive into
 `possible_matches`; that is a separate fix.
+
+### 38.4 The band under the best is numpy's, and it is one pass over the bytes
+
+`get_possible_hypothesis_ids/2` — Monty's
+`np.where(evidence > max - max / 100 * x_percent_threshold)[0]`, asked once per
+object per step — decoded the column, took `Enum.max/1` of the values and
+filtered them again in Elixir. It is `MatcherNif.indices_within/3` now: one pass
+over the bytes, one u32 answer per index, and `Hypotheses.indices_within/3` is
+where a caller asks, with the Elixir expression kept as the reference.
+
+This also closes the two edges §38.3 recorded, both toward numpy's answer rather
+than Elixir's:
+
+- a column holding a NaN has **no** best — `np.max` propagates the NaN and every
+  comparison against one is false — so nothing is possible. The old code took the
+  `nil` as the maximum (a number sorts below an atom) and then subtracted from
+  it, which raised;
+- an empty hypothesis space answers none. `Enum.max/1` raised `Enum.EmptyError`
+  there.
+
+Both are pinned in `hypotheses_test.exs` and `matcher_nif_test.exs`, the band is
+strict (`np.where` with `>`, so a hypothesis exactly at the threshold is out),
+and the ladder is unchanged digit for digit.
+
+**Speed: nothing measurable on this experiment** — 3 086 949 → 3 087 690
+reductions/step, which is noise. The call is on the terminal-condition path and
+the config reaches it rarely; it is kept because it is the same answer in one
+pass instead of three, and because the two edges above are now stated instead of
+raising.
