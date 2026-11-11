@@ -233,6 +233,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   # What a run says about itself and does not change while it runs: the files it
   # wrote, and where it is in the queue.
+  #
+  # Read by the poll, and not by a step: a step changes what the run said, and
+  # neither of these — the job is the same job from the first step to the last,
+  # and a run writes its summary and statistics when it stops. Re-reading them
+  # per step was a queue query and a directory listing four times a second, which
+  # is the sort of per-step cost this page exists without.
   defp put_run(socket, run) do
     assign(socket,
       run: run,
@@ -328,7 +334,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         socket
 
       {:grown, grown} ->
-        socket |> put_run(grown) |> append_log(grown) |> assign_replay(grown, :follow)
+        socket |> assign(run: grown) |> append_log(grown) |> assign_replay(grown, :follow)
     end
   end
 
