@@ -272,11 +272,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
     # space of thousands turns a selection into tens of millions of steps.
     possible = List.to_tuple(hypotheses.possible)
 
+    {evidence, locations, poses} = gather_all(hypotheses, indices)
+
     %__MODULE__{
-      evidence: gather(hypotheses.evidence, indices, 1),
+      evidence: evidence,
       possible: Enum.map(indices, &elem(possible, &1)),
-      locations: gather(hypotheses.locations, indices, @location_width),
-      poses: gather(hypotheses.poses, indices, @pose_width)
+      locations: locations,
+      poses: poses
     }
   end
 
@@ -286,6 +288,25 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   # the data a step has): a selection is dominated by copying the rows themselves —
   # 144 kB of poses, once per object per step — not by walking the index list four
   # times. The version that reads better stayed.
+  defp gather_all(hypotheses, indices) do
+    if MatcherNif.loaded?() do
+      # The copy is the cost, so it happens in the kernel at the width each column
+      # needs; the indices are encoded once for the three columns.
+      encoded = index_bytes(indices)
+
+      {MatcherNif.gather_rows(hypotheses.evidence, 1, encoded),
+       MatcherNif.gather_rows(hypotheses.locations, @location_width, encoded),
+       MatcherNif.gather_rows(hypotheses.poses, @pose_width, encoded)}
+    else
+      {gather(hypotheses.evidence, indices, 1),
+       gather(hypotheses.locations, indices, @location_width),
+       gather(hypotheses.poses, indices, @pose_width)}
+    end
+  end
+
+  @doc "Indices as the u32 bytes a kernel reads them from."
+  @spec index_bytes([non_neg_integer()]) :: binary()
+  def index_bytes(indices), do: for(index <- indices, into: <<>>, do: <<index::32-little>>)
 
   @doc """
   The rows of the hypotheses at `indices`, as the bytes a kernel reads.
@@ -295,8 +316,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   """
   @spec rows_at(t(), [non_neg_integer()]) :: {binary(), binary()}
   def rows_at(%__MODULE__{} = hypotheses, indices) do
-    {gather(hypotheses.locations, indices, @location_width),
-     gather(hypotheses.poses, indices, @pose_width)}
+    if MatcherNif.loaded?() do
+      encoded = index_bytes(indices)
+
+      {MatcherNif.gather_rows(hypotheses.locations, @location_width, encoded),
+       MatcherNif.gather_rows(hypotheses.poses, @pose_width, encoded)}
+    else
+      {gather(hypotheses.locations, indices, @location_width),
+       gather(hypotheses.poses, indices, @pose_width)}
+    end
   end
 
   @doc "The bytes of one location, as a step holds it."

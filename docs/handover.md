@@ -2242,3 +2242,28 @@ End to end it is not a win anywhere it was measured: the call sits behind
 reductions (−0.14 %, i.e. noise) with the wall time unchanged. It is kept because
 it is 96x cheaper on the call itself and removes a sort from the vote path — the
 number that matters, not a step-time claim this experiment cannot show.
+
+### 38.2 Narrowing a hypothesis space is a copy, so the copy is in the kernel
+
+Burst sampling keeps the hypotheses its slopes still find plausible, and keeping
+them is `Hypotheses.take/2`: three columns gathered row by row out of the columns
+they already sit in. In a ten-object step that is thousands of rows and the rows
+are wide — a pose is 72 bytes — so the gather was ~5.8 ms of a step spent copying.
+
+`MatcherNif.gather_rows/3` copies at the width it is asked for, and `take/2`
+encodes the indices once as u32 and calls it for the three columns. `rows_at/2`,
+which hands the same kind of subset to the neighbour kernel, went through the
+same path. The Elixir `gather/3` stays as the reference for a machine without the
+kernel; `matcher_nif_test.exs` states the rule on a six-number column (order
+asked for, a row asked for twice, and nothing asked for).
+
+Measured with `scripts/probe_step_cost.exs` on
+`base_config_10distinctobj_dist_agent`, six steps, tree before and after:
+
+- the step 3 222 572 → 3 086 949 reductions (−4.2 %), garbage 47 → 46 MB;
+- the learning module's server 1 623 394 → 1 487 425 (−8.4 %);
+- wall unchanged within this machine's noise, which the probe's own header warns
+  about — reductions are the number that does not move with the load.
+
+The acceptance ladder is unchanged digit for digit (`6.338 (1429, 2)`,
+`goals 15065`).

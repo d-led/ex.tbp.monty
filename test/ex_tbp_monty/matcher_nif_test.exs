@@ -169,6 +169,34 @@ defmodule ExTbpMonty.Core.MatcherNifTest do
     end
   end
 
+  describe "the rows a subset of a column keeps" do
+    # Narrowing a hypothesis space copies rows out of the columns they are
+    # already in, at three widths: one number of evidence, three of a location,
+    # nine of a rotation. What has to hold is that the copy is the rows asked
+    # for, in the order asked for, at the width each column has.
+    test "are the rows at the indices, in the order asked for" do
+      # Six numbers, so one-number rows are 1.0 … 6.0 and three-number rows are
+      # [1.0, 2.0, 3.0] and [4.0, 5.0, 6.0].
+      column = bytes([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+
+      assert MatcherNif.gather_rows(column, 1, indices([2, 0, 5])) == bytes([3.0, 1.0, 6.0])
+      assert MatcherNif.gather_rows(column, 3, indices([1])) == bytes([4.0, 5.0, 6.0])
+
+      assert MatcherNif.gather_rows(column, 3, indices([1, 0])) ==
+               bytes([4.0, 5.0, 6.0, 1.0, 2.0, 3.0])
+    end
+
+    test "keep a row twice when it is asked for twice" do
+      column = bytes([1.0, 2.0, 3.0])
+
+      assert MatcherNif.gather_rows(column, 1, indices([2, 2])) == bytes([3.0, 3.0])
+    end
+
+    test "are nothing at all when nothing is asked for" do
+      assert MatcherNif.gather_rows(bytes([1.0, 2.0]), 1, indices([])) == <<>>
+    end
+  end
+
   describe "the runner-up hypothesis" do
     # The answer is what `argsort(evidence)[-2]` answers in Monty, which Elixir
     # spells as a sort by `{value, index}` and the element before the last — so
@@ -209,6 +237,8 @@ defmodule ExTbpMonty.Core.MatcherNifTest do
       assert MatcherNif.second_argmax_index(bytes([1.0])) == nil
     end
   end
+
+  defp indices(values), do: for(index <- values, into: <<>>, do: <<index::32-little>>)
 
   defp index_before_the_last(values) do
     values

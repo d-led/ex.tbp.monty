@@ -553,6 +553,37 @@ fn argmax_index(column: Binary) -> u32 {
     best_index as u32
 }
 
+/// The rows of a column at the given indices, in the order asked for.
+///
+/// Narrowing a hypothesis space is a copy: burst sampling keeps the hypotheses
+/// its slopes still find plausible, which in a ten-object step is thousands of
+/// rows of evidence, location and pose. Copied a row at a time in Elixir it was
+/// three passes over the index list — `gather/3` in `Hypotheses` — and the copy
+/// itself is what the time went on, so it is done here at the width it is asked
+/// for.
+///
+/// * `column` — the column as `n * width` little-endian f64.
+/// * `width` — how many f64 each row holds (`1` for evidence, `3` for a location,
+///   `9` for a rotation).
+/// * `indices` — `k` u32 little-endian, the rows to take, in the order wanted.
+///
+/// The answer is `k * width` f64: the rows, back to back.
+#[rustler::nif]
+fn gather_rows<'a>(env: Env<'a>, column: Binary, width: u32, indices: Binary) -> Binary<'a> {
+    let row = width as usize * 8;
+    let count = indices.len() / 4;
+    let mut output = NewBinary::new(env, count * row);
+
+    for position in 0..count {
+        let index = u32_at(indices.as_slice(), position * 4) as usize;
+
+        output[position * row..(position + 1) * row]
+            .copy_from_slice(&column.as_slice()[index * row..(index + 1) * row]);
+    }
+
+    output.into()
+}
+
 // -- what a step does with the evidence column ---------------------------------
 
 /// The index of the *second* highest value — the runner-up hypothesis.

@@ -210,6 +210,16 @@ defmodule ExTbpMonty.Core.MatcherNif do
   def top_indices(_evidence, _count), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  The rows of a column at the given indices, in the order asked for.
+
+  `column` is `n * width` little-endian f64, `indices` is `k` u32; the answer is
+  `k * width` f64. Narrowing a hypothesis space keeps thousands of rows — the
+  copy is the cost, so it happens at the width it is asked for rather than a row
+  at a time in Elixir.
+  """
+  def gather_rows(_column, _width, _indices), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   The index of the second highest value — the runner-up hypothesis.
 
   A vote weighs the best hypothesis against the next one, so a step asks this
