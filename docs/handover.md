@@ -2322,3 +2322,32 @@ reductions/step, which is noise. The call is on the terminal-condition path and
 the config reaches it rarely; it is kept because it is the same answer in one
 pass instead of three, and because the two edges above are now stated instead of
 raising.
+
+### 38.5 Three things measured this time that are _not_ worth doing
+
+Kept so the next reader starts from them instead of re-deriving them:
+
+- **The closure at the top of a `tprof` table is usually the profiler.** The
+  time profile after §38.2 put `EvidenceSlopeTracker`'s `-update/3-fun-1-` at
+  57.5 ms, a quarter of the step, at 2.23 µs per call. It is `Enum.map(ages,
+&(&1 + 1))`: measured on its own it is 32 µs for 3 000 ages, and the whole
+  `update/3` is 0.14 ms. Tracing a fun costs ~2 µs per call, so a function that
+  calls a closure thousands of times reads as the step's worst cost. Trust the
+  arithmetic in the table only for named functions; for a closure, measure the
+  function it lives in.
+- **Recording a run costs 2-6 %, not seconds.** The same ten steps of
+  `base_config_10distinctobj_dist_agent`, recorded and `--no-record`, twice each:
+  1 277 / 1 142 ms against 1 181 / 1 110 ms. What the studio adds is a step's
+  data, not a step's second — a run that looks slow with a page open is slow in
+  the modules, and the page's own costs are §36.7's.
+- **The vote round is 0.5 ms.** `vote_evidence/3` decodes the evidence and the
+  location column and ranks the votes per hypothesis, which looked like the
+  biggest thing a five-module run does. A round over 780 hypotheses — the size
+  the tutorial's modules hold — measured 0.51 ms, and replacing the five-element
+  `Enum.sort/1` with a running top-three was _slower_ (0.68 ms). No kernel here.
+
+The profile is now flat: no addressable item is worth more than a few per cent,
+and the two remaining kinds of cost are the columns that are decoded because a
+consumer needs the values (`calculate_slopes/1`, `vote_evidence/3`, the detailed
+stats a configured logger asks for) and the per-pixel Elixir in the sensor
+modules, which do not appear as one hot function at all.
