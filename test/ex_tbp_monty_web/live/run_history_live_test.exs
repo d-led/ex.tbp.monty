@@ -501,14 +501,29 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
   # What the chart carries for the hover to read: one entry per drawn point, with
   # the object it belongs to, the step, what that step was worth, and the unit.
+  # The page sends the words once and the numbers per point, so this puts back the
+  # shape these tests read — the same shape the hook puts back.
   defp samples(view) do
-    view
-    |> element("#replay-chart-hover")
-    |> render()
-    |> LazyHTML.from_fragment()
-    |> LazyHTML.attribute("data-samples")
-    |> hd()
-    |> Jason.decode!()
+    payload =
+      view
+      |> element("#replay-chart-hover")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.attribute("data-samples")
+      |> hd()
+      |> Jason.decode!()
+
+    Enum.map(payload["points"], fn [line, x, y, step, value] ->
+      %{
+        "line" => Enum.at(payload["lines"], line),
+        "x" => x,
+        "y" => y,
+        "step" => step,
+        "value" => value,
+        "unit" => payload["unit"],
+        "named" => payload["named"]
+      }
+    end)
   end
 
   # The words on the value axis, top to bottom.
