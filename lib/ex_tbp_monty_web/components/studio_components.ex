@@ -877,7 +877,17 @@ defmodule ExTbpMontyWeb.StudioComponents do
             },
 
             read() {
-              this.samples = JSON.parse(this.el.dataset.samples || "[]")
+              // Parsed once per picture, not once per patch. The samples are a
+              // megabyte of JSON on a long run, and `updated()` runs on every
+              // patch of this box — a run of twenty thousand steps re-read them
+              // for a playhead move that changed nothing else, which is most of
+              // what a drag cost.
+              const samples = this.el.dataset.samples || "[]"
+              if (samples !== this.samplesJSON) {
+                this.samplesJSON = samples
+                this.samples = JSON.parse(samples)
+              }
+
               this.width = Number(this.el.dataset.width || 320)
               this.height = Number(this.el.dataset.height || 64)
               this.from = Number(this.el.dataset.from || 0)

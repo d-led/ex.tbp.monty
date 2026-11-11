@@ -727,15 +727,100 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                     const card = this.el.querySelector("[data-expanded=true]")
                     if (card === null) return
 
+                    this.pending = { card: card, expanded: false, at: Date.now() }
                     this.leaveFullScreen(card)
                     this.pushEvent("collapse", {})
                   }
 
-                  window.addEventListener("keydown", this.escape)
+                  // Capture phase, on the window: the first listener a key
+                  // reaches. Bubbling from `window` comes after every element
+                  // handler, and an open `<select>`, a `<dialog>` or anything
+                  // that calls `stopPropagation` takes the key on the way —
+                  // which is a key that works everywhere except where the
+                  // reader's focus happens to be.
+                  window.addEventListener("keydown", this.escape, true)
+
+                  // The box changes here, on the click itself. The picture is
+                  // the server's and arrives when it can — on this page that can
+                  // be a second or two, because the same process is stepping a
+                  // run — but a card that fills the window does not need the
+                  // picture to be redrawn to fill the window. LiveView's own
+                  // `phx-click` still runs; what it finds when it does is the
+                  // layout it was about to draw.
+                  this.el.addEventListener("click", (event) => {
+                    const button = event.target.closest?.("button[id^=chart-expand-]")
+                    if (button === undefined || button === null) return
+
+                    const card = button.closest("[data-expanded]")
+                    if (card === null) return
+
+                    const expanded = !(card.dataset.expanded === "true")
+                    this.pending = { card: card, expanded: expanded, at: Date.now() }
+
+                    if (expanded) this.enterFullScreen(card)
+                    else this.leaveFullScreen(card)
+                  })
+                },
+
+                // A patch computed before the click can land after it, and it
+                // says the card is where it used to be — which on a page that is
+                // stepping a run is not a long window: the click waits behind
+                // the steps, so the answer can be a second and a half late. So
+                // the layout the reader asked for is held until the server's own
+                // render agrees with it, and no longer: a real answer always wins.
+                updated() {
+                  if (this.pending === undefined) return
+
+                  const { card, expanded, at } = this.pending
+                  if (!card.isConnected || Date.now() - at > 4000) {
+                    this.pending = undefined
+
+                    return
+                  }
+
+                  if ((card.dataset.expanded === "true") === expanded) {
+                    this.pending = undefined
+
+                    return
+                  }
+
+                  if (expanded) this.enterFullScreen(card)
+                  else this.leaveFullScreen(card)
                 },
 
                 destroyed() {
-                  window.removeEventListener("keydown", this.escape)
+                  window.removeEventListener("keydown", this.escape, true)
+                },
+
+                // The same two layouts the server renders, written out in the
+                // browser so a click can show one before the round trip is over.
+                // They have to agree with the template's classes or the card
+                // jumps when the patch lands.
+                enterFullScreen(card) {
+                  card.className =
+                    "rounded-field fixed inset-0 z-50 flex flex-col overflow-hidden bg-base-100 p-4"
+                  card.dataset.expanded = "true"
+
+                  const figure = card.querySelector("figure")
+                  if (figure !== null) {
+                    figure.classList.add("flex", "h-full", "min-h-0", "flex-col")
+                  }
+
+                  const svg = card.querySelector("svg")
+                  if (svg !== null) {
+                    svg.dataset.expanded = "true"
+                    svg.classList.remove("h-52")
+                    svg.classList.add("min-h-0", "flex-1")
+                  }
+
+                  const button = card.querySelector("button[id^=chart-expand-]")
+                  if (button !== null) {
+                    button.setAttribute("aria-label", "leave full screen (Esc)")
+                    const glyph = button.querySelector("span")
+                    if (glyph !== null) {
+                      glyph.classList.replace("hero-arrows-pointing-out", "hero-arrows-pointing-in")
+                    }
+                  }
                 },
 
                 leaveFullScreen(card) {

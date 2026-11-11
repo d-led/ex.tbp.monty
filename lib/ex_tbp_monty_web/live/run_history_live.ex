@@ -1255,28 +1255,92 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                 const panel = this.el.querySelector("#replay-chart-panel")
                 if (panel === null || !panel.className.includes("fixed")) return
 
-                panel.className = "space-y-2 pt-1"
-
-                const button = panel.querySelector("#replay-expand")
-                if (button !== null) {
-                  button.setAttribute("aria-label", "full screen")
-                  // The glyph is a heroicon span named by its class: leaving full
-                  // screen is the picture expanding again.
-                  const glyph = button.querySelector("span")
-                  if (glyph !== null) {
-                    glyph.classList.replace("hero-arrows-pointing-in", "hero-arrows-pointing-out")
-                  }
-                }
-
+                this.pending = { panel: panel, expanded: false, at: Date.now() }
+                this.leaveFullScreen(panel)
                 this.pushEvent("replay_collapse", {})
               }
 
-              window.addEventListener("keydown", this.escape)
+              // Capture phase, on the window: the first listener a key reaches.
+              // Bubbling from `window` comes after every element handler, and an
+              // open `<select>`, a `<dialog>` or anything that calls
+              // `stopPropagation` takes the key on the way — which is a key that
+              // works everywhere except where the reader's focus happens to be.
+              window.addEventListener("keydown", this.escape, true)
+
+              // The box changes here, on the click itself; the picture follows
+              // when the server can draw it. A plot that fills the window does
+              // not need a redraw to fill the window.
+              this.el.addEventListener("click", (event) => {
+                const button = event.target.closest?.("#replay-expand")
+                if (button === undefined || button === null) return
+
+                const panel = this.el.querySelector("#replay-chart-panel")
+                if (panel === null) return
+
+                const expanded = !panel.className.includes("fixed")
+                this.pending = { panel: panel, expanded: expanded, at: Date.now() }
+
+                if (expanded) this.enterFullScreen(panel)
+                else this.leaveFullScreen(panel)
+              })
+            },
+
+            // A patch computed before the click can land after it and put the
+            // plot back where it was, so the layout that was asked for is held
+            // until the server's render agrees — no longer than four seconds, so
+            // a real answer always wins.
+            updated() {
+              if (this.pending === undefined) return
+
+              const { panel, expanded, at } = this.pending
+              if (!panel.isConnected || Date.now() - at > 4000) {
+                this.pending = undefined
+
+                return
+              }
+
+              if (panel.className.includes("fixed") === expanded) {
+                this.pending = undefined
+
+                return
+              }
+
+              if (expanded) this.enterFullScreen(panel)
+              else this.leaveFullScreen(panel)
             },
 
             destroyed() {
-              window.removeEventListener("keydown", this.escape)
-            }
+              window.removeEventListener("keydown", this.escape, true)
+            },
+
+            // The two layouts the server renders, written out here so a click
+            // shows one before the round trip is over. They have to agree with
+            // the component's classes or the plot jumps when the patch lands.
+            enterFullScreen(panel) {
+              panel.className = "space-y-2 pt-1 fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
+              this.flipGlyph(panel, "in")
+            },
+
+            leaveFullScreen(panel) {
+              panel.className = "space-y-2 pt-1"
+              this.flipGlyph(panel, "out")
+            },
+
+            // The glyph is a heroicon span named by its class: "in" is the
+            // picture shrinking back to its cell, "out" is it filling the screen.
+            flipGlyph(panel, direction) {
+              const button = panel.querySelector("#replay-expand")
+              if (button === null) return
+
+              const leaving = direction === "out"
+              button.setAttribute("aria-label", leaving ? "full screen" : "leave full screen (Esc)")
+
+              const glyph = button.querySelector("span")
+              if (glyph === null) return
+
+              glyph.classList.remove("hero-arrows-pointing-in", "hero-arrows-pointing-out")
+              glyph.classList.add(leaving ? "hero-arrows-pointing-out" : "hero-arrows-pointing-in")
+            },
           }
         </script>
         <ExTbpMontyWeb.StudioComponents.replay

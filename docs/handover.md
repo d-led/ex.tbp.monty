@@ -2419,3 +2419,34 @@ handlers were already idempotent.
 when it fills the screen, in the plot's top right corner, in the border colour of
 the card. `.icon` from `core_components` is imported into `StudioComponents` for
 it — the studio had no icons of its own and should not grow a second set.
+
+### 39.1 Why it felt like seconds, measured
+
+The layout was never the slow part; the round trip was, and it was slow for a
+reason particular to this page: `expand` is a `handle_event` that waits behind
+the run's own steps. On a stepping page the click was answered **1.7 seconds**
+later, and a patch computed _before_ the click landed at **269 ms** and put the
+card back where it had been — so the reader saw: nothing, nothing, a flash of
+the old layout, and then the card, two seconds in. That is the "multiple
+seconds" and it was not a rendering cost at all.
+
+Both are fixed in the browser, in the same place as Escape: the click applies
+the full-screen layout itself (14–40 ms), records what it asked for, and
+`updated()` re-applies it if a patch that disagrees arrives — for at most four
+seconds, so a real answer always wins. Measured after, on the cows surface
+experiment page while it was stepping: **expand 40 ms, Escape 28 ms, no
+flicker**; on the run page, expand 21 ms, Escape 18 ms, and the same numbers
+with the socket cut (29 ms / 12 ms).
+
+Also measured and fixed: `.ChartHover.read()` re-parsed the megabyte of samples
+JSON on **every** patch of the box, which a playhead move triggers. It now
+parses when the attribute actually changed.
+
+**The JavaScript audit** the same message asked for: `sidebar.js` listens for
+Escape on `document` (drawer) and stops nothing; `chart.js` binds pointer,
+wheel and dblclick on its own element, `preventDefault`s only the wheel, and
+removes its window resize listener in `destroyed`; no hook patches LiveView's
+own bindings, none calls `stopPropagation`, and nothing writes to an element
+LiveView owns except the two hooks above — which write only the class and
+`data-expanded` they are also the ones to restore, and now hold that value
+against patches on purpose rather than by luck.
