@@ -17,6 +17,23 @@ defmodule Monty.Studio.Replay.ChartTest do
     value
   end
 
+  # The one line a chart draws, as the points it is written with.
+  defp drawn_points(chart) do
+    [%{polylines: [line]}] = chart.lines
+
+    line
+    |> String.split(" ")
+    |> Enum.map(fn point ->
+      {x, y} = point |> String.split(",") |> Enum.map(&float_of/1) |> List.to_tuple()
+      {x, y}
+    end)
+  end
+
+  defp float_of(number) do
+    {value, _rest} = Float.parse(number)
+    value
+  end
+
   describe "the line the values are measured from" do
     test "is drawn where the axis admits zero" do
       chart = Chart.many([series([0.0, 2.0, -1.0], "mug")])
@@ -375,6 +392,42 @@ defmodule Monty.Studio.Replay.ChartTest do
       assert moved.ticks == chart.ticks
       assert moved.playhead == 320
       assert chart.playhead == 0
+    end
+  end
+
+  describe "a stretch of the line that lies flat" do
+    test "is drawn by its ends, not by every step that sits on it" do
+      # A step's value holds until the next step begins, so five steps that
+      # reported the same number are one horizontal segment. On a run of 42 401
+      # steps, 64 % of the points the page carried were of that kind — line that
+      # is not there, in a page that has to arrive before it can be read.
+      flat = drawn_points(Chart.new(points([4, 4, 4, 4, 4]), window: {0, 4}))
+      climbs = drawn_points(Chart.new(points([1, 2, 3, 4, 5]), window: {0, 4}))
+
+      assert [{start_x, height}, {end_x, height}] = flat
+
+      # Two points, across the same span the same chart would be drawn between if
+      # every step of it climbed.
+      assert start_x == climbs |> hd() |> elem(0)
+      assert end_x == climbs |> List.last() |> elem(0)
+    end
+
+    test "keeps every step of a climb" do
+      assert length(drawn_points(Chart.new(points([1, 2, 3, 4]), window: {0, 3}))) == 4
+    end
+
+    test "ends where the climb away from it begins" do
+      # The flat stretch is three points wide and the fourth step jumps: the line
+      # has to reach the step before the jump, or the picture says the value held
+      # for one step fewer than it did.
+      flat = drawn_points(Chart.new(points([4, 4, 4, 9]), window: {0, 3}))
+      climbs = drawn_points(Chart.new(points([1, 2, 3, 4]), window: {0, 3}))
+
+      assert [{_start, height}, {flat_end, height}, {_jump, peak}] = flat
+
+      assert flat_end == climbs |> Enum.at(2) |> elem(0)
+      # Up is a smaller y: the climb leaves the flat line towards the top.
+      assert peak < height
     end
   end
 end

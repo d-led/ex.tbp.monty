@@ -448,8 +448,32 @@ defmodule Monty.Studio.Replay.Chart do
   # Two decimals, not whole numbers: the chart is 320 units wide for a run of
   # hundreds of steps, so a rounded ordinate is a cliff where the data has a
   # slope.
-  defp polyline(points),
-    do: points |> Enum.map_join(" ", fn {x, y} -> "#{round_to(x)},#{round_to(y)}" end)
+  #
+  # A stretch of the line that lies flat needs two points, not the whole run of
+  # them: a step's value holds until the next step begins, so any two steps that
+  # reported the same number draw one horizontal segment however many points sit
+  # on it. On a run of 42 401 steps that was 149 822 of the 235 168 points drawn
+  # — 64 % of the page's 3.1 MB of coordinates as line that is not there. Only
+  # points that share a height with the point on both sides are dropped, so a
+  # slope of a hundredth of a unit still keeps every step it climbs by.
+  defp polyline(points) do
+    points
+    |> Enum.map(fn {x, y} -> {round_to(x), round_to(y)} end)
+    |> flat_stretches_to_their_ends()
+    |> Enum.map_join(" ", fn {x, y} -> "#{x},#{y}" end)
+  end
+
+  # The first and last point of each run of one height, and everything that does
+  # not share its height with the point before it.
+  defp flat_stretches_to_their_ends(points) do
+    points
+    |> Enum.chunk_by(fn {_x, y} -> y end)
+    |> Enum.flat_map(fn
+      [only] -> [only]
+      [first | _rest] = flat -> [first, List.last(flat)]
+    end)
+    |> Enum.dedup()
+  end
 
   defp round_to(value), do: Float.round(value * 1.0, 2)
 end
