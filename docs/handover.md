@@ -2018,3 +2018,77 @@ Two traps found doing it:
    then `Chart.many/2` over the whole window.
 4. `assign_charts/2` redraws every module at 4 Hz; the throttle is per page, not
    per module.
+
+## 36. 2026-11-12: a step is answered from memory, and habitat stops being an engine
+
+### 36.1 The three reads behind every step
+
+A page following a run rebuilt itself four times a second (once per burst of
+step messages), and each rebuild read three copies of the run's steps:
+
+1. `RunHistory.head/1` — the row, which carries the whole `log` (a transcript
+   read to learn what the page was just told),
+2. `RunStream.steps/1` — the whole in-memory log, to replace what the row said,
+3. `Enum.drop/2` in `append_log/2` — a second copy of the log, to work out which
+   lines were new.
+
+Now the row is asked only what memory cannot answer — how the run is doing — and
+the steps are topped up from the position the page stops at.
+
+- `read_run/2` reads `RunHistory.progress/1` (the counters; the sibling of
+  `head/1`, already used by the experiment page) while this node holds a stream
+  of the run, and `head/1` when it does not. A run with no stream here — settled,
+  or stepped by another node — is still read whole, because then the row is the
+  only account of it.
+- `steps_after/1` asks `RunStream.steps_from(id, length(run.log) - 1)`; `:no_stream`
+  (stream empty) is answered by reading the row, `:nothing_newer` by doing
+  nothing.
+- `keep_steps/2` keeps the page's steps across a poll: the stream is where they
+  came from, and the row is the same run written down.
+
+### 36.2 Two traps, both found by a failing test not by reading
+
+- **`head/1` carries no pictures.** `pictures_less/1` drops `timeline`, so a page
+  that has just read a row has its steps and *none* of their moments. Topping up
+  only the log left `log` at three steps and `timeline` at one, and the chart's
+  bands are drawn from the moments — they vanished silently. The log and the
+  moments are topped up separately, each from where it stops (`grown/1`).
+- **The row's log is not the stream's log.** A row entry carries `step`, `at`,
+  counts and (when the writer had them) `episode`; the stream's entry carries an
+  episode and the modules' beliefs, which is what the bands and the per-object
+  lines are drawn from. Mixing them gives a log whose middle has no episodes, and
+  the one episode left starts at the window's last step — a band of zero width,
+  which `bands/2` rejects. So when a stream exists the page takes the steps from
+  the stream and keeps them; the row's copy is used only when there is no stream.
+
+### 36.3 Habitat is no longer an engine
+
+`Monty.Prerequisites` asked the carried interpreter whether `habitat_sim`
+imports, which this build can never make true, and the experiment page offered a
+world it does not run. The engine check, its badge, the dead option text and
+`mix monty.readiness --world habitat` are gone; `@habitat_hfov` is
+`@default_hfov`, which is what it measures.
+
+The *world* stays. `world: :habitat` is what the MCP tool's `world: "monty"`
+maps to — an interpreter outside this build stepping Monty's own configs — and a
+run of one still needs the dataset and the memory its config names, so
+`for_setup/1` still asks for those. Upstream still ships
+`src/tbp/monty/simulators/habitat`, so the mapped classes stay mapped.
+
+### 36.4 A chart's resize listener
+
+`ChartZoom` added a `window` `resize` listener and never removed it: the
+experiment page draws one chart per learning module and replaces them as the run
+steps, so a long run collected a handler per chart it had ever drawn, each of
+them a server round trip per resize. `destroyed/0` removes it (and the pending
+wheel's timer), the way `.ReplaySlider` and `.EscapeCollapse` already do.
+
+### 36.5 What is still in the socket, in order of cost
+
+1. `ExperimentLive`'s reap (`Reaper.sweep/0`) — one query per open run, once per
+   page, after the first paint (see 35.2 for why it cannot move yet).
+2. `catalog/2` rebuilt whenever the log grows — 3 + N passes over the whole log,
+   then `Chart.many/2` over the whole window.
+3. `assign_charts/2` redraws every module at 4 Hz; the throttle is per page, not
+   per module.
+4. `chart_marks/3` and `chart_samples/3` each thin the window on their own.
