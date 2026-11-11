@@ -157,12 +157,10 @@ defmodule Monty.Studio.Replay do
   """
   @spec objects(Run.t(), String.t() | nil) :: [series()]
   def objects(%Run{} = run, module_id \\ nil) do
-    moments = recorded(run)
-
-    names =
-      moments |> Enum.flat_map(&object_names(&1, module_id)) |> Enum.uniq() |> Enum.sort()
-
-    Enum.map(names, fn name -> object_series(moments, name, module_id) end)
+    run
+    |> recorded()
+    |> series_by_object(module_id)
+    |> Enum.map(fn {name, points} -> object_series(name, points) end)
   end
 
   @doc """
@@ -176,23 +174,64 @@ defmodule Monty.Studio.Replay do
     run |> recorded() |> Enum.flat_map(&module_ids/1) |> Enum.uniq() |> Enum.sort()
   end
 
-  defp object_series(moments, name, module_id) do
+  # Every object's line, in one pass over the run, named in order.
+  #
+  # Reading the log once per object is the same answer at the price of a pass
+  # each: ten objects over 42 401 steps was 620 ms of a page that has four
+  # seconds to spend, and the module picker asked for its own pass per module.
+  # An object's point at a step is here where the step is visited, which is the
+  # only place it ever was.
+  defp series_by_object(moments, module_id) do
+    by_object =
+      Enum.reduce(moments, %{}, fn moment, by_object ->
+        moment
+        |> evidence_by_object(module_id)
+        |> Enum.reduce(by_object, fn {name, value}, by_object ->
+          point = %{step: moment.position, value: value, episode: episode_of(moment)}
+          Map.update(by_object, name, [point], &[point | &1])
+        end)
+      end)
+
+    by_object
+    |> Enum.map(fn {name, points} -> {name, Enum.reverse(points)} end)
+    |> Enum.sort_by(&elem(&1, 0))
+  end
+
+  # What each object a step held a graph for was worth there: the strongest
+  # evidence any module held for it, or what one module held when a module is
+  # named. An object a module named without a number is worth nought rather than
+  # missing — the line has a point there with nothing behind it, which is what a
+  # ruled-out theory looks like.
+  defp evidence_by_object(moment, module_id) do
+    moment
+    |> beliefs(module_id)
+    |> Enum.reduce(%{}, fn belief, strengths ->
+      belief
+      |> Map.get("graphs", %{})
+      |> Enum.reduce(strengths, fn {name, graph}, strengths ->
+        case Map.get(graph, "max_evidence") do
+          value when is_number(value) ->
+            Map.update(strengths, name, value, fn
+              nil -> value
+              kept -> max(kept, value)
+            end)
+
+          _none ->
+            Map.put_new(strengths, name, nil)
+        end
+      end)
+    end)
+    |> Map.new(fn {name, strength} -> {name, strength || 0.0} end)
+  end
+
+  defp object_series(name, points) do
     %{
       id: "object:" <> name,
       label: name,
       title: name,
       unit: "",
       axis: @evidence_axis,
-      points:
-        moments
-        |> Enum.filter(&(name in object_names(&1, module_id)))
-        |> Enum.map(fn moment ->
-          %{
-            step: moment.position,
-            value: evidence_of(moment, name, module_id),
-            episode: episode_of(moment)
-          }
-        end)
+      points: points
     }
   end
 
@@ -206,14 +245,16 @@ defmodule Monty.Studio.Replay do
   def best_evidence(%Run{} = run) do
     run
     |> recorded()
-    |> Enum.flat_map(fn moment ->
-      for name <- object_names(moment), do: %{object: name, value: evidence_of(moment, name)}
+    |> Enum.reduce(nil, fn moment, best ->
+      strengths = evidence_by_object(moment, nil)
+
+      moment
+      |> object_names()
+      |> Enum.reduce(best, fn name, best ->
+        value = Map.get(strengths, name, 0.0)
+        if best == nil or value > best.value, do: %{object: name, value: value}, else: best
+      end)
     end)
-    |> Enum.max_by(& &1.value, fn -> nil end)
-    |> case do
-      nil -> nil
-      best -> best
-    end
   end
 
   @doc """
