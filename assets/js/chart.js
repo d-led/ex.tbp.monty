@@ -52,8 +52,20 @@ export const ChartZoom = {
     // measured here and sent: a picture drawn for the guessed box is a picture
     // stretched into it, and stretching squashes a chart's own labels.
     this.measured = null;
+    this.remeasure = () => this.measure();
     this.measure();
-    window.addEventListener("resize", () => this.measure());
+    window.addEventListener("resize", this.remeasure);
+  },
+
+  // The element's own listeners go with the element; the window's does not, so a
+  // page that draws a chart per learning module left one behind for every chart
+  // it had ever drawn — and one of those is a server round trip each time the
+  // window is resized.
+  destroyed() {
+    window.removeEventListener("resize", this.remeasure);
+    clearTimeout(this.zoomTimer);
+    this.zoomTimer = null;
+    this.pendingRange = null;
   },
 
   // The plot is drawn for too many steps to redraw on every pointer move, so a
