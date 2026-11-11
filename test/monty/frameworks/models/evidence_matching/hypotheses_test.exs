@@ -42,6 +42,27 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
       assert Hypotheses.count(set) == 2
     end
 
+    # A vote weighs the best hypothesis against the next best, so a step asks
+    # this once per object — of the bytes, where the sort it stands for would
+    # need every value decoded and a tuple each.
+    test "names the runner-up, and nobody when there is no second hypothesis" do
+      set = hypothesis_set([1.0, 3.0, 2.0])
+
+      assert Hypotheses.second_argmax_evidence(set) == 2
+      assert Hypotheses.evidence_at(set, 2) == 2.0
+
+      assert Hypotheses.second_argmax_evidence(hypothesis_set([2.0])) == nil
+      assert Hypotheses.second_argmax_evidence(Hypotheses.empty()) == nil
+    end
+
+    # `argsort(evidence)[-2]` on two equal maxima names the lower index: the
+    # best of the two sits last in the sorted order, so the one before it is the
+    # other tie.
+    test "names the other half of two equal maxima as the runner-up" do
+      assert Hypotheses.second_argmax_evidence(hypothesis_set([3.0, 3.0, 1.0])) == 0
+      assert Hypotheses.second_argmax_evidence(hypothesis_set([1.0, 3.0, 3.0])) == 1
+    end
+
     # The lowest evidence is the threshold that updates the whole field, and it
     # is asked of every graph of every step — so it is answered from the column's
     # bytes, where a value that is not a number has no place in the comparison.

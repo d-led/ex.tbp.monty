@@ -171,6 +171,34 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
     do: evidence_at(hypotheses, argmax_evidence(hypotheses))
 
   @doc """
+  The index of the runner-up hypothesis, or `nil` when there is no second one.
+
+  Monty reads it as `argsort(evidence)[-2]` to weigh a vote between the two best
+  hypotheses, and a step asks once per object. Asked of the bytes: the sort it
+  stands for needs every value decoded and a tuple for each.
+  """
+  @spec second_argmax_evidence(t()) :: non_neg_integer() | nil
+  def second_argmax_evidence(%__MODULE__{evidence: bytes}) when byte_size(bytes) < 16, do: nil
+
+  def second_argmax_evidence(%__MODULE__{} = hypotheses) do
+    if MatcherNif.loaded?() do
+      MatcherNif.second_argmax_index(evidence_bytes(hypotheses))
+    else
+      hypotheses |> evidence() |> second_argmax()
+    end
+  end
+
+  # The reference: sort by `{value, index}` and take the one before the last, as
+  # `Enum.sort_by/2` orders a `nil` above every number.
+  defp second_argmax(values) do
+    values
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {value, index} -> {value, index} end)
+    |> Enum.at(-2)
+    |> elem(1)
+  end
+
+  @doc """
   The lowest evidence any hypothesis holds — the threshold that updates them all.
 
   `evidence_threshold_config: "all"` asks this once per graph per step, and the

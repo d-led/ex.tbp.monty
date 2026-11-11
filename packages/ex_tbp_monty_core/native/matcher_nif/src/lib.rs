@@ -555,6 +555,66 @@ fn argmax_index(column: Binary) -> u32 {
 
 // -- what a step does with the evidence column ---------------------------------
 
+/// The index of the *second* highest value — the runner-up hypothesis.
+///
+/// A learning module names its best hypothesis and the next one to weigh a vote
+/// between them, so this is asked once per object per step. It used to be
+/// `Enum.sort_by/2` over every hypothesis decoded into a list — a decode, a
+/// tuple per hypothesis and a full sort — to read one index off the end.
+///
+/// * `column` — `m` f64.
+///
+/// The answer is one u32, or `nil` for a column of fewer than two values. Ties
+/// go the way `Enum.sort_by(fn {value, index} -> {value, index} end) |> Enum.at(-2)`
+/// sent them: highest value wins, and among equal values the highest index sits
+/// above the others — and a NaN sorts above every number, as `nil` does in
+/// Elixir's term order.
+#[rustler::nif]
+fn second_argmax_index(column: Binary) -> Option<u32> {
+    let count = column.len() / 8;
+
+    if count < 2 {
+        return None;
+    }
+
+    let mut best_index: Option<usize> = None;
+
+    for index in 0..count {
+        if best_index.is_none() || above(column.as_slice(), index, best_index.unwrap()) {
+            best_index = Some(index);
+        }
+    }
+
+    let mut second_index: Option<usize> = None;
+
+    for index in 0..count {
+        if Some(index) == best_index {
+            continue;
+        }
+
+        if second_index.is_none() || above(column.as_slice(), index, second_index.unwrap()) {
+            second_index = Some(index);
+        }
+    }
+
+    second_index.map(|index| index as u32)
+}
+
+/// Whether the value at `index` sorts above the value at `other` under the
+/// ordering `Enum.sort_by({value, index})` uses: numbers below nils, and
+/// straight index order within each group.
+fn above(bytes: &[u8], index: usize, other: usize) -> bool {
+    let value = f64_at(bytes, index * 8);
+    let other_value = f64_at(bytes, other * 8);
+
+    match (value.is_nan(), other_value.is_nan()) {
+        (true, false) => true,
+        (false, true) => false,
+        (true, true) => index > other,
+        (false, false) => value > other_value || (value == other_value && index > other),
+    }
+}
+
 /// The lowest evidence in the column — the threshold that updates everything.
 ///
 /// `evidence_threshold_config: "all"` is Monty's default and what the

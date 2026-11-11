@@ -2219,3 +2219,26 @@ About 4 % of a step, honestly counted — the same order as §37's geometry win 
 for the same reason: what is left is not one hot function but a long tail
 (`Enum.reduce/3` and `Enum.map/2` between them are a fifth of a step, spread
 over 300 000 calls; `KdTreeNif.nearest_many/3` is 8 % of it doing real work).
+
+### 38.1 The runner-up, asked of the column too — 96x per call, invisible in the runs measured
+
+`get_top_two_pose_hypotheses_for_graph_id/2` names the second best hypothesis by
+what Monty's `argsort(evidence)[-2]` means, and it did it the expensive way: decode
+the column, make a `{value, index}` tuple per hypothesis, sort all of them, read
+one index off the end. On a 1 930-hypothesis column that is **490 µs a call**;
+`MatcherNif.second_argmax_index/1` answers it from the bytes in **5.1 µs**, 96x.
+
+The ordering is the sort's, ties included: the highest value wins, the higher
+index sits above an equal value, and a NaN sorts above every number — which is
+what `nil` does in Elixir's term order. So `[3.0, 3.0, 1.0]` answers `0`, not
+`1`: the maximum occupies the last slot and the tie before it is the runner-up.
+The reference (`Enum.sort_by/2` + `Enum.at(-2)`) stays in `Hypotheses` as the
+path for a machine without the kernel, and `matcher_nif_test.exs` holds the
+kernel to it over ties, gaps and short columns.
+
+End to end it is not a win anywhere it was measured: the call sits behind
+`focus_on_pose` in `EvidenceGoalGenerator`, and on
+`base_config_10distinctobj_dist_agent` the step went 3 227 109 → 3 222 572
+reductions (−0.14 %, i.e. noise) with the wall time unchanged. It is kept because
+it is 96x cheaper on the call itself and removes a sort from the vote path — the
+number that matters, not a step-time claim this experiment cannot show.

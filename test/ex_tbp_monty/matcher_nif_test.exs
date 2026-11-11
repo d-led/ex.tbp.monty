@@ -169,6 +169,64 @@ defmodule ExTbpMonty.Core.MatcherNifTest do
     end
   end
 
+  describe "the runner-up hypothesis" do
+    # The answer is what `argsort(evidence)[-2]` answers in Monty, which Elixir
+    # spells as a sort by `{value, index}` and the element before the last — so
+    # that is what the kernel is held to, ties and gaps included.
+    test "is the index before the last of the column sorted by value and index" do
+      for values <- [
+            [1.0, 3.0, 2.0],
+            [3.0, 3.0, 1.0],
+            [1.0, 3.0, 3.0],
+            [-2.0, -1.0, -3.0, 0.0],
+            [5.0, 4.0],
+            [4.0, 5.0]
+          ] do
+        assert MatcherNif.second_argmax_index(bytes(values)) == index_before_the_last(values),
+               "for #{inspect(values)}"
+      end
+    end
+
+    test "sorts a gap above every number, the way a nil sorts" do
+      not_a_number = MatcherNif.not_a_number()
+
+      for values <- [
+            [1.0, nil, 2.0],
+            [nil, nil],
+            [nil, 1.0],
+            [1.0, nil],
+            [nil, nil, 2.0, 3.0]
+          ] do
+        bytes = encode(values, not_a_number)
+
+        assert MatcherNif.second_argmax_index(bytes) == index_before_the_last(values),
+               "for #{inspect(values)}"
+      end
+    end
+
+    test "a column of fewer than two hypotheses has no runner-up" do
+      assert MatcherNif.second_argmax_index(<<>>) == nil
+      assert MatcherNif.second_argmax_index(bytes([1.0])) == nil
+    end
+  end
+
+  defp index_before_the_last(values) do
+    values
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {value, index} -> {value, index} end)
+    |> Enum.at(-2)
+    |> elem(1)
+  end
+
+  defp encode(values, not_a_number) do
+    for value <- values, into: <<>>, do: value |> encode_one(not_a_number)
+  end
+
+  defp encode_one(nil, not_a_number), do: not_a_number
+  defp encode_one(value, _not_a_number), do: <<value::float-64-little>>
+
+  defp bytes(values), do: encode(values, MatcherNif.not_a_number())
+
   # The same three steps the scorer takes: describe the columns, hand both to the
   # kernel, read the answers back.
   defp native(recorded, increment: increment) do

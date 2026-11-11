@@ -210,6 +210,18 @@ defmodule ExTbpMonty.Core.MatcherNif do
   def top_indices(_evidence, _count), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  The index of the second highest value — the runner-up hypothesis.
+
+  A vote weighs the best hypothesis against the next one, so a step asks this
+  once per object. The Elixir it replaces decoded the column, made a tuple per
+  hypothesis and sorted all of them to read one index off the end; the answer is
+  in the bytes. `nil` for fewer than two values, and ties go the way
+  `Enum.sort_by(fn {value, index} -> {value, index} end) |> Enum.at(-2)` sent
+  them.
+  """
+  def second_argmax_index(_column), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   The lowest evidence in the column — the threshold that updates everything.
 
   `evidence_threshold_config: "all"` is Monty's default and what the experiments

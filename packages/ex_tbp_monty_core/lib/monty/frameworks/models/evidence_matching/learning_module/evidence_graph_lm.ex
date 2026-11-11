@@ -966,16 +966,6 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   end
 
   # The index of the second highest value, or `nil` when there is no second.
-  defp second_argmax([_only]), do: nil
-
-  defp second_argmax(values) do
-    values
-    |> Enum.with_index()
-    |> Enum.sort_by(fn {value, index} -> {value, index} end)
-    |> Enum.at(-2)
-    |> elem(1)
-  end
-
   # Ties keep the first object in memory order, which is the order
   # `get_all_known_object_ids/1` gives.
   defp better(nil, candidate), do: candidate
@@ -1086,8 +1076,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   @spec get_top_two_pose_hypotheses_for_graph_id(t(), graph_id()) :: {mlh(), mlh() | nil}
   def get_top_two_pose_hypotheses_for_graph_id(%__MODULE__{} = lm, graph_id) do
     best = most_likely_hypothesis(lm, graph_id)
+    hypotheses = Map.fetch!(lm.hypotheses, graph_id)
 
-    case second_argmax(Hypotheses.evidence(Map.fetch!(lm.hypotheses, graph_id))) do
+    case Hypotheses.second_argmax_evidence(hypotheses) do
       nil -> {best, nil}
       id -> {best, mlh_from_id(lm, graph_id, id)}
     end
