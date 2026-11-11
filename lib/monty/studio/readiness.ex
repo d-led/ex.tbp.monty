@@ -164,9 +164,7 @@ defmodule Monty.Studio.Readiness do
   """
   @spec catalog(keyword()) :: survey()
   def catalog(opts \\ []) do
-    key =
-      {__MODULE__, :catalog, Catalog.stamp(opts), world(opts), libraries_stamp(),
-       downloads_stamp()}
+    key = catalog_key(opts)
 
     case :persistent_term.get(key, nil) do
       nil ->
@@ -177,6 +175,24 @@ defmodule Monty.Studio.Readiness do
       survey ->
         survey
     end
+  end
+
+  @doc """
+  Whether this node already holds the answer for these options.
+
+  Reading through is correct on its own; what it cannot say is whether a call
+  will cost a composition, which is the one thing a cache in front of it has to
+  know to count them (`Monty.Studio.Readiness.Cache`).
+  """
+  @spec cached?(keyword()) :: boolean()
+  def cached?(opts \\ []) do
+    :persistent_term.get(catalog_key(opts), nil) != nil
+  end
+
+  # Everything the answer is derived from: a different catalogue, world, or set
+  # of files on this machine is a different answer, and a different key.
+  defp catalog_key(opts) do
+    {__MODULE__, :catalog, Catalog.stamp(opts), world(opts), libraries_stamp(), downloads_stamp()}
   end
 
   @doc """

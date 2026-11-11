@@ -100,9 +100,10 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   end
 
   # What each experiment is labelled with — whether it runs here, and the world
-  # its config was written for — as `Monty.Studio.Readiness` answers it. Cached,
-  # because composing two hundred configs is not a page's work.
-  defp labels, do: Readiness.catalog() |> Readiness.labels()
+  # its config was written for — as `Monty.Studio.Readiness` answers it, through
+  # the one process that composes it: the answer is cached, but the composing is
+  # not, and every page open on a node that has just started used to do its own.
+  defp labels, do: Monty.Studio.Readiness.Cache.survey() |> Readiness.labels()
 
   # The parameters `Index` takes, built from what the LiveView holds.
   defp params_of(%{filters: filters, query: query}) do

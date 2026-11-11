@@ -22,6 +22,9 @@ defmodule ExTbpMontyWeb.ModulesLive do
   alias Monty.ModuleMap
   alias Monty.ModuleMap.Table
 
+  @page_size 100
+  @default_size "some"
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
@@ -30,7 +33,8 @@ defmodule ExTbpMontyWeb.ModulesLive do
        summary: ModuleMap.summary(ModuleMap.load()),
        sources: ModuleMap.sources(),
        status: :all,
-       query: ""
+       query: "",
+       size: @default_size
      )}
   end
 
@@ -38,13 +42,34 @@ defmodule ExTbpMontyWeb.ModulesLive do
   def handle_params(params, _uri, socket) do
     query = params["q"] || ""
     status = Table.status(params["status"])
+    size = params["size"] || @default_size
 
-    rows = Table.filter(socket.assigns.rows, query, status)
+    matching = Table.filter(socket.assigns.rows, query, status)
+    {rows, truncated?} = window(matching, size)
 
     {:noreply,
      socket
-     |> assign(query: query, status: status, shown: length(rows))
+     |> assign(
+       query: query,
+       status: status,
+       size: size,
+       shown: length(rows),
+       matching: length(matching),
+       truncated?: truncated?,
+       truncated_when_paged?: length(matching) > @page_size
+     )
      |> stream(:modules, rows, reset: true)}
+  end
+
+  # One page of rows is what a first paint carries. The whole map is 451 rows and
+  # a megabyte of markup, and rendering all of it before the page can be read is a
+  # render that keeps the socket from answering while it runs — which is how a
+  # page opened beside a stepping run lost its connection. `show all` is there for
+  # the reader who wants to scroll the whole map instead of filtering it.
+  defp window(rows, "all"), do: {rows, false}
+
+  defp window(rows, _paged) do
+    {Enum.take(rows, @page_size), length(rows) > @page_size}
   end
 
   # A keystroke re-filters the table by rewriting the query string, so the URL
@@ -52,16 +77,27 @@ defmodule ExTbpMontyWeb.ModulesLive do
   # 360 rows — happened once, in `mount/3`.
   @impl true
   def handle_event("filter", params, socket) do
-    {:noreply, push_patch(socket, to: modules_path(params["q"] || "", socket.assigns.status))}
+    {:noreply,
+     push_patch(socket, to: modules_path(params["q"] || "", socket.assigns.status, nil))}
   end
 
   def handle_event("status", %{"status" => status}, socket) do
-    {:noreply, push_patch(socket, to: modules_path(socket.assigns.query, Table.status(status)))}
+    {:noreply,
+     push_patch(socket, to: modules_path(socket.assigns.query, Table.status(status), nil))}
   end
 
-  defp modules_path(query, status) do
+  def handle_event("size", %{"size" => size}, socket) do
+    {:noreply,
+     push_patch(socket, to: modules_path(socket.assigns.query, socket.assigns.status, size))}
+  end
+
+  defp modules_path(query, status, size) do
     params =
-      [{"q", String.trim(query)}, {"status", if(status == :all, do: nil, else: status)}]
+      [
+        {"q", String.trim(query)},
+        {"status", if(status == :all, do: nil, else: status)},
+        {"size", if(size in [nil, @default_size], do: nil, else: size)}
+      ]
       |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
 
     case params do
@@ -127,7 +163,27 @@ defmodule ExTbpMontyWeb.ModulesLive do
         </form>
 
         <p class="mt-3 font-mono text-xs text-base-content/60" id="modules-shown">
-          {@shown} of {@summary.classes} classes
+          {@shown} of {@matching} classes
+          <button
+            :if={@truncated?}
+            type="button"
+            phx-click="size"
+            phx-value-size="all"
+            id="show-all"
+            class="btn btn-ghost btn-xs"
+          >
+            show all {@matching}
+          </button>
+          <button
+            :if={@size == "all" and @truncated_when_paged?}
+            type="button"
+            phx-click="size"
+            phx-value-size="some"
+            id="show-fewer"
+            class="btn btn-ghost btn-xs"
+          >
+            show fewer
+          </button>
         </p>
 
         <div class="mt-2 overflow-x-auto rounded-field border border-base-300">

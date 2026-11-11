@@ -28,6 +28,10 @@ defmodule ExTbpMonty.Application do
       # The one process that writes a run's steps: a boundary hands them over and
       # steps on, so the experiment never waits for Postgres.
       Monty.Studio.RunWriter,
+      # The readiness survey over every config, composed by one process: a page
+      # opened on a node that has just started asks for it, and every page used
+      # to compose a copy of its own (three tabs: three times all 132 configs).
+      Monty.Studio.Readiness.Cache,
       # One child per prerequisite download, restarted never: a download either
       # finishes or is started again deliberately.
       {DynamicSupervisor, name: ExTbpMonty.PrerequisitesSupervisor, strategy: :one_for_one},
@@ -83,13 +87,10 @@ defmodule ExTbpMonty.Application do
         # The YAML, and then the survey read from it: the experiments list asks for
         # both, and paying for them here is what keeps the first visitor from being
         # the one who pays. Measured on a fresh node: 22 ms for the files, 1 404 ms
-        # for the survey over all 132 configs, 5 ms once it is cached — and the
-        # cache is a read-through `:persistent_term`, so every page open at that
-        # moment composes its own copy (three concurrent first calls cost 3 × 3.8 s,
-        # which is work a stepping run competes with and a page pays for by losing
-        # its connection).
+        # for the survey over all 132 configs, 5 ms once it is cached. Through the
+        # cache, so a page opened during this pays nothing extra.
         Monty.Studio.Catalog.experiments()
-        Monty.Studio.Readiness.catalog()
+        Monty.Studio.Readiness.Cache.survey()
       end)
     end
 
