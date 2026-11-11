@@ -2049,7 +2049,7 @@ the steps are topped up from the position the page stops at.
 ### 36.2 Two traps, both found by a failing test not by reading
 
 - **`head/1` carries no pictures.** `pictures_less/1` drops `timeline`, so a page
-  that has just read a row has its steps and *none* of their moments. Topping up
+  that has just read a row has its steps and _none_ of their moments. Topping up
   only the log left `log` at three steps and `timeline` at one, and the chart's
   bands are drawn from the moments — they vanished silently. The log and the
   moments are topped up separately, each from where it stops (`grown/1`).
@@ -2069,7 +2069,7 @@ world it does not run. The engine check, its badge, the dead option text and
 `mix monty.readiness --world habitat` are gone; `@habitat_hfov` is
 `@default_hfov`, which is what it measures.
 
-The *world* stays. `world: :habitat` is what the MCP tool's `world: "monty"`
+The _world_ stays. `world: :habitat` is what the MCP tool's `world: "monty"`
 maps to — an interpreter outside this build stepping Monty's own configs — and a
 run of one still needs the dataset and the memory its config names, so
 `for_setup/1` still asks for those. Upstream still ships
@@ -2087,8 +2087,17 @@ wheel's timer), the way `.ReplaySlider` and `.EscapeCollapse` already do.
 
 1. `ExperimentLive`'s reap (`Reaper.sweep/0`) — one query per open run, once per
    page, after the first paint (see 35.2 for why it cannot move yet).
-2. `catalog/2` rebuilt whenever the log grows — 3 + N passes over the whole log,
-   then `Chart.many/2` over the whole window.
-3. `assign_charts/2` redraws every module at 4 Hz; the throttle is per page, not
-   per module.
-4. `chart_marks/3` and `chart_samples/3` each thin the window on their own.
+2. `catalog/2` rebuilt whenever the log grows — `Replay.objects/1`,
+   `Replay.modules/1`, one `Replay.objects/2` per module, `Replay.series/1` and
+   `Replay.best_evidence/1`, each a full walk of the log — then `Chart.many/2`
+   over the window. This is the one cost still repeated over the whole run on
+   every step, and the one worth making incremental: the series are per-step
+   values, so they can be appended as the log grows, and the object set is an
+   append-only union. It is a change to `Monty.Studio.Replay`'s contract, so it
+   wants its own tests rather than a quiet edit.
+3. `chart_marks/3` and `chart_samples/3` each thin the window on their own — two
+   `group_by` + `take_every` passes per render over a list of up to a few
+   thousand points. Small beside the SVG path the same render builds.
+4. Nothing else: the experiment page's `assign_charts/2` redraws every module on
+   one throttled tick, which is what drawing N charts of a run that just stepped
+   costs, and the per-page throttle is the right granularity for it.
