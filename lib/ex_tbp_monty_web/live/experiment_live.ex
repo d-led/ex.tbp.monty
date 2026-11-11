@@ -703,6 +703,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             phx-hook=".EscapeCollapse"
             phx-window-keydown="collapse"
             phx-key="Escape"
+            phx-window-keyup="collapse"
+            phx-keyup="Escape"
             class="grid gap-2"
           >
             <script :type={Phoenix.LiveView.ColocatedHook} name=".EscapeCollapse">
@@ -739,6 +741,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                   // which is a key that works everywhere except where the
                   // reader's focus happens to be.
                   window.addEventListener("keydown", this.escape, true)
+                  // And on the way up: an embedded view can consume the keydown
+                  // before the page ever sees it, and the keyup is a second
+                  // chance at the same intention.
+                  window.addEventListener("keyup", this.escape, true)
 
                   // The box changes here, on the click itself. The picture is
                   // the server's and arrives when it can — on this page that can
@@ -790,6 +796,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
                 destroyed() {
                   window.removeEventListener("keydown", this.escape, true)
+                  window.removeEventListener("keyup", this.escape, true)
                 },
 
                 // The same two layouts the server renders, written out in the
@@ -797,20 +804,20 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 // They have to agree with the template's classes or the card
                 // jumps when the patch lands.
                 enterFullScreen(card) {
-                  card.className =
-                    "rounded-field fixed inset-0 z-50 flex flex-col overflow-hidden bg-base-100 p-4"
+                  card.className = "rounded-field fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
                   card.dataset.expanded = "true"
 
                   const figure = card.querySelector("figure")
                   if (figure !== null) {
-                    figure.classList.add("flex", "h-full", "min-h-0", "flex-col")
+                    figure.classList.remove("h-full", "min-h-0", "flex-1")
+                    figure.classList.add("flex", "flex-col")
                   }
 
                   const svg = card.querySelector("svg")
                   if (svg !== null) {
                     svg.dataset.expanded = "true"
-                    svg.classList.remove("h-52")
-                    svg.classList.add("min-h-0", "flex-1")
+                    svg.classList.remove("h-52", "min-h-0", "flex-1")
+                    svg.classList.add("h-[78vh]")
                   }
 
                   const button = card.querySelector("button[id^=chart-expand-]")
@@ -829,13 +836,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
                   const figure = card.querySelector("figure")
                   if (figure !== null) {
-                    figure.classList.remove("flex", "h-full", "min-h-0", "flex-col")
+                    figure.classList.remove("flex", "h-full", "min-h-0", "flex-col", "flex-1")
                   }
 
                   const svg = card.querySelector("svg")
                   if (svg !== null) {
                     svg.dataset.expanded = "false"
-                    svg.classList.remove("min-h-0", "flex-1")
+                    svg.classList.remove("min-h-0", "flex-1", "h-[78vh]")
                     svg.classList.add("h-52")
                   }
 
@@ -867,7 +874,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                   # like. The fixed card is its own containing block, so the
                   # button beside it needs no `relative` while it is expanded.
                   if(@expanded == module_id,
-                    do: "fixed inset-0 z-50 flex flex-col overflow-hidden bg-base-100 p-4",
+                    do: "fixed inset-0 z-50 overflow-auto bg-base-100 p-4",
                     else: "relative"
                   )
                 ]

@@ -70,9 +70,13 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           "relative rounded-field border border-base-300 bg-base-100 p-2",
           # Full screen is the chart's own size, not the card's: a card filling the
           # window around a 960x300 ribbon is a small chart with a lot of padding,
-          # which is what "full screen" looked like before. The figure takes the
-          # card's height and the plot takes what the caption and the legend leave.
-          @expanded && "flex h-full min-h-0 flex-col"
+          # which is what "full screen" looked like before.
+          #
+          # The height is a viewport height, not `h-full`: a percentage height is
+          # only as good as the chain of ancestors it resolves through, and the
+          # card it lands in is a grid cell, then a fixed box. A chart asked for
+          # 78vh is 78vh, which is what the run page's plot already does.
+          @expanded && "flex flex-col"
         ]
       }
     >
@@ -91,7 +95,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
       The gestures are the shared hook's (`assets/js/chart.js`), the same one the
       run page's chart answers to: drag a stretch to zoom, shift-drag to pan, the
       wheel to zoom about the pointer, double-click for the whole run. --%>
-      <div class={["relative", @expanded && "flex min-h-0 flex-1 flex-col"]}>
+      <div class="relative">
         {render_slot(@control)}
         <svg
           id={"chart-svg-#{@module_id}"}
@@ -103,7 +107,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
               # The height is the page's, not the picture's: a chart given the whole
               # width of a column and its own aspect ratio is a chart twice as tall
               # as it reads well, because the aspect was drawn for half a row.
-              @expanded && "min-h-0 flex-1",
+              @expanded && "h-[78vh]",
               !@expanded && "h-52"
             ]
           }

@@ -1240,6 +1240,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         phx-hook=".EscapeReplay"
         phx-window-keydown="replay_collapse"
         phx-key="Escape"
+        phx-window-keyup="replay_collapse"
+        phx-keyup="Escape"
       >
         <script :type={Phoenix.LiveView.ColocatedHook} name=".EscapeReplay">
           // Escape leaves full screen at once, in the browser, and tells the
@@ -1266,6 +1268,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               // `stopPropagation` takes the key on the way — which is a key that
               // works everywhere except where the reader's focus happens to be.
               window.addEventListener("keydown", this.escape, true)
+              // And on the way up: an embedded view can consume the keydown
+              // before the page ever sees it, and the keyup is a second chance
+              // at the same intention.
+              window.addEventListener("keyup", this.escape, true)
 
               // The box changes here, on the click itself; the picture follows
               // when the server can draw it. A plot that fills the window does
@@ -1311,6 +1317,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
             destroyed() {
               window.removeEventListener("keydown", this.escape, true)
+              window.removeEventListener("keyup", this.escape, true)
             },
 
             // The two layouts the server renders, written out here so a click

@@ -2450,3 +2450,24 @@ own bindings, none calls `stopPropagation`, and nothing writes to an element
 LiveView owns except the two hooks above — which write only the class and
 `data-expanded` they are also the ones to restore, and now hold that value
 against patches on purpose rather than by luck.
+
+### 39.2 The expanded card had three hundred pixels of nothing in it
+
+Full screen did not make the plot bigger: the card went `fixed inset-0`, the
+figure asked for `h-full`, and the plot asked for `flex-1` — and a percentage
+height is only as good as the chain it resolves through. Measured on the cows
+surface experiment page: card 884x554, figure 852x**510**, svg 834x**432** only
+after the redraw; before it, the plot sat at its cell height (208 px) at the top
+of a tall white card, which is what the screenshot of the broken state shows.
+
+The height is now `78vh`, taken from the viewport the way the run page's plot
+already takes `72vh`, and the card scrolls instead of hiding its overflow. Same
+page, after: card 884x554, figure 852x510, svg 834x432, `viewBox 0 0 834 432` —
+the picture redrawn for the box rather than a small picture in a large box.
+
+**Escape also answers on `keyup`.** A bare `keyup` with no `keydown` collapses
+in 142 ms (measured), which is the case a host that consumes the first event
+leaves open. What no page can answer is a host that consumes the key entirely:
+VS Code's Simple Browser takes Escape for the editor, which is where the "still
+no Esc" reports came from — the same page in a browser tab collapses in 7 ms, and
+the control itself is a click either way.
