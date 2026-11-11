@@ -73,6 +73,67 @@ defmodule Monty.Studio.RunStreamTest do
     end
   end
 
+  # What a page reads, and what a boundary writes, both come from this table:
+  # `steps_from/2` asks the process only for the order and then reads here, and
+  # `read_from/2` is that read. The keys are ordinary table keys, so the mistake
+  # that is easy to make and invisible until two runs are open at once is reading
+  # on past the end of one run and into the next.
+  describe "the steps a page reads" do
+    test "are the ones after the position it already has", %{run_id: run_id} do
+      for step <- 1..4, do: RunStream.publish(run_id, report(step: step))
+      settled(run_id)
+
+      {entries, moments} = RunStream.read_from(run_id, 1)
+
+      assert Enum.map(entries, & &1["step"]) == [3, 4]
+      assert length(moments) == 2
+    end
+
+    test "stop at the end of the run they belong to", %{run_id: run_id} do
+      other = Ecto.UUID.generate()
+      :ok = Artifacts.start(other)
+      on_exit(fn -> Artifacts.forget(other) end)
+
+      RunStream.publish(run_id, report(step: 1))
+      RunStream.publish(other, report(step: 1))
+      RunStream.publish(run_id, report(step: 2))
+      settled(run_id)
+
+      {entries, _moments} = RunStream.read_from(run_id, -1)
+
+      assert Enum.map(entries, & &1["step"]) == [1, 2]
+    end
+
+    test "are read whole when the page asks for everything", %{run_id: run_id} do
+      for step <- 1..3, do: RunStream.publish(run_id, report(step: step))
+      settled(run_id)
+
+      assert {entries, moments} = RunStream.steps_from(run_id, -1)
+      assert Enum.map(entries, & &1["step"]) == [1, 2, 3]
+      assert length(moments) == 3
+    end
+
+    test "are none, for a run this node never stepped", %{run_id: run_id} do
+      settled(run_id)
+
+      assert RunStream.read_from(Ecto.UUID.generate(), -1) == {[], []}
+    end
+
+    test "are none once the run's record holds them", %{run_id: run_id} do
+      RunStream.publish(run_id, report(step: 1))
+      settled(run_id)
+
+      :ok = RunStream.clear(run_id)
+
+      assert RunStream.read_from(run_id, -1) == {[], []}
+      assert RunStream.count(run_id) == 0
+    end
+  end
+
+  # Everything the test process has handed over, so far, has landed: a call
+  # answers after the casts that came before it.
+  defp settled(run_id), do: RunStream.count(run_id)
+
   # A step, the way a worker hands one over: what it reported, what the modules
   # believed, what the sensors saw, and when.
   defp report(options) do

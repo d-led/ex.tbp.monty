@@ -54,6 +54,13 @@ defmodule Monty.Studio.RunStream do
 
   @table __MODULE__
 
+  # The default was five seconds, and a run whose four parts were all finishing
+  # an episode at once made one of them give up: the boundary write turned the
+  # timeout into a failed run. Reading a run's steps out of the table is a
+  # bounded amount of work that a busy node makes slow, not impossible, so the
+  # wait is generous and the failure is no longer how a run ends.
+  @timeout 60_000
+
   @doc "Starts the table. One for the node, owned by this process."
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -70,9 +77,18 @@ defmodule Monty.Studio.RunStream do
   `cast`, deliberately: a step that waited for this process would be a step
   waiting for a file write and a JPEG, and the point of the arrangement is that
   it does not.
+
+  `:announce` is the run whose page is watching, when it is not the stream the
+  steps are kept in. A parallel run's parts each keep their own stream — they are
+  the steps of one part, which is what that part's card draws — and all of them
+  announce to the one run the page opened, because a page watching a run wants
+  every part's step (Monty's dashboard draws a section per publisher for the same
+  reason).
   """
-  @spec publish(binary(), map()) :: :ok
-  def publish(run_id, report), do: GenServer.cast(__MODULE__, {:publish, run_id, report})
+  @spec publish(binary(), map(), keyword()) :: :ok
+  def publish(stream_id, report, options \\ []) do
+    GenServer.cast(__MODULE__, {:publish, stream_id, report, Keyword.get(options, :announce)})
+  end
 
   @doc """
   A run's steps in the order it took them, as the pair a record keeps.
@@ -91,16 +107,85 @@ defmodule Monty.Studio.RunStream do
   throw most of it away is the copy this exists to avoid. A negative `from` is
   the whole run — no run has a step below nought.
 
-  A `call`, like `clear/1`: a boundary that read the table directly could miss
-  the steps its own casts had not landed yet, and write an episode without its
-  last steps.
+  A boundary needs two things of this process, and they are not the transcript:
+  that every step it handed over has landed, and then its own copy of the steps.
+  So it asks for the first with a `:barrier` (a message carrying nothing, answered
+  after the casts that came before it, because one process sends its messages in
+  order) and reads the table for the second. Asking this process for the steps
+  made it build and hand over a run's whole transcript — 2 305 ms of 74 MB for a
+  run of 42 401 steps — while every page waited behind it.
   """
   @spec steps_from(binary(), integer()) :: {[map()], [map()]}
-  def steps_from(run_id, from), do: GenServer.call(__MODULE__, {:steps_from, run_id, from})
+  def steps_from(run_id, from) do
+    :ok = GenServer.call(__MODULE__, :barrier, @timeout)
+    read_from(run_id, from)
+  end
 
-  @doc "How many steps of `run_id` are held here."
+  @doc """
+  The steps of `run_id` taken after the first `from`, read from the table here.
+
+  What `steps_from/2` reads once the order is settled, and what a page can read
+  without waiting for this process at all: a page that asked it for steps waited
+  behind every step of every run the node was writing — pictures, log lines and
+  all — and five seconds of that is the page dying with a `GenServer.call`
+  timeout while the run it watched stepped perfectly well.
+
+  A step a page is told about is a step the table already holds, because the
+  announcement follows the insert. What a read can miss is a step not yet
+  announced, and the next announcement brings it.
+  """
+  @spec read_from(binary(), integer()) :: {[map()], [map()]}
+  def read_from(run_id, from) do
+    cond do
+      not table?(@table) -> {[], []}
+      # Everything: one traversal of the run's keys. Seeking each step would pay
+      # a lookup a row and measured three and a half times slower (57 ms against
+      # 16 ms for 42 400 steps).
+      from < 0 -> between(run_id, -1)
+      # The tail: the steps after this one are found by seeking, because a
+      # partly bound key cannot be seeked through by `:ets.select` — reading the
+      # ten steps after the forty-second thousand cost 56 ms of it instead of
+      # nothing.
+      true -> collect(run_id, {run_id, from}, [], [])
+    end
+  end
+
+  @doc """
+  How many steps of `run_id` are held here.
+
+  A `call`, and an instant one — the count is this process's own — because a
+  caller that has just handed a step over expects to hear about it (`Parts`
+  reads a part's steps as soon as its cards see that it has any). What must not
+  be a call is the transcript: see `steps_from/2`.
+  """
   @spec count(binary()) :: non_neg_integer()
-  def count(run_id), do: GenServer.call(__MODULE__, {:count, run_id})
+  def count(run_id), do: GenServer.call(__MODULE__, {:count, run_id}, @timeout)
+
+  # A run's steps are `{run_id, position}` keys over dense positions, so the next
+  # one is a seek and not a scan.
+  defp collect(run_id, key, entries, moments) do
+    case :ets.next(@table, key) do
+      {^run_id, _position} = next ->
+        [{_key, entry, moment}] = :ets.lookup(@table, next)
+        collect(run_id, next, [entry | entries], [moment | moments])
+
+      _end_of_the_run ->
+        {Enum.reverse(entries), Enum.reverse(moments)}
+    end
+  end
+
+  # Every step of one run, in one pass. The guard is what keeps the traversal on
+  # this run: a partly bound key stops at the next run's first key, so the guard
+  # is how the empty tail is recognised — the same read, with nothing to return.
+  defp between(run_id, from) do
+    @table
+    |> :ets.select([
+      {{{run_id, :"$1"}, :"$2", :"$3"}, [{:>, :"$1", from}], [{{:"$2", :"$3"}}]}
+    ])
+    |> Enum.unzip()
+  end
+
+  defp table?(name), do: :ets.whereis(name) != :undefined
 
   @doc """
   Forgets a run's steps.
@@ -113,7 +198,7 @@ defmodule Monty.Studio.RunStream do
   after it would put back what was just forgotten.
   """
   @spec clear(binary()) :: :ok
-  def clear(run_id), do: GenServer.call(__MODULE__, {:clear, run_id})
+  def clear(run_id), do: GenServer.call(__MODULE__, {:clear, run_id}, @timeout)
 
   @impl true
   def init(_opts) do
@@ -131,50 +216,58 @@ defmodule Monty.Studio.RunStream do
   end
 
   @impl true
-  def handle_cast({:publish, run_id, report}, state) do
+  def handle_cast({:publish, stream_id, report, announce}, state) do
     step = drawn(report)
     images = images_of(step)
 
     # The record keeps where a picture is, not what it is: a step's PNGs were ten
     # kilobytes of the row, and a run of twenty thousand steps does not fit in a
     # jsonb value. The page keeps drawing from the bytes it was handed.
+    # The pictures are written under the directory a browser can fetch from: a
+    # part's steps live in a stream of their own, but there is no run row behind a
+    # stream id, and the frames route answers only for a run that exists. So a
+    # part's pictures go in the run the page opened, in a folder that says which
+    # part took them — every part numbers its steps from nought.
+    pictures_in = announce || stream_id
+    frame = frame_key(Map.get(report, :part), step.number)
+
     store = fn sensor_id, kind, base64 ->
-      with {:ok, name} <- Artifacts.put_frame(run_id, step.number, sensor_id, kind, base64),
-           do: {:ok, Artifacts.frame_url(run_id, name)}
+      with {:ok, name} <- Artifacts.put_frame(pictures_in, frame, sensor_id, kind, base64),
+           do: {:ok, Artifacts.frame_url(pictures_in, name)}
     end
 
     moment = RunLog.moment(step.number, step.observations, images, store)
-    position = Map.get(state.held, run_id, 0)
+    position = Map.get(state.held, stream_id, 0)
 
-    :ets.insert(@table, {{run_id, position}, step.entry, moment})
+    :ets.insert(@table, {{stream_id, position}, step.entry, moment})
 
     # A step's line is built from its own entry here, so it is always there: the
     # file and the page are told the same words.
-    say(run_id, step.line)
+    say(stream_id, step.line)
 
-    broadcast(run_id, {:step, announcement(step, frames_of(step, images))})
-    {:noreply, %{state | held: Map.put(state.held, run_id, position + 1)}}
+    broadcast(announce || stream_id, {:step, announcement(step, frames_of(step, images))})
+    {:noreply, %{state | held: Map.put(state.held, stream_id, position + 1)}}
   end
 
   @impl true
   def handle_call({:count, run_id}, _from, state),
     do: {:reply, Map.get(state.held, run_id, 0), state}
 
-  def handle_call({:steps_from, run_id, from}, _from, state) do
-    steps =
-      @table
-      |> :ets.select([
-        {{{run_id, :"$1"}, :"$2", :"$3"}, [{:>, :"$1", from}], [{{:"$2", :"$3"}}]}
-      ])
-      |> Enum.unzip()
-
-    {:reply, steps, state}
-  end
+  # What a writer asks for before it reads its own steps: that everything handed
+  # over before this message is in the table. It carries nothing and answers at
+  # once, where the same call used to carry a run's whole transcript.
+  def handle_call(:barrier, _from, state), do: {:reply, :ok, state}
 
   def handle_call({:clear, run_id}, _from, state) do
     :ets.match_delete(@table, {{run_id, :_}, :_, :_})
     {:reply, :ok, %{state | held: Map.delete(state.held, run_id)}}
   end
+
+  # Where a step's pictures are kept inside its run's directory: the step alone
+  # for a run of the whole experiment, the part and the step for a run of several
+  # parts.
+  defp frame_key(nil, step), do: Integer.to_string(step)
+  defp frame_key(part, step), do: "part-#{part}-#{step}"
 
   # What a report becomes once the record's shape and the log's text are known.
   #
@@ -183,7 +276,12 @@ defmodule Monty.Studio.RunStream do
   # the string-keyed copy a row keeps — because both travelled. What is derived
   # here travels once.
   defp drawn(%{info: info, at: at, episode: episode, beliefs: beliefs} = report) do
-    entry = RunLog.entry(info, beliefs, episode: episode, at: at)
+    entry =
+      RunLog.entry(info, beliefs,
+        episode: episode,
+        at: at,
+        part: Map.get(report, :part)
+      )
 
     report
     |> Map.drop([:info, :at])
