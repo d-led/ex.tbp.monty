@@ -102,9 +102,17 @@ env:
 jobs:
   # Fork pull requests only: a same-repository branch has a push run already,
   # and that run is what its pull request shows. See the trigger above.
+  #
+  # A tag is not a new commit: it is the same one `main` already ran the gates
+  # for, so `push` on a tag runs only what a tag adds — the versioned image and
+  # the desktop release. Re-earning a verdict the commit already has is a
+  # second run of the whole suite for nothing, and `publish.yml` tests the
+  # package it is about to upload in any case.
   lint:
     name: lint
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork) &&
+      !startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -139,7 +147,9 @@ jobs:
   # the four exports and holds the total to 85.
   test:
     name: test ${{ matrix.partition }}/4
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork) &&
+      !startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     # A quarter of the suite, plus the compile and the setup.
     timeout-minutes: 20
@@ -381,7 +391,9 @@ jobs:
 
   types:
     name: types
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork) &&
+      !startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

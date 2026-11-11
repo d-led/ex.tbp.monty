@@ -2,28 +2,25 @@ name: publish
 
 # The core package, published to Hex.
 #
-# It publishes from a tag and only from a tag: `v0.1.0` for a release, and the
-# tag has to be the version in the package's `mix.exs`, because a hex release is
-# permanent — a wrong number can be retired but never withdrawn.
+# A tag *is* the release: pushing `v0.1.0` publishes `ex_tbp_monty_core` 0.1.0
+# and opens a GitHub release with the notes. Nothing here asks another workflow
+# whether it passed — the tag is pushed by a person looking at a green main, and
+# a publish job that goes hunting for a verdict is a second place for the two to
+# disagree. `scripts/tag_and_push_version.sh` is the path that checks for you.
 #
-# "When the build is green" is answered here rather than assumed: this workflow
-# compiles and tests the package itself before it builds the tarball, and it
-# builds the tarball before it publishes it. The application's `ci.yml` gates the
-# container images; this gates the library, and the two do not depend on each
-# other because the library is a package that has to stand on its own — which is
-# also why its own suite is what runs here.
+# The package's own suite runs here before the upload: a hex release is
+# permanent, and a version number spent on a broken build can be retired but
+# never withdrawn.
+#
+# Publishing is resumable: a version Hex already carries is skipped, so a run
+# that failed half way is re-run rather than re-tagged.
+
 on:
   push:
     tags:
       - "v*.*.*"
       - "v*.*.*-rc.*"
       - "v*.*.*-beta.*"
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Build the tarball and stop (no publish)"
-        type: boolean
-        default: true
 
 concurrency:
   group: publish-${{ github.ref }}
@@ -33,46 +30,26 @@ env:
   ELIXIR_VERSION: "1.20.5"
   OTP_VERSION: "29.1.2"
 
-permissions:
-  contents: read
-  # The gate below asks the API whether this commit's `ci` run passed.
-  actions: read
-
 jobs:
-  package:
-    name: test and build the package
+  publish:
+    name: publish the core to Hex
     runs-on: ubuntu-latest
+    permissions:
+      # The package goes to Hex with a key that belongs to a person; the release
+      # notes go to this repository.
+      contents: write
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # A hex release is permanent: a version number spent on a commit whose
-      # gates failed cannot be withdrawn, only retired. This asks about *this*
-      # commit rather than trusting that the tag was pushed from a good branch.
-      - name: The commit's CI is green
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -e
-          sha=$(git rev-parse HEAD)
-          # Completed runs only. Pushing the tag also runs `ci` for the same
-          # commit, and that run is created seconds before this gate asks: its
-          # conclusion is still null, and reading the newest run's null as "not
-          # green" failed 0.1.0's first release while a green run for the same
-          # commit was already there.
-          conclusion=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=$sha&status=completed&per_page=1" \
-            --jq '.workflow_runs[0].conclusion // "none"')
-          echo "ci for $sha: $conclusion"
-          [ "$conclusion" = "success" ] || {
-            echo "::error::CI for $sha is '$conclusion' — not publishing"
-            exit 1
-          }
 
       - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           elixir-version: ${{ env.ELIXIR_VERSION }}
           otp-version: ${{ env.OTP_VERSION }}
 
+      # The crates are compiled when the package is: a NIF is loaded by the BEAM
+      # of the machine that installs it, so `deps.compile` wants a Rust toolchain
+      # here as much as in `ci.yml`.
       - name: Cache the Rust build
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -86,70 +63,42 @@ jobs:
       - name: Install the toolchain the NIFs are built with
         run: rustup toolchain install stable --profile minimal --no-self-update
 
-      - name: Fetch dependencies and compile, warnings are errors
-        working-directory: packages/ex_tbp_monty_core
-        run: |
-          mix local.hex --force
-          mix local.rebar --force
-          mix deps.get
-          mix compile --warnings-as-errors
+      # `VERSION`, the package's `@version` and the tag are three statements of
+      # one number, and a tag that publishes a version nobody reviewed is what
+      # this check exists to stop.
+      - name: The tag and the packages agree on the version
+        run: elixir scripts/release.exs check
 
-      - name: Test the package
-        working-directory: packages/ex_tbp_monty_core
-        run: mix test
-
-      - name: The tag and the package agree on the version
-        if: startsWith(github.ref, 'refs/tags/')
-        working-directory: packages/ex_tbp_monty_core
-        run: |
-          set -e
-          tag="${GITHUB_REF_NAME#v}"
-          version=$(grep -o '@version "[^"]*"' mix.exs | head -1 | cut -d'"' -f2)
-          echo "tag v$tag, package $version"
-          [ "$tag" = "$version" ] || {
-            echo "::error::the tag is v$tag and the package is $version — bump @version or retag"
-            exit 1
-          }
-
-      - name: Build the tarball
-        working-directory: packages/ex_tbp_monty_core
-        run: mix hex.build
-
-      - name: Keep the tarball
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: hex-tarball
-          path: packages/ex_tbp_monty_core/ex_tbp_monty_core-*.tar
-          retention-days: 30
-
-  publish:
-    name: publish to Hex
-    needs: package
-    if: startsWith(github.ref, 'refs/tags/') && (github.event_name == 'push' || inputs.dry_run == false)
-    runs-on: ubuntu-latest
-    environment: hex
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
-        with:
-          elixir-version: ${{ env.ELIXIR_VERSION }}
-          otp-version: ${{ env.OTP_VERSION }}
-
-      - name: Install the toolchain the NIFs are built with
-        run: rustup toolchain install stable --profile minimal --no-self-update
-
-      - name: Fetch dependencies
-        working-directory: packages/ex_tbp_monty_core
-        run: |
-          mix local.hex --force
-          mix local.rebar --force
-          mix deps.get
-
-      # The key belongs to the account that owns the package name. It is the
-      # repository's secret, set by a person, never a value in this file.
-      - name: Publish
+      - name: Test, document and publish
         working-directory: packages/ex_tbp_monty_core
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
-        run: mix hex.publish --yes
+        run: |
+          set -e
+          mix local.hex --force
+          mix local.rebar --force
+
+          version=$(tr -d '[:space:]' < ../../VERSION)
+
+          # Resumable: a package that already carries this version is left alone,
+          # so a failed run is simply re-run.
+          if mix hex.info ex_tbp_monty_core "$version" > /dev/null 2>&1; then
+            echo "ex_tbp_monty_core $version is already published — nothing to publish"
+            exit 0
+          fi
+
+          mix deps.get
+          mix compile --warnings-as-errors
+          # `env` rather than a `VAR=value` prefix: shellcheck reads the prefix
+          # as an assignment whose value is a command, and the repo's workflow
+          # lint refuses it.
+          env MIX_ENV=test mix deps.get --only test
+          env MIX_ENV=test mix test
+          env MIX_ENV=dev mix docs
+          mix hex.publish --yes
+
+      - name: GitHub release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref, '-rc.') || contains(github.ref, '-beta.') }}
