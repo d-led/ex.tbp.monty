@@ -701,6 +701,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           <div
             id="charts"
             phx-hook=".EscapeCollapse"
+            phx-window-keydown="collapse"
+            phx-key="Escape"
             class="grid gap-2"
           >
             <script :type={Phoenix.LiveView.ColocatedHook} name=".EscapeCollapse">
@@ -755,9 +757,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                   const button = card.querySelector("button[id^=chart-expand-]")
                   if (button !== null) {
                     button.setAttribute("aria-label", "full screen")
-
+                    // The glyph is a heroicon span named by its class: leaving
+                    // full screen is the picture expanding again.
                     const glyph = button.querySelector("span")
-                    if (glyph !== null) glyph.textContent = "⤢"
+                    if (glyph !== null) {
+                      glyph.classList.replace("hero-arrows-pointing-in", "hero-arrows-pointing-out")
+                    }
                   }
                 }
               }
@@ -796,7 +801,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                     id={"chart-expand-#{module_id}"}
                     phx-click="expand"
                     phx-value-module={module_id}
-                    class="btn btn-circle btn-sm absolute right-2 top-2 z-10 border border-base-300 bg-base-100/85 backdrop-blur"
+                    class="btn btn-sm size-8 min-h-0 p-0 absolute right-2 top-2 z-10 border border-base-300"
                     aria-label={
                       if @expanded == module_id, do: "leave full screen (Esc)", else: "full screen"
                     }
@@ -804,9 +809,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                       if @expanded == module_id, do: "leave full screen (Esc)", else: "full screen"
                     }
                   >
-                    <span class="text-2xl leading-none">
-                      {if @expanded == module_id, do: "⤡", else: "⤢"}
-                    </span>
+                    <.icon
+                      name={
+                        if @expanded == module_id,
+                          do: "hero-arrows-pointing-in",
+                          else: "hero-arrows-pointing-out"
+                      }
+                      class="size-4"
+                    />
                   </button>
                 </:control>
               </ExTbpMontyWeb.EvidenceChart.evidence_chart>

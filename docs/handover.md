@@ -2385,3 +2385,37 @@ that owns a whole update (the hypothesis updater's build-and-blend pass, which i
 where `List.duplicate`/`Enum.concat`/`flat_map` live) or the numeric core on
 EXLA, which is the standing ask and the only thing that reaches the ~50 ms target
 at ten objects.
+
+## 39. 2026-11-14: the run page's picture was six megabytes, and two ways out of full screen
+
+What a reader asked for was one control on the plot, the same on both pages,
+whose picture says what it will do, and a key that gets out of full screen at
+once. What the measurements found under it is the reason it felt broken.
+
+**The page was 6.7 MB and 26 240 nodes.** The replay chart drew one transparent
+`<circle>` per decimated sample with a `<title>` inside it, so the browser could
+show a native tooltip: two and a quarter megabytes of markup, twenty-five
+thousand nodes, all re-laid out on every patch. Beside it was a `data-samples`
+attribute of 1.28 MB holding the same points again as JSON. Leaving full screen
+took ~460 ms for that re-layout alone, which is what "Escape does nothing" felt
+like — the key was answered, the page could not show it.
+
+The marks are gone: the hook reads the pointer off the samples and names the
+step itself, so the circles said nothing the page did not already say. Measured
+after: 6.71 → 4.48 MB, 26 240 → 1 042 nodes, expand 250 → 88 ms, Escape
+460 → 7 ms with the socket offline. The polylines (1.73 MB) and the samples
+attribute are the next two cuts and are still there.
+
+**Escape has two paths, on purpose.** A hook (`EscapeReplay`, `EscapeCollapse`)
+drops the full-screen layout in the browser and only then tells the server: with
+the socket offline it is 7 ms. Beside it each page keeps the plain
+`phx-window-keydown="…" phx-key="Escape"` binding, which answers in ~90 ms — it
+is what works when the tab holds a bundle from before the hook existed, which is
+exactly the state that made the key look dead to the person using it. Both
+handlers were already idempotent.
+
+**The control is one widget on both pages**: `btn btn-sm size-8 min-h-0 p-0`,
+`hero-arrows-pointing-out` when the plot is a cell and `hero-arrows-pointing-in`
+when it fills the screen, in the plot's top right corner, in the border colour of
+the card. `.icon` from `core_components` is imported into `StudioComponents` for
+it — the studio had no icons of its own and should not grow a second set.

@@ -1237,9 +1237,48 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         :if={@run}
         id="replay-panel"
         class="space-y-1"
+        phx-hook=".EscapeReplay"
         phx-window-keydown="replay_collapse"
         phx-key="Escape"
       >
+        <script :type={Phoenix.LiveView.ColocatedHook} name=".EscapeReplay">
+          // Escape leaves full screen at once, in the browser, and tells the
+          // server after. It used to be `phx-window-keydown` on this section,
+          // which is a round trip: while a run is stepping that round trip is
+          // what made Escape feel like a key that does nothing. What the browser
+          // drops here is what the server's next patch removes anyway.
+          export default {
+            mounted() {
+              this.escape = (event) => {
+                if (event.key !== "Escape") return
+
+                const panel = this.el.querySelector("#replay-chart-panel")
+                if (panel === null || !panel.className.includes("fixed")) return
+
+                panel.className = "space-y-2 pt-1"
+
+                const button = panel.querySelector("#replay-expand")
+                if (button !== null) {
+                  button.setAttribute("aria-label", "full screen")
+                  // The glyph is a heroicon span named by its class: leaving full
+                  // screen is the picture expanding again.
+                  const glyph = button.querySelector("span")
+                  if (glyph !== null) {
+                    glyph.classList.replace("hero-arrows-pointing-in", "hero-arrows-pointing-out")
+                  }
+                }
+
+                this.pushEvent("replay_collapse", {})
+              }
+
+              window.addEventListener("keydown", this.escape)
+            },
+
+            destroyed() {
+              window.removeEventListener("keydown", this.escape)
+            }
+          }
+        </script>
         <ExTbpMontyWeb.StudioComponents.replay
           moment={@moment}
           chart={@chart}

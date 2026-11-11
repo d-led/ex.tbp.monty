@@ -10,6 +10,10 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
   use Phoenix.Component
 
+  # The icons are the studio's, not a second set: `<.icon>` is the one component
+  # that knows how a heroicon is drawn here.
+  import ExTbpMontyWeb.CoreComponents, only: [icon: 1]
+
   alias Monty.Studio.{Diagram, Finding}
 
   @doc """
@@ -620,11 +624,14 @@ defmodule ExTbpMontyWeb.StudioComponents do
               <button
                 id="replay-expand"
                 phx-click="replay_expand"
-                class="btn btn-circle btn-sm absolute right-2 top-2 z-10 border border-base-300 bg-base-100/85 backdrop-blur"
+                class="btn btn-sm size-8 min-h-0 p-0 absolute right-2 top-2 z-10 border border-base-300"
                 aria-label={if @expanded, do: "leave full screen (Esc)", else: "full screen"}
                 title={if @expanded, do: "leave full screen (Esc)", else: "full screen"}
               >
-                <span class="text-2xl leading-none">{if @expanded, do: "⤡", else: "⤢"}</span>
+                <.icon
+                  name={if @expanded, do: "hero-arrows-pointing-in", else: "hero-arrows-pointing-out"}
+                  class="size-4"
+                />
               </button>
               <div
                 id="replay-chart-hover"
@@ -719,21 +726,16 @@ defmodule ExTbpMontyWeb.StudioComponents do
                       vector-effect="non-scaling-stroke"
                       pointer-events="none"
                     />
-                    <%!-- A mark per drawn step, each carrying its own sentence in a
-                  `<title>`: the browser shows that on hover, so the readout needs
-                  no JavaScript at all. The circle is transparent and wider than
-                  the line, because a point is easier to point at than a stroke.
-                  Decimation is what makes this affordable — a few hundred marks
-                  per line rather than twenty thousand. --%>
-                    <circle
-                      :for={mark <- chart_marks(@chart, @series, @series_id)}
-                      cx={mark.x}
-                      cy={mark.y}
-                      r="6"
-                      fill="transparent"
-                    >
-                      <title>{mark.label}</title>
-                    </circle>
+                    <%!-- No mark per drawn step. There used to be one transparent
+                  circle per decimated point, each carrying a `<title>` so the
+                  browser would show a native tooltip — a second readout beside
+                  the one the hook draws, and the expensive half of the page: a
+                  run of seven thousand steps over ten objects is twenty-five
+                  thousand nodes and two megabytes, re-laid out on every patch,
+                  which is what made leaving full screen take half a second.
+                  The hook reads the pointer off the samples and names the step
+                  itself, so the marks said nothing the page did not already
+                  say. --%>
                   </g>
                   <line
                     :if={@chart.playhead}
@@ -1141,35 +1143,10 @@ defmodule ExTbpMontyWeb.StudioComponents do
     end
   end
 
-  # One mark per drawn point, each with the sentence a hover shows. The sentence
-  # is built here rather than in the browser because it is a sentence about the
-  # data — "mug · #1337 · 16.53" — and the page that says it should be the one
-  # that chose the words, exactly as it is for the tooltip the hook draws.
-  defp chart_marks(chart, series, series_id) do
-    unit = chart_unit(series, series_id)
-    named? = length(chart.lines) > 1 or series_id == "evidence"
-
-    chart.hover
-    |> nearest_per_unit(@samples_per_line)
-    |> Enum.map(fn %{line: line, x: x, y: y, step: step, value: value} ->
-      %{
-        x: Float.round(x * 1.0, 2),
-        y: Float.round(y * 1.0, 2),
-        label: mark_label(line, step, value, unit, named?)
-      }
-    end)
-  end
-
-  defp mark_label(line, step, value, unit, named?) do
-    name = if named?, do: "#{line} · ", else: ""
-    unit = if unit == "", do: "", else: " #{unit}"
-
-    decimals =
-      if is_float(value), do: :erlang.float_to_binary(value * 1.0, decimals: 2), else: value
-
-    "#{name}##{step} · #{decimals}#{unit}"
-  end
-
+  # The samples a hover reads, each with the sentence the readout shows. The
+  # sentence is built here rather than in the browser because it is a sentence
+  # about the data — "mug · #1337 · 16.53" — and the page that says it should be
+  # the one that chose the words.
   defp chart_samples(chart, series, series_id) do
     unit = chart_unit(series, series_id)
     named? = length(chart.lines) > 1 or series_id == "evidence"
