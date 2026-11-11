@@ -708,10 +708,25 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               // declared as `phx-window-keydown` on this element: that binding
               // never reached the server on this page, and a key that does
               // nothing is worse than one that was never offered.
+              //
+              // It leaves at once, in the browser, and only then tells the
+              // server. The picture is the server's — the plot is drawn for the
+              // box the browser measures — but the card covering the page is
+              // not something a reader should wait a round trip to be rid of,
+              // and while a run is stepping that round trip is what made Escape
+              // feel like a key that did nothing. What the browser drops here is
+              // exactly what the server's next patch removes, so the two agree
+              // on the frame after.
               export default {
                 mounted() {
                   this.escape = (event) => {
-                    if (event.key === "Escape") this.pushEvent("collapse", {})
+                    if (event.key !== "Escape") return
+
+                    const card = this.el.querySelector("[data-expanded=true]")
+                    if (card === null) return
+
+                    this.leaveFullScreen(card)
+                    this.pushEvent("collapse", {})
                   }
 
                   window.addEventListener("keydown", this.escape)
@@ -719,12 +734,38 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
                 destroyed() {
                   window.removeEventListener("keydown", this.escape)
+                },
+
+                leaveFullScreen(card) {
+                  card.className = "rounded-field relative"
+                  card.dataset.expanded = "false"
+
+                  const figure = card.querySelector("figure")
+                  if (figure !== null) {
+                    figure.classList.remove("flex", "h-full", "min-h-0", "flex-col")
+                  }
+
+                  const svg = card.querySelector("svg")
+                  if (svg !== null) {
+                    svg.dataset.expanded = "false"
+                    svg.classList.remove("min-h-0", "flex-1")
+                    svg.classList.add("h-52")
+                  }
+
+                  const button = card.querySelector("button[id^=chart-expand-]")
+                  if (button !== null) {
+                    button.setAttribute("aria-label", "full screen")
+
+                    const glyph = button.querySelector("span")
+                    if (glyph !== null) glyph.textContent = "⤢"
+                  }
                 }
               }
             </script>
             <div
               :for={{module_id, chart} <- @charts}
               id={"chart-card-#{module_id}"}
+              data-expanded={to_string(@expanded == module_id)}
               class={
                 [
                   "rounded-field",
@@ -742,20 +783,33 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 ]
               }
             >
-              <button
-                id={"chart-expand-#{module_id}"}
-                phx-click="expand"
-                phx-value-module={module_id}
-                class="btn btn-xs absolute right-2 top-2 z-10"
-                aria-label={if @expanded == module_id, do: "leave full screen", else: "full screen"}
-              >
-                {if @expanded == module_id, do: "⤡", else: "⤢"}
-              </button>
               <ExTbpMontyWeb.EvidenceChart.evidence_chart
                 module_id={module_id}
                 chart={chart}
                 expanded={@expanded == module_id}
-              />
+              >
+                <%!-- On the plot, in its top right corner, because the plot is
+                what it acts on: a control in a header row acts on "the chart"
+                in the abstract, and the expanded picture then hides it. --%>
+                <:control>
+                  <button
+                    id={"chart-expand-#{module_id}"}
+                    phx-click="expand"
+                    phx-value-module={module_id}
+                    class="btn btn-circle btn-sm absolute right-2 top-2 z-10 border border-base-300 bg-base-100/85 backdrop-blur"
+                    aria-label={
+                      if @expanded == module_id, do: "leave full screen (Esc)", else: "full screen"
+                    }
+                    title={
+                      if @expanded == module_id, do: "leave full screen (Esc)", else: "full screen"
+                    }
+                  >
+                    <span class="text-2xl leading-none">
+                      {if @expanded == module_id, do: "⤡", else: "⤢"}
+                    </span>
+                  </button>
+                </:control>
+              </ExTbpMontyWeb.EvidenceChart.evidence_chart>
             </div>
           </div>
         </section>

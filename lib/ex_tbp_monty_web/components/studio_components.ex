@@ -457,14 +457,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
         }
       >
         <div class="flex flex-wrap items-center gap-1.5">
-          <button
-            id="replay-expand"
-            phx-click="replay_expand"
-            class="btn btn-xs"
-            aria-label={if @expanded, do: "leave full screen", else: "full screen"}
-          >
-            {if @expanded, do: "⤡", else: "⤢"}
-          </button>
           <form id="replay-series" phx-change="replay_series">
             <select name="series" class="select select-xs" aria-label="Series to chart">
               <option :for={series <- @series} value={series.id} selected={series.id == @series_id}>
@@ -619,7 +611,21 @@ defmodule ExTbpMontyWeb.StudioComponents do
               data-x-max={@chart.to}
               data-zoom-event="replay_brush"
               data-zoom-all-event="replay_zoom"
+              class="relative"
             >
+              <%!-- On the plot, in its top right corner, and a sibling of the
+              hooks rather than inside them: the box it floats over is the
+              chart's own, and a button inside the drag surface would be a
+              brush that clicks. --%>
+              <button
+                id="replay-expand"
+                phx-click="replay_expand"
+                class="btn btn-circle btn-sm absolute right-2 top-2 z-10 border border-base-300 bg-base-100/85 backdrop-blur"
+                aria-label={if @expanded, do: "leave full screen (Esc)", else: "full screen"}
+                title={if @expanded, do: "leave full screen (Esc)", else: "full screen"}
+              >
+                <span class="text-2xl leading-none">{if @expanded, do: "⤡", else: "⤢"}</span>
+              </button>
               <div
                 id="replay-chart-hover"
                 phx-hook=".ChartHover"
