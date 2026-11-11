@@ -327,6 +327,72 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert view |> element("#run-inputs") |> render() =~ "episodes"
       assert has_element?(view, "#log-0-0")
     end
+
+    # The reason the step path exists: a step the worker publishes is in memory on
+    # this node, so showing it must not ask the database anything. A page that
+    # read the record per step competed with the run it was watching — the reason
+    # the whole path was rewritten — and this is the one assertion that notices
+    # the difference without measuring time.
+    test "a step costs the database nothing", %{conn: conn} do
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 100,
+          inputs: %{"episodes" => 1}
+        })
+
+      publish(run.id, 0)
+      publish(run.id, 1)
+      _ = :sys.get_state(Monty.Studio.RunStream)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      # Everything the page needed to draw itself is read now; what follows is one
+      # step of a run it is already showing. The counter is proved against a read
+      # that certainly happens, so a wrong event name cannot pass for "no reads".
+      assert count_queries(fn -> RunHistory.head(run.id) end) > 0
+
+      count =
+        count_queries(fn ->
+          publish(run.id, 2)
+          send(view.pid, {:studio, run.id, {:step, %{step: 2}}})
+          send(view.pid, :refresh_due)
+          _ = :sys.get_state(view.pid)
+        end)
+
+      assert view |> element("#replay-panel") |> render() =~ "steps 0–2"
+      assert count == 0
+    end
+  end
+
+  # How many statements the repository ran while this block did its work: asked of
+  # telemetry, because the question is whether the page asked the database, not
+  # what it asked.
+  defp count_queries(work) do
+    id = "queries-#{System.unique_integer([:positive])}"
+    test = self()
+
+    :telemetry.attach_many(
+      id,
+      [[:ex_tbp_monty, :repo, :postgres, :query], [:ex_tbp_monty, :repo, :query]],
+      fn _event, _measurements, _metadata, pid -> send(pid, {:query, id}) end,
+      test
+    )
+
+    work.()
+
+    counted = count_sent(id)
+    :telemetry.detach(id)
+    counted
+  end
+
+  defp count_sent(id) do
+    receive do
+      {:query, ^id} -> 1 + count_sent(id)
+    after
+      0 -> 0
+    end
   end
 
   describe "what a row says a run did" do

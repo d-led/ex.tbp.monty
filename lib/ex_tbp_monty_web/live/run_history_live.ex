@@ -554,7 +554,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       series: series,
       series_id: series_id,
       window: window,
-      pictures: socket.assigns[:pictures] || kept_pictures?(run),
+      # Whether the run kept any picture is a property of the run, asked once: a
+      # `false` is an answer too, and `||` on it asked again at every step.
+      pictures: Map.get_lazy(socket.assigns, :pictures, fn -> kept_pictures?(run) end),
       best: catalog.best,
       theories: Replay.theories(moment),
       graphs: catalog.objects != [],
@@ -576,19 +578,22 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     )
   end
 
-  # The pictures of the step being shown, asked for by itself: the record is read
-  # without them (see `RunHistory.head/1`), and one step's observations are the
-  # only ones a page can draw.
+  # The pictures of the step being shown, asked for by itself: a record read
+  # without its pictures (`RunHistory.head/1`) has no timeline at all, and one
+  # step's observations are the only ones a page can draw.
+  #
+  # Nothing is asked when the run has a timeline: a moment that came with it was
+  # handed over with whatever its sensors kept, and asking again would be a
+  # database read per step for a page that is following a run.
   defp with_pictures(moment, run) do
     case moment do
       %{frames: [_ | _]} ->
         moment
 
       %{position: position, step: step} ->
-        # The row's copy first, and the files when it has none: a run stopped
-        # mid-flight takes the moments the stream had not written yet with it,
-        # and the two pictures of each of those steps are already on disk.
-        Replay.with_pictures(moment, sensors_at(run, position, step))
+        if run.timeline == [],
+          do: Replay.with_pictures(moment, sensors_at(run, position, step)),
+          else: moment
 
       nil ->
         nil
