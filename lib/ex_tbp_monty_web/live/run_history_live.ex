@@ -1350,13 +1350,18 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         </p>
       </section>
 
-      <section :if={@run} class="space-y-1">
-        <h2 class="text-sm font-medium">Config snapshot</h2>
+      <%!-- The snapshot is the run's whole config, and a person reads the facts
+      above it far more often than the file they came from. A `details` is the
+      closed-by-default version of that: the browser remembers nothing for it,
+      the page patches it without disturbing what is open, and it is the same
+      control with or without JavaScript. --%>
+      <details :if={@run} id="run-snapshot" class="space-y-1">
+        <summary class="cursor-pointer text-sm font-medium">Config snapshot</summary>
         <pre
           id="run-config"
-          class="max-h-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-[11px]"
+          class="mt-1 max-h-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-[11px]"
         ><code>{Json.highlight(@run.config)}</code></pre>
-      </section>
+      </details>
 
       <.confirm_delete :if={@confirming} run={@confirming} />
     </Layouts.app>

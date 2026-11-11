@@ -900,6 +900,21 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert has_element?(view, "#log-0-1")
     end
 
+    # The snapshot is the run's whole config — a file, not a table — and the
+    # facts above it are what a person comes to this page for. It is drawn
+    # closed, and it is a `details`, so opening it is the browser's own doing and
+    # a patch of the page leaves it however the reader left it.
+    test "the whole config is a closed box until a reader opens it", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      snapshot = view |> element("#run-snapshot") |> render()
+
+      assert snapshot =~ "<details"
+      refute snapshot =~ ~r/<details[^>]*\sopen/
+      assert snapshot =~ "Config snapshot"
+      assert has_element?(view, "#run-config")
+    end
+
     # What the run was started with, read back from its own record: the same
     # sentences the experiment page promises before a run, so that what was
     # promised and what was done are the same words — and the seed the record
