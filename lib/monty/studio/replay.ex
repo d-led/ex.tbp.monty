@@ -429,6 +429,17 @@ defmodule Monty.Studio.Replay do
   # A drawn moment is a recorded one plus the pictures it delivered, so it keeps
   # its place in the run: `at/2` promises a moment, and a moment that had
   # forgotten where it sat would not be one.
+  @doc """
+  The pictures a step's sensors kept, as frames a page draws.
+
+  A replay asks for these for the one step on screen; a page showing several runs
+  side by side (`ExTbpMontyWeb.RunParts`) asks for the last step of each, from the
+  sensors it read for that position.
+  """
+  @spec pictures(non_neg_integer(), map()) :: [map()]
+  def pictures(step, sensors) when is_map(sensors),
+    do: frames(%{step: step, sensors: sensors})
+
   defp draw(moment) do
     %{
       position: moment.position,

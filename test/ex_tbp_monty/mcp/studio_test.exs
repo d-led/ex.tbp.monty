@@ -28,7 +28,7 @@ defmodule ExTbpMonty.Mcp.StudioTest do
 
       # `running` is a list of ids in Oban; a caller wants the number.
       assert is_integer(studio.parallel.running_now)
-      assert studio.parallel.one_episode_per_run
+      assert studio.parallel.one_part_per_run
       assert studio.parallel.how =~ ":studio"
     end
 

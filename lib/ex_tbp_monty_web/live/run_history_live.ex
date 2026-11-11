@@ -22,6 +22,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     Jobs,
     Json,
     Panel,
+    Parts,
     Replay,
     RunHistory,
     RunLog,
@@ -94,7 +95,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
        deleting: nil,
        expanded: false,
        log_tail: @log_tail,
-       trimmed_log?: false
+       trimmed_log?: false,
+       # The other parts of the batch this run belongs to, and what the page
+       # keeps of them between two polls (`Monty.Studio.Parts`). A run of the
+       # whole experiment has one part, which is the run the page already draws.
+       parts: [],
+       parts_held: %{},
+       setup: nil
      )
      |> stream_configure(:log, dom_id: &log_id/1)
      |> stream_configure(:runs, dom_id: &"run-#{&1.id}")
@@ -266,6 +273,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          socket
          |> put_run(run)
          |> put_configuration(run)
+         |> assign(setup: setup_of(run))
+         |> put_parts(run)
          |> follow(run)
          |> stream(:log, log_tail(run.log), reset: true)
          |> assign(
@@ -274,6 +283,34 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
            trimmed_log?: length(run.log) > @log_tail
          )
          |> assign_replay(run, Replay.last_step(run))}
+    end
+  end
+
+  # The parts of the batch a record belongs to, drawn as one card each beside the
+  # run this page is about (`ExTbpMontyWeb.RunParts`). Read from the records and
+  # the live stream, never from the experiment: a poll that rebuilt them from the
+  # config would cost a compose every two seconds.
+  defp put_parts(socket, run) do
+    batch = get_in(run.inputs, ["batch"])
+    held = Parts.refresh(batch, Map.get(socket.assigns, :parts_held, %{}))
+    setup = Map.get(socket.assigns, :setup)
+
+    socket = assign(socket, parts_held: held)
+
+    if batch != nil and length(Map.keys(held)) > 1 and setup != nil do
+      assign(socket, parts: Parts.cards(held, setup))
+    else
+      assign(socket, parts: [])
+    end
+  end
+
+  # A part's chart bands are named after the objects its episodes showed, which
+  # is the experiment's answer. Opened once per record: composing a config costs
+  # what the config costs, not what a poll costs.
+  defp setup_of(%{experiment: name}) do
+    case Monty.Studio.open(name) do
+      {:ok, opened} -> opened.setup
+      {:error, _reason} -> nil
     end
   end
 
@@ -1343,6 +1380,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         />
       </section>
 
+      <%!-- The other parts of the batch this run belongs to, one card each, one
+      after the other: a parallel run is several runs, and this page is about one
+      of them. --%>
+      <ExTbpMontyWeb.RunParts.parts :if={@parts != []} parts={@parts} />
+
       <section :if={@run} class="space-y-1">
         <h2 class="text-sm font-medium">Log</h2>
         <p :if={@trimmed_log?} id="run-log-trimmed" class="text-xs text-base-content/60">
@@ -1809,17 +1851,22 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     socket |> refresh_run(id) |> keep_polling()
   end
 
-  defp poll_shown_run(%{assigns: %{live_action: :show, run: %{id: id}}} = socket),
-    do: socket |> refresh_run(id) |> keep_polling()
+  defp poll_shown_run(%{assigns: %{live_action: :show, run: %{id: id} = run}} = socket),
+    do: socket |> refresh_run(id) |> put_parts(run) |> keep_polling()
 
   defp poll_shown_run(socket), do: socket
 
-  # A run that has stopped does not need asking again.
+  # A run that has stopped does not need asking again — unless it is one part of a
+  # batch, whose other parts are still stepping: their cards keep moving after this
+  # part is done.
   defp keep_polling(socket) do
-    if in_flight?(socket.assigns.run, socket.assigns.queue),
+    if in_flight?(socket.assigns.run, socket.assigns.queue) or still_parting?(socket),
       do: schedule_show_poll(socket),
       else: socket
   end
+
+  defp still_parting?(socket),
+    do: Enum.any?(Map.get(socket.assigns, :parts, []), &(&1.status == "running"))
 
   # Three zooms, named: a button sends a string, and turning arbitrary strings
   # into atoms is how a page leaks memory one click at a time.
@@ -1969,13 +2016,16 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   defp failure(_run), do: nil
 
+  # A value the record kept, in words: a part's inputs hold a map of the phases it
+  # was given and a list of episode numbers inside it, so the reading has to go all
+  # the way down rather than assume every value is scalar.
   defp format(value) when is_map(value) do
     value
     |> Enum.sort_by(fn {key, _} -> key end)
-    |> Enum.map_join(" ", fn {k, v} -> "#{k}=#{v}" end)
+    |> Enum.map_join(" ", fn {key, nested} -> "#{key}=#{format(nested)}" end)
   end
 
-  defp format(value) when is_list(value), do: Enum.join(value, ", ")
+  defp format(value) when is_list(value), do: Enum.map_join(value, ", ", &format/1)
   defp format(value), do: to_string(value)
 
   defp status_class("running"), do: "badge-info"

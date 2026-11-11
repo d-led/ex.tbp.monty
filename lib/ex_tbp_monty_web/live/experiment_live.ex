@@ -35,13 +35,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     Logging,
     Memory,
     Panel,
+    Partition,
+    Parts,
     Replay,
     RunHistory,
     RunLog,
     Setup
   }
 
-  alias Monty.Studio.Jobs.Reaper
+  alias Monty.Studio.Jobs.{Merge, Reaper}
 
   # A log is a thing a person reads back, not a database: the last few thousand
   # lines are enough to scroll through a run and bounded enough that a runaway
@@ -136,6 +138,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # One run until somebody asks for more: parallelism is a choice made on
       # this page, not something a link should be able to set for them.
       parallelism: 1,
+      # The batch a press of Run started and the page shows: `nil` until a run of
+      # this experiment is followed, and then the parts whose cards the page draws
+      # beside the run it is watching (`Monty.Studio.Partition`).
+      batch: nil,
+      parts: [],
       filter: "",
       # Which stretch of the run's own x axis the chart draws, `{from, to}` or
       # `nil` for all of it. It comes from the URL rather than from an assign the
@@ -216,6 +223,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> clear_run_view()
     |> assign(
       run_id: record.id,
+      batch: batch_of(record),
       status: record.status,
       progress: steps_of_last_episode(record),
       # The counter restarts inside every episode, so the episode it belongs to
@@ -227,6 +235,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> seed(record.id)
     |> watch()
   end
+
+  # The batch a record belongs to, if it is a part of one: the id is what the
+  # parts of one press of Run share (`Monty.Studio.Partition`).
+  defp batch_of(%{inputs: %{"batch" => batch}}) when is_binary(batch), do: batch
+  defp batch_of(_run_of_the_whole_experiment), do: nil
 
   # The record, read once, when this page starts watching a run: the lines it
   # already printed, the last frame it kept, and the beliefs the chart draws from
@@ -272,7 +285,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       chart_extent: {0, 0},
       beliefs_seeded: false,
       frames_seeded: false,
-      caught_up: false
+      caught_up: false,
+      # The parts of the previous batch's cards go with the previous run: a page
+      # that moves to another run must not keep drawing somebody else's batch.
+      parts: []
     )
     |> stream(:frames, [], reset: true)
   end
@@ -286,6 +302,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> clear_run_view()
     |> assign(
       run_id: nil,
+      batch: nil,
       status: nil,
       progress: {0, socket.assigns.steps},
       # Which episode the step counter is counting inside: it restarts at every
@@ -454,15 +471,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             <.icon name="hero-forward-mini" class="size-4" /> One step
           </button>
           <%!-- Monty starts a parallel run with a second script; here it is a
-          number, and it means what it means there: n processes, n episodes, one
-          object each. --%>
+          number of *parts*, and it means what the script's `num_parallel` means
+          there: the experiment divided between that many processes — evaluation
+          by episode, training by object. Not that many copies of it: a hundred
+          and forty episodes at four parts is a quarter of the clock, where four
+          copies were four times the work. --%>
           <form id="parallelism" phx-change="parallelism" class="flex items-center gap-1">
             <label for="parallelism-count" class="text-[11px] text-base-content/60">in parallel</label>
             <select
               id="parallelism-count"
               name="parallelism"
               class="select select-xs w-16"
-              aria-label="How many episodes to run at once"
+              aria-label="How many parts to run the experiment in"
             >
               <option :for={count <- 1..8} value={count} selected={count == @parallelism}>
                 {count}
@@ -857,6 +877,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           </figure>
         </div>
 
+        <%!-- One card per part, one after the other: the pyview dashboard's
+        multi-publisher view. A parallel run is several runs, and the page above
+        draws the one this page is following in full. --%>
+        <ExTbpMontyWeb.RunParts.parts :if={@parts != []} parts={@parts} />
+
         <div :if={@run_id} id="run-log-panel" class="space-y-1">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="text-sm font-medium">Log</h3>
@@ -1207,15 +1232,40 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # whether one has started since it opened, and a page whose run has finished
   # asks whether another has begun — the answer is the same run for everybody.
   def handle_info(:studio_poll, socket) do
-    socket = follow_started(socket)
-    socket = reconcile(socket)
+    socket =
+      socket
+      |> follow_started()
+      |> reconcile()
+      |> refresh_parts()
 
-    if socket.assigns.status == "running" do
+    # A batch is still going while any of its parts is, even when the part this
+    # page is following has finished: its siblings' cards keep moving.
+    if socket.assigns.status == "running" or still_parting?(socket) do
       {:noreply, watch(socket)}
     else
       {:noreply, socket}
     end
   end
+
+  # The batch's cards, brought up to date with the steps its parts have taken
+  # since the last poll (`Monty.Studio.Parts`). One part is the run the page is
+  # already drawing in full, so a page watching a run of the whole experiment — or
+  # a batch of one — draws no cards at all.
+  defp refresh_parts(socket) do
+    setup = socket.assigns.opened && socket.assigns.opened.setup
+    batch = Map.get(socket.assigns, :batch)
+    held = Parts.refresh(batch, Map.get(socket.assigns, :parts_held, %{}))
+
+    if setup == nil or length(Map.keys(held)) < 2 do
+      assign(socket, parts_held: held, parts: [])
+    else
+      socket
+      |> assign(parts_held: held)
+      |> assign(parts: Parts.cards(held, setup))
+    end
+  end
+
+  defp still_parting?(socket), do: Map.get(socket.assigns, :parts, []) != []
 
   # Zero is the ordinary answer to the staleness check and costs nothing. A run
   # that was closed is one this page may be describing as `running`, so it is
@@ -1842,14 +1892,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # Parallelism is the experiment's own answer to "one object after another, or
   # several at once": Monty starts a parallel run with a second script, and the
-  # scripts differ only in how many episodes go at the same time. Here that is a
-  # number — n runs of n episodes, each its own record, its own topic and its own
-  # seed — and the queue is told the same number, because a queue limit of two
-  # would quietly turn ten runs into five rounds of two.
+  # scripts differ only in how many parts of the work go at the same time. Here
+  # that is a number of *parts* (`Monty.Studio.Partition`), each its own record,
+  # its own topic and its own stretch of the experiment's episodes, and the queue
+  # is told the same number, because a queue limit of two would quietly turn ten
+  # parts into five rounds of two.
+  #
+  # A part is not a copy of the experiment. A config evaluated a hundred and forty
+  # times is finished in a fourteenth of the clock at fourteen parts, where
+  # fourteen copies of it were fourteen times the work and no faster.
   defp start(socket, opened, steps, parallelism, episodes) do
     _ = Jobs.parallelism(parallelism)
+    plan = Partition.plan(opened.setup, parallelism, episodes)
 
-    results = Enum.map(0..(parallelism - 1), &queue(opened, steps, &1, parallelism, episodes))
+    results =
+      Enum.map(now(plan), &queue(opened, steps, plan, &1))
+
     records = Enum.flat_map(results, &started/1)
     refused = for {:error, changeset} <- results, do: changeset_errors(changeset)
 
@@ -1863,6 +1921,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         # listens is a run the page watched happen and never heard about.
         Enum.each(records, &Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(&1.id)))
         Enum.each(records, &enqueue/1)
+        start_later(plan, opened, steps, parallelism)
 
         [first | _rest] = records
 
@@ -1871,6 +1930,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
          |> clear_run_view()
          |> assign(
            run_id: first.id,
+           batch: plan.batch,
            status: "running",
            progress: {0, steps},
            episode: 0,
@@ -1884,6 +1944,38 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
+  # What runs now, and what waits for the training wave to be merged.
+  #
+  # Monty runs the training configs, merges them into one model and only then runs
+  # the evaluation configs. A batch whose config trains is that batch: its
+  # evaluation parts cannot start until every training part has finished, because
+  # they read what those parts learned between them. A batch that only evaluates
+  # starts all of its parts at once, and a batch that only trains starts its parts
+  # and a merge that writes the memory they built.
+  defp now(%{train: []} = plan), do: plan.eval
+  defp now(plan), do: plan.train
+
+  defp start_later(%{train: []}, _opened, _steps, _parallelism), do: :ok
+
+  defp start_later(plan, opened, steps, parallelism) do
+    {:ok, _job} =
+      Merge.enqueue(%{
+        batch: plan.batch,
+        experiment: opened.name,
+        steps: steps,
+        parallel: parallelism,
+        eval: Enum.map(plan.eval, &evaluation_part/1)
+      })
+
+    :ok
+  end
+
+  # A part, as the merge job's args carry it: data, because the job starts those
+  # parts after the page that asked for them may be long closed.
+  defp evaluation_part(part) do
+    %{"index" => part.index, "of" => part.of, "episodes" => part.episodes}
+  end
+
   defp refused(socket, []), do: socket
 
   defp refused(socket, [reason | _rest]),
@@ -1894,15 +1986,27 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # experiments' worth of evidence — the stand-in checks the runtime, MuJoCo
   # produces the experiment's numbers — so a page that already has one going
   # can still be asked for the other, and the queue decides when it starts.
-  defp queue(opened, steps, episode, parallel, episodes) do
+  #
+  # A part is recognised by the episode it starts at, which the plan takes from
+  # the experiment's own list: two parts of one batch start at different episodes,
+  # so a second press of Run is refused part by part rather than wholesale.
+  defp queue(opened, steps, plan, part) do
     world = to_string(opened.setup.world)
+    first = hd(part.episodes)
 
-    case RunHistory.running_for(opened.name, episode) do
+    case RunHistory.running_for(opened.name, first) do
       %{inputs: %{"world" => ^world}} ->
         :going
 
       _nothing_or_another_world ->
-        RunHistory.start(RunLog.attributes(opened, steps, episode, parallel, episodes))
+        RunHistory.start(
+          RunLog.attributes(opened, steps, first, part.of, length(part.episodes), %{
+            batch: plan.batch,
+            index: part.index,
+            of: part.of,
+            phases: %{part.phase => part.episodes}
+          })
+        )
     end
   end
 
@@ -1945,12 +2049,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     do: "queued: #{steps} step(s) of #{name} (episode #{only.episode})"
 
   defp queued(records, steps, name) do
-    first = hd(records)
-    last = List.last(records)
+    [first | _rest] = records
 
-    "queued #{length(records)} runs of #{name}, episodes #{first.episode}–#{last.episode}, " <>
-      "#{steps} step(s) each: watching episode #{first.episode}, the rest are on Runs"
+    "queued #{length(records)} parts of #{name}, #{steps} step(s) an episode: " <>
+      "watching part #{part_label(first)}, the rest are on Runs"
   end
+
+  # "2 of 4", as the record says it: the plan's own numbering, so a page and the
+  # batch's cards call the same part the same thing.
+  defp part_label(%{inputs: %{"part" => %{"index" => index, "of" => of}}}),
+    do: "#{index + 1} of #{of}"
+
+  defp part_label(_not_a_part), do: "1 of 1"
 
   # -- the log ---------------------------------------------------------------
 

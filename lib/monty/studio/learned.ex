@@ -54,12 +54,21 @@ defmodule Monty.Studio.Learned do
   A run with no record has nowhere to put them — a throwaway run keeps nothing —
   and a plan with no training phase learned nothing that outlives it: both answer
   `[]`, which says nothing rather than saying that something failed.
-  """
-  @spec keep(binary() | nil, map(), plan(), %{optional(term()) => term()}) :: [String.t()]
-  def keep(nil, _opened, _plan, _memories), do: []
 
-  def keep(run_id, opened, plan, memories) do
-    if trains?(plan), do: keep_run(run_id, opened, memories), else: []
+  A **part** of a parallel training run keeps its memory in its own directory and
+  leaves the library tree alone (`library: false`): the library is what the parts
+  learned *between* them, and one part writing it as it finishes would overwrite
+  the merged one with its own share
+  (`Monty.Studio.Memories`).
+  """
+  @spec keep(binary() | nil, map(), plan(), %{optional(term()) => term()}, keyword()) ::
+          [String.t()]
+  def keep(run_id, opened, plan, memories, options \\ [])
+
+  def keep(nil, _opened, _plan, _memories, _options), do: []
+
+  def keep(run_id, opened, plan, memories, options) do
+    if trains?(plan), do: keep_run(run_id, opened, memories, options), else: []
   end
 
   @doc "Where a run's memories are written."
@@ -123,7 +132,7 @@ defmodule Monty.Studio.Learned do
   # A module that keeps no graph memory — the stand-in learning module a config
   # without an evidence model gets — has nothing to write, and the `shell`
   # finding already says so.
-  defp keep_run(run_id, opened, memories) do
+  defp keep_run(run_id, opened, memories, options) do
     learned =
       opened.setup.learning_modules
       |> Enum.with_index()
@@ -136,19 +145,16 @@ defmodule Monty.Studio.Learned do
 
     case learned do
       [] -> []
-      learned -> write(run_id, library_name(opened), learned)
+      learned -> write(run_id, name_for(opened), learned, Keyword.get(options, :library, true))
     end
   end
 
-  defp write(run_id, name, learned) do
+  defp write(run_id, name, learned, library?) do
     indexed = Enum.map(learned, fn {index, _module_id, memory} -> {index, memory} end)
 
     with :ok <- Memory.save_all(indexed, name, @release, dir(run_id)),
-         :ok <- Memory.save_all(indexed, name, @release, Memory.libraries_dir()) do
-      [
-        "#{subject(learned)} is the library #{name} (#{@release}), " <>
-          "in #{dir(run_id)} and in the libraries"
-      ]
+         :ok <- write_library(indexed, name, library?) do
+      ["#{subject(learned)} is the library #{name} (#{@release}), #{where(run_id, library?)}"]
     else
       {:error, reason} ->
         # A memory that could not be written is worth a sentence, not a crash: the
@@ -156,6 +162,16 @@ defmodule Monty.Studio.Learned do
         ["the memory #{name} could not be written: #{inspect(reason)}"]
     end
   end
+
+  defp write_library(_indexed, _name, false), do: :ok
+
+  defp write_library(indexed, name, true),
+    do: Memory.save_all(indexed, name, @release, Memory.libraries_dir())
+
+  defp where(run_id, true), do: "in #{dir(run_id)} and in the libraries"
+
+  defp where(run_id, false),
+    do: "in #{dir(run_id)}; the whole batch's memory is written once its parts are merged"
 
   # One module's memory is that module's; several are the model's, and the model
   # is what the file is named after.
@@ -171,10 +187,19 @@ defmodule Monty.Studio.Learned do
   # is the name the *next* config asks for: a run that filed
   # `dist_agent_5lm_2obj_train-learning_module_0` … `_4` left five libraries the
   # evaluation config of the same tutorial never asked for.
-  defp library_name(opened) do
-    Memory.name_of(opened.setup.model_name_or_path) ||
-      sanitise(opened.setup.logging.run_name) || sanitise(opened.name) ||
-      "monty-memory"
+  #
+  # Public because a batch's merged memory is filed under the same name
+  # (`Monty.Studio.Memories`): the parts of a parallel training run are one
+  # library when they are put back together, and two names for one model would be
+  # one library the next config does not find.
+  @doc "The library a run of this experiment writes its memory under."
+  @spec name_for(map()) :: String.t()
+  def name_for(opened) do
+    case Memory.name_of(opened.setup.model_name_or_path) ||
+           sanitise(opened.setup.logging.run_name) || sanitise(opened.name) do
+      nil -> "monty-memory"
+      name -> name
+    end
   end
 
   # A file name, from a config's own words: anything that is not a letter, a

@@ -289,6 +289,102 @@ defmodule Monty.Studio.Jobs.RunTest do
     end
   end
 
+  describe "a part of a parallel batch" do
+    test "walks the episodes its record names, not the first ones of the experiment" do
+      # The whole point of the division (`Monty.Studio.Partition`): part two of a
+      # ten-object config starts at episode three, and the episode number is what
+      # says which object stands in front of the agent.
+      {:ok, opened} = Monty.Studio.open(@experiment)
+      objects = Monty.Studio.Setup.objects(opened.setup, :eval)
+
+      part = %{batch: Ecto.UUID.generate(), index: 1, of: 2, phases: %{eval: [3, 4]}}
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 3, 2, 2, part))
+
+      assert {:ok, closed} = perform(record)
+      assert closed.status == "finished"
+
+      log = File.read!(closed.log_path)
+      assert log =~ "episode 4: #{Enum.at(objects, 3)}"
+      assert log =~ "episode 5: #{Enum.at(objects, 4)}"
+      refute log =~ "episode 1: "
+    end
+
+    test "a training part keeps its memory to its own directory, and leaves the library alone", %{
+      libraries: libraries
+    } do
+      # The library is what the parts learned *between* them, and it is written
+      # once by the merge: a part that wrote it as it finished would overwrite the
+      # merged memory with its own share.
+      {:ok, opened} = Monty.Studio.open(@training_experiment)
+      name = Monty.Studio.Learned.name_for(opened)
+
+      part = %{batch: Ecto.UUID.generate(), index: 0, of: 1, phases: %{train: [0]}}
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 40, 0, 1, 1, part))
+
+      assert {:ok, closed} = perform(record)
+      assert closed.status == "finished"
+
+      assert File.read!(closed.log_path) =~
+               "the whole batch's memory is written once its parts are merged"
+
+      assert Path.wildcard(Path.join(Monty.Studio.Learned.dir(closed.id), "**/*.jsonl.gz")) != []
+      assert Memory.releases_for(name, libraries) == []
+    end
+
+    test "a part starts from the memory its batch points it at" do
+      # Monty's `run_parallel` merges the trained model and then evaluates the
+      # configs it generated; here the record points at the merged library, so a
+      # part reads what its own batch built rather than the library its config
+      # names. A training part is the one that leaves its memory behind, so what
+      # it started from is readable afterwards.
+      {:ok, opened} = Monty.Studio.open(@experiment)
+      batch = Ecto.UUID.generate()
+
+      {:ok, model} =
+        Monty.Frameworks.Models.ObjectModel.GraphObjectModel.build_model(
+          Monty.Frameworks.Models.ObjectModel.GraphObjectModel.new("a_learned_object"),
+          [[0.0, 0.0, 0.0], [0.01, 0.0, 0.0]],
+          %{}
+        )
+
+      memory =
+        GraphMemory.add_graph_to_memory(GraphMemory.new(), %{"rgba" => model}, "a_learned_object")
+
+      {:ok, name} = Monty.Studio.Memories.keep(batch, opened, %{"learning_module_0" => memory})
+
+      {:ok, record} =
+        RunHistory.start(
+          RunLog.attributes(opened, 3, 0, 1, 1, %{
+            batch: batch,
+            index: 0,
+            of: 1,
+            phases: %{train: [0]},
+            memory: %{
+              "name" => name,
+              "release" => Monty.Studio.Learned.release(),
+              "dir" => Monty.Studio.Memories.batch_dir(batch)
+            }
+          })
+        )
+
+      assert {:ok, closed} = perform(record)
+
+      [file] =
+        Path.wildcard(Path.join([Artifacts.dir(closed.id), "memory", "trained", "*.jsonl.gz"]))
+
+      # The library root is the run's `memory` directory, and the release is the
+      # directory under it: that is where a later config looks.
+      {:ok, kept} =
+        Memory.load(
+          Path.basename(file, ".jsonl.gz"),
+          "trained",
+          Path.join(Artifacts.dir(closed.id), "memory")
+        )
+
+      assert "a_learned_object" in GraphMemory.get_memory_ids(kept)
+    end
+  end
+
   describe "the statistics a run leaves" do
     # This experiment's logging group names the CSV handler and wandb — the one
     # every benchmark config in Monty uses — so it is the run that leaves a file

@@ -549,6 +549,31 @@ defmodule Monty.Studio.RunHistory do
 
   defp escape(word), do: Regex.replace(~r/([%_\\])/, word, "\\\\\\1")
 
+  # What a page asks about a run between its steps. Every field here is a scalar
+  # or a small map: a poll costs a row, not a transcript.
+  @progress_fields [
+    :id,
+    :experiment,
+    :status,
+    :steps,
+    :steps_done,
+    :episodes_done,
+    :episode,
+    :source,
+    :seed,
+    :summary,
+    :log_path,
+    :started_at,
+    :finished_at,
+    :inserted_at,
+    :duration_us,
+    :updated_at
+  ]
+
+  # The same, plus the part a record was given: a page drawing several parts reads
+  # its label, its episodes and its phase from there (`Monty.Studio.Parts`).
+  @part_fields @progress_fields ++ [:inputs]
+
   @doc "Runs of one experiment, newest first."
   @spec list_for(String.t(), keyword()) :: [Run.t()]
   def list_for(experiment, opts \\ []) do
@@ -559,6 +584,45 @@ defmodule Monty.Studio.RunHistory do
     |> order_by(desc: :inserted_at)
     |> limit(^limit)
     |> rows()
+  end
+
+  @doc """
+  The parts of one press of Run, in the order the plan numbered them.
+
+  A parallel run is several runs — one job each, so the queue runs them side by
+  side (`Monty.Studio.Partition`) — and the batch id in each record's inputs is
+  what says they were one experiment. Reading them back in part order is what
+  makes "part 2 of 4" a number a page can trust rather than the order the rows
+  happened to be written in.
+  """
+  @spec parts(binary()) :: [Run.t()]
+  def parts(batch) do
+    Run
+    |> where([run], fragment("?->>'batch'", run.inputs) == ^batch)
+    |> order_by([run], asc: run.inserted_at)
+    |> rows()
+    # By the number the plan gave each part, in Elixir: the index is JSON in the
+    # record, and a database sorts "10" before "2".
+    |> Enum.sort_by(&(get_in(&1.inputs, ["part", "index"]) || 0))
+  end
+
+  @doc """
+  The parts of a batch as a page polls them: the counters and the status, not the
+  transcript.
+  The same reason as `progress/1`, once per part: a page drawing four parts must
+  not carry four runs' steps across the wire every half second, and what a card
+  needs of a record is which part it is, how far it got and how it ended. The
+  steps come from `RunStream` while a part runs and from `head/1` once it has
+  settled.
+  """
+  @spec parts_progress(binary()) :: [Run.t()]
+  def parts_progress(batch) do
+    Run
+    |> where([run], fragment("?->>'batch'", run.inputs) == ^batch)
+    |> select([run], map(run, @part_fields))
+    |> Repo.all()
+    |> Enum.map(&struct(Run, &1))
+    |> Enum.sort_by(&(get_in(&1.inputs, ["part", "index"]) || 0))
   end
 
   @doc """
@@ -602,27 +666,6 @@ defmodule Monty.Studio.RunHistory do
         nil
     end
   end
-
-  # What a page asks about a run between its steps. Every field here is a scalar
-  # or a small map: a poll costs a row, not a transcript.
-  @progress_fields [
-    :id,
-    :experiment,
-    :status,
-    :steps,
-    :steps_done,
-    :episodes_done,
-    :episode,
-    :source,
-    :seed,
-    :summary,
-    :log_path,
-    :started_at,
-    :finished_at,
-    :inserted_at,
-    :duration_us,
-    :updated_at
-  ]
 
   @doc """
   What a page polls for: how the run is doing, without what it said.

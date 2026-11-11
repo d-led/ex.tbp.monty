@@ -1033,6 +1033,52 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     end
   end
 
+  describe "a run that is one part of a batch" do
+    # A parallel run is several runs (Monty.Studio.Partition), and a page about one
+    # of them used to say nothing about the others: they ran, and nobody saw them
+    # until the list. One card each, one after the other — the pyview dashboard's
+    # multi-publisher view.
+    test "shows every part's card, not only its own", %{conn: conn} do
+      batch = Ecto.UUID.generate()
+
+      parts =
+        for index <- 0..1 do
+          {:ok, run} =
+            RunHistory.start(%{
+              experiment: "tutorial/first_experiment",
+              source: "monty",
+              steps: 2,
+              episode: index,
+              inputs: %{
+                "batch" => batch,
+                "part" => %{"index" => index, "of" => 2, "phases" => %{"eval" => [index]}}
+              }
+            })
+
+          run
+        end
+
+      [first | _rest] = parts
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{first.id}")
+
+      assert has_element?(view, "#run-parts")
+
+      for {run, index} <- Enum.with_index(parts) do
+        assert view |> element("#part-#{run.id}") |> render() =~ "part #{index + 1} of 2"
+      end
+    end
+
+    test "a run of the whole experiment has no cards, because it has one part", %{conn: conn} do
+      {:ok, run} =
+        RunHistory.start(%{experiment: "tutorial/first_experiment", source: "monty", steps: 2})
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      refute has_element?(view, "#run-parts")
+    end
+  end
+
   describe "a run that did not finish" do
     test "says what stopped it, above everything else", %{conn: conn, run: run} do
       {:ok, failed} =
@@ -1170,6 +1216,11 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       # mid-drag would otherwise put the handle back where the server left it.
       assert view |> element("#replay-slider") |> render() =~
                ~s(phx-hook="ExTbpMontyWeb.StudioComponents.ReplaySlider")
+
+      # The hover's readout is drawn by the hook, in a box the page marks to be
+      # left alone: the picture is patched on every step, and a readout written
+      # into it would be a readout the next patch takes away.
+      assert has_element?(view, ~s(#replay-chart-readout[phx-update="ignore"]))
 
       assert has_element?(view, "#replay-panel")
       assert has_element?(view, "#replay-slider")

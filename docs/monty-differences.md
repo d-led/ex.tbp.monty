@@ -1388,6 +1388,50 @@ an `OrientationMatrix` belong to the `experiment/` layer, which the module map
 still lists as planned. Wiring it before there is a channel to dispatch on would
 be a branch no run can take.
 
+## 2.22 "In parallel" divides the work, and a part is a run
+
+Monty runs an experiment in parallel with a second script,
+`framework/run_parallel.py`. It generates **one config per part** —
+`generate_parallel_eval_configs` writes a config per object _and_ rotation,
+`generate_parallel_train_configs` one per object with its rotations in sequence —
+hands them to a `multiprocessing.Pool(num_parallel)`, and when the pool is empty
+merges what they produced: `load_state_dict_from_parallel` loads every part's
+`model.pt` into one model (`post_parallel_train`), the CSVs and transcripts are
+concatenated (`post_parallel_eval`), and the parts' directories are deleted.
+
+This port divides the same way, with two differences that are the studio's rather
+than the maths':
+
+- **A part is a run, not an episode.** Monty writes one config per episode of an
+  evaluation; here the plan is `Monty.Studio.Partition`, and `n` in parallel is
+  `n` parts of the experiment — `n` contiguous stretches of the episode list for
+  evaluation, and one part per object (objects taken in turn when there are more
+  objects than workers) for training. The division of _work_ is Monty's; only the
+  number of pieces a page draws is the studio's, because a page with a chart and
+  two pictures per episode would have a hundred and forty of them. Each part is a
+  record of its own and an Oban job of its own, so the queue's limit is the
+  parallelism and stopping, the log and the Replay stay per part.
+- **The trained memory is handed to the evaluation.** `run_parallel.py` generates
+  the evaluation configs from the original config, so a config that trains and
+  then evaluates is evaluated under `run_parallel` against the memory its config
+  _names_, not the one its training built. Here a batch of such a config runs a
+  training wave, then `Monty.Studio.Jobs.Merge` merges the parts' memories
+  (`Monty.Studio.Memories`, Monty's `load_state_dict_from_parallel` per module)
+  and starts the evaluation wave pointed at the merged library. That is one thing
+  this port does that Monty's runner does not.
+
+Episode numbers are shared, not renumbered: a part walks the experiment's own
+episode numbers (`0, 2, 4, …` for the second of two training objects), because the
+number is what says which object stands in front of the agent, which rotation it
+is and which draws the episode takes. Monty's partitioned training configs instead
+repeat one object in the interface and set `change_every_episode: true`; with the
+numbers kept, the same episodes come out without the flag.
+
+A part of a training wave keeps its memory in its own directory and does not write
+the library tree (`Learned.keep(..., library: false)`): the library is what the
+parts learned between them, and a part that wrote it as it finished would overwrite
+the merged memory with its own share.
+
 ---
 
 # Checked and found consistent

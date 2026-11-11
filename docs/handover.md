@@ -2510,3 +2510,68 @@ the same tick, `position: relative`, plot 208 px.
    element whose DOM a hook owns; these two nodes belong in the parent instead.
 4. The run page is 4.5 MB: 1.73 MB of polylines and a 1.28 MB `data-samples`
    attribute the server re-encodes on every render.
+
+---
+
+## 35. 2026-11-11: "in parallel" divided the work, and every part has a card
+
+The user's report: _"run in parallel starts a stupid copy of each experiment as a
+job. This is absolutely NOT what run in parallel should be doing! We should have
+the problem partitioned and thus sped up!"_ — and it was exactly that. The page's
+`in parallel N` queued `N` runs and every one of them ran **the whole episode
+list**: the record's `episode` field (0…N-1) was written and never read, so a
+hundred and forty-episode config at four in parallel was four copies of the same
+hundred and forty episodes.
+
+Monty's own answer is `frameworks/run_parallel.py`, and that is what is adopted
+(`docs/monty-differences.md` §2.22 has the detail):
+
+- **`Monty.Studio.Partition`** turns an experiment into `n` parts. Evaluation is
+  divided by episode (contiguous stretches of the list); training is divided by
+  object, with that object's rotations kept together and in order. A part is a
+  list of the experiment's _own_ episode numbers — `0, 2, 4` for the second of
+  two training objects — because the number is what decides the object, the
+  rotation and the draws. `MontyExperiment.run_epochs/2` grew an `{:indices, …}`
+  clause for it, and `run_epoch` now walks `{episode, object}` pairs rather than
+  a taken prefix of the object list. **A bug this caught**: `planned/2` had to
+  clamp the count to the object list's length, or a phase with a budget of nine
+  and two objects ran nine episodes.
+- **A part is a run**: its own record and its own Oban job, so the queue's limit
+  is the parallelism, and Stop, the log and the Replay stay per part. The batch
+  id lives in the record's `inputs`, and `RunHistory.parts/1` /
+  `parts_progress/1` read it back.
+- **A config that trains and then evaluates** gets two waves. `Jobs.Merge` snoozes
+  until every training part is `finished`, merges their memories
+  (`Monty.Studio.Memories`, per module, Monty's `load_state_dict_from_parallel`),
+  writes the merged library and starts the evaluation parts pointed at it. Monty's
+  own runner does not do this hand-off (it generates the eval configs from the
+  original config), so a partitioned run here evaluates what it trained where
+  Monty's would not; §2.22 says so.
+- **A training part does not write the library tree**
+  (`Learned.keep(..., library: false)`): the library is the merge's to write, or
+  the last part to finish would overwrite the merged memory with its own share.
+- **The pages** show the parts, which is the pyview dashboard's multi-publisher
+  view: `Monty.Studio.Parts` reads each part's cards (label, stretch, status,
+  strongest evidence, last pictures, chart) off `RunStream` while it runs and off
+  its record once it has settled, and `ExTbpMontyWeb.RunParts` draws them one
+  after the other on both the experiment and the run page. A part's card chart is
+  one line picture from the strongest module, not one chart per module: a page
+  with a chart per module per part would be twenty charts for a five-module
+  heterarchy.
+
+**Measured**: `mix test` on the studio, web and MCP suites is 1 097 tests green.
+Two traps worth keeping:
+
+- `MIX_ENV=test mix run` writes to the **test database outside the sandbox**, and
+  the Reaper settles those runs. Five probe rows of
+  `base_config_10distinctobj_dist_agent` left behind by a debug script made three
+  page tests fail with "6 runs where 1 was expected" — nothing in the code.
+- `Parts.refresh/2` must keep what it has already read (`taken` for the stream,
+  `read` for the record): the page polls twice a second, and re-reading four
+  transcripts would cost more than the run.
+
+**Still open**: the run page's parts do not follow other parts' broadcasts (they
+update on the two-second poll); a batch's merged memory lives in
+`Artifacts.dir(batch)/memory`, which deleting the parts does not remove; and
+`configs` that name `num_parallel` still have their own Monty-side meaning that
+nothing here reads.

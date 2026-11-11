@@ -79,6 +79,12 @@ defmodule Monty.Frameworks.Experiments.MontyExperiment do
     * `:stopped?` — whether the caller has asked the run to stop;
     * `:post_episode` — Monty's `post_episode`: what the end of an episode owes,
       which is the studio's record and its counters.
+
+  `:episodes` is how many episodes of a phase a loop takes (`:all` for the whole
+  phase); `:first_episode` is the number the first of them is. `:indices` is the
+  two together, as a list: the episodes a part of a parallel run was given
+  (`Monty.Studio.Partition`), which are the experiment's own numbers and not a
+  count from nought.
   """
   @type callbacks(state, info) :: %{
           required(:objects) => [String.t()],
@@ -92,8 +98,9 @@ defmodule Monty.Frameworks.Experiments.MontyExperiment do
           required(:stopped?) => (-> boolean()),
           required(:post_episode) => (state, outcome(), [info] -> state),
           optional(:epochs) => non_neg_integer(),
-          optional(:episodes) => non_neg_integer() | :all,
+          optional(:episodes) => non_neg_integer() | :all | {:indices, [non_neg_integer()]},
           optional(:first_episode) => non_neg_integer(),
+          optional(:indices) => [non_neg_integer()],
           optional(:experiment) => module(),
           optional(:ground_truth) => (state -> {:ok, state} | {:error, term()})
         }
@@ -113,6 +120,42 @@ defmodule Monty.Frameworks.Experiments.MontyExperiment do
   """
   @spec run_epochs(state, callbacks(state, info)) :: {outcome(), [episode_result()], state}
         when state: term(), info: term()
+  # A part of a parallel run is told which episodes are its own
+  # (`Monty.Studio.Partition`), and takes exactly those: one epoch at a time, in
+  # the order the experiment walks them. An epoch a part touches only in the
+  # middle is still that epoch — the number of the first episode in the group is
+  # what the sampler and the seed read, so a part sees the rotation, the object
+  # and the draws the whole experiment would have seen.
+  def run_epochs(state, %{episodes: {:indices, indices}} = callbacks) do
+    experiment = Map.get(callbacks, :experiment, __MODULE__)
+    per_epoch = length(callbacks.objects)
+
+    {outcome, newest_first, state} =
+      indices
+      |> Enum.chunk_by(&epoch_of(&1, per_epoch))
+      |> Enum.reduce_while({:finished, [], state}, fn group, {_outcome, held, state} ->
+        if callbacks.stopped?.() do
+          {:halt, {:stopped, held, state}}
+        else
+          {outcome, ran, state} =
+            experiment.run_epoch(
+              state,
+              Map.merge(callbacks, %{
+                epoch: epoch_of(hd(group), per_epoch),
+                first_episode: hd(group),
+                episodes: length(group),
+                indices: group
+              })
+            )
+
+          acc = {outcome, Enum.reverse(ran, held), state}
+          if outcome == :finished, do: {:cont, acc}, else: {:halt, acc}
+        end
+      end)
+
+    {outcome, Enum.reverse(newest_first), state}
+  end
+
   def run_epochs(state, %{epochs: epochs} = callbacks) do
     experiment = Map.get(callbacks, :experiment, __MODULE__)
     per_epoch = length(callbacks.objects)
@@ -128,6 +171,8 @@ defmodule Monty.Frameworks.Experiments.MontyExperiment do
       []
     )
   end
+
+  defp epoch_of(index, per_epoch), do: div(index, per_epoch)
 
   defp run_epochs(0, _per_epoch, _first, _budget, state, _callbacks, _experiment, episodes),
     do: {:finished, Enum.reverse(episodes), state}
@@ -186,22 +231,36 @@ defmodule Monty.Frameworks.Experiments.MontyExperiment do
   @spec run_epoch(state, callbacks(state, info)) :: {outcome(), [episode_result()], state}
         when state: term(), info: term()
   def run_epoch(state, %{objects: objects} = callbacks) do
-    run_objects(
-      Enum.take(objects, budget(Map.get(callbacks, :episodes, :all), objects)),
-      Map.get(callbacks, :first_episode, 0),
-      state,
-      callbacks,
-      []
-    )
+    run_objects(planned(callbacks, objects), state, callbacks, [])
   end
+
+  # The episodes this epoch walks: the number each one is, and the object it
+  # shows. A run takes the objects in order from `:first_episode`; a part of a
+  # parallel run is told its own numbers, which are the experiment's — the object
+  # is `episode mod objects` either way, so a part shows the object the whole
+  # experiment would have shown at that number.
+  defp planned(callbacks, objects) do
+    case Map.get(callbacks, :indices) do
+      nil ->
+        first = Map.get(callbacks, :first_episode, 0)
+        count = min(budget(Map.get(callbacks, :episodes, :all), objects), length(objects))
+
+        for index <- first..(first + count - 1)//1, do: {index, object_at(objects, index)}
+
+      indices ->
+        for index <- indices, do: {index, object_at(objects, index)}
+    end
+  end
+
+  defp object_at(objects, index), do: Enum.at(objects, rem(index, length(objects)))
 
   defp budget(:all, objects), do: length(objects)
   defp budget(count, _objects) when is_integer(count), do: max(count, 0)
 
-  defp run_objects([], _index, state, _callbacks, episodes),
+  defp run_objects([], state, _callbacks, episodes),
     do: {:finished, Enum.reverse(episodes), state}
 
-  defp run_objects([object | rest], index, state, callbacks, episodes) do
+  defp run_objects([{index, object} | rest], state, callbacks, episodes) do
     # A stop lands between episodes, as it lands between steps: the episode not
     # begun is an episode the run did not take.
     if callbacks.stopped?.() do
@@ -227,7 +286,7 @@ defmodule Monty.Frameworks.Experiments.MontyExperiment do
         case outcome do
           {:crashed, _step, _reason} = crashed -> {crashed, Enum.reverse(episodes), state}
           :stopped -> {:stopped, Enum.reverse(episodes), state}
-          :finished -> run_objects(rest, index + 1, state, callbacks, episodes)
+          :finished -> run_objects(rest, state, callbacks, episodes)
         end
 
       {:error, reason} ->

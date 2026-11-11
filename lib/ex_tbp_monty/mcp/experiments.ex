@@ -370,8 +370,8 @@ defmodule ExTbpMonty.Mcp.Experiments do
       parallel: %{
         num_parallel: num_parallel(opened.config),
         note:
-          "Monty's own runner walks that many episodes in parallel; this studio queues " <>
-            "runs and steps them one at a time"
+          "Monty's own runner walks that many episodes in parallel; this studio divides the " <>
+            "experiment into that many parts — evaluation by episode, training by object"
       },
       connections: Enum.map(opened.setup.connections, &connection/1),
       # The same sentences the studio page shows before a run and the CLI prints
@@ -549,8 +549,10 @@ defmodule ExTbpMonty.Mcp.Experiments do
   end
 
   # What each experiment is labelled with — whether it runs in this deployment,
-  # and the world its config was written for — from the one place that answers it.
-  defp labels, do: Readiness.catalog() |> Readiness.labels()
+  # and the world its config was written for — from the one process that composes
+  # the answer once, so a client asking at the same moment as a page does not
+  # compose a second copy.
+  defp labels, do: Monty.Studio.Readiness.Cache.survey() |> Readiness.labels()
 
   defp window(entries, opts) do
     limit = min(opts[:limit] || @default_limit, @max_limit)

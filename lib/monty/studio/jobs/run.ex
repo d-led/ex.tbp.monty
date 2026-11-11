@@ -33,6 +33,7 @@ defmodule Monty.Studio.Jobs.Run do
     Failure,
     Learned,
     Logging,
+    Memories,
     Run,
     RunHistory,
     RunLog,
@@ -181,16 +182,17 @@ defmodule Monty.Studio.Jobs.Run do
     }
 
     # How much of the experiment this run is: all of it, unless its record says
-    # fewer episodes — which is how a page runs a slice and how a test runs one.
-    # The number is per phase, so a two-phase config sliced to two runs two of
-    # each; every shipped config has one phase, where the two are the same.
+    # fewer episodes or names the ones a part of a parallel batch takes
+    # (`Monty.Studio.Partition`). The number is per phase, so a two-phase config
+    # sliced to two runs two of each; every shipped config has one phase, where
+    # the two are the same.
     episodes = episodes_of(record, Setup.planned_episodes(opened.setup))
 
     # What this run will leave behind is the config's answer, not the page's: the
     # handlers it names are also what decides whether the modules keep the whole
     # hypothesis space, which is Monty's `init_monty_data_loggers`.
     logging = Logging.open(opened.setup)
-    plan = Setup.epoch_plan(opened.setup)
+    plan = phases_of(record, opened.setup)
 
     say(
       run_id,
@@ -231,7 +233,10 @@ defmodule Monty.Studio.Jobs.Run do
       # What the phase has learned so far, by module. A run is one episode, so
       # this is the memory a training phase carries from one to the next; an
       # evaluation phase writes nothing into it and hands it on unchanged.
-      memories: Setup.memories(opened.setup),
+      #
+      # An evaluation wave of a parallel batch starts from the memory its training
+      # wave's parts built between them, which is what the record points at.
+      memories: memories_of(record, opened),
       # Where each object stood the first time this run showed it. A supervised
       # experiment states its answer as "here on the model", and a later epoch
       # that places the object somewhere else still extends the graph it built
@@ -249,7 +254,7 @@ defmodule Monty.Studio.Jobs.Run do
     }
 
     {outcome, ran, state} =
-      run_phases(plan, episodes, state, %{
+      run_phases(plan, episodes_plan(record, episodes), state, %{
         experiment: experiment,
         objects: objects,
         pre_episode: &start_episode(run_id, opened, &1, &2, &3, &4),
@@ -261,7 +266,15 @@ defmodule Monty.Studio.Jobs.Run do
       })
 
     say(run_id, episodes_line(ran))
-    Enum.each(Learned.keep(run_id, opened, plan, state.memories), &say(run_id, &1))
+
+    # A part of a batch keeps its memory to its own directory: the library is what
+    # the parts learned between them, and one part writing it would overwrite the
+    # merged one with its own share.
+    Enum.each(
+      Learned.keep(run_id, opened, plan, state.memories, library: not part?(record)),
+      &say(run_id, &1)
+    )
+
     close(state.record, opened, outcome, state.infos, state.conclusion, run_id)
   end
 
@@ -274,7 +287,7 @@ defmodule Monty.Studio.Jobs.Run do
         %{state | mode: mode},
         callbacks
         |> Map.put(:objects, Map.get(callbacks.objects, mode, []))
-        |> Map.merge(%{epochs: epochs, episodes: episodes})
+        |> Map.merge(%{epochs: epochs, episodes: episodes_for(episodes, mode)})
       )
 
     case outcome do
@@ -309,6 +322,59 @@ defmodule Monty.Studio.Jobs.Run do
        do: count
 
   defp episodes_of(_record, default), do: default
+
+  # The part of a parallel batch this run is, or `nil` for a run of the whole
+  # experiment (`Monty.Studio.Partition`).
+  defp part(%{inputs: %{"part" => %{} = part}}), do: part
+  defp part(_record), do: nil
+
+  defp part?(record), do: part(record) != nil
+
+  # What a part takes, phase by phase, as the loop's own vocabulary: the episode
+  # numbers of that phase and nothing else. A run of the whole experiment answers
+  # the budget it was given, which is the same thing said as a count.
+  defp episodes_plan(record, budget) do
+    case part(record) do
+      nil ->
+        budget
+
+      %{"phases" => phases} ->
+        Map.new(phases, fn {mode, indices} -> {phase(mode), {:indices, indices}} end)
+    end
+  end
+
+  defp episodes_for(episodes, mode) when is_map(episodes),
+    do: Map.get(episodes, mode, {:indices, []})
+
+  defp episodes_for(episodes, _mode), do: episodes
+
+  defp phase("train"), do: :train
+  defp phase("eval"), do: :eval
+  defp phase(:train), do: :train
+  defp phase(:eval), do: :eval
+
+  # The plan a run is walked with: the config's phases and how many epochs of each,
+  # or — for a part of a parallel batch — the phases that part was given, one pass
+  # each. A part that was told to train does not run the config's evaluation as
+  # well: its work is the episodes it was handed (`Monty.Studio.Partition`).
+  defp phases_of(record, setup) do
+    case part(record) do
+      nil ->
+        Setup.epoch_plan(setup)
+
+      %{"phases" => phases} ->
+        for mode <- [:train, :eval],
+            Map.get(phases, to_string(mode)) not in [nil, []],
+            do: {mode, 1}
+    end
+  end
+
+  # What the run starts from: the memory its record points at — an evaluation
+  # wave's merged one — or the library its config names.
+  defp memories_of(%{inputs: %{"part" => %{"memory" => %{} = pointer}}}, opened),
+    do: Memories.load(opened, pointer)
+
+  defp memories_of(_record, opened), do: Setup.memories(opened.setup)
 
   # Monty's `pre_episode`, interface half: an episode starts where it was told to
   # — the world for this episode's object, the agent positioned, the sensors

@@ -419,11 +419,12 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert has_element?(view, "#stop")
     end
 
-    # One press of Run with a parallelism of three is three runs, and stopping
-    # them one at a time from another page is not what "stop" means.
+    # One press of Run with a parallelism of three is three parts of the
+    # experiment — three runs — and stopping them one at a time from another page
+    # is not what "stop" means.
     test "Stop ends every run of the experiment, not only the one on screen", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=3")
 
       view |> element("#parallelism") |> render_change(%{"parallelism" => "3"})
       view |> element("#run") |> render_click()
@@ -476,23 +477,81 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert render(two) =~ "watching it"
     end
 
-    test "in parallel starts one run per episode, one object each", %{conn: conn} do
+    # The blind spot this fixes: "in parallel" used to start n copies of the whole
+    # experiment, which is n times the work and no faster. It starts n *parts* of
+    # one experiment now — Monty's own division of the work
+    # (`Monty.Studio.Partition`) — each a run of its own with its own episodes.
+    test "in parallel divides the experiment into parts, each its own run", %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=3")
 
       view |> element("#parallelism") |> render_change(%{"parallelism" => "3"})
       view |> element("#run") |> render_click()
 
-      # Three runs, three episodes, and the page watches the first of them. The
-      # episodes are why this is not just "three of the same": each carries its
-      # own seed, and a config that names ten objects has ten of them.
       runs = RunHistory.list_for("base_config_10distinctobj_dist_agent")
-
-      assert runs |> Enum.map(& &1.episode) |> Enum.sort() == [0, 1, 2]
+      assert length(runs) == 3
       assert current_run_id(view) in Enum.map(runs, & &1.id)
+
+      # Three episodes came out of the config as three parts of one episode each,
+      # and no episode is run twice: this is the experiment divided, not copied.
+      episodes =
+        runs
+        |> Enum.map(&get_in(&1.inputs, ["part", "phases", "eval"]))
+        |> Enum.sort()
+
+      assert episodes == [[0], [1], [2]]
+      assert runs |> Enum.map(& &1.episode) |> Enum.sort() == [0, 1, 2]
 
       # Each is a job of its own, so the queue steps them side by side.
       assert map_size(Monty.Studio.Jobs.by_run(Enum.map(runs, & &1.id))) == 3
+    end
+
+    test "parts of one press of Run share a batch, so a page can find them all", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=3")
+
+      view |> element("#parallelism") |> render_change(%{"parallelism" => "3"})
+      view |> element("#run") |> render_click()
+
+      runs = RunHistory.list_for("base_config_10distinctobj_dist_agent")
+      assert [%{inputs: %{"batch" => batch}} | _rest] = runs
+      assert length(RunHistory.parts(batch)) == 3
+
+      # Numbered by the plan, in the order the plan walks them: "part 2 of 4" is
+      # the second stretch of the experiment, not the second row written.
+      assert Enum.map(RunHistory.parts(batch), &get_in(&1.inputs, ["part", "index"])) == [
+               0,
+               1,
+               2
+             ]
+    end
+
+    # The pyview dashboard's multi-publisher view: one card per part, one after the
+    # other. A page that drew only the part it followed hid the other two while they
+    # ran (`ExTbpMontyWeb.RunParts`).
+    test "every part of the batch has a card beside the run the page is watching", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=3")
+
+      view |> element("#parallelism") |> render_change(%{"parallelism" => "3"})
+      view |> element("#run") |> render_click()
+
+      # The press of Run polls for its cards; the poll is what the page does
+      # between steps.
+      send(view.pid, :studio_poll)
+      perform_run(view)
+
+      assert has_element?(view, "#run-parts")
+
+      runs =
+        RunHistory.parts(
+          hd(RunHistory.list_for("base_config_10distinctobj_dist_agent")).inputs["batch"]
+        )
+
+      for {run, index} <- Enum.with_index(runs) do
+        assert has_element?(view, "#part-#{run.id}")
+        assert view |> element("#part-#{run.id}") |> render() =~ "part #{index + 1} of 3"
+      end
     end
 
     test "each sensor has its own view, updated as the run steps", %{conn: conn} do

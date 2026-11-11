@@ -341,9 +341,25 @@ defmodule Monty.Studio.RunLog do
 
   The config snapshot is the composed tree, and the inputs are what the run was
   given: the group choices, the seed, the budget, and the modules it addresses.
+
+  `part` is what a run of a parallel batch was given
+  (`Monty.Studio.Partition`), and empty for a run of the whole experiment: which
+  part it is and of how many, the batch it belongs to, the episodes it takes per
+  phase, and — for an evaluation wave — the merged memory its training wave built.
+  The record keeps it because the worker that steps it may be another node, and
+  because a page asks "which run is part 2 of 4" of the records rather than of
+  the page that started them.
   """
-  @spec attributes(map(), pos_integer()) :: map()
-  def attributes(opened, steps, episode \\ 0, parallel \\ 1, episodes \\ nil) do
+  @spec attributes(
+          map(),
+          pos_integer(),
+          non_neg_integer(),
+          pos_integer(),
+          pos_integer() | nil,
+          map()
+        ) ::
+          map()
+  def attributes(opened, steps, episode \\ 0, parallel \\ 1, episodes \\ nil, part \\ %{}) do
     %{
       experiment: opened.name,
       episode: episode,
@@ -351,22 +367,38 @@ defmodule Monty.Studio.RunLog do
       steps: steps,
       seed: opened.setup.seed,
       config: opened.config,
-      inputs: %{
-        "groups" => opened.groups,
-        "seed" => opened.setup.seed,
-        "world" => to_string(opened.setup.world),
-        "train_epochs" => opened.setup.epochs.train,
-        "eval_epochs" => opened.setup.epochs.eval,
-        # What this run is: every episode of the experiment (objects × rotations),
-        # unless the caller asked for fewer. The record keeps it so a page can say
-        # how far a run got without knowing the config.
-        "episodes" => episodes || Setup.episodes(opened.setup),
-        "sensors" => Setup.sensor_ids(opened.setup),
-        "learning_modules" => Enum.map(opened.setup.learning_modules, & &1.id),
-        # How many runs were started together: one episode each, the same
-        # experiment side by side. A property of the run's record, not of the
-        # page that started it.
-        "parallel" => parallel
+      inputs:
+        %{
+          "groups" => opened.groups,
+          "seed" => opened.setup.seed,
+          "world" => to_string(opened.setup.world),
+          "train_epochs" => opened.setup.epochs.train,
+          "eval_epochs" => opened.setup.epochs.eval,
+          # What this run is: every episode of the experiment (objects × rotations),
+          # unless the caller asked for fewer. The record keeps it so a page can say
+          # how far a run got without knowing the config.
+          "episodes" => episodes || Setup.episodes(opened.setup),
+          "sensors" => Setup.sensor_ids(opened.setup),
+          "learning_modules" => Enum.map(opened.setup.learning_modules, & &1.id),
+          # How many runs were started together: one episode each, the same
+          # experiment side by side. A property of the run's record, not of the
+          # page that started it.
+          "parallel" => parallel
+        }
+        |> Map.merge(part_inputs(part))
+    }
+  end
+
+  defp part_inputs(part) when map_size(part) == 0, do: %{}
+
+  defp part_inputs(part) do
+    %{
+      "batch" => part.batch,
+      "part" => %{
+        "index" => part.index,
+        "of" => part.of,
+        "phases" => Map.new(part.phases, fn {mode, episodes} -> {to_string(mode), episodes} end),
+        "memory" => Map.get(part, :memory)
       }
     }
   end

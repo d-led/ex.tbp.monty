@@ -33,8 +33,10 @@ defmodule ExTbpMonty.Mcp.Studio do
     }
   end
 
-  # One run is one episode: the studio opens one record per episode and steps it
-  # on its own, which is what makes a run's page a page about one object.
+  # One run is one *part* of the experiment: the studio divides it — evaluation
+  # by episode, training by object (`Monty.Studio.Partition`) — and steps each
+  # part on its own, which is what makes a run's page about one stretch of the
+  # experiment rather than about all of it.
   #
   # The limit comes from the running queue, because the run page changes it while
   # the queue drains — the configured value is where it started, not where it is.
@@ -53,7 +55,7 @@ defmodule ExTbpMonty.Mcp.Studio do
       live?: true,
       running_now: running_count(state.running),
       paused?: state.paused == true,
-      one_episode_per_run: true,
+      one_part_per_run: true,
       how: how(),
       monty_equivalent: monty_equivalent()
     }
@@ -65,7 +67,7 @@ defmodule ExTbpMonty.Mcp.Studio do
       live?: false,
       running_now: 0,
       paused?: false,
-      one_episode_per_run: true,
+      one_part_per_run: true,
       how: how() <> " (This process has no queue running, so nothing is executing here.)",
       monty_equivalent: monty_equivalent()
     }
@@ -88,11 +90,14 @@ defmodule ExTbpMonty.Mcp.Studio do
 
   defp how do
     "a run is a job on the :studio queue, and the queue's limit is how many run at once. " <>
-      "The run page's \"in parallel\" selector queues one run per episode and sets the " <>
-      "limit to the same number — one object per episode."
+      "The run page's \"in parallel\" selector divides the experiment into that many parts " <>
+      "— evaluation by episode, training by object — queues one run each, and sets the " <>
+      "limit to the same number."
   end
 
-  defp monty_equivalent, do: "Monty's run_parallel.py, one process per episode"
+  defp monty_equivalent,
+    do:
+      "Monty's run_parallel.py: one config per part, evaluation by episode and training by object"
 
   # `running` is the producer's list of executing job ids, not a count.
   defp running_count(ids), do: length(ids)

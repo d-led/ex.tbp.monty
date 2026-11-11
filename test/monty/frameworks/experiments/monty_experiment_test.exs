@@ -152,6 +152,80 @@ defmodule Monty.Frameworks.Experiments.MontyExperimentTest do
     end
   end
 
+  describe "a part of a parallel run" do
+    # Episode numbers are the experiment's, not a count from nought: the whole
+    # run derives the object, the rotation and the draws from them, so a part that
+    # renumbered its episodes would run a different experiment
+    # (`Monty.Studio.Partition`).
+    test "takes the episodes it was given, with the object each number shows" do
+      callbacks =
+        epoch(%{objects: ["mug", "bowl", "cup"], episodes: {:indices, [3, 4, 5]}})
+
+      assert {:finished, episodes, _} = MontyExperiment.run_epochs(%{}, callbacks)
+
+      assert Enum.map(episodes, & &1.episode) == [3, 4, 5]
+      assert Enum.map(episodes, & &1.object) == ["mug", "bowl", "cup"]
+    end
+
+    test "starts a stretch in the middle of an epoch at the object its number names" do
+      callbacks = epoch(%{objects: ["mug", "bowl", "cup"], episodes: {:indices, [4, 5]}})
+
+      assert {:finished, episodes, _} = MontyExperiment.run_epochs(%{}, callbacks)
+
+      assert Enum.map(episodes, &{&1.episode, &1.object}) == [{4, "bowl"}, {5, "cup"}]
+    end
+
+    test "tells an episode which epoch of the phase it belongs to, whatever it starts at" do
+      callbacks =
+        epoch(%{
+          objects: ["mug", "bowl"],
+          episodes: {:indices, [2, 3, 5]},
+          pre_episode: fn state, _index, _object, callbacks ->
+            send(self(), {:epoch, Map.get(callbacks, :epoch)})
+            {:ok, state}
+          end
+        })
+
+      assert {:finished, episodes, _} = MontyExperiment.run_epochs(%{}, callbacks)
+
+      # Episodes 2 and 3 are the second walk of the objects, 5 the third one's.
+      assert epochs_seen() == [1, 1, 2]
+      assert Enum.map(episodes, & &1.object) == ["mug", "bowl", "bowl"]
+    end
+
+    test "trains an object's rotations in order, one epoch at a time" do
+      # A training part keeps its object and takes the rotations in sequence, so
+      # every episode extends the graph the one before it built.
+      callbacks =
+        epoch(%{objects: ["mug", "bowl"], episodes: {:indices, [0, 2, 4]}})
+
+      assert {:finished, episodes, _} = MontyExperiment.run_epochs(%{}, callbacks)
+
+      assert Enum.map(episodes, &{&1.episode, &1.object}) == [
+               {0, "mug"},
+               {2, "mug"},
+               {4, "mug"}
+             ]
+    end
+
+    test "ends where the episode it was given could not begin" do
+      callbacks =
+        epoch(%{
+          objects: ["mug", "bowl"],
+          episodes: {:indices, [0, 1, 2]},
+          pre_episode: fn
+            state, 0, "mug", _callbacks -> {:ok, state}
+            _state, _index, _object, _callbacks -> {:error, :object_not_visible}
+          end
+        })
+
+      assert {{:crashed, 0, :object_not_visible}, episodes, _} =
+               MontyExperiment.run_epochs(%{}, callbacks)
+
+      assert Enum.map(episodes, & &1.episode) == [0, 1]
+    end
+  end
+
   # The epochs the episodes were told they belong to, in the order they were
   # started.
   defp epochs_seen do

@@ -299,8 +299,8 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
   defp objects_text(%{source: source}), do: "none named by the config — #{source}"
 
   defp parallel_text(%{num_parallel: count}) when is_integer(count) do
-    "the config declares num_parallel #{count} for Monty's own runner; this studio queues " <>
-      "runs and steps them one at a time"
+    "the config declares num_parallel #{count} for Monty's own runner; this studio divides " <>
+      "the experiment into that many parts — evaluation by episode, training by object"
   end
 
   defp parallel_text(%{note: note}), do: note
