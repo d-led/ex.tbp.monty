@@ -162,7 +162,10 @@ defmodule Monty.Studio.Artifacts do
   # the same confinement `frame_path/2` checks again when the file is read.
   # sobelow_skip ["Traversal.FileModule"]
   def put_frame(run_id, step, sensor_id, kind, base64) do
-    name = Path.join(Integer.to_string(step), "#{sensor_id}-#{kind}.png")
+    # The step is whatever a run numbers its pictures by: a step number for a run
+    # of the whole experiment, and part-and-step for a run of several parts, whose
+    # parts each count from nought inside one run's directory.
+    name = Path.join(to_string(step), "#{sensor_id}-#{kind}.png")
     path = Path.join(frames_dir(run_id), name)
 
     with :ok <- File.mkdir_p(Path.dirname(path)),

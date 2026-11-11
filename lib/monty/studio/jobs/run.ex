@@ -162,15 +162,28 @@ defmodule Monty.Studio.Jobs.Run do
 
   # -- the run ---------------------------------------------------------------
 
+  # One press of Run is one record and one job, whatever it was asked to do with
+  # its work. A run asked for several parts runs them here, in this process's own
+  # pool; there is still one row, one topic and one transcript.
+  defp run_experiment(record, opened) do
+    case parallel(record) do
+      1 -> run_alone(record, opened)
+      count -> run_partitioned(record, opened, count)
+    end
+  end
+
   # One run is one *epoch*: an episode per object the experiment names, each of
   # them ending the way Monty's does — the recognition policy said done, or the
   # page's step budget ran out. The loop is the experiment class's
   # (`MontyExperiment.run_epoch/2`); this function is the world, the records and
   # the page, which the loop asks for through callbacks.
-  defp run_experiment(record, opened) do
+  defp run_alone(record, opened) do
     run_id = record.id
     log_ready = Artifacts.start(run_id)
-    record = attach_log(record, run_id, log_ready)
+    # A part's log is its own stream's, and the row it would be attached to is the
+    # run's, which the run has already attached: the part writes its lines to its
+    # own file and leaves the row alone.
+    record = if part?(record), do: record, else: attach_log(record, run_id, log_ready)
     sensor_ids = Setup.sensor_ids(opened.setup)
     experiment = Setup.experiment_class(opened.setup)
     # An epoch walks its own phase's objects: a config can train on two and
@@ -227,8 +240,10 @@ defmodule Monty.Studio.Jobs.Run do
       # run of three sees as upright, then turned, then upright again.
       epoch: 0,
       # How many episodes this run has started. It, not the epoch's own index, is
-      # the number the record keeps: see `start_episode/5`.
-      episodes_started: 0,
+      # the number the record keeps: see `start_episode/5`. A part's steps carry
+      # the episode of the *experiment* they took, so the parts of one run make one
+      # chart rather than four charts that each count from nought.
+      episodes_started: offset_of(record),
       mode: :eval,
       # What the phase has learned so far, by module. A run is one episode, so
       # this is the memory a training phase carries from one to the next; an
@@ -275,8 +290,267 @@ defmodule Monty.Studio.Jobs.Run do
       &say(run_id, &1)
     )
 
-    close(state.record, opened, outcome, state.infos, state.conclusion, run_id)
+    # A part of a run leaves its record to the run: the run knows when every part
+    # is done and what the experiment concluded between them, and a part that
+    # closed the row would say "finished" while its neighbours were still
+    # stepping.
+    if part?(record) do
+      outcome
+    else
+      close(state.record, opened, outcome, state.infos, state.conclusion, run_id)
+    end
   end
+
+  # -- a run of several parts ------------------------------------------------
+
+  # Monty's `run_parallel.py`, as one job: the experiment divided into parts that
+  # run at the same time (`Monty.Studio.Partition`), and one record for all of
+  # them.
+  #
+  # The parts are processes inside this job rather than jobs of their own. A
+  # part's work is independent of every other part's, so `Task.async_stream/3` is
+  # `mp.Pool(num_parallel)`: it starts `n` of them, starts the next as one
+  # finishes, and hands each back when it is done. What a part leaves behind is
+  # its stream — its steps, its log, its memory — under the stream id the record
+  # gave it, so four parts cannot overwrite each other's episode one or their
+  # memory, and the row is written by this one process, which is what makes the
+  # transcript append rather than race.
+  #
+  # Training then evaluation is Monty's `post_parallel_train`: the parts of the
+  # training wave each build the memory of the objects they were given, the
+  # memories are merged into one, and the evaluation wave starts from that one
+  # (`Monty.Studio.Memories`).
+  defp run_partitioned(record, opened, count) do
+    run_id = record.id
+    log_ready = Artifacts.start(run_id)
+    record = attach_log(record, run_id, log_ready)
+    parts = planned(record)
+
+    say(
+      run_id,
+      "run started: #{record.experiment}, #{length(parts)} part(s) of one experiment, " <>
+        "#{min(count, length(parts))} at a time, up to #{record.steps} steps an episode"
+    )
+
+    broadcast(run_id, {:started, record.steps})
+
+    {outcome, record} =
+      with {:ok, record, memories} <- train_wave(record, opened, parts),
+           {:ok, record, _memories} <- eval_wave(record, opened, parts, memories) do
+        {:finished, record}
+      else
+        {:error, reason, record} -> {{:failed, reason}, record}
+      end
+
+    # The parts' steps are the run's transcript, written once and in part order,
+    # and only then are the streams let go: they are the only copy until then.
+    record = store_parts(record, parts)
+    Enum.each(parts, &RunStream.clear(&1.stream))
+    close(record, opened, outcome, [], %{}, run_id, true)
+  end
+
+  # The training wave, and the memory it built between its parts.
+  defp train_wave(record, opened, parts) do
+    case wave(parts, "train") do
+      [] ->
+        {:ok, record, nil}
+
+      wave ->
+        with {:ok, record} <- run_wave(record, opened, wave, nil) do
+          merge_memories(record, opened, wave)
+        end
+    end
+  end
+
+  defp eval_wave(record, opened, parts, memories) do
+    case wave(parts, "eval") do
+      [] ->
+        {:ok, record, memories}
+
+      wave ->
+        with {:ok, record} <- run_wave(record, opened, wave, memories),
+             do: {:ok, record, memories}
+    end
+  end
+
+  # Monty's `post_parallel_train`: every part's memory read back, folded into one
+  # (`Monty.Studio.Memories.merge/1`), written where the evaluation wave will look
+  # for it — and where a later configuration of the same experiment looks, which
+  # is what "the model was trained" means here.
+  defp merge_memories(record, opened, wave) do
+    memories = wave |> Enum.map(& &1.stream) |> Memories.learned(opened) |> Memories.merge()
+
+    case Memories.keep(record.id, opened, memories) do
+      {:ok, name} ->
+        say(record.id, "merged #{length(wave)} trained part(s) into #{name}")
+
+        memory = %{
+          "name" => name,
+          "release" => Learned.release(),
+          "dir" => Memories.batch_dir(record.id)
+        }
+
+        {:ok, record, memory}
+
+      {:error, reason} ->
+        {:error, "the merged memory could not be written: #{inspect(reason)}", record}
+    end
+  end
+
+  # One pass over a wave: `n` parts at a time, each writing its own stream, the
+  # run's transcript written as each part falls out of the pool.
+  defp run_wave(record, opened, wave, memory) do
+    results =
+      wave
+      |> Task.async_stream(&run_part(record, opened, &1, memory),
+        max_concurrency: max(length(wave), 1),
+        ordered: false,
+        timeout: :infinity
+      )
+      |> Enum.to_list()
+
+    broken = Enum.find(results, fn result -> match?({:ok, {:error, _part, _reason}}, result) end)
+
+    record = Enum.reduce(results, record, fn result, record -> collect(result, record) end)
+
+    case broken do
+      {:ok, {:error, part, reason}} ->
+        {:error, "part #{part.index + 1} of #{part.of} stopped: #{inspect(reason)}", record}
+
+      nil ->
+        {:ok, record}
+    end
+  end
+
+  # A part that has finished says so, and leaves its steps where they are: the
+  # run's transcript is the parts' transcripts one after another, written once
+  # when the run closes (`store_parts/2`), because a row holds one transcript and
+  # four parts each writing theirs is four parts overwriting one another.
+  defp collect({:ok, {:ok, part, _memories}}, record) do
+    steps = RunStream.count(part.stream)
+
+    say(record.id, "part #{part.index + 1} of #{part.of} finished: #{steps} step(s)")
+    record
+  end
+
+  defp collect({:ok, {:error, part, reason}}, record) do
+    say(record.id, "part #{part.index + 1} of #{part.of} stopped: #{inspect(reason)}")
+    record
+  end
+
+  defp collect({:exit, reason}, record) do
+    say(record.id, "a part exited: #{inspect(reason)}")
+    record
+  end
+
+  # The one transcript a run of several parts leaves: part one's steps, then part
+  # two's, and so on — which is the order Monty's dashboard draws its sections in,
+  # and the order a reader of the record expects.
+  defp store_parts(record, parts) do
+    {log, timeline} =
+      parts
+      |> Enum.sort_by(&{&1.phase, &1.index})
+      |> Enum.flat_map(fn part ->
+        {steps, moments} = RunStream.steps(part.stream)
+        Enum.zip(steps, moments)
+      end)
+      |> Enum.unzip()
+
+    publish(record.id, {:keeping, length(log)})
+
+    case RunWriter.store(record, log, timeline) do
+      {:ok, saved} ->
+        publish(record.id, :kept)
+        saved
+
+      {:error, reason} ->
+        publish(record.id, :kept)
+        say(record.id, "the run's steps could not be written: #{inspect(reason)}")
+        record
+    end
+  end
+
+  # One part, as the run the rest of this module already knows how to step: the
+  # same record, with its own stream and the episodes it was given. Everything the
+  # step loop derives from a record — the phase, the episodes, the memory — is
+  # read from it here, so a part is not a second kind of run.
+  defp run_part(record, opened, part, memory) do
+    record = part_record(record, part, memory)
+    # A part owns its stream the way a run owns its id: `Stop` reaches it, and the
+    # Reaper can see that something is working on it, until it is done.
+    register(record.id)
+
+    try do
+      case run_alone(record, opened) do
+        {:error, reason} -> {:error, part, reason}
+        outcome -> {:ok, part, outcome}
+      end
+    rescue
+      exception -> {:error, part, Failure.crashed(:error, exception, __STACKTRACE__)}
+    catch
+      kind, reason -> {:error, part, Failure.crashed(kind, reason, __STACKTRACE__)}
+    after
+      unregister(record.id)
+    end
+  end
+
+  defp part_record(record, part, memory) do
+    %{
+      record
+      | id: part.stream,
+        inputs:
+          Map.put(record.inputs, "part", %{
+            "index" => part.index,
+            "of" => part.of,
+            # The run this part belongs to: the row it is recorded in, the log it
+            # writes to and the directory its pictures are served from are all the
+            # run's, because a part's stream id is a stream and not a run
+            # (`db/1`).
+            "parent" => record.id,
+            "phases" => %{to_string(part.phase) => part.episodes},
+            "memory" => memory
+          })
+    }
+  end
+
+  # The plan the record was started with (`Monty.Studio.Partition`), as parts.
+  defp planned(%{inputs: %{"parts" => [_ | _] = parts}}) do
+    Enum.map(parts, fn part ->
+      %{
+        index: part["index"],
+        of: part["of"],
+        phase: phase_of(part["phase"]),
+        episodes: part["phases"] |> Map.values() |> List.flatten(),
+        stream: part["stream"]
+      }
+    end)
+  end
+
+  defp planned(_no_plan), do: []
+
+  defp wave(parts, phase), do: Enum.filter(parts, &(to_string(&1.phase) == phase))
+
+  defp phase_of("train"), do: :train
+  defp phase_of("eval"), do: :eval
+  defp phase_of(_other), do: :eval
+
+  # The row a part writes to: the run's own, never the stream's. A part's id is
+  # where its steps and its memory live, not where the experiment is recorded.
+  defp db(%{inputs: %{"part" => %{"parent" => parent}}} = record) when is_binary(parent),
+    do: %{record | id: parent}
+
+  defp db(record), do: record
+
+  defp parallel(%{inputs: %{"parallel" => count}}) when is_integer(count) and count > 1, do: count
+  defp parallel(_one), do: 1
+
+  # A part's steps go on the run's topic, because the page watching the run
+  # draws every part; a step says which part took it, which is how the run's own
+  # chart keeps them apart and how a part's card finds its own.
+  defp announce_of(record), do: db(record).id
+
+  defp part_index(%{inputs: %{"part" => %{"index" => index}}}), do: index
+  defp part_index(_whole_run), do: nil
 
   # Monty's `run()`: `train()` and then `evaluate()`, each a loop of its own with
   # the mode set on the model before it starts. An epoch that ends badly ends the
@@ -322,6 +596,14 @@ defmodule Monty.Studio.Jobs.Run do
        do: count
 
   defp episodes_of(_record, default), do: default
+
+  # The episode a part starts counting from: the first of the episodes it was
+  # given. A run of the whole experiment starts at nought.
+  defp offset_of(%{inputs: %{"part" => %{"phases" => phases}}}) when is_map(phases) do
+    phases |> Map.values() |> List.flatten() |> Enum.min(fn -> 0 end)
+  end
+
+  defp offset_of(_whole_run), do: 0
 
   # The part of a parallel batch this run is, or `nil` for a run of the whole
   # experiment (`Monty.Studio.Partition`).
@@ -493,6 +775,12 @@ defmodule Monty.Studio.Jobs.Run do
   # The record in hand is the transcript; writing it is what makes it history.
   # A write that fails does not stop a run: the steps are still in memory for the
   # page, and the next boundary tries again.
+  #
+  # A part writes nothing: its steps are the run's, and the run writes them as
+  # each part finishes (`collect/2`). Four parts keeping a cursor of their own on
+  # one column was four parts rewriting each other's transcript.
+  defp keep(%{inputs: %{"part" => %{}}} = part), do: part
+
   defp keep(record) do
     {saved, _held?} = keep_with_state(record)
     saved
@@ -618,15 +906,20 @@ defmodule Monty.Studio.Jobs.Run do
     # waited for. Formatting a step's line here cost 117 us a step and building
     # its entry another 509 (10 objects, surface agent); both are this
     # process's to do once the run has moved on.
-    RunStream.publish(run_id, %{
-      info: info,
-      at: RunLog.now().instant,
-      episode: state.episode,
-      beliefs: beliefs,
-      observations: rendered,
-      sensor_ids: sensor_ids,
-      centre: centre_view(run, info.step)
-    })
+    RunStream.publish(
+      run_id,
+      %{
+        info: info,
+        at: RunLog.now().instant,
+        episode: state.episode,
+        beliefs: beliefs,
+        observations: rendered,
+        sensor_ids: sensor_ids,
+        centre: centre_view(run, info.step),
+        part: part_index(state.record)
+      },
+      announce: announce_of(state.record)
+    )
 
     # The record in this process is the counters: the transcript is the stream's,
     # and a boundary asks it for what the row has not written yet.
@@ -687,7 +980,7 @@ defmodule Monty.Studio.Jobs.Run do
   # reads as "no such panel".
   defp centre_view(run, step), do: CentreView.frame(run.interface.env, step)
 
-  defp close(record, opened, outcome, infos, conclusion, run_id) do
+  defp close(record, opened, outcome, infos, conclusion, run_id, written? \\ false) do
     summary = Summary.from_infos(infos, opened.setup, conclusion)
     status = status_of(outcome)
     # One summary for the record and for whoever is watching: why a run did not
@@ -699,8 +992,9 @@ defmodule Monty.Studio.Jobs.Run do
 
     # The run's steps and its pictures go into the row once, here, rather than
     # once an episode while it ran. They stay in memory for a page until the row
-    # has them.
-    {record, held?} = store_all(record)
+    # has them. A run of several parts has already written them, part by part, as
+    # each part fell out of the pool.
+    {record, held?} = if written?, do: {record, true}, else: store_all(record)
     if held?, do: RunStream.clear(run_id)
 
     case RunHistory.finish(record, stored, status) do
@@ -718,12 +1012,16 @@ defmodule Monty.Studio.Jobs.Run do
   defp status_of(:finished), do: "finished"
   defp status_of(:stopped), do: "stopped"
   defp status_of({:crashed, _step, _reason}), do: "failed"
+  defp status_of({:failed, _reason}), do: "failed"
 
   defp closing_line(:finished, infos, summary),
     do: "run finished: #{length(infos)} steps in #{summary.duration_us} µs"
 
   defp closing_line(:stopped, infos, summary),
     do: "run stopped after #{length(infos)} step(s), #{summary.duration_us} µs of compute"
+
+  defp closing_line({:failed, reason}, infos, _summary),
+    do: "run failed after #{length(infos)} step(s): #{reason}"
 
   defp closing_line({:crashed, step, reason}, infos, _summary) do
     what = reason |> Failure.stopped() |> Map.fetch!("reason")
@@ -794,8 +1092,8 @@ defmodule Monty.Studio.Jobs.Run do
   defp attach_log(record, run_id, :ok) do
     path = Artifacts.log_path(run_id)
 
-    case RunHistory.attach_log(record, path) do
-      {:ok, record} -> record
+    case RunHistory.attach_log(db(record), path) do
+      {:ok, written} -> %{record | log_path: written.log_path}
       {:error, changeset} -> fail_log(record, {:cannot_record_log_path, changeset.errors})
     end
   end

@@ -117,6 +117,7 @@ defmodule Monty.Studio.Failure do
   @spec stopped(term()) :: %{String.t() => String.t() | nil} | nil
   def stopped(outcome) when outcome in [:finished, :stopped], do: nil
   def stopped({:crashed, _step, reason}), do: stopped(reason)
+  def stopped({:failed, sentence}) when is_binary(sentence), do: stopped(sentence)
   def stopped(%{"reason" => _} = recorded), do: recorded
   def stopped(%{__exception__: true} = exception), do: crashed(:error, exception, [])
   def stopped(sentence) when is_binary(sentence), do: sentence |> explain() |> recorded()

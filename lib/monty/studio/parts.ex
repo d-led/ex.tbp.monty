@@ -1,19 +1,19 @@
 defmodule Monty.Studio.Parts do
   @moduledoc """
-  The parts of one press of Run, as the cards a page draws.
+  The parts of one run, as the cards a page draws.
 
-  A parallel run is several runs (`Monty.Studio.Partition`) and a page watching
-  one of them used to show one chart: the other parts ran, and nobody saw them
-  until the Runs page. This is the other half of Monty's dashboard — the pyview
-  contrib draws a section per publisher, with that publisher's evidence and its
-  sensor images, one after the other — and it is what the studio's pages draw.
+  A run asked for several parts (`Monty.Studio.Partition`) is one record and one
+  job, with the parts running inside it — and each part keeps a stream of its own,
+  which is its steps, its log and its frames. This turns those streams into the
+  sections Monty's dashboard draws: one publisher after another, each with its own
+  evidence and the last pictures its cameras took.
 
   A card is built from what the part has already reported, never from the
-  experiment: the counter of how far a part got, its status, its evidence chart
-  and the last pictures its cameras took. While a part runs those come from
-  `RunStream`, which holds the steps of every run in memory; once it has settled
-  they come from its own record, read once — the page polls this, and a poll that
-  re-read four transcripts twice a second would cost more than the run.
+  experiment: how many steps it has taken, the evidence it reported and its
+  frames. While the run is going those come from `RunStream`, which holds every
+  part's steps in memory; once the run has settled the streams are gone, and the
+  same points are read back from the run's own transcript, where every step says
+  which part took it.
 
   One point a step, from the module that believed most: a part's card is one
   picture of one stretch of the experiment, where the run page offers a chart per
@@ -35,19 +35,22 @@ defmodule Monty.Studio.Parts do
   @typedoc """
   What a page keeps of one part between two polls.
 
-  `read` is how many steps the record had when it was last read: a settled part's
-  transcript does not change, so it is read once and kept.
+  `taken` is how many of the part's live steps have been read. `read` says whether
+  the settled run's transcript has been read for this part: it is written once and
+  does not change, so it is read once.
   """
   @type held :: %{
           id: binary(),
+          part: map(),
           record: RunHistory.Run.t(),
           taken: non_neg_integer(),
-          read: non_neg_integer() | nil,
+          read: boolean(),
+          steps: non_neg_integer(),
           points: [point()],
           frames: [map()]
         }
 
-  @typedoc "The cards of a batch, as the page draws them."
+  @typedoc "One part, as a page draws it."
   @type card :: %{
           id: binary(),
           label: String.t(),
@@ -63,22 +66,31 @@ defmodule Monty.Studio.Parts do
         }
 
   @doc """
-  The batch's parts, up to date with the steps taken since `previous`.
+  The run's parts, up to date with the steps taken since `previous`.
 
-  `nil` is a page watching a run of the whole experiment: there is one part and it
-  is the run the page already draws, so it has no cards.
+  `nil`, or a run of one part, is a run the page already draws in full: there is
+  nothing to say twice, so it has no cards. A run's plan lives in its record's
+  inputs, written when the run started (`Monty.Studio.RunLog.attributes/6`), so a
+  page draws every part's card before the first of them has taken a step.
   """
-  @spec refresh(binary() | nil, %{optional(binary()) => held()}) :: %{
+  @spec refresh(RunHistory.Run.t() | map() | nil, %{optional(binary()) => held()}) :: %{
           optional(binary()) => held()
         }
   def refresh(nil, _previous), do: %{}
 
-  def refresh(batch, previous) do
-    batch
-    |> RunHistory.parts_progress()
-    |> Map.new(fn record ->
-      {record.id, record |> then(&held_up_to_date(Map.get(previous, &1.id), &1))}
-    end)
+  def refresh(record, previous) do
+    case parts_of(record) do
+      [_one] ->
+        %{}
+
+      [] ->
+        %{}
+
+      parts ->
+        Map.new(parts, fn part ->
+          {part["stream"], held_up_to_date(Map.get(previous, part["stream"]), record, part)}
+        end)
+    end
   end
 
   @doc """
@@ -91,42 +103,59 @@ defmodule Monty.Studio.Parts do
   """
   @spec cards(%{optional(binary()) => held()}, Setup.t()) :: [card()]
   def cards(held, setup) do
+    sorted = held |> Map.values() |> Enum.sort_by(&part_number/1)
+    # A run that trains and then evaluates has two waves, and both number their
+    # parts from one: "part 1 of 2" twice would be two different parts under one
+    # name.
+    named? = sorted |> Enum.map(& &1.part["phase"]) |> Enum.uniq() |> length() > 1
+
     {cards, _labels} =
-      held
-      |> Map.values()
-      |> Enum.sort_by(&part_index/1)
-      |> Enum.map_reduce(%{}, fn part, labels ->
-        card = card(part, setup, labels)
+      Enum.map_reduce(sorted, %{}, fn part, labels ->
+        card = card(part, setup, labels, named?)
         {card, card.chart.labels}
       end)
 
     cards
   end
 
-  defp held_up_to_date(nil, record) do
+  defp parts_of(%{inputs: %{"parts" => [_ | _] = parts}}), do: parts
+  defp parts_of(_run_of_the_whole_experiment), do: []
+
+  defp held_up_to_date(nil, record, part) do
     held_up_to_date(
-      %{id: record.id, record: record, taken: 0, read: nil, points: [], frames: []},
-      record
+      %{
+        id: part["stream"],
+        part: part,
+        record: record,
+        taken: 0,
+        read: false,
+        steps: 0,
+        points: [],
+        frames: []
+      },
+      record,
+      part
     )
   end
 
-  defp held_up_to_date(held, record) do
-    held = %{held | record: record}
+  defp held_up_to_date(held, record, part) do
+    held = %{held | record: record, part: part}
 
-    case RunStream.count(record.id) do
+    case RunStream.count(held.id) do
       0 -> from_record(held)
       steps -> from_stream(held, steps)
     end
   end
 
   # The live steps, and only the ones this page has not seen: a page that read the
-  # whole stream on every poll would copy a run's transcript twice a second.
+  # whole stream on every poll would copy every part's transcript twice a second.
   defp from_stream(held, steps) when steps > held.taken do
     {entries, moments} = RunStream.steps_from(held.id, held.taken - 1)
 
     %{
       held
       | taken: steps,
+        steps: steps,
         points: Enum.reverse(points_of(entries), held.points),
         frames: pictures_of(moments) || held.frames
     }
@@ -134,36 +163,35 @@ defmodule Monty.Studio.Parts do
 
   defp from_stream(held, _nothing_new), do: held
 
-  # A part that has settled: its transcript is written and does not change, so it
-  # is read once, when the record says there is more of it than was read.
+  # A part whose stream is gone: the run has settled, and its transcript — the
+  # parts' steps one after another — holds every one of them, each saying which
+  # part took it. It is written once and does not change, so it is read once.
+  defp from_record(%{read: true} = held), do: held
+
   defp from_record(held) do
-    written = held.record.steps_done || 0
-
-    cond do
-      written == 0 -> held
-      held.read == written -> held
-      true -> read(held, written)
-    end
-  end
-
-  defp read(held, written) do
-    case RunHistory.head(held.id) do
+    case RunHistory.head(held.record.id) do
       nil ->
         held
 
       record ->
+        mine =
+          (record.log || [])
+          |> Enum.with_index()
+          |> Enum.filter(fn {entry, _position} -> entry["part"] == held.part["index"] end)
+
         %{
           held
-          | read: written,
-            points: Enum.reverse(points_of(record.log), held.points),
-            frames: last_pictures(held.id, written) || held.frames
+          | read: true,
+            steps: length(mine),
+            points: Enum.reverse(points_of(Enum.map(mine, &elem(&1, 0))), held.points),
+            frames: last_pictures(record.id, List.last(mine)) || held.frames
         }
     end
   end
 
-  defp last_pictures(id, written) do
-    position = max(written - 1, 0)
+  defp last_pictures(_id, nil), do: nil
 
+  defp last_pictures(id, {_entry, position}) do
     case RunHistory.sensors_at(id, position) do
       nil -> nil
       sensors -> Replay.pictures(position, sensors) |> presence()
@@ -218,45 +246,51 @@ defmodule Monty.Studio.Parts do
     |> Enum.max(fn -> 0 end)
   end
 
-  defp card(held, setup, labels) do
-    plan = plan_of(held.record)
-    episodes = episodes_of(plan)
+  defp card(held, setup, labels, named?) do
+    episodes = episodes_of(held.part)
     points = Enum.reverse(held.points)
 
     %{
       id: held.id,
-      label: label(plan),
-      phase: phase_of(plan),
-      status: held.record.status,
+      label: label(held.part, named?),
+      phase: phase_of(held.part),
+      status: status_of(held),
       span: span(episodes),
       object: object_of(episodes, setup),
-      steps: held.record.steps_done || 0,
-      episodes_done: held.record.episodes_done || 0,
+      steps: held.steps,
+      episodes_done: episodes_done(points),
       best: best(points),
       chart: Chart.new(points, labels: labels, episode_objects: episode_objects(episodes, setup)),
       frames: held.frames
     }
   end
 
-  defp plan_of(%{inputs: %{"part" => %{} = part}}), do: part
-  defp plan_of(_run_of_the_whole_experiment), do: %{"index" => 0, "of" => 1, "phases" => %{}}
+  defp part_number(%{part: part}), do: {part["phase"] || "", part["index"] || 0}
 
-  defp part_index(%{record: record}), do: get_in(record.inputs, ["part", "index"]) || 0
-
-  defp label(%{"index" => index, "of" => of}), do: "part #{index + 1} of #{of}"
-  defp label(_nothing), do: "part 1 of 1"
-
-  defp phase_of(%{"phases" => phases}) do
-    if Map.has_key?(phases, "train"), do: :train, else: :eval
+  defp label(part, named?) do
+    name = "part #{Map.get(part, "index", 0) + 1} of #{Map.get(part, "of", 1)}"
+    if named?, do: "#{Map.get(part, "phase", "eval")} #{name}", else: name
   end
 
-  defp phase_of(_nothing), do: :eval
+  defp phase_of(%{"phase" => "train"}), do: :train
+  defp phase_of(_eval), do: :eval
+
+  # A part that has not stepped yet is a part the run has not reached: said as
+  # "queued" rather than "running", because a page that calls waiting running is
+  # a page whose clock cannot be trusted.
+  defp status_of(%{record: %{status: "running"}, steps: 0}), do: "queued"
+  defp status_of(%{record: %{status: "running"}}), do: "running"
+  defp status_of(%{record: %{status: status}}), do: status
 
   defp episodes_of(%{"phases" => phases}) when is_map(phases) do
     phases |> Map.values() |> List.flatten()
   end
 
   defp episodes_of(_nothing), do: []
+
+  defp episodes_done(points) do
+    points |> Enum.map(&elem(&1, 0)) |> Enum.uniq() |> length()
+  end
 
   # "episodes 0–34" for a stretch, and just the count for a training part's
   # rotations, which are one object every tenth episode rather than a range.
@@ -291,15 +325,12 @@ defmodule Monty.Studio.Parts do
     end
   end
 
-  # The run's own episode numbers are the ones its steps carry — they count from
-  # nought inside the run — and the object each one showed is the experiment's
-  # answer for the episode it took, which is what the bands are drawn from.
+  # A part's steps carry the experiment's own episode number — a part numbers its
+  # episodes as the experiment does, not from nought again — and the object each
+  # one showed is the experiment's answer for that episode, which is what the
+  # bands are drawn from.
   defp episode_objects(episodes, setup) do
-    episodes
-    |> Enum.with_index()
-    |> Map.new(fn {experiment_episode, local} ->
-      {local, Setup.object_name(setup, experiment_episode)}
-    end)
+    Map.new(episodes, fn episode -> {episode, Setup.object_name(setup, episode)} end)
   end
 
   defp best([]), do: nil

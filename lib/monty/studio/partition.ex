@@ -32,7 +32,7 @@ defmodule Monty.Studio.Partition do
   A config that trains and then evaluates gets a training wave and an evaluation
   wave. The evaluation wave cannot start until every training part has finished
   and its memory has been merged (`Monty.Studio.Memories`), which is what
-  `Monty.Studio.Jobs.Merge` waits for.
+  `Monty.Studio.Jobs.Run` waits for.
 
   ## What a part is not
 
@@ -97,7 +97,7 @@ defmodule Monty.Studio.Partition do
   Whether the evaluation wave waits for the training one.
 
   A config that only evaluates waits for nothing; one that trains and then
-  evaluates has a merge between its waves (`Monty.Studio.Jobs.Merge`), because
+  evaluates has a merge between its waves (`Monty.Studio.Jobs.Run`), because
   its evaluation has to read what its training built.
   """
   @spec two_waves?(t()) :: boolean()

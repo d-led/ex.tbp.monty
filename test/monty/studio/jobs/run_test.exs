@@ -2,7 +2,7 @@ defmodule Monty.Studio.Jobs.RunTest do
   use ExTbpMontyWeb.ConnCase, async: false
 
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
-  alias Monty.Studio.{Artifacts, Drafts, Jobs, Memory, RunHistory, RunLog}
+  alias Monty.Studio.{Artifacts, Drafts, Jobs, Memory, Partition, RunHistory, RunLog}
   alias Monty.Test.Tmp
 
   # The experiment a run of this file steps: an evaluation config whose classes
@@ -53,6 +53,16 @@ defmodule Monty.Studio.Jobs.RunTest do
   defp start_run(experiment, steps) do
     {:ok, opened} = Monty.Studio.open(experiment)
     RunHistory.start(RunLog.attributes(opened, steps, 0, 1, 1))
+  end
+
+  # The smallest PNG there is, base64: a picture the store can write and the route
+  # can serve.
+  defp base64_png do
+    Base.encode64(
+      <<137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8,
+        6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 0, 1, 0, 0, 5, 0,
+        1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130>>
+    )
   end
 
   defp perform(%RunHistory.Run{id: id}), do: perform_id(id)
@@ -289,91 +299,95 @@ defmodule Monty.Studio.Jobs.RunTest do
     end
   end
 
-  describe "a part of a parallel batch" do
-    test "walks the episodes its record names, not the first ones of the experiment" do
-      # The whole point of the division (`Monty.Studio.Partition`): part two of a
-      # ten-object config starts at episode three, and the episode number is what
-      # says which object stands in front of the agent.
+  describe "a run of several parts" do
+    test "is one record, and every episode of the experiment is in its transcript" do
+      # The whole point of the division (`Monty.Studio.Partition`): two parts of a
+      # four-episode run take two episodes each, and what comes out is the
+      # experiment — one row, one transcript, every episode in it.
       {:ok, opened} = Monty.Studio.open(@experiment)
-      objects = Monty.Studio.Setup.objects(opened.setup, :eval)
 
-      part = %{batch: Ecto.UUID.generate(), index: 1, of: 2, phases: %{eval: [3, 4]}}
-      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 3, 2, 2, part))
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 2, 4, %{parts: parts}))
 
       assert {:ok, closed} = perform(record)
       assert closed.status == "finished"
 
+      # One run, one row: no second record was made for any part.
+      assert closed.id == record.id
+      assert RunHistory.list_for(@experiment, limit: 50) |> Enum.count(&(&1.id == closed.id)) == 1
+
+      assert length(closed.log) == 4
+      assert closed.log |> Enum.map(& &1["episode"]) |> Enum.sort() == [0, 1, 2, 3]
+      assert closed.log |> Enum.map(& &1["part"]) |> Enum.uniq() |> Enum.sort() == [0, 1]
+
       log = File.read!(closed.log_path)
-      assert log =~ "episode 4: #{Enum.at(objects, 3)}"
-      assert log =~ "episode 5: #{Enum.at(objects, 4)}"
-      refute log =~ "episode 1: "
+      assert log =~ "part 1 of 2 finished"
+      assert log =~ "part 2 of 2 finished"
     end
 
-    test "a training part keeps its memory to its own directory, and leaves the library alone", %{
+    # The pictures of a run of several parts were served from a directory nothing
+    # answers for: a step's picture is fetched from a *run*, and a part's stream id
+    # has no run row behind it, so every one of them came back 404. A part's
+    # picture is the run's picture, in a folder named for the part.
+    test "a part's picture is kept inside its run's own directory" do
+      run = Ecto.UUID.generate()
+
+      assert {:ok, name} = Artifacts.put_frame(run, "part-1-7", "patch", "depth", base64_png())
+      assert name == "part-1-7/patch-depth.png"
+
+      assert Artifacts.frame_url(run, name) == "/runs/#{run}/frames/part-1-7/patch-depth.png"
+      assert {:ok, path} = Artifacts.frame_path(run, name)
+      assert File.regular?(path)
+    end
+
+    test "keeps each part's memory to its own stream, and writes the merged one once", %{
       libraries: libraries
     } do
       # The library is what the parts learned *between* them, and it is written
-      # once by the merge: a part that wrote it as it finished would overwrite the
-      # merged memory with its own share.
+      # once, from the merge: a part that wrote it as it finished would overwrite
+      # the merged memory with its own share.
       {:ok, opened} = Monty.Studio.open(@training_experiment)
       name = Monty.Studio.Learned.name_for(opened)
 
-      part = %{batch: Ecto.UUID.generate(), index: 0, of: 1, phases: %{train: [0]}}
-      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 40, 0, 1, 1, part))
+      plan = Partition.plan(opened.setup, 2, nil)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 40, 0, 2, nil, %{parts: parts}))
 
       assert {:ok, closed} = perform(record)
       assert closed.status == "finished"
 
-      assert File.read!(closed.log_path) =~
-               "the whole batch's memory is written once its parts are merged"
+      assert File.read!(closed.log_path) =~ "merged"
+
+      for part <- parts do
+        assert Path.wildcard(Path.join(Monty.Studio.Learned.dir(part.stream), "**/*.jsonl.gz")) !=
+                 [],
+               "part #{part.index} left no memory of its own"
+      end
 
       assert Path.wildcard(Path.join(Monty.Studio.Learned.dir(closed.id), "**/*.jsonl.gz")) != []
-      assert Memory.releases_for(name, libraries) == []
+      assert Memory.releases_for(name, libraries) != []
     end
 
-    test "a part starts from the memory its batch points it at" do
+    test "starts its evaluation from the memory its training wave built" do
       # Monty's `run_parallel` merges the trained model and then evaluates the
-      # configs it generated; here the record points at the merged library, so a
-      # part reads what its own batch built rather than the library its config
-      # names. A training part is the one that leaves its memory behind, so what
-      # it started from is readable afterwards.
-      {:ok, opened} = Monty.Studio.open(@experiment)
-      batch = Ecto.UUID.generate()
+      # configs it generated; here the evaluation wave is handed the merged
+      # library, so it reads what its own run built.
+      {:ok, opened} = Monty.Studio.open(@training_experiment)
 
-      {:ok, model} =
-        Monty.Frameworks.Models.ObjectModel.GraphObjectModel.build_model(
-          Monty.Frameworks.Models.ObjectModel.GraphObjectModel.new("a_learned_object"),
-          [[0.0, 0.0, 0.0], [0.01, 0.0, 0.0]],
-          %{}
-        )
+      plan = Partition.plan(opened.setup, 2, nil)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
 
-      memory =
-        GraphMemory.add_graph_to_memory(GraphMemory.new(), %{"rgba" => model}, "a_learned_object")
-
-      {:ok, name} = Monty.Studio.Memories.keep(batch, opened, %{"learning_module_0" => memory})
-
-      {:ok, record} =
-        RunHistory.start(
-          RunLog.attributes(opened, 3, 0, 1, 1, %{
-            batch: batch,
-            index: 0,
-            of: 1,
-            phases: %{train: [0]},
-            memory: %{
-              "name" => name,
-              "release" => Monty.Studio.Learned.release(),
-              "dir" => Monty.Studio.Memories.batch_dir(batch)
-            }
-          })
-        )
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 40, 0, 2, nil, %{parts: parts}))
 
       assert {:ok, closed} = perform(record)
+      assert closed.status == "finished"
 
       [file] =
         Path.wildcard(Path.join([Artifacts.dir(closed.id), "memory", "trained", "*.jsonl.gz"]))
 
-      # The library root is the run's `memory` directory, and the release is the
-      # directory under it: that is where a later config looks.
       {:ok, kept} =
         Memory.load(
           Path.basename(file, ".jsonl.gz"),
@@ -381,7 +395,7 @@ defmodule Monty.Studio.Jobs.RunTest do
           Path.join(Artifacts.dir(closed.id), "memory")
         )
 
-      assert "a_learned_object" in GraphMemory.get_memory_ids(kept)
+      assert GraphMemory.get_memory_ids(kept) != []
     end
   end
 

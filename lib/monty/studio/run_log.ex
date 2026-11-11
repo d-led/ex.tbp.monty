@@ -58,7 +58,15 @@ defmodule Monty.Studio.RunLog do
       "world_us" => Map.get(info, :world_us, 0)
     }
     |> put_beliefs(beliefs)
+    |> put_part(Keyword.get(options, :part))
   end
+
+  # Which part of a parallel run took a step, when the run has parts. A run of
+  # several parts keeps one transcript — the parts' steps one after the other, in
+  # part order — and this is what lets a page read one part's share of it back
+  # after the run has settled and its live stream is gone.
+  defp put_part(entry, nil), do: entry
+  defp put_part(entry, part), do: Map.put(entry, "part", part)
 
   defp put_beliefs(entry, beliefs) when map_size(beliefs) == 0, do: entry
 
@@ -391,15 +399,22 @@ defmodule Monty.Studio.RunLog do
 
   defp part_inputs(part) when map_size(part) == 0, do: %{}
 
-  defp part_inputs(part) do
+  # The plan a parallel run was asked to carry out (`Monty.Studio.Partition`),
+  # written into the record when the run starts: a page draws one card per part
+  # before any part has taken a step, and the worker finds each part's stream by
+  # the id kept here rather than by a second plan that might disagree.
+  defp part_inputs(%{parts: parts}) when is_list(parts) do
     %{
-      "batch" => part.batch,
-      "part" => %{
-        "index" => part.index,
-        "of" => part.of,
-        "phases" => Map.new(part.phases, fn {mode, episodes} -> {to_string(mode), episodes} end),
-        "memory" => Map.get(part, :memory)
-      }
+      "parts" =>
+        Enum.map(parts, fn part ->
+          %{
+            "index" => part.index,
+            "of" => part.of,
+            "phase" => to_string(part.phase),
+            "stream" => part.stream,
+            "phases" => %{to_string(part.phase) => part.episodes}
+          }
+        end)
     }
   end
 

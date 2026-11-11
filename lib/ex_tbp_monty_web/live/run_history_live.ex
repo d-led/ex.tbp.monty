@@ -286,18 +286,17 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     end
   end
 
-  # The parts of the batch a record belongs to, drawn as one card each beside the
-  # run this page is about (`ExTbpMontyWeb.RunParts`). Read from the records and
-  # the live stream, never from the experiment: a poll that rebuilt them from the
+  # The parts of a run asked for several, drawn as one card each beside the run
+  # this page is about (`ExTbpMontyWeb.RunParts`). Read from the run's own plan and
+  # the live streams, never from the experiment: a poll that rebuilt them from the
   # config would cost a compose every two seconds.
   defp put_parts(socket, run) do
-    batch = get_in(run.inputs, ["batch"])
-    held = Parts.refresh(batch, Map.get(socket.assigns, :parts_held, %{}))
+    held = Parts.refresh(run, Map.get(socket.assigns, :parts_held, %{}))
     setup = Map.get(socket.assigns, :setup)
 
     socket = assign(socket, parts_held: held)
 
-    if batch != nil and length(Map.keys(held)) > 1 and setup != nil do
+    if length(Map.keys(held)) > 1 and setup != nil do
       assign(socket, parts: Parts.cards(held, setup))
     else
       assign(socket, parts: [])
@@ -920,10 +919,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         Deleting {@deleting.deleted} of {@deleting.total} runs…
       </p>
 
-      <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+      <%!-- The history scrolls inside a fixed height rather than running down the
+      page: a thousand runs would otherwise push the filters and the buttons off
+      the top of the screen, and the header stays put so the columns a reader is
+      looking at are still named. --%>
+      <div class="max-h-[70vh] overflow-auto rounded-box border border-base-300 bg-base-100">
         <table id="runs-table" phx-hook={ExTbpMontyWeb.LocalTime.hook_name()} class="table table-sm">
-          <thead>
-            <tr class="text-xs text-base-content/60">
+          <thead class="text-xs text-base-content/60">
+            <tr>
               <th class="w-6">
                 <%!-- daisyUI's pastel primary draws a pale tick on a pale box,
                 which is invisible; the state is drawn here instead: filled and

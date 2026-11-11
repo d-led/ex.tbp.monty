@@ -1054,33 +1054,36 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     # until the list. One card each, one after the other — the pyview dashboard's
     # multi-publisher view.
     test "shows every part's card, not only its own", %{conn: conn} do
-      batch = Ecto.UUID.generate()
-
+      # One run asked for two parts: the parts are its plan, and each part's steps
+      # are the stream that plan named. What the run page draws is both cards, one
+      # after the other — a page that showed only the part it was opened on hid the
+      # other while it ran.
       parts =
         for index <- 0..1 do
-          {:ok, run} =
-            RunHistory.start(%{
-              experiment: "tutorial/first_experiment",
-              source: "monty",
-              steps: 2,
-              episode: index,
-              inputs: %{
-                "batch" => batch,
-                "part" => %{"index" => index, "of" => 2, "phases" => %{"eval" => [index]}}
-              }
-            })
-
-          run
+          %{
+            "index" => index,
+            "of" => 2,
+            "phase" => "eval",
+            "stream" => Ecto.UUID.generate(),
+            "phases" => %{"eval" => [index]}
+          }
         end
 
-      [first | _rest] = parts
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 2,
+          episode: 0,
+          inputs: %{"parallel" => 2, "parts" => parts}
+        })
 
-      {:ok, view, _html} = live(conn, ~p"/runs/#{first.id}")
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
       assert has_element?(view, "#run-parts")
 
-      for {run, index} <- Enum.with_index(parts) do
-        assert view |> element("#part-#{run.id}") |> render() =~ "part #{index + 1} of 2"
+      for {part, index} <- Enum.with_index(parts) do
+        assert view |> element("#part-#{part["stream"]}") |> render() =~ "part #{index + 1} of 2"
       end
     end
 

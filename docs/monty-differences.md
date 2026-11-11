@@ -1388,7 +1388,7 @@ an `OrientationMatrix` belong to the `experiment/` layer, which the module map
 still lists as planned. Wiring it before there is a channel to dispatch on would
 be a branch no run can take.
 
-## 2.22 "In parallel" divides the work, and a part is a run
+## 2.22 "In parallel" divides one run's work into parts
 
 Monty runs an experiment in parallel with a second script,
 `framework/run_parallel.py`. It generates **one config per part** —
@@ -1402,15 +1402,24 @@ concatenated (`post_parallel_eval`), and the parts' directories are deleted.
 This port divides the same way, with two differences that are the studio's rather
 than the maths':
 
-- **A part is a run, not an episode.** Monty writes one config per episode of an
-  evaluation; here the plan is `Monty.Studio.Partition`, and `n` in parallel is
-  `n` parts of the experiment — `n` contiguous stretches of the episode list for
-  evaluation, and one part per object (objects taken in turn when there are more
-  objects than workers) for training. The division of _work_ is Monty's; only the
-  number of pieces a page draws is the studio's, because a page with a chart and
-  two pictures per episode would have a hundred and forty of them. Each part is a
-  record of its own and an Oban job of its own, so the queue's limit is the
-  parallelism and stopping, the log and the Replay stay per part.
+- **A part is a piece of one run, not a run.** Monty writes one config per
+  episode of an evaluation; here the plan is `Monty.Studio.Partition`, and `n` in
+  parallel is `n` parts of the experiment — `n` contiguous stretches of the
+  episode list for evaluation, and one part per object (objects taken in turn
+  when there are more objects than workers) for training. The division of _work_
+  is Monty's; only the number of pieces a page draws is the studio's, because a
+  page with a chart and two pictures per episode would have a hundred and forty
+  of them.
+- **One record and one job for the whole experiment.** The parts are processes
+  inside that job (`Task.async` under a meeter, `Monty.Studio.Jobs.Run`), not
+  jobs of their own: the Runs page shows the experiment once rather than `n`
+  times, and one process writes the row. Each part keeps a stream of its own —
+  its steps, its frames, its memory — under the stream id the record's plan gave
+  it, and its steps carry the experiment's own episode number, so the run's
+  transcript and chart are all the parts one after another.
+- **A part's pictures are the run's pictures**, kept in the run's own directory
+  in a folder named `part-<index>-<step>`: a picture is fetched from a run, and a
+  part's stream id has no run row behind it.
 - **The trained memory is handed to the evaluation.** `run_parallel.py` generates
   the evaluation configs from the original config, so a config that trains and
   then evaluates is evaluated under `run_parallel` against the memory its config

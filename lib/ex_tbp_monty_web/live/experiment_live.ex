@@ -43,7 +43,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     Setup
   }
 
-  alias Monty.Studio.Jobs.{Merge, Reaper}
+  alias Monty.Studio.Jobs.Reaper
 
   # A log is a thing a person reads back, not a database: the last few thousand
   # lines are enough to scroll through a run and bounded enough that a runaway
@@ -579,53 +579,57 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             No run of this experiment yet. The buttons above start one.
           </p>
 
-          <table
-            :if={@runs != []}
-            id="experiment-runs-table"
-            phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
-            class={table_class()}
-          >
-            <thead class="text-left text-base-content/60">
-              <tr>
-                <th class="font-normal">when</th>
-                <th class="font-normal">state</th>
-                <th class="font-normal text-right">steps</th>
-                <th class="font-normal text-right">seed</th>
-                <th class="font-normal text-right">parallel</th>
-                <th class="font-normal text-right">took</th>
-                <th class="font-normal">world</th>
-              </tr>
-            </thead>
-            <tbody>
-              <%!-- The row is the link: a whole row a person can click beats a
+          <%!-- What this experiment has done, in a box that scrolls: a config run
+          a hundred times is a hundred rows, and the chart above it should stay
+          where a reader put it. --%>
+          <div :if={@runs != []} class="max-h-[60vh] overflow-auto rounded-box border border-base-300">
+            <table
+              id="experiment-runs-table"
+              phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
+              class={table_class()}
+            >
+              <thead class="text-left text-base-content/60">
+                <tr>
+                  <th class="font-normal">when</th>
+                  <th class="font-normal">state</th>
+                  <th class="font-normal text-right">steps</th>
+                  <th class="font-normal text-right">seed</th>
+                  <th class="font-normal text-right">parallel</th>
+                  <th class="font-normal text-right">took</th>
+                  <th class="font-normal">world</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%!-- The row is the link: a whole row a person can click beats a
               word at the end of it, and every cell is then the same target. --%>
-              <tr
-                :for={run <- @runs}
-                id={"experiment-run-#{run.id}"}
-                phx-click={JS.navigate(~p"/runs/#{run.id}")}
-                class="cursor-pointer border-t border-base-300 hover:bg-base-200"
-              >
-                <td class="py-0.5 font-mono text-base-content/60">
-                  <ExTbpMontyWeb.LocalTime.local_time at={run.inserted_at} class="tabular-nums" />
-                </td>
-                <td>
-                  <span class={[
-                    "badge badge-xs",
-                    run_state_class(run_state(run, @queue[run.id]))
-                  ]}>
-                    {run_state(run, @queue[run.id])}
-                  </span>
-                </td>
-                <td class="text-right font-mono">{run.steps}</td>
-                <td class="text-right font-mono">{input_of(run, "seed")}</td>
-                <td class="text-right font-mono">{input_of(run, "parallel")}</td>
-                <td class="text-right font-mono whitespace-nowrap">{run_duration(run)}</td>
-                <td class="text-[11px] whitespace-nowrap">
-                  {ExTbpMontyWeb.StudioComponents.world_label(run)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                <tr
+                  :for={run <- @runs}
+                  id={"experiment-run-#{run.id}"}
+                  phx-click={JS.navigate(~p"/runs/#{run.id}")}
+                  class="cursor-pointer border-t border-base-300 hover:bg-base-200"
+                >
+                  <td class="py-0.5 font-mono text-base-content/60">
+                    <ExTbpMontyWeb.LocalTime.local_time at={run.inserted_at} class="tabular-nums" />
+                  </td>
+                  <td>
+                    <span class={[
+                      "badge badge-xs",
+                      run_state_class(run_state(run, @queue[run.id]))
+                    ]}>
+                      {run_state(run, @queue[run.id])}
+                    </span>
+                  </td>
+                  <td class="text-right font-mono">{run.steps}</td>
+                  <td class="text-right font-mono">{input_of(run, "seed")}</td>
+                  <td class="text-right font-mono">{input_of(run, "parallel")}</td>
+                  <td class="text-right font-mono whitespace-nowrap">{run_duration(run)}</td>
+                  <td class="text-[11px] whitespace-nowrap">
+                    {ExTbpMontyWeb.StudioComponents.world_label(run)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <ExTbpMontyWeb.LocalTime.local_time_hook />
         </section>
 
@@ -1247,14 +1251,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
-  # The batch's cards, brought up to date with the steps its parts have taken
-  # since the last poll (`Monty.Studio.Parts`). One part is the run the page is
-  # already drawing in full, so a page watching a run of the whole experiment — or
-  # a batch of one — draws no cards at all.
+  # The run's cards, brought up to date with the steps its parts have taken since
+  # the last poll (`Monty.Studio.Parts`). A run of one part is the run the page is
+  # already drawing in full, so it draws no cards at all.
   defp refresh_parts(socket) do
     setup = socket.assigns.opened && socket.assigns.opened.setup
-    batch = Map.get(socket.assigns, :batch)
-    held = Parts.refresh(batch, Map.get(socket.assigns, :parts_held, %{}))
+    record = socket.assigns[:run_id] && RunHistory.progress(socket.assigns.run_id)
+    held = Parts.refresh(record, Map.get(socket.assigns, :parts_held, %{}))
 
     if setup == nil or length(Map.keys(held)) < 2 do
       assign(socket, parts_held: held, parts: [])
@@ -1890,128 +1893,65 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # -- starting a run --------------------------------------------------------
 
-  # Parallelism is the experiment's own answer to "one object after another, or
-  # several at once": Monty starts a parallel run with a second script, and the
-  # scripts differ only in how many parts of the work go at the same time. Here
-  # that is a number of *parts* (`Monty.Studio.Partition`), each its own record,
-  # its own topic and its own stretch of the experiment's episodes, and the queue
-  # is told the same number, because a queue limit of two would quietly turn ten
-  # parts into five rounds of two.
+  # Parallelism is how many parts of the experiment go at the same time — Monty's
+  # `run_parallel.py`, where one script runs `num_parallel` configs and merges
+  # what they produced. It is one record and one job (`Monty.Studio.Jobs.Run`),
+  # with the parts as processes inside it, so the Runs page shows the experiment
+  # once and the experiment's page shows every part's evidence and pictures.
   #
   # A part is not a copy of the experiment. A config evaluated a hundred and forty
   # times is finished in a fourteenth of the clock at fourteen parts, where
   # fourteen copies of it were fourteen times the work and no faster.
   defp start(socket, opened, steps, parallelism, episodes) do
-    _ = Jobs.parallelism(parallelism)
     plan = Partition.plan(opened.setup, parallelism, episodes)
+    parts = with_streams(Partition.parts(plan))
 
-    results =
-      Enum.map(now(plan), &queue(opened, steps, plan, &1))
+    attributes =
+      RunLog.attributes(opened, steps, first_episode(parts), parallelism, episodes, %{
+        parts: parts
+      })
 
-    records = Enum.flat_map(results, &started/1)
-    refused = for {:error, changeset} <- results, do: changeset_errors(changeset)
-
-    case records do
-      [] ->
-        already_going(socket, opened)
-
-      records ->
+    case RunHistory.start(attributes) do
+      {:ok, record} ->
         # Subscribe before enqueueing: the queue can start a job within
         # milliseconds of the insert, and a run that finishes before the page
         # listens is a run the page watched happen and never heard about.
-        Enum.each(records, &Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(&1.id)))
-        Enum.each(records, &enqueue/1)
-        start_later(plan, opened, steps, parallelism)
-
-        [first | _rest] = records
+        Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
+        enqueue(record)
 
         {:noreply,
          socket
          |> clear_run_view()
          |> assign(
-           run_id: first.id,
-           batch: plan.batch,
+           run_id: record.id,
            status: "running",
            progress: {0, steps},
            episode: 0,
            summary: nil,
            lines: [],
-           log_path: first.log_path
+           log_path: record.log_path,
+           parts: [],
+           parts_held: %{}
          )
-         |> push(nil, queued(records, steps, opened.name), :info)
-         |> refused(refused)
+         |> push(nil, queued(parts, steps, opened.name), :info)
          |> watch()}
+
+      {:error, changeset} ->
+        {:noreply, push(socket, nil, changeset_errors(changeset), :error)}
     end
   end
 
-  # What runs now, and what waits for the training wave to be merged.
-  #
-  # Monty runs the training configs, merges them into one model and only then runs
-  # the evaluation configs. A batch whose config trains is that batch: its
-  # evaluation parts cannot start until every training part has finished, because
-  # they read what those parts learned between them. A batch that only evaluates
-  # starts all of its parts at once, and a batch that only trains starts its parts
-  # and a merge that writes the memory they built.
-  defp now(%{train: []} = plan), do: plan.eval
-  defp now(plan), do: plan.train
-
-  defp start_later(%{train: []}, _opened, _steps, _parallelism), do: :ok
-
-  defp start_later(plan, opened, steps, parallelism) do
-    {:ok, _job} =
-      Merge.enqueue(%{
-        batch: plan.batch,
-        experiment: opened.name,
-        steps: steps,
-        parallel: parallelism,
-        eval: Enum.map(plan.eval, &evaluation_part/1)
-      })
-
-    :ok
+  # Each part's stream id, made here because the page that draws the cards needs
+  # it before anything has run: a part's steps are its own stream, and the record
+  # is where the page finds which stream belongs to which part.
+  defp with_streams(parts) do
+    Enum.map(parts, &Map.put(&1, :stream, Ecto.UUID.generate()))
   end
 
-  # A part, as the merge job's args carry it: data, because the job starts those
-  # parts after the page that asked for them may be long closed.
-  defp evaluation_part(part) do
-    %{"index" => part.index, "of" => part.of, "episodes" => part.episodes}
-  end
-
-  defp refused(socket, []), do: socket
-
-  defp refused(socket, [reason | _rest]),
-    do: push(socket, nil, "could not record every run: #{reason}", :error)
-
-  # Two runs of the same experiment in the same world would be the same run
-  # twice, and that is what this refuses. Two *worlds* are two different
-  # experiments' worth of evidence — the stand-in checks the runtime, MuJoCo
-  # produces the experiment's numbers — so a page that already has one going
-  # can still be asked for the other, and the queue decides when it starts.
-  #
-  # A part is recognised by the episode it starts at, which the plan takes from
-  # the experiment's own list: two parts of one batch start at different episodes,
-  # so a second press of Run is refused part by part rather than wholesale.
-  defp queue(opened, steps, plan, part) do
-    world = to_string(opened.setup.world)
-    first = hd(part.episodes)
-
-    case RunHistory.running_for(opened.name, first) do
-      %{inputs: %{"world" => ^world}} ->
-        :going
-
-      _nothing_or_another_world ->
-        RunHistory.start(
-          RunLog.attributes(opened, steps, first, part.of, length(part.episodes), %{
-            batch: plan.batch,
-            index: part.index,
-            of: part.of,
-            phases: %{part.phase => part.episodes}
-          })
-        )
-    end
-  end
-
-  defp started({:ok, record}), do: [record]
-  defp started(_going_or_refused), do: []
+  # The episode a plan starts at, which is what a second press of Run is refused
+  # by: a run of the whole experiment starts at its first episode.
+  defp first_episode([%{episodes: [first | _rest]} | _more]), do: first
+  defp first_episode(_no_work), do: 0
 
   # A run that cannot be queued is not a run: close its record with the reason,
   # because a row that says "running" with nothing working on it is the lie the
@@ -2045,22 +1985,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
-  defp queued([only], steps, name),
-    do: "queued: #{steps} step(s) of #{name} (episode #{only.episode})"
+  defp queued([_one], steps, name),
+    do: "queued: #{steps} step(s) of #{name}"
 
-  defp queued(records, steps, name) do
-    [first | _rest] = records
+  defp queued([], steps, name),
+    do: "queued: #{steps} step(s) of #{name}"
 
-    "queued #{length(records)} parts of #{name}, #{steps} step(s) an episode: " <>
-      "watching part #{part_label(first)}, the rest are on Runs"
+  defp queued(parts, steps, name) do
+    "queued #{length(parts)} parts of #{name} as one run, #{steps} step(s) an episode: " <>
+      "every part's chart and pictures below"
   end
-
-  # "2 of 4", as the record says it: the plan's own numbering, so a page and the
-  # batch's cards call the same part the same thing.
-  defp part_label(%{inputs: %{"part" => %{"index" => index, "of" => of}}}),
-    do: "#{index + 1} of #{of}"
-
-  defp part_label(_not_a_part), do: "1 of 1"
 
   # -- the log ---------------------------------------------------------------
 

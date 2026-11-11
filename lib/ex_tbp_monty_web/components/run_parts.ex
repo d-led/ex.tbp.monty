@@ -26,56 +26,61 @@ defmodule ExTbpMontyWeb.RunParts do
     <section id="run-parts" class="space-y-2">
       <h3 class="text-sm font-medium">{@title}</h3>
 
-      <div
-        :for={part <- @parts}
-        id={"part-#{part.id}"}
-        class="space-y-2 rounded-field border border-base-300 bg-base-100 p-2"
-      >
-        <header class="flex flex-wrap items-baseline gap-2">
-          <span class="font-mono text-xs">{part.label}</span>
-          <span id={"part-#{part.id}-status"} class={["badge badge-xs", status_class(part.status)]}>
-            {part.status}
-          </span>
-          <span class="text-[11px] text-base-content/60">{part.span}</span>
-          <span
-            :if={part.object}
-            id={"part-#{part.id}-object"}
-            class="text-[11px] text-base-content/60"
-          >
-            {part.object}
-          </span>
-          <span class="ms-auto font-mono text-[11px] text-base-content/50">
-            {part.steps} step(s) · {part.episodes_done} episode(s)
-          </span>
-          <a href={"/runs/#{part.id}"} class="text-[11px] link">the run</a>
-        </header>
+      <%!-- The parts of a parallel run, in a box that scrolls: fourteen parts of
+      one experiment is fourteen charts and fifty-six pictures, and the run's own
+      chart above them is the thing a reader scrolls back to. --%>
+      <div id="run-parts-list" class="max-h-[70vh] space-y-2 overflow-y-auto pr-1">
+        <div
+          :for={part <- @parts}
+          id={"part-#{part.id}"}
+          class="space-y-2 rounded-field border border-base-300 bg-base-100 p-2"
+        >
+          <header class="flex flex-wrap items-baseline gap-2">
+            <span class="font-mono text-xs">{part.label}</span>
+            <span id={"part-#{part.id}-status"} class={["badge badge-xs", status_class(part.status)]}>
+              {part.status}
+            </span>
+            <span class="text-[11px] text-base-content/60">{part.span}</span>
+            <span
+              :if={part.object}
+              id={"part-#{part.id}-object"}
+              class="text-[11px] text-base-content/60"
+            >
+              {part.object}
+            </span>
+            <span class="ms-auto font-mono text-[11px] text-base-content/50">
+              {part.steps} step(s) · {part.episodes_done} episode(s)
+            </span>
+            <a href={"/runs/#{part.id}"} class="text-[11px] link">the run</a>
+          </header>
 
-        <p :if={part.best} id={"part-#{part.id}-best"} class="text-xs">
-          max evidence: <span class="font-mono">{part.best.object}</span>
-          ({format(part.best.evidence)})
-        </p>
+          <p :if={part.best} id={"part-#{part.id}-best"} class="text-xs">
+            max evidence: <span class="font-mono">{part.best.object}</span>
+            ({format(part.best.evidence)})
+          </p>
 
-        <div :if={part.frames != []} class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <figure
-            :for={frame <- part.frames}
-            id={"part-#{part.id}-frame-#{frame.sensor_id}"}
-            class="rounded-field border border-base-300 bg-base-100 p-1.5"
-          >
-            <figcaption class="flex items-baseline justify-between px-0.5 pb-1 text-[11px] text-base-content/60">
-              <span class="font-mono">{frame.sensor_id}</span>
-              <span>{frame.note}</span>
-            </figcaption>
-            <%!-- The frame is markup this application built, with every value
+          <div :if={part.frames != []} class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <figure
+              :for={frame <- part.frames}
+              id={"part-#{part.id}-frame-#{frame.sensor_id}"}
+              class="rounded-field border border-base-300 bg-base-100 p-1.5"
+            >
+              <figcaption class="flex items-baseline justify-between px-0.5 pb-1 text-[11px] text-base-content/60">
+                <span class="font-mono">{frame.sensor_id}</span>
+                <span>{frame.note}</span>
+              </figcaption>
+              <%!-- The frame is markup this application built, with every value
             in it escaped where it was built. --%>
-            <div class="text-base-content/80">{frame.data}</div>
-          </figure>
-        </div>
+              <div class="text-base-content/80">{frame.data}</div>
+            </figure>
+          </div>
 
-        <EvidenceChart.evidence_chart
-          module_id={"part-#{part.id}"}
-          label={"evidence · #{part.label}"}
-          chart={part.chart}
-        />
+          <EvidenceChart.evidence_chart
+            module_id={"part-#{part.id}"}
+            label={"evidence · #{part.label}"}
+            chart={part.chart}
+          />
+        </div>
       </div>
     </section>
     """

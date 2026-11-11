@@ -12,7 +12,7 @@ defmodule Monty.Studio.Memories do
 
   It is not a step: a part's memory is read once, when every part has finished,
   because a memory is only whole when its last rotation has been trained. That is
-  what `Monty.Studio.Jobs.Merge` waits for.
+  what `Monty.Studio.Jobs.Run` waits for.
 
   The merged memory is written under the same name and release a single training
   run writes (`Learned.name_for/1`, `Learned.release/0`), so a later

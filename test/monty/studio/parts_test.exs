@@ -21,18 +21,14 @@ defmodule Monty.Studio.PartsTest do
     {:ok, setup: opened.setup}
   end
 
-  describe "the parts of a batch" do
+  describe "the parts of a run" do
     test "one card each, in the order the plan numbered them", %{setup: setup} do
-      batch = Ecto.UUID.generate()
+      {record, _parts} = run([[0, 1, 2, 3], [4, 5, 6, 7]])
 
-      for index <- 0..1 do
-        part(batch, index, 2, Enum.to_list(index..(index + 3)))
-      end
-
-      cards = batch |> Parts.refresh(%{}) |> Parts.cards(setup)
+      cards = record |> Parts.refresh(%{}) |> Parts.cards(setup)
 
       assert Enum.map(cards, & &1.label) == ["part 1 of 2", "part 2 of 2"]
-      assert Enum.map(cards, & &1.span) == ["episodes 0–3", "episodes 1–4"]
+      assert Enum.map(cards, & &1.span) == ["episodes 0–3", "episodes 4–7"]
     end
 
     test "a card says the object a part is about, and its stretch of the experiment", %{
@@ -40,11 +36,9 @@ defmodule Monty.Studio.PartsTest do
     } do
       # Episode 0 is the first object the config names, episode 1 the second: a
       # part of two episodes is about two objects, and says so by naming neither.
-      batch = Ecto.UUID.generate()
-      part(batch, 0, 1, [0])
-      part(batch, 1, 1, [1, 2])
+      {record, _parts} = run([[0], [1, 2]])
 
-      [single, several] = batch |> Parts.refresh(%{}) |> Parts.cards(setup)
+      [single, several] = record |> Parts.refresh(%{}) |> Parts.cards(setup)
 
       assert single.object == Enum.at(Monty.Studio.Setup.objects(setup, :eval), 0)
       assert single.span == "episode 0"
@@ -54,16 +48,20 @@ defmodule Monty.Studio.PartsTest do
     test "a card's evidence is the strongest it holds, and its chart has that step", %{
       setup: setup
     } do
-      batch = Ecto.UUID.generate()
-      kept = part(batch, 0, 1, [0, 1])
+      {record, _parts} = run([[0, 1], [2, 3]])
 
       {:ok, _written} =
-        RunHistory.checkpoint_steps(kept, [entry(0, 0, 1.0), entry(1, 0, 2.5)], [],
+        RunHistory.checkpoint_steps(
+          record,
+          [entry(0, 0, 1.0), entry(1, 1, 2.5), entry(0, 0, 9.0, 1)],
+          [],
           timeline: :skip
         )
 
-      [card] = batch |> Parts.refresh(%{}) |> Parts.cards(setup)
+      [card | _second] = record |> Parts.refresh(%{}) |> Parts.cards(setup)
 
+      # The second part's step is not this card's: one part's card is one part's
+      # evidence, whichever part took the step with the most in it.
       assert card.best == %{object: "mug", evidence: 2.5}
       assert card.steps == 2
       assert card.episodes_done == 2
@@ -71,15 +69,17 @@ defmodule Monty.Studio.PartsTest do
     end
 
     test "a step that reported nothing is not a point on the chart", %{setup: setup} do
-      batch = Ecto.UUID.generate()
-      kept = part(batch, 0, 1, [0])
+      {record, _parts} = run([[0], [1]])
 
       {:ok, _written} =
-        RunHistory.checkpoint_steps(kept, [entry(0, 0, 1.0), step_without_beliefs(1)], [],
+        RunHistory.checkpoint_steps(
+          record,
+          [entry(0, 0, 1.0), step_without_beliefs(1)],
+          [],
           timeline: :skip
         )
 
-      [card] = batch |> Parts.refresh(%{}) |> Parts.cards(setup)
+      [card | _second] = record |> Parts.refresh(%{}) |> Parts.cards(setup)
 
       assert card.steps == 2
       # One point, because the second step changed nothing to report.
@@ -87,78 +87,85 @@ defmodule Monty.Studio.PartsTest do
     end
   end
 
-  describe "reading a batch twice" do
-    test "does not read a settled record's transcript again", %{setup: setup} do
+  describe "reading a run twice" do
+    test "does not read a settled transcript again", %{setup: setup} do
       # The page polls; a poll that re-read four transcripts twice a second would
       # cost more than the run it is watching.
-      batch = Ecto.UUID.generate()
-      kept = part(batch, 0, 1, [0])
+      {record, _parts} = run([[0], [1]])
 
-      {:ok, _written} = RunHistory.checkpoint_steps(kept, [entry(0, 0, 1.0)], [], timeline: :skip)
+      {:ok, _written} =
+        RunHistory.checkpoint_steps(record, [entry(0, 0, 1.0)], [], timeline: :skip)
 
-      first = Parts.refresh(batch, %{})
-      second = Parts.refresh(batch, first)
+      first = Parts.refresh(record, %{})
+      second = Parts.refresh(record, first)
 
-      assert [card] = Parts.cards(second, setup)
+      assert [card | _second] = Parts.cards(second, setup)
       assert card.best == %{object: "mug", evidence: 1.0}
-      assert Map.get(second, kept.id) == Map.get(first, kept.id)
+      assert Map.get(second, hd(Map.keys(first))) == Map.get(first, hd(Map.keys(first)))
     end
 
     test "a part that is still stepping is read from the stream, one step at a time", %{
       setup: setup
     } do
-      # While a part runs its steps are in `RunStream`, and its record holds only
-      # what a boundary wrote: a card drawn from the record alone would stand
-      # still between boundaries.
-      batch = Ecto.UUID.generate()
-      kept = part(batch, 0, 1, [0])
+      # While a part steps its steps are in `RunStream`, and the record holds only
+      # what a part's completion wrote: a card drawn from the record alone would
+      # stand still until the part was finished.
+      {record, [first | _more]} = run([[0], [1]])
+      stream = first["stream"]
 
-      Monty.Studio.RunStream.publish(kept.id, step(0, 1.0))
-      Monty.Studio.RunStream.publish(kept.id, step(1, 3.0))
+      Monty.Studio.RunStream.publish(stream, step(0, 1.0))
+      Monty.Studio.RunStream.publish(stream, step(1, 3.0))
 
-      held = Parts.refresh(batch, %{})
-      first = Parts.cards(held, setup)
-      assert [card] = first
+      held = Parts.refresh(record, %{})
+      assert [card | _second] = Parts.cards(held, setup)
       assert card.best == %{object: "mug", evidence: 3.0}
-      assert Map.get(held, kept.id).taken == 2
+      assert Map.get(held, stream).taken == 2
 
       # The next poll reads the new step and nothing else.
-      Monty.Studio.RunStream.publish(kept.id, step(2, 4.0))
-      held = Parts.refresh(batch, held)
+      Monty.Studio.RunStream.publish(stream, step(2, 4.0))
+      held = Parts.refresh(record, held)
 
-      assert [card] = Parts.cards(held, setup)
+      assert [card | _second] = Parts.cards(held, setup)
       assert card.best == %{object: "mug", evidence: 4.0}
-      assert Map.get(held, kept.id).taken == 3
+      assert Map.get(held, stream).taken == 3
     end
   end
 
-  # A part's record, as the page queues one (Monty.Studio.Partition).
-  defp part(batch, index, of, episodes) do
+  # One run asked for two or more parts, as the page records it: the plan is in
+  # the record's inputs, and each part's steps are the stream the plan names.
+  defp run(episodes_per_part) do
+    parts =
+      episodes_per_part
+      |> Enum.with_index()
+      |> Enum.map(fn {episodes, index} ->
+        %{
+          "index" => index,
+          "of" => length(episodes_per_part),
+          "phase" => "eval",
+          "stream" => Ecto.UUID.generate(),
+          "phases" => %{"eval" => episodes}
+        }
+      end)
+
     {:ok, record} =
       RunHistory.start(%{
         experiment: @experiment,
         source: "monty",
         steps: 2,
-        episode: hd(episodes),
-        inputs: %{
-          "batch" => batch,
-          "part" => %{
-            "index" => index,
-            "of" => of,
-            "phases" => %{"eval" => episodes}
-          }
-        }
+        episode: 0,
+        inputs: %{"parallel" => length(parts), "parts" => parts}
       })
 
-    record
+    {record, parts}
   end
 
-  # What a step's transcript entry is: the episode of the run, the step, and what
-  # the module believed.
-  defp entry(episode, step, evidence) do
+  # What a step's transcript entry is: the episode of the run, the step, the part
+  # that took it, and what the module believed.
+  defp entry(episode, step, evidence, part \\ 0) do
     %{
       "episode" => episode,
       "step" => step,
+      "part" => part,
       "at" => Monty.Studio.RunLog.now().instant,
       "beliefs" => %{
         "learning_module_0" => %{
@@ -172,7 +179,7 @@ defmodule Monty.Studio.PartsTest do
   end
 
   defp step_without_beliefs(step) do
-    %{"episode" => 0, "step" => step, "at" => Monty.Studio.RunLog.now().instant}
+    %{"episode" => 0, "step" => step, "part" => 0, "at" => Monty.Studio.RunLog.now().instant}
   end
 
   # A step as a live run hands it over: the report `RunStream.publish/2` turns
