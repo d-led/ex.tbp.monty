@@ -2090,11 +2090,23 @@ wheel's timer), the way `.ReplaySlider` and `.EscapeCollapse` already do.
 2. `catalog/2` rebuilt whenever the log grows — `Replay.objects/1`,
    `Replay.modules/1`, one `Replay.objects/2` per module, `Replay.series/1` and
    `Replay.best_evidence/1`, each a full walk of the log — then `Chart.many/2`
-   over the window. This is the one cost still repeated over the whole run on
-   every step, and the one worth making incremental: the series are per-step
-   values, so they can be appended as the log grows, and the object set is an
-   append-only union. It is a change to `Monty.Studio.Replay`'s contract, so it
-   wants its own tests rather than a quiet edit.
+   over the window. **Measured** on a 20 000-step log: 37 ms for the series,
+   26 ms for the objects, 6 ms for the modules, 15 ms for the headline, and about
+   26 ms per extra module's chart — ~214 ms a step for a five-module run, four
+   times a second. This is the one cost still repeated over the whole run.
+
+   **A single-walk rewrite was tried and measured worse**, and reverted: folding
+   all five answers in one pass cost 494 ms on the same log, because per-moment
+   bookkeeping into nested maps (a `Map.update` per module per object per step)
+   costs more than the walks it replaced, which were each a `Enum.map` over the
+   moments. What that leaves is the design the numbers point at: **append, then
+   transpose** — keep the per-step contributions in flat lists as the log grows
+   and build the lines once per render, instead of re-deriving the whole run on
+   every step. That is a real change to `Monty.Studio.Replay`'s contract and wants
+   its own tests (its 37 tests in `test/monty/studio/replay_test.exs` are the
+   safety net, and they cover the per-module/ensemble/nil-evidence cases the
+   lines depend on).
+
 3. `chart_marks/3` and `chart_samples/3` each thin the window on their own — two
    `group_by` + `take_every` passes per render over a list of up to a few
    thousand points. Small beside the SVG path the same render builds.
