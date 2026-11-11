@@ -2101,7 +2101,28 @@ It found two, both real and both fixed in `c043a88`:
 - `pictures: assigns[:pictures] || kept_pictures?(run)` re-asked at every step when
   the answer was `false`, because `false` is falsy. `Map.get_lazy/3` asks once.
 
-### 36.6 What is still in the socket, in order of cost
+### 36.6 Two traps this work found, both worth remembering
+
+- **A page's first HTML is an API.** `scripts/boot-check.sh` starts the packaged
+  release and requires `/prerequisites` to name the free space behind the roots —
+  the check that once caught a Windows build reading the disk with a program the
+  platform does not have. Moving _that_ measurement into `start_async` made the
+  page usable while the disk is read, and made the check unsatisfiable: every
+  desktop job in CI failed with "the release's /prerequisites says no room at
+  all". The two facts are not the same cost — the room is one `df` per root, a
+  walk of each directory is not — so the room is painted with the page and the
+  walk is answered in the task. Before moving work off a page, ask what reads its
+  HTML rather than its socket.
+- **`Monty.Random.Stream` was the one call in a step on the default five
+  seconds.** A step draws from it many times, and a draw that queued behind a long
+  one — a suite running sixteen cases behind one shared stream, or a slow machine
+  — killed the caller. Twice today the heavy parity test
+  (`Monty.RecordingEpisodeTest`) failed with a pending `:step` message in the
+  mailbox and passed on the immediate rerun; that is what this looked like. Every
+  other server call in the runtime is `:infinity` because a step is
+  computation-bound; the draws are now too.
+
+### 36.7 What is still in the socket, in order of cost
 
 1. `ExperimentLive`'s reap (`Reaper.sweep/0`) — one query per open run, once per
    page, after the first paint (see 35.2 for why it cannot move yet).
