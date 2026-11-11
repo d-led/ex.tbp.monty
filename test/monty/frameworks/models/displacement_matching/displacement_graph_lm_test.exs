@@ -325,6 +325,13 @@ defmodule Monty.Frameworks.Models.DisplacementMatching.DisplacementGraphLMTest d
     # a class that left one unanswered could not be stepped at all — it would
     # fail on the first episode rather than on the first line that says so.
     test "answers every callback the learning module behaviour declares" do
+      # `function_exported?/3` answers for a module that is *loaded*, and a module
+      # is loaded when something first calls it. A run that reaches this test
+      # before anything else has asked this module anything — a different seed, a
+      # different partition — got every callback reported missing, which is a
+      # green suite that fails on a coin toss.
+      {:module, _loaded} = Code.ensure_loaded(DisplacementGraphLM)
+
       missing =
         for {name, arity} <-
               Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.behaviour_info(
