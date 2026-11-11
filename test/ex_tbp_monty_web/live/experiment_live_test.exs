@@ -802,6 +802,10 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       assert view |> element("#run-progress") |> render() =~ "episode 2 · step 3 / 5"
 
+      # The lines are drawn in a task: this waits for the picture of the three
+      # steps the batch delivered.
+      await_chart(view)
+
       # One contiguous run of three points for the three batched steps — and no
       # one-point dashes anywhere, because a dash is a step the chart was told
       # about while its neighbour was not.
@@ -840,6 +844,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       end
 
       assert view |> element("#run-progress") |> render() =~ "episode 3 · step 3 / 5"
+
+      await_chart(view)
 
       # Two runs of three, one per episode: a single run of six would be the two
       # episodes joined across a boundary nobody measured.
@@ -910,33 +916,41 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert view |> element("#chart-extent") |> render() =~ "steps 1–3"
     end
 
-    test "a chart that follows the run slides back to the newest step, and stops when told",
+    test "a window asked for is the window drawn, and the tick is what slides it",
          %{conn: conn} do
       {:ok, view, _html} =
-        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=2")
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=4&episodes=1")
 
       view |> element("#run") |> render_click()
       perform_run(view)
 
-      # Following is what a page opened on a run does by default: a window that
-      # has been zoomed into keeps its width and ends at the newest step, so
-      # moving back by a quarter is undone rather than leaving the run behind.
+      # Following is what a page opened on a run does by default.
       assert has_element?(view, "#follow-latest:checked")
 
+      # A window asked for is drawn as asked, and following stops: the button or
+      # the drag is a reader saying which stretch they are reading, and a window
+      # that slid to the newest step showed a stretch nobody had chosen.
       view |> element("#zoom-in") |> render_click()
-      view |> element("#zoom-left") |> render_click()
-
-      assert view |> element("#chart-extent") |> render() =~ "steps 1–2 of 2"
-
-      # A reader reading an earlier stretch says so, and the window then stays
-      # exactly where they put it.
-      view |> element("#follow-latest") |> render_click()
+      await_chart(view)
 
       refute has_element?(view, "#follow-latest:checked")
+      assert view |> element("#chart-extent") |> render() =~ "steps 1–2 of 3"
 
-      view |> element("#zoom-left") |> render_click()
+      # Turning the tick back on keeps the window's width and takes it to the
+      # newest step — what a reader zoomed in on a live run wants of it.
+      view |> element("#follow-latest") |> render_click()
+      await_chart(view)
 
-      assert view |> element("#chart-extent") |> render() =~ "steps 0–1 of 2"
+      assert has_element?(view, "#follow-latest:checked")
+      assert view |> element("#chart-extent") |> render() =~ "steps 2–3 of 3"
+
+      # And turning it off leaves the picture where it is, rather than throwing
+      # the reader back to the stretch they asked for before it slid.
+      view |> element("#follow-latest") |> render_click()
+      await_chart(view)
+
+      refute has_element?(view, "#follow-latest:checked")
+      assert view |> element("#chart-extent") |> render() =~ "steps 2–3 of 3"
     end
 
     test "a run's budget is a control on the page, not something a link decides", %{
@@ -1407,6 +1421,27 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     ~r/points="([^"]*)"/
     |> Regex.scan(html)
     |> Enum.map(fn [_, points] -> points |> String.split() |> length() end)
+  end
+
+  # The chart is drawn in a task, so a picture of the steps a test just sent is
+  # one round trip later — and a batch that lands while a drawing runs is drawn
+  # again when that one returns. This waits until the page has neither a drawing
+  # running nor one waiting for its turn, so an assertion reads the chart of the
+  # steps the test sent rather than the picture they replaced.
+  defp await_chart(view) do
+    if drawing?(view) do
+      render_async(view, 1_000)
+      await_chart(view)
+    else
+      view
+    end
+  end
+
+  defp drawing?(view) do
+    assigns =
+      view.pid |> :sys.get_state() |> Map.fetch!(:socket) |> Map.fetch!(:assigns)
+
+    Map.get(assigns, :chart_asking, false) or Map.get(assigns, :chart_pending?, false)
   end
 
   defp current_run_id(view) do

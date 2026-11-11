@@ -964,7 +964,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         # drawn window is how a page comes to draw one stretch and label another.
         socket
         |> assign(x_window: window)
-        |> assign_charts(socket.assigns.beliefs)
+        |> request_drawing()
         |> assign(
           # Full screen survives the steps that arrive while it is on: it is a
           # property of how the page is being read, not of the run.
@@ -995,18 +995,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # one thing a chart cannot see from where it is drawn. A stretch narrower than
   # a step says nothing, and the picture stays as it is rather than jumping to
   # the whole run under a reader who only scrolled too hard.
-  def handle_event("zoom", %{"from" => from, "to" => to}, socket) do
-    case range_window(socket.assigns[:chart_extent], count_of(from), count_of(to)) do
-      nil -> {:noreply, socket}
-      window -> {:noreply, push_patch(socket, to: experiment_path(socket, window))}
-    end
-  end
+  def handle_event("zoom", %{"from" => from, "to" => to}, socket),
+    do: zoom_to(socket, from, to)
 
-  def handle_event("zoom", %{"how" => how}, socket) do
-    window = zoom(socket.assigns[:chart_window], socket.assigns[:chart_extent], how)
-
-    {:noreply, push_patch(socket, to: experiment_path(socket, window))}
-  end
+  def handle_event("zoom", %{"how" => how}, socket), do: zoom_by(socket, how)
 
   def handle_event("expand", %{"module" => module_id}, socket),
     do: {:noreply, show_chart(socket, module_id)}
@@ -1027,11 +1019,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # label that wraps its checkbox can deliver the activation twice in a browser,
   # and a handler that merely inverted the assign would then put the tick back
   # where it was — which is the box that "sprang back" when it was unticked.
-  def handle_event("follow", params, socket) do
-    follow? = wanted_follow(params, socket)
-
-    {:noreply, socket |> assign(:follow, follow?) |> assign_charts(socket.assigns.beliefs)}
-  end
+  def handle_event("follow", params, socket), do: set_follow(socket, params)
 
   def handle_event("parallelism", %{"parallelism" => count}, socket) do
     {:noreply, assign(socket, parallelism: parallelism(%{"parallelism" => count}))}
@@ -1102,6 +1090,57 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   defp wanted_follow(_params, socket), do: not Map.get(socket.assigns, :follow, true)
 
+  # A window that is asked for is a reader saying which stretch they are reading,
+  # and following slides it out from under them: a drag across the middle of a run
+  # drew a window of that width at the newest step, not the stretch the reader
+  # chose. Zooming back out to the whole run is not that — the whole run is where
+  # the newest step is — so following survives it.
+  defp stop_following(%{assigns: %{follow: false}} = socket), do: socket
+  defp stop_following(socket), do: assign(socket, :follow, false)
+
+  # The stretch the pointer chose, as the window the page then keeps.
+  defp zoom_to(socket, from, to) do
+    case range_window(socket.assigns[:chart_extent], count_of(from), count_of(to)) do
+      nil ->
+        {:noreply, socket}
+
+      window ->
+        {:noreply, socket |> stop_following() |> push_patch(to: experiment_path(socket, window))}
+    end
+  end
+
+  # One of the legend's own directions, as a window.
+  defp zoom_by(socket, how) do
+    window = zoom(socket.assigns[:chart_window], socket.assigns[:chart_extent], how)
+    socket = if how == "all", do: socket, else: stop_following(socket)
+
+    {:noreply, push_patch(socket, to: experiment_path(socket, window))}
+  end
+
+  # The tick, and what it does to the window: on, the window slides to the newest
+  # step; off, the picture stays where it is (`freeze_window/1`).
+  defp set_follow(socket, params) do
+    case wanted_follow(params, socket) do
+      true -> {:noreply, socket |> assign(:follow, true) |> request_drawing()}
+      false -> {:noreply, freeze_window(socket)}
+    end
+  end
+
+  # Following stops where the picture is. A window that slid to the newest step
+  # while the reader followed it becomes the window the page keeps, so saying
+  # "leave it here" does not throw them back to a stretch they asked for minutes
+  # ago — and the address bar names what is on screen, because a window that is
+  # drawn is a window somebody can send.
+  defp freeze_window(socket) do
+    socket = assign(socket, :follow, false)
+
+    case {Map.get(socket.assigns, :chart_window), Map.get(socket.assigns, :x_window)} do
+      {nil, _unzoomed} -> request_drawing(socket)
+      {window, window} -> request_drawing(socket)
+      {window, _asked} -> push_patch(socket, to: experiment_path(socket, window))
+    end
+  end
+
   defp range_window(_extent, nil, _to), do: nil
   defp range_window(_extent, _from, nil), do: nil
 
@@ -1141,7 +1180,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     socket
     |> assign(:expanded, expanded)
     |> assign(:chart_sizes, %{})
-    |> assign_charts(socket.assigns.beliefs)
+    |> request_drawing()
   end
 
   defp size_chart(socket, params) do
@@ -1151,8 +1190,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
       {module_id, width, height} ->
         socket
-        |> assign(:chart_sizes, Map.put(chart_sizes(socket), module_id, {width, height}))
-        |> assign_charts(socket.assigns.beliefs)
+        |> assign(:chart_sizes, Map.put(chart_sizes(socket.assigns), module_id, {width, height}))
+        |> request_drawing()
     end
   end
 
@@ -1222,13 +1261,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # The drawing a step asked for and could not have yet.
   def handle_info(:chart_due, socket) do
-    socket =
-      socket
-      |> assign(:chart_pending?, false)
-      |> assign(:chart_drawn_at, System.monotonic_time(:millisecond))
-      |> then(&assign_charts(&1, &1.assigns.beliefs))
-
-    {:noreply, socket}
+    {:noreply, socket |> assign(:chart_pending?, false) |> request_drawing()}
   end
 
   # A run is the experiment's, not the page's: two people (or two tabs) looking at
@@ -1526,10 +1559,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         # does not move is the drawing.
         assign(socket, :chart_extent, extent_of(socket.assigns.beliefs))
 
-      now - Map.get(socket.assigns, :chart_drawn_at, 0) >= chart_interval() ->
-        socket
-        |> assign(:chart_drawn_at, now)
-        |> then(&assign_charts(&1, &1.assigns.beliefs))
+      now - Map.get(socket.assigns, :chart_drawn_at, 0) >= wait_between_charts(socket) ->
+        request_drawing(socket)
 
       true ->
         schedule_redraw(socket)
@@ -1538,35 +1569,100 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   defp chart_interval, do: Application.get_env(:ex_tbp_monty, :chart_interval, @chart_interval)
 
+  # How long the page waits between drawings of a history that is still growing.
+  # A drawing costs what the run is long, and asking for four of them a second
+  # whatever they cost is a page that spends all of its time drawing; half of it
+  # is kept for the reader. A reader's own action — a zoom, a tick, a chart made
+  # full screen — is drawn at once, because it is the picture they are waiting for.
+  defp wait_between_charts(socket) do
+    max(chart_interval(), Map.get(socket.assigns, :chart_cost, 0))
+  end
+
   defp schedule_redraw(%{assigns: %{chart_pending?: true}} = socket), do: socket
 
   defp schedule_redraw(socket) do
-    Process.send_after(self(), :chart_due, chart_interval())
+    Process.send_after(self(), :chart_due, wait_between_charts(socket))
     assign(socket, :chart_pending?, true)
   end
 
   # The histories, the chart of the stretch being looked at, and how long the run
   # is so far — the last of those is what zoom and pan move within.
-  defp assign_charts(socket, histories) do
-    labels = Map.get(socket.assigns, :chart_labels, %{})
+  #
+  # Computed from the page's own state rather than from the socket, because this is
+  # the one thing here that costs what the run costs and it is drawn in a task
+  # (`request_drawing/1`): a picture is of the history as it stood when the
+  # drawing started, so what it is drawn from has to be a value, not a process.
+  defp drawing(page, histories) do
+    labels = Map.get(page, :chart_labels, %{})
 
     extent = extent_of(histories)
 
     # The window the chart is drawn for, which is the one asked for except while
     # following: the label beside the chart names this, so a page that drew one
     # stretch and said another would be lying about its own picture.
-    window = window_with_follow(socket, extent)
+    window = window_with_follow(page, extent)
 
     {charts, labels} =
-      charts_of(histories, window, socket.assigns.episode_objects, chart_sizes(socket), labels)
+      charts_of(
+        histories,
+        window,
+        Map.get(page, :episode_objects, %{}),
+        chart_sizes(page),
+        labels
+      )
 
-    assign(socket,
-      beliefs: histories,
+    # The picture and what it was drawn from — never the history itself. A
+    # drawing is of the history as it stood when it started, so assigning one back
+    # would roll the page back over every step that arrived while it ran: a
+    # history is the page's own and only ever grows.
+    [
       charts: charts,
       chart_labels: labels,
       chart_window: window,
       chart_extent: extent
-    )
+    ]
+  end
+
+  # The page's first picture, drawn from the history it was just given: the one
+  # place a drawing and a history are assigned together.
+  defp assign_drawing(socket, histories) do
+    socket
+    |> assign(beliefs: histories)
+    |> assign(drawing(socket.assigns, histories))
+  end
+
+  # A picture is of the history as it stood when the drawing started, and there is
+  # one at a time: a request that arrives while one runs is served when it
+  # returns, with the history as it stands then.
+  #
+  # It runs in a task because this process answers everything else — a click, a
+  # step, a filter — and a drawing of a long run is a second of arithmetic. Drawn
+  # here, four times a second, it left no time between them: the controls of a long
+  # run answered seconds late, and the socket gave up waiting.
+  defp request_drawing(socket) do
+    if Map.get(socket.assigns, :chart_asking, false) do
+      assign(socket, :chart_asks_again, true)
+    else
+      start_drawing(socket)
+    end
+  end
+
+  defp start_drawing(socket) do
+    generation = Map.get(socket.assigns, :chart_generation, 0) + 1
+
+    # Only what a picture is made of, not the page: LiveView copies whatever a
+    # task closes over, and the page holds a run's whole history.
+    page =
+      Map.take(socket.assigns, [:chart_labels, :follow, :x_window, :episode_objects, :chart_sizes])
+
+    histories = Map.get(socket.assigns, :beliefs, %{})
+
+    socket
+    |> assign(chart_generation: generation, chart_asking: true, chart_asks_again: false)
+    |> start_async({:charts, generation}, fn ->
+      {microseconds, drawing} = :timer.tc(fn -> drawing(page, histories) end)
+      {drawing, div(microseconds, 1000)}
+    end)
   end
 
   # How far the run has got, as the chart reads it: the longest history there is.
@@ -1592,14 +1688,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # How big the expanded chart's box is, as the browser measured it. A screen is
   # a shape no server can guess, so the one chart filling it is drawn for the
   # box it really has; every other chart keeps the size of its cell.
-  defp chart_sizes(socket), do: Map.get(socket.assigns, :chart_sizes, %{})
+  defp chart_sizes(page), do: Map.get(page, :chart_sizes, %{})
 
   # "Follow latest", the way the pyview dashboard has it: while it is on, a window
   # that has been zoomed into keeps its width and slides so that it ends at the
   # newest step — the run grows and the reader keeps seeing the live end of it.
   # Off, the window is exactly what was asked for, and the run grows out of view.
-  defp window_with_follow(socket, {_first, last}) do
-    case {Map.get(socket.assigns, :follow, true), socket.assigns.x_window} do
+  defp window_with_follow(page, {_first, last}) do
+    case {Map.get(page, :follow, true), Map.get(page, :x_window)} do
       {true, {from, to}} -> {max(last - (to - from), 0), last}
       {_off, window} -> window
     end
@@ -1805,7 +1901,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       recorded ->
         socket
         |> assign(:beliefs_seeded, true)
-        |> assign_charts(histories_of(socket, recorded))
+        |> assign_drawing(histories_of(socket, recorded))
     end
   end
 
@@ -2005,6 +2101,31 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # this page's own lines live in a panel that only exists while a run is being
   # followed.
   @impl true
+  # The drawing a task made: the page takes it if it is the newest one asked for,
+  # and draws again if the history moved while it was being drawn.
+  def handle_async({:charts, generation}, {:ok, {drawing, cost}}, socket) do
+    socket =
+      socket
+      |> assign(
+        chart_asking: false,
+        chart_drawn_at: System.monotonic_time(:millisecond),
+        chart_cost: cost
+      )
+
+    socket =
+      if generation == Map.get(socket.assigns, :chart_generation),
+        do: assign(socket, drawing),
+        else: socket
+
+    {:noreply, if(socket.assigns[:chart_asks_again], do: start_drawing(socket), else: socket)}
+  end
+
+  def handle_async({:charts, _generation}, {:exit, reason}, socket) do
+    Logger.warning("a chart could not be drawn: #{inspect(reason)}")
+
+    {:noreply, assign(socket, chart_asking: false, chart_asks_again: false)}
+  end
+
   def handle_async(:world, {:ok, {:ok, opened}}, socket) do
     {:noreply,
      socket

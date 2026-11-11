@@ -173,19 +173,22 @@ defmodule Monty.Studio.Chart do
     episode_objects = Keyword.get(options, :episode_objects, %{})
     placed = within(placed, from, to)
 
+    chart = %__MODULE__{width: width, height: height, x_min: from, x_max: to}
+
+    # Every object's line, cut to what the plot can show as it is read — one
+    # pass, and everything below works on a few thousand samples rather than on
+    # every step the run ever took. The cut has to happen here, inside that
+    # pass: building every step's sample for every object first and cutting
+    # afterwards visited a thousand times more points than the picture can show,
+    # which is what made a drawing of a long run cost a page most of a second
+    # (`lines_by_object/2`).
+    lines = lines_by_object(placed, chart)
+
     # Ranked worst first, so the object a run is converging on is drawn last and
     # its line ends on top of the others.
-    #
-    # Each object's points are cut down to what the plot can show here, before
-    # anything is drawn from them: the four hundred units between two pixels are
-    # invisible, so a run of twenty thousand steps is at most a couple of samples
-    # per column per object. Everything below — the gaps, the axis, the strings
-    # a polyline is made of — then works on a few thousand samples rather than on
-    # every step the run ever took, which is the difference between a drawing that
-    # costs a page four hundred milliseconds and one that costs twenty.
-    chart = %__MODULE__{width: width, height: height, x_min: from, x_max: to}
-    ranked = evidence_by_object(placed)
-    points_by_object = Map.new(ranked)
+    ranked =
+      Enum.sort_by(lines, fn {object_id, segments} -> {last_sample(segments), object_id} end)
+
     objects = Keyword.get(options, :objects) || Enum.map(ranked, &elem(&1, 0))
 
     # The colour and legend place every object was given when it first appeared,
@@ -196,14 +199,15 @@ defmodule Monty.Studio.Chart do
       assign_labels(
         Keyword.get(options, :labels, %{}),
         objects,
-        points_by_object
+        lines
       )
 
     # The lowest and the highest value the chart will draw, in one pass: the
     # floor and the ceiling are read off the same fold so they cannot drift, and
     # a run of twenty thousand steps does not build two lists of every value to
-    # throw them away. Cutting the samples down first cannot move either end:
-    # `decimate/2` keeps the lowest and the highest of every column.
+    # throw them away. Cutting the samples down first cannot move either end: a
+    # column keeps its lowest and its highest sample, so the lowest and the
+    # highest of the drawing are the lowest and the highest of the run.
     {worst, best} = extreme_values(ranked)
 
     chart = %{
@@ -232,23 +236,20 @@ defmodule Monty.Studio.Chart do
     series =
       objects
       |> Enum.map(fn object_id ->
-        points = Map.get(points_by_object, object_id, [])
-
-        # One list of samples per polyline, cut down to what a column can show —
-        # the same lists the line is drawn from and the series carries, so what a
-        # page holds is what it draws and not every step of a long run.
-        drawn = drawn_samples(points, chart)
+        segments = Map.get(lines, object_id, [])
 
         %{
           graph_id: object_id,
           colour: Map.fetch!(labels, object_id).colour,
           evidence:
-            drawn |> Enum.concat() |> Enum.map(fn {_episode, x, evidence} -> {x, evidence} end),
+            segments
+            |> Enum.concat()
+            |> Enum.map(fn {_episode, x, evidence} -> {x, evidence} end),
           points:
-            Enum.map(drawn, fn segment ->
+            Enum.map(segments, fn segment ->
               Enum.map_join(segment, " ", &points_string(&1, chart))
             end),
-          last: point(List.last(points) |> last_point(chart), chart)
+          last: point(last_sample(segments) |> last_point(chart), chart)
         }
       end)
       |> Enum.reject(&(&1.evidence == []))
@@ -285,14 +286,14 @@ defmodule Monty.Studio.Chart do
   # has always used. The newcomers are taken in the order the run reported them,
   # not in the drawing order, so a page rebuilt from the record assigns what a
   # page watching live assigned.
-  defp assign_labels(labels, objects, points_by_object) do
+  defp assign_labels(labels, objects, lines) do
     newcomers =
       objects
       |> Enum.reject(&Map.has_key?(labels, &1))
       |> Enum.sort_by(fn object_id ->
-        case Map.get(points_by_object, object_id, []) do
-          [{_episode, x, _evidence} | _rest] -> {x, object_id}
-          [] -> {:later, object_id}
+        case Map.get(lines, object_id, []) do
+          [[{_episode, x, _evidence} | _rest] | _segments] -> {x, object_id}
+          _never_reported -> {:later, object_id}
         end
       end)
 
@@ -369,30 +370,114 @@ defmodule Monty.Studio.Chart do
     end
   end
 
-  # One object's reported evidence, per step, in the order the module listed the
-  # objects on the last step it reported them — so the line the run is chasing is
-  # drawn last and ends on top.
-  defp evidence_by_object(placed) do
-    by_object =
-      Enum.reduce(placed, %{}, fn {episode, x, belief}, acc ->
-        Enum.reduce(belief.graphs, acc, fn {graph_id, graph}, acc ->
-          Map.update(
-            acc,
-            graph_id,
-            [{episode, x, graph.max_evidence * 1.0}],
-            &[{episode, x, graph.max_evidence * 1.0} | &1]
-          )
-        end)
-      end)
-
-    by_object
-    # The steps were put in run order by `stack/1`, so one object's points come
-    # out of the fold back to front — the step that arrived is the one on top.
-    # Reversing is what puts them right again, and it is not a sort: sorting ten
-    # objects of twenty thousand points was a quarter of a drawing.
-    |> Map.new(fn {graph_id, points} -> {graph_id, Enum.reverse(points)} end)
-    |> Enum.sort_by(fn {graph_id, points} -> {List.last(points), graph_id} end)
+  # Every object's line over the window, cut to the samples the plot can show.
+  #
+  # This is the one part of a drawing that costs what the run costs, because it
+  # is the part that touches every step, and a page following a run asks for a
+  # drawing four times a second. So it is one pass, taken a column at a time: a
+  # column of the picture keeps the four samples a line at that width can still
+  # be seen through, and the rest are never built at all. Building every step's
+  # sample for every object and cutting afterwards — which is what this did —
+  # visited a thousand times more points than the picture can show.
+  #
+  # The steps themselves decide two things the cutting cannot: a step an object
+  # was not reported on leaves a hole in its line, and each column is a fresh
+  # start for the extremes. So a column is read as runs — stretches of steps
+  # reported one after another — and the runs of neighbouring columns are joined
+  # back into one polyline where they meet.
+  defp lines_by_object(placed, chart) do
+    placed
+    |> Enum.chunk_by(fn {_episode, x, _belief} -> column_of(x, chart) end)
+    |> Enum.reduce(%{}, fn column, lines -> add_column(column, lines) end)
+    |> Map.new(fn {object_id, runs} -> {object_id, segments(runs)} end)
   end
+
+  # One column of the picture, read run by run: for each object, the stretches of
+  # this column it was reported on, each cut to its first, lowest, highest and
+  # last sample. Newest run first, because that is the one a step extends.
+  defp add_column(column, lines) do
+    column
+    |> Enum.reduce(%{}, fn {episode, x, belief}, runs_of_column ->
+      Enum.reduce(belief.graphs, runs_of_column, fn {object_id, graph}, runs_of_column ->
+        sample = {episode, x, graph.max_evidence * 1.0}
+
+        Map.update(
+          runs_of_column,
+          object_id,
+          [{sample, sample, sample, sample}],
+          fn runs -> extend_run(runs, sample) end
+        )
+      end)
+    end)
+    |> Enum.reduce(lines, fn {object_id, runs}, lines ->
+      # A column's runs came newest first, and the columns come in step order, so
+      # an object's runs are in step order once each column is turned round.
+      Map.update(lines, object_id, Enum.reverse(runs), &(&1 ++ Enum.reverse(runs)))
+    end)
+  end
+
+  defp extend_run([{first, low, high, previous} = run | earlier], sample) do
+    if contiguous?(sample, previous),
+      do: [{first, lower(low, sample), higher(high, sample), sample} | earlier],
+      else: [run_of_one(sample), run | earlier]
+  end
+
+  defp run_of_one(sample), do: {sample, sample, sample, sample}
+
+  # The polylines of one object: a new one wherever a step was not reported, and
+  # the same one across a column boundary, because a column is how the picture is
+  # read and not where the line breaks.
+  defp segments([]), do: []
+
+  defp segments([first_run | other_runs]) do
+    polylines =
+      Enum.chunk_while(
+        other_runs,
+        [first_run],
+        fn run, [previous | _earlier] = line ->
+          if contiguous?(first_sample(run), last_sample_of(previous)),
+            do: {:cont, [run | line]},
+            else: {:cont, Enum.reverse(line), [run]}
+        end,
+        fn line -> {:cont, Enum.reverse(line), []} end
+      )
+
+    Enum.map(polylines, fn line -> Enum.flat_map(line, &samples_of_run/1) end)
+  end
+
+  # What a line at this width can show of one run of a column: its first and its
+  # last — the points the next column's line is drawn from — and its lowest and
+  # its highest, which is what makes this a saving rather than a lie. In step
+  # order, because a column is a set of samples and a polyline is a sequence.
+  defp samples_of_run({first, low, high, last}) do
+    [first, low, high, last]
+    |> Enum.uniq()
+    |> Enum.sort_by(&elem(&1, 1))
+  end
+
+  defp first_sample({first, _low, _high, _last}), do: first
+  defp last_sample_of({_first, _low, _high, last}), do: last
+
+  # The column of the plot a step falls in. Two samples in one column are one
+  # point on the line as it is drawn, which is why a column keeps only what can
+  # be seen of it.
+  defp column_of(x, chart), do: x_coordinate(x, chart) |> round()
+
+  # The last sample drawn, and `nil` for a line with nothing on it: the ranking
+  # of the lines and the page's legend both start from it.
+  defp last_sample([]), do: nil
+  defp last_sample(segments), do: segments |> List.last() |> List.last()
+
+  defp contiguous?({_episode, x, _evidence}, {_same_episode, previous, _previous_evidence}),
+    do: x == previous + 1
+
+  # The lower of two samples, and the higher: they are the two points of a column
+  # a line drawn at this width still shows.
+  defp lower({_episode, _x, current} = held, {_other, _at, candidate} = sample),
+    do: if(candidate < current, do: sample, else: held)
+
+  defp higher({_episode, _x, current} = held, {_other, _at, candidate} = sample),
+    do: if(candidate > current, do: sample, else: held)
 
   # Every step, on the run's own x axis.
   #
@@ -447,10 +532,12 @@ defmodule Monty.Studio.Chart do
   # The lowest and the highest evidence the chart draws, over every object's
   # points. An empty chart has both at zero, which `ceiling/1` turns into a scale.
   defp extreme_values(ranked) do
-    Enum.reduce(ranked, {nil, nil}, fn {_graph_id, points}, {worst, best} ->
-      Enum.reduce(points, {worst, best}, fn {_episode, _x, evidence}, {low, high} ->
-        {if(low == nil or evidence < low, do: evidence, else: low),
-         if(high == nil or evidence > high, do: evidence, else: high)}
+    Enum.reduce(ranked, {nil, nil}, fn {_graph_id, segments}, {worst, best} ->
+      Enum.reduce(segments, {worst, best}, fn segment, {worst, best} ->
+        Enum.reduce(segment, {worst, best}, fn {_episode, _x, evidence}, {low, high} ->
+          {if(low == nil or evidence < low, do: evidence, else: low),
+           if(high == nil or evidence > high, do: evidence, else: high)}
+        end)
       end)
     end)
   end
@@ -470,82 +557,6 @@ defmodule Monty.Studio.Chart do
   defp y_floor(nil), do: 0.0
 
   defp y_floor(worst), do: min(Float.floor(worst), 0.0)
-
-  # A segment per contiguous run of steps: an object reported on 1, 2 and 4 has
-  # two polylines, and the missing step 3 stays missing.
-  #
-  # An episode boundary is *not* a break by itself. It used to be, on the
-  # argument that joining the last evidence of one episode to the first of the
-  # next draws a fall nobody saw — and it does: that drop at the band's edge is
-  # the reset. What the break cost was a hole in the line at every boundary,
-  # which reads as missing data rather than as a reset, so the line now joins the
-  # two when the steps are adjacent and breaks only where nothing was reported.
-  # The samples each polyline is drawn from: one list per contiguous run of
-  # reported steps, cut down to what the plot's columns can show.
-  #
-  # A gap is a jump in x between two steps the module reported, and it is judged
-  # there — on the steps themselves, not on the samples left after cutting them
-  # down, which sit a column apart and would make every column a break of its own.
-  defp drawn_samples(points, chart) do
-    points
-    |> Enum.reduce([], fn {episode, _x, _evidence} = point, segments ->
-      case segments do
-        [{_same_episode, [previous | _] = run} | earlier] ->
-          if contiguous?(point, previous),
-            do: [{episode, [point | run]} | earlier],
-            else: [{episode, [point]} | segments]
-
-        [] ->
-          [{episode, [point]}]
-      end
-    end)
-    |> Enum.reverse()
-    |> Enum.map(fn {_episode, run} ->
-      # Each run is built back to front — the point that arrived is the one on
-      # top — so it is turned round once here. Appending instead copied the run
-      # at every step, which was nine hundred milliseconds of a drawing for a run
-      # of twenty thousand.
-      run |> Enum.reverse() |> decimate(chart)
-    end)
-  end
-
-  # A run of steps drawn at one pair per column of the plot.
-  #
-  # The plot is a few hundred units wide and a run of twenty thousand steps is
-  # more samples than it has columns, so a column holds several of them and only
-  # the extremes of that column can be seen. Keeping the extremes — not their
-  # average — is what makes this a saving rather than a lie: a spike up and a drop
-  # down both survive, and the line between two columns is drawn for columns that
-  # had data. Every other sample in the column was invisible when it was sent.
-  @doc """
-  The samples a plot can show, one low and one high per column.
-  """
-  @spec decimate([{term(), number(), number()}], map()) :: [{term(), number(), number()}]
-  def decimate([_one, _two | _rest] = run, chart) do
-    run
-    |> Enum.chunk_by(fn {_episode, x, _evidence} -> x_coordinate(x, chart) |> round() end)
-    |> Enum.flat_map(&extremes/1)
-  end
-
-  def decimate(run, _chart), do: run
-
-  # The first and the last of a column as well as its extremes: those are the
-  # points the next column's line is drawn from, and dropping them would move the
-  # line sideways rather than shorten it. Sorted back into step order, because a
-  # column is a set of samples and a polyline is a sequence of them.
-  defp extremes([single]), do: [single]
-
-  defp extremes(column) do
-    lowest = Enum.min_by(column, fn {_episode, _x, evidence} -> evidence end)
-    highest = Enum.max_by(column, fn {_episode, _x, evidence} -> evidence end)
-
-    [hd(column), lowest, highest, List.last(column)]
-    |> Enum.uniq()
-    |> Enum.sort_by(fn {_episode, x, _evidence} -> x end)
-  end
-
-  defp contiguous?({_episode, x, _evidence}, {_same_episode, previous, _previous_evidence}),
-    do: x == previous + 1
 
   defp points_string({_episode, x, evidence}, chart) do
     {px, py} = point({x, evidence}, chart)

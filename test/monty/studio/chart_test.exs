@@ -8,6 +8,7 @@ defmodule Monty.Studio.ChartTest do
   """
 
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   alias Monty.Studio.Chart
 
@@ -170,6 +171,82 @@ defmodule Monty.Studio.ChartTest do
 
       assert chart.series |> Enum.map(& &1.graph_id) |> Enum.sort() == ["bowl", "mug", "spoon"]
     end
+  end
+
+  # The cut that keeps a long run's line short happens while the run is being
+  # read, which is the only place it can happen without visiting every step of
+  # every object: a page following a run asks for a drawing four times a second.
+  # These two properties are what that pass must not lose, and they hold for any
+  # run rather than for a run somebody chose.
+  describe "a line cut down to what the plot can show" do
+    property "never invents a sample, and keeps every run's lowest and highest" do
+      check all(steps <- steps_of_one_object()) do
+        [%{evidence: drawn}] = steps |> Chart.new() |> Map.fetch!(:series)
+
+        assert Enum.all?(drawn, &(&1 in reported(steps)))
+
+        for run <- runs(reported(steps)) do
+          assert Enum.min_by(run, &elem(&1, 1)) in drawn
+          assert Enum.max_by(run, &elem(&1, 1)) in drawn
+        end
+      end
+    end
+
+    property "breaks the line exactly where a step was not reported" do
+      check all(steps <- steps_of_one_object()) do
+        [%{points: segments}] = steps |> Chart.new() |> Map.fetch!(:series)
+
+        assert length(segments) == length(runs(reported(steps)))
+      end
+    end
+
+    # One object's samples in the chart's own x, which counts the episode's steps
+    # from the first one it reported.
+    defp reported(steps) do
+      samples = Enum.map(steps, fn {_episode, step, belief} -> {step, evidence_of(belief)} end)
+      first = samples |> Enum.map(&elem(&1, 0)) |> Enum.min(fn -> 0 end)
+
+      samples
+      |> Enum.sort()
+      |> Enum.map(fn {step, evidence} -> {step - first, evidence} end)
+    end
+
+    # The stretches of steps the object was reported on without a hole in them.
+    defp runs(samples) do
+      samples
+      |> Enum.chunk_while(
+        [],
+        fn {x, _evidence} = sample, run ->
+          if run == [] or x == elem(hd(run), 0) + 1,
+            do: {:cont, [sample | run]},
+            else: {:cont, Enum.reverse(run), [sample]}
+        end,
+        fn
+          [] -> {:cont, []}
+          run -> {:cont, Enum.reverse(run), []}
+        end
+      )
+    end
+
+    # Steps in one episode, some of them skipped — the shape a module's history
+    # has when it did not report on every step of the episode. The first step is
+    # always reported, because a run of nothing at all is not a chart.
+    defp steps_of_one_object do
+      gen all(
+            reported? <- list_of(boolean(), length: 39),
+            evidence <- list_of(member_of([0.0, 1.0, 2.5, -3.0, 10.0]), length: 40)
+          ) do
+        [true | reported?]
+        |> Enum.zip(evidence)
+        |> Enum.with_index()
+        |> Enum.reject(fn {{reported?, _evidence}, _step} -> not reported? end)
+        |> Enum.map(fn {{_reported?, evidence}, step} ->
+          {0, step, belief(%{"mug" => evidence})}
+        end)
+      end
+    end
+
+    defp evidence_of(belief), do: belief.graphs |> Map.fetch!("mug") |> Map.fetch!(:max_evidence)
   end
 
   describe "a run of several episodes" do

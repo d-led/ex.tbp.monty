@@ -1,33 +1,81 @@
 defmodule Monty.Studio.Chart.DecimationTest do
+  @moduledoc """
+  A picture has a few hundred columns; a run has thousands of steps. What a line
+  is drawn through is therefore a choice, and this is the choice: a column keeps
+  its first, its lowest, its highest and its last sample, and every other sample
+  in it was invisible when it was sent.
+
+  These are the cases of that cut, asked of `Chart.new/2` — which is where the
+  cut now happens, inside the pass that reads the run, rather than as a second
+  step over samples built for the whole run. The second step cost a second of
+  drawing for a run of thirty thousand steps, and a page following a run asks
+  for a drawing four times a second.
+  """
+
   use ExUnit.Case, async: true
 
   alias Monty.Studio.Chart
 
-  # A plot of one thousand steps across its width: the chart's own key set, and
-  # nothing else, because the decimation only ever asks for the frame.
-  @chart %{x_min: 0, x_max: 19_999, width: 320}
+  # A plot of twenty thousand steps across its width: about seventy steps to a
+  # column, which is what makes the cut visible at all.
+  @long_run 0..19_999
 
-  defp run(steps, value), do: Enum.map(steps, &{0, &1, value.(&1)})
+  defp steps(step_range, evidence) do
+    Enum.map(step_range, &{0, &1, belief(evidence.(&1))})
+  end
+
+  defp belief(evidence) do
+    %{
+      possible_matches: ["mug"],
+      mlh: nil,
+      graphs: %{
+        "mug" => %{
+          hypotheses: 10,
+          max_evidence: evidence,
+          within_x_percent: 1,
+          top_evidence: [evidence]
+        }
+      },
+      x_percent_threshold: 20,
+      terminal_state: nil,
+      detected_object: nil
+    }
+  end
+
+  defp drawn(step_range, evidence, options \\ []) do
+    chart = Chart.new(steps(step_range, evidence), options)
+    [%{evidence: drawn}] = chart.series
+
+    drawn
+  end
 
   describe "a run longer than the plot is wide" do
-    setup do
-      points = run(0..19_999, fn step -> :math.sin(step / 250) * 100 end)
+    test "is drawn with a fraction of the samples it was given" do
+      pointed = drawn(@long_run, &(:math.sin(&1 / 250) * 100))
 
-      %{points: points, drawn: Chart.decimate(points, @chart)}
+      assert length(pointed) < Enum.count(@long_run) / 10
     end
 
-    test "is drawn with a fraction of the samples it was given", %{points: points, drawn: drawn} do
-      assert length(drawn) < length(points) / 10
+    test "is drawn with samples it was actually given, and nothing invented" do
+      pointed = drawn(@long_run, &(:math.sin(&1 / 250) * 100))
+
+      assert Enum.all?(pointed, fn {step, evidence} -> evidence == :math.sin(step / 250) * 100 end)
     end
 
-    test "is drawn with samples it was actually given", %{points: points, drawn: drawn} do
-      assert Enum.all?(drawn, &(&1 in points))
+    test "is drawn in step order, because a polyline is a sequence" do
+      steps_drawn = drawn(@long_run, &(&1 * 1.0)) |> Enum.map(&elem(&1, 0))
+
+      assert steps_drawn == Enum.sort(steps_drawn)
     end
 
-    test "is drawn in step order, because a polyline is a sequence", %{drawn: drawn} do
-      steps = Enum.map(drawn, &elem(&1, 1))
+    # What a column is allowed to keep: the samples its line can be seen
+    # through, four of them, and the columns are the plot's own width.
+    test "is drawn with at most four samples a column" do
+      chart = Chart.new(steps(@long_run, &(&1 * 1.0)), width: 320)
+      [mug] = chart.series
+      columns = chart.width - chart.margin_left - chart.margin_right
 
-      assert steps == Enum.sort(steps)
+      assert length(mug.evidence) <= 4 * columns
     end
   end
 
@@ -35,40 +83,32 @@ defmodule Monty.Studio.Chart.DecimationTest do
   # flatten the two moments the chart exists to show.
   describe "the extremes of the run" do
     test "survive, at the step they happened on" do
-      points =
-        run(0..19_999, fn
-          5_000 -> 1000.0
-          15_000 -> -1000.0
-          _step -> 0.0
-        end)
+      pointed =
+        drawn(
+          @long_run,
+          fn
+            5_000 -> 1000.0
+            15_000 -> -1000.0
+            _step -> 0.0
+          end
+        )
 
-      drawn = Chart.decimate(points, @chart)
-
-      assert {0, 5_000, 1000.0} in drawn
-      assert {0, 15_000, -1000.0} in drawn
+      assert {5_000, 1000.0} in pointed
+      assert {15_000, -1000.0} in pointed
     end
   end
 
   describe "a run of one or two samples" do
     test "comes back untouched, sample for sample" do
-      points = run(0..1, fn step -> step * 1.0 end)
-
-      assert Chart.decimate(points, @chart) == points
+      assert drawn(0..1, &(&1 * 1.0)) == [{0, 0.0}, {1, 1.0}]
     end
 
-    test "and so does an empty one" do
-      assert Chart.decimate([], @chart) == []
+    test "and a run of one sample is that sample" do
+      assert drawn(0..0, &(&1 * 1.0)) == [{0, 0.0}]
     end
-  end
 
-  # Three samples inside one column is not a short run, it is a crowded column:
-  # the middle one is invisible at this scale, and the two the line is drawn
-  # through — the column's first and last — are also its lowest and highest here.
-  describe "samples that share a column" do
-    test "are reduced to the ones that can be seen" do
-      points = run(0..2, fn step -> step * 1.0 end)
-
-      assert Chart.decimate(points, @chart) == [{0, 0, 0.0}, {0, 2, 2.0}]
+    test "and so does an empty one, which has no line at all" do
+      assert Chart.new([]).series == []
     end
   end
 end
