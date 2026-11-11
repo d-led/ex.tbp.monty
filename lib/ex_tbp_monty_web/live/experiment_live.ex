@@ -1648,32 +1648,38 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp merge_beliefs(%{assigns: %{beliefs_seeded: true}} = socket, _record), do: socket
 
   defp merge_beliefs(socket, record) do
-    recorded =
-      for entry <- record.log,
-          entry["beliefs"] != nil,
-          {module_id, belief} <- entry["beliefs"],
-          into: [] do
-        {module_id, {entry["episode"] || 0, entry["step"] || 0, Belief.from_stored(belief)}}
-      end
+    case recorded_beliefs(record) do
+      [] ->
+        socket
 
-    if recorded == [] do
-      socket
-    else
-      # Newest first while merging, then one reverse per module: appending a point
-      # copies the history it grows, and a page opened on a long run has exactly
-      # that many points to merge. Seeding starts from an empty view
-      # (`clear_run_view/1`), so every list here is this record's own.
-      histories =
-        recorded
-        |> Enum.reduce(socket.assigns.beliefs, fn {module, point}, histories ->
-          Map.update(histories, module, [point], &[point | &1])
-        end)
-        |> Map.new(fn {module, points} -> {module, Enum.reverse(points)} end)
-
-      socket
-      |> assign(:beliefs_seeded, true)
-      |> assign_charts(histories)
+      recorded ->
+        socket
+        |> assign(:beliefs_seeded, true)
+        |> assign_charts(histories_of(socket, recorded))
     end
+  end
+
+  # Every opinion the record's log holds, as the chart's own points: an episode,
+  # a step, and the belief the module had there.
+  defp recorded_beliefs(record) do
+    for entry <- record.log,
+        entry["beliefs"] != nil,
+        {module_id, belief} <- entry["beliefs"],
+        into: [] do
+      {module_id, {entry["episode"] || 0, entry["step"] || 0, Belief.from_stored(belief)}}
+    end
+  end
+
+  # Newest first while merging, then one reverse per module: appending a point
+  # copies the history it grows, and a page opened on a long run has exactly that
+  # many points to merge. Seeding starts from an empty view
+  # (`clear_run_view/1`), so every list here is this record's own.
+  defp histories_of(socket, recorded) do
+    recorded
+    |> Enum.reduce(socket.assigns.beliefs, fn {module, point}, histories ->
+      Map.update(histories, module, [point], &[point | &1])
+    end)
+    |> Map.new(fn {module, points} -> {module, Enum.reverse(points)} end)
   end
 
   # A run that was reported from elsewhere never sent its pictures here, so the

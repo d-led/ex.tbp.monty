@@ -208,21 +208,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
     """
   end
 
-  @doc "How a module's implementation status reads and looks."
-  @spec status_label(atom() | nil) :: String.t()
-  def status_label(:implemented), do: "ported"
-  def status_label(:partial), do: "partly ported"
-  def status_label(:planned), do: "planned"
-  def status_label(:excluded), do: "excluded"
-  def status_label(_unknown), do: "not in map"
-
-  @spec status_class(atom() | nil) :: String.t()
-  def status_class(:implemented), do: "badge-success"
-  def status_class(:partial), do: "badge-info"
-  def status_class(:planned), do: "badge-ghost"
-  def status_class(:excluded), do: "badge-warning"
-  def status_class(_unknown), do: "badge-error"
-
   @doc """
   The world a run stepped, in the words the selector used to offer it.
 

@@ -1001,6 +1001,42 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert has_element?(view, "#frames figure")
     end
 
+    test "a page opened on a run that has already believed draws its charts", %{conn: conn} do
+      record = running_run()
+
+      # Two steps of one episode, both carrying what the module believed. A page
+      # that arrives late has no step messages to learn this from — the run was
+      # stepped by a worker this page never heard — so the record is the only
+      # place its lines can come from.
+      for step <- [0, 1] do
+        {:ok, _stepped} =
+          RunHistory.record_step(
+            record,
+            believing_entry(step, 1.0 + step),
+            %{"step" => step, "sensors" => %{}}
+          )
+      end
+
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      assert current_run_id(view) == record.id
+
+      poll(view)
+
+      # One line for the object, with a point for each step the module held it:
+      # the two steps the record has, and no more.
+      assert has_element?(view, "#chart-learning_module_0 polyline")
+
+      [_, drawn] =
+        view
+        |> element("#chart-learning_module_0")
+        |> render()
+        |> then(&Regex.run(~r/points="([^"]*)"/, &1))
+
+      assert length(String.split(drawn, ~r/\s+/, trim: true)) == 2
+    end
+
     test "opening a long run draws the window of its log, not the whole transcript", %{
       conn: conn
     } do
@@ -1217,6 +1253,19 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       "actions" => 1,
       "duration_us" => 100
     }
+  end
+
+  # A step a module had an opinion at, in the shape a run records it: an episode,
+  # a step number, and the graphs the module still held with the evidence behind
+  # each. `Belief.from_stored/1` reads exactly this back.
+  defp believing_entry(step, evidence) do
+    entry(step)
+    |> Map.put("episode", 0)
+    |> Map.put("beliefs", %{
+      "learning_module_0" => %{
+        "graphs" => %{"mug" => %{"max_evidence" => evidence, "within_x_percent" => 0.1}}
+      }
+    })
   end
 
   defp moment(step) do
