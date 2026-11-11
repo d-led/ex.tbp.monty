@@ -704,7 +704,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             phx-window-keydown="collapse"
             phx-key="Escape"
             phx-window-keyup="collapse"
-            phx-keyup="Escape"
             class="grid gap-2"
           >
             <script :type={Phoenix.LiveView.ColocatedHook} name=".EscapeCollapse">

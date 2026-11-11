@@ -39,7 +39,48 @@ defmodule ExTbpMontyWeb.Layouts do
     assigns = assign(assigns, :window?, ExTbpMontyWeb.Window.mode?())
 
     ~H"""
-    <div class="flex min-h-screen">
+    <div id="app-root" phx-hook=".EscapeAnywhere" class="flex min-h-screen">
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".EscapeAnywhere">
+        // Escape leaves full screen on every page, from one place.
+        //
+        // A page that owns a full-screen surface already answers Escape itself,
+        // in the browser, in the same tick. This is the net under that: it looks
+        // for the surface rather than for the page, and it leaves full screen by
+        // pressing the control the surface itself carries, so there is no second
+        // list of events to keep in step with the pages. A page whose own hook
+        // did not mount, or a tab holding an older bundle, still gets out.
+        export default {
+          mounted() {
+            this.escape = (event) => {
+              if (event.key !== "Escape") return
+
+              const surface =
+                document.querySelector("[data-expanded=true]") ??
+                document.querySelector("#replay-chart-panel.fixed")
+
+              if (surface === null) return
+
+              const control =
+                surface.querySelector("button[id^=chart-expand-]") ??
+                document.querySelector("#replay-expand")
+
+              if (control === null) return
+
+              // The control's own `phx-click` is the page's own event: this
+              // presses it rather than guessing what the page calls leaving.
+              control.click()
+            }
+
+            window.addEventListener("keydown", this.escape, true)
+            window.addEventListener("keyup", this.escape, true)
+          },
+
+          destroyed() {
+            window.removeEventListener("keydown", this.escape, true)
+            window.removeEventListener("keyup", this.escape, true)
+          }
+        }
+      </script>
       <div
         data-sidebar-backdrop
         hidden

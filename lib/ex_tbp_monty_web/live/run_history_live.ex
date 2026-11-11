@@ -1241,7 +1241,6 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         phx-window-keydown="replay_collapse"
         phx-key="Escape"
         phx-window-keyup="replay_collapse"
-        phx-keyup="Escape"
       >
         <script :type={Phoenix.LiveView.ColocatedHook} name=".EscapeReplay">
           // Escape leaves full screen at once, in the browser, and tells the
