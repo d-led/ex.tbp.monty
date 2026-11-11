@@ -2267,3 +2267,29 @@ Measured with `scripts/probe_step_cost.exs` on
 
 The acceptance ladder is unchanged digit for digit (`6.338 (1429, 2)`,
 `goals 15065`).
+
+### 38.3 Two things found on the way, recorded rather than changed
+
+**A hypothesis with no evidence is a hole in `get_possible_hypothesis_ids/2`.**
+The column is decoded and `Enum.max/1` taken over it. In Elixir's term order a
+number sorts below an atom, so a NaN — `nil` once decoded — _is_ the maximum, and
+the arithmetic that follows (`max - max / 100 * x_percent_threshold`) has a `nil`
+in it. numpy, which is what Monty reads, compares a NaN as `False` and simply
+leaves that hypothesis out. So the two differ twice over on such a column: ours
+raises where Monty narrows. Nothing in the runs measured reaches it — evidence is
+finite in every episode of the ladder — which is why it is written here and not
+changed under a performance commit: the fix is a decision about parity (follow
+numpy: skip a NaN) and wants its own test and its own line in
+`docs/monty-differences.md`.
+
+**`threshold_possible_matches/2` can name `"patch_off_object"` as a match.**
+`evidence_for_each_graph/1` answers with the sentinel `{["patch_off_object"],
+[0.0]}` when memory has a graph but no hypothesis space, which is a shape a probe
+with a recording sensor reaches once its percepts run out. `possible_of/4` then
+keeps that id — its standard deviation is 0 and its evidence is not negative — so
+`possible_matches` becomes `["patch_off_object"]`, and the next step asks
+`get_possible_hypothesis_ids/2` for that object and raises `KeyError`. Reached by
+`scripts/probe_step_cost.exs tutorial/dist_agent_5lm_2obj_eval 24`, not by
+`mix monty.run` of the same experiment (3 episodes, 60 steps, clean), so it is the
+probe's fixture rather than the studio. The sentinel should never survive into
+`possible_matches`; that is a separate fix.
