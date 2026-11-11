@@ -234,6 +234,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
     }
   end
 
+  # Four passes — three gathers and the map over `possible` — was tried as one pass
+  # that collects the columns as iolists and concatenates each once, and it measured
+  # 173.35 µs against 171.22 µs per selection of 2 000 rows out of 4 000 (1.01x, on
+  # the data a step has): a selection is dominated by copying the rows themselves —
+  # 144 kB of poses, once per object per step — not by walking the index list four
+  # times. The version that reads better stayed.
+
   @doc """
   The rows of the hypotheses at `indices`, as the bytes a kernel reads.
 

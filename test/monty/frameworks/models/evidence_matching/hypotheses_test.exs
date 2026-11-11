@@ -80,5 +80,33 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
       assert Hypotheses.locations(subset) == [[2.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
       assert subset.possible == [true, true]
     end
+
+    # The four fields are one walk of the indices now, so what has to hold is that
+    # the walk copies each field of the *same* hypothesis — a stride read with the
+    # wrong width would pair one hypothesis' place with another's evidence, and a
+    # missing reverse would put the rows back to front.
+    test "copies each field of the same hypothesis, and nothing at all when asked for nothing" do
+      set =
+        Hypotheses.concatenate([
+          hypothesis(0.1, [0.0, 0.0, 0.0]),
+          hypothesis(0.2, [1.0, 0.0, 0.0], false),
+          hypothesis(0.3, [2.0, 0.0, 0.0])
+        ])
+
+      assert Hypotheses.locations(Hypotheses.take(set, [1])) == [[1.0, 0.0, 0.0]]
+      assert Hypotheses.take(set, [1]).possible == [false]
+
+      # The same index twice is two hypotheses: a caller that asked for a row
+      # twice gets it twice, in the order it asked.
+      twice = Hypotheses.take(set, [2, 2])
+      assert Hypotheses.evidence(twice) == [0.3, 0.3]
+      assert Hypotheses.locations(twice) == [[2.0, 0.0, 0.0], [2.0, 0.0, 0.0]]
+
+      nothing = Hypotheses.take(set, [])
+      assert Hypotheses.evidence(nothing) == []
+      assert Hypotheses.locations(nothing) == []
+      assert Hypotheses.poses(nothing) == []
+      assert nothing.possible == []
+    end
   end
 end

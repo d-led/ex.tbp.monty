@@ -2152,3 +2152,41 @@ It found two, both real and both fixed in `c043a88`:
 4. Nothing else: the experiment page's `assign_charts/2` redraws every module on
    one throttled tick, which is what drawing N charts of a run that just stepped
    costs, and the per-page throttle is the right granularity for it.
+
+## 37. 2026-11-13: two micro-optimisations measured, one kept
+
+Both were chosen from the step's own profile and both were timed against the
+version they replace on the data a step hands them, three warm-up rounds then
+five measured ones. One earned its place; the other did not, and is not in the
+tree.
+
+**`Geometry.mul/2` and `apply/2` — 1.33x, kept (`82afc06`).** They were written
+as `transpose/1` plus a map of `dot/2` calls with a closure per element, and a
+step calls `mul/2` once per hypothesis to rotate a frame and `apply/2` to carry a
+vector through it. Written out, the product is nine multiplications and six
+additions, and the pair measures 365.2 → 274.8 ns and 117.9 → 97.4 ns on one
+rotation: 1.33x and 1.21x. The profile had the two at 3.2 % of a run, so the honest
+size of this is about 1 % of a step — small, and worth having because it is nine
+signed terms either way.
+
+**`Hypotheses.take/2` — 1.01x, reverted.** Four passes per selection (three
+`gather/3` comprehensions and a map over `possible`) looked like three passes too
+many, so they became one walk of the indices that collects each column as an
+iolist and concatenates it once. On the data a step has — 2 000 rows kept of
+4 000 — it measured **173.35 µs against 171.22 µs**: nothing. The cost is copying
+the rows (144 kB of poses per selection, once per object per step), which both
+versions pay; the fourth walk of a 2 000-element list is not measurable beside
+it. The four-pass version reads better and stayed, with the number recorded above
+its body so the next reader does not try again.
+
+Two lessons, both already in §7's note about `check_orthonormal`:
+
+- A profile attributes time to the functions that _allocate_, which is not the
+  same as the functions whose _structure_ is wasteful. Copying bytes shows up in
+  whichever clause does the `binary_part`; removing an index walk does not move
+  a number that is dominated by the copy.
+- The strengthened tests stayed even though the rewrite did not: `take/2`'s
+  "copies each field of the same hypothesis, and nothing at all when asked for
+  nothing" pins the order asked for, the same index twice, and the empty
+  selection — cases a stride read with the wrong width or a missing reverse would
+  break, and the earlier test did not cover.
