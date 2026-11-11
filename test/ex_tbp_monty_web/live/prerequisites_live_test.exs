@@ -173,15 +173,22 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
   # visible, so the room it writes into is answered before the click.
   test "the page says how much room is left where the downloads land", %{conn: conn, tmp: tmp} do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
-    # The walk of these directories runs beside the page: `render_async/1` waits
-    # for its answer, which is the state a reader waits for before clicking.
+
+    # The room is answered by the page itself — one `df` per root — because it is
+    # what a person needs before starting a download that has to fit: a page that
+    # said it only once a walk of the directories had finished said nothing to
+    # anybody reading the HTML.
+    assert view |> element("#free-space-volume") |> render() =~
+             ~r/\d+(\.\d+)? (B|KiB|MiB|GiB|TiB) free of \d+(\.\d+)? (B|KiB|MiB|GiB|TiB) on \S+, \d+% used/
+
+    # And the walk runs beside the page: `render_async/1` waits for its answer,
+    # which is the rest of the state a reader waits for before clicking. An empty
+    # directory is measured before a test can look at the in-flight wording, so
+    # what is asserted is where the numbers end up.
     render_async(view)
 
     assert view |> element("#occupied-MONTY_DATA") |> render() =~
              "nothing in #{Path.join(tmp, "data")} yet"
-
-    assert view |> element("#free-space-volume") |> render() =~
-             ~r/\d+(\.\d+)? (B|KiB|MiB|GiB|TiB) free of \d+(\.\d+)? (B|KiB|MiB|GiB|TiB) on \S+, \d+% used/
   end
 
   # The header's figure belongs to the directory, not to the rows. A root holds

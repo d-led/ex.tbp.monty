@@ -17,6 +17,13 @@ defmodule Monty.Random.Stream do
   A draw is a call, so this is the one place in a step where a module is not a
   pure function of its inputs; what it stays is a function of the episode, and
   two runs of the same episode draw the same numbers in the same order.
+
+  Every call here waits as long as it takes. A step is computation-bound and the
+  rest of the runtime already says so (`:infinity` on every server call); a draw
+  was the one thing left on the default five seconds, so a step that queued
+  behind a long one — or a suite running sixteen cases at once behind one stream
+  — died of a timeout rather than finishing. A draw is not a health check: if the
+  stream is slow, the step is slow.
   """
 
   use GenServer
@@ -39,28 +46,30 @@ defmodule Monty.Random.Stream do
 
   @doc "Starts the episode `seed` names, discarding the one before it."
   @spec reseed(server(), non_neg_integer()) :: :ok
-  def reseed(server, seed), do: GenServer.call(server, {:reseed, seed})
+  def reseed(server, seed), do: GenServer.call(server, {:reseed, seed}, :infinity)
 
   @doc "A float drawn uniformly from `[0, 1)`: Monty's `ctx.rng.uniform()`."
   @spec random(server()) :: float()
-  def random(server), do: GenServer.call(server, :random)
+  def random(server), do: GenServer.call(server, :random, :infinity)
 
   @doc "A float drawn uniformly from `[low, high)`: Monty's `ctx.rng.uniform(a, b)`."
   @spec uniform(server(), float(), float()) :: float()
-  def uniform(server, low, high), do: GenServer.call(server, {:uniform, low, high})
+  def uniform(server, low, high),
+    do: GenServer.call(server, {:uniform, low, high}, :infinity)
 
   @doc "One normal draw: Monty's `ctx.rng.normal(loc=..., scale=...)`."
   @spec normal(server(), float(), float()) :: float()
-  def normal(server, loc, scale), do: GenServer.call(server, {:normal, loc, scale})
+  def normal(server, loc, scale),
+    do: GenServer.call(server, {:normal, loc, scale}, :infinity)
 
   @doc "`count` normal draws: Monty's `ctx.rng.normal(loc=..., scale=..., size=count)`."
   @spec normals(server(), non_neg_integer(), float(), float()) :: [float()]
   def normals(server, count, loc, scale),
-    do: GenServer.call(server, {:normals, count, loc, scale})
+    do: GenServer.call(server, {:normals, count, loc, scale}, :infinity)
 
   @doc "The stream's own state, for a test that has to say where it is."
   @spec state(server()) :: Numpy.t()
-  def state(server), do: GenServer.call(server, :state)
+  def state(server), do: GenServer.call(server, :state, :infinity)
 
   @impl true
   def init(seed), do: {:ok, Numpy.new(seed)}

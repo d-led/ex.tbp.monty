@@ -42,14 +42,13 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
         python: EmbeddedPython.version(),
         wandb: EmbeddedPython.wandb_mode(),
         engines: Prerequisites.engines(),
-        # Walking these directories and asking the volume for its room costs what
-        # the disk costs, not what the page costs: it is asked for here and
-        # answered in a task, so the page is usable — downloads included — while
-        # it is measured.
-        storage: nil
+        # What each root already holds is a walk of the tree, and that costs what
+        # the disk costs, not what the page costs: it is answered in a task, so the
+        # page is usable — downloads included — while it is measured.
+        storage: room(prerequisites)
       )
 
-    {:ok, start_async(socket, :space, fn -> storage(prerequisites) end)}
+    {:ok, start_async(socket, :space, fn -> held(prerequisites) end)}
   end
 
   # Where these downloads land: what each directory already holds, and what is
@@ -57,11 +56,11 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # belongs to a directory, the second to a filesystem, and both roots usually
   # sit on one filesystem — so the room is said once rather than twice.
   #
-  # The figure for a directory is the *directory's*, because a root keeps more
-  # than this page lists: releases an older config named, archives someone
-  # unpacked by hand. A number that read as "what the entries below cost" would
-  # be the page hiding gigabytes it has no row for.
-  defp storage(prerequisites) do
+  # The room is asked for while the page is drawn: it is one `df` per root, and
+  # how much space is left is the one thing a person wants to know *before*
+  # starting a download that is meant to fit in it. A page that answered it only
+  # after its task finished answered nothing to anybody reading the HTML.
+  defp room(prerequisites) do
     roots =
       prerequisites
       |> Enum.map(& &1.root)
@@ -71,9 +70,21 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
     %{roots: roots, volumes: roots |> Enum.map(& &1.device) |> Enum.uniq_by(&device_key/1)}
   end
 
+  # What each root holds, measured in a task and merged into the room it was
+  # drawn beside.
+  defp held(prerequisites) do
+    Map.new(prerequisites, fn prerequisite ->
+      path = Prerequisites.root_path(prerequisite.root)
+      {prerequisite.root, Prerequisites.directory_size(path)}
+    end)
+  end
+
+  # A root's room is known when the page is drawn and what the root *holds* is
+  # not: the walk that answers it is in flight, and saying "nothing in it yet"
+  # while it runs would be the page answering a question it has not asked.
   defp root_usage(root) do
     path = Prerequisites.root_path(root)
-    Map.merge(Storage.usage(path), %{root: root, occupied: Prerequisites.directory_size(path)})
+    Map.merge(Storage.usage(path), %{root: root, occupied: :measuring})
   end
 
   defp device_key(nil), do: nil
@@ -111,13 +122,6 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
             and move into place only when they are complete.
           </p>
           <div id="free-space" class="space-y-1">
-            <p
-              :if={is_nil(@storage)}
-              id="free-space-measuring"
-              class="text-sm text-base-content/50"
-            >
-              Measuring what these directories hold…
-            </p>
             <p
               :for={root <- (@storage && @storage.roots) || []}
               id={"occupied-#{root.root}"}
@@ -317,11 +321,16 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # that failed says nothing about the files, so the page says nothing about the
   # space rather than showing a nought.
   @impl true
-  def handle_async(:space, {:ok, storage}, socket),
-    do: {:noreply, assign(socket, storage: storage)}
+  def handle_async(:space, {:ok, held}, socket) do
+    roots =
+      Enum.map(socket.assigns.storage.roots, fn root ->
+        %{root | occupied: Map.get(held, root.root)}
+      end)
 
-  def handle_async(:space, {:exit, _reason}, socket),
-    do: {:noreply, assign(socket, storage: %{roots: [], volumes: []})}
+    {:noreply, assign(socket, storage: %{socket.assigns.storage | roots: roots})}
+  end
+
+  def handle_async(:space, {:exit, _reason}, socket), do: {:noreply, socket}
 
   # Arriving with a prerequisite named is a link that starts the download it
   # points at — a finding that says a run is waiting for an archive offers the
@@ -494,6 +503,11 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # this page exists to make visible, so "is there room for another" is answered
   # before the click rather than by an error afterwards; and "what is already
   # there" is answered about the whole directory, not only about the rows below.
+  defp occupied_label(%{path: path, occupied: :measuring}),
+    do: "measuring what is in #{path}…"
+
+  # Nothing there yet — or a directory the walk could not read, which for this
+  # sentence is the same thing: there is no size to report.
   defp occupied_label(%{path: path, occupied: occupied}) when occupied in [nil, 0],
     do: "nothing in #{path} yet"
 
