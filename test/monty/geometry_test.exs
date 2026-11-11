@@ -26,6 +26,23 @@ defmodule Monty.GeometryTest do
 
       refute Geometry.mul(turn, flip) == Geometry.mul(flip, turn)
     end
+
+    # The product is nine multiplications written out, and rotations composed with
+    # themselves hide a transposed index (`mul(t, t)` is symmetric for a rotation
+    # like that). What makes the write-out right is the definition it came from:
+    # element (i, j) is row i of the left factor dotted with column j of the
+    # right, which is what `numpy.dot` means.
+    test "each element is a row of the left factor dotted with a column of the right" do
+      left = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 10.0]]
+      right = [[1.0, 0.0, 2.0], [0.0, 3.0, 1.0], [2.0, 1.0, 0.0]]
+
+      product =
+        for row <- left do
+          for column <- Geometry.transpose(right), do: Geometry.dot(row, column)
+        end
+
+      assert Geometry.mul(left, right) == product
+    end
   end
 
   describe "transpose/1" do
