@@ -215,4 +215,56 @@ defmodule Monty.Studio.Jobs.ReaperTest do
       assert Repo.get!(Oban.Job, job.id).state == "cancelled"
     end
   end
+
+  describe "the one-run form a page polls with" do
+    # Twice a second, for as long as a page is open, so what it reads matters: a
+    # full record is the run's whole transcript and — before the record is read
+    # without them — its pictures, which on a long run is most of a gigabyte.
+    test "asks the counters and not the run's transcript" do
+      record = start_run()
+      {:ok, _stepped} = RunHistory.record_step(record, %{"step" => 0}, %{})
+
+      asked = queries_while(fn -> assert Reaper.reap(record.id) == false end)
+
+      assert asked != []
+      refute Enum.any?(asked, &(&1 =~ "timeline"))
+      refute Enum.any?(asked, &(&1 =~ "r0.log"))
+    end
+
+    test "still closes a run nothing is working on" do
+      record = start_run()
+      _quiet = quiet_since(record, 61)
+
+      assert Reaper.reap(record.id) == :ok
+      assert RunHistory.get(record.id).status == "failed"
+    end
+  end
+
+  # The statements the repository ran while this block did its work. Asked of
+  # telemetry so a test can say *what* was read, which is the question here.
+  defp queries_while(work) do
+    id = "reaper-queries-#{System.unique_integer([:positive])}"
+    test = self()
+
+    :telemetry.attach_many(
+      id,
+      [[:ex_tbp_monty, :repo, :postgres, :query], [:ex_tbp_monty, :repo, :query]],
+      fn _event, _measurements, metadata, pid -> send(pid, {:query, id, metadata.query}) end,
+      test
+    )
+
+    work.()
+
+    statements = collect_queries(id)
+    :telemetry.detach(id)
+    statements
+  end
+
+  defp collect_queries(id) do
+    receive do
+      {:query, ^id, statement} -> [statement | collect_queries(id)]
+    after
+      0 -> []
+    end
+  end
 end

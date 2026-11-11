@@ -66,10 +66,15 @@ defmodule Monty.Studio.Jobs.Reaper do
   polls the run it shows, and sweeping every open run on every poll asked the
   database and Oban about runs that page cannot be wrong about; this asks about
   the one it can.
+
+  The counters are enough to decide, and they are all that is read: a full record
+  is the run's whole transcript, and this question is asked twice a second by
+  every open page. Closing a run writes its status and summary by id, so nothing
+  that is not read here is needed to close it.
   """
   @spec reap(String.t()) :: :ok | false
   def reap(run_id) do
-    case RunHistory.get(run_id) do
+    case RunHistory.progress(run_id) do
       %{status: "running"} = record ->
         if Run.held?(record.id) or alive?(record), do: false, else: abandon(record)
 
