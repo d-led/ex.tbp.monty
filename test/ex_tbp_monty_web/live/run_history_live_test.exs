@@ -278,6 +278,37 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     end
   end
 
+  # The two numbers a person asks of a run: when it began, and how long it has
+  # taken. The experiment page already says them for the run it is watching
+  # ("running 1 m 36 s since 23:33:19"); the run's own page is where a reader
+  # goes to check, so it says the same thing.
+  describe "when a run began, and how long it took" do
+    test "a run that is still stepping says how long, and since when", %{conn: conn} do
+      run = insert_run(%{experiment: "tutorial/first_experiment", status: "running"})
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      timing = view |> element("#run-timing") |> render()
+
+      assert timing =~ "running for"
+      assert timing =~ "since"
+      # The clock is the `LocalTime` component's, so the browser is what turns
+      # UTC into the reader's own time.
+      assert timing =~ "<time"
+    end
+
+    test "a run that has stopped says what it took, and between which clocks", %{conn: conn} do
+      run = insert_run(%{experiment: "tutorial/first_experiment", status: "finished"})
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      timing = view |> element("#run-timing") |> render()
+
+      assert timing =~ "took"
+      assert timing =~ "from"
+      assert timing =~ "to"
+      assert length(String.split(timing, "<time")) == 3, "the start and the end, both as clocks"
+    end
+  end
+
   describe "a run that is still stepping" do
     test "is counted from memory, and is not called stalled", %{conn: conn} do
       # The row is written at an episode boundary, so during an episode it says

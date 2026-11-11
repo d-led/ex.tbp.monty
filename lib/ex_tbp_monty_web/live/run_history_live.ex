@@ -321,6 +321,42 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp started_at(%{inserted_at: %DateTime{} = at}), do: DateTime.to_iso8601(at)
   defp started_at(_run), do: nil
 
+  # How long this run has taken and when it began, in the words the experiment
+  # page uses for the run it is watching — "running for 1 m 36 s since 23:33:19" —
+  # and, for a run that has stopped, what it took and the two clocks it took them
+  # between. The clocks are the `LocalTime` component's, so a reader sees their
+  # own time rather than the UTC the record keeps.
+  defp run_timing(assigns) do
+    ~H"""
+    <span id="run-timing">
+      <%= cond do %>
+        <% @run.status == "running" -> %>
+          running for {Duration.of_run(@run)} since
+          <ExTbpMontyWeb.LocalTime.local_time
+            at={began(@run)}
+            style={:clock}
+          />
+        <% @run.finished_at -> %>
+          took {Duration.of_run(@run)}, from
+          <ExTbpMontyWeb.LocalTime.local_time
+            at={began(@run)}
+            style={:clock}
+          /> to <ExTbpMontyWeb.LocalTime.local_time at={@run.finished_at} style={:clock} />
+        <% true -> %>
+          started
+          <ExTbpMontyWeb.LocalTime.local_time at={began(@run)} style={:clock} />, {Duration.of_run(
+            @run
+          )}
+      <% end %>
+    </span>
+    """
+  end
+
+  # The instant the run began: what the worker stamped for it, or the record's own
+  # clock for a row written before runs carried one.
+  defp began(%{started_at: %DateTime{} = at}), do: at
+  defp began(%{inserted_at: at}), do: at
+
   # What the reader chose to look at belongs to the run they chose it for: a
   # series, a window and a step are answers about one run. Carrying them to the
   # next run opened in the same tab meant every run after the first was drawn the
@@ -1121,7 +1157,15 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   def render(%{live_action: :show} = assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <header :if={@run} class="space-y-1">
+      <%!-- The header says when the run began and how long it has taken, in the
+      reader's own time: the clocks in it are `LocalTime`'s, and this is the hook
+      that turns the UTC the record keeps into the clock on their wall. --%>
+      <header
+        :if={@run}
+        id="run-header"
+        phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
+        class="space-y-1"
+      >
         <div class="flex flex-wrap items-center gap-2">
           <h1 class="font-mono text-2xl font-semibold tracking-tight">{@run.experiment}</h1>
           <span class="badge badge-sm" id="run-episode">episode {@run.episode}</span>
@@ -1188,8 +1232,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           </div>
         </div>
         <p class="text-xs text-base-content/60">
-          started <ExTbpMontyWeb.LocalTime.local_time at={@run.inserted_at} style={:clock} />
-          · {RunHistory.steps_run(@run)} steps in {episodes_label(@run)} · {Duration.of_run(@run)}
+          <.run_timing run={@run} /> · {RunHistory.steps_run(@run)} steps in {episodes_label(@run)}
           <span :if={RunHistory.ending(@run)} id="run-ending">
             · {RunHistory.ending(@run)}
           </span>
