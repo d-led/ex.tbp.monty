@@ -36,6 +36,21 @@ config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:ex_tbp_monty, ~w(--sourcemap=inline --watch)]},
     tailwind: {Tailwind, :install_and_run, [:ex_tbp_monty, ~w(--watch)]}
+  ],
+  # The tab reloads itself when the bundle, the stylesheet or a page changes.
+  #
+  # Without this there was no reloader at all: a hook lives in `app.js`, the
+  # browser fetches `app.js` once per page load, and `code_reloader: true` alone
+  # does not touch the browser. So a fix to a colocated hook was invisible in a
+  # tab that had been open for an hour — the page looked broken while the server
+  # was serving the fix, and Escape in particular stayed dead in exactly the tabs
+  # that had been open longest.
+  live_reload: [
+    patterns: [
+      ~r"priv/static/(?!uploads/).*\.(js|css)$",
+      ~r"lib/ex_tbp_monty_web/router\.ex$",
+      ~r"lib/ex_tbp_monty_web/(controllers|live|components)/.*\.(ex|heex)$"
+    ]
   ]
 
 # ## SSL Support
