@@ -17,8 +17,14 @@ config :ex_tbp_monty,
 # repos are `Repo.Postgres` and `Repo.SQLite` now, so the directory is named
 # rather than inherited from a module name — with the `priv/` prefix, which is
 # what that option is expected to carry (its default is `priv/repo`).
+# Ecto logs every statement at `:debug`, which is the level a development console
+# shows. A page following a run reads the database on a timer, so that log is
+# thousands of lines nobody asked for — and it would have made adding `:debug` to
+# the console the same mistake the experiment's own per-step lines were. A
+# console that wants the statements says `log: :debug` here.
 config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
   priv: "priv/repo",
+  log: false,
   # How long a caller may hold a connection before DBConnection gives up on it.
   # The default is fifteen seconds, and every episode boundary writes the run's
   # transcript back into its row (`RunHistory.append_steps/4` appends to a jsonb
@@ -40,7 +46,7 @@ config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
   queue_target: 1_000,
   queue_interval: 10_000
 
-config :ex_tbp_monty, ExTbpMonty.Repo.SQLite, priv: "priv/repo"
+config :ex_tbp_monty, ExTbpMonty.Repo.SQLite, priv: "priv/repo", log: false
 
 # Where this software lives: the footer links to it with the octocat. A fork
 # that does not want the upstream link drops the key, and the link goes with it.
@@ -53,6 +59,13 @@ config :ex_tbp_monty, :source, repo: "https://github.com/d-led/ex.tbp.monty"
 # `ExTbpMonty.EmbeddedPython.wandb_mode/0`) wins over it, and what it answers is
 # what the interpreter is told before `wandb.init`, so the two cannot disagree.
 config :ex_tbp_monty, wandb_mode: "disabled"
+
+# The experiment's own words — what Monty's Python prints per step and per module
+# (`Monty.Trace`) — are off unless a deployment asks for them: a run says "did not
+# recognize an object yet" on every step, and a console reading a twenty-thousand
+# step run is a console nobody can read. `MONTY_TRACE=1` turns them on at run time
+# (`config/runtime.exs`); nothing else here is gated that way.
+config :ex_tbp_monty_core, experiment_trace: false
 
 # Which world a run steps when nobody chooses one. MuJoCo is the world Monty's
 # own configs are written for, and it costs nothing here: the interpreter that

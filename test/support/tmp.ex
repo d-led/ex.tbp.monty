@@ -61,11 +61,21 @@ defmodule Monty.Test.Tmp do
   Restored to its previous value, or deleted when it had none.
   """
   @spec app_env(atom(), term()) :: :ok
-  def app_env(key, value) do
-    previous = Application.fetch_env(:ex_tbp_monty, key)
-    Application.put_env(:ex_tbp_monty, key, value)
+  def app_env(key, value), do: app_env(:ex_tbp_monty, key, value)
 
-    ExUnit.Callbacks.on_exit(fn -> restore_app_env(key, previous) end)
+  @doc """
+  The same, for another application's environment.
+
+  A setting that belongs to a library rather than to this application lives in
+  the library's own environment — the experiment's trace is
+  `:ex_tbp_monty_core`'s, because the ported modules are the ones that say it.
+  """
+  @spec app_env(atom(), atom(), term()) :: :ok
+  def app_env(app, key, value) do
+    previous = Application.fetch_env(app, key)
+    Application.put_env(app, key, value)
+
+    ExUnit.Callbacks.on_exit(fn -> restore_app_env(app, key, previous) end)
   end
 
   @doc """
@@ -106,7 +116,7 @@ defmodule Monty.Test.Tmp do
     previous = Application.fetch_env(:ex_tbp_monty, key)
     Application.delete_env(:ex_tbp_monty, key)
 
-    ExUnit.Callbacks.on_exit(fn -> restore_app_env(key, previous) end)
+    ExUnit.Callbacks.on_exit(fn -> restore_app_env(:ex_tbp_monty, key, previous) end)
   end
 
   @doc """
@@ -152,8 +162,8 @@ defmodule Monty.Test.Tmp do
       Path.join(:code.priv_dir(:ex_tbp_monty), "monty/libraries")
   end
 
-  defp restore_app_env(key, {:ok, value}), do: Application.put_env(:ex_tbp_monty, key, value)
-  defp restore_app_env(key, :error), do: Application.delete_env(:ex_tbp_monty, key)
+  defp restore_app_env(app, key, {:ok, value}), do: Application.put_env(app, key, value)
+  defp restore_app_env(app, key, :error), do: Application.delete_env(app, key)
 
   defp restore_system_env(name, nil), do: System.delete_env(name)
   defp restore_system_env(name, value), do: System.put_env(name, value)

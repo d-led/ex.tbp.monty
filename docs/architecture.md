@@ -354,3 +354,29 @@ measurement and `step`, `votes_used`, `deadline_hit?` as metadata
 ([`lib/monty/runtime/step.ex`](../lib/monty/runtime/step.ex)). That is what a
 latency experiment reads: a round that closed early says so, and how many votes
 it actually used is beside it.
+
+### What the console says
+
+Four things reach it, and each has one level:
+
+| what                                                                                         | level         |
+| -------------------------------------------------------------------------------------------- | ------------- |
+| a run starting, finishing or failing; a page opened; a connection opened and closed          | `:info`       |
+| a write that could not happen, a run that had to be abandoned                                | `:warning`    |
+| a run that could not start at all                                                            | `:error`      |
+| the experiment talking to itself — what Monty's `logger.info` prints per step and per module | `Monty.Trace` |
+
+That last one is not a level `Logger` has, because it is not one it should: a run
+of twenty thousand steps says "did not recognize an object yet" twenty thousand
+times, and a console reading that is a console nobody can read
+([`lib/monty/trace.ex`](../packages/ex_tbp_monty_core/lib/monty/trace.ex)). It is
+below `:debug`, off by default, and on with `MONTY_TRACE=1` (or
+`config :ex_tbp_monty_core, experiment_trace: true`), where it arrives at
+`:debug`. Development shows `:debug`; a release stops at `:info`.
+
+Two things that would be noise are therefore quiet by their own rules rather
+than by the level: Ecto does not log statements (`log: false` on both repos — a
+page following a run reads the database on a timer), and Phoenix LiveView does
+not log every mount and event (`use Phoenix.LiveView, log: false` in
+`ExTbpMontyWeb.live_view/0`). A page being debugged puts `log: :debug` back on
+its own module.

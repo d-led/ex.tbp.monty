@@ -51,7 +51,6 @@ defmodule Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM do
 
   use Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
 
-  require Logger
 
   alias Monty.Cmp.Message
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
@@ -508,11 +507,13 @@ defmodule Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM do
     {paths, poses} = extended_paths_and_poses(lm, graph_id, features, displacement)
 
     unless length(poses) >= 10 do
-      Logger.info("possible poses after matching for #{graph_id}: #{inspect(poses)}")
+      Monty.Trace.trace(fn ->
+        "possible poses after matching for #{graph_id}: #{inspect(poses)}"
+      end)
     end
 
     lm = put_paths_and_poses(lm, graph_id, paths, poses)
-    Logger.debug("possible paths after matching for #{graph_id}: #{length(paths)}")
+    Monty.Trace.trace("possible paths after matching for #{graph_id}: #{length(paths)}")
 
     {lm, paths != []}
   end
@@ -717,7 +718,7 @@ defmodule Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM do
       if Map.fetch!(Map.fetch!(sensed_features, channel), "pose_fully_defined") do
         GraphMatchingUtils.possible_sensed_directions(sensed, 2)
       else
-        Logger.debug("PC 1 is similar to PC2 -> Their directions are not meaningful")
+        Monty.Trace.trace("PC 1 is similar to PC2 -> Their directions are not meaningful")
         GraphMatchingUtils.possible_sensed_directions(sensed, lm.umbilical_num_poses)
       end
 
@@ -830,7 +831,7 @@ defmodule Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM do
     lm = %{lm | symmetry_evidence: if(unchanged?, do: lm.symmetry_evidence + 1, else: 0)}
 
     if enough_symmetry_evidence?(lm) do
-      Logger.info("Symmetry detected for poses #{inspect(euler_poses)}")
+      Monty.Trace.trace(fn -> "Symmetry detected for poses #{inspect(euler_poses)}" end)
       {lm, true}
     else
       {lm, false}

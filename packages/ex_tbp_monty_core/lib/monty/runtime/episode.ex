@@ -162,7 +162,7 @@ defmodule Monty.Runtime.Episode do
       Logger.warning("episode timed out after #{run.steps} steps")
       %{steps: run.steps, done?: true, timed_out?: true, infos: Enum.reverse(run.infos)}
     else
-      Logger.debug("episode ended after #{run.steps} steps")
+      Monty.Trace.trace("episode ended after #{run.steps} steps")
       %{steps: run.steps, done?: true, timed_out?: false, infos: Enum.reverse(run.infos)}
     end
   end

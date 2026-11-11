@@ -62,7 +62,7 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtils do
         {:ok, k_n}
 
       num_datapoints > 2 ->
-        Logger.debug("setting k_n to #{num_datapoints - 1} for #{num_datapoints} observations")
+        Monty.Trace.trace("setting k_n to #{num_datapoints - 1} for #{num_datapoints} observations")
         {:ok, num_datapoints - 1}
 
       true ->
@@ -201,7 +201,9 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtils do
       true ->
         case Enum.find(@fallback_curvature_key_order, &Map.has_key?(features, &1)) do
           nil ->
-            Logger.info("no curvatures contained in the features #{inspect(Map.keys(features))}")
+            Monty.Trace.trace(fn ->
+              "no curvatures contained in the features #{inspect(Map.keys(features))}"
+            end)
             @curvature_fallback
 
           key ->

@@ -17,7 +17,12 @@ config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
 
 # The studio shows what happened; the console keeps the structured log. SQL at
 # debug level is far too chatty to be useful in development.
-config :logger, level: :info
+# `:debug` is what a development console shows, and the two noisy things are
+# kept out of it by their own rules rather than by the level: the experiment's
+# per-step chatter is `Monty.Trace` (off unless `MONTY_TRACE=1`), and Ecto's
+# queries are quiet below the level this page actually logs at. Connections and
+# requests stay at `:info`, so a page that reconnects still says so.
+config :logger, level: :debug
 
 # For development, we disable any cache and enable
 # debugging and code reloading.

@@ -1162,14 +1162,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
         cond do
           pose != nil ->
-            Logger.info("#{lm.learning_module_id} recognised #{object_id}")
+            Monty.Trace.trace("#{lm.learning_module_id} recognised #{object_id}")
             set_individual_ts(lm, :match)
 
           lm.terminal_state == :match ->
             set_individual_ts(lm, nil)
 
           true ->
-            Logger.info("pose of #{object_id} is not narrowed down yet")
+            Monty.Trace.trace("pose of #{object_id} is not narrowed down yet")
             lm
         end
 
@@ -1223,11 +1223,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     lm = %{lm | buffer: buffer}
 
     if terminal_state == :match do
-      Logger.info(
+      Monty.Trace.trace(fn ->
         "#{lm.learning_module_id} detected #{lm.detected_object} at " <>
           "#{inspect(Enum.take(lm.detected_pose, 3))} rotated " <>
           "#{inspect(Enum.slice(lm.detected_pose, 3, 3))}"
-      )
+      end)
     end
 
     lm
@@ -1313,7 +1313,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         if pose_is_unique or symmetry_detected do
           settle_pose(lm, object_id, mlh, possible_ids, symmetry_detected)
         else
-          Logger.debug("#{object_id} is detected but its pose is not resolved yet")
+          Monty.Trace.trace("#{object_id} is detected but its pose is not resolved yet")
           {lm, nil}
         end
     end
@@ -1368,7 +1368,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     euler = inverse |> Rotation.to_euler_degrees(3) |> Enum.map(&wrap_degrees/1)
     pose_and_scale = mlh.location ++ euler ++ [mlh.scale]
 
-    Logger.debug("(location, rotation, scale): #{inspect(pose_and_scale)}")
+    Monty.Trace.trace(fn -> "(location, rotation, scale): #{inspect(pose_and_scale)}" end)
 
     stats = %{
       "detected_path" => mlh.location,
@@ -1880,7 +1880,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   @spec update_ltm_from_stm(t()) :: t()
   def update_ltm_from_stm(%__MODULE__{mode: :train} = lm) do
     if FeatureAtLocationBuffer.size(lm.buffer) > 0 do
-      Logger.info("updating the memory of #{lm.learning_module_id}")
+      Monty.Trace.trace("updating the memory of #{lm.learning_module_id}")
       lm |> update_memory() |> build_updater()
     else
       lm

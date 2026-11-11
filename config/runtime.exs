@@ -20,6 +20,13 @@ if System.get_env("PHX_SERVER") do
   config :ex_tbp_monty, ExTbpMontyWeb.Endpoint, server: true
 end
 
+# The experiment's own trace (`Monty.Trace`): every step's own words, which is a
+# lot of lines and is why they are off by default. `MONTY_TRACE=1` is how a shell
+# asks for them, and they then arrive at `:debug` — so the console's level has to
+# allow that too.
+config :ex_tbp_monty_core,
+  experiment_trace: System.get_env("MONTY_TRACE", "false") in ~w(true 1)
+
 config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 

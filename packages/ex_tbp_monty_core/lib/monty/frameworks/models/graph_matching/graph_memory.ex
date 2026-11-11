@@ -121,7 +121,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
         _location_rel_model,
         _object_rotation
       ) do
-    Logger.info("no match found in time, not updating memory")
+    Monty.Trace.trace("no match found in time, not updating memory")
     memory
   end
 
@@ -136,12 +136,12 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
       ) do
     object_known? = graph_id in get_memory_ids(memory)
 
-    Logger.info(
+    Monty.Trace.trace(fn ->
       if(object_known?,
         do: "#{graph_id} already in memory (#{inspect(get_memory_ids(memory))})",
         else: "#{graph_id} not in memory (#{inspect(get_memory_ids(memory))})"
       )
-    )
+    end)
 
     Enum.reduce(features, memory, fn {input_channel, channel_features}, memory ->
       {channel_features, channel_locations} =
@@ -679,7 +679,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
   """
   @spec load_state_dict(t(), %{optional(graph_id()) => map()}) :: t()
   def load_state_dict(%__MODULE__{} = memory, memento) do
-    Logger.info("loading #{map_size(memento)} model(s) into memory")
+    Monty.Trace.trace("loading #{map_size(memento)} model(s) into memory")
 
     Enum.reduce(memento, memory, fn {graph_id, model}, memory ->
       add_graph_to_memory(memory, model, graph_id)
@@ -722,7 +722,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
         |> put_in([Access.key(:models_in_memory), graph_id, input_channel], model)
         |> forget_rows(graph_id, input_channel)
         |> then(fn memory ->
-          Logger.info("added graph #{graph_id} for #{input_channel}")
+          Monty.Trace.trace("added graph #{graph_id} for #{input_channel}")
           memory
         end)
 

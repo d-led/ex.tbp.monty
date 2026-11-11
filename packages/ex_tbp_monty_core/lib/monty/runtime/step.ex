@@ -36,7 +36,6 @@ defmodule Monty.Runtime.Step do
 
   use GenServer
 
-  require Logger
 
   alias Monty.Cmp.Message
   alias Monty.Runtime.{Barrier, LearningModuleServer, Registry, SensorModuleServer}
@@ -734,7 +733,7 @@ defmodule Monty.Runtime.Step do
   end
 
   defp switch_to(%State{} = state, step_type) do
-    Logger.debug("switching to #{step_type} after #{state.matching_steps} matching steps")
+    Monty.Trace.trace("switching to #{step_type} after #{state.matching_steps} matching steps")
     %{state | step_type: step_type}
   end
 

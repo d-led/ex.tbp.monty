@@ -37,7 +37,6 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
 
   use Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
 
-  require Logger
 
   alias Monty.Cmp
   alias Monty.Cmp.{AttentionRegion, Message}
@@ -342,7 +341,8 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   # behind it to have moved from, which is a zero displacement rather than a
   # reason not to look.
   defp log_not_moved(_lm, true), do: :ok
-  defp log_not_moved(lm, false), do: Logger.debug("#{lm.learning_module_id} has not moved yet")
+  defp log_not_moved(lm, false),
+    do: Monty.Trace.trace("#{lm.learning_module_id} has not moved yet")
 
   # The observation goes into the buffer twice, as Monty writes it: once as the
   # step's own percepts, and once per displaced percept as what this module is
@@ -431,7 +431,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   @spec update_ltm_from_stm(t()) :: t()
   def update_ltm_from_stm(%__MODULE__{mode: :train} = lm) do
     if FeatureAtLocationBuffer.size(lm.buffer) > 0 do
-      Logger.info("\n---Updating memory of #{lm.learning_module_id}---")
+      Monty.Trace.trace("\n---Updating memory of #{lm.learning_module_id}---")
       update_memory(lm)
     else
       lm
@@ -634,19 +634,19 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
             # longer the only one possible.
             lm = if lm.terminal_state == :match, do: set_individual_ts(lm, nil), else: lm
 
-            Logger.info("Pose for #{lm.learning_module_id} not narrowed down yet")
+            Monty.Trace.trace("Pose for #{lm.learning_module_id} not narrowed down yet")
 
             {lm, lm.terminal_state}
 
           _pose ->
             lm = set_individual_ts(lm, :match)
-            Logger.info("#{lm.learning_module_id} recognized object #{object_id}")
+            Monty.Trace.trace("#{lm.learning_module_id} recognized object #{object_id}")
             {lm, lm.terminal_state}
         end
 
       true ->
         lm = if lm.terminal_state == :match, do: set_individual_ts(lm, nil), else: lm
-        Logger.info("#{lm.learning_module_id} did not recognize an object yet.")
+        Monty.Trace.trace("#{lm.learning_module_id} did not recognize an object yet.")
         {lm, lm.terminal_state}
     end
   end
@@ -733,7 +733,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphLM do
   """
   @spec set_individual_ts(t(), terminal_state()) :: t()
   def set_individual_ts(%__MODULE__{} = lm, terminal_state) do
-    Logger.info("Setting terminal state of #{lm.learning_module_id} to #{terminal_state}")
+    Monty.Trace.trace("Setting terminal state of #{lm.learning_module_id} to #{terminal_state}")
     lm = set_detected_object(lm, terminal_state)
 
     buffer =

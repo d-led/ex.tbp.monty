@@ -48,7 +48,14 @@ defmodule ExTbpMontyWeb do
 
   def live_view do
     quote do
-      use Phoenix.LiveView
+      # `log: false`: LiveView logs every mount, every event and every reply at
+      # `:debug` — two lines a keystroke — and a development console now shows
+      # `:debug`. What a reader of this console needs to know about a page is
+      # here already and at `:info`: one line when it opens, one when its
+      # connection opens and one when it closes, and the reason if it closes
+      # badly (`ExTbpMontyWeb.Telemetry.ConnectionLog`). A page being debugged
+      # says the same by putting `log: :debug` back on its own module.
+      use Phoenix.LiveView, log: false
 
       unquote(html_helpers())
     end
