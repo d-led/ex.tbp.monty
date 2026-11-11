@@ -225,6 +225,15 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
+      # The key is the browser's: the page can only say it listens for it on the
+      # window and which key it means. Without these two attributes the event
+      # below would still pass while a reader's Escape did nothing — which is the
+      # difference this assertion exists for.
+      panel = view |> element("#replay-panel") |> render()
+
+      assert panel =~ ~s(phx-window-keydown="replay_collapse")
+      assert panel =~ ~s(phx-key="Escape")
+
       view |> element("#replay-expand") |> render_click()
 
       assert view |> element("#replay-chart-panel") |> render() =~ "fixed inset-0"
