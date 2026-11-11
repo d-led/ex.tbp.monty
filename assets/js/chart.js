@@ -21,8 +21,6 @@
 //
 // Everything else — lines, bands, labels, the readout — belongs to the chart.
 
-const SVG = "http://www.w3.org/2000/svg";
-
 // A wheel ticks many times before a page can be rebuilt, and every range asked
 // for is a re-render: the last range wins, a moment after the wheel stops.
 const WHEEL_SETTLE_MS = 120;
@@ -47,6 +45,19 @@ export const ChartZoom = {
     // Double-clicking puts the whole run back, as Plotly's charts do: the way
     // out of a zoom is never a button a reader has to hunt for.
     this.el.addEventListener("dblclick", () => this.zoomAll());
+
+    // The mouse-up of a drag is also a click, and a drag has already said what
+    // it wanted: a box chosen by hand is not a request to look at where the hand
+    // stopped. LiveView listens for `click` on `window`, so a listener here — on
+    // the box that holds whatever the click would act on — has already run by
+    // the time the event would reach it, and stopping it is enough.
+    this.dragged = false;
+    this.el.addEventListener("click", (event) => {
+      if (!this.dragged) return;
+
+      this.dragged = false;
+      event.stopPropagation();
+    });
 
     // A chart that fills the screen has a box the server cannot guess, so it is
     // measured here and sent: a picture drawn for the guessed box is a picture
@@ -126,6 +137,9 @@ export const ChartZoom = {
   },
 
   startDrag(event) {
+    // A new gesture decides for itself whether it was a drag.
+    this.dragged = false;
+
     const chart = this.geometry();
     const unitX = this.unitX(event, chart);
 
@@ -163,29 +177,20 @@ export const ChartZoom = {
     this.showBrush(chart);
   },
 
+  // The brush is the chart's own: each picture renders it hidden, and this only
+  // says where it stands. A node appended to the SVG is a node LiveView may
+  // remove in the middle of a drag — and the run page rendered one that nobody
+  // ever found, because this looked for an attribute the markup did not carry.
   brushRect() {
-    const existing = this.el.querySelector("[data-chart-brush]");
-    if (existing) return existing;
-
-    const plot = this.plot();
-    const rect = document.createElementNS(SVG, "rect");
-    rect.setAttribute("data-chart-brush", "");
-    rect.setAttribute("fill", "currentColor");
-    rect.setAttribute("fill-opacity", "0.12");
-    rect.setAttribute("stroke", "currentColor");
-    rect.setAttribute("stroke-opacity", "0.4");
-    rect.setAttribute("pointer-events", "none");
-    rect.setAttribute("visibility", "hidden");
-
-    if (plot.tagName.toLowerCase() === "svg") plot.appendChild(rect);
-
-    return rect;
+    return this.el.querySelector("[data-chart-brush]");
   },
 
   showBrush(chart) {
     if (!this.brush) return;
 
     const rect = this.brushRect();
+    if (rect === null) return;
+
     const top = Number(this.el.dataset.top || 0);
     const bottom = Number(this.el.dataset.bottom || 0);
 
@@ -216,6 +221,7 @@ export const ChartZoom = {
 
     if (!brush.moved) return;
 
+    this.dragged = true;
     const chart = this.geometry();
     const ends = [
       this.positionOf(brush.from, chart),
@@ -262,6 +268,7 @@ export const ChartZoom = {
 
     if (!pan || !pan.moved || !pan.range) return;
 
+    this.dragged = true;
     this.pushRange(...pan.range);
   },
 

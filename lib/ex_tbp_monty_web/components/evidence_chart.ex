@@ -16,6 +16,9 @@ defmodule ExTbpMontyWeb.EvidenceChart do
   use Phoenix.Component
 
   attr :module_id, :string, required: true
+  # What the chart is headed with. A module's own id is the heading of a chart on
+  # the experiment page; a card of one part says which part it is instead.
+  attr :label, :string, default: nil
   attr :chart, :map, required: true
   # Expanded is the chart filling the screen rather than its cell in the grid.
   # It is the card's state, not the chart's: the picture is the same run, drawn
@@ -84,7 +87,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         "flex shrink-0 flex-wrap items-baseline justify-between gap-x-2 px-0.5 pb-1 font-mono text-[11px] text-base-content/60",
         @expanded && "pr-8"
       ]}>
-        <span>{@module_id}</span>
+        <span>{@label || @module_id}</span>
         <span :if={@chart.mlh}>{@chart.mlh.graph_id} is the answer so far</span>
       </figcaption>
       <%!-- The plot's own box, not the picture's shape: full screen hands the
@@ -248,6 +251,38 @@ defmodule ExTbpMontyWeb.EvidenceChart do
               fill={@chart.mlh_colour}
             />
           </g>
+          <%!-- The range a drag is choosing and the crosshair a hover draws: both are
+          rendered here, hidden, and the hooks only set their geometry. A node the
+          server owns is a node a patch cannot lose, and a hover that moved a
+          dozen attributes instead of creating and removing an element per pointer
+          move is a hover that costs nothing to perform. --%>
+          <rect
+            id={"chart-brush-#{@module_id}"}
+            data-chart-brush
+            x="0"
+            y="0"
+            width="0"
+            height="0"
+            fill="currentColor"
+            fill-opacity="0.12"
+            stroke="currentColor"
+            stroke-opacity="0.4"
+            vector-effect="non-scaling-stroke"
+            pointer-events="none"
+            visibility="hidden"
+          />
+          <line
+            id={"chart-crosshair-#{@module_id}"}
+            data-chart-crosshair
+            class="evidence-chart__crosshair text-base-content/50"
+            x1="0"
+            y1="0"
+            x2="0"
+            y2="0"
+            vector-effect="non-scaling-stroke"
+            pointer-events="none"
+            visibility="hidden"
+          />
         </svg>
       </div>
       <ul class="flex shrink-0 flex-wrap gap-x-3 gap-y-1 px-0.5 pb-0.5 text-[11px]">
@@ -299,7 +334,12 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           // blinks, and one that is never repositioned drifts away from the
           // cursor the moment the chart grows under it.
           this.pointer = null
-          this.tooltip = this.el.parentElement.querySelector("[data-chart-tooltip]")
+
+          // The tooltip belongs to the chart, not to the picture: it is a child of
+          // the figure, one level above the box this hook sits on. Asking the
+          // parent for it found nothing, and the readout — the only thing this
+          // hook does beyond the shared gestures — never ran at all.
+          this.tooltip = this.el.closest("figure").querySelector("[data-chart-tooltip]")
           if (this.tooltip === null) return
 
           this.el.addEventListener("mousemove", (event) => this.hover(event))
@@ -312,9 +352,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         updated() {
           ChartZoom.updated.call(this)
 
-          this.tooltip = this.el.parentElement.querySelector("[data-chart-tooltip]")
           if (this.tooltip === null) return
-
           if (this.pointer === null) return this.hide()
 
           this.hover(this.pointer)
@@ -353,7 +391,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           const rows = this.rowsAt(x, chart)
           if (rows.length === 0) return this.hide(false)
 
-          this.show(rows, chart, rect, this.pointer)
+          this.show(rows, chart, this.pointer)
         },
 
         // The values at the step nearest the cursor, which is the question a
@@ -401,7 +439,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           return best
         },
 
-        show(rows, chart, rect, event) {
+        show(rows, chart, event) {
           const shown = rows.slice(0, 8)
           const hidden = rows.length - shown.length
 
@@ -422,44 +460,50 @@ defmodule ExTbpMontyWeb.EvidenceChart do
 
           // Beside the cursor, and on the other side of it near the edge:
           // a tooltip that hangs off the chart is a tooltip nobody reads.
-          // Both numbers are in the reader's pixels — the box is positioned
-          // in the page, not in the SVG's own units.
+          // Both numbers are in the reader's pixels, measured from the box the
+          // tooltip is positioned in — the figure, which holds the caption above
+          // the picture: an offset from the picture put the words a caption's
+          // height away from the pointer they describe.
+          const box = this.tooltip.offsetParent
+            ? this.tooltip.offsetParent.getBoundingClientRect()
+            : this.el.getBoundingClientRect()
+
           const left = Math.min(
-            event.clientX - rect.left + 14,
-            rect.width - this.tooltip.offsetWidth - 4,
+            event.clientX - box.left + 14,
+            box.width - this.tooltip.offsetWidth - 4,
           )
 
           this.tooltip.style.left = `${Math.max(left, 4)}px`
-          this.tooltip.style.top = `${Math.max(event.clientY - rect.top - 10, 4)}px`
+          this.tooltip.style.top = `${Math.max(event.clientY - box.top - 10, 4)}px`
           this.tooltip.removeAttribute("hidden")
 
           this.crosshairFor(shown[0].x, chart)
         },
 
         // The step the values are from, drawn where it is: the cursor is
-        // between steps and the numbers are not.
+        // between steps and the numbers are not. The line is the chart's own —
+        // the server renders it hidden — so this only says where it stands,
+        // and a patch that redraws the picture leaves it to be found again.
         crosshairFor(x, chart) {
-          this.crosshairMark?.remove()
+          const line = this.crosshairLine()
+          if (line === null) return
 
-          const line = document.createElementNS("http://www.w3.org/2000/svg", "line")
           line.setAttribute("x1", x)
           line.setAttribute("x2", x)
           line.setAttribute("y1", chart.top)
           line.setAttribute("y2", chart.height - chart.bottom)
-          line.setAttribute("class", "evidence-chart__crosshair text-base-content/50")
+          line.setAttribute("visibility", "visible")
+        },
 
-          this.el.appendChild(line)
-          this.crosshairMark = line
-
-          return line
+        crosshairLine() {
+          return this.el.querySelector("[data-chart-crosshair]")
         },
 
         hide(pointer_left = true) {
           if (pointer_left) this.pointer = null
 
           if (this.tooltip) this.tooltip.setAttribute("hidden", "")
-          this.crosshairMark?.remove()
-          this.crosshairMark = null
+          this.crosshairLine()?.setAttribute("visibility", "hidden")
         },
       }
 

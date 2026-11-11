@@ -79,7 +79,18 @@ defmodule ExTbpMonty.Application do
   # here, in a process of its own, before anybody asks.
   defp warm_catalogue do
     if Application.get_env(:ex_tbp_monty, :precompute, true) do
-      Task.start(fn -> Monty.Studio.Catalog.experiments() end)
+      Task.start(fn ->
+        # The YAML, and then the survey read from it: the experiments list asks for
+        # both, and paying for them here is what keeps the first visitor from being
+        # the one who pays. Measured on a fresh node: 22 ms for the files, 1 404 ms
+        # for the survey over all 132 configs, 5 ms once it is cached — and the
+        # cache is a read-through `:persistent_term`, so every page open at that
+        # moment composes its own copy (three concurrent first calls cost 3 × 3.8 s,
+        # which is work a stepping run competes with and a page pays for by losing
+        # its connection).
+        Monty.Studio.Catalog.experiments()
+        Monty.Studio.Readiness.catalog()
+      end)
     end
 
     :ok

@@ -533,10 +533,13 @@ defmodule ExTbpMontyWeb.StudioComponents do
           <%!-- Nothing is stepping a run that has stopped, so a clock beside it
           would count the minutes since somebody killed it and call them the time
           it has been running. What is worth knowing is when the last step
-          landed: that is what says how long ago it stopped. --%>
+          landed: that is what says how long ago it stopped. The clock carries the
+          same hook as the one above — only one of the two spans is ever in the
+          page — because a time nobody localises is a UTC time beside a local one. --%>
           <span
             :if={@started_at && !@running}
             id="replay-chart-stopped"
+            phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
             class="text-[11px] text-base-content/60"
           >
             last step
@@ -749,9 +752,12 @@ defmodule ExTbpMontyWeb.StudioComponents do
                   />
                   <%!-- The range a drag is choosing, drawn while the pointer is down
             and gone on release: the zoom is the drag, so the box is feedback
-            rather than a state the page has to keep. --%>
+            rather than a state the page has to keep. It is rendered here, hidden,
+            and the hook only sets its geometry: a node the server owns is a node
+            a patch cannot lose. --%>
                   <rect
                     id="replay-chart-brush"
+                    data-chart-brush
                     x="0"
                     y="0"
                     width="0"
@@ -761,9 +767,24 @@ defmodule ExTbpMontyWeb.StudioComponents do
                     stroke="currentColor"
                     stroke-opacity="0.4"
                     vector-effect="non-scaling-stroke"
+                    pointer-events="none"
                     visibility="hidden"
                   />
                 </svg>
+                <%!-- The readout — the crosshair and the words beside it — is drawn by
+                the hook into a box LiveView never patches. `phx-update="ignore"`
+                makes its children the hook's own, so a step that redraws the
+                picture leaves them in place; appending them to the patched box
+                below was two nodes the server could remove, which had to be put
+                back after every update. The box covers the plot and lets the
+                pointer through, so every gesture still reaches the chart. --%>
+                <div
+                  id="replay-chart-readout"
+                  data-chart-readout
+                  phx-update="ignore"
+                  class="pointer-events-none absolute inset-0"
+                >
+                </div>
               </div>
             </div>
             <p id="replay-chart-x-name" class="text-center text-xs text-base-content/75">
@@ -836,6 +857,13 @@ defmodule ExTbpMontyWeb.StudioComponents do
           // units before the nearest drawn step is looked up.
           export default {
             mounted() {
+              // The readout lives in the box the server marked `phx-update="ignore"`.
+              // Children of an element LiveView patches are children it may remove —
+              // which is why the two nodes below used to be put back after every
+              // update. An ignored box is the hook's alone, so they are appended
+              // once and a step's patch leaves them where they are.
+              this.readout = this.el.querySelector("[data-chart-readout]")
+
               this.marker = document.createElement("div")
               this.marker.className =
                 "pointer-events-none absolute inset-y-0 w-px border-l border-dashed border-base-content/50"
@@ -851,28 +879,27 @@ defmodule ExTbpMontyWeb.StudioComponents do
               this.el.addEventListener("pointermove", event => this.hover(event))
               this.el.addEventListener("pointerleave", () => this.hide())
 
-              // Clicking a point is the shortest way to say "show me that step":
-              // the slider below the chart does the same thing, one drag at a time.
-              this.el.addEventListener("click", event => this.seek(event))
+              // Clicking the plot is an ordinary LiveView event: the picture draws
+              // a column per forty-eighth of its width, each carrying the step it
+              // stands for. A hook that pushed the same event was a second way to
+              // say one thing — and it had stopped working, calling a method the
+              // readout's refactor took away.
 
               // Zooming, panning and double-click-to-reset are the shared
               // `ChartZoom` hook around this box; what is left here is what only
-              // this chart does: the readout, and a click that moves the playhead.
+              // this chart does: the readout under the pointer.
 
               this.read()
             },
 
-            // LiveView re-renders this box whenever the step changes, and a
-            // re-render replaces its children — including the two nodes this
-            // hook appended. Without putting them back, hover writes into
-            // nodes nobody can see: it works until the first update.
+            // The picture changed, the readout did not have to be put back: it sits
+            // in its own box, so a patch of this one cannot take it with it.
             updated() {
               this.read()
-              this.attach()
             },
 
             attach() {
-              if (!this.el.contains(this.marker)) this.el.append(this.marker, this.label)
+              if (!this.readout.contains(this.marker)) this.readout.append(this.marker, this.label)
             },
 
             read() {
@@ -889,25 +916,8 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
               this.width = Number(this.el.dataset.width || 320)
               this.height = Number(this.el.dataset.height || 64)
-              this.from = Number(this.el.dataset.from || 0)
-              this.to = Number(this.el.dataset.to || 0)
             },
 
-            // Where a pointer is across the plot, in the chart's own units.
-            unitX(event) {
-              const box = this.el.getBoundingClientRect()
-              if (box.width === 0) return 0
-
-              return ((event.clientX - box.left) / box.width) * this.width
-            },
-
-            // And where that is in the window's own terms: the plot is the whole
-            // width of the box, so a position is a fraction of it.
-            positionOf(unitX) {
-              const fraction = unitX / Math.max(this.width, 1)
-
-              return this.from + fraction * (this.to - this.from)
-            },
             // What the pointer is over, read off the drawn line rather than off
             // the nearest stored point: a run of hundreds of steps has points a
             // few pixels apart, and a readout that jumps from one to the next
@@ -1037,13 +1047,6 @@ defmodule ExTbpMontyWeb.StudioComponents do
               this.label.style.bottom = ""
 
               this.label.hidden = false
-            },
-
-            seek(event) {
-              const nearest = this.nearest(event)
-              if (!nearest) return
-
-              this.pushEvent("replay_seek", {step: String(nearest.position)})
             },
 
             hide() {
