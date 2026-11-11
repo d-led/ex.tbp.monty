@@ -21,13 +21,14 @@ defmodule Monty.Studio.RunHistory do
   @topic "studio_runs"
 
   # Every field but the pictures, for `head/1`. Taken from the schema so a field
-  # added later is read by default rather than silently left behind.
-  @without_pictures Run.__schema__(:fields) -- [:timeline]
+  # added later is read by default rather than silently left behind. The log is
+  # one of them, read as text and decoded here — see `pictures_less/1`.
+  @without_log Run.__schema__(:fields) -- [:timeline, :log]
 
   # What a table draws. Neither the pictures nor the transcript: a row of a list
   # says which run it is, how it ended and what it cost, and 50 of them carrying
   # a log each is 50 transcripts nobody reads to render one page.
-  @table_fields @without_pictures -- [:log]
+  @table_fields @without_log
 
   @doc """
   Records a run that is starting.
@@ -506,12 +507,25 @@ defmodule Monty.Studio.RunHistory do
   end
 
   # The row a page draws from: its log, without the pictures.
+  #
+  # The log is asked for as text and decoded here. Handed over as a column it is
+  # the driver's document — seventy-one megabytes of it for a run of 42 401
+  # steps, turned into terms a value at a time by the adapter's own decoder
+  # before Ecto sees any of it. As text it is one binary, decoded once by `JSON`:
+  # 2 871 ms against 5 593 ms for that run, and the same document either way.
+  # `CAST(... AS text)` is how both adapters spell it — Postgres renders `jsonb`
+  # as its own text, and SQLite's column already is text, where the cast is a
+  # no-op. Verified on both: the desktop build's repo is started on a file, given
+  # a run, and `head/1` reads its steps, their evidence and their hypotheses back.
   defp pictures_less(query) do
     query
-    |> select([run], map(run, @without_pictures))
+    |> select([run], {map(run, @without_log), fragment("CAST(? AS text)", run.log)})
     |> Repo.all()
-    |> Enum.map(&struct(Run, &1))
+    |> Enum.map(fn {fields, log} -> struct(Run, Map.put(fields, :log, logged(log))) end)
   end
+
+  defp logged(nil), do: []
+  defp logged(text), do: JSON.decode!(text)
 
   defp pages(0, _per_page), do: 1
   defp pages(total, per_page), do: div(total + per_page - 1, per_page)
