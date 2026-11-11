@@ -210,6 +210,18 @@ defmodule ExTbpMonty.Core.MatcherNif do
   def top_indices(_evidence, _count), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  The lowest evidence in the column — the threshold that updates everything.
+
+  `evidence_threshold_config: "all"` is Monty's default and what the experiments
+  run, and a step asked for it once per graph. The answer is one number out of a
+  column of thousands, so it is read out of the bytes: decoding them into a list
+  to take a minimum of it was the largest single Elixir cost in a ten-object
+  step. `nil` when every value is a NaN, which is `Enum.min/1`'s answer for a
+  column of `nil`s.
+  """
+  def min_value(_column), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   The hypotheses whose evidence has reached `threshold`, in index order.
 
   `evidence` is `hypotheses` f64; the answer is `k` u32. The reference is the

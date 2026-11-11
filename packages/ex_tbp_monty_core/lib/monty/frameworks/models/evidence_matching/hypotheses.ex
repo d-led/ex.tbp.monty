@@ -170,6 +170,24 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   def max_evidence(%__MODULE__{} = hypotheses),
     do: evidence_at(hypotheses, argmax_evidence(hypotheses))
 
+  @doc """
+  The lowest evidence any hypothesis holds — the threshold that updates them all.
+
+  `evidence_threshold_config: "all"` asks this once per graph per step, and the
+  answer is one number: asked of the bytes, a minimum of six thousand of them no
+  longer costs six thousand decoded floats.
+  """
+  @spec min_evidence(t()) :: float() | nil
+  def min_evidence(%__MODULE__{evidence: <<>>}), do: nil
+
+  def min_evidence(%__MODULE__{} = hypotheses) do
+    if MatcherNif.loaded?() do
+      MatcherNif.min_value(evidence_bytes(hypotheses))
+    else
+      Enum.min(evidence(hypotheses), fn -> nil end)
+    end
+  end
+
   # numpy's `argmax`: the first index holding the highest value.
   defp argmax([]), do: 0
 

@@ -555,6 +555,40 @@ fn argmax_index(column: Binary) -> u32 {
 
 // -- what a step does with the evidence column ---------------------------------
 
+/// The lowest evidence in the column — the threshold that updates everything.
+///
+/// `evidence_threshold_config: "all"` is Monty's default and what the
+/// experiments run: a hypothesis is updated unless it is below every other one.
+/// A step asks this once per graph, and answering it by decoding six thousand
+/// floats into a list to take a minimum of them was the largest single Elixir
+/// cost in a ten-object step.
+///
+/// * `column` — `m` f64, one value per hypothesis.
+///
+/// The answer is one f64, or `nil` when every value is a NaN — which is
+/// `Enum.min/1`'s answer for a column of `nil`s, a NaN being greater than every
+/// number in Elixir's term order.
+#[rustler::nif]
+fn min_value(column: Binary) -> Option<f64> {
+    let count = column.len() / 8;
+    let mut lowest: Option<f64> = None;
+
+    for index in 0..count {
+        let value = f64_at(column.as_slice(), index * 8);
+
+        if value.is_nan() {
+            continue;
+        }
+
+        lowest = Some(match lowest {
+            Some(current) if current <= value => current,
+            _ => value,
+        });
+    }
+
+    lowest
+}
+
 /// The hypotheses whose evidence has reached `threshold`, in index order.
 ///
 /// Which hypotheses an observation is worth testing is a comparison per

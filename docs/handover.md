@@ -2190,3 +2190,32 @@ Two lessons, both already in §7's note about `check_orthonormal`:
   nothing" pins the order asked for, the same index twice, and the empty
   selection — cases a stride read with the wrong width or a missing reverse would
   break, and the earlier test did not cover.
+
+## 38. 2026-11-13: the threshold is one number, so it is asked of the bytes
+
+`evidence_threshold_config: "all"` is what the experiments run, and what it
+means is "update every hypothesis at or above the lowest" — one number out of a
+column of thousands. `EvidenceGraphLM.update_evidence/4` asked for it by
+decoding the whole column (`Hypotheses.evidence/1`) once per graph per step: on
+`base_config_10distinctobj_dist_agent` that was **19 306 decoded floats a
+step** of the 96 560 the step decoded in total, to take a minimum of them.
+
+There is a kernel for it now, `MatcherNif.min_value/1`, next to `argmax_index/1`
+whose column it reads the other end of, and `Hypotheses.min_evidence/1` is the
+one place a caller asks (`nil` when every value is a NaN, which is `Enum.min/1`'s
+answer for a column of `nil`s — a number sorts below an atom). The threshold
+itself takes the column in either form — the numbers or the set that keeps them —
+so `:mean` and `:median`, which need every value, still decode.
+
+Measured with `scripts/probe_step_cost.exs` and `scripts/probe_step_profile.exs`
+on the same experiment, tree before and after, six steps:
+
+- decode: 96 560 → 77 254 values and 18.8 → 14.3 ms per step;
+- the learning module's server: 1 717 210 → 1 628 710 reductions per step, and
+  the step 3 316 399 → 3 227 109 (−2.7 %);
+- wall 159 → 155 ms per step on this machine.
+
+About 4 % of a step, honestly counted — the same order as §37's geometry win and
+for the same reason: what is left is not one hot function but a long tail
+(`Enum.reduce/3` and `Enum.map/2` between them are a fifth of a step, spread
+over 300 000 calls; `KdTreeNif.nearest_many/3` is 8 % of it doing real work).

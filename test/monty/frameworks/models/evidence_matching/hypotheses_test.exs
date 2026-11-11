@@ -1,6 +1,7 @@
 defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
   use ExUnit.Case, async: true
 
+  alias ExTbpMonty.Core.MatcherNif
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
 
   defp hypothesis(evidence, location, possible \\ true) do
@@ -11,6 +12,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
       possible: [possible]
     )
   end
+
+  defp hypothesis_set(evidence) do
+    Enum.reduce(evidence, Hypotheses.empty(), fn value, set ->
+      Hypotheses.concatenate([set, hypothesis(value, [0.0, 0.0, 0.0])])
+    end)
+  end
+
+  defp bytes(values), do: for(value <- values, into: <<>>, do: <<value::little-float-64>>)
 
   describe "a set of hypotheses" do
     test "is empty, and has a count of zero" do
@@ -31,6 +40,31 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
         ])
 
       assert Hypotheses.count(set) == 2
+    end
+
+    # The lowest evidence is the threshold that updates the whole field, and it
+    # is asked of every graph of every step — so it is answered from the column's
+    # bytes, where a value that is not a number has no place in the comparison.
+    # `nil` is greater than every number in Elixir's term order, which is what
+    # makes "skip it" and `Enum.min/1` the same answer.
+    test "the lowest evidence skips the values that are not numbers" do
+      not_a_number = MatcherNif.not_a_number()
+
+      assert Hypotheses.min_evidence(hypothesis_set([0.4, 0.2, 0.9])) == 0.2
+
+      with_gaps = %Hypotheses{
+        Hypotheses.empty()
+        | evidence: not_a_number <> bytes([1.5]) <> not_a_number <> bytes([-0.5])
+      }
+
+      assert Hypotheses.min_evidence(with_gaps) == -0.5
+
+      assert Hypotheses.min_evidence(%Hypotheses{
+               with_gaps
+               | evidence: not_a_number <> not_a_number
+             }) == nil
+
+      assert Hypotheses.min_evidence(Hypotheses.empty()) == nil
     end
   end
 

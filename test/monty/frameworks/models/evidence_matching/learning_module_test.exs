@@ -1,8 +1,11 @@
 defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModuleTest do
   use ExUnit.Case, async: true
 
+  alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.InvalidEvidenceThresholdConfig
+
+  defp pose, do: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
 
   describe "which hypotheses a step is worth spending on" do
     test "a fixed number is the threshold, whatever the rest of the field says" do
@@ -32,6 +35,42 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModuleTest do
       for config <- [0.5, :mean, :median, :all, {:percent_of_max, 10.0}] do
         assert LearningModule.evidence_update_threshold(config, 0.0, []) == 0.0
       end
+    end
+
+    # The threshold is asked of the hypothesis set itself, once per graph per
+    # step, and the setting the experiments run needs one number of it. Answering
+    # from the column's bytes rather than from a decoded list is what keeps a
+    # step from decoding thousands of floats to take a minimum of them — so the
+    # test is that both forms answer the same, and that the set does not decode.
+    test "a set answers what its evidence column answers" do
+      hypotheses =
+        Hypotheses.concatenate([
+          Hypotheses.new(
+            evidence: [1.0],
+            locations: [[0.0, 0.0, 0.0]],
+            poses: [pose()],
+            possible: [true]
+          ),
+          Hypotheses.new(
+            evidence: [-2.5],
+            locations: [[1.0, 0.0, 0.0]],
+            poses: [pose()],
+            possible: [true]
+          ),
+          Hypotheses.new(
+            evidence: [3.0],
+            locations: [[2.0, 0.0, 0.0]],
+            poses: [pose()],
+            possible: [true]
+          )
+        ])
+
+      for config <- [0.5, :mean, :median, :all, {:percent_of_max, 10.0}] do
+        assert LearningModule.evidence_update_threshold(config, 10.0, hypotheses) ==
+                 LearningModule.evidence_update_threshold(config, 10.0, [1.0, -2.5, 3.0])
+      end
+
+      assert LearningModule.evidence_update_threshold(:all, 10.0, hypotheses) == -2.5
     end
   end
 

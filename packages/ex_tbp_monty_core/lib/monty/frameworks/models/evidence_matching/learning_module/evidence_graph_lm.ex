@@ -697,11 +697,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     # spaces one object at a time — so an object already behind us has been
     # pruned and the index the MLH was found at may no longer be in it. Monty
     # reads `self.current_mlh["evidence"]` here, which is the stored number.
+    #
+    # The hypotheses go over whole: the setting the experiments run asks the
+    # column one question — its lowest value — and handing over the numbers
+    # meant decoding all of them first, once per graph per step.
     update_threshold =
       LearningModule.evidence_update_threshold(
         lm.threshold_config,
         lm.current_mlh.evidence,
-        Hypotheses.evidence(hypotheses)
+        hypotheses
       )
 
     {lm, displaced} = displace(lm, hypotheses, displacement)
