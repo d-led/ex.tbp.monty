@@ -2471,3 +2471,42 @@ leaves open. What no page can answer is a host that consumes the key entirely:
 VS Code's Simple Browser takes Escape for the editor, which is where the "still
 no Esc" reports came from — the same page in a browser tab collapses in 7 ms, and
 the control itself is a click either way.
+
+### 39.3 The key that was never arriving, and the class that fought the patcher
+
+**The measurement that changed the answer.** Every "Escape works in N ms" before
+this was wrong, and wrong in the way that wastes a day: `page.keyboard.press`
+reports success whether or not the page receives anything. With a capture
+listener installed first — `window.addEventListener("keydown", e =>
+window.__seen.push(e.key), true)` — a trusted "a" and a trusted Escape both
+arrived at `__seen === []`. A synthetic `new KeyboardEvent("keydown", …)`
+dispatched inside the page collapses the panel in the same tick, which is what
+the earlier numbers were seeing. So: in the environment the agent drives, no
+keyboard input reaches the page at all; in the reader's window something eats
+Escape and, per the reader, reloads the view — nothing in our JavaScript calls
+`reload` except `phoenix_live_reload.js:84`, whose page strategy fires on a file
+change.
+
+**What a hook may write.** Expanding moved layout by assigning `class` from
+JavaScript to elements LiveView renders: a second author of the same markup,
+which is how a card could visibly go back to where it was. Full screen is one
+attribute now — `data-fullscreen`, rendered by the server and set by the browser
+— and CSS reads it: `position: fixed; inset: 0; padding; overflow: auto`, and the
+plot's height (72vh on the run page, 78vh on the experiment's cards). The button
+renders both heroicons and CSS picks one from the same attribute. Verified with a
+synthetic key, which is the only key that reaches the page here: expand →
+`data-fullscreen="true"`, `position: fixed`, plot 432 px; Escape → `"false"` in
+the same tick, `position: relative`, plot 208 px.
+
+**Still open**, in the order they cost a reader something:
+
+1. Escape in a window whose host takes the key. Nothing in the page can answer a
+   key it never receives; the control is a click, and it works.
+2. The picture still comes from the server, and on a stepping page a click's
+   `handle_event` waits behind the steps — measured 1.7 s, mitigated by a
+   four-second hold in each hook, not solved.
+3. `.ChartHover` appends its marker and label into `#replay-chart-hover`, which
+   LiveView also patches. `AGENTS.md` asks for `phx-update="ignore"` on any
+   element whose DOM a hook owns; these two nodes belong in the parent instead.
+4. The run page is 4.5 MB: 1.73 MB of polylines and a 1.28 MB `data-samples`
+   attribute the server re-encodes on every render.
