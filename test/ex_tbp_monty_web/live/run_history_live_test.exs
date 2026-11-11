@@ -854,6 +854,31 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert view |> element("#run-status") |> render() =~ "failed"
     end
+
+    # A step is several messages — the line, the beliefs, the pictures — and each
+    # announces the same step. A page that added a line per message showed the
+    # same step four times, which is the page inventing steps the run did not
+    # take.
+    test "a second message about one step does not add a second step", %{
+      conn: conn,
+      running: run
+    } do
+      publish(run.id, 0)
+      _ = :sys.get_state(Monty.Studio.RunStream)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#replay-panel") |> render() =~ "steps 0–0"
+
+      send(view.pid, {:studio, run.id, {:beliefs, %{}}})
+      send(view.pid, :refresh_due)
+      send(view.pid, {:studio, run.id, {:frames, []}})
+      send(view.pid, :refresh_due)
+
+      assert has_element?(view, "#log-0-0")
+      assert length(log_lines(render(view))) == 1
+      assert view |> element("#run-progress") |> render() =~ "step 1 / 3"
+    end
   end
 
   describe "one run" do
