@@ -155,11 +155,13 @@ defmodule Monty.Studio.Artifacts do
   `/runs/<id>/frames/12/patch-depth.png`, and there is one `frames` in a URL
   rather than two.
   """
-  @spec put_frame(binary(), non_neg_integer(), String.t(), String.t(), binary()) ::
+  @spec put_frame(binary(), non_neg_integer() | String.t(), String.t(), String.t(), binary()) ::
           {:ok, String.t()} | {:error, term()}
-  # Not a path from a request: the step is an integer and the sensor and kind
-  # are the names a config and a camera gave, inside a run's own directory —
-  # the same confinement `frame_path/2` checks again when the file is read.
+  # Not a path from a request: the step is a number this run gave its own
+  # pictures — a step number, or part-and-step for a run of several parts — and
+  # the sensor and kind are the names a config and a camera gave, inside a run's
+  # own directory: the same confinement `frame_path/2` checks again when the file
+  # is read.
   # sobelow_skip ["Traversal.FileModule"]
   def put_frame(run_id, step, sensor_id, kind, base64) do
     # The step is whatever a run numbers its pictures by: a step number for a run
