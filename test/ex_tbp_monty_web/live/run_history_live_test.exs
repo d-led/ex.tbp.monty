@@ -297,7 +297,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
     # The page asks the record how the run is doing twice a second, and the
     # record is written at an episode boundary: a page that took the steps from
-    # it too would lose the ones it was already showing every time it looked.
+    # it too would lose the ones it was already showing every time it looked —
+    # and the counters it asks for are not the only thing on the page that came
+    # from the row. What the run was given and run with is written once, when it
+    # starts, so a poll has to keep it rather than read `nil` over it.
     test "keeps the steps it was handed while it asks how the run is doing",
          %{conn: conn} do
       {:ok, run} =
@@ -316,10 +319,12 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
       assert view |> element("#replay-panel") |> render() =~ "steps 0–2"
+      assert view |> element("#run-inputs") |> render() =~ "episodes"
 
       send(view.pid, :show_poll)
 
       assert view |> element("#replay-panel") |> render() =~ "steps 0–2"
+      assert view |> element("#run-inputs") |> render() =~ "episodes"
       assert has_element?(view, "#log-0-0")
     end
   end

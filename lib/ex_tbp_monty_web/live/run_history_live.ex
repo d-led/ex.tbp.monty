@@ -464,10 +464,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   # The steps a page shows are the ones it was handed, and a poll is not a reason
   # to build them again: the stream is where they came from, the row is the same
-  # run written down. The configuration is kept for the same reason — it is
-  # written when the run starts and never changes.
-  defp keep_steps(%RunHistory.Run{} = fresh, %RunHistory.Run{} = shown),
-    do: %{fresh | log: shown.log, timeline: shown.timeline, config: shown.config}
+  # run written down. The three fields a counters read does not carry — the
+  # configuration, the inputs and the seed — are kept for the same reason: they
+  # are written when the run starts and never change, and a page that read them
+  # again would read `nil` and quietly print nothing where they were.
+  defp keep_steps(%RunHistory.Run{} = fresh, %RunHistory.Run{} = shown) do
+    %{
+      fresh
+      | log: shown.log,
+        timeline: shown.timeline,
+        config: shown.config,
+        inputs: shown.inputs,
+        seed: shown.seed
+    }
+  end
 
   defp streamed?(id), do: RunStream.count(id) > 0
 
@@ -1187,7 +1197,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       <section :if={@run} class="grid gap-3 lg:grid-cols-2">
         <div class="space-y-1">
           <h2 class="text-sm font-medium">Inputs</h2>
-          <dl class="overflow-hidden rounded-box border border-base-300 bg-base-100 text-xs">
+          <dl
+            id="run-inputs"
+            class="overflow-hidden rounded-box border border-base-300 bg-base-100 text-xs"
+          >
             <div
               :for={{key, value} <- inputs(@run)}
               class="flex gap-2 border-b border-base-300 px-2.5 py-1 last:border-0"
