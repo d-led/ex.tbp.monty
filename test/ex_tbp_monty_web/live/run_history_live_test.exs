@@ -236,11 +236,11 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       view |> element("#replay-expand") |> render_click()
 
-      assert view |> element("#replay-chart-panel") |> render() =~ "fixed inset-0"
+      assert view |> element("#replay-chart-panel") |> render() =~ ~s(data-fullscreen="true")
 
       view |> element("#replay-panel") |> render_keydown(%{"key" => "Escape"})
 
-      refute view |> element("#replay-chart-panel") |> render() =~ "fixed inset-0"
+      refute view |> element("#replay-chart-panel") |> render() =~ ~s(data-fullscreen="true")
     end
 
     test "and each band says which episode it is, without painting a handle under it",

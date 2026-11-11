@@ -40,7 +40,57 @@ defmodule ExTbpMontyWeb.Layouts do
 
     ~H"""
     <div id="app-root" phx-hook=".EscapeAnywhere" class="flex min-h-screen">
+      <%!-- Full screen is an attribute, not a class list. The server renders
+      `data-fullscreen` on a surface and the browser changes the same attribute
+      when a reader asks for it, so the two never hold different opinions about
+      the same element — a hook that rewrote `class` was a hook editing DOM the
+      server owns, and LiveView patches what it rendered.
+
+      The glyph follows the attribute too: both icons are in the button and CSS
+      picks one, which is one fewer thing for a hook to keep in step. --%>
+      <style :type={ExTbpMontyWeb.ColocatedCSS}>
+        [data-fullscreen] {
+          position: relative;
+        }
+
+        [data-fullscreen="true"] {
+          position: fixed;
+          inset: 0;
+          z-index: 50;
+          overflow: auto;
+          background-color: var(--color-base-100, #fff);
+          padding: 1rem;
+        }
+
+        #replay-chart-panel[data-fullscreen="true"] svg {
+          height: 72vh;
+        }
+
+        [id^="chart-card-"][data-fullscreen="true"] svg {
+          height: 78vh;
+        }
+
+        .fullscreen-glyph-in {
+          display: none;
+        }
+
+        [data-fullscreen="true"] .fullscreen-glyph-out {
+          display: none;
+        }
+
+        [data-fullscreen="true"] .fullscreen-glyph-in {
+          display: inline-flex;
+        }
+      </style>
       <script :type={Phoenix.LiveView.ColocatedHook} name=".EscapeAnywhere">
+        // Three browsers have spelled this key three ways: `key` is "Escape"
+        // everywhere current, "Esc" in the older ones, and the deprecated
+        // `keyCode` 27 is what is left when a keyboard or an extension reports
+        // nothing useful at all. A key that leaves full screen should not depend
+        // on which of those a reader's browser chose.
+        export const isEscape = (event) =>
+          event.key === "Escape" || event.key === "Esc" || event.keyCode === 27
+
         // Escape leaves full screen on every page, from one place.
         //
         // A page that owns a full-screen surface already answers Escape itself,
@@ -52,18 +102,12 @@ defmodule ExTbpMontyWeb.Layouts do
         export default {
           mounted() {
             this.escape = (event) => {
-              if (event.key !== "Escape") return
+              if (!isEscape(event)) return
 
-              const surface =
-                document.querySelector("[data-expanded=true]") ??
-                document.querySelector("#replay-chart-panel.fixed")
-
+              const surface = document.querySelector("[data-fullscreen=true]")
               if (surface === null) return
 
-              const control =
-                surface.querySelector("button[id^=chart-expand-]") ??
-                document.querySelector("#replay-expand")
-
+              const control = surface.querySelector("button[data-fullscreen-control]")
               if (control === null) return
 
               // The control's own `phx-click` is the page's own event: this

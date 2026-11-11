@@ -54,8 +54,16 @@ defmodule ExTbpMontyWeb.LocalTime do
   @doc """
   The hook that localises every `<time data-local-time>` under its element.
 
-  Rendered once per container, and it runs again after every patch, because a
-  live log keeps appending lines while it is read.
+  Rendered once per container, because a log of two thousand lines is two
+  thousand elements and one hook.
+
+  It has to answer twice, not once. A patch re-renders the container and
+  `updated/0` localises what it brought; a stream does not patch the container
+  at all — it inserts the new item into it — so `updated/0` never runs for a
+  line that arrived while the page was open, and that line kept the server's
+  `UTC` fallback beside older lines that had been localised. The run page's log
+  and its table of runs are both streams, so the hook watches its own subtree
+  for added times as well.
   """
   def local_time_hook(assigns) do
     ~H"""
@@ -67,11 +75,27 @@ defmodule ExTbpMontyWeb.LocalTime do
       export default {
         mounted() {
           this.localise()
+
+          // A stream inserts its items into the container instead of patching
+          // it, so `updated/0` is not called for them. Watching for added
+          // nodes is the only place the hook is told about a line it has not
+          // localised: the text it writes itself replaces a text node, which
+          // arrives here as a non-element and is ignored, so there is no loop.
+          this.observer = new MutationObserver((records) => {
+            for (const record of records) {
+              for (const node of record.addedNodes) {
+                if (node.nodeType === Node.ELEMENT_NODE) this.localise(node)
+              }
+            }
+          })
+          this.observer.observe(this.el, { childList: true, subtree: true })
+
           this.timer = setInterval(() => this.tick(), 1000)
         },
 
         destroyed() {
           clearInterval(this.timer)
+          this.observer.disconnect()
         },
 
         updated() {
@@ -87,10 +111,14 @@ defmodule ExTbpMontyWeb.LocalTime do
           }
         },
 
-        localise() {
-          for (const node of this.el.querySelectorAll("time[datetime]")) {
+        // The container on mount and after a patch, one stream item when it
+        // is inserted: whoever brings the times, the times are localised.
+        localise(root = this.el) {
+          for (const node of root.querySelectorAll("time[datetime]")) {
             this.write(node)
           }
+
+          if (root.matches("time[datetime]")) this.write(root)
         },
 
         write(node) {

@@ -575,17 +575,19 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # is the one they wanted to read.
       view |> element("#chart-expand-learning_module_0") |> render_click()
 
+      # Full screen is an attribute the server renders and the browser also
+      # sets, and CSS says what it looks like: one value, two authors, no class
+      # list for them to disagree about.
       assert view |> element("#chart-card-learning_module_0") |> render() =~
-               "rounded-field fixed inset-0"
+               ~s(data-fullscreen="true")
 
       # Escape is what a full-screen anything answers to, and the control is the
       # way back for anyone without a keyboard. The key is the grid's own hook
-      # (`.EscapeCollapse`), which answers it by sending this event — the key
-      # itself is the browser's, and `phx-window-keydown` did not deliver it.
+      # (`.EscapeCollapse`), which answers it by sending this event.
       view |> element("#charts") |> render_hook("collapse", %{})
 
       refute view |> element("#chart-card-learning_module_0") |> render() =~
-               "rounded-field fixed inset-0"
+               ~s(data-fullscreen="true")
 
       assert has_element?(view, "#chart-expand-learning_module_0")
     end

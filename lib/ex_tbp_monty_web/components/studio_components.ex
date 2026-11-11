@@ -449,16 +449,8 @@ defmodule ExTbpMontyWeb.StudioComponents do
       <div
         :if={@chart}
         id="replay-chart-panel"
-        class={
-          [
-            # A control in this row is focused the moment a reader touches it, and
-            # its focus ring is drawn outside its box; against the plot's own
-            # border, a two-pixel gap made the picker look as if it lay on top of
-            # the chart. The gap is the ring's width and a little more.
-            "space-y-2 pt-1",
-            @expanded && "fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
-          ]
-        }
+        data-fullscreen={to_string(@expanded)}
+        class="space-y-2 pt-1"
       >
         <div class="flex flex-wrap items-center gap-1.5">
           <form id="replay-series" phx-change="replay_series">
@@ -623,15 +615,22 @@ defmodule ExTbpMontyWeb.StudioComponents do
               brush that clicks. --%>
               <button
                 id="replay-expand"
+                data-fullscreen-control
                 phx-click="replay_expand"
                 class="btn btn-sm size-8 min-h-0 p-0 absolute right-2 top-2 z-10 border border-base-300"
                 aria-label={if @expanded, do: "leave full screen (Esc)", else: "full screen"}
                 title={if @expanded, do: "leave full screen (Esc)", else: "full screen"}
               >
-                <.icon
-                  name={if @expanded, do: "hero-arrows-pointing-in", else: "hero-arrows-pointing-out"}
-                  class="size-4"
-                />
+                <%!-- Both glyphs, and CSS picks one from the surface's own
+                `data-fullscreen`: a hook that swapped the icon was a hook
+                writing into markup the server rendered, and the two could
+                disagree for the length of a round trip. --%>
+                <span class="fullscreen-glyph-out">
+                  <.icon name="hero-arrows-pointing-out" class="size-4" />
+                </span>
+                <span class="fullscreen-glyph-in">
+                  <.icon name="hero-arrows-pointing-in" class="size-4" />
+                </span>
               </button>
               <div
                 id="replay-chart-hover"

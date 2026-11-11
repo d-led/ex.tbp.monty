@@ -707,72 +707,56 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             class="grid gap-2"
           >
             <script :type={Phoenix.LiveView.ColocatedHook} name=".EscapeCollapse">
-              // Escape leaves full screen. It is listened for here rather than
-              // declared as `phx-window-keydown` on this element: that binding
-              // never reached the server on this page, and a key that does
-              // nothing is worse than one that was never offered.
+              import { isEscape } from "../../../../../assets/js/keys.js"
+
+              // Escape leaves full screen at once, in the browser, and tells the
+              // server after: while a run is stepping that round trip is what
+              // made the key feel like it did nothing.
               //
-              // It leaves at once, in the browser, and only then tells the
-              // server. The picture is the server's — the plot is drawn for the
-              // box the browser measures — but the card covering the page is
-              // not something a reader should wait a round trip to be rid of,
-              // and while a run is stepping that round trip is what made Escape
-              // feel like a key that did nothing. What the browser drops here is
-              // exactly what the server's next patch removes, so the two agree
-              // on the frame after.
+              // Both the click and the key set one attribute — the same one the
+              // server renders — and CSS decides what full screen looks like.
+              // Nothing here rewrites a class: these cards are patched by
+              // LiveView, and a hook that writes their attributes is a second
+              // author of the same markup.
               export default {
                 mounted() {
                   this.escape = (event) => {
-                    if (event.key !== "Escape") return
+                    if (!isEscape(event)) return
 
-                    const card = this.el.querySelector("[data-expanded=true]")
+                    const card = this.el.querySelector("[data-fullscreen=true]")
                     if (card === null) return
 
                     this.pending = { card: card, expanded: false, at: Date.now() }
-                    this.leaveFullScreen(card)
+                    this.setFullScreen(card, false)
                     this.pushEvent("collapse", {})
                   }
 
                   // Capture phase, on the window: the first listener a key
                   // reaches. Bubbling from `window` comes after every element
                   // handler, and an open `<select>`, a `<dialog>` or anything
-                  // that calls `stopPropagation` takes the key on the way —
-                  // which is a key that works everywhere except where the
-                  // reader's focus happens to be.
+                  // that calls `stopPropagation` takes the key on the way.
                   window.addEventListener("keydown", this.escape, true)
-                  // And on the way up: an embedded view can consume the keydown
-                  // before the page ever sees it, and the keyup is a second
-                  // chance at the same intention.
                   window.addEventListener("keyup", this.escape, true)
 
-                  // The box changes here, on the click itself. The picture is
-                  // the server's and arrives when it can — on this page that can
-                  // be a second or two, because the same process is stepping a
-                  // run — but a card that fills the window does not need the
-                  // picture to be redrawn to fill the window. LiveView's own
-                  // `phx-click` still runs; what it finds when it does is the
-                  // layout it was about to draw.
+                  // The box changes here, on the click itself; the picture is
+                  // the server's and arrives when it can.
                   this.el.addEventListener("click", (event) => {
-                    const button = event.target.closest?.("button[id^=chart-expand-]")
+                    const button = event.target.closest?.("[data-fullscreen-control]")
                     if (button === undefined || button === null) return
 
-                    const card = button.closest("[data-expanded]")
+                    const card = button.closest("[data-fullscreen]")
                     if (card === null) return
 
-                    const expanded = !(card.dataset.expanded === "true")
+                    const expanded = card.dataset.fullscreen !== "true"
                     this.pending = { card: card, expanded: expanded, at: Date.now() }
-
-                    if (expanded) this.enterFullScreen(card)
-                    else this.leaveFullScreen(card)
+                    this.setFullScreen(card, expanded)
                   })
                 },
 
-                // A patch computed before the click can land after it, and it
-                // says the card is where it used to be — which on a page that is
-                // stepping a run is not a long window: the click waits behind
-                // the steps, so the answer can be a second and a half late. So
-                // the layout the reader asked for is held until the server's own
-                // render agrees with it, and no longer: a real answer always wins.
+                // A patch computed before the click can land after it and put
+                // the card back where it was, so the layout that was asked for
+                // is held until the server's render agrees — no longer than four
+                // seconds, so a real answer always wins.
                 updated() {
                   if (this.pending === undefined) return
 
@@ -783,14 +767,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                     return
                   }
 
-                  if ((card.dataset.expanded === "true") === expanded) {
+                  if ((card.dataset.fullscreen === "true") === expanded) {
                     this.pending = undefined
 
                     return
                   }
 
-                  if (expanded) this.enterFullScreen(card)
-                  else this.leaveFullScreen(card)
+                  this.setFullScreen(card, expanded)
                 },
 
                 destroyed() {
@@ -798,63 +781,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                   window.removeEventListener("keyup", this.escape, true)
                 },
 
-                // The same two layouts the server renders, written out in the
-                // browser so a click can show one before the round trip is over.
-                // They have to agree with the template's classes or the card
-                // jumps when the patch lands.
-                enterFullScreen(card) {
-                  card.className = "rounded-field fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
-                  card.dataset.expanded = "true"
-
-                  const figure = card.querySelector("figure")
-                  if (figure !== null) {
-                    figure.classList.remove("h-full", "min-h-0", "flex-1")
-                    figure.classList.add("flex", "flex-col")
-                  }
-
-                  const svg = card.querySelector("svg")
-                  if (svg !== null) {
-                    svg.dataset.expanded = "true"
-                    svg.classList.remove("h-52", "min-h-0", "flex-1")
-                    svg.classList.add("h-[78vh]")
-                  }
-
-                  const button = card.querySelector("button[id^=chart-expand-]")
-                  if (button !== null) {
-                    button.setAttribute("aria-label", "leave full screen (Esc)")
-                    const glyph = button.querySelector("span")
-                    if (glyph !== null) {
-                      glyph.classList.replace("hero-arrows-pointing-out", "hero-arrows-pointing-in")
-                    }
-                  }
-                },
-
-                leaveFullScreen(card) {
-                  card.className = "rounded-field relative"
-                  card.dataset.expanded = "false"
-
-                  const figure = card.querySelector("figure")
-                  if (figure !== null) {
-                    figure.classList.remove("flex", "h-full", "min-h-0", "flex-col", "flex-1")
-                  }
-
-                  const svg = card.querySelector("svg")
-                  if (svg !== null) {
-                    svg.dataset.expanded = "false"
-                    svg.classList.remove("min-h-0", "flex-1", "h-[78vh]")
-                    svg.classList.add("h-52")
-                  }
-
-                  const button = card.querySelector("button[id^=chart-expand-]")
-                  if (button !== null) {
-                    button.setAttribute("aria-label", "full screen")
-                    // The glyph is a heroicon span named by its class: leaving
-                    // full screen is the picture expanding again.
-                    const glyph = button.querySelector("span")
-                    if (glyph !== null) {
-                      glyph.classList.replace("hero-arrows-pointing-in", "hero-arrows-pointing-out")
-                    }
-                  }
+                setFullScreen(card, expanded) {
+                  card.dataset.fullscreen = expanded ? "true" : "false"
                 }
               }
             </script>
@@ -862,22 +790,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               :for={{module_id, chart} <- @charts}
               id={"chart-card-#{module_id}"}
               data-expanded={to_string(@expanded == module_id)}
-              class={
-                [
-                  "rounded-field",
-                  # One position utility at a time. `relative` and `fixed` are both
-                  # `.position` declarations, and Tailwind emits `relative` after
-                  # `fixed`, so a class list holding both kept the card where it
-                  # was: expanding it added padding to the grid cell and made the
-                  # chart a little *smaller*, which is what full screen looked
-                  # like. The fixed card is its own containing block, so the
-                  # button beside it needs no `relative` while it is expanded.
-                  if(@expanded == module_id,
-                    do: "fixed inset-0 z-50 overflow-auto bg-base-100 p-4",
-                    else: "relative"
-                  )
-                ]
-              }
+              data-fullscreen={to_string(@expanded == module_id)}
+              class="rounded-field"
             >
               <ExTbpMontyWeb.EvidenceChart.evidence_chart
                 module_id={module_id}
@@ -890,6 +804,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 <:control>
                   <button
                     id={"chart-expand-#{module_id}"}
+                    data-fullscreen-control
                     phx-click="expand"
                     phx-value-module={module_id}
                     class="btn btn-sm size-8 min-h-0 p-0 absolute right-2 top-2 z-10 border border-base-300"
@@ -900,14 +815,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                       if @expanded == module_id, do: "leave full screen (Esc)", else: "full screen"
                     }
                   >
-                    <.icon
-                      name={
-                        if @expanded == module_id,
-                          do: "hero-arrows-pointing-in",
-                          else: "hero-arrows-pointing-out"
-                      }
-                      class="size-4"
-                    />
+                    <span class="fullscreen-glyph-out">
+                      <.icon name="hero-arrows-pointing-out" class="size-4" />
+                    </span>
+                    <span class="fullscreen-glyph-in">
+                      <.icon name="hero-arrows-pointing-in" class="size-4" />
+                    </span>
                   </button>
                 </:control>
               </ExTbpMontyWeb.EvidenceChart.evidence_chart>

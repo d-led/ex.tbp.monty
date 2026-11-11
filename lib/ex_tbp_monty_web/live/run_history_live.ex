@@ -1243,21 +1243,27 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         phx-window-keyup="replay_collapse"
       >
         <script :type={Phoenix.LiveView.ColocatedHook} name=".EscapeReplay">
+          import { isEscape } from "../../../../../assets/js/keys.js"
+
           // Escape leaves full screen at once, in the browser, and tells the
           // server after. It used to be `phx-window-keydown` on this section,
           // which is a round trip: while a run is stepping that round trip is
-          // what made Escape feel like a key that does nothing. What the browser
-          // drops here is what the server's next patch removes anyway.
+          // what made Escape feel like a key that does nothing.
+          //
+          // It sets one attribute, which the server also renders, and CSS does
+          // the rest. What it must not do is rewrite `class`: this element is
+          // patched by LiveView, and a hook that writes its attributes is a
+          // second author of the same markup.
           export default {
             mounted() {
               this.escape = (event) => {
-                if (event.key !== "Escape") return
+                if (!isEscape(event)) return
 
-                const panel = this.el.querySelector("#replay-chart-panel")
-                if (panel === null || !panel.className.includes("fixed")) return
+                const panel = this.el.querySelector("[data-fullscreen=true]")
+                if (panel === null) return
 
                 this.pending = { panel: panel, expanded: false, at: Date.now() }
-                this.leaveFullScreen(panel)
+                this.setFullScreen(panel, false)
                 this.pushEvent("replay_collapse", {})
               }
 
@@ -1268,25 +1274,21 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               // works everywhere except where the reader's focus happens to be.
               window.addEventListener("keydown", this.escape, true)
               // And on the way up: an embedded view can consume the keydown
-              // before the page ever sees it, and the keyup is a second chance
-              // at the same intention.
+              // before the page ever sees it, and the keyup is a second chance.
               window.addEventListener("keyup", this.escape, true)
 
               // The box changes here, on the click itself; the picture follows
-              // when the server can draw it. A plot that fills the window does
-              // not need a redraw to fill the window.
+              // when the server can draw it.
               this.el.addEventListener("click", (event) => {
-                const button = event.target.closest?.("#replay-expand")
+                const button = event.target.closest?.("[data-fullscreen-control]")
                 if (button === undefined || button === null) return
 
                 const panel = this.el.querySelector("#replay-chart-panel")
                 if (panel === null) return
 
-                const expanded = !panel.className.includes("fixed")
+                const expanded = panel.dataset.fullscreen !== "true"
                 this.pending = { panel: panel, expanded: expanded, at: Date.now() }
-
-                if (expanded) this.enterFullScreen(panel)
-                else this.leaveFullScreen(panel)
+                this.setFullScreen(panel, expanded)
               })
             },
 
@@ -1304,14 +1306,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                 return
               }
 
-              if (panel.className.includes("fixed") === expanded) {
+              if ((panel.dataset.fullscreen === "true") === expanded) {
                 this.pending = undefined
 
                 return
               }
 
-              if (expanded) this.enterFullScreen(panel)
-              else this.leaveFullScreen(panel)
+              this.setFullScreen(panel, expanded)
             },
 
             destroyed() {
@@ -1319,34 +1320,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               window.removeEventListener("keyup", this.escape, true)
             },
 
-            // The two layouts the server renders, written out here so a click
-            // shows one before the round trip is over. They have to agree with
-            // the component's classes or the plot jumps when the patch lands.
-            enterFullScreen(panel) {
-              panel.className = "space-y-2 pt-1 fixed inset-0 z-50 overflow-auto bg-base-100 p-4"
-              this.flipGlyph(panel, "in")
-            },
-
-            leaveFullScreen(panel) {
-              panel.className = "space-y-2 pt-1"
-              this.flipGlyph(panel, "out")
-            },
-
-            // The glyph is a heroicon span named by its class: "in" is the
-            // picture shrinking back to its cell, "out" is it filling the screen.
-            flipGlyph(panel, direction) {
-              const button = panel.querySelector("#replay-expand")
-              if (button === null) return
-
-              const leaving = direction === "out"
-              button.setAttribute("aria-label", leaving ? "full screen" : "leave full screen (Esc)")
-
-              const glyph = button.querySelector("span")
-              if (glyph === null) return
-
-              glyph.classList.remove("hero-arrows-pointing-in", "hero-arrows-pointing-out")
-              glyph.classList.add(leaving ? "hero-arrows-pointing-out" : "hero-arrows-pointing-in")
-            },
+            setFullScreen(panel, expanded) {
+              panel.dataset.fullscreen = expanded ? "true" : "false"
+            }
           }
         </script>
         <ExTbpMontyWeb.StudioComponents.replay
