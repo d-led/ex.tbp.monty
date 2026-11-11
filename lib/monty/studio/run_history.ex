@@ -150,7 +150,7 @@ defmodule Monty.Studio.RunHistory do
         episodes_done: episodes_done(run.episodes_done, new_log)
     }
 
-    if appendable?() do
+    if appendable?(opts) do
       append_steps(run, new_log, new_timeline, stepped, opts)
     else
       # An adapter with no append writes the record whole, so it needs the steps
@@ -194,9 +194,19 @@ defmodule Monty.Studio.RunHistory do
   end
 
   # Postgres, and only Postgres: the statement appends without sending what the
-  # row already holds.
-  defp appendable?,
-    do: ExTbpMonty.Database.repo_module().__adapter__() == Ecto.Adapters.Postgres
+  # row already holds. Any other adapter — the desktop build's SQLite is the one
+  # that exists — has no `||` over a `jsonb` column, so the row is rewritten and
+  # the whole transcript has to travel with the batch.
+  #
+  # `:append` says which of the two this write is. Nothing sets it but a test: the
+  # rewrite is the path a desktop user's run takes, and asking a Postgres test
+  # database to take it is the only way to have it tested at all.
+  defp appendable?(opts) do
+    case Keyword.fetch(opts, :append) do
+      {:ok, append?} -> append?
+      :error -> ExTbpMonty.Database.repo_module().__adapter__() == Ecto.Adapters.Postgres
+    end
+  end
 
   defp append_steps(%Run{id: id}, new_log, new_timeline, stepped, opts) do
     log = Jason.encode!(new_log)

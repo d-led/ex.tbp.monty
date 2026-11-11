@@ -169,8 +169,8 @@ defmodule Monty.Studio.RunHistoryTest do
       assert Monty.Studio.RunStream.count(run.id) == 5
     end
 
+    # An experiment page polled the whole record twice a second: 252 MB per
     test "a page's poll reads the row without its transcript" do
-      # An experiment page polled the whole record twice a second: 252 MB per
       # request by the end of a twenty-thousand-step run, while the run was trying
       # to step. What a poll needs is the state and the counters.
       {:ok, run} = RunHistory.start(@attributes)
@@ -183,6 +183,34 @@ defmodule Monty.Studio.RunHistoryTest do
       assert polled.log == []
       assert polled.timeline == []
       assert Enum.map(RunHistory.head(run.id).log, & &1["step"]) == [0]
+    end
+
+    # The desktop build's record is SQLite, which has no `||` over the column the
+    # transcript lives in: a boundary rewrites the row whole. So what it already
+    # holds has to travel with the batch, or every boundary after the first would
+    # drop the steps before it — a run's history quietly shrinking to its last
+    # episode. Nothing else in the suite takes this path.
+    test "an adapter that cannot append writes the whole transcript" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      first = [%{"step" => 0, "episode" => 0}, %{"step" => 1, "episode" => 0}]
+
+      {:ok, saved} =
+        RunHistory.checkpoint_steps(run, first, [moment(0), moment(1)],
+          append: false,
+          timeline: :skip
+        )
+
+      {later, later_moments} = {[%{"step" => 2, "episode" => 0}], [moment(2)]}
+
+      {:ok, _saved} =
+        RunHistory.checkpoint_steps(saved, later, later_moments,
+          append: false,
+          timeline: :skip
+        )
+
+      assert Enum.map(RunHistory.get(run.id).log, & &1["step"]) == [0, 1, 2]
+      assert RunHistory.get(run.id).steps_done == 3
     end
 
     test "a run closed without its worker still has the steps it took" do
