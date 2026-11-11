@@ -2351,3 +2351,37 @@ and the two remaining kinds of cost are the columns that are decoded because a
 consumer needs the values (`calculate_slopes/1`, `vote_evidence/3`, the detailed
 stats a configured logger asks for) and the per-pixel Elixir in the sensor
 modules, which do not appear as one hot function at all.
+
+### 38.6 Where the tail is, item by item, and why none of it is a commit
+
+After §38.2 and §38.4 the profile is a long tail. Each item below was sized before
+being attempted; none is worth its risk, and the sizes are here so the next
+session does not re-measure them:
+
+- **The depth image's per-pixel unprojection** (`place_in/5`, `place_pixel/6`) is
+  8 % of a step's _words_, which made it look like the sensor side's biggest cost.
+  Measured on its own at the real size — 64×128, two surfaces, world
+  coordinates — `DepthTo3DLocations.call/3` is **1.28 ms** per image. The sensor
+  modules' 600 k reductions are spread over the whole patch pipeline, not this
+  loop, and hoisting the per-column factors out of it (which is bit-exact: same
+  left-to-right order) would save a few tenths of a millisecond.
+- **`calculate_slopes/1` decodes every hypothesis' slope once per step per
+  graph**, and the one reader of the decoded list is
+  `TheoreticalLimitLMLoggingMixin` — an experiment no config in the tree runs.
+  It is a Monty-shaped computation (Monty builds the same telemetry dict every
+  step), so dropping it is a _deviation_, not a speed-up, and would want its line
+  in `docs/monty-differences.md`. Sized at ~2 % of a step.
+- **`Hypotheses.index_bytes/1`** is this session's own overhead — `take/2`
+  encodes the indices for `gather_rows/3`, 5 words a call, 2.95 % of a step's
+  words and ~1 % of its time. Removing it means a kernel that takes the list
+  instead of the bytes, for a per cent.
+- **What is left is diffuse**: `Enum.map/2` 5.7 % over 106 557 calls, `Enum.reduce`
+  4.9 %, `decode` 6.7 %, `nearest_many/3` 5.5 % doing the k-d search it is for.
+  There is no function left whose shape is wrong — only many small ones that are
+  correct and Elixir.
+
+So the next step here is a design decision, not another kernel: either a kernel
+that owns a whole update (the hypothesis updater's build-and-blend pass, which is
+where `List.duplicate`/`Enum.concat`/`flat_map` live) or the numeric core on
+EXLA, which is the standing ask and the only thing that reaches the ~50 ms target
+at ten objects.
