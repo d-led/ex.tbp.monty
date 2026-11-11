@@ -1389,15 +1389,29 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # A step is recorded whatever happens to the picture — that is a cheap append —
   # but the picture itself is drawn at most `@chart_interval` apart, and a step
   # that arrives between two drawings asks for one rather than drawing it.
+  #
+  # A picture can only change when the run puts a step *inside* the window being
+  # drawn, or when the window itself moves. A reader zoomed into a stretch the run
+  # has already passed is looking at a finished picture: redrawing it four times a
+  # second — the same SVG, re-sent — is what made the page fight the reader, every
+  # keystroke queuing behind a drawing that could not have changed, until the
+  # socket gave up.
   defp redraw_when_due(socket) do
     now = System.monotonic_time(:millisecond)
 
-    if now - Map.get(socket.assigns, :chart_drawn_at, 0) >= chart_interval() do
-      socket
-      |> assign(:chart_drawn_at, now)
-      |> then(&assign_charts(&1, &1.assigns.beliefs))
-    else
-      schedule_redraw(socket)
+    cond do
+      not drawing_can_change?(socket) ->
+        # The extent still moves, because a zoom is measured against it; what
+        # does not move is the drawing.
+        assign(socket, :chart_extent, extent_of(socket.assigns.beliefs))
+
+      now - Map.get(socket.assigns, :chart_drawn_at, 0) >= chart_interval() ->
+        socket
+        |> assign(:chart_drawn_at, now)
+        |> then(&assign_charts(&1, &1.assigns.beliefs))
+
+      true ->
+        schedule_redraw(socket)
     end
   end
 
@@ -1415,12 +1429,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp assign_charts(socket, histories) do
     labels = Map.get(socket.assigns, :chart_labels, %{})
 
-    longest =
-      histories
-      |> Map.values()
-      |> Enum.max_by(&length/1, fn -> [] end)
-
-    extent = Chart.extent(longest)
+    extent = extent_of(histories)
 
     # The window the chart is drawn for, which is the one asked for except while
     # following: the label beside the chart names this, so a page that drew one
@@ -1437,6 +1446,26 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       chart_window: window,
       chart_extent: extent
     )
+  end
+
+  # How far the run has got, as the chart reads it: the longest history there is.
+  defp extent_of(histories) do
+    histories
+    |> Map.values()
+    |> Enum.max_by(&length/1, fn -> [] end)
+    |> Chart.extent()
+  end
+
+  # Whether a drawing started now could differ from the one on screen.
+  defp drawing_can_change?(socket) do
+    case {
+      Map.get(socket.assigns, :follow, true),
+      Map.get(socket.assigns, :chart_window),
+      Map.get(socket.assigns, :chart_extent)
+    } do
+      {false, {_from, to}, {_first, last}} -> last <= to
+      _following_or_not_drawn_yet -> true
+    end
   end
 
   # How big the expanded chart's box is, as the browser measured it. A screen is

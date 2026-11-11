@@ -72,7 +72,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
       }
     >
       <figcaption class={[
-        "flex items-baseline justify-between px-0.5 pb-1 font-mono text-[11px] text-base-content/60",
+        "flex shrink-0 flex-wrap items-baseline justify-between gap-x-2 px-0.5 pb-1 font-mono text-[11px] text-base-content/60",
         @expanded && "pr-8"
       ]}>
         <span>{@module_id}</span>
@@ -238,7 +238,7 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           />
         </g>
       </svg>
-      <ul class="flex flex-wrap gap-x-3 gap-y-1 px-0.5 pb-0.5 text-[11px]">
+      <ul class="flex shrink-0 flex-wrap gap-x-3 gap-y-1 px-0.5 pb-0.5 text-[11px]">
         <li :for={series <- @chart.legend} class="flex items-center gap-1">
           <span
             class="evidence-chart__swatch inline-block size-2 rounded-full"
