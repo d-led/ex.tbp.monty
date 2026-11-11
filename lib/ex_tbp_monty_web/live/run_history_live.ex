@@ -246,7 +246,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp put_configuration(socket, run), do: assign(socket, configuration: configuration(run))
 
   defp assign_run(%{"id" => id}, socket) do
-    case RunHistory.head(id) do
+    case read_run(socket, id) do
       nil ->
         {:noreply,
          assign(socket, run: nil, moment: nil, configuration: [])
@@ -306,33 +306,75 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # newer of the two, and the only one that has the step being taken. Once the
   # run settles its row has everything and the stream has been dropped, so which
   # of the two answered is not something a caller has to know.
+  defp with_steps(%RunHistory.Run{} = run) do
+    case steps_after(run) do
+      {:grown, grown} -> grown
+      _nothing_newer -> run
+    end
+  end
+
+  # A step is published on the run's topic, which this page already listens to,
+  # and it is in memory here: reading the row again for it would decode an
+  # episode's log to learn what this process was just told. So a step adds what
+  # the stream has that the page does not, and the row is read when this node
+  # has no stream of the run at all — a run another node steps, or one whose
+  # steps were only ever written down — and when the run ends.
+  defp take_steps(%{assigns: %{live_action: :show, run: %RunHistory.Run{id: id} = run}} = socket) do
+    case steps_after(run) do
+      :no_stream ->
+        refresh_run(socket, id)
+
+      :nothing_newer ->
+        socket
+
+      {:grown, grown} ->
+        socket |> put_run(grown) |> append_log(grown) |> assign_replay(grown, :follow)
+    end
+  end
+
+  defp take_steps(socket), do: socket
+
+  # The steps the page does not have yet. The stream numbers a run's steps from
+  # its first one, so a page showing a thousand of them asks for the
+  # thousand-and-first rather than for a copy of the thousand. Nothing newer than
+  # what the page holds is either a stream that stops where the page does, or no
+  # stream at all — and only the second means the row may hold steps this page
+  # does not, which is why the two are answered differently.
+  defp steps_after(%RunHistory.Run{id: id} = run) do
+    case RunStream.count(id) do
+      0 ->
+        :no_stream
+
+      held ->
+        if length(run.log) >= held and length(run.timeline) >= held,
+          do: :nothing_newer,
+          else: {:grown, grown(run)}
+    end
+  end
+
+  # The log and the moments are topped up separately, because they stop at
+  # different places: `head/1` is asked for everything a page reads between steps
+  # except the pictures, so a page that has just read a row has its steps and
+  # none of their moments, and asks for those from the beginning — once, and then
+  # never again while the run steps.
   #
   # The counts and the timestamp are taken from the steps themselves, not left as
   # the row's: a header reading `steps_done` off a row written an episode ago
   # would say "0 steps · nothing recorded for a minute" about a run that is
   # stepping, which is the page lying about the one thing it is for.
-  defp with_steps(%RunHistory.Run{id: id} = run) do
-    case RunStream.steps(id) do
-      {[], []} ->
-        run
+  defp grown(%RunHistory.Run{} = run) do
+    {fresh_log, _moments} = RunStream.steps_from(run.id, length(run.log) - 1)
+    {_steps, fresh_moments} = RunStream.steps_from(run.id, length(run.timeline) - 1)
+    log = run.log ++ fresh_log
 
-      {log, timeline} ->
-        # The stream holds a run from its first step, so it is never shorter than
-        # the row for a run this node is stepping. If it ever is, the row is the
-        # one to believe: a page must not lose steps it was already showing.
-        if length(log) < length(run.log) do
-          run
-        else
-          %{
-            run
-            | log: log,
-              timeline: timeline,
-              steps_done: length(log),
-              episodes_done: RunHistory.episodes_in(log),
-              updated_at: newest(log) || run.updated_at
-          }
-        end
-    end
+    %{
+      run
+      | log: log,
+        timeline: run.timeline ++ fresh_moments,
+        steps_done: length(log),
+        episodes_done: RunHistory.episodes_in(log),
+        updated_at: newest(fresh_log) || run.updated_at
+    }
   end
 
   # When the last step was taken: the entry's own clock, which is the instant a
@@ -375,7 +417,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp refresh_run(socket, id) do
-    case RunHistory.head(id) do
+    case read_run(socket, id) do
       nil ->
         assign(socket, run: nil)
 
@@ -388,6 +430,46 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         |> assign_replay(run, :follow)
     end
   end
+
+  # What a page reads between steps. A run this node is stepping has its steps in
+  # memory, and the copy of them that carries an episode and what a module
+  # believed is the stream's; what the row adds is how the run is doing. Reading
+  # the transcript twice a second to learn that is the page keeping the run's
+  # whole log in flight while the run is trying to step, so the row is asked for
+  # the counters and the page keeps the steps it has.
+  #
+  # A run with no stream here — one that has settled, or one another node steps —
+  # is read whole from its row, which is then the only account of it.
+  defp read_run(%{assigns: %{run: %RunHistory.Run{id: id} = shown}}, id) do
+    if streamed?(id) do
+      case RunHistory.progress(id) do
+        nil -> nil
+        fresh -> keep_steps(fresh, shown)
+      end
+    else
+      RunHistory.head(id)
+    end
+  end
+
+  # A run opened for the first time: the row is read whole because the fields a
+  # page shows once — the configuration, the seed, when it started — are in it,
+  # and the steps are not taken from it when the stream has them, because the
+  # stream's copy is the one that carries an episode and a module's beliefs.
+  defp read_run(_socket, id) do
+    case RunHistory.head(id) do
+      nil -> nil
+      row -> if streamed?(id), do: %{row | log: [], timeline: []}, else: row
+    end
+  end
+
+  # The steps a page shows are the ones it was handed, and a poll is not a reason
+  # to build them again: the stream is where they came from, the row is the same
+  # run written down. The configuration is kept for the same reason — it is
+  # written when the run starts and never changes.
+  defp keep_steps(%RunHistory.Run{} = fresh, %RunHistory.Run{} = shown),
+    do: %{fresh | log: shown.log, timeline: shown.timeline, config: shown.config}
+
+  defp streamed?(id), do: RunStream.count(id) > 0
 
   # The log grows a step at a time, and the page sends the steps that are new
   # rather than the run's whole scrollback again: a refresh used to re-render and
@@ -1425,11 +1507,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       do: refresh_now(socket)
 
   def handle_info({:studio, _run_id, _event}, socket) do
-    if answered?(socket), do: {:noreply, refresh_later(socket)}, else: refresh_now(socket)
+    if answered?(socket),
+      do: {:noreply, refresh_later(socket)},
+      else: {:noreply, take_steps(socket)}
   end
 
   def handle_info(:refresh_due, socket) do
-    socket |> assign(refresh_due: false) |> refresh_now()
+    {:noreply, socket |> assign(refresh_due: false) |> take_steps()}
   end
 
   # A page that shows a run keeps asking, even though the worker broadcasts: a

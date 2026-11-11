@@ -294,6 +294,34 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert html =~ "3 steps"
       refute html =~ "not progressing"
     end
+
+    # The page asks the record how the run is doing twice a second, and the
+    # record is written at an episode boundary: a page that took the steps from
+    # it too would lose the ones it was already showing every time it looked.
+    test "keeps the steps it was handed while it asks how the run is doing",
+         %{conn: conn} do
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 100,
+          inputs: %{"episodes" => 1}
+        })
+
+      publish(run.id, 0)
+      publish(run.id, 1)
+      publish(run.id, 2)
+      _ = :sys.get_state(Monty.Studio.RunStream)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#replay-panel") |> render() =~ "steps 0–2"
+
+      send(view.pid, :show_poll)
+
+      assert view |> element("#replay-panel") |> render() =~ "steps 0–2"
+      assert has_element?(view, "#log-0-0")
+    end
   end
 
   describe "what a row says a run did" do

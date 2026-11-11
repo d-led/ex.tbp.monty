@@ -602,10 +602,14 @@ defmodule Monty.Studio.RunHistory do
     :steps,
     :steps_done,
     :episodes_done,
+    :episode,
+    :source,
+    :seed,
     :summary,
     :log_path,
     :started_at,
     :finished_at,
+    :inserted_at,
     :duration_us,
     :updated_at
   ]
