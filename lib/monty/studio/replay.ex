@@ -208,20 +208,26 @@ defmodule Monty.Studio.Replay do
     |> Enum.reduce(%{}, fn belief, strengths ->
       belief
       |> Map.get("graphs", %{})
-      |> Enum.reduce(strengths, fn {name, graph}, strengths ->
-        case Map.get(graph, "max_evidence") do
-          value when is_number(value) ->
-            Map.update(strengths, name, value, fn
-              nil -> value
-              kept -> max(kept, value)
-            end)
-
-          _none ->
-            Map.put_new(strengths, name, nil)
-        end
-      end)
+      |> Enum.reduce(strengths, &stronger/2)
     end)
     |> Map.new(fn {name, strength} -> {name, strength || 0.0} end)
+  end
+
+  # One object's entry against what is known so far: the strongest evidence wins,
+  # and an object a module named without a number is kept as `nil` — a theory
+  # ruled out to nothing still has its point on the line, and a later module that
+  # does report a number still takes it.
+  defp stronger({name, graph}, strengths) do
+    case Map.get(graph, "max_evidence") do
+      value when is_number(value) ->
+        Map.update(strengths, name, value, fn
+          nil -> value
+          kept -> max(kept, value)
+        end)
+
+      _none ->
+        Map.put_new(strengths, name, nil)
+    end
   end
 
   defp object_series(name, points) do
