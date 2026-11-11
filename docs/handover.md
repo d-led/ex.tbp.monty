@@ -2083,7 +2083,25 @@ steps, so a long run collected a handler per chart it had ever drawn, each of
 them a server round trip per resize. `destroyed/0` removes it (and the pending
 wheel's timer), the way `.ReplaySlider` and `.EscapeCollapse` already do.
 
-### 36.5 What is still in the socket, in order of cost
+### 36.5 A step costs the database nothing, and a test says so
+
+The rule this page is built on is now pinned by a test rather than by a comment:
+`run_history_live_test.exs`'s "a step costs the database nothing" attaches to
+`[:ex_tbp_monty, :repo, :postgres, :query]` and counts what the repository ran
+while the page showed one more step of a run it follows. It first proves the
+counter against a read that certainly happens, so a wrong event name cannot pass
+for "no reads".
+
+It found two, both real and both fixed in `c043a88`:
+
+- `with_pictures/2` asked for the shown step's frames whenever the moment had
+  none — every step, for a run whose sensors kept no picture. Only a record with
+  no `timeline` at all (the `head/1` case) has to ask; a moment handed over with a
+  timeline came with whatever its sensors kept.
+- `pictures: assigns[:pictures] || kept_pictures?(run)` re-asked at every step when
+  the answer was `false`, because `false` is falsy. `Map.get_lazy/3` asks once.
+
+### 36.6 What is still in the socket, in order of cost
 
 1. `ExperimentLive`'s reap (`Reaper.sweep/0`) — one query per open run, once per
    page, after the first paint (see 35.2 for why it cannot move yet).
