@@ -242,17 +242,21 @@ in the same proportion — CPU starvation, not code.
 
 **Where Monty's own time goes** (`cProfile`, one epoch — 10 episodes — 25.7 s of
 profiled Python): its MuJoCo work is _cheap_ — `mjr_readPixels` 2.0 s over 2 024
-renders (**0.99 ms a render**) and `mj_r_render` 0.47 s (0.23 ms) — against
-`graph_matching.get_features_at_node` **6.9 s cumulative** and 2.3 s of module
-imports. So a Monty world step is about **3 ms** (two renders, `mj_forward`,
-states), where **ours is 7.65 ms of Python** for the same scene. Over the 7 500
-world steps a run takes (5 110 model + 2 380 positioning) that is **~35 s — 15 %
-of the run — inside `priv/monty_py/world.py`, our own file**: the thread hop per
-call, `np.full`+`np.dstack` adding an alpha channel per sensor per step, `states`
-built whether or not anyone reads it, and `_answer`'s recursive walk plus
-`json.dumps` header and `tobytes` copies. Measured while the box was busy, so the
-_absolute_ numbers move; the ratio (ours 7.65 against its ~3) does not, because
-both were taken under the same load.
+renders (**0.99 ms a render**) and `mj_r_render` 0.47 s — against
+`graph_matching.get_features_at_node` **6.9 s cumulative**. 2 024 renders over
+~366 steps is **5.5 a step** and ours is **six** (colour, depth and segmentation
+per sensor, two sensors), so the two simulators do the same work; our whole
+Python step is **5.6–7.7 ms** depending on the box's load. That leaves a few ms
+a world step at most — 20–35 s a run over 7 500 world steps, and inside MuJoCo
+and numpy rather than in Elixir. **It needs its own probe before anyone claims
+it**: the candidates are the thread hop per call, `np.full`+`np.dstack` adding an
+alpha channel every step, `states` built whether read or not, and `_answer`'s
+walk plus `json.dumps` header and `tobytes` copies.
+
+Monty on a quiet machine: **170 s** for the same run — 33.2 ms a step against our
+47.0, so the run is **1.44×**. The largest single item that is ours alone is not
+the world: it is `Model.state/1`, **55.5 MB and 176 ms copied once per episode**
+by `Logging.report/3` to write one row of a CSV — **25 s a run**.
 
 ## Where a step's work goes (2026-11-03, ten objects, six steps, dev)
 
