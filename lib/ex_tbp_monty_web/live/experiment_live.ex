@@ -185,13 +185,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # of a busier one's.
   defp recent_runs(name), do: RunHistory.list_for(name, limit: @runs_shown)
 
-  # A run's record is written the moment it is queued, so `running` on the record
-  # before a worker exists means "queued": the queue knows better, and this is
-  # the same reading the runs page uses.
-  defp run_state(%{status: "running"}, %{state: state})
-       when state in ~w(available scheduled retryable),
-       do: "queued"
-
+  # The record's own word. It used to need repairing here — a run was written
+  # `running` before a worker existed, so this mapped a `running` record whose
+  # job was still waiting back to "queued" — and it does not any more:
+  # `RunHistory.start/1` writes `queued` and the worker writes `running` when it
+  # has the record in hand (`Jobs.Run.perform/1`).
   defp run_state(run, _job), do: run.status
 
   defp run_state_class("running"), do: "badge-info"
@@ -298,6 +296,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       beliefs_seeded: false,
       frames_seeded: false,
       caught_up: false,
+      # The steps this page has drawn a line for, by the run's own identity for a
+      # step — its episode and its step. A step whose line is already here is not
+      # drawn twice, whether it arrived as an announcement or in the record.
+      steps_drawn: MapSet.new(),
       # How many of the run's steps this page has applied, from whichever way it
       # heard of them. It is what the poll compares the run's own count with: a
       # page that hears every step is nought behind, and one that missed a
@@ -2113,7 +2115,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     else
       chatter = Enum.filter(socket.assigns.lines, &is_nil(&1.step))
       recorded = record.log |> Enum.map(&record_line/1) |> Enum.take(-@log_limit)
-      assign(socket, lines: Enum.sort_by(recorded ++ chatter, & &1.id))
+
+      assign(socket,
+        lines: Enum.sort_by(recorded ++ chatter, & &1.id),
+        steps_drawn: MapSet.new(record.log, &{&1["episode"], &1["step"]})
+      )
     end
   end
 
@@ -2158,7 +2164,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
          |> clear_run_view()
          |> assign(
            run_id: record.id,
-           status: "running",
+           # Asked for, not running: the record says `queued` until a worker has
+           # it in hand, and the page says the same until the worker's own
+           # `{:started, steps}` arrives on the run's topic.
+           status: "queued",
            progress: {0, steps},
            episode: 0,
            summary: nil,
@@ -2310,8 +2319,27 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # otherwise copy the window a hundred times.
   defp push_lines(socket, events) do
     at = RunLog.now()
+
+    # One line a step, whichever way the page heard of it. A settled run's steps
+    # arrive in the record, which the page merges when it catches up, and the
+    # last of them can be announced again afterwards: the drawing of a step's
+    # pictures outlives the job by a moment, and on a busy machine that moment is
+    # long enough for the record to be read first. The step is still applied —
+    # its beliefs, its badge — it simply does not get a second line.
+    events =
+      Enum.reject(events, fn event ->
+        MapSet.member?(socket.assigns.steps_drawn, {event.episode, event.step})
+      end)
+
     lines = Enum.map(events, &line(&1.step, &1.line, :info, at))
-    assign(socket, lines: Enum.take(socket.assigns.lines ++ lines, -@log_limit))
+
+    drawn =
+      Enum.reduce(events, socket.assigns.steps_drawn, &MapSet.put(&2, {&1.episode, &1.step}))
+
+    assign(socket,
+      lines: Enum.take(socket.assigns.lines ++ lines, -@log_limit),
+      steps_drawn: drawn
+    )
   end
 
   # A recorded step keeps its own instant, and the page writes a clock it can

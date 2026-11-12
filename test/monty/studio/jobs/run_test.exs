@@ -2,7 +2,7 @@ defmodule Monty.Studio.Jobs.RunTest do
   use ExTbpMontyWeb.ConnCase, async: false
 
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
-  alias Monty.Studio.{Artifacts, Drafts, Jobs, Memory, Partition, RunHistory, RunLog}
+  alias Monty.Studio.{Artifacts, Drafts, Jobs, Memory, Partition, RunHistory, RunLog, RunStream}
   alias Monty.Test.Tmp
 
   # The experiment a run of this file steps: an evaluation config whose classes
@@ -68,7 +68,20 @@ defmodule Monty.Studio.Jobs.RunTest do
 
   defp perform(%RunHistory.Run{id: id}), do: perform_id(id)
 
-  defp perform_id(id), do: Jobs.Run.perform(%Oban.Job{args: %{"run_id" => id}, attempt: 1})
+  defp perform_id(id) do
+    performed = Jobs.Run.perform(%Oban.Job{args: %{"run_id" => id}, attempt: 1})
+
+    # A step's announcement comes from the process that draws its pictures, and
+    # that drawing is deliberately behind the run's own barrier: the job returns
+    # while pictures are still being written. Asking the stream for its count
+    # settles the order — a call answers after the casts before it, and each of
+    # those has handed its pictures on — and then the drawing catches up. Without
+    # it a test that reads a step is racing a slower machine.
+    _ = RunStream.count(id)
+    :ok = RunStream.Pictures.settle()
+
+    performed
+  end
 
   # Two fields of a record are choices the config cannot make for a particular
   # run: the world to step and the seed to step it from. Both are read back from
