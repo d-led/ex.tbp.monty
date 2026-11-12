@@ -30,6 +30,12 @@ defmodule Monty.Studio.Replay.Chart do
   @width 320
   @height 150
 
+  # How finely the drawn path is sampled: this many samples to a unit of the plot,
+  # which is more than the pixel a unit is drawn as. A stretch longer than the
+  # plot can show is thinned to it (`thin/1`).
+  @per_unit 4
+  @max_drawn @width * @per_unit
+
   # Four labelled lines is what a plot this tall carries without crowding, and
   # the tolerance that keeps a value sitting exactly on a multiple from being
   # read as sitting just below it.
@@ -406,10 +412,31 @@ defmodule Monty.Studio.Replay.Chart do
     |> Enum.zip_with(points, fn point, xy -> {point[:episode], point.step, xy} end)
     |> stretches()
     |> Enum.map(fn run ->
-      run |> to_the_edge(from, to) |> Enum.map(&elem(&1, 2)) |> polyline()
+      run |> to_the_edge(from, to) |> thin() |> Enum.map(&elem(&1, 2)) |> polyline()
     end)
     |> Enum.reject(&(&1 == ""))
   end
+
+  # A plot is `@width` units across however long the run is, so a stretch of five
+  # thousand steps puts fifteen samples in every unit: they are drawn on top of
+  # one another, and every one of them travels to the browser on every drawing a
+  # live page makes. A stretch with more samples than the plot has room for is
+  # thinned to the first of each quarter unit plus the point it really ends at —
+  # monotone in x, so the stroke never retraces itself. Keeping a column's lowest
+  # *and* highest was tried before and doubled every line: both sit at the same
+  # x, and the retraced stroke looked worse than the sampling it saved.
+  #
+  # What a pointer reads is not thinned: `samples` below keeps every point, so a
+  # hover still names the step under the cursor.
+  defp thin(run) do
+    if length(run) <= @max_drawn do
+      run
+    else
+      (run |> Enum.chunk_by(&column/1) |> Enum.map(&hd/1)) ++ [List.last(run)]
+    end
+  end
+
+  defp column({_episode, _step, {x, _y}}), do: trunc(x * @per_unit)
 
   # A step's value holds until the next step begins, so a stretch is drawn to the
   # edge of the step it was last seen in. Without that the line stops at its last

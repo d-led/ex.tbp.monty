@@ -430,4 +430,36 @@ defmodule Monty.Studio.Replay.ChartTest do
       assert peak < height
     end
   end
+
+  describe "a run too long for the plot's own resolution" do
+    # Five thousand steps across three hundred and twenty units of chart: every
+    # unit holds fifteen samples, they are drawn on top of one another, and all
+    # of them travel to the browser on every drawing a live page makes.
+    defp five_thousand_steps, do: Enum.map(1..5000, &(&1 * 0.01))
+
+    test "is drawn as many points as the plot can show, not one a step" do
+      chart = Chart.many([series(five_thousand_steps(), "mug")])
+
+      assert length(drawn_points(chart)) <= 4 * 320 + 2
+    end
+
+    test "still ends where the data does" do
+      chart = Chart.many([series(five_thousand_steps(), "mug")])
+      {last_x, _y} = chart |> drawn_points() |> List.last()
+
+      assert last_x == chart.width
+    end
+
+    test "keeps every sample for the pointer, so a readout is exact" do
+      chart = Chart.many([series(five_thousand_steps(), "mug")])
+
+      assert length(chart.hover) == 5000
+    end
+
+    test "leaves a run the plot can show whole alone" do
+      chart = Chart.many([series(Enum.map(1..500, &(&1 * 0.01)), "mug")])
+
+      assert length(drawn_points(chart)) == 500
+    end
+  end
 end

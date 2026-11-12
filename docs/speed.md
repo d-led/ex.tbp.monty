@@ -98,6 +98,13 @@ step**, `EvidenceSlopeTracker`+`HypothesesSelection` 197 k, `DepthTo3DLocations`
 4. **The sensor modules' `Enum` plumbing**: `ObservationProcessor` and
    `OnObjectObservation` walk the 4096-row cloud several times each.
 
+Landed the same session, the page's own drawing: a stretch of the chart is drawn
+at the plot's resolution — four samples to a unit of its 320 — instead of one a
+step. Paired, same script, a 5 000-step line goes **5 000 drawn points and 63 kB
+of polyline to 1 281 and 16 kB**, so every drawing a live page sends is 74 %
+smaller and the browser repaints a quarter of the path; the hover still holds all
+5 000 samples, so what a pointer reads is unchanged.
+
 Landed this session (measured paired on the same observation, same script):
 `ObservationProcessor.process/2` **2.22 ms → 1.36 ms, 217 k → 156 k
 reductions** by answering coverage, the middle pixel and the on-surface depths in
