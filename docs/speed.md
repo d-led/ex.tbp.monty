@@ -258,6 +258,59 @@ Monty on a quiet machine: **170 s** for the same run — 33.2 ms a step against 
 the world: it is `Model.state/1`, **55.5 MB and 176 ms copied once per episode**
 by `Logging.report/3` to write one row of a CSV — **25 s a run**.
 
+## Is SQLite the desktop's slow-down? Measured 2026-11-12: no, and a bug in the way
+
+The question was whether a run on the desktop — SQLite in a file, 19 minutes for
+the same benchmark — pays for its database where the server instance does not.
+Measured by driving `Monty.Studio.RunHistory` itself, on a row the size a
+140-episode run reaches (5 000 steps: a 0.7 MB transcript, 42 MB of pictures),
+once against the dev Postgres and once against the SQLite file the desktop build
+uses — a 639 MB file, which is what several runs leave behind.
+
+| write                                   |         Postgres |                  SQLite |
+| --------------------------------------- | ---------------: | ----------------------: |
+| a boundary's checkpoint (140 a run)     | 17–49 ms, ~21 ms | **115–496 ms**, ~230 ms |
+| the closing `store/3` (once a run)      |           980 ms |                  705 ms |
+| `alive` — one `updated_at` (every 10 s) |            ~2 ms |                40–53 ms |
+
+**SQLite costs a boundary about ten times what Postgres does, and the pictures
+are why.** Its row is one record across overflow pages, so an update of any
+column rewrites the record whole: an `updated_at` on a 42 MB row costs 40–53 ms
+and the same write on a 0.8 MB row costs 0–4 ms (measured; ~1 ms per MB). The
+same row on Postgres is a `jsonb` value the update does not touch, and a
+boundary there appends with `||`.
+
+**And a bug was paying for the pictures twice.** `checkpoint/2`'s `timeline:
+:skip` means "a boundary leaves the pictures alone" — but it was only honoured on
+the append path. An adapter that rewrites the row was handed the `timeline` it
+already held, so every boundary encoded 42 MB and wrote it back: 230 ms against
+the 45 ms the same write costs without it. Fixed in `f8a0fa7`; the boundary on
+SQLite is now 40–174 ms (a loaded box's spread, typically ~50 ms).
+
+**What that means for a run**: 140 boundaries at 50 ms is **7 s**, the closing
+write 0.5 s, and a heartbeat every ten seconds. Run end to end, one straight after
+the other on this box that same day (load 5–6.7, most of its swap in use, the
+studio's runner through `Monty.Studio.Jobs.Run`, 140 episodes, 5 110 steps):
+
+| database                                   |        wall |   a step |
+| ------------------------------------------ | ----------: | -------: |
+| Postgres (dev)                             | **485.6 s** |  95.0 ms |
+| SQLite, the 639 MB file the desktop leaves | **529.3 s** | 103.6 ms |
+
+**9 % apart, 44 s** — the size the boundary table above predicts and no more.
+(Only the pair is usable: both are about twice the 242 s this doc records for the
+same run on a quiet box, and one run on a loaded machine says nothing on its
+own.)
+
+So the database is a real cost, smaller than the model or the world, and **it does
+not explain the desktop's 19 minutes** — 4–5× our own run. The remaining
+candidates are the ones the machine brings: the world behind `pythonx` there, the
+30 660 PNG files a run writes, and the sidecar's stderr drain.
+
+What a desktop needs next is the same split the server instance has: the step's
+own `duration_us` beside the wall between lines (`scripts/probe_run_log.exs`), so
+that "slow machine" and "slow port" are told apart instead of guessed.
+
 ## Where a step's work goes (2026-11-03, ten objects, six steps, dev)
 
 9.0 M reductions and 82 MB of garbage a step, split by the process that did it
