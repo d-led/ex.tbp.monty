@@ -17,7 +17,7 @@ defmodule Monty.Studio.Replay do
   alias Monty.Simulators.Synthetic.Camera
   alias Monty.Studio.RunHistory.Run
 
-  @logged_series ["evidence", "percepts", "votes_used", "duration_us"]
+  @logged_series ["evidence", "percepts", "votes_used", "duration_us", "world_us"]
 
   # The value axis of an evidence chart, named where the charts are built so the
   # page never has to guess what the numbers are.
@@ -520,6 +520,10 @@ defmodule Monty.Studio.Replay do
   defp value_of(%{entry: entry}, "votes_used"), do: get_in(entry || %{}, ["votes", "used"]) || 0
   defp value_of(%{entry: entry}, "duration_us"), do: Map.get(entry || %{}, "duration_us", 0)
 
+  # The world's half of a step, which a step's own clock does not measure: the
+  # agent is moved and the sensors rendered before the model sees anything.
+  defp value_of(%{entry: entry}, "world_us"), do: Map.get(entry || %{}, "world_us", 0)
+
   # How sure the run was on that step: the best evidence any learning module held
   # for any object. That is the curve an episode is judged by — it climbs to the
   # recognition or it does not — and it is what the live page draws while a run is
@@ -559,11 +563,13 @@ defmodule Monty.Studio.Replay do
   defp label_of("percepts"), do: "percepts per step"
   defp label_of("votes_used"), do: "votes used"
   defp label_of("duration_us"), do: "step duration"
+  defp label_of("world_us"), do: "world time per step"
   defp label_of("evidence"), do: "best evidence"
   defp label_of(other), do: other
 
   defp unit_of("sensor:" <> _sensor_id), do: "m"
   defp unit_of("duration_us"), do: "µs"
+  defp unit_of("world_us"), do: "µs"
   defp unit_of(_counted), do: ""
 
   # What the numbers on the value axis are. Evidence is the score a hypothesis is
@@ -571,6 +577,7 @@ defmodule Monty.Studio.Replay do
   # "evidence" rather than nothing; a count says what it counts.
   defp axis_of("sensor:" <> _sensor_id), do: "metres"
   defp axis_of("duration_us"), do: "microseconds"
+  defp axis_of("world_us"), do: "microseconds"
   defp axis_of("percepts"), do: "percepts"
   defp axis_of("votes_used"), do: "votes"
   defp axis_of(_evidence), do: @evidence_axis

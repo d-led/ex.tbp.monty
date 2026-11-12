@@ -318,6 +318,7 @@ defmodule Monty.Studio.RunLog do
     %{
       "steps" => summary.steps,
       "duration_us" => summary.duration_us,
+      "world_us" => summary.world_us,
       "deadline_hits" => summary.deadline_hits,
       "goals" => summary.goals,
       "votes_sent" => summary.votes_sent,

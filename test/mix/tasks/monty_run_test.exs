@@ -45,7 +45,11 @@ defmodule Mix.Tasks.Monty.RunTest do
       # names only the sensor that made one.
       assert output =~ "step 0 · percepts patch ·"
       assert output =~ "step 1 · percepts patch ·"
-      assert output =~ "2 steps in"
+      # Both halves a run spends, because the model's clock does not measure the
+      # world that moved the agent before it.
+      assert output =~ "2 steps:"
+      assert output =~ "µs in the model"
+      assert output =~ "µs in the world"
     end
 
     test "covers the whole experiment by default, not one episode of it" do
@@ -139,7 +143,7 @@ defmodule Mix.Tasks.Monty.RunTest do
         ])
 
       refute output =~ "step 0 ·"
-      assert output =~ "2 steps in"
+      assert output =~ "2 steps:"
     end
 
     test "keeps the memory a training run learned, as the page's worker does" do

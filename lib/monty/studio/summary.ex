@@ -27,6 +27,7 @@ defmodule Monty.Studio.Summary do
 
   defstruct steps: 0,
             duration_us: 0,
+            world_us: 0,
             deadline_hits: 0,
             goals: 0,
             votes_sent: 0,
@@ -122,6 +123,19 @@ defmodule Monty.Studio.Summary do
   def average_step_us(%__MODULE__{steps: steps, duration_us: duration_us}),
     do: duration_us / steps
 
+  @doc """
+  What the run spent in its own two halves: the model's steps and the world's.
+
+  The wall clock is the run row's (`studio_runs.duration_us`, written when the
+  run closes). These are the parts of it that had a clock of their own, and the
+  rest — the record, the pictures, the crossing into another language, the
+  scheduler — is the wall minus this. A report that shows only one of the three
+  cannot tell a slow machine from a slow port, which is what made 772 s of one
+  run read as the studio's.
+  """
+  @spec compute_us(t()) :: non_neg_integer()
+  def compute_us(%__MODULE__{} = summary), do: summary.duration_us + summary.world_us
+
   defp add_step(info, summary) do
     votes = Map.get(info, :votes, %{})
 
@@ -129,6 +143,7 @@ defmodule Monty.Studio.Summary do
       summary
       | steps: summary.steps + 1,
         duration_us: summary.duration_us + Map.get(info, :duration_us, 0),
+        world_us: summary.world_us + Map.get(info, :world_us, 0),
         deadline_hits:
           summary.deadline_hits + if(Map.get(votes, :deadline_hit?, false), do: 1, else: 0),
         goals: summary.goals + Map.get(info, :goals, 0),

@@ -158,6 +158,7 @@ defmodule Monty.Studio.ReplayTest do
              ]
 
       assert Replay.chart_series(run(0..1), "duration_us").unit == "µs"
+      assert Replay.chart_series(run(0..1), "world_us").unit == "µs"
     end
 
     test "have a point for every step, even when the log is missing one" do

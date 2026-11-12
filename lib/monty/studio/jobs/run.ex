@@ -1015,10 +1015,14 @@ defmodule Monty.Studio.Jobs.Run do
   defp status_of({:failed, _reason}), do: "failed"
 
   defp closing_line(:finished, infos, summary),
-    do: "run finished: #{length(infos)} steps in #{summary.duration_us} µs"
+    do:
+      "run finished: #{length(infos)} steps, #{summary.duration_us} µs in the model " <>
+        "and #{summary.world_us} µs in the world"
 
   defp closing_line(:stopped, infos, summary),
-    do: "run stopped after #{length(infos)} step(s), #{summary.duration_us} µs of compute"
+    do:
+      "run stopped after #{length(infos)} step(s), #{summary.duration_us} µs in the model " <>
+        "and #{summary.world_us} µs in the world"
 
   defp closing_line({:failed, reason}, infos, _summary),
     do: "run failed after #{length(infos)} step(s): #{reason}"

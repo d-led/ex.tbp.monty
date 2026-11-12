@@ -30,6 +30,25 @@ defmodule Monty.Studio.SummaryTest do
     assert summary.duration_us == 3_000
   end
 
+  # A step's own clock measures the modules, not the world that moved the agent
+  # before them. Reporting only the model's time made 772 s of a run read as the
+  # studio's, so both halves are kept and the wall clock is the row's.
+  test "the world's time is kept beside the model's, and the two are what compute is" do
+    summary =
+      Summary.from_infos([
+        step(%{duration_us: 900, world_us: 300}),
+        step(%{duration_us: 1_100, world_us: 200})
+      ])
+
+    assert summary.duration_us == 2_000
+    assert summary.world_us == 500
+    assert Summary.compute_us(summary) == 2_500
+  end
+
+  test "a step from a world that times nothing is a step with no world time" do
+    assert Summary.from_infos([step()]).world_us == 0
+  end
+
   test "a step that hit the vote deadline is counted, because a late vote is a different run" do
     summary =
       Summary.from_infos([step(), step(%{votes: %{sent: 1, used: 0, deadline_hit?: true}})])

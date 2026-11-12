@@ -402,7 +402,8 @@ defmodule Mix.Tasks.Monty.Run do
 
   defp describe_run(history, summary) do
     Mix.shell().info(
-      "#{summary.steps} steps in #{summary.duration_us} µs · " <>
+      "#{summary.steps} steps: #{summary.duration_us} µs in the model, " <>
+        "#{summary.world_us} µs in the world · " <>
         "votes #{summary.votes_used}/#{summary.votes_sent} · goals #{summary.goals} · " <>
         "deadline hits #{summary.deadline_hits}"
     )
