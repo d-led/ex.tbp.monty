@@ -1618,6 +1618,30 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       refute has_element?(view, "#replay-slider")
     end
 
+    test "steps the replay from beside the pictures as well as from the header", %{
+      conn: conn
+    } do
+      # The chart stands between the header's buttons and the frames, and on a
+      # long run it is a screen tall: a reader reading frames wants the next
+      # frame where the frames are.
+      run = run_believing([%{"mug" => 1.0}, %{"mug" => 2.0}])
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      # Both sets are on the page, and each is its own: two buttons with one id
+      # would answer for the other.
+      assert has_element?(view, "#replay-back")
+      assert has_element?(view, "#replay-below-back")
+      assert view |> element("#replay-step-below") |> render() =~ "step 1"
+
+      view |> element("#replay-below-back") |> render_click()
+      assert view |> element("#replay-step-below") |> render() =~ "step 0"
+      assert view |> element("#replay-step") |> render() =~ "step 0"
+
+      view |> element("#replay-below-forward") |> render_click()
+      assert view |> element("#replay-step-below") |> render() =~ "step 1"
+    end
+
     # Five modules of one heterarchy are five opinions about the same objects,
     # and the first chart is the strongest of them — which is the right answer
     # for the ensemble and the wrong one for "did they agree?". A run whose

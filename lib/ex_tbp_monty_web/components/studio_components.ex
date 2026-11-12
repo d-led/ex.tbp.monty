@@ -292,6 +292,47 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
   defp no_pictures(true), do: "This step kept no pictures."
 
+  # The three buttons that step a replay and play it: once in the header, and
+  # again under the second slider beside the pictures, because the chart between
+  # them is a screen tall. `id_prefix` keeps the two apart — a page with two
+  # `#replay-forward` would answer the wrong one.
+  attr :moment, :map, default: nil
+  attr :playing, :boolean, default: false
+  attr :id_prefix, :string, default: "replay"
+
+  defp replay_controls(assigns) do
+    ~H"""
+    <div :if={@moment} class="join">
+      <button
+        id={"#{@id_prefix}-back"}
+        phx-click="replay_step"
+        phx-value-delta="-1"
+        class="btn join-item btn-xs"
+        aria-label="Previous step"
+      >
+        ◀
+      </button>
+      <button
+        id={"#{@id_prefix}-play"}
+        phx-click={if @playing, do: "replay_pause", else: "replay_play"}
+        class="btn join-item btn-xs btn-primary"
+        aria-label={if @playing, do: "Pause the replay", else: "Play the replay"}
+      >
+        {if @playing, do: "❚❚", else: "▶"}
+      </button>
+      <button
+        id={"#{@id_prefix}-forward"}
+        phx-click="replay_step"
+        phx-value-delta="1"
+        class="btn join-item btn-xs"
+        aria-label="Next step"
+      >
+        ▶
+      </button>
+    </div>
+    """
+  end
+
   @doc """
   A finished run, step by step: the slider, the frames at that step, and a chart.
 
@@ -333,34 +374,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
       <header class="flex flex-wrap items-center gap-1.5">
         <h2 class="text-sm font-medium">Replay</h2>
 
-        <div :if={@moment} class="join">
-          <button
-            id="replay-back"
-            phx-click="replay_step"
-            phx-value-delta="-1"
-            class="btn join-item btn-xs"
-            aria-label="Previous step"
-          >
-            ◀
-          </button>
-          <button
-            id="replay-play"
-            phx-click={if @playing, do: "replay_pause", else: "replay_play"}
-            class="btn join-item btn-xs btn-primary"
-            aria-label={if @playing, do: "Pause the replay", else: "Play the replay"}
-          >
-            {if @playing, do: "❚❚", else: "▶"}
-          </button>
-          <button
-            id="replay-forward"
-            phx-click="replay_step"
-            phx-value-delta="1"
-            class="btn join-item btn-xs"
-            aria-label="Next step"
-          >
-            ▶
-          </button>
-        </div>
+        <.replay_controls moment={@moment} playing={@playing} />
 
         <span :if={@moment} id="replay-step" class="badge badge-sm badge-ghost font-mono">
           step {@moment.step}
@@ -1083,6 +1097,18 @@ defmodule ExTbpMontyWeb.StudioComponents do
         moment={@moment}
         recorded={@recorded}
       />
+
+      <%!-- And the buttons that step it, where the pictures are: a reader reading
+      frames wants the next frame, and the header is a chart away. --%>
+      <div :if={@moment} class="flex flex-wrap items-center gap-1.5">
+        <.replay_controls moment={@moment} playing={@playing} id_prefix="replay-below" />
+        <span id="replay-step-below" class="badge badge-sm badge-ghost font-mono">
+          step {@moment.step}
+        </span>
+        <span :if={@moment.entry} class="text-xs text-base-content/60">
+          {duration(@moment.entry["duration_us"])}
+        </span>
+      </div>
 
       <div :if={@moment} class="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div :if={@moment.frames != []} id="replay-frames" class="grid gap-1.5 sm:grid-cols-2">
