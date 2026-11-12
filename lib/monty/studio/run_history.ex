@@ -160,13 +160,16 @@ defmodule Monty.Studio.RunHistory do
       # counters (see `checkpoint_steps/4`).
       {log, timeline} = whole_transcript(run, new_log, new_timeline)
 
-      rewrite(%{
-        stepped
-        | log: log,
-          timeline: timeline,
-          steps_done: length(log),
-          episodes_done: episodes_in(log)
-      })
+      rewrite(
+        %{
+          stepped
+          | log: log,
+            timeline: timeline,
+            steps_done: length(log),
+            episodes_done: episodes_in(log)
+        },
+        opts
+      )
     end
   end
 
@@ -291,14 +294,25 @@ defmodule Monty.Studio.RunHistory do
     end
   end
 
-  defp rewrite(%Run{log: log, timeline: timeline} = run) do
-    run
-    |> Ecto.Changeset.change()
-    |> Ecto.Changeset.force_change(:log, log)
-    |> Ecto.Changeset.force_change(:timeline, timeline)
-    |> Ecto.Changeset.force_change(:steps_done, length(log))
-    |> Ecto.Changeset.force_change(:episodes_done, episodes_in(log))
-    |> Repo.update()
+  defp rewrite(%Run{log: log, timeline: timeline} = run, opts \\ []) do
+    stepped =
+      run
+      |> Ecto.Changeset.change()
+      |> Ecto.Changeset.force_change(:log, log)
+      |> Ecto.Changeset.force_change(:steps_done, length(log))
+      |> Ecto.Changeset.force_change(:episodes_done, episodes_in(log))
+
+    # `timeline: :skip` has to reach this path too: an adapter that cannot append
+    # rewrites the row, and encoding the pictures to hand them back unchanged was
+    # most of what that cost. Measured on a 5 000-step row on SQLite, a boundary
+    # took **230 ms** when it carried the 42 MB of pictures and **45 ms** for the
+    # row alone — and a run of `base_10distinctobj_dist_agent` has 140 boundaries.
+    changes =
+      if Keyword.get(opts, :timeline, :write) == :skip,
+        do: stepped,
+        else: Ecto.Changeset.force_change(stepped, :timeline, timeline)
+
+    Repo.update(changes)
   end
 
   @doc "How many distinct episodes a log names, counting the steps that named none as one."

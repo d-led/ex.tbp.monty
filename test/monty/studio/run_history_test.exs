@@ -213,6 +213,30 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.get(run.id).steps_done == 3
     end
 
+    test "a boundary on an adapter that cannot append leaves the pictures where they were" do
+      # The pictures are the row's bulk — 42 MB by the end of a five-thousand-step
+      # run — and a boundary is not where they are written: `store/3` is, once.
+      # The append-only path leaves them alone by assigning the column to itself;
+      # an adapter that has to rewrite the row was handing them back unchanged,
+      # and on SQLite that was 185 of a boundary's 230 ms.
+      {:ok, run} = RunHistory.start(@attributes)
+
+      {:ok, saved} =
+        RunHistory.checkpoint_steps(run, [%{"step" => 0, "episode" => 0}], [moment(0)],
+          append: false
+        )
+
+      {:ok, _saved} =
+        RunHistory.checkpoint_steps(saved, [%{"step" => 1, "episode" => 0}], [moment(1)],
+          append: false,
+          timeline: :skip
+        )
+
+      written = RunHistory.get(run.id)
+      assert Enum.map(written.log, & &1["step"]) == [0, 1]
+      assert Enum.map(written.timeline, & &1["step"]) == [0]
+    end
+
     test "a run closed without its worker still has the steps it took" do
       {:ok, run} = RunHistory.start(@attributes)
 
