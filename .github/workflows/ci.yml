@@ -1133,10 +1133,36 @@ jobs:
         run: |
           set -euo pipefail
           ls -lh artifacts
+
+          # A release carries the bundles and nothing else. The download is every
+          # artifact of the run merged into one directory, so it also holds what
+          # the gates left: the coverage *directory*, the partitions' `.coverdata`,
+          # the JUnit reports, and buildkit's own `.dockerbuild` session files.
+          # `artifacts/*` failed the v0.1.1 tag on the directory —
+          # `read artifacts/cover: is a directory` — after attaching four
+          # coverage files and nothing a person can install.
+          shopt -s nullglob
+          bundles=(
+            artifacts/*.AppImage
+            artifacts/*.deb
+            artifacts/*.tar.gz
+            artifacts/*.zip
+            artifacts/*.exe
+            artifacts/*.pkg
+          )
+
+          if [ "${#bundles[@]}" -eq 0 ]; then
+            echo "the download holds no bundle to attach:" >&2
+            ls -la artifacts >&2
+            exit 1
+          fi
+
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$GITHUB_REF_NAME" "${bundles[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
           else
-            gh release create "$GITHUB_REF_NAME" artifacts/* \
+            gh release create "$GITHUB_REF_NAME" "${bundles[@]}" \
               --repo "$GITHUB_REPOSITORY" \
               --title "ex.tbp.monty $GITHUB_REF_NAME" \
               --generate-notes
