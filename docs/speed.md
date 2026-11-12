@@ -164,6 +164,24 @@ of the words a step allocates, and `align_orthonormal_vectors_as_matrix` 23 % â€
 which is nine floats' worth of list scaffolding per call, and already written out
 by hand rather than through a generic product.
 
+The Elixir side of that boundary is already the best of the shapes that work
+(`probe_decode.exs`, one 6 432-value column with a NaN in every 97th, re-measured
+today):
+
+| shape                                   | us/column | words/value |
+| --------------------------------------- | --------: | ----------: |
+| one u64 per element, bignum and all     |     757.6 |        11.8 |
+| two u32 halves read out of the u64      |     935.2 |         9.7 |
+| an eight-byte window (**what it does**) |     764.1 |     **7.7** |
+| the float comprehension alone           |     576.5 |         0.0 |
+
+The last row is the one that looks best and cannot be used: matching
+`float-64-little` **stops at the first NaN**, and 6 365 of 6 432 values came back.
+A NaN is exactly what a hypothesis with no value is, so the window and the two
+halves are what a decoder in Elixir costs. The 20 % left is on the Rust side:
+answer the columns as floats (Rust already knows which are NaN), or keep the whole
+comparison inside one call and never bring the column across.
+
 1. **The model step, 22.3 ms of our 47 ms a step** (114 s of the run) â€” and Monty
    does the same experiment's _whole_ step, world and transforms included, in
    29.7 ms. Nothing else we could fix is worth as much; the question to answer
