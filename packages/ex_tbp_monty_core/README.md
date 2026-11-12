@@ -12,7 +12,7 @@ supplies.
 ```elixir
 def deps do
   [
-    {:ex_tbp_monty_core, "~> 0.1"}
+    {:ex_tbp_monty_core, "~> 0.1.1"}
   ]
 end
 ```
