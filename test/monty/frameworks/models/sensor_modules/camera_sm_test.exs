@@ -155,6 +155,21 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
       assert features["min_depth"] == 0.02
     end
 
+    test "counts every pixel of the cloud even when the depth image is shorter" do
+      # Coverage is a share of the patch, and the patch is the cloud: a depth
+      # image that stops half way says nothing about the pixels it does not
+      # reach, and they still count.
+      patch =
+        Patch.new(depths: [[0.04, 0.02, 0.04], [0.04, 0.04, 0.04], [0.04, 0.04, 0.04]])
+        |> Map.put("depth", [[0.02]])
+
+      features = features(patch)
+
+      assert features["object_coverage"] == 1.0
+      assert features["min_depth"] == 0.02
+      assert_in_delta features["mean_depth"], 0.02, 1.0e-12
+    end
+
     test "is not offered to a learning module when none of it is on the object" do
       percept = percept(Patch.new(mask: List.duplicate(List.duplicate(0.0, 3), 3)))
 

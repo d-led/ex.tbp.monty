@@ -37,6 +37,76 @@ and the _step_ is what is open.
   `gen:do_call/4` row. `:eprof` prints an empty table for a step whose work
   happens in other processes, and `:fprof` writes hundreds of megabytes.
 
+## Where the benchmark's time goes, measured 2026-11-12
+
+`base_config_10distinctobj_dist_agent`, dev, MuJoCo, 140 episodes of about 36
+steps each. The experiment's own clock, read from the record it writes, and from
+`Monty.Studio.Run.start`/`Run.step` called directly.
+
+**The first thing to know: watching a run nearly triples it.**
+
+| how it was run                         | per episode | a 140-episode run |
+| -------------------------------------- | ----------: | ----------------: |
+| the studio's own runner, no page open  |    **1.67 s** |            ~4 min |
+| the studio's own runner, one page open |    **4.60 s** |          ~11 min |
+| `mix monty.run` (no record, no page)   |        2.7 s |            ~6 min |
+| Monty's own dashboard, same config     |        1.4 s |         **3:18** |
+
+So the per-step work of this port is at parity with Monty's (33 ms a step against
+its 39 ms) and what is *not* Monty's is the page: a run that is being watched
+spends about 2.9 s a step-run of the machine's time on drawing itself. The chart
+is rebuilt from the run's whole history at up to 3 Hz (`Chart.new/2` reads every
+step to draw a window of it), and the presenter encodes and writes a picture per
+sensor per step.
+
+**One episode, split by the process that did the work** (per-episode reductions,
+studio runner, 59 steps):
+
+| who                      | reductions | share |
+| ------------------------ | ---------: | ----: |
+| the two sensor modules   |     21.0 M |   36% |
+| `Monty.Simulators.Mujoco.Host` (world) | 18.2 M | 32% |
+| the learning module      |     16.8 M |   29% |
+| `Monty.Random.Stream`    |      0.8 M |    1% |
+
+and on top of that **`Run.start` is 12–16 M reductions — about six steps — per
+episode**. It is not the model: it is the 17 world steps the positioning
+procedures take (`GetGoodView` for the view finder, then for the patch), each of
+which runs the full `DepthTo3DLocations` transform for *both* sensors.
+
+**A world step is 590–600 k reductions and 10–13 ms**, measured by ablation on a
+live interface (the same step with `DepthTo3DLocations` removed is 350 k / 8 ms).
+So the transform is **240 k of every world half** — 40% of it — and it runs twice
+per step and 34 times per episode for positioning alone.
+
+**Per step, in calls** (`:cprof`, eight steps, whole VM): `Enum` **493 k calls a
+step**, `EvidenceSlopeTracker`+`HypothesesSelection` 197 k, `DepthTo3DLocations`
+94 k (one a pixel), `MatcherNif` 84 k, `Answer` 66 k (the world's decode),
+`Hypotheses` 60 k, `Numpy` 58 k, `SensorProcessing` 37 k,
+`ObservationProcessor` 8.2 k, `OnObjectObservation` 12 k.
+
+**What that means for the next session, in order of size:**
+
+1. **The page, while a run is live** (~2.9 s an episode of machine time, and it
+   is the reason a watched run takes 4.6 s an episode instead of 1.67). Draw the
+   chart from what changed, not from the whole history.
+2. **`Run.start` / positioning** (~1.2 s an episode, 19% of an episode's
+   reductions): 17 world steps whose transforms compute both sensors' point
+   clouds while the procedure reads one.
+3. **The transform's 240 k a call**, and `MissingToMaxDepth` beside it: per-pixel
+   Elixir building 4096 four-float rows, twice, every world step.
+4. **The sensor modules' `Enum` plumbing**: `ObservationProcessor` and
+   `OnObjectObservation` walk the 4096-row cloud several times each.
+
+Landed this session (measured paired on the same observation, same script):
+`ObservationProcessor.process/2` **2.22 ms → 1.36 ms, 217 k → 156 k
+reductions** by answering coverage, the middle pixel and the on-surface depths in
+one walk instead of five, and by not walking the depth image at all when no depth
+feature is wanted. The benchmark's step did not move (its 809 k a step is
+dominated by the paths above), so this is a win for the surface agent and the
+stand-in scene rather than for the distant agent — said plainly rather than
+counted as a step win.
+
 ## Where a step's work goes (2026-11-03, ten objects, six steps, dev)
 
 9.0 M reductions and 82 MB of garbage a step, split by the process that did it

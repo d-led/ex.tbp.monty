@@ -94,18 +94,26 @@ defmodule Monty.Frameworks.Models.SensorModules.ObservationProcessor do
   @spec process(t(), map()) :: {:ok, Message.t()} | {:error, term()}
   def process(%__MODULE__{} = processor, observation) do
     with {:ok, points} <- point_cloud(observation) do
-      center_id = center_id(points)
+      # One walk answers the four questions a percept asks of the patch — how
+      # many pixels it has, how many are on the surface, what the middle one is,
+      # and (only when a depth feature is wanted) the depths of the surface
+      # pixels. Asked one at a time they were five passes of four thousand
+      # nested rows: a single `Enum.count` over this cloud costs about a fifth of
+      # a millisecond, and a processed step paid for four of them before the
+      # surface was even fitted.
+      centre_id = center_id(points)
+      {count, on_surface, centre, depths} = survey(processor, points, observation, centre_id)
+
       # Once: the coverage feature needs it, and a surface sensor decides on the
-      # same number whether to fit anything at all. It was counted twice, over
-      # the whole patch, for every observation.
-      coverage = coverage(points)
+      # same number whether to fit anything at all.
+      coverage = if count == 0, do: 0.0, else: on_surface / count
       features = coverage_feature(processor, coverage)
-      [x, y, z, semantic_id] = Enum.at(points, center_id)
+      [x, y, z, semantic_id] = centre
       on_object? = semantic_id > 0.0
 
       {features, morphological_features, valid_signals?} =
         if on_object? or (processor.is_surface_sm and coverage > 0.0),
-          do: extract(processor, observation, points, center_id, features),
+          do: extract(processor, observation, points, centre_id, features, depths),
           else: {features, %{}, false}
 
       morphological_features =
@@ -146,6 +154,64 @@ defmodule Monty.Frameworks.Models.SensorModules.ObservationProcessor do
 
   defp patch_width(points), do: points |> length() |> :math.sqrt() |> round()
 
+  # The patch, in one walk: its size, how many of its pixels are on the surface,
+  # the middle pixel's row, and — when the camera is asked for a depth feature —
+  # the depths of the pixels that are on the surface, in the cloud's own order,
+  # because a mean over them is summed in that order.
+  defp survey(processor, points, observation, centre) do
+    if wants_depth?(processor) do
+      depths = observation |> Map.get("depth") |> List.flatten()
+      survey_with_depths(points, depths, 0, centre, {0, 0, nil, []})
+    else
+      survey_plain(points, 0, centre, {0, 0, nil})
+    end
+  end
+
+  # The patch and the depths it was unprojected from, a pixel at a time: a pixel
+  # on the surface contributes its depth, and every pixel contributes to the
+  # count the coverage feature divides by.
+  defp survey_with_depths([], _depths, _index, _centre, {count, on_surface, centre, depths}),
+    do: {count, on_surface, centre, Enum.reverse(depths)}
+
+  # A depth image shorter than the cloud stops contributing depths but not
+  # pixels: the count a coverage is taken over is every pixel the cloud holds,
+  # which is what the walk it replaced counted.
+  defp survey_with_depths(points, [], index, centre, {count, on, centre_row, kept}) do
+    {count, on, centre_row, _no_depths} = survey_plain(points, index, centre, {count, on, centre_row})
+    {count, on, centre_row, Enum.reverse(kept)}
+  end
+
+  defp survey_with_depths(
+         [row | rows],
+         [depth | depths],
+         index,
+         centre,
+         {count, on, centre_row, kept}
+       ) do
+    on? = on_surface?(row)
+
+    survey_with_depths(rows, depths, index + 1, centre, {
+      count + 1,
+      if(on?, do: on + 1, else: on),
+      if(index == centre, do: row, else: centre_row),
+      if(on?, do: [depth | kept], else: kept)
+    })
+  end
+
+  defp survey_plain([], _index, _centre, {count, on_surface, centre}),
+    do: {count, on_surface, centre, []}
+
+  defp survey_plain([row | rows], index, centre, {count, on, centre_row}) do
+    survey_plain(rows, index + 1, centre, {
+      count + 1,
+      if(on_surface?(row), do: on + 1, else: on),
+      if(index == centre, do: row, else: centre_row)
+    })
+  end
+
+  defp wants_depth?(%__MODULE__{features: features}),
+    do: Enum.any?(features, &(&1 in ["min_depth", "mean_depth"]))
+
   # Whether the pixel is on the surface: the last number on its row. A patch's
   # rows are four numbers — where the pixel is and whether it is on the object —
   # so the mask is matched rather than found. `List.last/1` walks the row to
@@ -153,9 +219,6 @@ defmodule Monty.Frameworks.Models.SensorModules.ObservationProcessor do
   # step, over four thousand pixels.
   defp on_surface?([_x, _y, _z, mask | _rest]), do: mask > 0.0
   defp on_surface?(row), do: List.last(row) > 0.0
-
-  # The share of the patch on the surface the camera is pointed at.
-  defp coverage(points), do: Enum.count(points, &on_surface?/1) / length(points)
 
   # Coverage is read before the surface is fitted, because a surface sensor is
   # allowed to report features with its middle pixel off the object as long as
@@ -168,19 +231,14 @@ defmodule Monty.Frameworks.Models.SensorModules.ObservationProcessor do
   # image: a pixel that returned a depth but is not on an object is scenery, and a
   # sensor watching scenery is not on the object — the difference is what a
   # surface agent's search turns on (`sensor_modules.py:308-312`).
-  defp depth_features(%__MODULE__{features: wanted}, observation, points) do
-    depths = observation |> Map.get("depth") |> List.flatten()
-    mask = Enum.map(points, &on_surface?/1)
-
-    on_surface = for {depth, true} <- Enum.zip(depths, mask), do: depth
-
+  defp depth_features(%__MODULE__{features: wanted}, on_surface) do
     %{"min_depth" => Enum.min(on_surface, fn -> nil end), "mean_depth" => mean(on_surface)}
     |> Map.take(wanted)
   end
 
   # -- the fitted surface ----------------------------------------------------
 
-  defp extract(processor, observation, points, center_id, features) do
+  defp extract(processor, observation, points, center_id, features, depths) do
     {normal, valid_normal?} =
       SensorProcessing.surface_normal_total_least_squares(
         points,
@@ -200,7 +258,7 @@ defmodule Monty.Frameworks.Models.SensorModules.ObservationProcessor do
 
     features =
       features
-      |> Map.merge(depth_features(processor, observation, points))
+      |> Map.merge(depth_features(processor, depths))
       |> with_colour(processor, observation)
       |> with_curvatures(processor, first, second, valid_normal?, valid_curvatures?)
 
