@@ -59,6 +59,45 @@ is rebuilt from the run's whole history at up to 3 Hz (`Chart.new/2` reads every
 step to draw a window of it), and the presenter encodes and writes a picture per
 sensor per step.
 
+**Corrected 2026-11-12, later the same day: the page is not the problem.** The
+rows above are wall-clock, and this box is loaded (load ~6 on 8 cores, most of
+the swap in use), so they do not separate the page from contention. Measured in
+reductions instead: one render of a 120-step, ten-object replay page — a playhead
+move, which is what a page following a live run does — is **4 010 reductions**,
+and a render that rebuilds the chart is 13 695. A step is 425 000. The page also
+does not read the transcript per step: `RunHistory.progress/1` selects one row of
+scalars (`@progress_fields`), and the steps themselves come from the stream. At
+the six or seven renders a second a watched run causes, the page is **under 1 %
+of a step**. What a page _does_ pay for is the first read of a run: `head/1` of a
+5 110-step run is **210 ms** and `get/1` (which also carries the pictures'
+timeline) is **325 ms**, because the row is an 8.4 MB log — once per visit, not
+once per step.
+
+**The whole benchmark, run end to end today** (the studio's own runner, no page
+open, `base_config_10distinctobj_dist_agent`, 10 train + 10 eval objects × 14
+eval epochs = **140 episodes, 5 110 steps**, all concluded):
+
+| what                                      |          time | share |
+| ----------------------------------------- | ------------: | ----: |
+| the run, wall                             | **242–247 s** |  100% |
+| the model steps, as they timed themselves |       114.8 s |   47% |
+| the world, as it timed itself             |        58.7 s |   24% |
+| everything else                           |         ~70 s |   29% |
+
+242 s is **4:04**, against Monty's dashboard's **3:18** for the same shape of run
+— 1.2×, not the 3× that a 30-minute report suggests. "Everything else" is
+**425k reductions a step** in total against about 340k for the step itself: the
+recording (a step's entry, its line, its moment, two PNGs, the frame files, the
+ETS row, the broadcast), the world's crossing (the message in and out of the
+Python process, which `info.world_us` does not count), and the scheduler. The
+pictures are **1.4 ms and 1.0 ms** a step to encode warm, so ~12 s of the run is
+drawing the scene the page shows.
+
+**A step inside `Run.step` is model and world and nothing else**: 21 steps of an
+episode, wall 1 789 ms, of which the model 1 512 ms and the world 244 ms — 1.5 ms
+a step unaccounted. So the studio's per-step work is outside the step, where it
+was deliberately moved, and it is now the largest single item in a run.
+
 **One episode, split by the process that did the work** (per-episode reductions,
 studio runner, 59 steps):
 
@@ -85,16 +124,18 @@ step**, `EvidenceSlopeTracker`+`HypothesesSelection` 197 k, `DepthTo3DLocations`
 `Hypotheses` 60 k, `Numpy` 58 k, `SensorProcessing` 37 k,
 `ObservationProcessor` 8.2 k, `OnObjectObservation` 12 k.
 
-**What that means for the next session, in order of size:**
+**What that means for the next session, in order of size** (revised once the page
+was measured in reductions — it is 1 % of a step, so the list below it moved up):
 
-1. **The page, while a run is live** (~2.9 s an episode of machine time, and it
-   is the reason a watched run takes 4.6 s an episode instead of 1.67). Draw the
-   chart from what changed, not from the whole history.
+1. **The recording, at ~70 s of a 242 s run** (29 %): a step's entry, line,
+   moment and two PNGs, the frame files, the ETS row and the broadcast, plus the
+   world's crossing. The pictures alone are ~12 s.
 2. **`Run.start` / positioning** (~1.2 s an episode, 19% of an episode's
    reductions): 17 world steps whose transforms compute both sensors' point
-   clouds while the procedure reads one.
-3. **The transform's 240 k a call**, and `MissingToMaxDepth` beside it: per-pixel
-   Elixir building 4096 four-float rows, twice, every world step.
+   clouds while the procedure reads one. **Done** (see below).
+3. **The transform's 240 k a world step**, and `MissingToMaxDepth` beside it:
+   per-pixel Elixir building 4096 four-float rows, twice, every world step — 24 s
+   of the run's world time.
 4. **The sensor modules' `Enum` plumbing**: `ObservationProcessor` and
    `OnObjectObservation` walk the 4096-row cloud several times each.
 
