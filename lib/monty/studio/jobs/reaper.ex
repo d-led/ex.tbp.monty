@@ -9,17 +9,18 @@ defmodule Monty.Studio.Jobs.Reaper do
   that shows a run still going when nothing is working on it, and an experiment
   that refuses a new run because its old one is "already running".
 
-  A record is therefore checked against the two things that can only be true of a
-  live run: a process registered for it on this node
-  (`Monty.Studio.Jobs.Run.held?/1`), or an Oban job still waiting its turn. A
-  `running` record with neither is one whose process is gone, and saying so —
-  with the reason, in the record and in the run's own log — beats leaving it to
-  be guessed at.
+  A record is therefore checked against the one thing that can only be true of a
+  live run: a process stepping it, which the run registers (`Run.owner/1`). Oban
+  says what has become of the job — queued jobs will be tried, settled ones never
+  will — and for a job that is executing the registry answers with a pid, or with
+  nothing. A `running` record with no pid behind it is one whose process is gone,
+  and saying so — with the reason, in the record and in the run's own log — beats
+  leaving it to be guessed at.
 
-  Reading silence as death needs a grace period: a job that has just started has
-  not registered itself yet, so for the first minute of an attempt the registry
-  cannot be believed. Anything older than that is a decision this module can make
-  on its own, because nothing else is going to.
+  Silence is not evidence, and is not used as any: a run stepped where this node
+  cannot see it (`mix monty.run`, which never enqueues a job) is the one case
+  with no pid and no job, and the only one judged by how recently its record was
+  written.
 
   This is a one-node judgement, and it is worth saying so: the registry is this
   node's, so two nodes executing the same queue would each need to prove
@@ -83,31 +84,41 @@ defmodule Monty.Studio.Jobs.Reaper do
     end
   end
 
-  # A run is alive if this node holds a process for it, if Oban still has its job
-  # queued or freshly started, or if its record has been written to in the last
-  # minute.
+  # A run is alive if a process is stepping it. Oban says what has become of the
+  # job — queued jobs will be tried, settled ones never will — and for a job that
+  # is executing, the process is the answer: the registry holds it, and an entry
+  # whose pid is gone holds nothing. Oban's `attempted_by` names a host and a
+  # producer, not a process, so the pid is this node's to know and nobody else's.
   #
-  # That last one is what a headless run needs: `mix monty.run` steps the
-  # experiment in its own VM, so this node's registry can never see it, and
-  # judging it by absence was this module killing a healthy run at the first
-  # page visit. Silence is what can be judged here; absence only means the
-  # process is not this node's.
-  defp alive?(record), do: waiting?(record) or fresh?(record)
-
-  # A job that is queued will still be tried, and one that is executing may have
-  # started a moment ago.
-  defp waiting?(record) do
+  # No job at all is the headless case — `mix monty.run` steps an experiment in
+  # its own VM, so this node's registry can never see it and its queue never
+  # knows it — and the only one silence can be judged on.
+  defp alive?(record) do
     case job_of(record.id) do
       %{state: state} when state in @waiting -> true
-      %{state: "executing", attempted_at: %DateTime{} = at} -> recent?(at)
-      _settled_or_missing -> false
+      %{state: "executing"} = job -> working?(record) or starting?(job)
+      nil -> fresh?(record)
+      %{state: _settled} -> false
     end
   end
+
+  defp working?(record) do
+    case Run.owner(record.id) do
+      [{pid, _label}] -> Process.alive?(pid)
+      [] -> false
+    end
+  end
+
+  # The one gap a registry cannot see: Oban writes `attempted_at` before it calls
+  # the worker, so a claim seconds old may have no process registered yet.
+  @claim_grace_s 5
+  defp starting?(%{attempted_at: %DateTime{} = at}), do: recent?(at, @claim_grace_s)
+  defp starting?(_job), do: false
 
   # Every step a run takes writes its record, whoever is stepping it.
   defp fresh?(record), do: RunHistory.quiet_for(record) < grace_seconds()
 
-  defp recent?(at), do: DateTime.diff(DateTime.utc_now(), at, :second) < grace_seconds()
+  defp recent?(at, seconds), do: DateTime.diff(DateTime.utc_now(), at, :second) < seconds
 
   # The threshold is a setting, read through a cache: a claim about somebody
   # else's process is exactly the number that is wrong on a slow machine, so it

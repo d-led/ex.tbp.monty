@@ -76,6 +76,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         # first visit after a restart, is exactly when somebody is waiting. A
         # message to ourselves is after this render and before anything the
         # reader can do.
+        #
+        # "Here" is every connected mount, which includes every websocket
+        # reconnect: a page that comes back is a page whose run may have died
+        # while it was away, and the answer arrives on the run's own topic like
+        # everything else the run says.
         send(self(), :reap)
         socket
       else
@@ -1292,6 +1297,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # whether one has started since it opened, and a page whose run has finished
   # asks whether another has begun — the answer is the same run for everybody.
   def handle_info(:studio_poll, socket) do
+    # The same check the run page makes, for the run this page shows: a worker
+    # that died leaves the word `running` behind, and closing the record is what
+    # stops a page saying it. It is the cheap question — one run, counters only —
+    # and the answer comes back on the run's topic like everything else the run
+    # says, so the page draws it from `handle_studio/2`.
+    _ =
+      if socket.assigns[:run_id] && socket.assigns.status == "running",
+        do: Reaper.reap(socket.assigns.run_id)
+
     socket =
       socket
       |> follow_started()
@@ -1957,13 +1971,20 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # A stored step as the message that would have carried it: the words the line
   # holds, the beliefs the chart draws, and the pair the badge counts.
+  #
+  # Beliefs are stored the way a row keeps them — string keys — and the chart
+  # reads the shape a live step carries. Handing one to the other drew nothing
+  # and raised `key :graphs not found`, which killed the drawing task.
   defp event_of(entry) do
     %{
       line: RunLog.text(entry),
       step: entry["step"],
       episode: entry["episode"],
       frames: [],
-      beliefs: entry["beliefs"] || %{},
+      beliefs:
+        Map.new(entry["beliefs"] || %{}, fn {module_id, belief} ->
+          {module_id, Belief.from_stored(belief)}
+        end),
       centre: nil
     }
   end

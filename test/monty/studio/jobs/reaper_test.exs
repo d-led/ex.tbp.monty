@@ -103,6 +103,18 @@ defmodule Monty.Studio.Jobs.ReaperTest do
   end
 
   describe "a run whose job has settled" do
+    test "is closed at once, however recently its record was written" do
+      # A cancelled or discarded job will never step the run again. Waiting for
+      # the record to go quiet first is a minute of a page saying `running`
+      # about a run that died with its node, on every reload.
+      record = start_run()
+      job = enqueue(record)
+      :ok = Oban.cancel_job(job)
+
+      assert Reaper.sweep() == 1
+      assert RunHistory.get(record.id).status == "failed"
+    end
+
     test "is closed, with the reason a person can act on" do
       record = start_run()
       job = enqueue(record)
@@ -192,13 +204,39 @@ defmodule Monty.Studio.Jobs.ReaperTest do
   end
 
   describe "a job left executing" do
-    test "is given a minute before its silence counts as death" do
-      # A worker registers itself first thing, but Oban's `attempted_at` is
-      # written before the worker runs at all: judging inside that gap would
-      # close a run that is just starting.
+    test "is abandoned at once when no process is stepping it" do
+      # The run died with the node it was started on, and Oban's job still says
+      # `executing` until its rescuer gets to it. A record written seconds before
+      # that is the previous node's last breath, not a worker: what says nobody is
+      # working on the run is that no pid is.
       record = start_run()
       job = enqueue(record)
-      :ok = executing_since(job, 5)
+      :ok = executing_since(job, 300)
+
+      assert Reaper.sweep() == 1
+      assert RunHistory.get(record.id).status == "failed"
+    end
+
+    test "is left alone while a pid is stepping it" do
+      record = start_run()
+      job = enqueue(record)
+      :ok = executing_since(job, 3_600)
+
+      {:ok, _owner} =
+        Registry.register(Monty.Runtime.Registry, {:studio_run, record.id}, :running)
+
+      # This test process is the owner, and it is alive: that is the whole of it.
+      assert Reaper.sweep() == 0
+      assert RunHistory.get(record.id).status == "running"
+    end
+
+    test "is left alone in the moment between Oban claiming it and its worker registering" do
+      # Oban writes `attempted_at` before it calls the worker, and the worker
+      # registers itself first thing: judging inside that gap would close a run
+      # that is just starting.
+      record = start_run()
+      job = enqueue(record)
+      :ok = executing_since(job, 0)
 
       assert Reaper.sweep() == 0
       assert RunHistory.get(record.id).status == "running"

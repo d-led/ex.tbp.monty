@@ -828,6 +828,13 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       assert view |> element("#run-progress") |> render() =~ "episode 1 · step 12 / 20"
 
+      # And drawn, not only counted: a stored belief carries string keys and the
+      # chart reads the shape a live step carries, so a repair that hands one to
+      # the other draws nothing at all — the picture stops where the messages
+      # stopped.
+      _ = :sys.get_state(view.pid)
+      assert view |> chart_segments("learning_module_0") > 0
+
       # Every step of the repair, not only the last: a line with holes in it is
       # the transcript a reader scrolls back through.
       texts = view |> rendered_lines() |> Enum.map(& &1.text)
