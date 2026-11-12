@@ -167,7 +167,7 @@ defmodule Monty.Studio.Artifacts do
     # The step is whatever a run numbers its pictures by: a step number for a run
     # of the whole experiment, and part-and-step for a run of several parts, whose
     # parts each count from nought inside one run's directory.
-    name = Path.join(to_string(step), "#{sensor_id}-#{kind}.png")
+    name = frame_name(step, sensor_id, kind)
     path = Path.join(frames_dir(run_id), name)
 
     with :ok <- File.mkdir_p(Path.dirname(path)),
@@ -176,6 +176,18 @@ defmodule Monty.Studio.Artifacts do
       {:ok, name}
     end
   end
+
+  @doc """
+  The name a picture is kept under, without writing it.
+
+  `<step>/<sensor>-<depth|colour>.png`, which is what the route under
+  `/runs/:id/frames/` appends. A run's pictures are named by convention, so a
+  record can keep a picture's name before its bytes exist — `RunStream` does,
+  and the drawing happens afterwards in a process of its own.
+  """
+  @spec frame_name(non_neg_integer() | String.t(), String.t(), String.t()) :: String.t()
+  def frame_name(step, sensor_id, kind),
+    do: Path.join(to_string(step), "#{sensor_id}-#{kind}.png")
 
   # `Base.decode64/1` answers `:error`, not `{:error, _}`: a picture that is not
   # base64 is refused in the shape this function promises, rather than in the

@@ -1437,8 +1437,16 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   end
 
   defp perform_run(view) do
-    job = %Oban.Job{args: %{"run_id" => current_run_id(view)}, attempt: 1}
+    run_id = current_run_id(view)
+    job = %Oban.Job{args: %{"run_id" => run_id}, attempt: 1}
     assert {:ok, _record} = Monty.Studio.Jobs.Run.perform(job)
+
+    # The page learns about the run by message, and a step's announcement comes
+    # from the process that draws its pictures. Asking the stream for its count
+    # settles the order — a call answers after the casts before it, and each of
+    # those has handed its pictures on — and then the drawing catches up.
+    _ = Monty.Studio.RunStream.count(run_id)
+    :ok = Monty.Studio.RunStream.Pictures.settle()
 
     # The page learns about the run by message; let it drain them.
     _ = :sys.get_state(view.pid)

@@ -15,7 +15,9 @@ defmodule Monty.Studio.RunStream do
     * the record's own shape, which this process builds from the report — the
       entry a row keeps and the text a log line prints are derived here, so a
       step spends nothing on either;
-    * the pictures, which this process encodes — a JPEG per sensor per step;
+    * the pictures, which this process names and `RunStream.Pictures` draws and
+      writes — a JPEG per sensor per step, and no longer anything a boundary's
+      barrier waits behind;
     * the database, which a step does not touch at all. `studio_runs` gets the
       transcript at every episode boundary and once when the run settles.
 
@@ -25,9 +27,11 @@ defmodule Monty.Studio.RunStream do
   the whole list, so a run of forty thousand steps copied forty thousand lists —
   `steps_from/2` reads the steps a boundary has not written yet instead.
 
-  A step's pictures are encoded here, once per sensor: the frame a page draws and
-  the scene a replay keeps are the same two PNGs, and encoding them on the step as
-  well made every step pay for four.
+  A step's pictures are named here, once per sensor, and drawn there: the frame a
+  page draws and the scene a replay keeps are the same two PNGs, and encoding
+  them on the step as well made every step pay for four. Naming them here is what
+  lets the record be complete while the drawing is still queued: the name is the
+  run's own convention (`<step>/<sensor>-<depth|colour>.png`).
 
   Writing the transcript to Postgres per step instead is what made a step cost
   grow with the run: the `timeline` is 15 kB a step and was rewritten whole each
@@ -49,8 +53,8 @@ defmodule Monty.Studio.RunStream do
 
   require Logger
 
-  alias Monty.Simulators.Synthetic.Camera
   alias Monty.Studio.{Artifacts, RunLog}
+  alias Monty.Studio.RunStream.Pictures
 
   @table __MODULE__
 
@@ -218,7 +222,6 @@ defmodule Monty.Studio.RunStream do
   @impl true
   def handle_cast({:publish, stream_id, report, announce}, state) do
     step = drawn(report)
-    images = images_of(step)
 
     # The record keeps where a picture is, not what it is: a step's PNGs were ten
     # kilobytes of the row, and a run of twenty thousand steps does not fit in a
@@ -229,14 +232,17 @@ defmodule Monty.Studio.RunStream do
     # part's pictures go in the run the page opened, in a folder that says which
     # part took them — every part numbers its steps from nought.
     pictures_in = announce || stream_id
-    frame = frame_key(Map.get(report, :part), step.number)
+    frame = frame_key(Map.get(step, :part), step.number)
 
-    store = fn sensor_id, kind, base64 ->
-      with {:ok, name} <- Artifacts.put_frame(pictures_in, frame, sensor_id, kind, base64),
-           do: {:ok, Artifacts.frame_url(pictures_in, name)}
-    end
+    # A picture's name is this run's own convention, so the record keeps it
+    # before the bytes exist: `Pictures` draws and writes them, and a barrier —
+    # which only waits for what this process has been handed — stops waiting
+    # behind the encoding of every step still in its queue.
+    moment =
+      RunLog.moment(step.number, step.observations, fn sensor_id, kind ->
+        Artifacts.frame_url(pictures_in, Artifacts.frame_name(frame, sensor_id, kind))
+      end)
 
-    moment = RunLog.moment(step.number, step.observations, images, store)
     position = Map.get(state.held, stream_id, 0)
 
     :ets.insert(@table, {{stream_id, position}, step.entry, moment})
@@ -244,8 +250,8 @@ defmodule Monty.Studio.RunStream do
     # A step's line is built from its own entry here, so it is always there: the
     # file and the page are told the same words.
     say(stream_id, step.line)
+    Pictures.drawn(step, pictures_in, frame)
 
-    broadcast(announce || stream_id, {:step, announcement(step, frames_of(step, images))})
     {:noreply, %{state | held: Map.put(state.held, stream_id, position + 1)}}
   end
 
@@ -288,45 +294,8 @@ defmodule Monty.Studio.RunStream do
     |> Map.merge(%{entry: entry, line: RunLog.line(entry), number: info.step})
   end
 
-  # One encoding per sensor per step, shared by the picture a page draws and the
-  # scene a replay keeps: they are the same two PNGs, and encoding them twice made
-  # a step pay for four.
-  defp images_of(step) do
-    step.observations
-    |> RunLog.sensors_of()
-    |> Map.new(fn {sensor_id, observation} ->
-      {sensor_id, Camera.images(observation)}
-    end)
-  end
-
-  # What a page draws a step from: its line, the pictures, and what the learning
-  # modules concluded. The observations themselves stay in `steps/1`, where a
-  # replay reads them.
-  defp announcement(step, frames) do
-    %{
-      line: step.line,
-      episode: step.episode,
-      step: step.number,
-      frames: frames,
-      beliefs: step.beliefs,
-      centre: step.centre
-    }
-  end
-
-  # Every sensor, every step. A queued run has no socket waiting on it, so there
-  # is nothing to throttle for; the frames are not thumbnails either — they are
-  # the same drawing a live page would get. The observation carries the pictures
-  # this step already encoded, so `Camera.frame/3` draws them rather than making
-  # its own: a step pays for two PNGs a sensor, not four.
-  defp frames_of(step, images) do
-    seen = RunLog.sensors_of(step.observations)
-
-    step.sensor_ids
-    |> Enum.filter(&Map.has_key?(seen, &1))
-    |> Enum.map(&Camera.frame(&1, RunLog.drawn(seen[&1], Map.get(images, &1)), step.number))
-    |> Enum.map(&Map.take(&1, [:sensor_id, :media_type, :data, :note]))
-  end
-
+  # The log's line, appended here: a step the page has heard of is a step the
+  # file has too, because the announcement is cast after this write.
   defp say(run_id, line) do
     case Artifacts.append(run_id, line) do
       :ok ->
@@ -335,13 +304,5 @@ defmodule Monty.Studio.RunStream do
       {:error, reason} ->
         Logger.warning("studio run #{run_id}: cannot write log: #{inspect(reason)}")
     end
-  end
-
-  defp broadcast(run_id, event) do
-    Phoenix.PubSub.broadcast(
-      ExTbpMonty.PubSub,
-      Monty.Studio.Jobs.Run.topic(run_id),
-      {:studio, run_id, event}
-    )
   end
 end

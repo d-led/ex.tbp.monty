@@ -121,6 +121,20 @@ defmodule Monty.Simulators.Synthetic.Camera do
   defp range(_none), do: nil
 
   @doc """
+  The shallowest and deepest pixel a depth image saw, or `nil` for a frame that
+  saw nothing.
+
+  The range is what the depth picture is drawn over and what a record keeps
+  beside the picture — a depth image of a close surface is otherwise a flat grey
+  square that says nothing. This is the walk on its own, for a caller that needs
+  the numbers and not the picture: a step's record keeps the range and has the
+  bytes drawn later.
+  """
+  @spec depth_range([[number()]] | nil) :: {float(), float()} | nil
+  def depth_range(nil), do: nil
+  def depth_range(rows), do: range_of(rows)
+
+  @doc """
   The greyscale rows a depth image becomes, and the range they were drawn over.
 
   Public because it is the picture's arithmetic rather than its presentation: a

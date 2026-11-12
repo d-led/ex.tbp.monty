@@ -113,13 +113,38 @@ defmodule Monty.Studio.RunLog do
   def moment(step, observations) when is_integer(step),
     do: moment(step, observations, %{})
 
+  # Two shapes of one function. A step that has already had its pictures drawn
+  # hands the images over; a step whose pictures are still to be drawn hands over
+  # the function that answers where each of them will be kept.
   @doc """
-  The same scene, from pictures somebody has already drawn.
+  The same scene, with each picture named and still to be written.
 
-  `RunStream` encodes a sensor's pictures once per step — the page's frame and the
-  record's scene are the same two PNGs — so it hands them here instead of having
-  them drawn twice.
+  `name_of` answers where a sensor's picture will be, and is called with the
+  sensor and the kind (`"depth"`, `"colour"`): a run's pictures are named by its
+  own convention, so the name is known before the bytes are, and a step's record
+  can be complete while the drawing is still queued somewhere else.
+
+  The range a depth picture is drawn over is computed here — it is a number the
+  record keeps — and the arrays are dropped exactly as they are in the other
+  shapes, so the record does not grow a second way of saying what a sensor saw.
   """
+  @spec moment(non_neg_integer(), map(), (String.t(), String.t() -> String.t())) :: map()
+  def moment(step, observations, name_of)
+      when is_integer(step) and is_function(name_of, 2) do
+    %{
+      "step" => step,
+      "sensors" =>
+        observations
+        |> sensors_of()
+        |> Map.new(fn {sensor_id, observation} ->
+          {sensor_id, named(sensor_id, observation, name_of)}
+        end)
+    }
+  end
+
+  # The other shape: the pictures a step has already had drawn, as
+  # `Camera.images/1` answered them. `RunStream` encodes once and hands them over
+  # rather than having the same two PNGs drawn twice.
   @spec moment(non_neg_integer(), map(), %{optional(String.t()) => map()}) :: map()
   def moment(step, observations, images) when is_integer(step),
     do: moment(step, observations, images, nil)
@@ -207,6 +232,39 @@ defmodule Monty.Studio.RunLog do
       _refused -> base64
     end
   end
+
+  # The shape a record keeps while the pictures are still to be written: their
+  # names, and the range the depth picture is drawn over. An observation that
+  # already carries drawn pictures keeps them as they stand — it was drawn once,
+  # and a step is not drawn twice.
+  defp named(sensor_id, observation, name_of) do
+    kept = Map.drop(observation, @camera_arrays)
+
+    case Map.get(observation, "images") do
+      %{} = drawn ->
+        Map.put(kept, "images", drawn)
+
+      nil ->
+        pictures =
+          %{
+            "depth" => named_picture(observation, "depth", "depth", sensor_id, name_of),
+            "colour" => named_picture(observation, "rgba", "colour", sensor_id, name_of),
+            "range" => observation |> Map.get("depth") |> Camera.depth_range() |> as_list()
+          }
+          |> Map.reject(fn {_key, value} -> is_nil(value) end)
+
+        if map_size(pictures) == 0, do: kept, else: Map.put(kept, "images", pictures)
+    end
+  end
+
+  # A picture that is there has a name; a sensor that sent no such array has
+  # nothing to write and nothing to point at.
+  defp named_picture(observation, array, kind, sensor_id, name_of) do
+    if is_nil(Map.get(observation, array)), do: nil, else: name_of.(sensor_id, kind)
+  end
+
+  defp as_list(nil), do: nil
+  defp as_list({low, high}), do: [low, high]
 
   @doc """
   One timestep, as a line of text.

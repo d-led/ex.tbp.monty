@@ -13,6 +13,7 @@ defmodule Monty.Studio.RunStreamTest do
   use ExUnit.Case, async: true
 
   alias Monty.Studio.{Artifacts, RunLog, RunStream}
+  alias Monty.Studio.RunStream.Pictures
 
   # A moment far enough from now that a line carrying it cannot be mistaken for
   # one carrying the clock of the process that wrote it.
@@ -134,6 +135,51 @@ defmodule Monty.Studio.RunStreamTest do
   # answers after the casts that came before it.
   defp settled(run_id), do: RunStream.count(run_id)
 
+  # A step whose sensor saw something: one depth array, which is what a picture
+  # is drawn from, and the sensor a page is told to draw.
+  defp seeing(options) do
+    report(
+      step: 1,
+      observations: %{
+        "agent_id_0" => %{
+          "patch" => %{"depth" => Keyword.fetch!(options, :depth), "location" => [0.0, 0.0, 0.1]}
+        }
+      },
+      sensor_ids: ["patch"]
+    )
+  end
+
+  describe "a step's pictures" do
+    # Drawing them is 1.2–1.7 ms of PNG and 0.8–1.0 ms of writing, per sensor per
+    # step, and a boundary asks this process for everything it has been handed. So
+    # the record keeps where a picture will be, and the drawing happens behind it:
+    # a queue of undrawn steps is not something a boundary waits for.
+    test "are named by the record, whether or not they have been drawn", %{run_id: run_id} do
+      RunStream.publish(run_id, seeing(depth: [[0.05, 0.07]]))
+
+      assert {[entry], [moment]} = RunStream.steps(run_id)
+      assert entry["step"] == 1
+
+      assert %{"patch" => %{"images" => pictures}} = moment["sensors"]
+      assert pictures["depth"] == "/runs/#{run_id}/frames/1/patch-depth.png"
+      assert pictures["range"] == [0.05, 0.07]
+    end
+
+    test "are drawn and written behind the step the page is shown", %{run_id: run_id} do
+      Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Monty.Studio.Jobs.Run.topic(run_id))
+
+      RunStream.publish(run_id, seeing(depth: [[0.05, 0.07]]))
+
+      assert_receive {:studio, ^run_id, {:step, announcement}}, 5_000
+      assert [%{sensor_id: "patch", media_type: "text/html"}] = announcement.frames
+
+      # The record already pointed at it; this is the bytes arriving.
+      :ok = Pictures.settle()
+      assert {:ok, path} = Artifacts.frame_path(run_id, "1/patch-depth.png")
+      assert File.exists?(path)
+    end
+  end
+
   # A step, the way a worker hands one over: what it reported, what the modules
   # believed, what the sensors saw, and when.
   defp report(options) do
@@ -150,8 +196,8 @@ defmodule Monty.Studio.RunStreamTest do
       at: Keyword.get(options, :at, @moment),
       episode: Keyword.get(options, :episode, 0),
       beliefs: Keyword.get(options, :beliefs, %{}),
-      observations: %{},
-      sensor_ids: [],
+      observations: Keyword.get(options, :observations, %{}),
+      sensor_ids: Keyword.get(options, :sensor_ids, []),
       centre: nil
     }
   end

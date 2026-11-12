@@ -28,6 +28,10 @@ defmodule ExTbpMonty.Application do
       # transcript reaches its page from here, and the database is written when
       # the run settles rather than once per step.
       Monty.Studio.RunStream,
+      # The pictures of those steps, drawn and written after the step is in the
+      # table: a boundary waits for the steps, not for a JPEG per sensor per
+      # step, and the drawing catches up behind it.
+      Monty.Studio.RunStream.Pictures,
       # The one process that writes a run's steps: a boundary hands them over and
       # steps on, so the experiment never waits for Postgres.
       Monty.Studio.RunWriter,
