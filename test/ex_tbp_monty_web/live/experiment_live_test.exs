@@ -844,6 +844,59 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       end
     end
 
+    # A run's transcript is written by the run's own writer, which the job hands
+    # it to and does not wait for. A page that read the row the instant a run
+    # finished could therefore find counters saying what the run took and a log
+    # holding none of it — and latching "caught up" on that read is a page that
+    # never asks again. With the announcements lost as well, such a page showed
+    # nothing at all for a run it had watched happen.
+    test "does not give up on a finished run whose transcript is not written yet", %{conn: conn} do
+      {:ok, record} =
+        RunHistory.start(%{
+          experiment: "base_config_10distinctobj_dist_agent",
+          source: "monty",
+          steps: 20,
+          config: %{},
+          inputs: %{"seed" => 42, "world" => "synthetic"}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      # Two steps taken, and the page is told of neither.
+      for step <- 0..1 do
+        Monty.Studio.RunStream.publish(record.id, stream_report(step),
+          announce: "no page listens here"
+        )
+      end
+
+      {entries, moments} = Monty.Studio.RunStream.steps(record.id)
+
+      {:ok, closed} = RunHistory.finish(record, %{}, "finished")
+
+      {1, nil} =
+        ExTbpMonty.Repo.update_all(
+          from(r in Monty.Studio.RunHistory.Run, where: r.id == ^closed.id),
+          set: [steps_done: 2]
+        )
+
+      send(view.pid, :studio_poll)
+      _ = :sys.get_state(view.pid)
+
+      refute Enum.any?(visible_lines(view), &(&1 =~ "step 0 ·")),
+             "a run whose transcript is not written has no step to draw"
+
+      # The writer catches up, and the next tick shows the run.
+      {:ok, _written} =
+        RunHistory.checkpoint_steps(RunHistory.get(record.id), entries, moments, timeline: :skip)
+
+      send(view.pid, :studio_poll)
+      _ = :sys.get_state(view.pid)
+
+      texts = visible_lines(view)
+      assert Enum.any?(texts, &(&1 =~ "step 0 ·"))
+      assert Enum.any?(texts, &(&1 =~ "step 1 ·"))
+    end
+
     test "a backlog keeps every step, so the line it draws has no gaps", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=5&episodes=1")

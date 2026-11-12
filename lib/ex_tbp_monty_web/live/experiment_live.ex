@@ -1907,9 +1907,25 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp catch_up(socket, %{status: status} = record) when status in ["queued", "running"],
     do: repair(socket, record)
 
+  # A settled run: its transcript is in the row. That write is the run's writer's,
+  # which the job hands the transcript to and does not wait for — so the first
+  # read after a job returns can hold the row as it was when the run started,
+  # with the counters saying what the run took and the log holding none of it.
+  # Latching `caught_up` on that read is a page that never asks again, and a page
+  # that lost the announcements then has nothing to show for the run at all. The
+  # latch waits for a transcript there is something in — or for a run that took
+  # nothing, where there is nothing to wait for.
   defp catch_up(socket, record) do
     case RunHistory.head(record.id) do
       nil ->
+        socket
+
+      %{log: []} = settled when settled.steps_done == 0 ->
+        socket
+        |> assign(caught_up: true)
+        |> assign(steps_seen: 0)
+
+      %{log: []} ->
         socket
 
       settled ->
