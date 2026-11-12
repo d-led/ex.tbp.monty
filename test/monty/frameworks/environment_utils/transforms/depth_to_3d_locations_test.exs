@@ -128,6 +128,28 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocationsTest do
 
       assert List.flatten(surface) == List.duplicate(0.0, 9)
     end
+
+    test "counts pixels, not rows, when a depth beyond a metre is a metre" do
+      # The threshold is found by counting how many depths fall in each of eight
+      # bins, which means counting *pixels*: three depths three-eighths of the
+      # way up the range are three counts, not three rows of one count each. Given
+      # a row where they are mistaken for one value of a metre, the bins they
+      # would have filled are empty and the threshold lands somewhere else — a
+      # patch has two surfaces and the mask keeps the wrong one.
+      near = [0.02, 0.02, 0.02]
+      middle = [0.5, 0.5, 0.5]
+      far = [5.0, 5.0, 5.0]
+      image = [near, middle, far]
+
+      # A metre is the clip, so the far row is the same image with its depths
+      # written as a metre already.
+      clipped = [near, middle, List.duplicate(1.0, 3)]
+
+      surface = DepthTo3DLocations.get_surface_from_depth(image, image(1.0), 1000.0)
+
+      assert surface == DepthTo3DLocations.get_surface_from_depth(clipped, image(1.0), 1000.0)
+      assert List.flatten(surface) == [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
+    end
   end
 
   describe "a surface agent's finger" do
