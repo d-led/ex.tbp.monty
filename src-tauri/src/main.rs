@@ -52,9 +52,39 @@ const SERVER_FILE: &str = if cfg!(windows) {
 /// database open.
 struct Sidecar(Mutex<Option<Child>>);
 
+/// macOS freezes an application nobody is looking at — App Nap — and a frozen
+/// window is a window that sends no heartbeat: the sidecar closes its socket
+/// after the idle timeout, and the LiveView client, by design, does not
+/// reconnect while the page is hidden. A run that takes ten minutes is exactly
+/// the case App Nap gets wrong, so the application holds an activity assertion
+/// for as long as it is open.
+///
+/// `UserInitiatedAllowingIdleSystemSleep` on purpose: the window has no business
+/// keeping the machine awake, only itself unfrozen. `LatencyCritical` is the
+/// other half of `NSActivityUserInteractive`, which is what a page somebody
+/// actually watches is.
+#[cfg(target_os = "macos")]
+fn keep_the_window_out_of_app_nap() {
+    use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
+
+    let options = NSActivityOptions::UserInitiatedAllowingIdleSystemSleep
+        | NSActivityOptions::LatencyCritical;
+    let reason = NSString::from_str("the window is running an experiment");
+
+    let activity = NSProcessInfo::processInfo().beginActivityWithOptions_reason(options, &reason);
+
+    // Held, not ended: an assertion lasts as long as the object does, and there
+    // is nothing after this that wants App Nap back. `forget` is the hold.
+    std::mem::forget(activity);
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keep_the_window_out_of_app_nap() {}
+
 fn main() {
     let log = log_path();
     install_panic_log(&log);
+    keep_the_window_out_of_app_nap();
 
     let shared: SharedState = Arc::new(Mutex::new(Shared::default()));
 
