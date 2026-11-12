@@ -112,6 +112,14 @@ defmodule Monty.Frameworks.Models.NoResetEvidenceMatching.MontyForNoResetEvidenc
   @spec state(atom() | String.t()) :: Step.State.t()
   def state(model_id), do: Model.state(model_id)
 
+  @doc """
+  The coordinator's state with each module's own projection of itself.
+
+  What a statistics report is read from (`Monty.Runtime.Step.statistics/2`).
+  """
+  @spec statistics(atom() | String.t(), (term() -> term())) :: Step.State.t()
+  def statistics(model_id, projection \\ & &1), do: Model.statistics(model_id, projection)
+
   @doc "Whether the model has concluded this episode."
   @spec done?(atom() | String.t()) :: boolean()
   def done?(model_id), do: Model.done?(model_id)

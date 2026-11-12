@@ -24,6 +24,12 @@ defmodule Monty.Studio.Logging do
 
   alias Monty.Studio.{Run, Setup}
 
+  # What a module needs for its next step and no report reads: the goal generator,
+  # the hypothesis updater and the graph memory. Named here rather than as the
+  # fields a report *does* read, so a handler that starts reading a new field of a
+  # module still finds it (`Monty.Studio.Logging.projection/1`).
+  @working_set ~w(graph_memory gsg hypotheses_updater)a
+
   @typedoc """
   What a run will log with, and what it will not.
 
@@ -134,7 +140,52 @@ defmodule Monty.Studio.Logging do
   @spec report(plan(), Run.t(), Path.t()) :: {:ok, plan()} | {:skipped, plan()} | {:error, term()}
   def report(%{logger: nil} = plan, %Run{}, _output_dir), do: {:skipped, plan}
 
-  def report(plan, %Run{} = run, output_dir), do: report(plan, run, output_dir, Run.state(run))
+  def report(plan, %Run{} = run, output_dir),
+    do: report(plan, run, output_dir, state(run, plan))
+
+  @doc """
+  The state a plan is reported from: each module asked for what the plan reads.
+
+  A report is about the episode that has just been taken, so the modules are asked
+  for their own state — the coordinator holds the one they were *started* with. How
+  much of a module travels is the plan's own question: a DETAILED handler reads the
+  hypothesis space and gets the module, and a BASIC one reads a dozen fields and
+  gets those (`projection/1`).
+  """
+  @spec state(Run.t(), plan()) :: Monty.Runtime.Step.State.t()
+  def state(%Run{} = run, plan), do: Run.statistics(run, projection_for(plan))
+
+  # What a report of this plan is made of: the module itself when a handler wants
+  # the DETAILED level, and a projection of it otherwise.
+  defp projection_for(plan), do: if(detailed?(plan), do: & &1, else: &projection/1)
+
+  @doc """
+  The part of a learning module a statistics report reads, and the rest of it.
+
+  A report asks a dozen questions of a module — did the episode reach the object,
+  what did it conclude, how many hypotheses were left, what did the buffer record,
+  which objects was the graph built from — and Monty's handlers read them off the
+  module. The module also carries its *working set*: the goal generator, the
+  hypothesis updater and the graph memory, which are what the next step needs and
+  what no report reads. Those were 398 MB of an episode boundary, copied so that
+  two numbers could be read out of them.
+
+  So a boundary asks for the module through this and gets everything but the
+  working set. Whatever a handler starts reading later is still there, because the
+  module is kept whole — a field that is dropped has to be named here, and the
+  test beside this module is what fails when a report needs one of them.
+  """
+  @spec projection(term()) :: term()
+  def projection(%{lm: inner} = wrapped) when is_map(inner),
+    do: %{wrapped | lm: projection(inner)}
+
+  def projection(module) when is_map(module) do
+    Enum.reduce(@working_set, module, fn field, module ->
+      if Map.has_key?(module, field), do: Map.put(module, field, nil), else: module
+    end)
+  end
+
+  def projection(other), do: other
 
   defp logger_module(nil) do
     {:error, "logging: this experiment names no data logger, so this run writes no statistics"}

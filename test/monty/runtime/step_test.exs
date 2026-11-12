@@ -686,4 +686,36 @@ defmodule Monty.Runtime.StepTest do
       assert Map.delete(first_info, :duration_us) == Map.delete(second_info, :duration_us)
     end
   end
+
+  describe "the state a statistics report is read from" do
+    test "is what the module says now, not what it was started with" do
+      model_id = start_model()
+
+      assert {:ok, [_action], _info} = step(model_id)
+
+      # What the coordinator holds for a module is the state it was started
+      # with: the modules are processes and the coordinator keeps their wiring.
+      # A report built from it described an episode that had not been taken —
+      # every row said `patch_off_object` and nought steps.
+      [%{state: at_start}] = Step.state(Registry.via({:step, model_id})).learning_modules
+      assert at_start.seen == []
+
+      # Asking the module is what a report needs, and this is the asking.
+      [%{state: as_the_episode_left_it}] =
+        Step.statistics(Registry.via({:step, model_id})).learning_modules
+
+      assert [%Cmp.Message{}] = as_the_episode_left_it.seen
+    end
+
+    test "answers a projection of each module when the report wants one" do
+      model_id = start_model()
+
+      assert {:ok, [_action], _info} = step(model_id)
+
+      projected =
+        Step.statistics(Registry.via({:step, model_id}), &Map.take(&1, [:id, :mode]))
+
+      assert [%{state: %{id: :lm_0}}] = projected.learning_modules
+    end
+  end
 end

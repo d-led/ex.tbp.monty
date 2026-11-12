@@ -112,6 +112,29 @@ defmodule Monty.Runtime.Step do
     do: GenServer.call(server, {:detailed, projection}, :infinity)
 
   @doc """
+  The coordinator's state, with every module's own answer asked for in its process.
+
+  This is what a statistics report is made of: the counters the coordinator owns,
+  and each module's state as the episode left it. It is asked for rather than read
+  out of the coordinator for two reasons.
+
+  The first is correctness. The `state` the coordinator holds for a module is the
+  one the module was *started* with — the modules are processes and the coordinator
+  keeps their wiring, not their working set — so a report built from it describes
+  an episode that has not been taken: every row said `patch_off_object` and nought
+  steps, however the episode had gone.
+
+  The second is cost. `projection` runs inside the module, so a report that reads
+  a dozen fields asks for those fields instead of copying the module — 398 MB an
+  episode of the ten-object config, most of it the goal generator, the hypothesis
+  updater and the graph memory, none of which a report reads. `& &1` asks for the
+  module itself, which a DETAILED log needs and pays for.
+  """
+  @spec statistics(server(), (term() -> term())) :: Monty.Runtime.Step.State.t()
+  def statistics(server, projection \\ & &1),
+    do: GenServer.call(server, {:statistics, projection}, :infinity)
+
+  @doc """
   The four things a recognition policy may read off the model.
 
   Monty's `MontyIsDone` and its siblings read `model.is_done`, the model's step
@@ -302,6 +325,15 @@ defmodule Monty.Runtime.Step do
   end
 
   def handle_call(:state, _from, state), do: {:reply, state, state}
+
+  def handle_call({:statistics, projection}, _from, %State{} = state) do
+    {:reply,
+     %{
+       state
+       | learning_modules:
+           Enum.map(state.learning_modules, &live_learning_module(&1, state.model_id, projection))
+     }, state}
+  end
 
   def handle_call({:detailed, projection}, _from, %State{} = state) do
     {:reply,

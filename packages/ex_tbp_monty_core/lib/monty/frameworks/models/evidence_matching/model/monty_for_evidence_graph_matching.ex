@@ -156,6 +156,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
   def state(model_id), do: Model.state(model_id)
 
   @doc """
+  The coordinator's state with each module's own projection of itself.
+
+  What a statistics report is read from (`Monty.Runtime.Step.statistics/2`):
+  the modules are asked rather than read out of the coordinator, so the report is
+  about the episode that has just been taken.
+  """
+  @spec statistics(atom() | String.t(), (term() -> term())) :: Monty.Runtime.Step.State.t()
+  def statistics(model_id, projection \\ & &1), do: Model.statistics(model_id, projection)
+
+  @doc """
   `MontyForGraphMatching.fixme_set_ground_truth`: what this episode is about.
 
   The experiment is the only one that knows, and a module that is never told cannot

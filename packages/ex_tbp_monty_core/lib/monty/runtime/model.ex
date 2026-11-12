@@ -75,6 +75,16 @@ defmodule Monty.Runtime.Model do
   def detailed(model_id, projection \\ & &1),
     do: Step.detailed(Registry.via({:step, model_id}), projection)
 
+  @doc """
+  The coordinator's state with each module's own projection of itself.
+
+  What a statistics report is made of. See `Monty.Runtime.Step.statistics/2` for
+  why the modules are asked instead of read out of the coordinator.
+  """
+  @spec statistics(atom() | String.t(), (term() -> term())) :: Monty.Runtime.Step.State.t()
+  def statistics(model_id, projection \\ & &1),
+    do: Step.statistics(Registry.via({:step, model_id}), projection)
+
   @doc "The four things a recognition policy may read off the model."
   @spec status(atom() | String.t()) :: Monty.Experiment.RecognitionStrategy.model()
   def status(model_id), do: Step.status(Registry.via({:step, model_id}))

@@ -759,7 +759,7 @@ defmodule Monty.Studio.Jobs.Run do
   # and an episode logged afterwards would look confused about the object it just
   # recognised (`monty_experiment.py`, `post_episode`).
   defp end_episode(run_id, %{run: run} = state, outcome, infos) do
-    {conclusion, memories, closing} = close_episode(run_id, state, outcome, run)
+    {conclusion, memories, logging, closing} = close_episode(run_id, state, outcome, run)
 
     {stopping, _} = :timer.tc(fn -> stop_episode(run, state, outcome) end)
     {handed, record} = :timer.tc(fn -> keep(state.record) end)
@@ -774,6 +774,7 @@ defmodule Monty.Studio.Jobs.Run do
         summary: Summary.accrue(Enum.reverse(infos), state.summary),
         conclusion: conclusion,
         memories: memories,
+        logging: logging,
         boundary: closing ++ [{"stop", stopping}, {"hand-over", handed}],
         # A supervised episode names where the object stood, and that place is
         # what every later episode of this run extends (`Run.supervise/1`).
@@ -786,8 +787,8 @@ defmodule Monty.Studio.Jobs.Run do
   # a part nobody can argue about, and the boundary is half of a run's wall clock.
   #
   # Both the statistics and the conclusion are made of the model's state, so it is
-  # read once: each read copied the coordinator's whole state, and asking twice was
-  # 220 ms an episode on the ten-object config — as much as either use.
+  # read once. What is read is `episode_state/2`: each module's own projection for
+  # a BASIC report, the whole model for a DETAILED one.
   defp close_episode(run_id, state, outcome, run) do
     cond do
       crashed?(outcome) ->
@@ -798,12 +799,12 @@ defmodule Monty.Studio.Jobs.Run do
         # with "a process the run was waiting on exited". Nothing was learned,
         # so the phase keeps the memory it had.
         say(run_id, "the episode crashed, so its statistics were not read")
-        {%{}, state.memories, []}
+        {%{}, state.memories, state.logging, []}
 
       state.mode == :train ->
-        {read, model_state} = :timer.tc(fn -> Run.state(run) end)
+        {read, model_state} = :timer.tc(fn -> episode_state(state, run) end)
 
-        {recorded, _} =
+        {recorded, logging} =
           :timer.tc(fn -> log_statistics(run_id, state.logging, run, model_state) end)
 
         {concluded, conclusion} = :timer.tc(fn -> Run.conclusion_of(model_state) end)
@@ -812,7 +813,7 @@ defmodule Monty.Studio.Jobs.Run do
         # run matches nothing, so what it has to show is the memory it built.
         say(run_id, Learned.growth_line(memories))
 
-        {conclusion, memories,
+        {conclusion, memories, logging,
          [
            {"model state", read},
            {"statistics", recorded},
@@ -826,17 +827,24 @@ defmodule Monty.Studio.Jobs.Run do
         # reading it back copies tens of megabytes out of the module process
         # every episode (`LearningModuleServer.state/1` — the reason
         # `detailed/2` exists).
-        {read, model_state} = :timer.tc(fn -> Run.state(run) end)
+        {read, model_state} = :timer.tc(fn -> episode_state(state, run) end)
 
-        {recorded, _} =
+        {recorded, logging} =
           :timer.tc(fn -> log_statistics(run_id, state.logging, run, model_state) end)
 
         {concluded, conclusion} = :timer.tc(fn -> Run.conclusion_of(model_state) end)
 
-        {conclusion, state.memories,
+        {conclusion, state.memories, logging,
          [{"model state", read}, {"statistics", recorded}, {"conclusion", concluded}]}
     end
   end
+
+  # The state an episode's statistics are read from, decided by the plan: a BASIC
+  # report reads a dozen fields of each module, a DETAILED one reads the module.
+  # Either way the modules are asked in their own processes, so what is reported
+  # is the episode that has just been taken rather than the one the model was
+  # started for (`Monty.Studio.Logging.state/2`).
+  defp episode_state(state, run), do: Logging.state(run, state.logging)
 
   # The record in hand is the transcript; writing it is what makes it history.
   # A write that fails does not stop a run: the steps are still in memory for the
@@ -1064,11 +1072,24 @@ defmodule Monty.Studio.Jobs.Run do
   # A run whose statistics did not get written has still run: the episode is
   # real, the file is missing. That is said in the run's log rather than raised,
   # because the failure is about the artefact and not about the experiment.
+  # The plan that comes back is the logger with this episode counted and its
+  # handlers' own bookkeeping moved on. It has to travel: a CSV handler renames a
+  # file it has not written to yet, because a file that exists belongs to the last
+  # run — so a plan thrown away here renames the run's own statistics away at every
+  # episode and leaves one row, which is what every file in `studio_runs` had. A
+  # report that failed leaves the plan as it was, so the next episode tries again
+  # with the same answer rather than with half a file's worth of state.
   defp log_statistics(run_id, logging, run, model_state) do
     case Logging.report(logging, run, Artifacts.dir(run_id), model_state) do
-      {:ok, _logging} -> :ok
-      {:skipped, _logging} -> :ok
-      {:error, reason} -> say(run_id, "statistics could not be written: #{inspect(reason)}")
+      {:ok, reported} ->
+        reported
+
+      {:skipped, reported} ->
+        reported
+
+      {:error, reason} ->
+        say(run_id, "statistics could not be written: #{inspect(reason)}")
+        logging
     end
   end
 

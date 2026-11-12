@@ -365,6 +365,19 @@ defmodule Monty.Studio.Run do
   def state(%__MODULE__{model: model, model_id: model_id}), do: model.state(model_id)
 
   @doc """
+  The coordinator's state with each module asked for its own projection.
+
+  This is the state a statistics report is built from, and it is a different value
+  from `state/1`: the modules are asked, in their own processes, so the report
+  describes the episode that has just been taken rather than the one the model was
+  started for. `Monty.Runtime.Step.statistics/2` says why, and `projection` is
+  what decides how much of a module travels (`Monty.Studio.Logging.projection/1`).
+  """
+  @spec statistics(t(), (term() -> term())) :: Monty.Runtime.Step.State.t()
+  def statistics(%__MODULE__{model: model, model_id: model_id}, projection \\ & &1),
+    do: model.statistics(model_id, projection)
+
+  @doc """
   What this episode is about: the object the world says it put in front of the
   agent, or `nil` for a world that does not ask the question.
 

@@ -50,9 +50,10 @@ defmodule Monty.Studio.Jobs.RunTest do
   # broadcasts — and an experiment's own run is every object in every rotation,
   # which is minutes of work this test does not need. The epoch itself is
   # `Monty.Frameworks.Experiments.MontyExperiment`'s own spec.
-  defp start_run(experiment, steps) do
+  defp start_run(experiment, steps, options \\ []) do
     {:ok, opened} = Monty.Studio.open(experiment)
-    RunHistory.start(RunLog.attributes(opened, steps, 0, 1, 1))
+
+    RunHistory.start(RunLog.attributes(opened, steps, 0, 1, Keyword.get(options, :episodes, 1)))
   end
 
   # The smallest PNG there is, base64: a picture the store can write and the route
@@ -493,6 +494,20 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert episode =~ "LM_0"
     end
 
+    test "keeps a row for every episode of the run" do
+      # Each report is made with the logger the last one handed back, because a
+      # handler renames a file it has not written to yet — a file that exists
+      # belongs to the last run. A plan thrown away at the boundary therefore
+      # renamed the run's own statistics away once an episode and left one row.
+      {:ok, record} = start_run(@experiment, 2, episodes: 2)
+
+      assert {:ok, closed} = perform(record)
+
+      assert [header | episodes] = stats_rows(closed)
+      assert header =~ "primary_performance"
+      assert length(episodes) == 2
+    end
+
     test "says what it logs with, and which classes it skipped, before stepping" do
       # wandb is off by default, and a note about a wandb class that was skipped
       # is not said to nobody — so this run is told one is configured.
@@ -541,6 +556,13 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert is_list(lm["locations"])
       assert is_list(lm["stepwise_targets_list"])
       assert is_list(entry["motor_system"]["action_sequence"])
+
+      # The module is reported as the episode left it, not as it was started: the
+      # episode took steps, so its buffer holds them. A report read off the
+      # coordinator's state was the start of the episode, and nothing in it had
+      # happened yet.
+      assert lm["locations"] != []
+      assert lm["evidences"] != []
 
       # A handler that wants the DETAILED level is what makes the modules keep the
       # hypothesis space, so the evidence trace is in the file and not only the
