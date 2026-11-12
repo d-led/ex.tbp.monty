@@ -143,16 +143,41 @@ step**, `EvidenceSlopeTracker`+`HypothesesSelection` 197 k, `DepthTo3DLocations`
 page was measured and is 1 % of a step, and the run was measured against Monty on
 this machine):
 
+**Where one model step's time goes, profiled** (`probe_step_profile.exs`,
+`:tprof`, one unprofiled step to warm, then one profiled — the probe's own
+supervisor name was stale and is fixed):
+
+| share | calls | function                                                   |
+| ----: | ----: | ---------------------------------------------------------- |
+| 15.9% |  74 k | `MatcherNif.decode_one/1` — the NIF marshalling its input  |
+|  7.7% | 107 k | `Enum.map/2`'s closure                                     |
+|  7.4% |    10 | `KdTreeNif.nearest_many/3`                                 |
+|  6.4% | 137 k | `Enum.reduce/3`'s closure                                  |
+|  5.7% |  77 k | `MatcherNif`'s `decode/1` comprehension                    |
+|  1.6% | 6 432 | `SpatialArithmetics.align_orthonormal_vectors_as_matrix/2` |
+
+So **the matcher's marshalling is the largest single item — 21 % with its
+comprehension** — and it is a boundary, not an algorithm: the Elixir side hands
+the NIF a term per float and Rust decodes 74 000 of them a step. The same table's
+allocation column says the same thing from the other side: `decode_one` is 17.8 %
+of the words a step allocates, and `align_orthonormal_vectors_as_matrix` 23 % —
+which is nine floats' worth of list scaffolding per call, and already written out
+by hand rather than through a generic product.
+
 1. **The model step, 22.3 ms of our 47 ms a step** (114 s of the run) — and Monty
    does the same experiment's _whole_ step, world and transforms included, in
    29.7 ms. Nothing else we could fix is worth as much; the question to answer
-   next is what Monty's model spends that ours does not.
+   next is what Monty's model spends that ours does not, and the profile above is
+   the first half of the answer: ours spends a fifth of it re-decoding its own
+   numbers at the NIF boundary.
 2. **The 140 episode boundaries, 43.4 s (18 %)**: 307 ms each, of which ~200 ms
    is the positioning's own world steps — 10–17 of them, and each is a crossing
    into Python at 7–8 ms where Monty's MuJoCo is a function call. The scene
+
    rebuild is 25–43 ms warm (~6 s over the run), so caching it is not the prize;
    the crossing is. It also pays on every model step, which is why it is 20 % of
    the run rather than 18 %.
+
 3. **`Run.start` / positioning** — done (`932bdfb`), one sensor's cloud instead
    of two.
 4. **The world's crossing and the transform beside it**: `Host.step` 7–8 ms a

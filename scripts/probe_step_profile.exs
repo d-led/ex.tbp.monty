@@ -51,7 +51,7 @@ spec =
     lm_to_lm_vote: %{module_id => []}
   })
 
-{:ok, _pid} = DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {Model, spec})
+{:ok, _pid} = DynamicSupervisor.start_child(ExTbpMonty.Core.ModelSupervisor, {Model, spec})
 :ok = Model.set_experiment_mode(id, :eval)
 
 run = fn -> Model.step(id, %{}, %{}, Monty.Context.new(0)) end
