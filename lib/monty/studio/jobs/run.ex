@@ -362,6 +362,14 @@ defmodule Monty.Studio.Jobs.Run do
     # and only then are the streams let go: they are the only copy until then.
     record = store_parts(record, parts)
     Enum.each(parts, &RunStream.clear(&1.stream))
+
+    # What the parts wrote as statistics belongs to the run: each part has its
+    # own `eval_stats.csv` in its own directory, and the run's directory is where
+    # a reader looks for the experiment's own numbers. Monty's `run_parallel.py`
+    # merges them for the same reason. Merged whatever the outcome: the parts
+    # that finished wrote episodes that are real.
+    _ = Artifacts.merge_reports(run_id, Enum.map(parts, & &1.stream))
+
     close(record, opened, outcome, %Summary{}, %{}, run_id, true)
   end
 

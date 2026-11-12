@@ -77,6 +77,70 @@ defmodule Monty.Studio.Artifacts do
   # lined up with anything else a person did that afternoon.
   defp stamped(line), do: "#{Monty.Studio.LocalClock.now().clock} #{line}"
 
+  @doc """
+  The statistics a run's parts wrote, gathered into the run's own directory.
+
+  A run divided into parts runs each part as its own record — its own stream, its
+  own log, its own `eval_stats.csv` — which is right while the parts are going and
+  wrong afterwards: the experiment's statistics are the run's, and the run's
+  directory is where a reader looks for them. Monty's `run_parallel.py` merges
+  what its parts produced for the same reason.
+
+  Every `<mode>_stats.csv` the parts wrote becomes one file of that name in the
+  run's directory: the header once, then each part's rows, in part order. The
+  parts' own files stay where they are — they are the parts' records.
+  """
+  @spec merge_reports(binary(), [binary()]) :: :ok | {:error, term()}
+  def merge_reports(run_id, part_ids) do
+    :ok = start(run_id)
+
+    part_ids
+    |> Enum.flat_map(&reports_of/1)
+    |> Enum.uniq()
+    |> Enum.reduce_while(:ok, fn name, :ok ->
+      case merge_report(run_id, part_ids, name) do
+        :ok -> {:cont, :ok}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  # The names of the statistics files a part wrote: `<mode>_stats.csv`, in the
+  # part's own directory.
+  defp reports_of(part_id) do
+    case File.ls(dir(part_id)) do
+      {:ok, names} -> Enum.filter(names, &String.ends_with?(&1, "_stats.csv"))
+      {:error, _reason} -> []
+    end
+  end
+
+  # Every path here is `dir/1`'s, which refuses an id that is not a UUID, plus a
+  # name listed from those directories or written by the run's own handler.
+  # sobelow_skip ["Traversal.FileModule"]
+  defp merge_report(run_id, part_ids, name) do
+    files =
+      part_ids
+      |> Enum.map(&Path.join(dir(&1), name))
+      |> Enum.filter(&File.exists?/1)
+      |> Enum.map(&(&1 |> File.read!() |> String.split("\n", trim: true)))
+
+    case Enum.reject(files, &(&1 == [])) do
+      [] ->
+        :ok
+
+      [first | others] ->
+        [header | first_rows] = first
+        rows = Enum.flat_map(others, &Enum.drop(&1, 1))
+
+        # A run's own directory, built by `dir/1` from a UUID.
+        # sobelow_skip ["Traversal.FileModule"]
+        File.write(
+          Path.join(dir(run_id), name),
+          Enum.join([header | first_rows ++ rows], "\n") <> "\n"
+        )
+    end
+  end
+
   @doc "Deletes a run's directory, if it has one."
   # A run's own directory, named by a UUID `dir/1` has checked; a recursive
   # delete of anything else never gets this far.

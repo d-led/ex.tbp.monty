@@ -413,6 +413,20 @@ defmodule Monty.Studio.Jobs.RunTest do
       log = File.read!(closed.log_path)
       assert log =~ "part 1 of 2 finished"
       assert log =~ "part 2 of 2 finished"
+
+      # What the parts wrote as statistics is the run's: two parts of two
+      # episodes each leave one file of four in the run's own directory, where a
+      # reader looks for the experiment's numbers — the parts' own files stay in
+      # their own directories, beside their own logs.
+      stats =
+        Path.join(Artifacts.dir(closed.id), "eval_stats.csv")
+        |> File.read!()
+        |> String.split("\n", trim: true)
+
+      assert [header | rows] = stats
+      assert header =~ "primary_performance"
+      assert length(rows) == 4
+      assert Enum.count(stats, &(&1 == header)) == 1
     end
 
     # The pictures of a run of several parts were served from a directory nothing
