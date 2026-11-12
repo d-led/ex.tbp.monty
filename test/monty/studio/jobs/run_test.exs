@@ -273,6 +273,23 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert length(DynamicSupervisor.which_children(ExTbpMonty.Core.ModelSupervisor)) == before
     end
 
+    test "leaves no big heap behind when it ends" do
+      # Everything a run gathers has to be collectable, and a process's heap is
+      # only collected when it grows again: the model supervisor once kept the
+      # model's spec — the pretrained memory with it, 203 MB — and went on holding
+      # that dead heap after a finished run. One collection took a node from
+      # 319 MB to 95 MB; the run asks for it, so what a run leaves is the baseline
+      # and not the last run's peak.
+      {:ok, opened} = Monty.Studio.open(@experiment)
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 1, 2))
+
+      assert {:ok, _closed} = perform(record)
+
+      supervisor = Process.whereis(ExTbpMonty.Core.ModelSupervisor)
+      {:memory, held} = Process.info(supervisor, :memory)
+      assert held < 20 * 1_048_576
+    end
+
     test "says what an episode boundary cost, and of what" do
       # A boundary is the second or two between one episode's last step and the
       # next one's first, and no step's timer accounts for it: the closing's

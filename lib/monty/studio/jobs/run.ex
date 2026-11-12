@@ -964,6 +964,18 @@ defmodule Monty.Studio.Jobs.Run do
       [{_pid, _}] -> guard_tidying(fn -> Setup.model_class(opened.setup).stop(model_id) end)
       [] -> :ok
     end
+
+    # The supervisor held the model's child spec, and with it the memory the model
+    # was started from — the pretrained graphs, 203 MB — in its own heap.
+    # Terminating the child drops the spec, but a BEAM process's heap is only
+    # collected when it grows again, so that heap sits there looking like a leak:
+    # measured after a finished run, 203 MB of it, and one collection took the node
+    # from 319 MB to 95 MB against an 84 MB baseline. Asked for once a run, because
+    # the next run's memory profile should not have to explain the last one's.
+    case Process.whereis(ExTbpMonty.Core.ModelSupervisor) do
+      pid when is_pid(pid) -> :erlang.garbage_collect(pid)
+      _not_started -> :ok
+    end
   end
 
   defp episodes_line(episodes) do
