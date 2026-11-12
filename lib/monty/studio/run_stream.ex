@@ -232,7 +232,8 @@ defmodule Monty.Studio.RunStream do
     # part's pictures go in the run the page opened, in a folder that says which
     # part took them — every part numbers its steps from nought.
     pictures_in = announce || stream_id
-    frame = frame_key(Map.get(step, :part), step.number)
+    position = Map.get(state.held, stream_id, 0)
+    frame = frame_key(Map.get(step, :part), position)
 
     # A picture's name is this run's own convention, so the record keeps it
     # before the bytes exist: `Pictures` draws and writes them, and a barrier —
@@ -242,8 +243,6 @@ defmodule Monty.Studio.RunStream do
       RunLog.moment(step.number, step.observations, fn sensor_id, kind ->
         Artifacts.frame_url(pictures_in, Artifacts.frame_name(frame, sensor_id, kind))
       end)
-
-    position = Map.get(state.held, stream_id, 0)
 
     :ets.insert(@table, {{stream_id, position}, step.entry, moment})
 
@@ -269,11 +268,16 @@ defmodule Monty.Studio.RunStream do
     {:reply, :ok, %{state | held: Map.delete(state.held, run_id)}}
   end
 
-  # Where a step's pictures are kept inside its run's directory: the step alone
-  # for a run of the whole experiment, the part and the step for a run of several
-  # parts.
-  defp frame_key(nil, step), do: Integer.to_string(step)
-  defp frame_key(part, step), do: "part-#{part}-#{step}"
+  # Where a step's pictures are kept inside its run's directory: the step's place
+  # in the run for a run of the whole experiment, the part and that place for a
+  # run of several parts.
+  #
+  # The step's *own* number cannot name the folder: every episode of a run numbers
+  # its steps from nought, so `frames/4` was every episode's fourth step at once
+  # and each one wrote over the one before. A replay of a hundred and forty
+  # episodes then showed a single object — the last episode's — at all 5110 steps.
+  defp frame_key(nil, position), do: Integer.to_string(position)
+  defp frame_key(part, position), do: "part-#{part}-#{position}"
 
   # What a report becomes once the record's shape and the log's text are known.
   #

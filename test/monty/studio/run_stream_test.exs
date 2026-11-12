@@ -139,7 +139,8 @@ defmodule Monty.Studio.RunStreamTest do
   # is drawn from, and the sensor a page is told to draw.
   defp seeing(options) do
     report(
-      step: 1,
+      step: Keyword.get(options, :step, 1),
+      episode: Keyword.get(options, :episode, 0),
       observations: %{
         "agent_id_0" => %{
           "patch" => %{"depth" => Keyword.fetch!(options, :depth), "location" => [0.0, 0.0, 0.1]}
@@ -161,8 +162,41 @@ defmodule Monty.Studio.RunStreamTest do
       assert entry["step"] == 1
 
       assert %{"patch" => %{"images" => pictures}} = moment["sensors"]
-      assert pictures["depth"] == "/runs/#{run_id}/frames/1/patch-depth.png"
+      assert pictures["depth"] == "/runs/#{run_id}/frames/0/patch-depth.png"
       assert pictures["range"] == [0.05, 0.07]
+    end
+
+    test "keep their own place when the next episode numbers its steps from nought again", %{
+      run_id: run_id
+    } do
+      # A run of episodes numbers the steps of each one from nought, so a frame
+      # named by the step's own number is every episode's fourth step at once and
+      # each episode wrote over the one before it. A replay of a hundred and forty
+      # objects then showed the last one — banana — at every step.
+      RunStream.publish(run_id, seeing(step: 4, episode: 0, depth: [[0.05, 0.07]]))
+      :ok = drawn(run_id)
+
+      assert {:ok, before} = Artifacts.frame_path(run_id, "0/patch-depth.png")
+      picture = File.read!(before)
+
+      RunStream.publish(run_id, seeing(step: 4, episode: 1, depth: [[0.5, 0.7]]))
+      :ok = drawn(run_id)
+
+      assert {[first_entry, second_entry], [first, second]} = RunStream.steps(run_id)
+      assert {first_entry["episode"], second_entry["episode"]} == {0, 1}
+      assert {first_entry["step"], second_entry["step"]} == {4, 4}
+
+      assert %{"patch" => %{"images" => %{"depth" => first_frame}}} = first["sensors"]
+      assert %{"patch" => %{"images" => %{"depth" => second_frame}}} = second["sensors"]
+
+      assert first_frame == "/runs/#{run_id}/frames/0/patch-depth.png"
+      assert second_frame == "/runs/#{run_id}/frames/1/patch-depth.png"
+
+      # And the later episode's pictures are its own, not a second write over the
+      # earlier episode's.
+      assert File.read!(before) == picture
+      assert {:ok, after_second} = Artifacts.frame_path(run_id, "1/patch-depth.png")
+      assert File.exists?(after_second)
     end
 
     test "are drawn and written behind the step the page is shown", %{run_id: run_id} do
@@ -175,9 +209,18 @@ defmodule Monty.Studio.RunStreamTest do
 
       # The record already pointed at it; this is the bytes arriving.
       :ok = Pictures.settle()
-      assert {:ok, path} = Artifacts.frame_path(run_id, "1/patch-depth.png")
+      assert {:ok, path} = Artifacts.frame_path(run_id, "0/patch-depth.png")
       assert File.exists?(path)
     end
+  end
+
+  # Waits until the steps published so far have their pictures. The drawing
+  # happens in another process and a cast reaches it from the stream's process,
+  # so the stream is asked for its count first: an answer to that says the cast
+  # was handed on, and only then is the drawing waited for.
+  defp drawn(run_id) do
+    _ = RunStream.count(run_id)
+    Pictures.settle()
   end
 
   # A step, the way a worker hands one over: what it reported, what the modules

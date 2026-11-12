@@ -214,10 +214,12 @@ defmodule Monty.Studio.Artifacts do
   Writes one picture of one step, and answers its name.
 
   The name is relative to the run's `frames` directory
-  (`<step>/<sensor>-<depth|colour>.png`), which is what the route under
+  (`<place>/<sensor>-<depth|colour>.png`), which is what the route under
   `/runs/:id/frames/` appends: the record a page reads says
   `/runs/<id>/frames/12/patch-depth.png`, and there is one `frames` in a URL
-  rather than two.
+  rather than two. A *place* is the step's place in the run, not the step's own
+  number: every episode numbers its steps from nought, so a folder named by the
+  number is every episode's fourth step at once.
   """
   @spec put_frame(binary(), non_neg_integer() | String.t(), String.t(), String.t(), binary()) ::
           {:ok, String.t()} | {:error, term()}
@@ -228,9 +230,9 @@ defmodule Monty.Studio.Artifacts do
   # is read.
   # sobelow_skip ["Traversal.FileModule"]
   def put_frame(run_id, step, sensor_id, kind, base64) do
-    # The step is whatever a run numbers its pictures by: a step number for a run
-    # of the whole experiment, and part-and-step for a run of several parts, whose
-    # parts each count from nought inside one run's directory.
+    # The step is whatever a run numbers its pictures by: the step's place in a
+    # run of the whole experiment, and part-and-place for a run of several parts,
+    # whose parts each count from nought inside one run's directory.
     name = frame_name(step, sensor_id, kind)
     path = Path.join(frames_dir(run_id), name)
 
@@ -244,7 +246,7 @@ defmodule Monty.Studio.Artifacts do
   @doc """
   The name a picture is kept under, without writing it.
 
-  `<step>/<sensor>-<depth|colour>.png`, which is what the route under
+  `<place>/<sensor>-<depth|colour>.png`, which is what the route under
   `/runs/:id/frames/` appends. A run's pictures are named by convention, so a
   record can keep a picture's name before its bytes exist — `RunStream` does,
   and the drawing happens afterwards in a process of its own.

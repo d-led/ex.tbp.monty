@@ -154,7 +154,8 @@ defmodule Monty.Studio.RunLog do
 
   `nil` keeps the picture in the record as the PNG it already is. A run passes
   `&Artifacts.put_frame/5`, which writes the bytes under the run's own directory
-  and answers `frames/<step>/<sensor>-<kind>.png`.
+  and answers `<place>/<sensor>-<kind>.png`, where the place is the step's place
+  in the run.
   """
   @type store :: (String.t(), String.t(), String.t() -> {:ok, String.t()} | {:error, term()})
 
