@@ -307,6 +307,18 @@ not explain the desktop's 19 minutes** — 4–5× our own run. The remaining
 candidates are the ones the machine brings: the world behind `pythonx` there, the
 30 660 PNG files a run writes, and the sidecar's stderr drain.
 
+**The pictures' place was the next win, and it was mostly already done.**
+`Artifacts.put_frame/5` moved a step's PNGs to
+`frames/<step>/<sensor>-<kind>.png` and the row keeps a 40-character URL: a
+moment written today is **701 bytes** against **13 687** for one written before
+that change. Rows from before it still held the bytes — three of them in one
+studio's file held **289 MB** of timeline between them. `mix monty.runs.compact`
+wrote their **115 816 pictures** out and rewrote the timeline to **29 MB**;
+`VACUUM` then took that file from **610 MB to 105 MB**, and the runs still read:
+`get/1` of the 24 329-step one is 1.58 s and `head/1` 517 ms. The pictures are
+65 MB on disk — the bytes moved out of the row rather than away, which is what a
+run of today's code does anyway.
+
 What a desktop needs next is the same split the server instance has: the step's
 own `duration_us` beside the wall between lines (`scripts/probe_run_log.exs`), so
 that "slow machine" and "slow port" are told apart instead of guessed.
