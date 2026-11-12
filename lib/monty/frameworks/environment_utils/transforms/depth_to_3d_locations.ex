@@ -193,15 +193,19 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   # range would separate nothing, so anything past a metre is a metre. When
   # nothing in view is nearer than a metre there is one surface at most, and no
   # threshold to find.
+  #
+  # The clipped image used to be *built* — a list of four thousand floats a sensor
+  # a step — to answer two questions about it. It is walked instead, once for the
+  # bounds and once for the bins, which is the same arithmetic with none of the
+  # list.
   defp surface_threshold(depth, semantic, default_threshold) do
-    near = for row <- depth, pixel <- row, do: min(pixel, 1.0)
-    {low, high} = Enum.min_max(near)
+    {low, high} = clipped_bounds(depth)
 
     if low >= 1.0 do
       :nothing_nearer_than_a_metre
     else
       threshold_between(
-        near,
+        fn -> clipped_bins(depth, low, high) end,
         low,
         high,
         # The clipped image's middle pixel, which is what the threshold was
@@ -212,6 +216,45 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
         default_threshold
       )
     end
+  end
+
+  # Which bins of the clipped image are empty, walked a row at a time: the image
+  # is nested, and the flat list this used to be built from existed only for this
+  # count.
+  defp clipped_bins(rows, low, high) do
+    width = (high - low) / @histogram_bins
+    edges = List.to_tuple(edges(low, width, high))
+
+    counts =
+      Enum.reduce(rows, @no_depths_counted, fn row, counts ->
+        Enum.reduce(row, counts, fn pixel, counts ->
+          index = bin(min(pixel, 1.0), low, width, edges)
+          put_elem(counts, index, elem(counts, index) + 1)
+        end)
+      end)
+
+    for index <- 0..(@histogram_bins - 1), elem(counts, index) == 0, do: elem(edges, index)
+  end
+
+  # The clipped image's smallest and largest value, in one walk over the image.
+  defp clipped_bounds(rows) do
+    {low, high} =
+      Enum.reduce(rows, {nil, nil}, fn row, bounds -> Enum.reduce(row, bounds, &bounds/2) end)
+
+    if low == nil,
+      do: raise(ArgumentError, "a depth image with no pixels has no depths to separate")
+
+    {low, high}
+  end
+
+  defp bounds(pixel, {nil, nil}) do
+    clipped = min(pixel, 1.0)
+    {clipped, clipped}
+  end
+
+  defp bounds(pixel, {low, high}) do
+    clipped = min(pixel, 1.0)
+    {if(clipped < low, do: clipped, else: low), if(clipped > high, do: clipped, else: high)}
   end
 
   # What a pixel's mask value is, as the rule the threshold decided: a semantic
@@ -268,7 +311,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
     {low, high} = Enum.min_max(depths)
 
     threshold_between(
-      depths,
+      fn -> empty_bins(depths, low, high) end,
       low,
       high,
       middle_pixel(depth),
@@ -278,8 +321,11 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
     )
   end
 
+  # The threshold the bins decide, from bins the caller builds: the two callers
+  # read different shapes — a clipped image and a flat list of depths — and each
+  # answers for its own. The bins are built only when there is a range to split.
   defp threshold_between(
-         depths,
+         empty_bins,
          low,
          high,
          middle_depth,
@@ -290,7 +336,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
     if high - low <= min_depth_range do
       {default_threshold, false}
     else
-      case empty_bins(depths, low, high) do
+      case empty_bins.() do
         [] ->
           {default_threshold, false}
 
@@ -305,8 +351,15 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
 
   defp transform_observation(observation, sensor_id, index, transform, agent_state) do
     depth = depth_image(observation, sensor_id)
-    semantic = on_object(observation, depth)
-    {depth, semantic} = clip(depth, semantic, index, transform)
+
+    # A semantic sensor's own image is the object mask; a sensor without one is
+    # masked by its depth image, and that mask and the finger's clipping are built
+    # in the one walk (`depth_with_mask/3`).
+    {depth, semantic} =
+      case Map.fetch(observation, "semantic") do
+        {:ok, semantic} -> clip(depth, semantic, index, transform)
+        :error -> depth_with_mask(depth, index, transform)
+      end
 
     intrinsic = Enum.at(transform.intrinsics, index)
     frame = camera_frame(agent_state, sensor_id)
@@ -440,12 +493,38 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   # reads one, and otherwise the depth image's — a pixel a metre away or more is
   # not the object, because `MissingToMaxDepth` has already replaced everything
   # the camera could not see.
-  defp on_object(observation, depth) do
-    case Map.fetch(observation, "semantic") do
-      {:ok, semantic} -> semantic
-      :error -> Enum.map(depth, fn row -> Enum.map(row, &if(&1 >= 1.0, do: 0.0, else: 1.0)) end)
+  #
+  # The depth image's own mask and a surface agent's clipping were three walks of
+  # four thousand pixels a sensor a step — the mask, the clipped depths, then the
+  # mask clipped again — to produce two lists whose values are one pixel each. It
+  # is one walk now, and the arithmetic is Monty's, in Monty's order: the mask is
+  # the unclipped rule (`>= 1.0` is not the object) with the finger's reach applied
+  # over it, and the depth is clipped at the reach.
+  defp depth_with_mask(depth, index, transform) do
+    if index in transform.depth_clip_sensors do
+      clip_value = transform.clip_value
+      {depths, masks} = clipped_rows(depth, clip_value, {[], []})
+      {Enum.reverse(depths), Enum.reverse(masks)}
+    else
+      {depth, Enum.map(depth, fn row -> Enum.map(row, &if(&1 >= 1.0, do: 0.0, else: 1.0)) end)}
     end
   end
+
+  defp clipped_rows([depth_row | rest], clip_value, acc) do
+    {depth_row, mask_row} = clipped_row(depth_row, clip_value, {[], []})
+    clipped_rows(rest, clip_value, {[depth_row | elem(acc, 0)], [mask_row | elem(acc, 1)]})
+  end
+
+  defp clipped_rows([], _clip_value, acc), do: acc
+
+  defp clipped_row([pixel | rest], clip_value, {depths, masks}) do
+    masked = if pixel >= clip_value or pixel >= 1.0, do: 0.0, else: 1.0
+    clipped = if pixel == 0.0 or pixel > clip_value, do: clip_value, else: pixel
+    clipped_row(rest, clip_value, {[clipped | depths], [masked | masks]})
+  end
+
+  defp clipped_row([], _clip_value, {depths, masks}),
+    do: {Enum.reverse(depths), Enum.reverse(masks)}
 
   # A surface agent's finger does not reach past `clip_value`, so nothing beyond
   # it is object and every depth beyond it — or of zero, which is no return — is
