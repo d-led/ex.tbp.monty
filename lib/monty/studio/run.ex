@@ -527,8 +527,16 @@ defmodule Monty.Studio.Run do
   ending an episode gets from a time-out happens after that report.
   """
   @spec conclusion(t()) :: %{optional(atom()) => term()}
-  def conclusion(%__MODULE__{model: model, model_id: model_id}),
-    do: model.state(model_id).terminal_states
+  def conclusion(%__MODULE__{} = run), do: conclusion_of(state(run))
+
+  @doc """
+  The same conclusion, read off a model state the caller already has.
+
+  A boundary needs the state for the episode's statistics too, and reading it
+  twice copied the coordinator's whole state twice — 220 ms an episode.
+  """
+  @spec conclusion_of(Monty.Runtime.Step.State.t()) :: %{optional(atom()) => term()}
+  def conclusion_of(%{terminal_states: terminal_states}), do: terminal_states
 
   @doc """
   Whether the run is over: the experiment's policy, or this page's step budget.

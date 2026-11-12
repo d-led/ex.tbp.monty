@@ -285,10 +285,10 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert {:ok, closed} = perform(record)
 
       # The first episode has no boundary behind it; the second says what its
-      # boundary was, part by part and in the order the parts happened: the
-      # closing's statistics and conclusion, the stop, the transcript's hand-over,
-      # and then the start — what it prepared, the scene, the positioning steps and
-      # the model.
+      # boundary was, part by part and in the order the parts happened: the model
+      # state read once, the statistics and the conclusion made from it, the stop,
+      # the transcript's hand-over, and then the start — what it prepared, the
+      # scene, the positioning steps and the model.
       assert [boundary] =
                closed.log_path
                |> File.read!()
@@ -298,12 +298,22 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert boundary =~ ~r/the boundary took [\d.]+ ms: /
 
       assert Regex.scan(
-               ~r/\b(statistics|conclusion|stop|hand-over|prepared|scene|positioning|model) /,
+               ~r/\b(model state|statistics|conclusion|stop|hand-over|prepared|scene|positioning|model) /,
                boundary,
                capture: :all_but_first
              )
              |> List.flatten() ==
-               ~w(statistics conclusion stop hand-over prepared scene positioning model)
+               [
+                 "model state",
+                 "statistics",
+                 "conclusion",
+                 "stop",
+                 "hand-over",
+                 "prepared",
+                 "scene",
+                 "positioning",
+                 "model"
+               ]
     end
 
     test "writes a log file beside the record, and points at it" do

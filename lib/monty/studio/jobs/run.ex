@@ -783,6 +783,10 @@ defmodule Monty.Studio.Jobs.Run do
   # What the end of an episode owes — its statistics, its conclusion and, when it
   # trained, the memory it left — with what each part cost. A part nobody timed is
   # a part nobody can argue about, and the boundary is half of a run's wall clock.
+  #
+  # Both the statistics and the conclusion are made of the model's state, so it is
+  # read once: each read copied the coordinator's whole state, and asking twice was
+  # 220 ms an episode on the ten-object config — as much as either use.
   defp close_episode(run_id, state, outcome, run) do
     cond do
       crashed?(outcome) ->
@@ -796,8 +800,12 @@ defmodule Monty.Studio.Jobs.Run do
         {%{}, state.memories, []}
 
       state.mode == :train ->
-        {recorded, _} = :timer.tc(fn -> log_statistics(run_id, state.logging, run) end)
-        {concluded, conclusion} = :timer.tc(fn -> Run.conclusion(run) end)
+        {read, model_state} = :timer.tc(fn -> Run.state(run) end)
+
+        {recorded, _} =
+          :timer.tc(fn -> log_statistics(run_id, state.logging, run, model_state) end)
+
+        {concluded, conclusion} = :timer.tc(fn -> Run.conclusion_of(model_state) end)
         {written, memories} = :timer.tc(fn -> learned(run_id, run, state.memories) end)
         # A matching run is judged by evidence climbing per object; a training
         # run matches nothing, so what it has to show is the memory it built.
@@ -805,6 +813,7 @@ defmodule Monty.Studio.Jobs.Run do
 
         {conclusion, memories,
          [
+           {"model state", read},
            {"statistics", recorded},
            {"conclusion", concluded},
            {"memory", written}
@@ -816,9 +825,15 @@ defmodule Monty.Studio.Jobs.Run do
         # reading it back copies tens of megabytes out of the module process
         # every episode (`LearningModuleServer.state/1` — the reason
         # `detailed/2` exists).
-        {recorded, _} = :timer.tc(fn -> log_statistics(run_id, state.logging, run) end)
-        {concluded, conclusion} = :timer.tc(fn -> Run.conclusion(run) end)
-        {conclusion, state.memories, [{"statistics", recorded}, {"conclusion", concluded}]}
+        {read, model_state} = :timer.tc(fn -> Run.state(run) end)
+
+        {recorded, _} =
+          :timer.tc(fn -> log_statistics(run_id, state.logging, run, model_state) end)
+
+        {concluded, conclusion} = :timer.tc(fn -> Run.conclusion_of(model_state) end)
+
+        {conclusion, state.memories,
+         [{"model state", read}, {"statistics", recorded}, {"conclusion", concluded}]}
     end
   end
 
@@ -1036,8 +1051,8 @@ defmodule Monty.Studio.Jobs.Run do
   # A run whose statistics did not get written has still run: the episode is
   # real, the file is missing. That is said in the run's log rather than raised,
   # because the failure is about the artefact and not about the experiment.
-  defp log_statistics(run_id, logging, run) do
-    case Logging.report(logging, run, Artifacts.dir(run_id)) do
+  defp log_statistics(run_id, logging, run, model_state) do
+    case Logging.report(logging, run, Artifacts.dir(run_id), model_state) do
       {:ok, _logging} -> :ok
       {:skipped, _logging} -> :ok
       {:error, reason} -> say(run_id, "statistics could not be written: #{inspect(reason)}")

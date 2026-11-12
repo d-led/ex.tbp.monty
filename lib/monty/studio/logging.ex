@@ -114,21 +114,27 @@ defmodule Monty.Studio.Logging do
   A handler that fails fails the report, and the logger is not flushed: an
   episode whose statistics were half written is not one whose statistics can be
   trusted, which is the same rule the logging callback follows.
-  """
-  @spec report(plan(), Run.t(), Path.t()) :: {:ok, plan()} | {:skipped, plan()} | {:error, term()}
-  def report(%{logger: nil} = plan, %Run{}, _output_dir), do: {:skipped, plan}
 
-  def report(%{logger: logger} = plan, %Run{} = run, output_dir) do
-    case logger.__struct__.post_episode(
-           logger,
-           Run.logger_args(run),
-           output_dir,
-           Run.state(run)
-         ) do
+  The state is an argument because a boundary needs the same one twice — for the
+  statistics and for the episode's conclusion — and each read copies the whole
+  coordinator state, 220 ms an episode on the ten-object config. A caller that has
+  read nothing yet may leave it out and this reads it.
+  """
+  @spec report(plan(), Run.t(), Path.t(), Monty.Runtime.Step.State.t()) ::
+          {:ok, plan()} | {:skipped, plan()} | {:error, term()}
+  def report(%{logger: nil} = plan, %Run{}, _output_dir, _state), do: {:skipped, plan}
+
+  def report(%{logger: logger} = plan, %Run{} = run, output_dir, state) do
+    case logger.__struct__.post_episode(logger, Run.logger_args(run), output_dir, state) do
       {:ok, logger} -> {:ok, %{plan | logger: logger}}
       {:error, reason} -> {:error, reason}
     end
   end
+
+  @spec report(plan(), Run.t(), Path.t()) :: {:ok, plan()} | {:skipped, plan()} | {:error, term()}
+  def report(%{logger: nil} = plan, %Run{}, _output_dir), do: {:skipped, plan}
+
+  def report(plan, %Run{} = run, output_dir), do: report(plan, run, output_dir, Run.state(run))
 
   defp logger_module(nil) do
     {:error, "logging: this experiment names no data logger, so this run writes no statistics"}
