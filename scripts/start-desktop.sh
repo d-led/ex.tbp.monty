@@ -248,6 +248,15 @@ done
 run "building the desktop release (a no-change run only reassembles it)" \
   env MIX_ENV=desktop mix release --overwrite
 
+# `priv` is copied whole, and the memory a run recognises with is not a property
+# of the build: it is exported at run time from the pickles, into the folder the
+# application keeps its own files in (`Monty.Paths.libraries/0`) — the user's,
+# not the release's. What the checkout happens to hold in
+# `priv/monty/libraries` is the output of yesterday's development runs, and
+# every bundle carried it: two hundred megabytes of libraries this build never
+# reads, in a download a person waits for.
+rm -rf "$release"/lib/ex_tbp_monty-*/priv/monty/libraries
+
 # And asked, rather than assumed: a release missing one kernel is a release whose
 # window cannot start, and this is the last moment the build can say so with a
 # sentence instead of shipping it. Per crate again, for the reason above.
