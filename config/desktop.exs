@@ -27,3 +27,14 @@ config :logger, level: :info
 # (`src-tauri/src/main.rs:388-453`), so the log goes to stderr directly and no
 # write can fail that way.
 config :logger, :default_handler, config: %{type: :standard_error}
+
+# How long the window's socket may stay silent before its server closes it, ten
+# minutes rather than Phoenix's one. A minimised webview throttles JavaScript
+# timers: the client's heartbeat is a `setTimeout` chain every 30 seconds
+# (`deps/phoenix/assets/js/phoenix/socket.js`), and once the window is hidden it
+# can be a minute or more late. The server closed at that minute, and the client
+# deliberately does not reconnect while the page is hidden (`handleVisibilityChange`
+# in the same file), so the page stayed disconnected while nobody looked:
+# "background disconnects". The window has one client on loopback, so a socket
+# that outlives a nap costs a process and nothing else.
+config :ex_tbp_monty, :live_socket_timeout, 600_000
