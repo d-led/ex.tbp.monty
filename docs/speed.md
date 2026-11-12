@@ -47,13 +47,13 @@ steps each. The experiment's own clock, read from the record it writes, and from
 
 | how it was run                         | per episode | a 140-episode run |
 | -------------------------------------- | ----------: | ----------------: |
-| the studio's own runner, no page open  |    **1.67 s** |            ~4 min |
-| the studio's own runner, one page open |    **4.60 s** |          ~11 min |
-| `mix monty.run` (no record, no page)   |        2.7 s |            ~6 min |
-| Monty's own dashboard, same config     |        1.4 s |         **3:18** |
+| the studio's own runner, no page open  |  **1.67 s** |            ~4 min |
+| the studio's own runner, one page open |  **4.60 s** |           ~11 min |
+| `mix monty.run` (no record, no page)   |       2.7 s |            ~6 min |
+| Monty's own dashboard, same config     |       1.4 s |          **3:18** |
 
 So the per-step work of this port is at parity with Monty's (33 ms a step against
-its 39 ms) and what is *not* Monty's is the page: a run that is being watched
+its 39 ms) and what is _not_ Monty's is the page: a run that is being watched
 spends about 2.9 s a step-run of the machine's time on drawing itself. The chart
 is rebuilt from the run's whole history at up to 3 Hz (`Chart.new/2` reads every
 step to draw a window of it), and the presenter encodes and writes a picture per
@@ -62,17 +62,17 @@ sensor per step.
 **One episode, split by the process that did the work** (per-episode reductions,
 studio runner, 59 steps):
 
-| who                      | reductions | share |
-| ------------------------ | ---------: | ----: |
-| the two sensor modules   |     21.0 M |   36% |
-| `Monty.Simulators.Mujoco.Host` (world) | 18.2 M | 32% |
-| the learning module      |     16.8 M |   29% |
-| `Monty.Random.Stream`    |      0.8 M |    1% |
+| who                                    | reductions | share |
+| -------------------------------------- | ---------: | ----: |
+| the two sensor modules                 |     21.0 M |   36% |
+| `Monty.Simulators.Mujoco.Host` (world) |     18.2 M |   32% |
+| the learning module                    |     16.8 M |   29% |
+| `Monty.Random.Stream`                  |      0.8 M |    1% |
 
 and on top of that **`Run.start` is 12–16 M reductions — about six steps — per
 episode**. It is not the model: it is the 17 world steps the positioning
 procedures take (`GetGoodView` for the view finder, then for the patch), each of
-which runs the full `DepthTo3DLocations` transform for *both* sensors.
+which runs the full `DepthTo3DLocations` transform for _both_ sensors.
 
 **A world step is 590–600 k reductions and 10–13 ms**, measured by ablation on a
 live interface (the same step with `DepthTo3DLocations` removed is 350 k / 8 ms).
