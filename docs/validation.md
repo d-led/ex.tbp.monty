@@ -572,6 +572,26 @@ and put the studio's run beside it with
 `mix run scripts/probe_run_log.exs priv/studio_runs/<id>` — the run log's closing
 line names each episode's conclusion.
 
+### A run's `eval_stats.csv` is one row per episode only since `cbbbf48`
+
+Two defects in the statistics a run writes were fixed together, and a file
+written before them is not comparable with one written after:
+
+- **One row per run.** `log_statistics/4` discarded the logging plan a report
+  returns, and the CSV handler renames a file it has not written to yet ("a file
+  that exists belongs to the last run") — so every episode renamed the run's own
+  file away and what was read back was a single episode, not the run.
+- **The row described the episode's start.** The coordinator's copy of a learning
+  module's state is the state the module was _started_ with and is never
+  updated, so every row read `patch_off_object`, `num_steps: 0`,
+  `symmetry_evidence: 0`. The figures now come from each module, asked in its own
+  process (`Monty.Runtime.Step.statistics/2`, with
+  `Monty.Studio.Logging.state/2` deciding what travels to a handler).
+
+Six MuJoCo episodes of `base_config_10distinctobj_dist_agent` after the fix:
+`match` × 6 with `num_steps 22 33 26 21 31 21`, `monty_steps 22 38 26 35 38 22`
+and `symmetry_evidence 1 5 5 0 5 0` — six rows where the file had held one.
+
 ## Re-recording anything in this file
 
 The fixtures are generated, so they can be regenerated — and should be, when the
