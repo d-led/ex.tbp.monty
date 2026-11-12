@@ -37,8 +37,9 @@ defmodule Monty.Studio.Duration do
   started_at` when it settles), so the number only stops growing.
   """
   @spec of_run(map()) :: String.t()
-  def of_run(%{status: "running", started_at: %DateTime{} = started}),
-    do: humanize(since(started))
+  def of_run(%{status: status, started_at: %DateTime{} = started})
+      when status in ["queued", "running"],
+      do: humanize(since(started))
 
   def of_run(%{duration_us: us}) when is_integer(us) and us > 0, do: humanize(us)
   def of_run(_run), do: "—"
@@ -52,7 +53,10 @@ defmodule Monty.Studio.Duration do
   collection does.
   """
   @spec elapsed_us(map()) :: non_neg_integer()
-  def elapsed_us(%{status: "running", started_at: %DateTime{} = started}), do: since(started)
+  def elapsed_us(%{status: status, started_at: %DateTime{} = started})
+      when status in ["queued", "running"],
+      do: since(started)
+
   def elapsed_us(%{duration_us: us}) when is_integer(us) and us > 0, do: us
   def elapsed_us(_run), do: 0
 

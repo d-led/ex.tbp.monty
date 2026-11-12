@@ -335,7 +335,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
     end
   end
 
-  defp unsettled?(run), do: run.status == "running"
+  defp unsettled?(run), do: RunHistory.in_flight?(run)
 
   defp summary_of(run) do
     %{

@@ -76,10 +76,10 @@ defmodule Monty.Studio.Jobs.Reaper do
   @spec reap(String.t()) :: :ok | false
   def reap(run_id) do
     case RunHistory.progress(run_id) do
-      %{status: "running"} = record ->
+      %{status: status} = record when status in ["queued", "running"] ->
         if Run.held?(record.id) or alive?(record), do: false, else: abandon(record)
 
-      _not_running ->
+      _settled ->
         false
     end
   end

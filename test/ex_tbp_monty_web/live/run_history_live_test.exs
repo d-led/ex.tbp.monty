@@ -12,7 +12,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       RunHistory.start(%{experiment: experiment, source: "monty", steps: 0, config: %{}})
 
     if status == "running" do
-      run
+      # A record only says `running` once a worker has it, so a test that wants a
+      # run under way has to say so the same way the worker does.
+      {:ok, running} = RunHistory.mark_running(run)
+      running
     else
       {:ok, closed} = RunHistory.finish(run, %{"reason" => "as the test asked"}, status)
       closed
@@ -374,13 +377,17 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     # the whole path was rewritten — and this is the one assertion that notices
     # the difference without measuring time.
     test "a step costs the database nothing", %{conn: conn} do
-      {:ok, run} =
+      {:ok, queued} =
         RunHistory.start(%{
           experiment: "tutorial/first_experiment",
           source: "monty",
           steps: 100,
           inputs: %{"episodes" => 1}
         })
+
+      # A run someone is stepping: the page's question about it is the cheap one
+      # only while it has a worker.
+      {:ok, run} = RunHistory.mark_running(queued)
 
       publish(run.id, 0)
       publish(run.id, 1)
@@ -753,6 +760,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       refute has_element?(view, "#end-#{queued.id}")
 
       :ok = running(job)
+      {:ok, _began} = RunHistory.mark_running(queued)
 
       {:ok, view, _html} = live(conn, ~p"/runs")
 
@@ -773,7 +781,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   # three, with Stop and Delete kept apart.
   describe "a run that is still going" do
     setup do
-      {:ok, run} =
+      {:ok, queued} =
         RunHistory.start(%{
           experiment: "tutorial/first_experiment",
           source: "monty",
@@ -781,7 +789,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
           config: %{}
         })
 
-      {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(run)
+      {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(queued)
+
+      # A worker has it, which is what makes the record say `running`.
+      {:ok, run} = RunHistory.mark_running(queued)
 
       {:ok, running: run}
     end

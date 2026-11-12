@@ -204,7 +204,9 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
 
       assert run.experiment == @experiment
       assert run.steps == 2
-      assert run.status == "running"
+      # Queued, not running: a record says what it is, and asking for a run is
+      # not stepping it.
+      assert run.status == "queued"
     end
 
     test "reports what the run has done so far" do
@@ -258,7 +260,8 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
     end
 
     test "leaves a run that is still running alone, and says why" do
-      {:ok, running} = RunHistory.start(@run_attributes)
+      {:ok, running} =
+        RunHistory.start(@run_attributes) |> then(fn {:ok, r} -> RunHistory.mark_running(r) end)
 
       assert {:error, message} =
                Experiments.delete_runs(state: "running", confirm: true)

@@ -399,7 +399,9 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
     end
 
     test "names the runs left alone because they are still running" do
-      {:ok, running} = RunHistory.start(run_attributes())
+      {:ok, running} =
+        RunHistory.start(run_attributes()) |> then(fn {:ok, r} -> RunHistory.mark_running(r) end)
+
       settled("failed")
 
       assert {:ok, %{text: text, structured: answer}} =

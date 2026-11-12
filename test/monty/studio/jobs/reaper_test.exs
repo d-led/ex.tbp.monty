@@ -26,7 +26,14 @@ defmodule Monty.Studio.Jobs.ReaperTest do
     :ok
   end
 
+  # A run whose worker has it: the record says `queued` until somebody claims it.
   defp start_run do
+    {:ok, running} = queue_run() |> RunHistory.mark_running()
+    running
+  end
+
+  # A run that has been asked for and not claimed.
+  defp queue_run do
     {:ok, record} =
       RunHistory.start(%{
         experiment: "tutorial/first_experiment",
@@ -94,11 +101,11 @@ defmodule Monty.Studio.Jobs.ReaperTest do
 
   describe "a run whose job is still waiting" do
     test "is not abandoned: it is a run that has not started yet" do
-      record = start_run()
+      record = queue_run()
       _job = enqueue(record)
 
       assert Reaper.sweep() == 0
-      assert RunHistory.get(record.id).status == "running"
+      assert RunHistory.get(record.id).status == "queued"
     end
   end
 

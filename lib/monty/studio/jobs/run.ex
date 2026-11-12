@@ -121,6 +121,9 @@ defmodule Monty.Studio.Jobs.Run do
     try do
       with {:ok, record} <- fetch(run_id),
            {:ok, opened} <- opened_for(record) do
+        # The record says `queued` until here, because asking for a run is not
+        # running it: this is the moment a worker has it in hand.
+        {:ok, record} = RunHistory.mark_running(record)
         run_experiment(record, opened)
       else
         {:error, reason} -> give_up(run_id, reason)

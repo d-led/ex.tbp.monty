@@ -274,7 +274,10 @@ defmodule Monty.Studio.Jobs do
   # still in memory, and are written before the row is closed.
   defp settle(run_id, reason) when is_binary(run_id) and is_binary(reason) do
     case RunHistory.head(run_id) do
-      %Run{status: "running"} = record ->
+      # A run that was asked for and never claimed is as much in flight as one
+      # being stepped: stopping it is what closes its record, or the row says
+      # `queued` for ever about a job that no longer exists.
+      %Run{status: status} = record when status in ["queued", "running"] ->
         summary = Map.put(record.summary || %{}, "reason", reason)
         {:ok, record} = RunHistory.keep_streamed(record)
         {:ok, _closed} = RunHistory.finish(record, summary, "failed")

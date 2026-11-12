@@ -1898,9 +1898,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # A record that says `running` is asked after, and the Reaper is asked too: a
   # run whose worker died, or whose job was cancelled out from under it, leaves
   # the word behind, and closing the record is what stops the page saying it.
-  defp poll_shown_run(
-         %{assigns: %{live_action: :show, run: %{id: id, status: "running"}}} = socket
-       ) do
+  defp poll_shown_run(%{assigns: %{live_action: :show, run: %{id: id, status: status}}} = socket)
+       when status in ["queued", "running"] do
     # One run, asked about — not every open run: a run whose worker died, or whose
     # job was cancelled out from under it, leaves the word `running` behind, and
     # closing the record is what stops the page saying it. The record is polled
@@ -2140,9 +2139,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     Enum.count(log, &(Map.get(&1, "episode") == episode))
   end
 
-  # In flight means both halves agree: the record says `running` *and* a job
-  # still owns it. Either alone puts Stop in front of a run that is over.
-  defp in_flight?(%{status: "running"} = run, queue), do: unfinished?(queue[run.id])
+  # In flight means both halves agree: the record has not settled *and* a job
+  # still owns it. Either alone puts Stop in front of a run that is over — and a
+  # run waiting its turn can still be called off, so it is in flight too.
+  defp in_flight?(%{status: status} = run, queue) when status in ["queued", "running"],
+    do: unfinished?(queue[run.id])
+
   defp in_flight?(_run, _queue), do: false
 
   defp running_now?(%{status: "running"} = run, queue), do: going?(queue[run.id])

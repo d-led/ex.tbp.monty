@@ -13,7 +13,7 @@ defmodule Monty.Studio.RunHistory.Run do
 
   import Ecto.Changeset
 
-  @statuses ~w(running finished stopped failed)
+  @statuses ~w(queued running finished stopped failed)
 
   @primary_key {:id, :binary_id, autogenerate: true}
 
@@ -21,7 +21,7 @@ defmodule Monty.Studio.RunHistory.Run do
     field :experiment, :string
     field :episode, :integer, default: 0
     field :source, :string, default: "monty"
-    field :status, :string, default: "running"
+    field :status, :string, default: "queued"
     field :steps, :integer, default: 0
     # What a list draws, counted from `log` when it is written and never
     # castable from outside: they are counts of another column, not inputs.

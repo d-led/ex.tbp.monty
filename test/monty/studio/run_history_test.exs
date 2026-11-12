@@ -21,12 +21,31 @@ defmodule Monty.Studio.RunHistoryTest do
     test "is history immediately, with the config and the inputs that produced it" do
       assert {:ok, run} = RunHistory.start(@attributes)
 
-      assert run.status == "running"
+      # Asked for, not stepped: a record says `queued` until a worker claims it.
+      assert run.status == "queued"
       assert run.experiment == "tutorial/first_experiment"
       assert run.config["experiment"]["config"]["seed"] == 42
       assert run.inputs["groups"]["monty/learning_module"] == "displacement_1lm"
       assert %DateTime{} = run.started_at
       assert run.finished_at == nil
+    end
+
+    test "says running only when a worker claims it" do
+      # Asking for a run is not running it: the job may wait for a slot, or never
+      # be picked up. The two words are the difference between "somebody asked
+      # for this" and "somebody is working on it", and a page draws both.
+      {:ok, queued} = RunHistory.start(@attributes)
+
+      assert RunHistory.get(queued.id).status == "queued"
+      assert RunHistory.in_flight?(queued)
+
+      {:ok, began} = RunHistory.mark_running(queued)
+
+      assert began.status == "running"
+      assert RunHistory.get(queued.id).status == "running"
+
+      # Asking twice is not an error, and not a second start.
+      assert {:ok, ^began} = RunHistory.mark_running(began)
     end
 
     test "is one episode, and says which" do
@@ -97,6 +116,7 @@ defmodule Monty.Studio.RunHistoryTest do
 
     test "adds what came after what the row already holds" do
       {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.mark_running(run)
       {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
 
       # The second write carries one step, not the two the record holds: a
@@ -174,6 +194,7 @@ defmodule Monty.Studio.RunHistoryTest do
       # request by the end of a twenty-thousand-step run, while the run was trying
       # to step. What a poll needs is the state and the counters.
       {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.mark_running(run)
       {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
 
       polled = RunHistory.progress(run.id)
@@ -428,6 +449,7 @@ defmodule Monty.Studio.RunHistoryTest do
       :ok = RunHistory.subscribe()
 
       {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.mark_running(run)
       {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
       {:ok, run} = RunHistory.finish(run, %{"steps" => 1})
 
@@ -630,6 +652,7 @@ defmodule Monty.Studio.RunHistoryTest do
   describe "a run read for a page" do
     test "comes back without the pictures its steps kept" do
       {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.mark_running(run)
       {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
       {:ok, run} = RunHistory.record_step(run, %{"step" => 1, "goals" => 0}, moment(1))
       head = RunHistory.head(run.id)
@@ -646,6 +669,7 @@ defmodule Monty.Studio.RunHistoryTest do
 
     test "answers with the observations of one step, and nothing where there was no step" do
       {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.mark_running(run)
       {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
       {:ok, run} = RunHistory.record_step(run, %{"step" => 1, "goals" => 0}, moment(1))
 
@@ -660,6 +684,7 @@ defmodule Monty.Studio.RunHistoryTest do
       # used to be every picture of every one of them: 156 MB across this
       # machine's seventy-seven runs, and a page that timed out its connection.
       {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.mark_running(run)
       {:ok, _stepped} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
 
       page = RunHistory.search().runs
@@ -673,6 +698,7 @@ defmodule Monty.Studio.RunHistoryTest do
       # counting the log of every run on the page, which is what made a page
       # cost grow with its runs' transcripts.
       {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.mark_running(run)
       {:ok, run} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
       {:ok, _run} = RunHistory.record_step(run, %{"step" => 1, "goals" => 0}, moment(1))
 
@@ -687,6 +713,7 @@ defmodule Monty.Studio.RunHistoryTest do
       # transcript is read when somebody opens the run, and fifty of them is
       # fifty logs nobody asked for.
       {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.mark_running(run)
       {:ok, _stepped} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
 
       row = Enum.find(RunHistory.list(), &(&1.id == run.id))
@@ -703,6 +730,7 @@ defmodule Monty.Studio.RunHistoryTest do
       # run, so it is the one read that must never carry the observations; the
       # progress it reports is counted from the log.
       {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.mark_running(run)
       {:ok, _stepped} = RunHistory.record_step(run, %{"step" => 0, "goals" => 1}, moment(0))
 
       watched = RunHistory.running_for(run.experiment)

@@ -20,6 +20,12 @@ defmodule Monty.Studio.JobsTest do
     record
   end
 
+  # A run whose worker has it in hand: the record says `queued` until one does.
+  defp running_run do
+    {:ok, running} = record_run() |> RunHistory.mark_running()
+    running
+  end
+
   describe "a queued run" do
     test "is listed with its Oban state and the status of its record" do
       record = record_run()
@@ -31,7 +37,9 @@ defmodule Monty.Studio.JobsTest do
       assert listed.queue == "studio"
       assert listed.worker == "Monty.Studio.Jobs.Run"
       assert listed.run_id == record.id
-      assert listed.run_status == "running"
+      # Asked for, not stepped: the job is `available`, so no worker has claimed
+      # the run and its record says so.
+      assert listed.run_status == "queued"
       assert listed.error == nil
     end
 
@@ -84,7 +92,7 @@ defmodule Monty.Studio.JobsTest do
     end
 
     test "asks a running worker to stop instead, so it can report what it did" do
-      record = record_run()
+      record = running_run()
       {:ok, job} = Jobs.Run.enqueue_run(record)
       :ok = executing(job)
 
@@ -115,7 +123,7 @@ defmodule Monty.Studio.JobsTest do
     end
 
     test "leaves a job that had already finished alone" do
-      record = record_run()
+      record = running_run()
       {:ok, job} = Jobs.Run.enqueue_run(record)
       :ok = Oban.cancel_job(Repo.get!(Oban.Job, job.id))
 

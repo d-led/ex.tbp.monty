@@ -42,7 +42,9 @@ defmodule Monty.Studio.RunHistory do
   def start(attributes) do
     attributes =
       attributes
-      |> Map.put_new(:status, "running")
+      # Asked for is not running: the job may wait a minute for a slot, or never
+      # be picked up at all. `mark_running/1` is the worker's word that it began.
+      |> Map.put_new(:status, "queued")
       |> Map.put_new(:started_at, DateTime.utc_now())
 
     %Run{}
@@ -406,6 +408,36 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
+  Says a run has begun, because a worker claimed it and is opening its world.
+
+  A record is written when somebody asks for a run, and asking is not running:
+  the job may wait for a slot, or never be picked up at all. This is the worker's
+  own word, and the only thing on a record that may say `running`.
+  """
+  @spec mark_running(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
+  def mark_running(%Run{status: "running"} = run), do: {:ok, run}
+
+  # No announcement of its own: the worker says `{:started, steps}` on the run's
+  # topic, which is what a page draws from, and every page reads the record again
+  # on its tick.
+  def mark_running(%Run{} = run) do
+    run
+    |> Ecto.Changeset.change(status: "running")
+    |> Repo.update()
+  end
+
+  @doc """
+  Whether a run has not settled: asked for, and not yet closed.
+
+  A run that is `queued` is as much in flight as one being stepped — it is a
+  record with a job behind it and no ending — and every question of the form
+  "may this be deleted", "may this be stopped", "is this history" is asked of
+  this, not of `running` alone.
+  """
+  @spec in_flight?(Run.t()) :: boolean()
+  def in_flight?(%Run{status: status}), do: status in ["queued", "running"]
+
+  @doc """
   Closes a run with its summary.
 
   `status` is `"finished"` or `"failed"`; the duration is taken from the run's
@@ -554,7 +586,13 @@ defmodule Monty.Studio.RunHistory do
     |> Map.new()
   end
 
-  defp by_state(query, state) when state in ~w(running finished stopped failed),
+  # "Running" is what a reader means by a run that is not over: one waiting its
+  # turn is not finished, failed or stopped, and a list that hid it would hide
+  # the run somebody just asked for.
+  defp by_state(query, "running"),
+    do: where(query, [run], run.status in ["queued", "running"])
+
+  defp by_state(query, state) when state in ~w(queued finished stopped failed),
     do: where(query, [run], run.status == ^state)
 
   defp by_state(query, _every_state), do: query
@@ -832,7 +870,7 @@ defmodule Monty.Studio.RunHistory do
   @spec running_for(String.t(), non_neg_integer() | nil) :: Run.t() | nil
   def running_for(experiment, episode \\ nil) do
     Run
-    |> where([run], run.experiment == ^experiment and run.status == "running")
+    |> where([run], run.experiment == ^experiment and run.status in ["queued", "running"])
     |> then(fn query ->
       if episode, do: where(query, [run], run.episode == ^episode), else: query
     end)
@@ -856,7 +894,10 @@ defmodule Monty.Studio.RunHistory do
   @spec running() :: [Run.t()]
   def running do
     Run
-    |> where([run], run.status == "running")
+    # A run that was asked for and never claimed is as unsettled as one being
+    # stepped: the reaper is what decides it is nobody's, and it cannot decide
+    # about a row it is not shown.
+    |> where([run], run.status in ["queued", "running"])
     |> order_by(asc: :inserted_at)
     |> rows()
   end
