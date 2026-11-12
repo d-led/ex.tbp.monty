@@ -11,11 +11,9 @@
 # disagree with is refused rather than tagged.
 #
 # The tag is what `.github/workflows/publish.yml` releases from, and it refuses
-# to tag a commit whose CI is not green: a hex release is permanent, and a
-# version number spent on a broken build cannot be taken back. `--no-check`
-# lifts that refusal for the case it cannot serve — a commit whose CI cannot be
-# asked about at all (no `gh`, a fork, a runner outage) — and says so on the way
-# past, twice.
+# to tag a commit whose CI is not green. `--no-check` lifts that refusal for the
+# case it cannot serve — a commit whose CI cannot be asked about at all (no `gh`,
+# a fork, a runner outage) — and says on the way past what it did not ask.
 set -e
 
 cd "$(dirname "$0")/.."
@@ -94,9 +92,9 @@ SHA=$(git rev-parse HEAD)
 # this says *this* commit did. `gh` is the only way to ask, so its absence stops
 # here rather than tagging on a guess.
 if [ "$CHECK_CI" = false ]; then
-  echo "WARNING: --no-check — CI was not asked about $SHA."
-  echo "         A tag publishes to Hex, and a version spent on a broken build"
-  echo "         cannot be taken back."
+  echo "WARNING: --no-check — CI was not asked about $SHA, and the tag"
+  echo "         publishes from this commit anyway."
+  echo "         The run, if there is one: gh run list --commit $SHA"
 else
   if ! command -v gh > /dev/null 2>&1; then
     echo "Error: gh is not installed, so CI cannot be checked for $SHA"
