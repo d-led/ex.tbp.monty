@@ -53,11 +53,11 @@ steps each. The experiment's own clock, read from the record it writes, and from
 | Monty's own dashboard, same config     |       1.4 s |          **3:18** |
 
 So the per-step work of this port is at parity with Monty's (33 ms a step against
-its 39 ms) and what is _not_ Monty's is the page: a run that is being watched
-spends about 2.9 s a step-run of the machine's time on drawing itself. The chart
-is rebuilt from the run's whole history at up to 3 Hz (`Chart.new/2` reads every
-step to draw a window of it), and the presenter encodes and writes a picture per
-sensor per step.
+its 39 ms), and the first reading of the table above put the rest on the page: it
+looked as if a watched run spent about 2.9 s of machine time an episode on drawing
+itself, with the chart rebuilt from the run's whole history at up to 3 Hz and a
+picture encoded and written per sensor per step. **That reading is wrong**, and
+the correction below is why.
 
 **Corrected 2026-11-12, later the same day: the page is not the problem.** The
 rows above are wall-clock, and this box is loaded (load ~6 on 8 cores, most of
