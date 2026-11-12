@@ -259,6 +259,53 @@ defmodule Monty.Studio.Jobs.RunTest do
       refute Map.has_key?(patch, "rgba")
     end
 
+    test "leaves no model of its own behind" do
+      # The model outlives its episodes — the next one is started on it — so the
+      # run is what stops it: one per phase, released when the last phase ends.
+      # A model that outlived its run would be a memory (and a graph index) held
+      # for as long as the studio lives.
+      {:ok, opened} = Monty.Studio.open(@experiment)
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 1, 2))
+      before = length(DynamicSupervisor.which_children(ExTbpMonty.Core.ModelSupervisor))
+
+      assert {:ok, _closed} = perform(record)
+
+      assert length(DynamicSupervisor.which_children(ExTbpMonty.Core.ModelSupervisor)) == before
+    end
+
+    test "says what an episode boundary cost, and of what" do
+      # A boundary is the second or two between one episode's last step and the
+      # next one's first, and no step's timer accounts for it: the closing's
+      # statistics, its conclusion, the stop, the hand-over of the transcript,
+      # and the next episode's own start. It is half of a long run's wall clock,
+      # so a run says which part is which instead of leaving it to a stopwatch.
+      {:ok, opened} = Monty.Studio.open(@experiment)
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 1, 2))
+
+      assert {:ok, closed} = perform(record)
+
+      # The first episode has no boundary behind it; the second says what its
+      # boundary was, part by part and in the order the parts happened: the
+      # closing's statistics and conclusion, the stop, the transcript's hand-over,
+      # and then the start — what it prepared, the scene, the positioning steps and
+      # the model.
+      assert [boundary] =
+               closed.log_path
+               |> File.read!()
+               |> String.split("\n")
+               |> Enum.filter(&(&1 =~ "the boundary took"))
+
+      assert boundary =~ ~r/the boundary took [\d.]+ ms: /
+
+      assert Regex.scan(
+               ~r/\b(statistics|conclusion|stop|hand-over|prepared|scene|positioning|model) /,
+               boundary,
+               capture: :all_but_first
+             )
+             |> List.flatten() ==
+               ~w(statistics conclusion stop hand-over prepared scene positioning model)
+    end
+
     test "writes a log file beside the record, and points at it" do
       {:ok, record} = start_run("base_config_10distinctobj_dist_agent", 2)
 

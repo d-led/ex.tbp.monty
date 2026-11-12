@@ -268,7 +268,12 @@ defmodule Monty.Studio.Jobs.Run do
       # What the learning modules last said they believed. A step they were not
       # given cannot change it, so this is what such a step reports instead of
       # asking every module again.
-      beliefs: %{}
+      beliefs: %{},
+      # What the last episode boundary cost, part by part, in microseconds: the
+      # closing times its own work and the next episode's start appends its own,
+      # and together they are the line `boundary_line/1` says. A boundary is half
+      # of a run's wall clock and nothing about it is visible in a step's timer.
+      boundary: []
     }
 
     {outcome, ran, state} =
@@ -284,6 +289,11 @@ defmodule Monty.Studio.Jobs.Run do
       })
 
     say(run_id, episodes_line(ran))
+
+    # The phase's model outlived its episodes and does not outlive the run: a
+    # concluded run, a stopped one and a crashed one all release it here, where
+    # the loop has returned whatever ended it.
+    release_models(run_id, opened)
 
     # A part of a batch keeps its memory to its own directory: the library is what
     # the parts learned between them, and one part writing it would overwrite the
@@ -679,32 +689,54 @@ defmodule Monty.Studio.Jobs.Run do
   # line joining the last step of the training phase to the first of the
   # evaluation one, across a boundary where the evidence really did restart.
   defp start_episode(run_id, opened, %{run: previous} = state, index, object, callbacks) do
-    stop_run(previous)
-
     episode = state.episodes_started
+
+    # The previous episode's world goes first, because a run steps one world at a
+    # time. Its model stays: an evaluation phase steps the model it has.
+    stop_world(previous)
 
     # The episode is built from its own phase's objects: the world it shows, the
     # semantic id it carries and the target it is judged by all come from the
-    # interface Monty would have used for this mode.
-    case Run.start(Setup.with_phase(opened.setup, state.mode),
-           steps: state.record.steps,
-           episode: index,
-           epoch: Map.get(callbacks, :epoch, 0),
-           mode: state.mode,
-           memory: state.memories,
-           first_seen: state.first_seen,
-           has_detailed_logger: Logging.detailed?(state.logging)
-         ) do
+    # interface Monty would have used for this mode. An evaluation phase steps the
+    # model it already has; a training phase's next episode starts from the memory
+    # the last one wrote, so it is given a model of its own (`phase_model_id/1`).
+    options = [
+      steps: state.record.steps,
+      episode: index,
+      epoch: Map.get(callbacks, :epoch, 0),
+      mode: state.mode,
+      memory: state.memories,
+      first_seen: state.first_seen,
+      has_detailed_logger: Logging.detailed?(state.logging)
+    ]
+
+    options =
+      if state.mode == :eval, do: [{:model_id, phase_model_id(run_id)} | options], else: options
+
+    case Run.start(Setup.with_phase(opened.setup, state.mode), options) do
       {:ok, run} ->
         Registry.update_value(Monty.Runtime.Registry, key(run_id), fn _ -> run.model_id end)
         say(run_id, "episode #{index + 1}: #{object || "the scene's own object"}")
+
+        # The closing timed the rest and the start timed its own parts; a first
+        # episode has no boundary behind it to report.
+        if state.boundary != [],
+          do: say(run_id, boundary_line(state.boundary ++ run.started_in))
 
         broadcast(
           run_id,
           {:episode, %{episode: episode, object: object, steps: state.record.steps}}
         )
 
-        {:ok, %{state | run: run, episode: episode, episodes_started: episode + 1, beliefs: %{}}}
+        {:ok,
+         %{
+           state
+           | run: run,
+             episode: episode,
+             episodes_started: episode + 1,
+             beliefs: %{},
+             boundary: []
+         }}
 
       {:error, reason} ->
         {:error, reason}
@@ -724,38 +756,10 @@ defmodule Monty.Studio.Jobs.Run do
   # and an episode logged afterwards would look confused about the object it just
   # recognised (`monty_experiment.py`, `post_episode`).
   defp end_episode(run_id, %{run: run} = state, outcome, infos) do
-    {conclusion, memories} =
-      cond do
-        crashed?(outcome) ->
-          # The crash took the model with it: a module's failure stopped the step
-          # the model is, and both the statistics and the conclusion are read off
-          # that model. The reason this run ends is the crash, said once with its
-          # own traceback — asking a dead process for the rest would replace it
-          # with "a process the run was waiting on exited". Nothing was learned,
-          # so the phase keeps the memory it had.
-          say(run_id, "the episode crashed, so its statistics were not read")
-          {%{}, state.memories}
+    {conclusion, memories, closing} = close_episode(run_id, state, outcome, run)
 
-        state.mode == :train ->
-          log_statistics(run_id, state.logging, run)
-          conclusion = Run.conclusion(run)
-          memories = learned(run_id, run, state.memories)
-          # A matching run is judged by evidence climbing per object; a training
-          # run matches nothing, so what it has to show is the memory it built.
-          say(run_id, Learned.growth_line(memories))
-          {conclusion, memories}
-
-        true ->
-          # An evaluation episode writes nothing, and this reads nothing either:
-          # the memory only has to travel when something wrote to it, and
-          # reading it back copies tens of megabytes out of the module process
-          # every episode (`LearningModuleServer.state/1` — the reason
-          # `detailed/2` exists).
-          log_statistics(run_id, state.logging, run)
-          {Run.conclusion(run), state.memories}
-      end
-
-    stop_run(run)
+    {stopping, _} = :timer.tc(fn -> stop_episode(run, state, outcome) end)
+    {handed, record} = :timer.tc(fn -> keep(state.record) end)
 
     # `infos` arrive newest first; a page reads an epoch oldest first.
     #
@@ -765,14 +769,57 @@ defmodule Monty.Studio.Jobs.Run do
     %{
       state
       | run: nil,
-        record: keep(state.record),
+        record: record,
         infos: state.infos ++ Enum.reverse(infos),
         conclusion: conclusion,
         memories: memories,
+        boundary: closing ++ [{"stop", stopping}, {"hand-over", handed}],
         # A supervised episode names where the object stood, and that place is
         # what every later episode of this run extends (`Run.supervise/1`).
         first_seen: run.first_seen
     }
+  end
+
+  # What the end of an episode owes — its statistics, its conclusion and, when it
+  # trained, the memory it left — with what each part cost. A part nobody timed is
+  # a part nobody can argue about, and the boundary is half of a run's wall clock.
+  defp close_episode(run_id, state, outcome, run) do
+    cond do
+      crashed?(outcome) ->
+        # The crash took the model with it: a module's failure stopped the step
+        # the model is, and both the statistics and the conclusion are read off
+        # that model. The reason this run ends is the crash, said once with its
+        # own traceback — asking a dead process for the rest would replace it
+        # with "a process the run was waiting on exited". Nothing was learned,
+        # so the phase keeps the memory it had.
+        say(run_id, "the episode crashed, so its statistics were not read")
+        {%{}, state.memories, []}
+
+      state.mode == :train ->
+        {recorded, _} = :timer.tc(fn -> log_statistics(run_id, state.logging, run) end)
+        {concluded, conclusion} = :timer.tc(fn -> Run.conclusion(run) end)
+        {written, memories} = :timer.tc(fn -> learned(run_id, run, state.memories) end)
+        # A matching run is judged by evidence climbing per object; a training
+        # run matches nothing, so what it has to show is the memory it built.
+        say(run_id, Learned.growth_line(memories))
+
+        {conclusion, memories,
+         [
+           {"statistics", recorded},
+           {"conclusion", concluded},
+           {"memory", written}
+         ]}
+
+      true ->
+        # An evaluation episode writes nothing, and this reads nothing either:
+        # the memory only has to travel when something wrote to it, and
+        # reading it back copies tens of megabytes out of the module process
+        # every episode (`LearningModuleServer.state/1` — the reason
+        # `detailed/2` exists).
+        {recorded, _} = :timer.tc(fn -> log_statistics(run_id, state.logging, run) end)
+        {concluded, conclusion} = :timer.tc(fn -> Run.conclusion(run) end)
+        {conclusion, state.memories, [{"statistics", recorded}, {"conclusion", concluded}]}
+    end
   end
 
   # The record in hand is the transcript; writing it is what makes it history.
@@ -865,14 +912,42 @@ defmodule Monty.Studio.Jobs.Run do
       {record, false}
   end
 
-  defp stop_run(nil), do: :ok
+  # An episode's own processes: its world goes every time, and its model goes
+  # whenever the next episode cannot step it — a phase that learns writes the
+  # memory a model is built from, so the next training episode starts from a new
+  # one, and a crashed episode leaves a model nothing should step again.
+  defp stop_episode(run, state, outcome) do
+    stop_world(run)
+    if state.mode == :train or crashed?(outcome), do: stop_model(run)
+  end
 
-  defp stop_run(run) do
-    Run.stop(run)
+  defp stop_world(nil), do: :ok
+  defp stop_world(run), do: guard_tidying(fn -> Run.stop_world(run) end)
+
+  defp stop_model(%{model: _model} = run), do: guard_tidying(fn -> Run.stop_model(run) end)
+
+  defp guard_tidying(fun) do
+    fun.()
   rescue
-    # A world already closed is a world with nothing left to stop; stopping is
-    # tidying up, not a step that can fail.
-    _no_world_left -> :ok
+    # A world already closed is a world with nothing left to stop, and a model
+    # already stopped is one too: stopping is tidying up, not a step that fails.
+    _gone_already -> :ok
+  end
+
+  # The model an evaluation phase steps. One per run, because a model outlives the
+  # episode it steps: `Run.start/2` resets a model it is given an id for, and
+  # building one per episode cost 895 ms of the memory's graphs each time — half of
+  # a ten-object run's wall clock. A training phase holds none, because what a
+  # training episode learns is the memory the next model is built from.
+  defp phase_model_id(run_id), do: "studio-#{run_id}-eval"
+
+  defp release_models(run_id, opened) do
+    model_id = phase_model_id(run_id)
+
+    case Monty.Runtime.Registry.lookup({:model, model_id}) do
+      [{_pid, _}] -> guard_tidying(fn -> Setup.model_class(opened.setup).stop(model_id) end)
+      [] -> :ok
+    end
   end
 
   defp episodes_line(episodes) do
@@ -1124,6 +1199,20 @@ defmodule Monty.Studio.Jobs.Run do
         Logger.warning("studio run #{run_id}: cannot write log: #{inspect(reason)}")
     end
   end
+
+  # Where a boundary's time went, in the run's own log: an episode is separated
+  # from the next by a second or two that no step's timer accounts for, and a
+  # boundary nobody measured is a boundary nobody can argue about. The parts are
+  # in the order they happened, microseconds, and the total is their sum — the
+  # loop's own work between the callbacks is the only thing it leaves out.
+  defp boundary_line(parts) do
+    total = parts |> Enum.map(&elem(&1, 1)) |> Enum.sum()
+
+    "the boundary took #{milliseconds(total)} ms: " <>
+      Enum.map_join(parts, ", ", fn {part, micros} -> "#{part} #{milliseconds(micros)} ms" end)
+  end
+
+  defp milliseconds(micros), do: Float.round(micros / 1000, 1)
 
   defp broadcast(run_id, event) do
     Phoenix.PubSub.broadcast(ExTbpMonty.PubSub, topic(run_id), {:studio, run_id, event})

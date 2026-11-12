@@ -41,7 +41,8 @@ defmodule Monty.Studio.Run do
     positioning: nil,
     policy: nil,
     counter: nil,
-    first_seen: %{}
+    first_seen: %{},
+    started_in: []
   ]
 
   @type t :: %__MODULE__{
@@ -56,7 +57,9 @@ defmodule Monty.Studio.Run do
           positioning: Monty.Runtime.Positioning.outcome() | nil,
           policy: Monty.Experiment.RecognitionStrategy.t() | nil,
           counter: Monty.Experiment.RecognitionStrategy.RecognitionCounter.t() | nil,
-          first_seen: %{optional(String.t()) => [number()]}
+          first_seen: %{optional(String.t()) => [number()]},
+          # What starting this episode cost, part by part, in microseconds.
+          started_in: [{String.t(), non_neg_integer()}]
         }
 
   @doc """
@@ -96,19 +99,43 @@ defmodule Monty.Studio.Run do
     episode = Keyword.get(opts, :episode, 0)
     mode = Keyword.get(opts, :mode, :eval)
 
-    spec =
-      Setup.model_spec(setup, model_id,
-        has_detailed_logger: Keyword.get(opts, :has_detailed_logger, false),
-        memory: Keyword.get_lazy(opts, :memory, fn -> Setup.memories(setup) end)
-      )
+    # A model can outlive an episode. Monty's experiment is one model per run whose
+    # short-term state is cleared per episode — `Monty.Runtime.Episode.run/3` is
+    # that loop without the experiment around it — and building one per episode paid
+    # for the memory's graphs every time: 895 ms of a 1.7 s episode, measured on the
+    # ten-object config. A model this run already has is reset and stepped again;
+    # whoever started it stops it when the phase ends (`Run.stop_model/1`).
+    held? = Monty.Runtime.Registry.lookup({:model, model_id}) != []
 
-    model = Setup.model_class(setup)
+    {prepared, {spec, model, factories, policy}} =
+      :timer.tc(fn ->
+        spec =
+          if held?,
+            do: nil,
+            else:
+              Setup.model_spec(setup, model_id,
+                has_detailed_logger: Keyword.get(opts, :has_detailed_logger, false),
+                memory: Keyword.get_lazy(opts, :memory, fn -> Setup.memories(setup) end)
+              )
 
-    with {:ok, factories} <- Setup.positioning_procedures(setup),
-         {:ok, policy} <- Setup.recognition_strategy(setup),
-         {:ok, interface, positioning} <-
+        {:ok, factories} = Setup.positioning_procedures(setup)
+        {:ok, policy} = Setup.recognition_strategy(setup)
+        {spec, Setup.model_class(setup), factories, policy}
+      end)
+
+    with {:ok, interface, positioning, placed_in} <-
            position(setup, factories, episode, epoch: Keyword.get(opts, :epoch, 0), phase: mode) do
-      case DynamicSupervisor.start_child(ExTbpMonty.Core.ModelSupervisor, {model, spec}) do
+      {started_in, started} =
+        :timer.tc(fn ->
+          if held? do
+            :ok = Monty.Runtime.Model.reset_episode(model_id)
+            {:ok, :held}
+          else
+            DynamicSupervisor.start_child(ExTbpMonty.Core.ModelSupervisor, {model, spec})
+          end
+        end)
+
+      case started do
         {:ok, _pid} ->
           # The mode is told to the model, not assumed by it. Monty's experiment
           # sets it on the model before an epoch steps, and the coordinator's own
@@ -122,6 +149,12 @@ defmodule Monty.Studio.Run do
              model: model,
              model_id: model_id,
              setup: setup,
+             # What starting the episode cost, part by part: the memory and the
+             # config it resolved, the scene, the positioning steps the world
+             # took to put the agent in front of the object, and the model's own
+             # process. A run's boundaries are half its wall clock and this is
+             # the half nobody can see.
+             started_in: [{"prepared", prepared}] ++ placed_in ++ [{"model", started_in}],
              episode_seed: Seed.episode_seed(seed(setup), mode, episode),
              # The world starts where an episode starts, not where the last one
              # left it: a run is an episode — and where that is, the positioning
@@ -249,35 +282,47 @@ defmodule Monty.Studio.Run do
     # The episode's own object: Monty's interface shows one object per episode and
     # walks the list, so the world a run builds is about *this* episode's target —
     # in the pose its phase's sampler gives this episode of this epoch.
-    world = Setup.world(setup, episode, opts)
+    {scene, interface} =
+      :timer.tc(fn ->
+        world = Setup.world(setup, episode, opts)
 
-    interface =
-      Interface.new(
-        env: world,
-        # The next episode starts where Monty starts one: a new scene for a world
-        # that is a value, and the peer's own reset for a world that is a process
-        # — never a second peer.
-        reset: fn -> world.__struct__.reset(world) end,
-        transforms: Setup.built_transforms(setup),
-        seed: seed(setup)
-      )
+        interface =
+          Interface.new(
+            env: world,
+            # The next episode starts where Monty starts one: a new scene for a world
+            # that is a value, and the peer's own reset for a world that is a process
+            # — never a second peer.
+            reset: fn -> world.__struct__.reset(world) end,
+            transforms: Setup.built_transforms(setup),
+            seed: seed(setup)
+          )
 
-    {_observations, _proprioceptive_state, interface} = Interface.pre_episode(interface)
+        {_observations, _proprioceptive_state, interface} = Interface.pre_episode(interface)
+        interface
+      end)
 
-    if Monty.Simulators.Environment.positions_itself?(world) do
-      {:ok, interface, %{steps: nil, success: true, procedures: [:world]}}
+    if Monty.Simulators.Environment.positions_itself?(interface.env) do
+      {:ok, interface, %{steps: nil, success: true, procedures: [:world]}, [{"scene", scene}]}
     else
       observe = fn interface, actions -> Interface.step(interface, actions) end
 
-      case Positioning.prepare(
-             factories,
-             Setup.target_semantic_id(setup, episode),
-             interface,
-             observe,
-             distractors: Setup.distractors(setup)
-           ) do
-        {:ok, positioned, outcome} -> {:ok, positioned, outcome}
-        {:error, reason} -> {:error, reason}
+      {positioning, placed} =
+        :timer.tc(fn ->
+          Positioning.prepare(
+            factories,
+            Setup.target_semantic_id(setup, episode),
+            interface,
+            observe,
+            distractors: Setup.distractors(setup)
+          )
+        end)
+
+      case placed do
+        {:ok, positioned, outcome} ->
+          {:ok, positioned, outcome, [{"scene", scene}, {"positioning", positioning}]}
+
+        {:error, reason} ->
+          {:error, reason}
       end
     end
   end
@@ -507,6 +552,25 @@ defmodule Monty.Studio.Run do
     model.stop(model_id)
     Monty.Simulators.Environment.stop(interface.env)
   end
+
+  @doc """
+  Stops the world an episode stepped, and leaves its model alone.
+
+  A model outlives the episode it steps (`Run.start/2` reuses one that is already
+  there), so an episode that ends is a world that is done, not a model that is.
+  """
+  @spec stop_world(t()) :: :ok
+  def stop_world(%__MODULE__{interface: interface}),
+    do: Monty.Simulators.Environment.stop(interface.env)
+
+  @doc """
+  Stops the model an episode stepped, whatever world it was in.
+
+  Called by whoever started the model — the phase, in a run — and by an episode
+  that learned something, because the next episode's memory is not this one's.
+  """
+  @spec stop_model(t()) :: :ok
+  def stop_model(%__MODULE__{model: model, model_id: model_id}), do: model.stop(model_id)
 
   @doc "How many steps a run of this experiment takes by default."
   @spec default_steps() :: pos_integer()
