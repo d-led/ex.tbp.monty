@@ -60,6 +60,18 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
       assert render(view) =~ "a change needs a restart"
     end
 
+    # What a desktop user is asked to send back when a run is slow: whether the
+    # hot loops are the Rust kernels, where the writes land, and what the machine
+    # is. Each of these has been guessed at wrongly in a session already.
+    test "says which kernels it runs and where its writes land", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      assert has_element?(view, "#system-Kernels")
+      assert has_element?(view, "#system-Database-file")
+      assert has_element?(view, "#system-Data-directory")
+      assert has_element?(view, "#system-Machine")
+    end
+
     test "offers the episode write timeout, which a restart is not needed for", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings")
 

@@ -26,15 +26,79 @@ defmodule Monty.Studio.System do
         note: "chosen at boot from the environment"
       },
       %{
+        label: "Database file",
+        value: database_file(repo),
+        note: "where a run's writes land"
+      },
+      %{
         label: "Connection queue target",
         value: milliseconds(Keyword.get(config, :queue_target)),
         note: "config/config.exs — a change needs a restart"
       },
       %{label: "Pool size", value: number(Keyword.get(config, :pool_size)), note: nil},
+      %{
+        label: "Kernels",
+        value: kernels(),
+        note: "the Rust NIFs, or the Elixir fallback when they cannot load"
+      },
+      %{
+        label: "Data directory",
+        value: Monty.Paths.root(),
+        note: "runs, frames and the database live under it"
+      },
       %{label: "Elixir", value: System.version(), note: nil},
       %{label: "OTP", value: otp(), note: nil},
+      %{label: "Machine", value: machine(), note: nil},
       %{label: "Application", value: version(), note: nil}
     ]
+  end
+
+  # A desktop reports what it cannot be asked about otherwise: whether its hot
+  # loops are the Rust kernels or the Elixir fallback, where its writes land (a
+  # file on a synced volume behaves nothing like a file on disk), and what it is
+  # running on. Each of these has cost a session of guessing when it was missing.
+  defp kernels do
+    if ExTbpMonty.Core.MatcherNif.loaded?() and ExTbpMonty.Core.KdTreeNif.loaded?(),
+      do: "native (Rust)",
+      else: "Elixir reference paths"
+  end
+
+  defp database_file(ExTbpMonty.Repo.SQLite), do: "#{Monty.Paths.database()} (#{journal_mode()})"
+
+  defp database_file(_server), do: "a server — nothing is written to this machine's disk"
+
+  # WAL is what lets a page read while a run writes, so a report that says the
+  # file is where it is should say how it journals as well.
+  defp journal_mode do
+    case Ecto.Adapters.SQL.query(ExTbpMonty.Repo.SQLite, "PRAGMA journal_mode", []) do
+      {:ok, %{rows: [[mode]]}} -> "journal: #{mode}"
+      _other -> "journal: unknown"
+    end
+  rescue
+    _not_running -> "journal: unknown"
+  end
+
+  defp machine do
+    parts = [
+      :erlang.system_info(:system_architecture) |> to_string(),
+      "#{:erlang.system_info(:schedulers_online)} schedulers"
+      | memory()
+    ]
+
+    Enum.join(parts, " · ")
+  end
+
+  # The machine's memory, not the VM's: a report of "it is slow" is worth
+  # nothing beside a number that says the box had 8 GB or 64. os_mon answers it
+  # and is already running here; a build without it drops the number rather than
+  # the row.
+  defp memory do
+    case :memsup.get_system_memory_data()[:total_memory] do
+      nil -> []
+      bytes -> ["#{div(bytes, 1024 * 1024)} MB"]
+    end
+  rescue
+    _no_memsup -> []
   end
 
   defp milliseconds(nil), do: "the adapter's default"
