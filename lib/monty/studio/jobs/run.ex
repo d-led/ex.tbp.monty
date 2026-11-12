@@ -235,7 +235,10 @@ defmodule Monty.Studio.Jobs.Run do
       run: nil,
       record: record,
       logging: logging,
-      infos: [],
+      # The run's summary, folded as its episodes end rather than kept as reports:
+      # 5 110 reports are 4.3 GB (measured on the live node) for a summary of a few
+      # hundred bytes, and the transcript a reader wants is `RunStream`'s.
+      summary: %Summary{},
       conclusion: %{},
       episode: 0,
       # Which pass over the phase's objects the run is on. Monty's sampler reads
@@ -310,7 +313,7 @@ defmodule Monty.Studio.Jobs.Run do
     if part?(record) do
       outcome
     else
-      close(state.record, opened, outcome, state.infos, state.conclusion, run_id)
+      close(state.record, opened, outcome, state.summary, state.conclusion, run_id)
     end
   end
 
@@ -359,7 +362,7 @@ defmodule Monty.Studio.Jobs.Run do
     # and only then are the streams let go: they are the only copy until then.
     record = store_parts(record, parts)
     Enum.each(parts, &RunStream.clear(&1.stream))
-    close(record, opened, outcome, [], %{}, run_id, true)
+    close(record, opened, outcome, %Summary{}, %{}, run_id, true)
   end
 
   # The training wave, and the memory it built between its parts.
@@ -761,16 +764,14 @@ defmodule Monty.Studio.Jobs.Run do
     {stopping, _} = :timer.tc(fn -> stop_episode(run, state, outcome) end)
     {handed, record} = :timer.tc(fn -> keep(state.record) end)
 
-    # `infos` arrive newest first; a page reads an epoch oldest first.
-    #
-    # The episode boundary is where the transcript reaches the database: the row
-    # is one write an episode rather than one a step, and a run whose node dies
-    # leaves a record that is an episode behind rather than an empty one.
+    # `infos` arrive newest first; the fold does not care about order, but the
+    # report a reader gets is written oldest first, so it is the same list either
+    # way — and the episode's reports are released as soon as they are folded.
     %{
       state
       | run: nil,
         record: record,
-        infos: state.infos ++ Enum.reverse(infos),
+        summary: Summary.accrue(Enum.reverse(infos), state.summary),
         conclusion: conclusion,
         memories: memories,
         boundary: closing ++ [{"stop", stopping}, {"hand-over", handed}],
@@ -1073,15 +1074,15 @@ defmodule Monty.Studio.Jobs.Run do
   # reads as "no such panel".
   defp centre_view(run, step), do: CentreView.frame(run.interface.env, step)
 
-  defp close(record, opened, outcome, infos, conclusion, run_id, written? \\ false) do
-    summary = Summary.from_infos(infos, opened.setup, conclusion)
+  defp close(record, opened, outcome, summary, conclusion, run_id, written? \\ false) do
+    summary = Summary.finish(summary, opened.setup, conclusion)
     status = status_of(outcome)
     # One summary for the record and for whoever is watching: why a run did not
     # finish is part of it, because that is everything a page has after the last
     # step.
     stored = RunLog.summary(summary, Failure.stopped(outcome))
 
-    say(run_id, closing_line(outcome, infos, summary))
+    say(run_id, closing_line(outcome, summary))
 
     # The run's steps and its pictures go into the row once, here, rather than
     # once an episode while it ran. They stay in memory for a page until the row
@@ -1107,22 +1108,22 @@ defmodule Monty.Studio.Jobs.Run do
   defp status_of({:crashed, _step, _reason}), do: "failed"
   defp status_of({:failed, _reason}), do: "failed"
 
-  defp closing_line(:finished, infos, summary),
+  defp closing_line(:finished, summary),
     do:
-      "run finished: #{length(infos)} steps, #{summary.duration_us} µs in the model " <>
+      "run finished: #{summary.steps} steps, #{summary.duration_us} µs in the model " <>
         "and #{summary.world_us} µs in the world"
 
-  defp closing_line(:stopped, infos, summary),
+  defp closing_line(:stopped, summary),
     do:
-      "run stopped after #{length(infos)} step(s), #{summary.duration_us} µs in the model " <>
+      "run stopped after #{summary.steps} step(s), #{summary.duration_us} µs in the model " <>
         "and #{summary.world_us} µs in the world"
 
-  defp closing_line({:failed, reason}, infos, _summary),
-    do: "run failed after #{length(infos)} step(s): #{reason}"
+  defp closing_line({:failed, reason}, summary),
+    do: "run failed after #{summary.steps} step(s): #{reason}"
 
-  defp closing_line({:crashed, step, reason}, infos, _summary) do
+  defp closing_line({:crashed, step, reason}, summary) do
     what = reason |> Failure.stopped() |> Map.fetch!("reason")
-    "run failed at step #{step} after #{length(infos)} step(s): #{what}"
+    "run failed at step #{step} after #{summary.steps} step(s): #{what}"
   end
 
   # -- failing loudly enough -------------------------------------------------
