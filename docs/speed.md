@@ -219,10 +219,12 @@ outside it.
   (a first-ever object load is 1.4 s; ten of those are ~1.5 s of a run). The rest
   is 10–17 `GetGoodView` world steps at 7–8 ms a crossing, where Monty's MuJoCo is
   a function call in its own process.
-- **A crossing carries 129 kB**: two 64×64 depth, two RGBA, two semantic images as
-  a JSON header plus the arrays' bytes. `Pythonx.eval` alone (Python steps and
-  encodes) is 12–17 ms on this loaded box and the decode `Answer.decode` adds
-  ~3.5 ms, so the Python half is what a crossing costs, not the Elixir side.
+- **A crossing carries 129 kB** (two depth, two RGBA, two semantic images, a JSON
+  header then the arrays' bytes) and **the Python half is all of its cost**:
+  `Pythonx.eval("answer = world.step(actions)")` alone — MuJoCo, numpy and the
+  encode — is **7.65 ms best of four**, against 7–8 ms for the whole `Host.step`
+  with the Elixir decode on top. So there is nothing to win on our side of the
+  crossing; only MuJoCo doing less would move it, and Monty pays that too.
 - **Watching costs ~18 %** and it is contention, not drawing: a render is 4 010
   reductions (a step is 425 000) and the page reads one row of scalars per step.
   The model steps themselves go 113.9 → 129.6 s when a page is open.
