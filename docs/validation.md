@@ -536,6 +536,42 @@ that), or something else still differs. What is now out of the question is the
 first two suspects that were investigated at length — the random stream (same words
 consumed, same first action) and the percept (same to the last digit).
 
+## Run: the whole benchmark, on both sides (2026-11-12)
+
+The checks above replay Monty's percepts through the port. This one runs the
+whole experiment twice — Monty's own `run.py` and the studio's runner — on one
+machine, same config (`base_config_10distinctobj_dist_agent`), same seed (42),
+140 episodes of up to 14 evaluation epochs.
+
+| What                       | Agreement                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The episodes, in order     | identical: mug, bowl, potted_meat_can, spoon, strawberry, mustard_bottle, dice, golf_ball, c_lego_duplo, banana, and the same again for fourteen epochs |
+| Every episode's conclusion | **140 of 140 on the target object**, in both runs                                                                                                       |
+| The run's total steps      | **5 110 against 5 123** — 0.25 % apart                                                                                                                  |
+| A single episode's length  | **not identical, and not expected to be**: c_lego_duplo 36 steps against 62, spoon 35 against 24, potted_meat_can 26 against 26                         |
+
+The last row is the honest part. An episode is a policy's random walk over
+actions chosen from evidence, so a difference in the last digits of an evidence
+sum changes which action comes next, and from there the episode's length; the
+two runs land on the same conclusion by different paths. What is claimed is the
+conclusion, not the itinerary.
+
+The gates behind this, run the same day: `mix monty.module_map.verify` (123
+files, 329 classes — 206 implemented, 4 partial, 72 planned, 47 excluded),
+`mix monty.config.snapshots` (63 snapshots match), `scripts/quality.sh` (2 873
+tests, worst CRAP 29.85), and the acceptance ladder
+(`mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8
+--no-record`) still printing `0.908, 2.55, 4.086, 5.675, 7.032, 8.639, 10.15,
+11.712` with `goals 15 328`.
+
+To reproduce the comparison: run Monty's own
+`WANDB_MODE=disabled MPLBACKEND=Agg .venv/bin/python run.py experiment=base_config_10distinctobj_dist_agent`
+in a quiet checkout, read
+`$MONTY_LOGS/projects/monty_runs/base_config_10distinctobj_dist_agent/eval_stats.csv`,
+and put the studio's run beside it with
+`mix run scripts/probe_run_log.exs priv/studio_runs/<id>` — the run log's closing
+line names each episode's conclusion.
+
 ## Re-recording anything in this file
 
 The fixtures are generated, so they can be regenerated — and should be, when the
