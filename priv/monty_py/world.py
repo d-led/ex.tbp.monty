@@ -357,12 +357,12 @@ class Embodiment:
 
             # MuJoCo renders RGB only and Monty expects RGBA, so the alpha channel
             # is added here: a camera always returns opaque pixels.
-            rgb = renderer.render()
+            rgb = _render(renderer)
             alpha = np.full(rgb.shape[:2], 255, dtype=rgb.dtype)
             rgba = np.dstack([rgb, alpha])
 
             renderer.enable_depth_rendering()
-            depth = renderer.render()
+            depth = _render(renderer)
             renderer.disable_depth_rendering()
 
             if not sensor_config.semantic:
@@ -370,7 +370,7 @@ class Embodiment:
                 continue
 
             renderer.enable_segmentation_rendering()
-            segmentation = renderer.render()
+            segmentation = _render(renderer)
             renderer.disable_segmentation_rendering()
 
             # Segmentation answers `(object_id, object_type)` per pixel; only the
@@ -926,6 +926,14 @@ class MuJoCoSimulator:
 
     def _close_renderers(self) -> None:
         for renderer in self._renderers.values():
+            # `Renderer.close` frees GL objects, and those belong to whichever
+            # context is current — not necessarily this renderer's. Closing a
+            # world while another was mid-run deleted the *other* world's
+            # framebuffer, and its next two segmentation passes read rubbish
+            # (`IndexError: index 399387 is out of bounds for axis 0 with size 2`).
+            context = getattr(renderer, "_gl_context", None)
+            if context is not None:
+                context.make_current()
             renderer.close()
         self._renderers = {}
 
@@ -933,6 +941,27 @@ class MuJoCoSimulator:
     def _default_id_mapping() -> dict:
         """The background, which Habitat calls 0 and MuJoCo calls -1."""
         return {-1: 0}
+
+
+def _render(renderer: Renderer):
+    """One frame, through this renderer's own GL context.
+
+    MuJoCo makes a renderer's context current when it is built and never again,
+    so a process with two worlds renders both through whichever context was built
+    last: the read-back pixels belong to the other world — the segmentation pass
+    came back as the RGB image, whose bytes read as ids, and
+    `IndexError: index 399387 is out of bounds for axis 0 with size 2` is what a
+    run of four parts died of as soon as one part finished and freed the context
+    that was current.
+
+    `Renderer` takes no context argument and exposes no `make_current`, so the
+    call goes to the context it created; it is what MuJoCo's own `__init__` does.
+    """
+    context = getattr(renderer, "_gl_context", None)
+    if context is not None:
+        context.make_current()
+
+    return renderer.render()
 
 
 def _quaternion_list(rotation: np.quaternion) -> list:
