@@ -3,7 +3,7 @@ defmodule ExTbpMonty.Core.Supervisor do
   The processes the core needs, for a host to put in its own tree.
 
       children = [
-        ExMontyTbp.Core.Supervisor,
+        ExTbpMonty.Core.Supervisor,
         MyApp.Endpoint
       ]
 
@@ -11,15 +11,21 @@ defmodule ExTbpMonty.Core.Supervisor do
 
     * `Monty.Runtime.Registry` — every sensor and learning module registers
       here, so the step coordinator can address a module across restarts;
-    * `ExMontyTbp.Core.ModelSupervisor` — one child per running model, holding
-      its module servers and step coordinator. A model is stopped by
+    * `#{inspect(__MODULE__)}.model_supervisor()` — one child per running model,
+      holding its module servers and step coordinator. A model is stopped by
       terminating its supervisor, so its children cannot outlive the run.
 
   A host that names these differently passes the supervisor name to
-  `Monty.Runtime.Model.stop/1`; nothing else in the core knows a host's names.
+  `Monty.Runtime.Model.stop/2`; nothing else in the core knows a host's names.
   """
 
   use Supervisor
+
+  @model_supervisor ExTbpMonty.Core.ModelSupervisor
+
+  @doc "The supervisor a model is started under, and stopped through."
+  @spec model_supervisor() :: atom()
+  def model_supervisor, do: @model_supervisor
 
   @spec start_link(term()) :: Supervisor.on_start()
   def start_link(options \\ []) do
@@ -30,7 +36,7 @@ defmodule ExTbpMonty.Core.Supervisor do
   def init(_options) do
     children = [
       {Registry, keys: :unique, name: Monty.Runtime.Registry},
-      {DynamicSupervisor, name: ExMontyTbp.Core.ModelSupervisor, strategy: :one_for_one}
+      {DynamicSupervisor, name: @model_supervisor, strategy: :one_for_one}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

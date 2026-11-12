@@ -109,7 +109,7 @@ defmodule Mix.Tasks.Monty.RunTest do
     test "leaves nothing running" do
       run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "1", "--episodes", "1"])
 
-      assert DynamicSupervisor.which_children(ExTbpMonty.ModelSupervisor) == []
+      assert DynamicSupervisor.which_children(ExTbpMonty.Core.ModelSupervisor) == []
     end
 
     test "--no-record keeps the database out of it" do

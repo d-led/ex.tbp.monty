@@ -128,17 +128,24 @@ defmodule Monty.Runtime.Model do
   def via(model_id), do: Registry.via({:model, model_id})
 
   @doc """
-  Stops a model started under the application's `ModelSupervisor`.
+  Stops a model started under a model supervisor.
 
   A model is stopped by terminating its supervisor; the children go with it, so
-  no module process outlives the run it belonged to.
+  no module process outlives the run it belonged to. `supervisor` is
+  `ExTbpMonty.Core.Supervisor.model_supervisor/0` — the name the tree this
+  package starts uses — unless the host named its own.
   """
-  @spec stop(atom() | String.t()) :: :ok | {:error, :not_found}
-  def stop(model_id) do
+  @spec stop(atom() | String.t(), atom()) :: :ok | {:error, :not_found}
+  def stop(model_id, supervisor \\ ExTbpMonty.Core.Supervisor.model_supervisor()) do
     case Registry.lookup({:model, model_id}) do
       [{pid, _value}] ->
-        DynamicSupervisor.terminate_child(ExTbpMonty.ModelSupervisor, pid)
-        :ok
+        case DynamicSupervisor.terminate_child(supervisor, pid) do
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            {:error, reason}
+        end
 
       [] ->
         {:error, :not_found}

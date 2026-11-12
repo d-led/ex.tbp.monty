@@ -17,10 +17,13 @@ defmodule ExTbpMonty.Application do
       {DNSCluster, query: Application.get_env(:ex_tbp_monty, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: ExTbpMonty.PubSub},
       # Every sensor and learning module registers here, so the step
-      # coordinator can address a module by name across restarts.
-      {Registry, keys: :unique, name: Monty.Runtime.Registry},
-      # One child per running model (module servers + step coordinator).
-      {DynamicSupervisor, name: ExTbpMonty.ModelSupervisor, strategy: :one_for_one},
+      # coordinator can address a module by name across restarts, and one child
+      # per running model is started under `ExTbpMonty.Core.ModelSupervisor`
+      # (module servers + step coordinator). Both are the library's own names by
+      # now: a host that starts models — this application is one — stops them
+      # with `Monty.Runtime.Model.stop/1`, which terminates a model's supervisor
+      # in the tree it was started in.
+      ExTbpMonty.Core.Supervisor,
       # The steps of runs that are still stepping, kept in memory: a run's
       # transcript reaches its page from here, and the database is written when
       # the run settles rather than once per step.

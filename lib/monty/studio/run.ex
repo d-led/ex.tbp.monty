@@ -108,7 +108,7 @@ defmodule Monty.Studio.Run do
          {:ok, policy} <- Setup.recognition_strategy(setup),
          {:ok, interface, positioning} <-
            position(setup, factories, episode, epoch: Keyword.get(opts, :epoch, 0), phase: mode) do
-      case DynamicSupervisor.start_child(ExTbpMonty.ModelSupervisor, {model, spec}) do
+      case DynamicSupervisor.start_child(ExTbpMonty.Core.ModelSupervisor, {model, spec}) do
         {:ok, _pid} ->
           # The mode is told to the model, not assumed by it. Monty's experiment
           # sets it on the model before an epoch steps, and the coordinator's own

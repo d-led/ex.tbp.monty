@@ -28,7 +28,7 @@ defmodule Mix.Tasks.Monty.BenchTest do
     test "leaves no processes and no history behind" do
       capture(["base_config_10distinctobj_dist_agent", "--steps", "2", "--repeat", "2"])
 
-      assert DynamicSupervisor.which_children(ExTbpMonty.ModelSupervisor) == []
+      assert DynamicSupervisor.which_children(ExTbpMonty.Core.ModelSupervisor) == []
       assert RunHistory.list() == []
     end
 
