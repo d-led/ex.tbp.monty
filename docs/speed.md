@@ -93,6 +93,21 @@ Python process, which `info.world_us` does not count), and the scheduler. The
 pictures are **1.4 ms and 1.0 ms** a step to encode warm, so ~12 s of the run is
 drawing the scene the page shows.
 
+**The same benchmark in four parts, later the same day** (`93b148f`, no page
+open): **198.8 s**, 5 110 steps, 140 episodes, `finished`, and a statistics file
+with **140 rows, `match` × 140** — versus Monty's dashboard's 3:18 for the same
+run. Four parts is what `Monty.Studio.Partition` divides a run into, and the
+parts are what makes up the difference: the same work in one part was 186 s
+without contention and 242–247 s with the box as loaded as it was earlier, so the
+two readings are not a speedup to quote — they are the same run under two
+schedules. What is quoted is the comparison with Monty, which is now at parity.
+
+The parallel path only became usable in `183e57f`: MuJoCo's `Renderer` makes its
+GL context current in `__init__` and never again, and `Renderer.close()` frees GL
+objects of whichever context is _current_, so a part finishing deleted another
+part's framebuffer and the survivor's segmentation pass read the colour image
+(`IndexError: index 399387 is out of bounds for axis 0 with size 2`).
+
 **A step inside `Run.step` is model and world and nothing else**: 21 steps of an
 episode, wall 1 789 ms, of which the model 1 512 ms and the world 244 ms — 1.5 ms
 a step unaccounted. So the studio's per-step work is outside the step, where it
