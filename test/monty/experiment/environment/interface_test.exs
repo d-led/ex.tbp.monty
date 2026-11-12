@@ -81,6 +81,47 @@ defmodule Monty.Experiment.Environment.InterfaceTest do
     assert observations["observations"] == ["after 1 steps", "first", "second"]
   end
 
+  # Positioning narrows its transforms to the one sensor a procedure reads
+  # (`Monty.Runtime.Positioning.narrow_to/2`), and an episode spends fourteen to
+  # seventeen world steps there. A world asked for the other sensor's picture
+  # draws three images, crosses 132 kB and decodes them, per step, for nobody:
+  # 5.5 ms a step measured on MuJoCo.
+  test "the world is asked only for the sensors the transforms will read" do
+    one_sensor =
+      Interface.new(
+        env: %StubWorld{step: 0},
+        transforms: [%Tagging{name: "view_finder", sensor_ids: ["view_finder"]}]
+      )
+
+    {_observations, _pose, stepped} = Interface.step(one_sensor, [])
+
+    assert stepped.env.asked == [["view_finder"]]
+  end
+
+  test "a chain reading two sensors asks for each of them once" do
+    both =
+      Interface.new(
+        env: %StubWorld{step: 0},
+        transforms: [
+          %Tagging{name: "view_finder", sensor_ids: ["view_finder"]},
+          %Tagging{name: "patch", sensor_ids: ["patch"]},
+          %Tagging{name: "view_finder again", sensor_ids: ["view_finder"]}
+        ]
+      )
+
+    {_observations, _pose, stepped} = Interface.step(both, [])
+
+    assert stepped.env.asked == [["view_finder", "patch"]]
+  end
+
+  test "a transform that names no sensor asks for every sensor in the scene" do
+    unnamed = Interface.new(env: %StubWorld{step: 0}, transforms: [%Tagging{name: "first"}])
+
+    {_observations, _pose, stepped} = Interface.step(unnamed, [])
+
+    assert stepped.env.asked == [nil]
+  end
+
   # -- the stub world and the tagging transforms ------------------------------
 
   defp interface do

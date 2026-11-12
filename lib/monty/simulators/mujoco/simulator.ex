@@ -107,11 +107,22 @@ defmodule Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator do
   """
   @impl true
   @spec step(t(), [Monty.Frameworks.Actions.Action.t()]) :: {map(), map(), t()}
-  def step(%__MODULE__{} = world, actions) do
+  def step(%__MODULE__{} = world, actions), do: step(world, actions, nil)
+
+  @doc """
+  Observations and proprioceptive state after `actions`, rendering only `sensors`.
+
+  `nil` renders every sensor in the scene, which is what a model's step asks for.
+  A positioning step names the one sensor its procedure reads: the other one's
+  three renders cross the port and are decoded to be thrown away.
+  """
+  @spec step(t(), [Monty.Frameworks.Actions.Action.t()], [String.t()] | nil) ::
+          {map(), map(), t()}
+  def step(%__MODULE__{} = world, actions, sensors) do
     world = start(world)
     encoded = Enum.map(actions, &ActionJSONEncoder.encode/1)
 
-    case Host.step(world.id, encoded) do
+    case Host.step(world.id, encoded, sensors) do
       {:ok, answer} ->
         {answer["observations"], Protocol.proprioceptive_state(answer["proprioceptive_state"]),
          world}

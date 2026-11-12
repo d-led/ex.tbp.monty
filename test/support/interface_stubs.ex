@@ -17,14 +17,27 @@ defmodule Monty.InterfaceStubs do
     value: stepping it answers the world it leaves behind.
     """
 
-    defstruct step: 0, actions: []
+    defstruct step: 0, actions: [], asked: []
 
-    def step(%__MODULE__{} = world, actions) do
+    def step(%__MODULE__{} = world, actions), do: step(world, actions, nil)
+
+    @doc """
+    A step told which sensors to render.
+
+    The same step, and it says what it was asked for, so a test can check that a
+    narrowed positioning step does not ask for a picture nobody reads.
+    """
+    def step(%__MODULE__{} = world, actions, sensors) do
       names =
         Enum.map(actions, fn action -> action.__struct__ |> Module.split() |> List.last() end)
 
       {%{"observations" => ["after #{world.step + 1} steps"]}, %{"state" => "stepped"},
-       %{world | step: world.step + 1, actions: world.actions ++ [names]}}
+       %{
+         world
+         | step: world.step + 1,
+           actions: world.actions ++ [names],
+           asked: world.asked ++ [sensors]
+       }}
     end
   end
 
@@ -37,7 +50,7 @@ defmodule Monty.InterfaceStubs do
     left for it to read.
     """
 
-    defstruct [:name]
+    defstruct [:name, sensor_ids: []]
 
     def call(observations, %{name: name}, ctx) do
       send(self(), {:saw, name, observations["observations"], ctx.state != nil, ctx.rng != nil})

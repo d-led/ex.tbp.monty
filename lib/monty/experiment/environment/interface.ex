@@ -80,7 +80,8 @@ defmodule Monty.Experiment.Environment.Interface do
   """
   @spec step(t(), [Monty.Frameworks.Actions.Action.t()]) :: {map(), map(), t()}
   def step(%__MODULE__{} = interface, actions) do
-    {observations, proprioceptive_state, env} = step_world(interface.env, actions)
+    {observations, proprioceptive_state, env} =
+      step_world(interface.env, actions, sensors_read(interface.transforms))
 
     {apply_transforms(interface, observations, proprioceptive_state), proprioceptive_state,
      %{interface | env: env}}
@@ -114,12 +115,30 @@ defmodule Monty.Experiment.Environment.Interface do
 
   # The stand-in world steps with a function; a world behind a port answers with
   # its own process. Both answer `{observations, pose, world}`.
-  defp step_world(env, actions) when is_function(env, 1) do
+  defp step_world(env, actions, _sensors) when is_function(env, 1) do
     {observations, proprioceptive_state} = env.(actions)
     {observations, proprioceptive_state, env}
   end
 
-  defp step_world(env, actions), do: env.__struct__.step(env, actions)
+  # A world that can be told which sensors to render is; one that cannot renders
+  # all of them, which is what every world did before.
+  defp step_world(env, actions, sensors) do
+    if function_exported?(env.__struct__, :step, 3),
+      do: env.__struct__.step(env, actions, sensors),
+      else: env.__struct__.step(env, actions)
+  end
+
+  # The sensors this step's transforms will read, so a world does not draw images
+  # nobody looks at. Positioning narrows its transforms to the one sensor a
+  # procedure reads (`Monty.Runtime.Positioning.narrow_to/2`), and an episode
+  # spends seventeen world steps there — the other sensor's three renders were
+  # drawn, decoded and thrown away, once per step. `nil` asks for every sensor.
+  defp sensors_read(transforms) do
+    case transforms |> Enum.flat_map(&Map.get(&1, :sensor_ids, [])) |> Enum.uniq() do
+      [] -> nil
+      sensors -> sensors
+    end
+  end
 
   defp fresh(%__MODULE__{reset: nil} = interface), do: interface.env
   defp fresh(%__MODULE__{reset: reset}), do: reset.()

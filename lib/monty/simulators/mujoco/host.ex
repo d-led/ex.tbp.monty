@@ -45,7 +45,7 @@ defmodule Monty.Simulators.Mujoco.Host do
 
   @new_world "world = monty_world.World(spec)"
   @reset "answer = world.reset()"
-  @step "answer = world.step(actions)"
+  @step "answer = world.step(actions, sensors)"
   @close "world.close()"
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -61,7 +61,17 @@ defmodule Monty.Simulators.Mujoco.Host do
 
   @doc "One step: the actions the model chose, and what the sensors see after."
   @spec step(String.t(), [map()]) :: {:ok, map()} | {:error, String.t()}
-  def step(id, actions), do: GenServer.call(@name, {:step, id, actions}, @timeout)
+  def step(id, actions), do: step(id, actions, nil)
+
+  @doc """
+  One step, rendering only `sensors`.
+
+  `nil` renders every sensor in the scene; a positioning step names the one its
+  procedure reads, and the rest are not drawn.
+  """
+  @spec step(String.t(), [map()], [String.t()] | nil) :: {:ok, map()} | {:error, String.t()}
+  def step(id, actions, sensors),
+    do: GenServer.call(@name, {:step, id, actions, sensors}, @timeout)
 
   @doc "Closes a world: its model, its renderers and its agents go with it."
   @spec stop_world(String.t()) :: :ok
@@ -90,10 +100,15 @@ defmodule Monty.Simulators.Mujoco.Host do
     end
   end
 
-  def handle_call({:step, id, actions}, _from, state) do
+  def handle_call({:step, id, actions, sensors}, _from, state) do
     with {:ok, globals} <- world(state, id),
          {:ok, globals} <-
-           evaluate(@step, Map.put(globals, "actions", Jason.encode!(actions))) do
+           evaluate(
+             @step,
+             globals
+             |> Map.put("actions", Jason.encode!(actions))
+             |> Map.put("sensors", Jason.encode!(sensors))
+           ) do
       {:reply, {:ok, answer(globals)},
        %{state | globals: globals, worlds: put(state, id, globals)}}
     else

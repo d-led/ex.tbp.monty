@@ -340,11 +340,18 @@ class Embodiment:
         address = self.sim.model.jnt_qposadr[self.pitch_joint.id]
         self.sim.data.qpos[address] = np.deg2rad(pitch_degrees)
 
-    @property
-    def observations(self) -> dict:
-        """What each sensor saw: depth, `rgba`, and the semantic ids if asked."""
+    def observations(self, only=None) -> dict:
+        """What each sensor saw: depth, `rgba`, and the semantic ids if asked.
+
+        `only` names the sensors to render. A positioning step reads one of them,
+        and rendering the other cost half of every one of its seventeen world
+        steps: three MuJoCo renders, a 132 kB crossing and a decode, thrown away.
+        `None` — what a model's step asks for — renders every sensor in the scene.
+        """
         observations = {}
         for sensor_id, sensor_config in self._sensor_configs.items():
+            if only is not None and sensor_id not in only:
+                continue
             renderer = self.sim.renderer_for_res(sensor_config.height, sensor_config.width)
             renderer.update_scene(self.sim.data, camera=f"{self.id}.{sensor_id}")
 
@@ -376,10 +383,23 @@ class Embodiment:
         return observations
 
     def _semantic_ids(self, object_ids: np.ndarray) -> np.ndarray:
+        """The id each pixel was added with, for the ids the scene mapped.
+
+        One masked assignment per mapped id, where `np.vectorize` called back
+        into Python once per pixel: 0.24 ms a frame became 0.06 ms on the same
+        array. The comparison is against `object_ids`, the array as the renderer
+        answered it, so a pixel is remapped once — which is what
+        `mapping.get(object_id, object_id)` says — and an id the scene never
+        mapped keeps its own.
+        """
         mapping = self.sim.id_to_semantic_id
         if not mapping:
             return object_ids
-        return np.vectorize(lambda object_id: mapping.get(object_id, object_id))(object_ids)
+
+        semantic = object_ids.copy()
+        for object_id, semantic_id in mapping.items():
+            semantic[object_ids == object_id] = semantic_id
+        return semantic
 
     @property
     def state(self) -> dict:
@@ -470,9 +490,9 @@ class NoopAgent:
     def state(self) -> dict:
         return self._embodiment.state
 
-    @property
-    def observations(self) -> dict:
-        return self._embodiment.observations
+    def observations(self, only=None) -> dict:
+        """What each sensor saw, rendering only `only` when one is named."""
+        return self._embodiment.observations(only)
 
     def reset(self) -> None:
         self._embodiment.reset()
@@ -492,9 +512,9 @@ class DistantAgent:
     def state(self) -> dict:
         return self._embodiment.state
 
-    @property
-    def observations(self) -> dict:
-        return self._embodiment.observations
+    def observations(self, only=None) -> dict:
+        """What each sensor saw, rendering only `only` when one is named."""
+        return self._embodiment.observations(only)
 
     def reset(self) -> None:
         self._embodiment.reset()
@@ -544,9 +564,9 @@ class SurfaceAgent:
     def state(self) -> dict:
         return self._embodiment.state
 
-    @property
-    def observations(self) -> dict:
-        return self._embodiment.observations
+    def observations(self, only=None) -> dict:
+        """What each sensor saw, rendering only `only` when one is named."""
+        return self._embodiment.observations(only)
 
     def reset(self) -> None:
         self._embodiment.reset()
@@ -867,15 +887,15 @@ class MuJoCoSimulator:
             quat=rotation_quat,
         )
 
-    @property
-    def observations(self) -> dict:
-        return {agent.id: agent.observations for agent in self._agents.values()}
+    def observations(self, only=None) -> dict:
+        """What every agent's sensors saw, rendering only `only` when named."""
+        return {agent.id: agent.observations(only) for agent in self._agents.values()}
 
     @property
     def states(self) -> dict:
         return {agent.id: agent.state for agent in self._agents.values()}
 
-    def step(self, actions) -> tuple:
+    def step(self, actions, only=None) -> tuple:
         """Applies `actions`, then answers what the sensors see afterwards."""
         for action in actions:
             agent = self._agents[action.agent_id]
@@ -892,14 +912,14 @@ class MuJoCoSimulator:
             method(action)
 
         mj_forward(self.model, self.data)
-        return self.observations, self.states
+        return self.observations(only), self.states
 
     def reset(self) -> tuple:
         """Puts every agent back where it started, then looks again."""
         for agent in self._agents.values():
             agent.reset()
         mj_forward(self.model, self.data)
-        return self.observations, self.states
+        return self.observations(), self.states
 
     def close(self) -> None:
         self._close_renderers()
@@ -1106,16 +1126,21 @@ class World:
             }
         )
 
-    def step(self, actions) -> bytes:
-        """Takes the actions the model chose, and answers what came back."""
-        return _on_one_thread(lambda: self._step(actions))
+    def step(self, actions, sensors=None) -> bytes:
+        """Takes the actions the model chose, and answers what came back.
 
-    def _step(self, actions) -> bytes:
+        `sensors` is the JSON the BEAM sent: `null` to render every sensor, or a
+        list naming the ones this step's transforms will read.
+        """
+        return _on_one_thread(lambda: self._step(actions, sensors))
+
+    def _step(self, actions, sensors) -> bytes:
         # Monty's `ActionJSONDecoder` decoded one action, which is why the glue
         # used to decode a list one element at a time. These are our own actions,
         # so the list is decoded once.
         decoded = [Action(action) for action in json.loads(actions)]
-        observations, states = self._simulator.step(decoded)
+        only = json.loads(sensors) if sensors else None
+        observations, states = self._simulator.step(decoded, only)
         return _answer({"observations": observations, "proprioceptive_state": states})
 
     def close(self) -> None:
