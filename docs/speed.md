@@ -114,6 +114,34 @@ dominated by the paths above), so this is a win for the surface agent and the
 stand-in scene rather than for the distant agent — said plainly rather than
 counted as a step win.
 
+The list's first two, done in the same session:
+
+- **Positioning steps the world with one sensor's cloud** (item 2). The
+  interface's transform computes every sensor's point cloud and a positioning
+  procedure reads only its own; `Positioning.position/7` narrows the transform
+  list to the procedure's sensor for the steps it takes, and hands the full list
+  back on the interface it returns — narrowing past the prologue would leave the
+  model half blind on its first step. Paired, same script, same three episodes:
+  `Run.start` **14 432 k → 12 316 k reductions** on the third (12 906 k →
+  11 366 k on the second, 57 041 k → 54 412 k on the cold first) — about 3 % of
+  an episode. The procedures take exactly the same 11, 14 and 17 world steps:
+  the observation a procedure reads is unchanged, and only the cloud nothing
+  reads is gone, which is what the step counts are there to prove.
+- **The run page builds its hover samples once a chart, not once a render**
+  (item 1). A live page redraws eight times a second while a run is live, and
+  the chart changes only when a step arrives, so `data-samples` — every drawn
+  point, thinned to what a pointer can tell apart — was built again and again in
+  between: measured at **1.6 ms and 56 kB** for a 150-step chart over ten
+  objects and **11.4 ms and 488 kB** at 5 000 steps (best of four, this box). It
+  is now made with the chart and kept with it, re-made only when the chart
+  changes, and a page test drives the series picker and reads the units back to
+  prove a chart that has changed answers with its own.
+
+What is left of the list is the transform's per-pixel Elixir (item 3) and the
+sensor modules' `Enum` plumbing (item 4) — the same patch built twice into
+4096 four-float rows and then walked several times, which wants one kernel over
+the whole cloud rather than a faster walk of it.
+
 ## Where a step's work goes (2026-11-03, ten objects, six steps, dev)
 
 9.0 M reductions and 82 MB of garbage a step, split by the process that did it

@@ -1466,6 +1466,22 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert Enum.any?(samples(view), &(&1["step"] == 1))
     end
 
+    test "a chart that has changed answers the pointer with its own words", %{
+      conn: conn,
+      run: run
+    } do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> samples() |> Enum.map(& &1["unit"]) |> Enum.uniq() == [""]
+
+      # The page keeps a chart's samples beside the chart it made them from, so
+      # a chart that has changed must not still be read out in the old one's
+      # units.
+      view |> element("#replay-series") |> render_change(%{"series" => "duration_us"})
+
+      assert view |> samples() |> Enum.map(& &1["unit"]) |> Enum.uniq() == ["µs"]
+    end
+
     test "and the value axis is named in that series' own units", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 

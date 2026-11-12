@@ -301,6 +301,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
   """
   attr :moment, :map, default: nil
   attr :chart, :map, default: nil
+  attr :samples, :string, required: true
   attr :series, :list, default: []
   attr :series_id, :string, default: nil
   attr :best, :map, default: nil
@@ -642,7 +643,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
                 data-height={@chart.height}
                 data-from={@chart.from}
                 data-to={@chart.to}
-                data-samples={chart_samples(@chart, @series, @series_id)}
+                data-samples={@samples}
                 class="relative cursor-crosshair touch-none select-none"
               >
                 <svg
@@ -1179,7 +1180,22 @@ defmodule ExTbpMontyWeb.StudioComponents do
   # line's name, the unit and whether it is named, which is a megabyte of
   # attribute on a long run and is re-sent on every step of a live one. Measured
   # on the 12 448 points of a 42 401-step run: 1 270 539 bytes became 515 720.
-  defp chart_samples(chart, series, series_id) do
+  #
+  # The page makes this once per chart and hands the string in. It redraws
+  # several times a second while a run is live, and the samples change only when
+  # a step arrives, so making them in the render made the same string again and
+  # again between steps: measured at 1.6 ms and 56 kB for a hundred and fifty
+  # steps over ten objects, 11.4 ms and 488 kB for five thousand (best of four,
+  # this box). Immaterial on a finished run's page, and eight renders a second
+  # of it while one is live.
+  @doc """
+  The chart's `data-samples`: one entry per drawn point, where it sits and the
+  sentence a hover shows.
+
+  Pure, and public so the page can make it once for a chart and keep it until
+  that chart changes.
+  """
+  def chart_samples(chart, series, series_id) do
     unit = chart_unit(series, series_id)
     named? = length(chart.lines) > 1 or series_id == "evidence"
 
