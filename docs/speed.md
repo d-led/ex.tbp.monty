@@ -240,6 +240,20 @@ in the same proportion — CPU starvation, not code.
 
 `scripts/probe_run_log.exs priv/studio_runs/<id>` prints that split for any run.
 
+**Where Monty's own time goes** (`cProfile`, one epoch — 10 episodes — 25.7 s of
+profiled Python): its MuJoCo work is _cheap_ — `mjr_readPixels` 2.0 s over 2 024
+renders (**0.99 ms a render**) and `mj_r_render` 0.47 s (0.23 ms) — against
+`graph_matching.get_features_at_node` **6.9 s cumulative** and 2.3 s of module
+imports. So a Monty world step is about **3 ms** (two renders, `mj_forward`,
+states), where **ours is 7.65 ms of Python** for the same scene. Over the 7 500
+world steps a run takes (5 110 model + 2 380 positioning) that is **~35 s — 15 %
+of the run — inside `priv/monty_py/world.py`, our own file**: the thread hop per
+call, `np.full`+`np.dstack` adding an alpha channel per sensor per step, `states`
+built whether or not anyone reads it, and `_answer`'s recursive walk plus
+`json.dumps` header and `tobytes` copies. Measured while the box was busy, so the
+_absolute_ numbers move; the ratio (ours 7.65 against its ~3) does not, because
+both were taken under the same load.
+
 ## Where a step's work goes (2026-11-03, ten objects, six steps, dev)
 
 9.0 M reductions and 82 MB of garbage a step, split by the process that did it
