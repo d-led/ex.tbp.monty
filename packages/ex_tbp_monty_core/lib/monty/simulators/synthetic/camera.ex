@@ -17,6 +17,12 @@ defmodule Monty.Simulators.Synthetic.Camera do
   A frame's `data` is markup the page may interpolate as it stands. Everything in
   it that is not a number of ours is escaped here, at the point the string is
   built — a template that had to remember to escape it could forget.
+
+  The escaping is this module's own, and the `{:safe, iodata}` a frame carries is
+  the shape a page renders as markup rather than as text: a library that answers
+  what a sensor saw does not take a web framework as a dependency to say so, and
+  `Monty.Studio.CentreView` in the application beside it builds its frame the
+  same way.
   """
 
   alias ExTbpMonty.Core.Png
@@ -25,7 +31,7 @@ defmodule Monty.Simulators.Synthetic.Camera do
           sensor_id: String.t(),
           step: non_neg_integer(),
           media_type: String.t(),
-          data: Phoenix.HTML.Safe.t(),
+          data: {:safe, iodata()},
           location: [float()],
           note: String.t()
         }
@@ -200,9 +206,20 @@ defmodule Monty.Simulators.Synthetic.Camera do
   defp fixed(value), do: :erlang.float_to_binary(value * 1.0, decimals: 3)
 
   # The only things in a frame that are not numbers of ours, escaped before they
-  # become part of the markup.
-  defp escaped(value),
-    do: value |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+  # become part of the markup. The five characters that can end an attribute or
+  # open an element, and nothing else: a frame is read by a page, not by an XML
+  # parser.
+  defp escaped(value) do
+    value
+    |> to_string()
+    |> String.replace(~r/[&<>"']/, fn
+      "&" -> "&amp;"
+      "<" -> "&lt;"
+      ">" -> "&gt;"
+      "\"" -> "&quot;"
+      "'" -> "&#39;"
+    end)
+  end
 
   # Markup this module built from escaped parts: the page can interpolate it, and
   # does not have to take this module's word for it by calling `raw`.

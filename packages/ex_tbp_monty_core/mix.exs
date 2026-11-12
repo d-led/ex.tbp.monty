@@ -1,7 +1,7 @@
 defmodule ExTbpMonty.Core.MixProject do
   use Mix.Project
 
-  @version "0.1.1"
+  @version "0.1.2"
   @source_url "https://github.com/d-led/ex.tbp.monty"
 
   def project do
@@ -31,7 +31,13 @@ defmodule ExTbpMonty.Core.MixProject do
     [
       # No application callback on purpose: the core is processes a host starts
       # in its own tree (`ExTbpMonty.Core.Supervisor`), not a thing that runs
-      # by itself. `extra_applications` is what the code actually calls.
+      # by itself. `extra_applications` is what the code actually calls, and it
+      # is one: `Logger`, which is Elixir's own. A library that answers what a
+      # sensor saw should not ask a host to boot anything on its behalf, so the
+      # dependencies below are libraries, not applications with trees —
+      # `:jason` and `:yaml_elixir` compile code and start no process, and
+      # telemetry and `phoenix_html` are not dependencies at all (the first had
+      # no listener, the second was one escape function).
       extra_applications: [:logger]
     ]
   end
@@ -48,13 +54,10 @@ defmodule ExTbpMonty.Core.MixProject do
       # reference and the fallback for a VM where the NIF cannot be loaded.
       {:rustler, "~> 0.38", runtime: false},
       {:jason, "~> 1.2"},
-      # `Monty.Config.Source` and the maps it reads are YAML/JSON, and a
-      # telemetry span is how the runtime says what a step did.
+      # `Monty.Config.Source` and the maps it reads are YAML/JSON. Nothing else
+      # in the package asks for a parser: a host that hands over maps needs none
+      # of it, and the YAML is read only when a config file is.
       {:yaml_elixir, "~> 2.11"},
-      {:telemetry, "~> 1.0"},
-      # The stand-in scene draws its frame as HTML. The escaping is
-      # `Phoenix.HTML`, which is a markup library, not the web framework.
-      {:phoenix_html, "~> 4.1"},
 
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},

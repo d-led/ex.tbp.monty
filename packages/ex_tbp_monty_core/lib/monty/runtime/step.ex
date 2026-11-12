@@ -262,7 +262,6 @@ defmodule Monty.Runtime.Step do
       duration_us: elapsed_us(started_at)
     }
 
-    emit(info)
     {:reply, {:ok, actions, info}, %{state | step: state.step + 1}}
   end
 
@@ -910,13 +909,5 @@ defmodule Monty.Runtime.Step do
 
   defp elapsed_us(started_at) do
     System.convert_time_unit(System.monotonic_time() - started_at, :native, :microsecond)
-  end
-
-  defp emit(info) do
-    :telemetry.execute(
-      [:monty, :step, :stop],
-      %{duration: info.duration_us},
-      %{step: info.step, votes_used: info.votes.used, deadline_hit?: info.votes.deadline_hit?}
-    )
   end
 end
