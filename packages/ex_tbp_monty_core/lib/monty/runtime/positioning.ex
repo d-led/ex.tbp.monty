@@ -100,7 +100,18 @@ defmodule Monty.Runtime.Positioning do
 
   defp position([factory | rest], target, world, observe, max_steps, steps, answers) do
     {module, procedure} = GetGoodViewFactory.create(factory, target)
-    {observations, proprioceptive_state, world} = observe.(world, [])
+
+    # A procedure reads one sensor's observation — the one it is positioning —
+    # and the interface's transform computes every sensor's point cloud. An
+    # episode spends seventeen world steps here, and half of each step's
+    # transform is a cloud the procedure never looks at.
+    #
+    # Each procedure narrows from the world as it was handed in, and the
+    # recursion carries that, not the narrowed look: one procedure's restore
+    # would otherwise be the next one's starting point, and the second
+    # procedure would compute both clouds again.
+    look = narrow_to(observe, procedure.sensor_id)
+    {observations, proprioceptive_state, world} = look.(world, [])
 
     case until_finished(
            module,
@@ -108,7 +119,7 @@ defmodule Monty.Runtime.Positioning do
            observations,
            proprioceptive_state,
            world,
-           observe,
+           look,
            max_steps,
            steps + 1
          ) do
@@ -162,4 +173,70 @@ defmodule Monty.Runtime.Positioning do
 
   defp name(%GetGoodViewFactory{agent_id: agent_id, sensor_id: sensor_id}),
     do: "#{sensor_id}@#{agent_id}"
+
+  # The interface as the procedure needs it: stepped with only its own sensor's
+  # cloud computed. What comes back carries the interface's own transform list,
+  # because the steps after positioning are the model's and need every sensor's
+  # cloud — a narrowed interface handed on would leave the model half blind.
+  #
+  # A world with no transforms (a test's, or one that positions itself) is
+  # stepped exactly as it was.
+  defp narrow_to(observe, sensor_id) do
+    fn world, actions ->
+      case world do
+        %{transforms: [_ | _] = transforms} ->
+          case narrow(transforms, sensor_id) do
+            {:ok, narrowed} ->
+              {observations, proprioceptive_state, stepped} =
+                observe.(%{world | transforms: narrowed}, actions)
+
+              {observations, proprioceptive_state, %{stepped | transforms: transforms}}
+
+            :not_this_sensor ->
+              observe.(world, actions)
+          end
+
+        _untransformed ->
+          observe.(world, actions)
+      end
+    end
+  end
+
+  # The transforms with the sensor's own kept and the rest of the list narrowed
+  # to it. `intrinsics` and `depth_clip_sensors` are indexed by place in
+  # `sensor_ids`, so they have to move with it — narrow one without the other and
+  # the wrong camera is unprojected.
+  defp narrow(transforms, sensor_id) do
+    transforms
+    |> Enum.reduce_while({:ok, []}, fn transform, {:ok, kept} ->
+      case one(transform, sensor_id) do
+        :keep -> {:cont, {:ok, [transform | kept]}}
+        {:narrow, narrowed} -> {:cont, {:ok, [narrowed | kept]}}
+        :not_this_sensor -> {:halt, :not_this_sensor}
+      end
+    end)
+    |> case do
+      {:ok, kept} -> {:ok, Enum.reverse(kept)}
+      :not_this_sensor -> :not_this_sensor
+    end
+  end
+
+  defp one(%{sensor_ids: ids, intrinsics: intrinsics} = transform, sensor_id) do
+    case Enum.find_index(ids, &(&1 == sensor_id)) do
+      nil ->
+        :not_this_sensor
+
+      index ->
+        {:narrow,
+         %{
+           transform
+           | sensor_ids: [sensor_id],
+             intrinsics: [Enum.at(intrinsics, index)],
+             depth_clip_sensors:
+               if(index in Map.get(transform, :depth_clip_sensors, []), do: [0], else: [])
+         }}
+    end
+  end
+
+  defp one(_transform, _sensor_id), do: :keep
 end
