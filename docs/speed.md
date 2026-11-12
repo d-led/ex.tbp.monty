@@ -195,68 +195,48 @@ the whole cloud rather than a faster walk of it.
 
 Monty's own `run.py experiment=base_config_10distinctobj_dist_agent` in the
 user's checkout, `.venv`, `WANDB_MODE=disabled MPLBACKEND=Agg`, timed with
-`/usr/bin/time`. Ours: the studio's runner, twice — once with no page open, once
-with a page following the run in a browser.
+`/usr/bin/time`; ours through the studio's runner, no page and then with a page
+following the run.
 
-|                          | steps |          wall |  a step | an episode |
-| ------------------------ | ----: | ------------: | ------: | ---------: |
-| Monty, its own runner    | 5 123 |   **152.4 s** | 29.7 ms |     1.09 s |
-| ours, no page            | 5 110 | **240–247 s** | 47.0 ms |     1.71 s |
-| ours, one page following | 5 110 |     **284 s** | 55.6 ms |     2.03 s |
+|                          | steps |          wall |  a step |
+| ------------------------ | ----: | ------------: | ------: |
+| Monty, its own runner    | 5 123 |   **152.4 s** | 29.7 ms |
+| ours, no page            | 5 110 | **240–247 s** | 47.0 ms |
+| ours, one page following | 5 110 |     **284 s** | 55.6 ms |
 
-The step counts agree (5 110 against 5 123), which is the parity that matters: the
-two runs are the same experiment. **We are 1.58× slower a run and 1.26×…1.87×
-slower a step**, and that is the number to attack — not the 3× a 30-minute report
-suggested, which was this port before the last few sessions' work.
+The step counts agree, so the comparison is fair: **1.58× a run**, not the 3× a
+30-minute report suggested (that was this port before the last few sessions). The
+gap is not the model — see the split below.
 
-**Where our 47 ms a step goes**, from the run's own log (a line's write time
-against the step's own reported time) and from `Run.step` timed directly:
+**Our 47 ms a step**: the model 22.3 ms (114 s, 47 %), the world behind the port
+11.5 ms (59 s, 24 %), the record ~4 ms (~20 s), and **140 episode boundaries at
+307 ms each (43 s, 18 %)**. `Run.step` accounts for model + world to within 1.5 ms
+(21 steps: 1 789 ms = 1 512 + 244 + 1.5), so the record and the boundary are
+outside it.
 
-|                            | per step |      over the run | how it was measured                                         |
-| -------------------------- | -------: | ----------------: | ----------------------------------------------------------- |
-| the model step             |  22.3 ms |    113.9 s (47 %) | `info.duration_us`, summed from the log                     |
-| the world behind the port  |  11.5 ms |     58.7 s (24 %) | `info.world_us`; `Host.step` alone is 7–8 ms                |
-| the record around the step |    ~4 ms |       ~20 s (8 %) | `RunLog.moment` 2.33 ms + two PNGs 2.4 ms + the frame files |
-| **140 episode boundaries** |        — | **43.4 s (18 %)** | 307 ms a boundary, mean 312, from the log's timestamps      |
+- **The boundary is positioning, not the scene.** `Interface.pre_episode/1` is
+  260–282 ms of the 307, but rebuilding the _same_ MuJoCo scene is only 25–43 ms
+  (a first-ever object load is 1.4 s; ten of those are ~1.5 s of a run). The rest
+  is 10–17 `GetGoodView` world steps at 7–8 ms a crossing, where Monty's MuJoCo is
+  a function call in its own process.
+- **A crossing carries 129 kB**: two 64×64 depth, two RGBA, two semantic images as
+  a JSON header plus the arrays' bytes. `Pythonx.eval` alone (Python steps and
+  encodes) is 12–17 ms on this loaded box and the decode `Answer.decode` adds
+  ~3.5 ms, so the Python half is what a crossing costs, not the Elixir side.
+- **Watching costs ~18 %** and it is contention, not drawing: a render is 4 010
+  reductions (a step is 425 000) and the page reads one row of scalars per step.
+  The model steps themselves go 113.9 → 129.6 s when a page is open.
+- **Memory**: a run peaks at ~750 MB RSS (Python, MuJoCo and numpy inside the
+  BEAM) and falls back to ~400 MB between episodes — no leak, but on a box that is
+  already swapping (8.8 of 10 GB) the OS's high-watermark alarm fires during a
+  run.
 
-`Run.step` accounts for everything inside a step (21 steps: 1 789 ms wall = model
-1 512 + world 244 + 1.5 ms unaccounted), so the record's cost is outside it, and
-the boundary is `Run.start`:
+**Tell a slow machine from a slow port**: compare `duration_us` in the run's log
+(the step's own time) with the wall between lines. Here the same code reported
+25.4 ms and 31.1 ms a step on two runs twenty minutes apart, with the wall rising
+in the same proportion — CPU starvation, not code.
 
-- **`Interface.pre_episode/1` is 260–282 ms of the 307** (1 394 ms on the first
-  episode), and it is not the reset: `Host.reset` is 7–39 ms and a step is 7–8 ms.
-  It is **building the MuJoCo scene**, because `Run.position/4` asks
-  `Setup.world/3` for a fresh world every episode, so `add_object` `_recompile`s a
-  model and drops the renderers, which the next reset rebuilds. That build is
-  **1 412 ms cold and 25–43 ms once the same object has been seen before** — the
-  expensive part is the first time an object's mesh and texture are loaded, and a
-  run of 140 episodes over ten objects pays that ten times (~1.5 s) and the warm
-  price the other 130 (~4 s). So the scene is not the boundary's cost, and the
-  earlier reading of it in this file (141–199 ms an episode) was measuring the
-  first pass over ten _different_ objects.
-- the rest is the positioning: 10–17 world steps of `GetGoodView`, now with one
-  sensor's cloud instead of two — **120–200 ms of the 307**, at our 7–8 ms a
-  crossing where Monty calls MuJoCo in-process. That, not the scene, is what a
-  boundary costs us and Monty does not.
-
-**A watched run costs ~18 % more than an unwatched one** (284 s against 240 s),
-and it is not the page's own work: the model steps themselves are 129.6 s against
-113.9 s, i.e. the machine is busier and every step pays for it. The page's renders
-are 4 010 reductions a step (measured, see the correction above) and it reads one
-row of scalars per step.
-
-`scripts/probe_run_log.exs priv/studio_runs/<id>` prints the split above from any
-run's log: steps, wall, the steps' own time, and the gap around a step.
-
-**What a crossing carries**, measured with `Pythonx` directly on one of the
-benchmark's scenes: a step's answer is **129 kB** — two 64×64 depth images, two
-RGBA images, two semantic masks — as a JSON header and the arrays' bytes. The
-whole crossing (a Python step, its encode, the copy, `Pythonx.decode` and
-`Answer.decode` rebuilding 64-row lists) is the 7–8 ms `Host.step` reports, and a
-`Interface.step` is 590 k reductions on top of it, 240 k of which is
-`DepthTo3DLocations`. Splitting the crossing's Python half from its Elixir half
-is a probe nobody has written yet; until it is, 7–8 ms is what one world step
-costs and Monty's is a function call inside its own process.
+`scripts/probe_run_log.exs priv/studio_runs/<id>` prints that split for any run.
 
 ## Where a step's work goes (2026-11-03, ten objects, six steps, dev)
 
