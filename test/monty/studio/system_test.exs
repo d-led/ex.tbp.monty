@@ -39,10 +39,11 @@ defmodule Monty.Studio.SystemTest do
     assert %{value: value} = Enum.find(System.facts(), &(&1.label == "Database file"))
 
     # A SQLite instance names its file and how that file journals, because WAL is
-    # what lets a page read while a run writes; a server instance says plainly
-    # that the disk is elsewhere.
-    assert value =~ "journal:" or value =~ "a server",
-           "the row has to say where the writes go: #{inspect(value)}"
+    # what lets a page read while a run writes; a server instance says that its
+    # rows are not a file here — not that nothing is written locally, since the
+    # run's pictures and transcript always are.
+    assert value =~ "journal:" or value =~ "the rows are not a file here",
+           "the row has to say where the rows go: #{inspect(value)}"
   end
 
   test "the machine's row names its architecture, its schedulers and its memory" do

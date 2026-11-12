@@ -28,7 +28,7 @@ defmodule Monty.Studio.System do
       %{
         label: "Database file",
         value: database_file(repo),
-        note: "where a run's writes land"
+        note: "the run's rows; its pictures and transcript go in the data directory either way"
       },
       %{
         label: "Connection queue target",
@@ -63,9 +63,14 @@ defmodule Monty.Studio.System do
       else: "Elixir reference paths"
   end
 
-  defp database_file(ExTbpMonty.Repo.SQLite), do: "#{Monty.Paths.database()} (#{journal_mode()})"
+  defp database_file(ExTbpMonty.Repo.SQLite),
+    do: "#{Monty.Paths.database()} (#{journal_mode()})"
 
-  defp database_file(_server), do: "a server — nothing is written to this machine's disk"
+  # A Postgres may be on this machine or on another — the connection says which,
+  # but not whether it is a file here. What is certain is that the rows are not:
+  # a run's pictures, transcript and statistics are written under the data
+  # directory whichever database holds the rows.
+  defp database_file(_server), do: "a database server — the rows are not a file here"
 
   # WAL is what lets a page read while a run writes, so a report that says the
   # file is where it is should say how it journals as well.
