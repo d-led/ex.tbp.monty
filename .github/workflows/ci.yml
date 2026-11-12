@@ -373,6 +373,13 @@ jobs:
       - name: Module map
         run: mix monty.module_map.verify
 
+      # The version is written in three places and the tag is refused when they
+      # disagree — which is how `0.1.2` sat in two files and `0.1.1` in the third
+      # until someone tried to tag. One second here, and
+      # `elixir scripts/release.exs bump` becomes the only way to move it.
+      - name: Version
+        run: elixir scripts/release.exs check
+
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

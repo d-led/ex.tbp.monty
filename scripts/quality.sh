@@ -7,6 +7,7 @@
 #
 #   scripts/quality.sh              everything CI runs on a push
 #   scripts/quality.sh --fast       static analysis only: no database, no tests
+#                                   (lint, workflows, version still run)
 #   scripts/quality.sh --no-tests   reuse the coverage already exported, re-rank#   scripts/quality.sh --types      additionally run dialyzer (slow the first
 #                                   time; CI runs it as its own job)#   scripts/quality.sh --image      additionally build the image and check the user
 #                                   it runs as (slow; CI does it for a release)
@@ -111,6 +112,21 @@ else
     record workflows 1 "see above"
     finish
   fi
+fi
+
+# The version lives in `VERSION` and in two `mix.exs` files, and the tag is
+# refused when they disagree — but only then. `0.1.2` reached the package and
+# `VERSION` and left the application at `0.1.1`, and nothing said so until a tag
+# was attempted. One second here is cheaper than finding it at the tag, and it
+# is what makes `elixir scripts/release.exs bump` the only way to move a
+# version.
+banner "release"
+if elixir scripts/release.exs check >"$report" 2>&1; then
+  record release 0 "$(tail -1 "$report")"
+else
+  cat "$report"
+  record release 1 "see above — run elixir scripts/release.exs bump"
+  finish
 fi
 
 if [[ $fast -eq 1 ]]; then

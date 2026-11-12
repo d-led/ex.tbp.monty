@@ -11,6 +11,11 @@
 # build reports, so it moves with the package. `VERSION` is the source: a
 # `mix.exs` is read only to check that nothing drifted.
 #
+# `check` is a gate on every push (`scripts/quality.sh`), not only at tagging
+# time: a version edited in one file by hand used to survive until the tag, and
+# then the tag was refused — `0.1.2` reached two files by hand and the third sat
+# at `0.1.1` until someone noticed.
+#
 # Tagging is a separate step (`scripts/tag_and_push_version.sh`) and publishes
 # nothing by itself: `.github/workflows/publish.yml` releases from the tag, and
 # only after the commit's CI is green.
@@ -33,6 +38,12 @@ defmodule Release do
 
     IO.puts("#{current} -> #{next}")
     IO.puts("Updated #{@version_file}, #{length(@mix_files)} mix.exs file(s)#{pinned}")
+
+    # The bump is only done when the tree agrees with itself: a file that was
+    # already at the next number is not a failure (this ran after one `mix.exs`
+    # had been edited by hand), but a file the pattern did not reach would leave
+    # the same drift the bump exists to prevent.
+    main(["check"])
 
     IO.puts("\nNext: review the diff, commit, push, wait for CI to be green, then")
     IO.puts("./scripts/tag_and_push_version.sh")
@@ -87,11 +98,19 @@ defmodule Release do
     end
   end
 
+  # What a file states, or the same contents back when it already states the
+  # version being written. A file with no `@version` at all is a broken file and
+  # says so: that is the one case where "nothing to change" means the wrong
+  # thing.
   defp rewrite!(path, version) do
     contents = File.read!(path)
-    next = Regex.replace(~r/@version "[^"]+"/, contents, ~s(@version "#{version}"))
 
-    if next == contents, do: Mix.raise("Nothing to bump in #{path}"), else: File.write!(path, next)
+    unless Regex.match?(~r/@version "[^"]+"/, contents) do
+      Mix.raise("No @version in #{path}")
+    end
+
+    next = Regex.replace(~r/@version "[^"]+"/, contents, ~s(@version "#{version}"))
+    if next != contents, do: File.write!(path, next)
   end
 
   # The README's dependency line is what a reader copies, so it is pinned to the
