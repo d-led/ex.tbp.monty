@@ -88,6 +88,9 @@ defmodule ProbeDecode do
       (band(high, @high_significand_mask) != 0 or low != 0)
   end
 
+  @doc "The native decoder: one pass over the column, the NaN test the float's own."
+  def native(binary), do: ExTbpMonty.Core.MatcherNif.decode_native(binary)
+
   def measure(name, fun, column) do
     fun.(column)
     :erlang.garbage_collect()
@@ -110,6 +113,7 @@ IO.puts("one column: #{div(byte_size(column), 8)} values, a NaN in every 97th\n"
 ProbeDecode.measure("as_is", &ProbeDecode.as_is/1, column)
 ProbeDecode.measure("two_halves", &ProbeDecode.two_halves/1, column)
 ProbeDecode.measure("window", &ProbeDecode.window/1, column)
+ProbeDecode.measure("native", &ProbeDecode.native/1, column)
 ProbeDecode.measure("floats_only", &ProbeDecode.floats_only/1, column)
 
 IO.puts("""

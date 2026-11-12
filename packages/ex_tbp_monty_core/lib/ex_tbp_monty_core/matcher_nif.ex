@@ -55,12 +55,28 @@ defmodule ExTbpMonty.Core.MatcherNif do
   @doc """
   A kernel's answers as Elixir values: a NaN is `nil`.
 
-  Read as the integers the bytes are, because a comprehension over
-  `<<value::float-64>>` does not raise on a NaN — it stops, silently returning
-  the answers before it.
+  Natively when the kernels are loaded — one pass over the column, and the NaN
+  test is the float's own — and by `decode_reference/1` when they are not.
   """
   @spec decode(binary()) :: [float() | nil]
   def decode(binary) do
+    if loaded?(), do: decode_native(binary), else: decode_reference(binary)
+  end
+
+  @doc "The same answers, from the native side."
+  @spec decode_native(binary()) :: [float() | nil]
+  def decode_native(_binary), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  A kernel's answers as Elixir values, in Elixir: a NaN is `nil`.
+
+  Read as the integers the bytes are, because a comprehension over
+  `<<value::float-64>>` does not raise on a NaN — it stops, silently returning
+  the answers before it. This is the reference the native path is held to, and
+  what runs on a machine without a Rust toolchain.
+  """
+  @spec decode_reference(binary()) :: [float() | nil]
+  def decode_reference(binary) do
     for <<window::binary-size(8) <- binary>>, do: decode_one(window)
   end
 

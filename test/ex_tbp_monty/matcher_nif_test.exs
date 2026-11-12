@@ -149,11 +149,27 @@ defmodule ExTbpMonty.Core.MatcherNifTest do
       # Every exponent bit set makes both an infinity and a NaN; the significand
       # is what tells them apart, and an infinity has none. There is no Erlang
       # float to answer with, and answering `nil` would call it "no answer".
-      assert_raise MatchError, fn ->
-        MatcherNif.decode(<<0x7FF0_0000_0000_0000::unsigned-64-little>>)
-      end
+      #
+      # The refusal comes from different places on the two paths — a failed
+      # float match in the reference, the conversion out of the NIF in the
+      # native one — so the contract is that it fails, not which error it is.
+      assert catch_error(MatcherNif.decode(<<0x7FF0_0000_0000_0000::unsigned-64-little>>))
 
       assert [nil] == MatcherNif.decode(<<0x7FF0_0000_0000_0001::unsigned-64-little>>)
+    end
+
+    test "the two readings of the bytes agree, NaN for NaN" do
+      # What the NIF answers and what the Elixir reading answers are the same
+      # answers: the NIF is the same reading, done where the bytes are.
+      bytes =
+        <<1.5::float-64-little>> <>
+          MatcherNif.not_a_number() <>
+          <<0x7FF0_0000_0000_0001::unsigned-64-little>> <>
+          <<-0.0::float-64-little>> <>
+          <<0x8000_0000_0000_0000::unsigned-64-little>> <>
+          MatcherNif.not_a_number()
+
+      assert MatcherNif.decode_reference(bytes) == MatcherNif.decode(bytes)
     end
 
     test "the ends of the float range survive the round trip" do

@@ -1549,4 +1549,30 @@ fn normalise3(vector: [f64; 3]) -> Option<[f64; 3]> {
     }
 }
 
+/// A column of f64 bytes as Elixir values, `nil` where a value is a NaN.
+///
+/// The same answer the Elixir decoder gives (`MatcherNif.decode_reference/1`),
+/// done once instead of once per value: the column is read as f64s, its NaN test
+/// is the float's own, and what crosses back is the list of answers. The Elixir
+/// path pays a sub-binary, two 32-bit reads and a function call per value, which
+/// measured 7.7 words a value and about a fifth of a model step.
+///
+/// `MatcherNif.decode_native/1` is the Elixir name this answers to.
+#[rustler::nif]
+fn decode_native(column: Binary) -> Vec<Option<f64>> {
+    column
+        .chunks_exact(8)
+        .map(|window| {
+            let bytes: [u8; 8] = window.try_into().unwrap_or([0; 8]);
+            let value = f64::from_le_bytes(bytes);
+
+            if value.is_nan() {
+                None
+            } else {
+                Some(value)
+            }
+        })
+        .collect()
+}
+
 rustler::init!("Elixir.ExTbpMonty.Core.MatcherNif");
