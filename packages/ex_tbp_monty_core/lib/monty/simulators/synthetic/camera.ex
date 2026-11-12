@@ -86,16 +86,23 @@ defmodule Monty.Simulators.Synthetic.Camera do
   defp drawn(nil, nil), do: %{depth: nil, colour: nil, range: nil}
 
   defp drawn(depth, rgba) do
+    # One walk of the frame answers both the picture and the range printed on it.
+    # Asking `depth_view/1` twice, as this did, walked every pixel twice for the
+    # same two numbers.
+    {rows, range} = if depth, do: depth_view(depth), else: {nil, nil}
+
     %{
-      depth: depth && depth |> depth_view() |> elem(0) |> Png.greyscale() |> Base.encode64(),
-      colour:
-        rgba &&
-          rgba
-          |> Enum.map(fn row -> Enum.map(row, &colour_byte/1) end)
-          |> Png.rgb()
-          |> Base.encode64(),
-      range: depth && depth |> depth_view() |> elem(1)
+      depth: rows && (rows |> Png.greyscale() |> Base.encode64()),
+      colour: rgba && colour_picture(rgba),
+      range: range
     }
+  end
+
+  defp colour_picture(rgba) do
+    rgba
+    |> Enum.map(fn row -> Enum.map(row, &colour_byte/1) end)
+    |> Png.rgb()
+    |> Base.encode64()
   end
 
   @doc """
@@ -121,17 +128,27 @@ defmodule Monty.Simulators.Synthetic.Camera do
   """
   @spec depth_view([[number()]]) :: {[[non_neg_integer()]], {float(), float()} | nil}
   def depth_view(rows) do
-    case rows |> List.flatten() |> Enum.reject(&(&1 == 0.0)) do
-      [] ->
+    case range_of(rows) do
+      nil ->
         {Enum.map(rows, fn row -> Enum.map(row, fn _value -> 0 end) end), nil}
 
-      depths ->
-        low = Enum.min(depths)
-        high = Enum.max(depths)
-
+      {low, high} ->
         {Enum.map(rows, fn row -> Enum.map(row, &depth_byte(&1, low, high)) end), {low, high}}
     end
   end
+
+  # The shallowest and deepest pixel that saw something, in one walk. Zero is
+  # Monty's "no return" and is not part of the range; a frame that saw nothing
+  # has no range at all, which is what `nil` says. The walk used to flatten the
+  # frame, drop the zeros into a second list and take the minimum and the maximum
+  # of it — four passes where one answers.
+  defp range_of(rows), do: Enum.reduce(rows, nil, fn row, acc -> Enum.reduce(row, acc, &widen/2) end)
+
+  defp widen(value, acc) when value == 0.0, do: acc
+  defp widen(depth, nil), do: {depth, depth}
+  defp widen(depth, {low, high}) when depth < low, do: {depth, high}
+  defp widen(depth, {low, high}) when depth > high, do: {low, depth}
+  defp widen(_depth, range), do: range
 
   # Nearest is dark, furthest is light: depth reads as a picture of the surface,
   # and a pixel that saw nothing stays black along with it.
