@@ -42,9 +42,13 @@ defmodule Monty.Studio.RunStream.Pictures do
 
   For a caller that is about to look at the files rather than at the record: the
   record has their names already, which is the point of the arrangement.
+
+  `timeout` is how long the caller is prepared to wait: a page that wants the
+  picture of the step it just drew asks for the default, and a caller settling a
+  whole run's worth of pictures says so.
   """
-  @spec settle() :: :ok
-  def settle, do: GenServer.call(__MODULE__, :settle)
+  @spec settle(timeout()) :: :ok
+  def settle(timeout \\ 5_000), do: GenServer.call(__MODULE__, :settle, timeout)
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)

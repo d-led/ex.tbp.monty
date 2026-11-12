@@ -9,6 +9,12 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   alias Monty.Studio.RunHistory
   alias Monty.Test.Tmp
 
+  # The config is composed beside the page: `start_async/3` reads the config and
+  # builds it into a code path, a few hundred milliseconds of work here. Waiting
+  # for it is waiting for work, not for a render, so the limit is only there to
+  # fail eventually rather than to measure anything.
+  @composition_timeout 5_000
+
   setup do
     tmp = Tmp.env_dir("studio-experiment", :experiments_dir)
     Tmp.env_dir("studio-experiment-runs", :studio_artifacts_dir)
@@ -52,9 +58,9 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # one.
       view |> element("#world-choice") |> render_change(%{"world" => "mujoco"})
 
-      # The config is composed beside the page: `render_async/1` waits for the
-      # answer, so the assertions below read the world the reader chose.
-      render_async(view)
+      # The config is composed beside the page, so the assertions below read the
+      # world the reader chose rather than the one the page opened with.
+      await_composition(view)
 
       # The badge names the engine for the experiment's world — MuJoCo for this
       # experiment — and "stand-in scene" for this port's: the two answers a
@@ -88,7 +94,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert has_element?(view, "#run:not([disabled])")
 
       view |> element("#world-choice") |> render_change(%{"world" => "mujoco"})
-      render_async(view)
+      await_composition(view)
 
       assert has_element?(view, "#need-data")
       assert has_element?(view, "#need-models")
@@ -129,7 +135,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
 
       view |> element("#world-choice") |> render_change(%{"world" => "mujoco"})
-      render_async(view)
+      await_composition(view)
 
       view |> element("#run") |> render_click()
 
@@ -1590,6 +1596,10 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     |> Regex.scan(html)
     |> Enum.map(fn [_, points] -> points |> String.split() |> length() end)
   end
+
+  # The config is composed in a task, so a test that changes the world reads the
+  # composition's answer, not the page it had before.
+  defp await_composition(view), do: render_async(view, @composition_timeout)
 
   # The chart is drawn in a task, so a picture of the steps a test just sent is
   # one round trip later — and a batch that lands while a drawing runs is drawn

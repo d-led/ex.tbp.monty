@@ -77,8 +77,12 @@ defmodule Monty.Studio.Jobs.RunTest do
     # settles the order — a call answers after the casts before it, and each of
     # those has handed its pictures on — and then the drawing catches up. Without
     # it a test that reads a step is racing a slower machine.
+    #
+    # A whole run's pictures are more than a page's, so the wait is the test's
+    # own limit rather than a five-second guess: what is being waited for is work
+    # that has already been queued.
     _ = RunStream.count(id)
-    :ok = RunStream.Pictures.settle()
+    :ok = RunStream.Pictures.settle(:infinity)
 
     performed
   end
