@@ -2123,10 +2123,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # What state to show: a record is written the moment a run is queued, so the
   # word `running` on it means the job was picked up, and a job that has not
   # started yet is the one thing the queue knows better than the record.
-  defp run_state(%{status: "running"}, %{state: state})
-       when state in ~w(available scheduled retryable),
-       do: "queued"
-
+  # The record's own word, which can be believed: `RunHistory.start/1` writes
+  # `queued` and the worker writes `running` when it has the record in hand. This
+  # used to repair the fake — a `running` record whose job was still waiting was
+  # shown as "queued" — and there is nothing left to repair.
   defp run_state(run, _job), do: run.status
 
   # How far into its current episode a run is. Every episode restarts the step

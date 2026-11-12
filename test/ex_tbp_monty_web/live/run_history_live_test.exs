@@ -789,9 +789,12 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
           config: %{}
         })
 
-      {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(queued)
+      {:ok, job} = Monty.Studio.Jobs.Run.enqueue_run(queued)
 
-      # A worker has it, which is what makes the record say `running`.
+      # A worker has it, which is what makes the record say `running` — and the
+      # job is executing, because the worker's two words come together: a
+      # `running` record beside a job nobody started is a pair nothing writes.
+      :ok = running(job)
       {:ok, run} = RunHistory.mark_running(queued)
 
       {:ok, running: run}
@@ -904,7 +907,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     } do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      assert view |> element("#run-status") |> render() =~ "queued"
+      assert view |> element("#run-status") |> render() =~ "running"
 
       # Nothing owns the run any more: the job was cancelled out from under it,
       # and the record has said nothing since. What stops the page saying
