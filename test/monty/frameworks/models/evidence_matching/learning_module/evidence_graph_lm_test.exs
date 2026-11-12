@@ -805,4 +805,30 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer.new()
     |> Map.replace!(:on_object, [1])
   end
+
+  describe "the module the goal generator holds" do
+    # Monty points its generator at the module, which is one object mutated in
+    # place. A module that keeps the generator holding a copy of itself keeps
+    # the copy of itself from the step before, and the one before that: a run
+    # grew half a gigabyte over two hundred steps this way, one snapshot of the
+    # module's images per step.
+    test "does not keep a generator of its own, so a step keeps no module of its own" do
+      lm =
+        mug()
+        |> learning_module(gsg: EvidenceGoalGenerator.new())
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+
+      held = EvidenceGoalGenerator.parent_lm(lm.gsg)
+
+      assert %FeatureAtLocationBuffer{} = held.buffer
+      assert held.gsg == nil
+    end
+
+    test "and neither does a reset, which points the generator at the module as well" do
+      reset =
+        mug() |> learning_module(gsg: EvidenceGoalGenerator.new()) |> EvidenceGraphLM.reset_stm()
+
+      assert EvidenceGoalGenerator.parent_lm(reset.gsg).gsg == nil
+    end
+  end
 end

@@ -461,8 +461,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   defp reset_goal_generator(%__MODULE__{gsg: nil} = lm), do: lm
 
   defp reset_goal_generator(%__MODULE__{} = lm) do
-    %{lm | gsg: lm.gsg.__struct__.reset(lm.gsg.__struct__.point_at(lm.gsg, lm))}
+    %{lm | gsg: lm.gsg.__struct__.reset(lm.gsg.__struct__.point_at(lm.gsg, without_gsg(lm)))}
   end
+
+  # The module as the goal generator should hold it: everything it reads, and
+  # not the generator itself.
+  #
+  # The generator is handed this module and keeps it whole, so a module that
+  # keeps its generator keeps the module it held one step ago as well — whose
+  # generator holds the one before that, once per step for the length of the
+  # episode. Monty hands over a pointer to one module that is mutated in place
+  # and so has a single copy; a struct holding a struct has to be told where to
+  # stop. The generator reads the buffer, the step counters and the tolerances,
+  # never the generator it is itself part of.
+  defp without_gsg(%__MODULE__{} = lm), do: %{lm | gsg: nil}
 
   defp fresh_mlh do
     %{
@@ -548,7 +560,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   defp step_goal_generator(%__MODULE__{gsg: nil} = lm, _ctx, _percepts), do: lm
 
   defp step_goal_generator(%__MODULE__{} = lm, ctx, percepts) do
-    gsg = lm.gsg.__struct__.point_at(lm.gsg, lm)
+    gsg = lm.gsg.__struct__.point_at(lm.gsg, without_gsg(lm))
     %{lm | gsg: gsg.__struct__.step(gsg, ctx, percepts)}
   end
 
