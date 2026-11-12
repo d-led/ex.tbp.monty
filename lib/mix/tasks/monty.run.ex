@@ -64,6 +64,12 @@ defmodule Mix.Tasks.Monty.Run do
   def run(args) do
     {opts, argv} = OptionParser.parse!(args, strict: @switches)
 
+    # This task steps an experiment in its own process; the studio's queue is
+    # the server's. A node that takes a studio job publishes its steps into its
+    # own memory, where no page can hear them — the page shows a run that is
+    # stepping and never sees a step. So a CLI node steps nothing on the queue.
+    Oban.pause_queue(queue: :studio)
+
     case argv do
       [experiment] -> run_experiment(experiment, opts)
       [] -> Mix.raise("which experiment? mix monty.run <experiment> [--steps N]")

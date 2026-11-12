@@ -132,8 +132,12 @@ defmodule Monty.Studio.Summary do
   scheduler — is the wall minus this. A report that shows only one of the three
   cannot tell a slow machine from a slow port, which is what made 772 s of one
   run read as the studio's.
+
+  A step's two clocks are what the step reported, and a world can report a mean
+  rather than a whole number of microseconds; the sum is a `number()`, not the
+  integer the wall clock beside it is.
   """
-  @spec compute_us(t()) :: non_neg_integer()
+  @spec compute_us(t()) :: number()
   def compute_us(%__MODULE__{} = summary), do: summary.duration_us + summary.world_us
 
   defp add_step(info, summary) do

@@ -776,6 +776,67 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       end
     end
 
+    # Every other test here hands the page a message directly. A run does not:
+    # it broadcasts on its topic, and a page that never subscribed would answer
+    # all of those tests and hear nothing from a run that is stepping — which is
+    # what a reader sees as a live page frozen while the run goes on.
+    test "hears a step announced on the run's topic, not only one sent to it", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=5&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+      run_id = current_run_id(view)
+
+      announce(view, run_id, {:episode, %{episode: 1, object: "mug"}})
+      announce(view, run_id, {:step, step_event(episode: 1, step: 0)})
+
+      assert view |> element("#run-progress") |> render() =~ "episode 2 · step 1 / 5"
+    end
+
+    # Push is best effort: a page that was reloaded, reconnected or upgraded
+    # mid-run hears nothing of what was announced while it was away, and no
+    # announcement says where it is — so a page that has missed one step has
+    # missed every step after it. The run's stream knows, and the poll asks it.
+    test "catches up from the run's stream when no announcement ever arrives", %{conn: conn} do
+      {:ok, record} =
+        RunHistory.start(%{
+          experiment: "base_config_10distinctobj_dist_agent",
+          source: "monty",
+          steps: 20,
+          config: %{},
+          inputs: %{"seed" => 42, "world" => "synthetic"}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      # The run steps, and the page is not told: the announcements go to a topic
+      # nobody here listens on, which is what a message lost in flight amounts to.
+      for step <- 0..11 do
+        Monty.Studio.RunStream.publish(record.id, stream_report(step),
+          announce: "no page listens here"
+        )
+      end
+
+      # A boundary writes the row's own counters, as a run's boundaries do.
+      {entries, moments} = Monty.Studio.RunStream.steps(record.id)
+
+      {:ok, _row} =
+        RunHistory.checkpoint_steps(RunHistory.get(record.id), entries, moments, timeline: :skip)
+
+      send(view.pid, :studio_poll)
+
+      assert view |> element("#run-progress") |> render() =~ "episode 1 · step 12 / 20"
+
+      # Every step of the repair, not only the last: a line with holes in it is
+      # the transcript a reader scrolls back through.
+      texts = view |> rendered_lines() |> Enum.map(& &1.text)
+
+      for step <- 0..11 do
+        assert Enum.any?(texts, &(&1 =~ "step #{step} ·")), "step #{step} is missing"
+      end
+    end
+
     test "a backlog keeps every step, so the line it draws has no gaps", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=5&episodes=1")
@@ -1377,10 +1438,46 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     :ok
   end
 
+  # A message on the run's own topic, which is how a run tells every page
+  # showing it that something happened: `Monty.Studio.RunStream` and the job
+  # both publish this way, and a page hears nothing else.
+  defp announce(view, run_id, event) do
+    Phoenix.PubSub.broadcast(
+      ExTbpMonty.PubSub,
+      Monty.Studio.Jobs.Run.topic(run_id),
+      {:studio, run_id, event}
+    )
+
+    _ = :sys.get_state(view.pid)
+    :ok
+  end
+
+  # One step as the run's own process hands it over, before anything is made of
+  # it: what `RunStream.publish/3` takes, and what a boundary writes.
+  defp stream_report(step) do
+    %{
+      info: %{
+        step: step,
+        percept_ids: [:patch],
+        inputs: %{learning_module_0: 1},
+        votes: %{sent: 1, used: 1},
+        goals: 0,
+        actions: [:turn_left],
+        duration_us: 140
+      },
+      at: ~U[2026-11-12 12:00:00Z],
+      episode: 0,
+      beliefs: %{"learning_module_0" => belief(step)},
+      observations: %{},
+      sensor_ids: [],
+      centre: nil
+    }
+  end
+
   # One step, as `Monty.Studio.RunStream` announces it to a page.
   defp step_event(options) do
-    episode = Keyword.fetch!(options, :episode)
     step = Keyword.fetch!(options, :step)
+    episode = Keyword.fetch!(options, :episode)
 
     %{
       line: "step #{step} · percepts patch_0 · votes 1/1",

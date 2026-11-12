@@ -40,6 +40,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     Replay,
     RunHistory,
     RunLog,
+    RunStream,
     Setup
   }
 
@@ -214,8 +215,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   defp follow(socket, record) do
-    if connected?(socket),
-      do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(record.id))
+      Logger.info("page follows #{record.id}: subscribed to #{Jobs.Run.topic(record.id)}")
+    end
 
     # A page that moves to another run starts that run's story, not the last
     # one's.
@@ -261,6 +264,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
       record ->
         socket
+        # What the record gave is what the page starts out having seen; the poll
+        # counts the run against this, so a page seeded from a record that was
+        # written at a boundary asks the stream for the steps taken since.
+        |> assign(steps_seen: length(record.log))
         |> merge_lines(record)
         |> merge_beliefs(record)
         |> merge_frames(record)
@@ -286,6 +293,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       beliefs_seeded: false,
       frames_seeded: false,
       caught_up: false,
+      # How many of the run's steps this page has applied, from whichever way it
+      # heard of them. It is what the poll compares the run's own count with: a
+      # page that hears every step is nought behind, and one that missed a
+      # message never hears of the step again.
+      steps_seen: 0,
       # The parts of the previous batch's cards go with the previous run: a page
       # that moves to another run must not keep drawing somebody else's batch.
       parts: []
@@ -1222,6 +1234,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # transcript; what a backlog costs is the drawing of the steps the newest one
   # has already replaced.
   def handle_info({:studio, run_id, {:step, event}}, %{assigns: %{run_id: run_id}} = socket) do
+    if steps_seen(socket) == 0,
+      do: Logger.info("page hears its first step of #{run_id} (episode #{event.episode})")
+
     {steps, stopped_by} = drain_steps(run_id, [event])
 
     socket = handle_steps(steps, socket)
@@ -1244,7 +1259,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     {:noreply, handle_studio(event, socket)}
   end
 
-  def handle_info({:studio, _other_run, _event}, socket), do: {:noreply, socket}
+  def handle_info({:studio, other_run, _event}, socket) do
+    if steps_seen(socket) == 0 do
+      Logger.info(
+        "page follows #{inspect(socket.assigns[:run_id])} and ignored a message for #{other_run}"
+      )
+    end
+
+    {:noreply, socket}
+  end
 
   # The staleness check the page asked for when it loaded, answered before
   # anything the reader can do. It is a message to ourselves rather than work in
@@ -1275,13 +1298,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       |> reconcile()
       |> refresh_parts()
 
-    # A batch is still going while any of its parts is, even when the part this
-    # page is following has finished: its siblings' cards keep moving.
-    if socket.assigns.status == "running" or still_parting?(socket) do
-      {:noreply, watch(socket)}
-    else
-      {:noreply, socket}
-    end
+    # The clock does not stop while the page is open. It used to, for anything
+    # whose status was not `running` — and a run that started while the page
+    # still held `queued` (the worker's own status write is one more message
+    # that can be lost, and a page that opened before the job was picked up has
+    # seen nothing else) left the page standing there for ever. That is a page
+    # looking at a run it does not follow, which is what a reader reports as the
+    # live updates having stopped.
+    {:noreply, watch(socket)}
   end
 
   # The run's cards, brought up to date with the steps its parts have taken since
@@ -1300,8 +1324,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       |> assign(parts: Parts.cards(held, setup))
     end
   end
-
-  defp still_parting?(socket), do: Map.get(socket.assigns, :parts, []) != []
 
   # Zero is the ordinary answer to the staleness check and costs nothing. A run
   # that was closed is one this page may be describing as `running`, so it is
@@ -1447,6 +1469,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
         socket
         |> push_lines(fresh)
+        |> assign(steps_seen: steps_seen(socket) + length(fresh))
         |> assign(progress: {last.step + 1, elem(socket.assigns.progress, 1)})
         |> then(fn socket ->
           Enum.reduce(last.frames, socket, &stream_insert(&2, :frames, &1))
@@ -1829,7 +1852,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       record ->
         socket
         |> assign(
-          status: record.status,
+          status: status_of(record, socket),
           progress: progress_from(record, socket.assigns[:progress]),
           log_path: record.log_path,
           summary: if(record.summary == %{}, do: socket.assigns.summary, else: record.summary)
@@ -1838,20 +1861,114 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
+  # A row that says `queued` while the run's steps are already in the stream is
+  # a run that is stepping: the status is one more write that can be missed or
+  # not made, and the steps are what is actually happening.
+  defp status_of(%{status: status} = record, socket) do
+    if status in ["queued", nil] and RunStream.count(record.id) > steps_seen(socket),
+      do: "running",
+      else: status
+  end
+
   # A run whose steps did not all arrive here: another node's worker wrote the
   # row, and this page heard nothing of it. The row is written before a line is
   # broadcast, so the transcript is where a missing message is made good — read
   # once, when the run has stopped, and without the pictures (`head/1`), which
   # this page already has from the messages it did hear.
   defp catch_up(%{assigns: %{caught_up: true}} = socket, _record), do: socket
-  defp catch_up(socket, %{status: "running"}), do: socket
+
+  # A run that is still stepping: repaired from its own stream, because that is
+  # the only place its steps are complete. Push is best effort — a page that was
+  # reloaded, reconnected or hot-upgraded mid-run misses whatever was announced
+  # while it was away, and nothing in the announcements says where it is, so a
+  # page that has missed one step has missed every step after it. What it missed
+  # is handed to the same handler a broadcast goes to, so the transcript, the
+  # chart and the badge are repaired the way they were built.
+  #
+  # The row cannot answer this while the run is going: only its counters are
+  # written, and its transcript is written at boundaries. The stream holds every
+  # step this node published, and reading it waits for nobody.
+  defp catch_up(socket, %{status: status} = record) when status in ["queued", "running"],
+    do: repair(socket, record)
 
   defp catch_up(socket, record) do
     case RunHistory.head(record.id) do
-      nil -> socket
-      settled -> socket |> assign(caught_up: true) |> merge_lines(settled)
+      nil ->
+        socket
+
+      settled ->
+        socket
+        |> assign(caught_up: true)
+        |> assign(steps_seen: length(settled.log))
+        |> merge_lines(settled)
     end
   end
+
+  # How far behind a page may be before the poll stops believing push and reads
+  # the stream: a step or two behind is a message in flight, and reading the
+  # whole stream twice a second to find it would be the page paying for the
+  # run's history to learn that nothing was lost.
+  @behind_steps 8
+
+  # The stream's own count is the measure, not the row's: while a run steps the
+  # row is written at boundaries, so its `steps_done` stands still for a whole
+  # episode and a page that had lost its place would wait for a boundary to be
+  # noticed — which is a page that looks frozen for the length of an episode.
+  defp repair(socket, record) do
+    if RunStream.count(record.id) - steps_seen(socket) > @behind_steps,
+      do: read_missing(socket, record),
+      else: socket
+  end
+
+  defp read_missing(socket, record) do
+    {entries, _moments} = RunStream.read_from(record.id, -1)
+
+    case Enum.filter(entries, &after_shown?(&1, socket)) do
+      [] ->
+        # Nothing here to give: the steps were taken by another node, or this
+        # stream has already let them go. Asking again every half second would
+        # be the page reading the whole stream to be told the same thing; the
+        # record answers when the run stops (`catch_up/2`).
+        assign(socket, steps_seen: RunStream.count(record.id))
+
+      fresh ->
+        # The same handler a broadcast goes to, so a repaired step is a step the
+        # page drew exactly as it would have drawn it live.
+        socket = handle_steps(Enum.map(fresh, &event_of/1), socket)
+
+        # The badge counts inside an episode, so the episode a repaired batch
+        # belongs to goes with it: a page that heard nothing of episode fifty
+        # would otherwise number its steps against the episode it opened on.
+        assign(socket, episode: List.last(fresh)["episode"])
+    end
+  end
+
+  # The steps newer than the last one this page has drawn. A run numbers its
+  # steps from nought inside every episode, so it is the pair that orders them.
+  defp after_shown?(entry, socket) do
+    case Map.get(socket.assigns, :episode) do
+      nil ->
+        true
+
+      episode ->
+        {entry["episode"], entry["step"]} > {episode, elem(socket.assigns.progress, 0) - 1}
+    end
+  end
+
+  # A stored step as the message that would have carried it: the words the line
+  # holds, the beliefs the chart draws, and the pair the badge counts.
+  defp event_of(entry) do
+    %{
+      line: RunLog.text(entry),
+      step: entry["step"],
+      episode: entry["episode"],
+      frames: [],
+      beliefs: entry["beliefs"] || %{},
+      centre: nil
+    }
+  end
+
+  defp steps_seen(socket), do: Map.get(socket.assigns, :steps_seen, 0)
 
   # Which step to show. A run that is still going is counted by its own step
   # messages; the record is written at episode boundaries, so counting its log
