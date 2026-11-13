@@ -245,6 +245,14 @@ scene, not a config, knows where the object is.
    answers, because a rate over seeds that changed two things would say
    nothing.
 
+   **Two shapes, not two sizes.** The pair that matters most is distinct
+   parts, and that one works: with the blend and the plate in memory and the
+   plate sensed, the plate is the only object possible in both seeds tried, and
+   it concludes on one (evidence 6.3) while the other holds at 4.0 with its pose
+   unresolved. Sensing the blend against the same library leaves both possible —
+   the same blend problem seen from the other side, and the reason a run's
+   direction of travel matters as much as its library.
+
    Two things this leaves standing. A right answer is still seed-dependent —
    the plate is recognised in 4 of 10 seeds on its own — and a symmetric part
    still never concludes. Both are questions about evidence and exploration,
