@@ -47,35 +47,12 @@ derived = %{
   "plate-huge" => {"plate", 5.0}
 }
 
-# Sampling is relative to the part, unless `CAD_ABSOLUTE_SPACING=1` asks for the
-# absolute dial. A fixed spacing gives a 5× part the same number of nodes over
-# twenty-five times the area, so a library of two sizes is also a library of two
-# node densities — and the denser graph wins: sensing the 5× part against a
-# library of both concluded the *small* one at evidence 15.5, and at 1.5× it did
-# the same at 12.0. Sample each part at its own scale's spacing and the two
-# memories hold about as many nodes (1557 against 1581 at 1.5×, 1557 against
-# 1602 at 5×), and both questions come out right: the sensed part is the one on
-# top in every seed, at higher evidence than either wrong answer had.
-#
-# The rule is one sentence rather than a table of scales: never finer than two
-# millimetres, never coarser than the part's largest extent over thirty. The
-# floor is what a single part has always been written with — a 60 mm plate is
-# 2.0 both ways — so the single-part rates above are untouched, while a part
-# five times the size is sampled at 10 mm and gets a memory of the same size.
-#
-# The absolute dial is kept because it is what every measurement before this was
-# made with, and a rate over seeds that changed two things would say nothing.
-base_spacing = 2.0
-absolute? = System.get_env("CAD_ABSOLUTE_SPACING") in ["1", "true"]
-
-spacing = fn part, absolute? ->
-  if absolute? do
-    base_spacing
-  else
-    extent = part.summary["extent"] |> Enum.max()
-    max(base_spacing, extent / 30)
-  end
-end
+# Sampling is relative to the part, and that rule lives where the memory is
+# written (`MontyCad.Training.spacing/1`): a fixed number of millimetres gives a
+# 5x part the same number of nodes over twenty-five times the area, so a library
+# of two sizes is also a library of two node densities — and the denser graph
+# wins, because the candidate search is a radius. `CAD_ABSOLUTE_SPACING=1` asks
+# for the fixed 2 mm every measurement before the rule was made with.
 
 scaled = fn source, target, scale ->
   # `Float.parse/1` leaves the rest of the number behind: a STEP real may be
@@ -152,35 +129,30 @@ name = "surf_agent_1lm_10distinctobj"
 path = Path.join([libraries, release, name <> ".jsonl.gz"])
 File.mkdir_p!(Path.dirname(path))
 
-# One JSON line per object, which is what Monty's own libraries hold (checked
-# against `pretrained_ycb_v14/surf_agent_1lm_10distinctobj`: ten objects, ten
-# lines) and what `Monty.Studio.Memory.load/3` reads back.
-records =
-  for object_id <- Enum.uniq(memory) do
-    {:ok, part} = Quiddity.open(parts[object_id])
-    {:ok, recognition} = Quiddity.features(part)
+# One JSON line per object, in one file — what Monty's own libraries hold
+# (checked against `pretrained_ycb_v14/surf_agent_1lm_10distinctobj`: ten
+# objects, ten lines) and what `Monty.Studio.Memory.load/3` reads back.
+# `Training.write_library/3` writes them together so that every part is sampled
+# at its own size rather than at one number of millimetres for all of them,
+# which is the difference between a library of shapes and a library of densities.
+write_options =
+  if System.get_env("CAD_ABSOLUTE_SPACING") in ["1", "true"], do: [spacing: 2.0], else: []
 
-    each = Path.join([libraries, "each", object_id <> ".jsonl.gz"])
+{:ok, written} =
+  memory
+  |> Enum.map(&{&1, parts[&1]})
+  |> MontyCad.Training.write_library(path, write_options)
 
-    {:ok, written} =
-      MontyCad.Training.write(part, object_id, each,
-        recognition: recognition,
-        spacing: spacing.(part, absolute?)
-      )
-
-    IO.puts(
-      "#{object_id}: #{written.nodes} nodes, #{written.skipped} skipped, " <>
-        "families #{inspect(written.families)}"
-    )
-
-    each |> File.read!() |> :zlib.gunzip() |> String.split("\n", trim: true)
-  end
-
-path |> then(&File.write!(&1, :zlib.gzip(Enum.join(records, "\n"))))
+for object <- written.objects do
+  IO.puts(
+    "#{object.object_id}: #{object.nodes} nodes at #{object.spacing} mm, " <>
+      "#{object.skipped} skipped, families #{inspect(object.families)}"
+  )
+end
 
 control = if(sense_only?, do: " (control: the sensed part is not remembered)", else: "")
 
-IO.puts("memory: #{path} — #{length(records)} object(s), sensing #{sensed}#{control}\n")
+IO.puts("memory: #{path} — #{length(written.objects)} object(s), sensing #{sensed}#{control}\n")
 
 Application.put_env(:ex_tbp_monty, :monty_libraries_dir, libraries)
 System.put_env("MONTY_CAD_PART", parts[sensed])
