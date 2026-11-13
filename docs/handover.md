@@ -3403,7 +3403,13 @@ issues, sobelow); the full suite **3188 passed** — twice, because the first ru
 lost `recording_episode_test.exs`' fidelity case to the machine being loaded (21
 steps against 27); that case passes alone and on the second full run. The three
 CRAP paths 20.00/20, 20.00/20, 29.85/30 over a fresh `mix cover` export; dialyzer
-0 errors. CI: `80a78ec`, `afcb43f` and `d0bc2a0` **success** on every job including
-the three desktop legs; `3738467` and `c1e976c` (the correction above) queue behind
-them, because main's runs finish rather than cancel. The correction's own gate: lint
-0, full suite **3191 passed**, the three CRAP paths, dialyzer 0.
+0 errors. CI: `80a78ec`, `afcb43f`, `d0bc2a0` and `3738467` **success** on every
+job, the three desktop legs and the image index included. The correction's own
+gate: lint 0, full suite **3191 passed**, the three CRAP paths, dialyzer 0.
+
+**A pending run is cancelled by the next push on main, even with
+`cancel-in-progress: false`** (measured here): `c1e976c`'s run never started —
+`fa06d9e` queued behind it and GitHub keeps one pending run per group. The setting
+protects a _running_ run, not a queued one, so the only run that is guaranteed to
+be verified is the last pushed — which is why every push here carries its own
+local gate rather than waiting for the previous one to be confirmed.
