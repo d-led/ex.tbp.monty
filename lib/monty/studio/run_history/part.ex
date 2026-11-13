@@ -90,12 +90,30 @@ defmodule Monty.Studio.RunHistory.Part do
 
   `node` is set when a node takes the part rather than when the run is asked for,
   which is the same order the run itself follows, and `status` is the one column
-  every write names.
+  every write names. `claim` and `claimed_until` travel with the node that sets
+  them: they are what the cluster agrees on about who has the part
+  (`Monty.Studio.Claim`), and they are written by `Monty.Studio.RunHistory`
+  directly rather than through a changeset, because every one of those writes is a
+  condition on the row as much as a change to it.
   """
   @spec changeset(%__MODULE__{}, map()) :: Ecto.Changeset.t()
   def changeset(part \\ %__MODULE__{}, attributes) do
     part
-    |> cast(attributes, [:run_id, :part, :of, :node, :status, :steps, :started_at, :finished_at])
+    |> cast(
+      attributes,
+      [
+        :run_id,
+        :part,
+        :of,
+        :node,
+        :claim,
+        :claimed_until,
+        :status,
+        :steps,
+        :started_at,
+        :finished_at
+      ]
+    )
     |> validate_required([:run_id, :part, :of, :status])
     |> validate_inclusion(:status, @statuses)
     |> validate_number(:steps, greater_than_or_equal_to: 0)

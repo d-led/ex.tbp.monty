@@ -1,7 +1,7 @@
 defmodule Monty.Studio.Jobs.RunTest do
   use ExTbpMontyWeb.ConnCase, async: false
 
-  alias ExTbpMonty.Cluster.Protocol
+  alias ExTbpMonty.Cluster.{Nodes, Protocol}
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
 
   alias Monty.Studio.{
@@ -78,6 +78,44 @@ defmodule Monty.Studio.Jobs.RunTest do
         1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130>>
     )
   end
+
+  # The cluster as `Monty.Studio.Partition` sees it: this node and a peer that
+  # shares the run's folder and this build, and answers nothing. `Nodes.snapshot/0`
+  # is what the division reads, so a list put there is the whole of "a cluster of
+  # two" for a test — and it is put back afterwards, because it is the node's own.
+  defp cluster_of_two(peer_name) do
+    identity = Nodes.identity()
+
+    here = Map.merge(identity, %{name: name_of_this_node(), self: true, alive: true})
+
+    peer = %{
+      node: :"gone@127.0.0.1",
+      name: "#{peer_name}_127.0.0.1",
+      address: "gone@127.0.0.1",
+      self: false,
+      alive: true,
+      version: identity.version,
+      protocol: identity.protocol,
+      capabilities: identity.capabilities,
+      artifacts: identity.artifacts,
+      web: nil,
+      plugins: []
+    }
+
+    previous = :persistent_term.get({Nodes, :snapshot}, :none)
+    :persistent_term.put({Nodes, :snapshot}, [here, peer])
+
+    on_exit(fn ->
+      case previous do
+        :none -> :persistent_term.erase({Nodes, :snapshot})
+        entries -> :persistent_term.put({Nodes, :snapshot}, entries)
+      end
+    end)
+
+    :ok
+  end
+
+  defp name_of_this_node, do: Monty.Paths.data_dir_name()
 
   defp perform(%RunHistory.Run{id: id}), do: perform_id(id)
 
@@ -581,6 +619,37 @@ defmodule Monty.Studio.Jobs.RunTest do
 
       # Nothing was stepped, so there is no part file to read.
       assert {:error, :enoent} = Artifacts.read_part(record.id, part.phase, part.index)
+    end
+
+    # A lost node costs a part an attempt, not the part. The cluster says two
+    # nodes share the run's folder and this build; the peer is gone. The part the
+    # round robin gives it is claimed, found unreachable — `{:badrpc, :nodedown}`
+    # — given back (the row returns to `queued`) and taken by the next candidate,
+    # which is this node. One owner at a time, and the run finishes.
+    test "a part given to a node that is not there goes to the next candidate" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 40, 0, 2, 4, %{parts: parts}))
+
+      cluster_of_two(:gone)
+
+      assert {:ok, closed} = perform(record)
+
+      assert closed.status == "finished"
+      assert Enum.map(RunHistory.parts(closed.id), & &1.status) == ["finished", "finished"]
+
+      # The division is settled, so it is nobody's: no claim outlives the work.
+      assert RunHistory.parts(closed.id) |> Enum.all?(&(&1.claim == nil))
+
+      # Both parts were performed by this node in the end, and the run says which
+      # one had to move and away from what.
+      assert Enum.map(RunHistory.parts(closed.id), & &1.node) ==
+               [name_of_this_node(), name_of_this_node()]
+
+      assert File.read!(Artifacts.log_path(closed.id)) =~ "lost gone_127.0.0.1"
     end
 
     # A run of several parts is one run, so its summary is one summary: the
