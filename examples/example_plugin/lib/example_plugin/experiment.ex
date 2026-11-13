@@ -19,7 +19,7 @@ defmodule ExamplePlugin.Experiment do
 
   @doc "The name a cluster registers it under, and the name a run asks for."
   @spec name() :: String.t()
-  def name, do: "10simobj_surf_agent_one_episode"
+  def name, do: "example_plugin.10simobj_surf_agent_one_episode"
 
   @doc "What a cluster asks about it."
   @spec describe() :: MontyPlugin.description()

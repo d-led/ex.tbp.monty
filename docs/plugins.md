@@ -34,10 +34,15 @@ arguments of `call/6` go over `GenServer.call` as
 requests. The policy struct never crosses — the process on the plugin's node _is_
 the state — so a policy that remembers where it was being walked remembers it
 there. `examples/example_plugin` is the plugin's half of that shape; the studio
-picks it up when the node was started with `MONTY_REMOTE_POLICY=spiral_scan`,
-and the run's record then reads
-`motor_policy: spiral_scan@0.1.1 on example_plugin@127.0.0.1`, so a run whose
-actions came from another node says so.
+picks it up when the node was started with
+`MONTY_REMOTE_POLICY=example_plugin.spiral_scan`, and the run's record then reads
+`motor_policy: example_plugin.spiral_scan@0.1.1 on example_plugin@127.0.0.1`, so
+a run whose actions came from another node says so.
+
+A name is cluster-wide, not per node: `:pg` groups by kind _and_ name, so two
+hosts offering the same name join one group and `lookup/2` cannot say whose
+process a caller meant. A plugin that a cluster may hold more than one of
+therefore namespaces its names, as the example's do.
 
 ## What is missing before a plugin can be _called_ as intended
 
@@ -50,8 +55,15 @@ actions came from another node says so.
    the node holding the state; nothing refuses a call that reaches a copy which
    cannot serve, and `lookup/2` will hand out exactly such a copy. The caller is
    expected to know; a cluster should not depend on that.
-3. **`needs` is advisory.** A call that arrives on a node without `:quiddity`
-   fails inside the plugin, as an error the cluster did not predict.
+3. **`needs` is advisory in the package, checked by one caller.** A call that
+   arrives on a node without `:quiddity` fails inside the plugin, as an error the
+   cluster did not predict. This repository's caller now checks it itself:
+   `Monty.Studio.RemotePolicy.among/3` asks every plugin host, keeps the host's
+   tags beside the answer, and treats a node that does not offer what the plugin
+   says it needs as no candidate — so the refusal says "offered, but by no node
+   that can serve it: … does not offer :quiddity" instead of a step failing
+   inside a plugin. The check belongs in `route/4` so that the next caller does
+   not have to write it again.
 4. **No answer discipline.** Nothing says whether a request is idempotent, how long
    it may take, or what a call in flight does when the peer dies
    (`GenServer.call` to a dead remote pid exits with `:noproc`), so every caller

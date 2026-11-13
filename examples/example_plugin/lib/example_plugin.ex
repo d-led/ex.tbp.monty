@@ -21,6 +21,15 @@ defmodule ExamplePlugin do
   is added here is the description a cluster asks for, the placement that says
   whether a call may cross a node, and a process that can be reached.
 
+  ## Why the names are prefixed
+
+  A plugin's name is **cluster-wide**: `:pg` groups by kind *and* name, so two
+  hosts offering a `spiral_scan` would join one group and `lookup/2` could not
+  say which process a caller meant. A name nobody else would choose is therefore
+  the plugin's own problem, and ours carry the host that owns them:
+  `example_plugin.spiral_scan`, `example_plugin.evidence_threshold`,
+  `example_plugin.10simobj_surf_agent_one_episode`.
+
   ## What it proves
 
   Start two studio nodes and this one (`process-compose.yaml` in the application
