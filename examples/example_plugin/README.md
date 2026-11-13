@@ -44,13 +44,13 @@ application in the same cluster:
 
 ```
 cad_plugin_list
-#=> 3 plugin(s) on this cluster: experiment: example_run; learning_module:
-#   example_evidence_threshold; motor_policy: example_scan
+#=> 3 plugin(s) on this cluster: experiment: 10simobj_surf_agent_one_episode;
+#   learning_module: evidence_threshold; motor_policy: spiral_scan
 
-cad_plugin_describe name=example_scan kind=motor_policy
-#=> example_scan — motor_policy, offered by example_plugin@127.0.0.1: kind
-#   :motor_policy, name "example_scan", needs [:monty], placement :anywhere,
-#   version "0.1.0"
+cad_plugin_describe name=spiral_scan kind=motor_policy
+#=> spiral_scan — motor_policy, offered by example_plugin@127.0.0.1: kind
+#   :motor_policy, name "spiral_scan", needs [:monty], placement :anywhere,
+#   version "0.1.1"
 ```
 
 Alone, without the compose project, `mix run --no-halt` is enough: the plugins are

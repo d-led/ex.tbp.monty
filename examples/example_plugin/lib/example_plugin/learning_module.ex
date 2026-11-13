@@ -35,7 +35,7 @@ defmodule ExamplePlugin.LearningModule do
 
   @doc "The name a cluster registers it under."
   @spec name() :: String.t()
-  def name, do: "example_evidence_threshold"
+  def name, do: "evidence_threshold"
 
   @doc "What a cluster asks about it."
   @spec describe() :: MontyPlugin.description()

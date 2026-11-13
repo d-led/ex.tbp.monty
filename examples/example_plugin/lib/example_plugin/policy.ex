@@ -36,7 +36,7 @@ defmodule ExamplePlugin.Policy do
 
   @doc "The name a cluster registers it under."
   @spec name() :: String.t()
-  def name, do: "example_scan"
+  def name, do: "spiral_scan"
 
   @doc "What a cluster asks about it."
   @spec describe() :: MontyPlugin.description()

@@ -34,9 +34,9 @@ arguments of `call/6` go over `GenServer.call` as
 requests. The policy struct never crosses — the process on the plugin's node _is_
 the state — so a policy that remembers where it was being walked remembers it
 there. `examples/example_plugin` is the plugin's half of that shape; the studio
-picks it up when the node was started with `MONTY_REMOTE_POLICY=example_scan`,
+picks it up when the node was started with `MONTY_REMOTE_POLICY=spiral_scan`,
 and the run's record then reads
-`motor_policy: example_scan@0.1.0 on example_plugin@127.0.0.1`, so a run whose
+`motor_policy: spiral_scan@0.1.1 on example_plugin@127.0.0.1`, so a run whose
 actions came from another node says so.
 
 ## What is missing before a plugin can be _called_ as intended
