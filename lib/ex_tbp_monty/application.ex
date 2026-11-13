@@ -9,8 +9,17 @@ defmodule ExTbpMonty.Application do
 
   @impl true
   def start(_type, _args) do
-    # libcluster, Horde's registry and Horde's supervisor — or nothing at all,
-    # which is every node that was not asked to join a cluster.
+    # Where this node keeps its own data — its database, its runs, its own output
+    # — decided before anything opens one. A named node that was asked to join a
+    # cluster gets `<root>/nodes/<its name>`; a node that runs alone keeps the
+    # folder it always had, and this is `nil`.
+    #
+    # Asked here rather than in `config/runtime.exs`, because a `config :app, key,
+    # value` in that file is applied after the whole file has been evaluated: a
+    # decision read from a setting written two lines above it answers `false` (it
+    # did, and a named node kept the shared folder until this moved).
+    Application.put_env(:ex_tbp_monty, :data_dir_name, ExTbpMonty.Node.data_dir_name())
+
     children =
       [
         ExTbpMontyWeb.Telemetry,

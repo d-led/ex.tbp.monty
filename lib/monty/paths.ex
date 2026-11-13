@@ -15,6 +15,21 @@ defmodule Monty.Paths do
   supplies what a desktop install has instead, where there is nobody to export
   one.
 
+  ## One node, or one of several
+
+  On a node that runs alone everything hangs off `root/0`. A node that was given
+  a name as part of a cluster keeps what is *its* under
+  `<root>/nodes/<its name>` — `node_root/0` — because two nodes on one machine
+  must not open the same SQLite file, and the runs each writes are its own. What
+  they do share is what is downloaded and derived from downloads: `data/0`,
+  `models/0` and `libraries/0` are the same gigabytes on both, and fetching them
+  twice would be a gigabyte twice.
+
+  The name is not read here. `config/runtime.exs` asks
+  `ExTbpMonty.Node.data_dir_name/0` — which is `nil` on a node that runs alone —
+  and puts the answer in `:data_dir_name`, so this module stays a module about
+  paths, and a test can place a node's folder without being a node.
+
   The root is *fixed* rather than chosen. A folder that can be picked is a path
   that has to be remembered, in a file that can be lost, stale or unreadable —
   for a decision a person made once.
@@ -33,6 +48,35 @@ defmodule Monty.Paths do
   @spec root() :: Path.t()
   def root, do: :filename.basedir(:user_data, @app_name)
 
+  @doc """
+  The folder *this node* keeps its own things in.
+
+  The same as `root/0` on a node that runs alone, and `<root>/nodes/<name>` on a
+  node that was given a name: its database, its runs and its own output are not
+  another node's. `data_dir_name/0` says which of the two this is.
+  """
+  @spec node_root() :: Path.t()
+  def node_root do
+    case data_dir_name() do
+      nil -> root()
+      name -> Path.join([root(), "nodes", name])
+    end
+  end
+
+  @doc """
+  The name this node's folder carries, or `nil` on a node that runs alone.
+
+  Set by `config/runtime.exs` from `ExTbpMonty.Node.data_dir_name/0` — a node
+  name made safe for a path, nothing more.
+  """
+  @spec data_dir_name() :: String.t() | nil
+  def data_dir_name do
+    case Application.get_env(:ex_tbp_monty, :data_dir_name) do
+      name when name in [nil, ""] -> nil
+      name -> name
+    end
+  end
+
   @doc "Monty's object data — the `MONTY_DATA` root."
   @spec data() :: Path.t()
   def data, do: env("MONTY_DATA", Path.join(root(), "data"))
@@ -41,9 +85,14 @@ defmodule Monty.Paths do
   @spec models() :: Path.t()
   def models, do: env("MONTY_MODELS", Path.join(root(), "models"))
 
-  @doc "Where Monty writes a run's own output — the `MONTY_LOGS` root."
+  @doc """
+  Where Monty writes a run's own output — the `MONTY_LOGS` root.
+
+  A node's own: two nodes running experiments at once write two runs, not one
+  run's lines twice.
+  """
   @spec logs() :: Path.t()
-  def logs, do: env("MONTY_LOGS", Path.join(root(), "projects"))
+  def logs, do: env("MONTY_LOGS", Path.join(node_root(), "projects"))
 
   @doc """
   The memory this application exports from those archives — the
@@ -58,25 +107,26 @@ defmodule Monty.Paths do
   @doc """
   The SQLite file a release without `DATABASE_URL` keeps its runs in.
 
-  One file in the root above: a desktop install is one reader, and a file is the
-  database it can have without installing a server.
+  One file in this node's own folder: a desktop install is one reader, and a file
+  is the database it can have without installing a server. Two nodes sharing one
+  file is the arrangement this module exists to avoid.
   """
   @spec database() :: Path.t()
-  def database, do: env("SQLITE_PATH", Path.join(root(), @database_file))
+  def database, do: env("SQLITE_PATH", Path.join(node_root(), @database_file))
 
   @doc """
   The files a run leaves beside its record.
 
   `config/runtime.exs` points `:studio_artifacts_dir` here, so the desktop build
   writes them under the root above while development keeps writing them into the
-  checkout.
+  checkout. A node's own folder: a run belongs to the node that ran it.
   """
   @spec artifacts() :: Path.t()
-  def artifacts, do: Path.join(root(), "runs")
+  def artifacts, do: Path.join(node_root(), "runs")
 
   @doc "Where wandb writes what a run logs, when it logs anything."
   @spec wandb() :: Path.t()
-  def wandb, do: Path.join(root(), "wandb")
+  def wandb, do: Path.join(node_root(), "wandb")
 
   # An unset variable and an empty one are the same answer here: "nobody said".
   # Code that asks whether a variable *is there* would hear two things, and every

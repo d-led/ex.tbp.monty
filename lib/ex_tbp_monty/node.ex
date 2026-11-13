@@ -88,4 +88,39 @@ defmodule ExTbpMonty.Node do
       end
     )
   end
+
+  @doc """
+  The name this node's data folder carries, or `nil` when it keeps its data in the
+  folder a node that runs alone keeps it in.
+
+  Two conditions, and both are about the boot rather than about anything a page
+  can change: the node was asked to join a cluster, and it is a named node that
+  could. A cluster of one — a named node with no peers — is still a node with a
+  name, and its data is still its own; a node that was never named cannot be
+  told apart from another one on the same machine, which is exactly the case
+  where sharing a folder is right.
+
+  `config/runtime.exs` asks this once, at boot, and hands the answer to
+  `Monty.Paths`.
+  """
+  @spec data_dir_name() :: String.t() | nil
+  def data_dir_name do
+    if ExTbpMonty.Cluster.enabled?() and distributed?(), do: safe_name(name())
+  end
+
+  @doc """
+  A node name as a directory name.
+
+  A node's name is `name@host`, and `@` and `:` are exactly the characters a path
+  cannot carry everywhere (a Windows path cannot hold `:` at all). Everything
+  outside letters, digits, the dot, the dash and the underscore becomes an
+  underscore: `monty@127.0.0.1` is `monty_127.0.0.1`, which is still the node's
+  name to a reader and is one path segment everywhere.
+  """
+  @spec safe_name(node() | String.t()) :: String.t()
+  def safe_name(node_name) do
+    node_name
+    |> to_string()
+    |> String.replace(~r/[^A-Za-z0-9._-]/, "_")
+  end
 end

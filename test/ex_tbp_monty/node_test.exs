@@ -39,4 +39,16 @@ defmodule ExTbpMonty.NodeTest do
       assert settings["PLUGIN_SCOPE"] == nil
     end
   end
+
+  describe "a node name as a directory name" do
+    test "is the name with everything a path cannot hold replaced" do
+      # A node is `name@host`, and a Windows path cannot hold the `:` a long name
+      # carries at all — so the folder name is one segment everywhere, and still
+      # reads as the node.
+      assert Node.safe_name(:"monty@127.0.0.1") == "monty_127.0.0.1"
+      assert Node.safe_name(:"monty2@192.168.1.7") == "monty2_192.168.1.7"
+      assert Node.safe_name("monty@fe80::1") == "monty_fe80__1"
+      assert Node.safe_name(:monty) == "monty"
+    end
+  end
 end

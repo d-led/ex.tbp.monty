@@ -84,6 +84,30 @@ defmodule ExTbpMonty.ClusterTest do
     end
   end
 
+  describe "the folder a node keeps its data in" do
+    # Two nodes on one machine must not open one SQLite file, and the runs each
+    # writes are its own. A node that runs alone keeps the folder it always had.
+    test "is none at all on a node that was not asked to join a cluster" do
+      configure(enabled: false, seeds: [])
+
+      assert ExTbpMonty.Node.data_dir_name() == nil
+    end
+
+    test "is the node's name made safe for a path, on a named node" do
+      configure(enabled: true, seeds: [])
+
+      # This suite runs on `:nonode@nohost`, so what can be asserted here is the
+      # rule rather than the name: asked for a cluster, a node with no name still
+      # has none to put in a folder — sharing one is the safe answer for a VM
+      # that cannot be told apart from its neighbour.
+      if ExTbpMonty.Node.distributed?() do
+        assert ExTbpMonty.Node.data_dir_name() == ExTbpMonty.Node.safe_name(node())
+      else
+        assert ExTbpMonty.Node.data_dir_name() == nil
+      end
+    end
+  end
+
   # The child's own id: a `{module, argument}` spec is keyed by its module, and
   # `Supervisor.child_spec/2` would say the same thing in more words.
   defp configure(settings), do: Application.put_env(:ex_tbp_monty, :cluster, settings)

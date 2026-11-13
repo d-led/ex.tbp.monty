@@ -25,6 +25,40 @@ defmodule Monty.PathsTest do
     end
   end
 
+  describe "a node that was given a name" do
+    # Two nodes on one machine must not open one SQLite file, and the runs each
+    # writes are its own — so what is a node's hangs off `nodes/<its name>`. What
+    # they share is what is downloaded: fetching the same gigabytes twice is the
+    # one thing worse than fetching them once.
+    setup do
+      previous = Application.get_env(:ex_tbp_monty, :data_dir_name)
+      Application.put_env(:ex_tbp_monty, :data_dir_name, "monty_127.0.0.1")
+      on_exit(fn -> Application.put_env(:ex_tbp_monty, :data_dir_name, previous) end)
+
+      for variable <- ~w(SQLITE_PATH MONTY_LOGS WANDB_DIR MONTY_DATA MONTY_MODELS) do
+        Tmp.without_env(variable)
+      end
+
+      :ok
+    end
+
+    test "keeps its database, its runs and its own output under its own name" do
+      node_root = Path.join([Paths.root(), "nodes", "monty_127.0.0.1"])
+
+      assert Paths.data_dir_name() == "monty_127.0.0.1"
+      assert Path.dirname(Paths.database()) == node_root
+      assert Paths.artifacts() == Path.join(node_root, "runs")
+      assert Paths.logs() == Path.join(node_root, "projects")
+      assert Paths.wandb() == Path.join(node_root, "wandb")
+    end
+
+    test "still shares what was downloaded" do
+      assert Paths.data() == Path.join(Paths.root(), "data")
+      assert Paths.models() == Path.join(Paths.root(), "models")
+      assert Paths.libraries() == Path.join(Paths.data(), "libraries")
+    end
+  end
+
   describe "a variable that is set" do
     test "is the answer, so a container and CI keep their own layout" do
       Tmp.system_env("MONTY_DATA", "/srv/monty/data")
