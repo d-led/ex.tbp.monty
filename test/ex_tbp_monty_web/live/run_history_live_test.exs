@@ -707,6 +707,31 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       refute "node" in headings
     end
 
+    # A peer's run is not news here — this node has no row for it — so the panel
+    # has a clock of its own, and a running run over there moves instead of
+    # standing still at the count it had when the page loaded. One timer, re-armed
+    # by the scan it belongs to: asking on every announcement would otherwise add
+    # a timer per message.
+    test "the peer panel keeps one clock, re-armed by each scan", %{conn: conn} do
+      in_a_cluster(fn ->
+        {:ok, view, _html} = live(conn, ~p"/runs")
+
+        _ = :sys.get_state(view.pid)
+        first = :sys.get_state(view.pid).socket.assigns.peer_scan_ref
+
+        assert is_reference(first)
+        assert is_integer(Process.read_timer(first))
+
+        send(view.pid, :scan_peers)
+        _ = :sys.get_state(view.pid)
+        second = :sys.get_state(view.pid).socket.assigns.peer_scan_ref
+
+        # The scan it replaced is gone and the new one is armed: still one clock.
+        refute second == first
+        assert is_integer(Process.read_timer(second))
+      end)
+    end
+
     # Phoenix's pubsub is the distributed one, so the runs topic reaches every
     # node: this page hears about a run recorded on a peer. That run is a row of
     # the peer's list — its files, its worker and its page are there — and a row

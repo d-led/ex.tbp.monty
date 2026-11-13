@@ -79,6 +79,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # what a reader opens a finished run to see; the file has the rest.
   @log_tail 300
 
+  # How often the page asks the other nodes what they are working on. Their runs
+  # are not news here — this node has no row for one, so its announcements are
+  # filtered out — so the panel needs a clock of its own, and five seconds is
+  # slower than a step and faster than a reader's patience.
+  @peer_scan_ms 5_000
+
   @impl true
   def mount(_params, _session, socket) do
     # The list is a stream fed by the record's topic, not by re-reading: a run
@@ -108,7 +114,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
        cluster_mode: ExTbpMonty.Cluster.enabled?(),
        # What the peers are working on, which is asked after this render rather
        # than in front of it: the answer is an `:rpc` per peer.
-       peer_runs: []
+       peer_runs: [],
+       peer_scan_ref: nil
      )
      |> stream_configure(:log, dom_id: &log_id/1)
      |> stream_configure(:runs, dom_id: &"run-#{&1.id}")
@@ -138,6 +145,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # ...)`, for the same reason the reap is: it is an `:rpc` per peer, and a page
   # that waited for one before drawing would be a page that shows nothing until
   # the slowest node answers. Nothing to ask on a node that runs alone.
+  #
+  # Asked again every few seconds for as long as the page is open: a peer's run is
+  # not news here (this node has no row for it, so the topic is filtered out), and
+  # a panel that showed the step count it had when the page loaded would say a
+  # running run is standing still.
   defp scan_peers(%{assigns: %{cluster_mode: true, live_action: :index}} = socket) do
     if connected?(socket), do: send(self(), :scan_peers)
 
@@ -145,6 +157,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp scan_peers(socket), do: socket
+
+  defp keep_scanning(socket) do
+    ref = Process.send_after(self(), :scan_peers, @peer_scan_ms)
+    assign(socket, :peer_scan_ref, ref)
+  end
 
   # Asked for here and answered in `handle_info(:reap, ...)`: the check reads
   # every open run and asks Oban about each, so it belongs after this render and
@@ -1741,9 +1758,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   def handle_info(:reap, socket), do: {:noreply, after_reap(socket, Reaper.sweep())}
 
   # What the peers are working on, asked for after the first render and asked
-  # again when a peer announces a run this node does not have.
+  # again on a clock — one timer, re-armed by the scan it belongs to, so a page
+  # has one of them however often it is asked.
   def handle_info(:scan_peers, socket) do
-    {:noreply, assign(socket, :peer_runs, ExTbpMonty.Cluster.Peers.in_flight())}
+    {:noreply,
+     socket |> assign(:peer_runs, ExTbpMonty.Cluster.Peers.in_flight()) |> keep_scanning()}
   end
 
   # The run said something: a step, the end of it, or a failure. The worker
@@ -1898,15 +1917,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp recorded(%{assigns: %{live_action: :index}} = socket, run) when is_map(run) do
     if known?(run),
       do: {:noreply, stream_insert(socket, :runs, run, at: 0)},
-      else: {:noreply, scan_peers(socket)}
+      else: {:noreply, socket}
   end
 
   defp recorded(socket, _run), do: {:noreply, socket}
 
   defp settled(%{assigns: %{live_action: :index}} = socket, run) when is_map(run) do
-    if known?(run),
-      do: {:noreply, stream_insert(socket, :runs, run)},
-      else: {:noreply, scan_peers(socket)}
+    if known?(run), do: {:noreply, stream_insert(socket, :runs, run)}, else: {:noreply, socket}
   end
 
   defp settled(socket, _run), do: {:noreply, socket}
@@ -1919,6 +1936,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # that node, so a row here would offer Stop and Delete beside a link this node
   # cannot answer. With one database for the whole cluster the row is here, and
   # the message is news like any other.
+  #
+  # A dropped message is not a reason to ask the peers anything: their panel has
+  # its own clock (`@peer_scan_ms`), and a page that asked on every announcement
+  # would ask once per run each of them started.
   defp known?(%{id: id}), do: RunHistory.exists?(id)
 
   defp replay_to(socket, run, step) do
