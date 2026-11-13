@@ -151,23 +151,26 @@ jobs:
     name: example ${{ matrix.example }}
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
-    # The dependency that carries the NIF is compiled here, which is most of it.
+    # Each example's NIF is compiled here — the crate and its dependencies, not
+    # just the Elixir around them — which is most of the job.
     timeout-minutes: 20
     strategy:
       # One example failing is not a reason to hide the other one's answer.
       fail-fast: false
       matrix:
-        # `flyverse_plugin` is not here yet, and the reason is a fact about how it
-        # builds rather than about what it claims: its engine is a crate with no
-        # `mix compile` step behind it — Rustler 0.38 registers no `compile.rustler`
-        # task, so the library is built by hand and copied into `priv/native`
-        # (`README`'s `cargo test` line is the same hand). In CI that leaves
-        # `FlyversePlugin.Native` unloaded and every policy test fails on it. What
-        # it needs is the crate built by the project (a `Mix.Task.Compiler` of its
-        # own, or `elixir_make`), and then it belongs here beside the other one.
-        # Its *sources* are linted meanwhile: this job's compile is the part it
-        # misses, not its code.
-        example: [example_plugin]
+        # Both examples carry a NIF of their own, and each builds it from `mix
+        # compile`: `example_plugin`'s through `use Rustler`, `flyverse_plugin`'s
+        # through `Mix.Tasks.FlyversePlugin.Engine`, because a crate built when
+        # the module is compiled is not rebuilt when only the Rust changed — and
+        # not at all when the artefact was deleted while `_build` still holds a
+        # current beam, which is the state a `git clean` leaves (`priv/native` is
+        # ignored) and the one that made a plugin host come up offering nothing.
+        #
+        # `flyverse_plugin` was absent from this list while its engine was built
+        # by hand; the crate it wraps is plain CPU Rust (`liblf`/`pack`/`npy` of
+        # `flyverse`, no `flyBrain`, which is macOS-and-Metal), so a Linux runner
+        # builds it like any other.
+        example: [example_plugin, flyverse_plugin]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -183,7 +186,14 @@ jobs:
           path: |
             examples/${{ matrix.example }}/deps
             examples/${{ matrix.example }}/_build
-          key: ${{ runner.os }}-${{ matrix.example }}-${{ hashFiles(format('examples/{0}/mix.lock', matrix.example)) }}
+            examples/${{ matrix.example }}/priv/native
+            examples/${{ matrix.example }}/native/flyverse_nif/target
+          # `-nif-1` because the artefact and the crate's own `target/` joined
+          # this cache: without them the restored `_build` claims the project is
+          # current while `priv/native` is empty — the state that makes a Rustler
+          # module unloadable — and a key cannot be overwritten, so the paths
+          # need a key of their own.
+          key: ${{ runner.os }}-${{ matrix.example }}-nif-1-${{ hashFiles(format('examples/{0}/mix.lock', matrix.example)) }}
           restore-keys: ${{ runner.os }}-${{ matrix.example }}-
 
       # The example's dependency compiles a NIF, so this runner needs Rust.
