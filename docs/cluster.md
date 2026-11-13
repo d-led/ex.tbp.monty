@@ -99,6 +99,14 @@ Stop and Delete beside a link this node cannot answer. One runs table for the
 whole cluster would make those messages news, and nothing in this page would have
 to change.
 
+What a reader can see of the rest of the cluster is `/runs` → **Running on other
+nodes**: each node answers with up to five of its unsettled runs (no transcript,
+no pictures), and every row is a link to the peer's own page for it. It is asked
+rather than subscribed — once when the page loads, and again when a peer announces
+a run this node does not have — and it is read-only, because everything a reader
+could do to that run has to happen where the run is. A node that runs alone draws
+no such panel.
+
 A node with no name at all cannot join anything, and the settings page says so
 with the variable and the `mix` line that would fix it.
 
