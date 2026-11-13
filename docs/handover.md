@@ -2575,3 +2575,67 @@ update on the two-second poll); a batch's merged memory lives in
 `Artifacts.dir(batch)/memory`, which deleting the parts does not remove; and
 `configs` that name `num_parallel` still have their own Monty-side meaning that
 nothing here reads.
+
+## 40. 2026-11-13: a second node, and the things one node's page cannot say
+
+Studio clustering, additive and behind the environment: with `MONTY_CLUSTER=1` (or
+a `MONTY_SEEDS` list) a named node starts libcluster, a `Horde.Registry` and a
+`Horde.DynamicSupervisor` (`ExTbpMonty.Cluster`), keeps its own folder
+(`Monty.Paths.node_root/0` — database, runs, Monty's own output; `data/` and
+`models/` stay shared), polls the others every three seconds
+(`Cluster.Nodes`, one `:rpc` per peer carrying version, capability tags and the
+address a browser can open), and every page follows the list without a reload.
+**`docs/cluster.md` is the operator page** — variables, folders, tags, and what is
+not spread; this note is only the method and the traps.
+
+The visible parts beyond the chrome: `studio_runs.node` says whose run a row is
+(written once, in `RunHistory.start/1`, from the same setting that chose the
+folder; `nil` on a node that runs alone, and the runs list shows the column only
+when clustering is on); `/runs` has a read-only "Running on other nodes" panel
+(`Cluster.Peers` asks, `ClusterWeb.ClusterPeerRuns` draws, every row links to the
+peer's own page for it); and `monty_cluster_nodes` answers an MCP client with the
+nodes, their builds and `by_capability`.
+
+**Four traps, all found by a test or a browser, all now pinned:**
+
+- `use Phoenix.LiveView, on_mount: [Mod]` runs _nothing_. `before_compile` builds
+  `[on_mount: attr_list] ++ opts` and `__live__/0` reads the first match, so the
+  accumulated attribute list shadows the option. Use the `on_mount {Mod, :arg}`
+  macro — one line in `ex_tbp_monty_web.ex`, and no page has to know.
+- A `LiveComponent` has no `handle_info/2` (its own docs say the parent must
+  receive and `send_update/3`), and `Layouts.app` only sees what a page passes it,
+  so a footer cannot read a page assign. Hence the one mount hook handing the
+  broadcast to `cluster-badge` and `cluster-nodes` by id; `send_update` for a
+  component a page does not render is a no-op, which is why one hook serves both.
+- **Phoenix's pubsub is the distributed one.** `"studio_runs"` reached every node,
+  so a peer's run appeared in this node's list (with Stop and Delete beside it) and
+  the experiment page started following a run whose steps it never receives. The
+  guard is a fact, not a policy: `RunHistory.exists?(id)` — true with a file per
+  node and true if the cluster ever shares one runs table.
+- `Nodes.snapshot/0` answered by `GenServer.call`ing the poller, which is inside
+  an `:rpc` to a peer while it polls: a page waits behind the slowest peer, and a
+  big enough cluster puts that past the call's timeout, which is a crash for
+  reading a list. It reads the last poll from `:persistent_term` instead.
+
+**Measured**: `mix test` 2 980 tests green (67 properties), `scripts/quality.sh`
+green, and two nodes on one machine (4211/4212) checked in a browser: both footers
+said "2 nodes", both settings pages listed both nodes with their own tags and both
+tag groups, the peer's name was a link to the address it advertised, and stopping
+one node moved the footer **and** the list to one node with no reload to the page
+that was open. CI run `43344779545` completed success, Windows desktop job
+included.
+
+**Still open, and both are a decision rather than a fix**: (1) one runs table for
+the whole cluster (`DATABASE_URL` at one Postgres — the pages already behave) or a
+merged view over each node's file; until then a run's job lives in its own node's
+database, so the _queue_ cannot spread even though the tags that would route it
+already exist. (2) A part writes its files and publishes its steps into the memory
+of the node performing it, so a part on another node needs either a filesystem the
+owner can read or an explicit transfer of what it produced. Nothing schedules by
+tag yet, and `Nodes.offering/1` is the query waiting for that decision.
+
+One loose end from the same day, unrelated to the cluster: `RecordingEpisodeTest`
+failed once in eight full runs (21 steps against a recording of 27, the port
+concluding early), passes alone, and is written up in MemPalace under
+`suspected-issues` — the candidate is an unseeded RNG where the episode's own
+stream should be used.
