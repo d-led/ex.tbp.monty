@@ -185,6 +185,31 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
       assert Enum.count(LazyHTML.query(document, ".hero-puzzle-piece")) == 2
     end
 
+    # A host may bring as many modules of a kind as it likes — the registry keys
+    # each by `{kind, name}` — so the line under a tag has to name modules, not
+    # only the node: "which policy can I plug in" is the question a person
+    # setting an experiment up is asking.
+    test "a capability names the modules that provide it, more than one if there are" do
+      host = %{
+        plugin_host()
+        | plugins: [
+            %{"kind" => "motor_policy", "name" => "example_plugin.spiral_scan"},
+            %{"kind" => "motor_policy", "name" => "example_plugin.spiral_scan_coarse"}
+          ]
+      }
+
+      html =
+        render_component(ExTbpMontyWeb.ClusterNodes, %{id: "cluster-nodes", nodes: [host]})
+
+      capabilities =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query(~s([id="cluster-capabilities"]))
+        |> LazyHTML.text()
+
+      assert capabilities =~ "example_plugin.spiral_scan, example_plugin.spiral_scan_coarse"
+    end
+
     test "a node with no plugins to show gets no line" do
       html = render_component(ExTbpMontyWeb.ClusterNodes, %{id: "cluster-nodes", nodes: [peer()]})
 

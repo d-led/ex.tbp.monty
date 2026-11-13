@@ -55,7 +55,7 @@ defmodule ExTbpMontyWeb.ClusterNodes do
        summary: summary(nodes),
        own: own,
        plugins: plugins,
-       capabilities: Capabilities.by_tag(nodes)
+       capabilities: capabilities(nodes)
      )}
   end
 
@@ -99,12 +99,14 @@ defmodule ExTbpMontyWeb.ClusterNodes do
           class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 ps-2 text-xs"
         >
           <li
-            :for={{tag, names} <- @capabilities}
+            :for={{tag, rows} <- @capabilities}
             id={"capability-" <> ExTbpMonty.Node.safe_name(tag)}
             class="contents"
           >
             <span class="font-mono text-base-content/70">{tag}</span>
-            <span class="truncate text-base-content/50">{Enum.join(names, ", ")}</span>
+            <span class="truncate text-base-content/50">
+              {Enum.map_join(rows, ", ", &offered_by/1)}
+            </span>
           </li>
         </ul>
       </div>
@@ -237,6 +239,37 @@ defmodule ExTbpMontyWeb.ClusterNodes do
 
   defp plugin_kind(%{"kind" => kind}), do: kind
   defp plugin_kind(_plugin), do: nil
+
+  # What the cluster can do, one row per tag — and under a plugin tag, the modules
+  # that provide it. `plugin:motor_policy` over a node name says a machine brings
+  # something of that kind and not which, and "which policy can I plug in" is the
+  # question a person setting an experiment up is asking. A host may bring as many
+  # of a kind as it likes: the registry keys each by `{kind, name}`.
+  defp capabilities(nodes) do
+    nodes
+    |> Enum.flat_map(fn entry ->
+      for tag <- Capabilities.of_entry(entry) do
+        %{tag: Capabilities.normalise(tag), node: label(entry), modules: modules_of(entry, tag)}
+      end
+    end)
+    |> Enum.group_by(& &1.tag)
+    |> Enum.map(fn {tag, rows} -> {tag, Enum.sort_by(rows, & &1.node)} end)
+    |> Enum.sort_by(&elem(&1, 0))
+  end
+
+  defp modules_of(entry, "plugin:" <> kind) do
+    for plugin <- plugins(entry), plugin_kind(plugin) == kind, do: plugin_name(plugin)
+  end
+
+  defp modules_of(_entry, _tag), do: []
+
+  defp offered_by(%{node: node, modules: []}), do: node
+
+  defp offered_by(%{node: node, modules: modules}),
+    do: "#{node} (#{Enum.join(modules, ", ")})"
+
+  # The node's own name, the way every row above spells it.
+  defp label(entry), do: Map.get(entry, :address) || entry.name
 
   defp hint(entry) do
     case Map.get(entry, :address) do
