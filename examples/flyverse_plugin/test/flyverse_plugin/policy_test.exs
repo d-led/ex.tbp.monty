@@ -253,7 +253,8 @@ defmodule FlyversePlugin.PolicyTest do
     test "turns towards what the view finder sees while it closes the gap", %{state: state} do
       {:ok, policy, state} = Policy.new([], state)
 
-      {result, _policy, _state} = step(policy, state, scene([[0.2, 0.9], [0.9, 0.9]], 0.05), away())
+      {result, _policy, _state} =
+        step(policy, state, scene([[0.2, 0.9], [0.9, 0.9]], 0.05), away())
 
       assert [%OrientHorizontal{} = turned] = result.actions
       assert turned.rotation_degrees < 0.0, "left, because what is in view is on the left"
