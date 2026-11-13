@@ -91,6 +91,14 @@ itself: its host is the host part of its own name — the address its peers dial
 (`ExTbpMonty.Node.web_url/1`). A node with no name to build one from is a name
 and not a link, which is the honest thing to show.
 
+A page shows **this node's runs**. The topic runs are announced on is the
+cluster's — Phoenix's pubsub is the distributed one — so a page does hear about a
+run recorded on a peer, and it drops it: a row it can act on is a row it has. The
+run's files, its worker and its page are on that node, so a row here would offer
+Stop and Delete beside a link this node cannot answer. One runs table for the
+whole cluster would make those messages news, and nothing in this page would have
+to change.
+
 A node with no name at all cannot join anything, and the settings page says so
 with the variable and the `mix` line that would fix it.
 
