@@ -106,8 +106,13 @@ defmodule FlyversePlugin.Policy do
   # start of a run where no theory has any evidence. While the surface is that
   # flat the step is taken `@flight_walk` times over and the bend is damped, so the
   # flat is crossed rather than spiralled around.
+  #
+  # Six, not three: the approach in the last run was ~150 steps at four
+  # millimetres, and the object is a hand's width wide, so 26 mm a step still
+  # lands several samples on it. The flat is a place to leave, not a place to be
+  # careful in — the care starts the moment `relief` says something is there.
   @flat_relief 0.001
-  @flight_walk 3.0
+  @flight_walk 6.0
   @flight_bend 0.25
 
   # The ride height of the drive: at 25 mm from a surface, `1/d` is 40 and the
