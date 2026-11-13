@@ -29,9 +29,11 @@ end
 
 defmodule Monty.PluginHost.Provider do
   @moduledoc false
-  # One plugin's process, as a host runs it: it answers `:describe` always, and
-  # `:run` when it was started with a definition — which is what an `:experiment`
-  # plugin is asked for.
+  # One plugin's process, as a host runs it: it answers `:describe` always, `:run`
+  # when it was started with a definition — which is what an `:experiment` plugin
+  # is asked for — and the four calls a motor policy is asked for. It keeps no
+  # policy: the value it hands out at `{:new, []}` goes back with every call,
+  # which is the only way one provider can serve two episodes at once.
 
   use GenServer
 
@@ -59,6 +61,21 @@ defmodule Monty.PluginHost.Provider do
       :error -> {:reply, {:error, "this plugin defines no run"}, options}
     end
   end
+
+  def handle_call({:new, _options}, _from, options), do: {:reply, {:ok, 0}, options}
+
+  def handle_call({:call, policy, _ctx, _observations, _state, _percept, goals}, _from, options) do
+    result = %Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult{
+      actions: [{:step, policy, length(goals)}]
+    }
+
+    {:reply, {:ok, result, policy + 1}, options}
+  end
+
+  def handle_call({:reset, _policy}, _from, options), do: {:reply, {:ok, 0}, options}
+
+  def handle_call({:state_dict, policy}, _from, options),
+    do: {:reply, {:ok, %{steps: policy}}, options}
 
   defp description(options) do
     %{

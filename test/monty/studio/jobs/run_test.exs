@@ -2,7 +2,19 @@ defmodule Monty.Studio.Jobs.RunTest do
   use ExTbpMontyWeb.ConnCase, async: false
 
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
-  alias Monty.Studio.{Artifacts, Drafts, Jobs, Memory, Partition, RunHistory, RunLog, RunStream}
+
+  alias Monty.Studio.{
+    Artifacts,
+    Drafts,
+    Jobs,
+    Memory,
+    Partition,
+    RunHistory,
+    RunLog,
+    RunStream,
+    Summary
+  }
+
   alias Monty.Test.Tmp
 
   # The experiment a run of this file steps: an evaluation config whose classes
@@ -125,6 +137,21 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert closed.summary["steps"] == 3
       assert Enum.map(closed.timeline, & &1["step"]) == [0, 1, 2]
       assert closed.summary["outcome"] == %{"learning_module_0" => nil}
+    end
+
+    # The last episode is not the run. An evaluation of several episodes has one
+    # conclusion each, and whether this port recognises what Monty recognises is
+    # a question about all of them — so the record keeps a tally, which is the
+    # line the page shows "across the run" and what `mix monty.run` reports.
+    test "keeps a tally of what each episode concluded, not only the last one" do
+      {:ok, record} = start_run(@experiment, 40, episodes: 2)
+
+      assert {:ok, closed} = perform(record)
+
+      assert closed.summary["outcomes"] == %{"learning_module_0" => %{"match" => 2}}
+
+      assert Summary.outcomes_line(closed.summary["outcomes"]) ==
+               "learning_module_0: match 2 of 2"
     end
 
     # A tag is a filter on which nodes may perform a run, and a node that runs
@@ -463,6 +490,28 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert header =~ "primary_performance"
       assert length(rows) == 4
       assert Enum.count(stats, &(&1 == header)) == 1
+    end
+
+    # A run of several parts is one run, so its summary is one summary: the
+    # parts' steps added up, their tallies one tally. A page that showed four
+    # parts' steps and then "0 steps, 0 concluded" was showing the parts' work
+    # and the run's silence.
+    test "reports what its parts did as one summary" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 40, 0, 2, 4, %{parts: parts}))
+
+      assert {:ok, closed} = perform(record)
+
+      assert closed.summary["steps"] == length(closed.log)
+
+      assert closed.summary["outcomes"] == %{"learning_module_0" => %{"match" => 4}}
+
+      assert Summary.outcomes_line(closed.summary["outcomes"]) ==
+               "learning_module_0: match 4 of 4"
     end
 
     # The pictures of a run of several parts were served from a directory nothing

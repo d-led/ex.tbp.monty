@@ -3,11 +3,34 @@ defmodule Monty.Studio.RemotePolicy do
   A motor policy that lives on another node: a plugin's, called once per step.
 
   `MontyPlugin` says a motor policy is called once per step, which is what makes
-  calling one over a cluster free, and that the policy's state belongs where its
-  plugin is. This is the studio's half of that agreement: a
-  `MotorPolicySelector` whose policy is a process on the node offering it, and
-  whose state is that process's — the policy struct never crosses, so a policy
-  could in principle hold a part.
+  calling one over a cluster free. This is the studio's half of that agreement: a
+  `MotorPolicySelector` whose policy is decided on the node offering it.
+
+  ## The policy is a value, and it crosses
+
+  A plugin is one process per kind and name for the whole cluster, and a cluster
+  runs several episodes at once: the six parts of one sweep are six episodes in
+  one VM. A provider that kept "the policy" as its own state would be one policy
+  shared by every episode running anywhere — and a policy is not a thing to share.
+  The first parallel sweep this studio ran with a plugin's surface policy lost all
+  six parts to one pre-jump pose that they had overwritten for each other, each
+  asserting it had been put back where another part had moved it.
+
+  So the policy travels. This struct carries it, every call carries it, and the
+  provider is a function of what it was handed:
+
+      {:new, options}                                  => {:ok, policy}
+      {:call, policy, ctx, observations, state, p, g}  => {:ok, result, policy}
+      {:reset, policy}                                 => {:ok, policy}
+      {:state_dict, policy}                            => {:ok, recorded}
+
+  which is `MotorPolicy`'s own shape — the argument in, the argument out — with
+  the policy named first so that nothing about it is remembered where it is
+  decided. Two episodes cannot meet, and a batch cannot share a heading by
+  accident.
+
+  What that costs is copying the policy once per step, a few hundred numbers
+  beside the depth images in `observations` on the same call.
 
   ## Two questions, both the cluster's
 
@@ -25,11 +48,12 @@ defmodule Monty.Studio.RemotePolicy do
 
   ## What crosses
 
-  The six arguments of a `call/6` and the result — context, observations, motor
-  system state, percept, goals, and a `MotorPolicyResult`. Everything in them is
-  a term, and both ends compile the same framework package, which is what the
-  plugin's `version` is for: a policy and a caller built from different versions
-  of the actions would answer with actions the caller cannot interpret.
+  The call's six arguments and the answer — context, observations, motor system
+  state, percept, goals, and a `MotorPolicyResult` — and the policy itself, in
+  both directions. Everything in them is a term, and both ends compile the same
+  framework package, which is what the plugin's `version` is for: a policy and a
+  caller built from different versions of the actions would answer with actions
+  the caller cannot interpret.
   """
 
   @behaviour Monty.Frameworks.Models.MotorPolicySelectors.MotorPolicySelector
@@ -45,14 +69,19 @@ defmodule Monty.Studio.RemotePolicy do
   @timeout 5_000
 
   @enforce_keys [:node, :name, :version, :pid]
-  defstruct [:node, :name, :version, :pid]
+  defstruct [:node, :name, :version, :pid, :policy]
 
-  @typedoc "A policy resolved to the node that offers it, and the process that is it."
+  @typedoc """
+  A policy resolved to the node that offers it, the process that decides it, and
+  the policy itself — the value every call carries, `nil` until `among/3` starts
+  one.
+  """
   @type t :: %__MODULE__{
           node: node(),
           name: String.t(),
           version: String.t(),
-          pid: pid()
+          pid: pid(),
+          policy: term()
         }
 
   @doc """
@@ -78,7 +107,8 @@ defmodule Monty.Studio.RemotePolicy do
   "offered but unusable" and "not offered" are different repairs.
   """
   @spec find(String.t(), atom()) :: {:ok, t()} | {:error, String.t()}
-  def find(name, kind \\ :motor_policy) when is_binary(name), do: among(hosts(), name, kind)
+  def find(name, kind \\ :motor_policy) when is_binary(name),
+    do: with({:ok, remote} <- among(hosts(), name, kind), do: start(remote))
 
   @doc """
   The provider of `name` among `hosts`, which is `find/2` with the asking left
@@ -105,6 +135,36 @@ defmodule Monty.Studio.RemotePolicy do
       [] -> {:error, refusal(answers, offerings, name)}
     end
   end
+
+  @doc """
+  The provider, and the policy a run starts from.
+
+  Separate from `among/3` because finding a provider and being able to start a
+  policy on it are two questions, and only a motor policy has a second answer: an
+  experiment plugin is found the same way and starts nothing.
+
+  The options are empty because there is nobody to take them from: a config's
+  policy numbers belong to the policy the config names, and a run that asked for a
+  plugin's policy asked for the plugin's own decisions, which its `new/1` is where
+  to read.
+
+  Public for the reason `among/3` is: the start is a call to another process, which
+  a case can have and a cluster cannot.
+  """
+  @spec start(t()) :: {:ok, t()} | {:error, String.t()}
+  def start(%__MODULE__{policy: nil} = remote) do
+    case GenServer.call(remote.pid, {:new, []}, @timeout) do
+      {:ok, policy} -> {:ok, %{remote | policy: policy}}
+      {:error, why} -> {:error, "#{remote.name} on #{remote.node} could not be built: #{why}"}
+      other -> {:error, "#{remote.name} on #{remote.node} answered #{inspect(other)}"}
+    end
+  catch
+    :exit, reason ->
+      {:error,
+       "the policy #{remote.name} on #{remote.node} stopped answering: #{inspect(reason)}"}
+  end
+
+  def start(%__MODULE__{} = already_started), do: {:ok, already_started}
 
   # Every host is asked, and the answer is kept with the host it came from: which
   # node offers a plugin and whether that node can serve it are two facts, and a
@@ -168,8 +228,9 @@ defmodule Monty.Studio.RemotePolicy do
   @doc """
   The next action, chosen on the node that offers the policy.
 
-  The selector comes back unchanged: nothing about the policy is remembered here,
-  which is the point — a policy that holds a part holds it there.
+  The policy goes with the call and comes back changed, which is the whole of
+  what a step remembers: this struct is the only copy, so two episodes stepping
+  at once hold two policies and neither can see the other's.
   """
   @impl MotorPolicySelector
   @spec call(
@@ -180,37 +241,48 @@ defmodule Monty.Studio.RemotePolicy do
           Monty.Cmp.Message.t() | nil,
           [Monty.Cmp.Goal.t()]
         ) :: {MotorPolicyResult.t(), t()}
-  def call(%__MODULE__{} = policy, ctx, observations, state, percept, goals) do
-    case GenServer.call(policy.pid, {:call, ctx, observations, state, percept, goals}, @timeout) do
-      {:ok, %MotorPolicyResult{} = result} -> {result, policy}
-      {:error, why} -> raise ArgumentError, "#{policy.name} did not decide: #{why}"
-      other -> raise ArgumentError, "#{policy.name} answered #{inspect(other)}"
+  def call(%__MODULE__{} = remote, ctx, observations, state, percept, goals) do
+    call_args = {:call, remote.policy, ctx, observations, state, percept, goals}
+
+    case GenServer.call(remote.pid, call_args, @timeout) do
+      {:ok, %MotorPolicyResult{} = result, policy} -> {result, %{remote | policy: policy}}
+      {:error, why} -> raise ArgumentError, "#{remote.name} did not decide: #{why}"
+      other -> raise ArgumentError, "#{remote.name} answered #{inspect(other)}"
     end
   catch
     :exit, reason ->
       raise ArgumentError,
-            "the policy #{policy.name} on #{policy.node} stopped answering: #{inspect(reason)}"
+            "the policy #{remote.name} on #{remote.node} stopped answering: #{inspect(reason)}"
   end
 
-  @doc "Starts the next episode on the plugin's side: its state, its reset."
+  @doc "Starts the next episode on the plugin's side: its policy, reset."
   @impl MotorPolicySelector
-  def reset(%__MODULE__{} = policy) do
-    GenServer.call(policy.pid, :reset, @timeout)
-    policy
+  def reset(%__MODULE__{} = remote) do
+    case GenServer.call(remote.pid, {:reset, remote.policy}, @timeout) do
+      {:ok, policy} -> %{remote | policy: policy}
+      {:error, why} -> raise ArgumentError, "#{remote.name} could not be reset: #{why}"
+      other -> raise ArgumentError, "#{remote.name} answered #{inspect(other)}"
+    end
   catch
     :exit, reason ->
       raise ArgumentError,
-            "the policy #{policy.name} on #{policy.node} could not be reset: #{inspect(reason)}"
+            "the policy #{remote.name} on #{remote.node} could not be reset: #{inspect(reason)}"
   end
 
-  @doc "What the policy recorded, read from where it recorded it."
+  @doc "What the policy the run holds recorded."
   @impl MotorPolicySelector
-  def state_dict(%__MODULE__{} = policy) do
-    recorded = GenServer.call(policy.pid, :state_dict, @timeout)
-    Map.merge(%{policy: policy.name, version: policy.version, node: policy.node}, recorded)
+  def state_dict(%__MODULE__{} = remote) do
+    recorded =
+      case GenServer.call(remote.pid, {:state_dict, remote.policy}, @timeout) do
+        {:ok, recorded} -> recorded
+        {:error, why} -> raise ArgumentError, "#{remote.name} could not report: #{why}"
+        other -> raise ArgumentError, "#{remote.name} answered #{inspect(other)}"
+      end
+
+    Map.merge(%{policy: remote.name, version: remote.version, node: remote.node}, recorded)
   catch
     :exit, reason ->
       raise ArgumentError,
-            "the policy #{policy.name} on #{policy.node} could not report: #{inspect(reason)}"
+            "the policy #{remote.name} on #{remote.node} could not report: #{inspect(reason)}"
   end
 end

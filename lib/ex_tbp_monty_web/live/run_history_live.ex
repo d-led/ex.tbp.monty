@@ -327,12 +327,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     )
   end
 
-  # A run that is queued because a peer offers what this node does not is not
-  # waiting for a worker like any other — the job is put back until a node that
-  # offers what it needs takes it, and the page says which node and which tag. On
-  # a node that runs alone this answers `nil` without branching: its list of nodes
-  # is itself, and it offers everything any run of it ever asks for
-  # (`ExTbpMonty.Cluster.Placement`).
+  # How many steps a run has taken, as far as this page can see.
+  #
+  # A run of several parts steps in processes of their own, each writing its own
+  # stream, and the record learns what they did when it closes — so a record's own
+  # count says "0 steps" about a run that has been stepping for ten minutes. The
+  # parts' cards hold the live count (`Monty.Studio.Parts`), and a run with one
+  # part has nothing to add up: its record is the truth.
+  defp steps_so_far(%RunHistory.Run{steps_done: steps}, []), do: steps
+  defp steps_so_far(_run, parts), do: parts |> Enum.map(& &1.steps) |> Enum.sum()
+
+  # A part still stepping is a run still working, whatever the run's own row last
+  # said about itself.
+  defp parts_running?(parts), do: Enum.any?(parts, &(&1.status == "running"))
+
   # How far the division has got, as one number: a reader of a parted run wants
   # the count first, and the title above says the rest. `@division` is the
   # schedule (`Monty.Studio.RunHistory.Part`); `@parts` is the cards each part's
@@ -356,6 +364,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     end)
   end
 
+  # A run that is queued because a peer offers what this node does not is not
+  # waiting for a worker like any other — the job is put back until a node that
+  # offers what it needs takes it, and the page says which node and which tag. On
+  # a node that runs alone this answers `nil` without branching: its list of nodes
+  # is itself, and it offers everything any run of it ever asks for
+  # (`ExTbpMonty.Cluster.Placement`).
   defp waiting(%{status: "queued"} = run) do
     Placement.awaiting(run.inputs, Nodes.snapshot())
   end
@@ -1430,18 +1444,21 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           </div>
         </div>
         <p class="text-xs text-base-content/60">
-          <.run_timing run={@run} /> · {RunHistory.steps_run(@run)} steps in {episodes_label(@run)}
+          <.run_timing run={@run} /> · {steps_so_far(@run, @parts)} steps in {episodes_label(@run)}
           <span :if={RunHistory.ending(@run)} id="run-ending">
             · {RunHistory.ending(@run)}
           </span>
           <%!-- "Time is not enough": a stamp says when the last step was, not
           whether another is coming. This says both — the run claims to be
-          running and nothing has been recorded for longer than a slow step. --%>
+          running and nothing has been recorded for longer than a slow step. A
+          divided run's parts step in processes of their own and the record only
+          learns what they did when it closes, so its own clock says nothing about
+          whether they are working. --%>
           <span :if={@keeping} id="run-keeping" class="text-info">
             · saving {@keeping} steps to the database
           </span>
           <span
-            :if={is_nil(@keeping) and RunHistory.stalled?(@run)}
+            :if={is_nil(@keeping) and RunHistory.stalled?(@run) and not parts_running?(@parts)}
             id="run-stalled"
             class="text-warning"
           >

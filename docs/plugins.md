@@ -27,14 +27,26 @@ node with no transport of our own. Placement vocabulary is in the description
 that names the nodes that do offer it.
 
 **A motor policy is called once per step.** `Monty.Studio.RemotePolicy` is a
-`MotorPolicySelector` whose policy is a process on the node offering it: the six
-arguments of `call/6` go over `GenServer.call` as
-`{:call, ctx, observations, state, percept, goals}`, the answer is
-`{:ok, %MotorPolicyResult{}}`, and `:reset` and `:state_dict` are the other two
-requests. The policy struct never crosses — the process on the plugin's node _is_
-the state — so a policy that remembers where it was being walked remembers it
-there. `examples/example_plugin` is the plugin's half of that shape; the studio
-picks it up when the node was started with
+`MotorPolicySelector` whose policy is decided on the node offering it. The policy
+is a **value**, and it crosses:
+
+    {:new, options}                                  => {:ok, policy}
+    {:call, policy, ctx, observations, state, p, g}  => {:ok, result, policy}
+    {:reset, policy}                                 => {:ok, policy}
+    {:state_dict, policy}                            => {:ok, recorded}
+
+which is `MotorPolicy`'s own shape — the argument in, the argument out — with the
+policy named first, so that nothing about it is remembered where it is decided.
+A provider is one process per kind and name for the whole cluster, and a cluster
+runs several episodes at once: six parts of a sweep are six episodes in one VM. A
+policy kept in that process would be one heading walked by every episode, and the
+first parallel sweep this studio ran with a plugin's surface policy lost all six
+parts to a pre-jump pose they had overwritten for each other. So the caller holds
+the policy and every call carries it; what that costs is copying a few hundred
+numbers beside the depth images on the same call.
+
+`examples/example_plugin` is the plugin's half of that shape; the studio picks it
+up when the node was started with
 `MONTY_REMOTE_POLICY=example_plugin.spiral_scan`, and the run's record then reads
 `motor_policy: example_plugin.spiral_scan@0.1.1 on example_plugin@127.0.0.1`, so
 a run whose actions came from another node says so.

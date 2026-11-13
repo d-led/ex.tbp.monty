@@ -20,6 +20,18 @@ defmodule Monty.Studio.Summary.TallyTest do
     test "a module that did not conclude an episode is not counted for it" do
       assert Summary.tally(%{}, %{}) == %{}
     end
+
+    # A step budget that ran out before the module had an answer leaves a blank
+    # where a conclusion would be — the record spells it `""`, a summary `nil`.
+    # Counting either as a state would put a blank in the line and the episode in
+    # a denominator it does not belong to.
+    test "an episode a module concluded nothing about is not counted" do
+      assert Summary.tally(%{}, %{"lm_0" => "", "lm_1" => nil}) == %{}
+
+      assert Summary.tally(%{}, %{"lm_0" => "", "lm_1" => :match}) == %{
+               "lm_1" => %{match: 1}
+             }
+    end
   end
 
   describe "one line of it" do

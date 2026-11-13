@@ -60,6 +60,28 @@ defmodule Monty.Studio.PluginExperimentTest do
     assert opened.setup.remote_policy == nil
   end
 
+  # The definition is the experiment, so the seed it names is the seed the run
+  # uses — and it is the one the record will show.
+  test "the seed a definition names is the seed the run starts from", %{hosts: hosts} do
+    offer_experiment(%{
+      "base" => "base_10simobj_surf_agent",
+      "learning_modules" => [],
+      "seed" => 7
+    })
+
+    assert {:ok, opened} = PluginExperiment.open(@experiment, hosts: hosts)
+    assert opened.setup.seed == 7
+  end
+
+  test "a definition naming no seed keeps the base config's own", %{hosts: hosts} do
+    offer_experiment(%{"base" => "base_10simobj_surf_agent", "learning_modules" => []})
+
+    assert {:ok, mine} = Monty.Studio.open("base_10simobj_surf_agent")
+    assert {:ok, opened} = PluginExperiment.open(@experiment, hosts: hosts)
+
+    assert opened.setup.seed == mine.setup.seed
+  end
+
   test "a learning module a run asks for is refused by name, and why", %{hosts: hosts} do
     offer_experiment(%{
       "base" => "base_10simobj_surf_agent",

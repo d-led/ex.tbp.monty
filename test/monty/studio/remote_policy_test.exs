@@ -2,14 +2,15 @@ defmodule Monty.Studio.RemotePolicyTest do
   @moduledoc """
   What a policy on another node owes a step, and what the studio owes it back.
 
-  The policy struct never crosses — the process on the plugin's node *is* the
-  state — so the cases here are about that seam: a step is answered by the
-  process, remembered by the process, and a policy that has gone away says so
-  rather than producing a step nobody decided. Which node offers it is the other
-  half, and that half is a question (`among/3`), not a run.
+  The policy travels: the provider is a function of what it was handed, so the
+  cases here are about that seam — a step is decided by the process, the policy
+  comes back changed, and a policy that has gone away says so rather than
+  producing a step nobody decided. Two episodes stepping at once is the case this
+  convention exists for: the provider is one process for the whole cluster, so a
+  provider that remembered would be one policy shared by every episode running.
 
-  Not async: a node's environment and the stand-in's table are the node's, and
-  one case here sets what the node was told to run.
+  Not async: a node's environment and the stand-in's table are the node's, and one
+  case here sets what the node was told to run.
   """
 
   use ExUnit.Case, async: false
@@ -17,6 +18,8 @@ defmodule Monty.Studio.RemotePolicyTest do
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
   alias Monty.Studio.RemotePolicy
 
+  # A policy that counts its own steps, so a case can say which of two policies a
+  # step advanced. A counter is the smallest thing that can be shared by accident.
   defmodule Provider do
     @moduledoc false
     use GenServer
@@ -27,12 +30,17 @@ defmodule Monty.Studio.RemotePolicyTest do
     def init(calls), do: {:ok, calls}
 
     @impl true
-    def handle_call({:call, _ctx, _observations, _state, _percept, goals}, _from, calls) do
-      {:reply, {:ok, %MotorPolicyResult{actions: [{:step, calls, length(goals)}]}}, calls + 1}
+    def handle_call({:new, _options}, _from, calls), do: {:reply, {:ok, 0}, calls}
+
+    def handle_call({:call, policy, _ctx, _observations, _state, _percept, goals}, _from, calls) do
+      result = %MotorPolicyResult{actions: [{:step, policy, length(goals)}]}
+      {:reply, {:ok, result, policy + 1}, calls + 1}
     end
 
-    def handle_call(:reset, _from, _calls), do: {:reply, :ok, 0}
-    def handle_call(:state_dict, _from, calls), do: {:reply, %{steps: calls}, calls}
+    def handle_call({:reset, _policy}, _from, calls), do: {:reply, {:ok, 0}, calls}
+
+    def handle_call({:state_dict, policy}, _from, calls),
+      do: {:reply, {:ok, %{steps: policy}}, calls}
   end
 
   setup do
@@ -47,17 +55,19 @@ defmodule Monty.Studio.RemotePolicyTest do
     end)
 
     %{
-      policy: %RemotePolicy{node: node(), name: "example_scan", version: "0.1.0", pid: provider},
+      policy: started(provider),
       provider: provider
     }
   end
 
   test "a step is decided by the process that offers the policy", %{policy: policy} do
-    assert {%MotorPolicyResult{actions: [{:step, 0, 1}]}, ^policy} =
+    assert {%MotorPolicyResult{actions: [{:step, 0, 1}]}, %RemotePolicy{policy: 1}} =
              RemotePolicy.call(policy, %{}, nil, %{}, nil, [%{}])
   end
 
-  test "the policy remembers on its own node, not in what the studio holds", %{policy: policy} do
+  test "the policy comes back changed, and that is where the next step starts", %{
+    policy: policy
+  } do
     {_first, policy} = RemotePolicy.call(policy, %{}, nil, %{}, nil, [])
     {_second, policy} = RemotePolicy.call(policy, %{}, nil, %{}, nil, [])
 
@@ -69,11 +79,25 @@ defmodule Monty.Studio.RemotePolicyTest do
            }
   end
 
+  # The case the convention exists for. One provider is one process for the whole
+  # cluster, and a sweep is several episodes in it: a policy kept in that process
+  # would be one heading walked by every part at once.
+  test "two episodes hold two policies and neither advances the other", %{policy: policy} do
+    {_mine, mine} = RemotePolicy.call(policy, %{}, nil, %{}, nil, [])
+    {_mine, mine} = RemotePolicy.call(mine, %{}, nil, %{}, nil, [])
+    {theirs, other} = RemotePolicy.call(policy, %{}, nil, %{}, nil, [])
+
+    assert {%MotorPolicyResult{actions: [{:step, 2, 0}]}, _mine} =
+             RemotePolicy.call(mine, %{}, nil, %{}, nil, [])
+
+    assert %MotorPolicyResult{actions: [{:step, 0, 0}]} = theirs
+    assert %RemotePolicy{policy: 1} = other
+  end
+
   test "starting an episode reaches the node that owns the state", %{policy: policy} do
     {_first, policy} = RemotePolicy.call(policy, %{}, nil, %{}, nil, [])
 
-    assert RemotePolicy.reset(policy) == policy
-    assert RemotePolicy.state_dict(policy).steps == 0
+    assert %RemotePolicy{policy: 0} = RemotePolicy.reset(policy)
   end
 
   test "a policy whose node has gone says which policy stopped answering", %{policy: policy} do
@@ -103,7 +127,23 @@ defmodule Monty.Studio.RemotePolicyTest do
 
       assert RemotePolicy.among([here()], "example_scan", :motor_policy) ==
                {:ok,
-                %RemotePolicy{node: node(), name: "example_scan", version: "0.2.0", pid: provider}}
+                %RemotePolicy{
+                  node: node(),
+                  name: "example_scan",
+                  version: "0.2.0",
+                  pid: provider,
+                  policy: nil
+                }}
+    end
+
+    # Found and started are two questions, and only a policy has the second: a
+    # plugin that defines an experiment is found here and starts nothing.
+    test "a provider is not a policy until the plugin is asked for one", %{provider: provider} do
+      MontyPlugin.Registry.offer(:motor_policy, "example_scan", {:ok, offering(provider)})
+
+      assert {:ok, found} = RemotePolicy.among([here()], "example_scan", :motor_policy)
+      assert found.policy == nil
+      assert {:ok, %RemotePolicy{policy: 0}} = RemotePolicy.start(found)
     end
 
     test "a host that does not answer is passed over for one that does", %{provider: provider} do
@@ -191,6 +231,18 @@ defmodule Monty.Studio.RemotePolicyTest do
       name: "example_scan",
       pid: pid,
       describe: {:ok, %{"name" => "example_scan", "version" => "0.2.0"}}
+    }
+  end
+
+  # A policy a run holds: resolved to the provider, and the value that provider
+  # built for it.
+  defp started(provider) do
+    %RemotePolicy{
+      node: node(),
+      name: "example_scan",
+      version: "0.1.0",
+      pid: provider,
+      policy: 0
     }
   end
 

@@ -374,9 +374,11 @@ defmodule Monty.Studio.Jobs.Run do
     # A part of a run leaves its record to the run: the run knows when every part
     # is done and what the experiment concluded between them, and a part that
     # closed the row would say "finished" while its neighbours were still
-    # stepping.
+    # stepping. Its summary goes with its outcome, because a run of four parts is
+    # one run and a page that shows four parts' steps shows one number
+    # (`Summary.merge/2`).
     if part?(record) do
-      outcome
+      {outcome, state.summary}
     else
       close(state.record, opened, outcome, state.summary, state.conclusion, run_id)
     end
@@ -420,13 +422,14 @@ defmodule Monty.Studio.Jobs.Run do
 
     broadcast(run_id, {:started, record.steps})
 
-    {outcome, record} =
-      with {:ok, record, memories} <- train_wave(record, opened, parts),
-           {:ok, record, _memories} <- eval_wave(record, opened, parts, memories) do
-        {:finished, record}
+    {outcome, record, summary} =
+      with {:ok, record, memories, trained} <- train_wave(record, opened, parts),
+           {:ok, record, _memories, carried} <-
+             eval_wave(record, opened, parts, memories, trained) do
+        {:finished, record, carried}
       else
-        {:error, reason, record} -> {{:failed, reason}, record}
-        {:stopped, record} -> {:stopped, record}
+        {:error, reason, record, carried} -> {{:failed, reason}, record, carried}
+        {:stopped, record, carried} -> {:stopped, record, carried}
       end
 
     # The division closes with the run, before anything reads it: a part that
@@ -446,30 +449,48 @@ defmodule Monty.Studio.Jobs.Run do
     # that finished wrote episodes that are real.
     _ = Artifacts.merge_reports(run_id, Enum.map(parts, & &1.stream))
 
-    close(record, opened, outcome, %Summary{}, %{}, run_id, true)
+    close(record, opened, outcome, summary, %{}, run_id, true)
   end
 
   # The training wave, and the memory it built between its parts.
   defp train_wave(record, opened, parts) do
     case wave(parts, "train") do
       [] ->
-        {:ok, record, nil}
+        {:ok, record, nil, %Summary{}}
 
       wave ->
-        with {:ok, record} <- run_wave(record, opened, wave, nil) do
-          merge_memories(record, opened, wave)
+        case run_wave(record, opened, wave, nil) do
+          {:ok, record, carried} ->
+            case merge_memories(record, opened, wave) do
+              {:ok, record, memory} -> {:ok, record, memory, carried}
+              {:error, reason, record} -> {:error, reason, record, carried}
+            end
+
+          {:error, reason, record, carried} ->
+            {:error, reason, record, carried}
+
+          {:stopped, record, carried} ->
+            {:stopped, record, carried}
         end
     end
   end
 
-  defp eval_wave(record, opened, parts, memories) do
+  defp eval_wave(record, opened, parts, memories, trained) do
     case wave(parts, "eval") do
       [] ->
-        {:ok, record, memories}
+        {:ok, record, memories, trained}
 
       wave ->
-        with {:ok, record} <- run_wave(record, opened, wave, memories),
-             do: {:ok, record, memories}
+        case run_wave(record, opened, wave, memories) do
+          {:ok, record, carried} ->
+            {:ok, record, memories, Summary.merge(trained, carried)}
+
+          {:error, reason, record, carried} ->
+            {:error, reason, record, Summary.merge(trained, carried)}
+
+          {:stopped, record, carried} ->
+            {:stopped, record, Summary.merge(trained, carried)}
+        end
     end
   end
 
@@ -504,8 +525,8 @@ defmodule Monty.Studio.Jobs.Run do
       # A stop that arrived before this wave started: not one part of it steps,
       # and the parts it would have stepped stay `queued` until the run settles
       # them as `skipped` — nothing happened to them, which is the truth about a
-      # wave that never ran.
-      {:stopped, record}
+      # wave that never ran. Nothing was added to the run either.
+      {:stopped, record, %Summary{}}
     else
       step_wave(record, opened, wave, memory)
     end
@@ -522,14 +543,28 @@ defmodule Monty.Studio.Jobs.Run do
       |> Enum.to_list()
 
     record = Enum.reduce(results, record, fn result, record -> collect(result, record) end)
+    carried = carried(results)
 
     case Enum.find(results, &broken?/1) do
       {:ok, {:error, part, reason}} ->
-        {:error, "part #{part.index + 1} of #{part.of} stopped: #{inspect(reason)}", record}
+        {:error, "part #{part.index + 1} of #{part.of} stopped: #{inspect(reason)}", record,
+         carried}
 
       nil ->
-        if Enum.any?(results, &stopped?/1), do: {:stopped, record}, else: {:ok, record}
+        if Enum.any?(results, &stopped?/1),
+          do: {:stopped, record, carried},
+          else: {:ok, record, carried}
     end
+  end
+
+  # What the parts of this wave added to the run: one summary between them, and
+  # the episodes they concluded. A part that failed or was stopped before it
+  # began contributes what it got through, which is the truth about the work.
+  defp carried(results) do
+    Enum.reduce(results, %Summary{}, fn
+      {:ok, {:ok, _part, {_outcome, summary}}}, carried -> Summary.merge(carried, summary)
+      _nothing, carried -> carried
+    end)
   end
 
   defp broken?({:ok, {:error, _part, _reason}}), do: true
@@ -538,14 +573,14 @@ defmodule Monty.Studio.Jobs.Run do
   # A part that ended in a stop rather than in the work it was given: the wave it
   # is in ends there too, because the run has been asked to stop, and the parts
   # that had not started are `skipped` when the run settles.
-  defp stopped?({:ok, {:ok, _part, :stopped}}), do: true
+  defp stopped?({:ok, {:ok, _part, {outcome, _summary}}}), do: outcome == :stopped
   defp stopped?(_result), do: false
 
   # A part that has finished says so, and leaves its steps where they are: the
   # run's transcript is the parts' transcripts one after another, written once
   # when the run closes (`store_parts/2`), because a row holds one transcript and
   # four parts each writing theirs is four parts overwriting one another.
-  defp collect({:ok, {:ok, part, outcome}}, record) do
+  defp collect({:ok, {:ok, part, {outcome, _summary}}}, record) do
     steps = RunStream.count(part.stream)
     ending = status_of(outcome)
 
@@ -905,7 +940,9 @@ defmodule Monty.Studio.Jobs.Run do
       state
       | run: nil,
         record: record,
-        summary: Summary.accrue(Enum.reverse(infos), state.summary),
+        summary:
+          Summary.accrue(Enum.reverse(infos), state.summary)
+          |> tally(conclusion),
         conclusion: conclusion,
         memories: memories,
         logging: logging,
@@ -915,6 +952,14 @@ defmodule Monty.Studio.Jobs.Run do
         first_seen: run.first_seen
     }
   end
+
+  # What the end of an episode owes its run's tally: one more conclusion, under
+  # the module that made it. The last episode is not the run — whether this port
+  # recognises what Monty recognises is a question about all of them — so a run
+  # keeps a count per module, which is what the page's "across the run" line and
+  # `mix monty.run` both read.
+  defp tally(summary, conclusion),
+    do: %{summary | outcomes: Summary.tally(summary.outcomes, conclusion)}
 
   # What the end of an episode owes — its statistics, its conclusion and, when it
   # trained, the memory it left — with what each part cost. A part nobody timed is

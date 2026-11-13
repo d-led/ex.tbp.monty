@@ -81,12 +81,48 @@ defmodule Monty.Studio.Summary do
       summary
       | never_updated: never_updated(summary, setup),
         outcome: outcome,
-        outcomes: Keyword.get(options, :outcomes, %{})
+        outcomes: Keyword.get(options, :outcomes, summary.outcomes)
     }
   end
 
   defp timeouts(infos),
     do: infos |> Enum.flat_map(&Map.get(&1, :sensor_timeouts, [])) |> Enum.uniq()
+
+  @doc """
+  Two summaries added, which is what a run of several parts is.
+
+  A parallel run is one experiment in four processes, and the page that shows
+  four parts' steps shows one number: everything counted is added, the modules
+  that were fed are the modules either part fed, and the episodes each part
+  concluded are one tally.
+
+  `finish/4` computes `never_updated` again from the counts this adds up, and a
+  part's last step is not the run's, which is why both are left as `finish/4`
+  would want them rather than carried over.
+  """
+  @spec merge(t(), t()) :: t()
+  def merge(%__MODULE__{} = one, %__MODULE__{} = other) do
+    %__MODULE__{
+      steps: one.steps + other.steps,
+      duration_us: one.duration_us + other.duration_us,
+      world_us: one.world_us + other.world_us,
+      deadline_hits: one.deadline_hits + other.deadline_hits,
+      goals: one.goals + other.goals,
+      votes_sent: one.votes_sent + other.votes_sent,
+      votes_used: one.votes_used + other.votes_used,
+      actions: one.actions + other.actions,
+      inputs: merge_counts(one.inputs, other.inputs),
+      sensor_timeouts: Enum.uniq(one.sensor_timeouts ++ other.sensor_timeouts),
+      outcome: %{},
+      outcomes: merge_tally(one.outcomes, other.outcomes)
+    }
+  end
+
+  defp merge_tally(one, other) do
+    Map.merge(one, other, fn _module, left, right ->
+      Map.merge(left, right, fn _state, count, more -> count + more end)
+    end)
+  end
 
   # What the last step concluded. A run with no steps has no outcome, which is
   # not the same as a run whose modules all said nothing.
@@ -104,7 +140,9 @@ defmodule Monty.Studio.Summary do
   """
   @spec tally(map(), map()) :: map()
   def tally(tally, conclusion) when is_map(conclusion) do
-    Enum.reduce(conclusion, tally, fn {module_id, state}, tally ->
+    conclusion
+    |> Enum.reject(fn {_module_id, state} -> state in [nil, ""] end)
+    |> Enum.reduce(tally, fn {module_id, state}, tally ->
       Map.update(tally, module_id, %{state => 1}, fn per_module ->
         Map.update(per_module, state, 1, &(&1 + 1))
       end)

@@ -115,18 +115,30 @@ defmodule Monty.Studio.PluginExperiment do
   defp servable(_name, _definition), do: :ok
 
   defp motor(name, %{"motor_system" => motor}, hosts) when is_binary(motor) do
-    case RemotePolicy.among(hosts, motor, :motor_policy) do
-      {:ok, policy} -> {:ok, policy}
+    with {:ok, found} <- RemotePolicy.among(hosts, motor, :motor_policy),
+         {:ok, started} <- RemotePolicy.start(found) do
+      {:ok, started}
+    else
       {:error, why} -> {:error, "the experiment #{inspect(name)} names a motor system: #{why}"}
     end
   end
 
   defp motor(_name, _definition, _hosts), do: {:ok, nil}
 
+  # The seed a definition names is the seed the run uses. A definition that said
+  # `seed: 42` and then ran under the base config's own seed would be a record
+  # that disagrees with the thing it came from, and two runs of one experiment
+  # would differ for a reason nobody wrote down.
+  defp seeded(tree, %{"seed" => seed}) when is_integer(seed) do
+    update_in(tree, ["experiment", "config", "seed"], fn _previous -> seed end)
+  end
+
+  defp seeded(tree, _definition), do: tree
+
   defp opened(name, tree, definition, provider, policy, opts) do
     setup =
       Setup.new(
-        tree,
+        seeded(tree, definition),
         [name: name, remote_policy: policy && {:ok, policy}] ++
           Keyword.take(opts, [:world_simulator, :pretrained_dir])
       )
