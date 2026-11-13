@@ -56,12 +56,29 @@ defmodule ExTbpMonty.Cluster.Nodes do
   @spec topic() :: String.t()
   def topic, do: @topic
 
-  @doc "The cluster as a list, this node first."
+  # The last list, where a reader can take it without asking anybody. Reads are
+  # free and writes happen on a change only — at worst once per poll, and never
+  # when nothing moved.
+  @snapshot {__MODULE__, :snapshot}
+
+  @doc """
+  The cluster as a list, this node first.
+
+  Answered from the last poll rather than by asking the poller: the poller may be
+  in the middle of an `:rpc` to a peer that is slow to answer, and a page that
+  called it would wait behind that peer — a `GenServer.call` with a peer per node
+  and a timeout each is a page that can time out, which is a crash for reading a
+  list.
+
+  A node that runs alone — no poller at all — still answers, by building the list
+  a cluster of one has from this node. A poller that has not finished its first
+  poll answers the same way: slower than it will be, and never wrong.
+  """
   @spec snapshot() :: [map()]
   def snapshot do
-    case poller() do
-      nil -> of(Cluster.nodes())
-      pid -> GenServer.call(pid, :snapshot)
+    case :persistent_term.get(@snapshot, :none) do
+      :none -> of(Cluster.nodes())
+      entries -> entries
     end
   end
 
@@ -142,13 +159,11 @@ defmodule ExTbpMonty.Cluster.Nodes do
     # The first list is ready before the first page asks for it: a page opened on
     # a node that just started would otherwise wait for a poll it did not start.
     state = poll()
+    remember(state)
     schedule()
 
     {:ok, state}
   end
-
-  @impl true
-  def handle_call(:snapshot, _from, state), do: {:reply, state, state}
 
   @impl true
   def handle_info(:poll, state) do
@@ -157,10 +172,15 @@ defmodule ExTbpMonty.Cluster.Nodes do
 
     # Said only when it changed: a page that re-rendered every three seconds for
     # nothing would be a page that never stops working.
-    if entries != state, do: announce(entries)
+    if entries != state do
+      remember(entries)
+      announce(entries)
+    end
 
     {:noreply, entries}
   end
+
+  defp remember(entries), do: :persistent_term.put(@snapshot, entries)
 
   defp announce(entries) do
     Phoenix.PubSub.broadcast(ExTbpMonty.PubSub, @topic, {:cluster_nodes, entries})
@@ -177,13 +197,6 @@ defmodule ExTbpMonty.Cluster.Nodes do
       Logger.warning("cluster nodes: could not list the nodes: #{inspect(error)}")
 
       of([node()])
-  end
-
-  defp poller do
-    case Process.whereis(__MODULE__) do
-      nil -> nil
-      pid -> pid
-    end
   end
 
   # The version on a node that is not there is `nil`, which is what `alive:
