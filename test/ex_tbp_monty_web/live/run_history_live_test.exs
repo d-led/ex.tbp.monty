@@ -450,6 +450,43 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       refute inputs =~ "0, 1, 2, 3,"
     end
 
+    # Twelve rows, four of them the Configuration panel's own facts in another
+    # vocabulary, and one with nothing after it. What a reader wants first is what
+    # this run was *asked* for.
+    test "does not repeat the configuration, and does not draw empty rows", %{conn: conn} do
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 100,
+          inputs: %{
+            "episodes" => 140,
+            "groups" => [],
+            "learning_modules" => ["learning_module_0"],
+            "sensors" => ["patch", "view_finder"],
+            "train_epochs" => 3,
+            "eval_epochs" => 14,
+            "world" => "mujoco"
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      inputs = view |> element("#run-inputs") |> render()
+
+      # The run's own choices stay.
+      assert inputs =~ "episodes"
+      assert inputs =~ "mujoco"
+
+      # The ones the panel below states in the config's words do not, and neither
+      # does a row with nothing in it.
+      refute inputs =~ "learning_modules"
+      refute inputs =~ "sensors"
+      refute inputs =~ "train_epochs"
+      refute inputs =~ "eval_epochs"
+      refute inputs =~ "groups"
+    end
+
     # The reason the step path exists: a step the worker publishes is in memory on
     # this node, so showing it must not ask the database anything. A page that
     # read the record per step competed with the run it was watching — the reason

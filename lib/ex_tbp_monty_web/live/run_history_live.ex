@@ -67,6 +67,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # kept out of the table of everything else.
   @said_above ["reason", "technical"]
 
+  # The inputs that name what the config already names: the Configuration panel
+  # below states the sensors, the learning modules and the epochs in the config's
+  # own vocabulary, and the Inputs panel is about what this run was *asked* for.
+  @stated_in_configuration ~w(eval_epochs learning_modules sensors train_epochs)
+
   # A step's number restarts in every episode, so it alone does not name a line:
   # the page appends as a run grows, and a stream with two lines of one id is not
   # a page. A run recorded before a step said which episode it was in is one
@@ -2263,11 +2268,18 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     """
   end
 
+  # What a person reads first: the choices this run was started with, one line
+  # each. Two kinds of row are not here. The empty one — an input nobody set says
+  # nothing, and a row with nothing after it is width spent on nothing — and the
+  # ones `@stated_in_configuration` names, which the panel below says better.
   defp inputs(%{inputs: inputs}) do
     inputs
+    |> Enum.reject(fn {key, value} -> key in @stated_in_configuration or blank?(value) end)
     |> Enum.sort_by(fn {key, _value} -> key end)
     |> Enum.map(&input_line/1)
   end
+
+  defp blank?(value), do: value in [nil, "", %{}, []]
 
   # A divided run's `parts` is a list of maps — the episodes each part was given,
   # and the stream its steps are kept in while it runs — and printing that is
