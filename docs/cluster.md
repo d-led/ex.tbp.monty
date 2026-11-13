@@ -321,7 +321,7 @@ Three things carry a part across nodes, and each had to be true first:
 A part is an owner, not a work item. It has a row, a claim, a lease and a
 transcript file of its own, so the question a reader of this design asks — _are
 partitions stateless workers or resumable experiment owners?_ — is answered by
-naming the four things that make the second true:
+naming the things that make the second true:
 
 | the question                            | where it is answered                                                                                        |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
