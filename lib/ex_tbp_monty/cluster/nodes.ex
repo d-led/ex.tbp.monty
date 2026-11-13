@@ -37,6 +37,15 @@ defmodule ExTbpMonty.Cluster.Nodes do
   # caller, it repeats, and a page is never waiting behind it.
   @probe_ms 500
 
+  # Where a change to the list is announced. Phoenix's default pubsub adapter is
+  # `Phoenix.PubSub.PG2`, which reaches every connected node, so a page on one
+  # node hears about a peer that joined another.
+  @topic "cluster:nodes"
+
+  @doc "The topic a page subscribes to hear the list change."
+  @spec topic() :: String.t()
+  def topic, do: @topic
+
   @doc "The cluster as a list, this node first."
   @spec snapshot() :: [map()]
   def snapshot do
@@ -103,10 +112,19 @@ defmodule ExTbpMonty.Cluster.Nodes do
   def handle_call(:snapshot, _from, state), do: {:reply, state, state}
 
   @impl true
-  def handle_info(:poll, _state) do
+  def handle_info(:poll, state) do
     schedule()
+    entries = poll()
 
-    {:noreply, poll()}
+    # Said only when it changed: a page that re-rendered every three seconds for
+    # nothing would be a page that never stops working.
+    if entries != state, do: announce(entries)
+
+    {:noreply, entries}
+  end
+
+  defp announce(entries) do
+    Phoenix.PubSub.broadcast(ExTbpMonty.PubSub, @topic, {:cluster_nodes, entries})
   end
 
   defp schedule, do: Process.send_after(self(), :poll, @poll_ms)

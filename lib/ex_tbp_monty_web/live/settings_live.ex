@@ -120,6 +120,9 @@ defmodule ExTbpMontyWeb.SettingsLive do
           <p :if={@cluster.why_not} id="cluster-why-not" class="text-xs text-base-content/60">
             {@cluster.why_not}
           </p>
+          <p id="cluster-cookie" class="text-xs text-base-content/60">
+            cookie: {@cluster.cookie}
+          </p>
         </section>
       </section>
     </Layouts.app>
@@ -142,7 +145,8 @@ defmodule ExTbpMontyWeb.SettingsLive do
     %{
       nodes: nodes,
       summary: summary(nodes),
-      why_not: ExTbpMonty.Node.why_not()
+      why_not: ExTbpMonty.Node.why_not(),
+      cookie: ExTbpMonty.Node.cookie_source()
     }
   end
 

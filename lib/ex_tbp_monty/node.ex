@@ -110,7 +110,6 @@ defmodule ExTbpMonty.Node do
 
   @doc """
   A node name as a directory name.
-
   A node's name is `name@host`, and `@` and `:` are exactly the characters a path
   cannot carry everywhere (a Windows path cannot hold `:` at all). Everything
   outside letters, digits, the dot, the dash and the underscore becomes an
@@ -122,5 +121,35 @@ defmodule ExTbpMonty.Node do
     node_name
     |> to_string()
     |> String.replace(~r/[^A-Za-z0-9._-]/, "_")
+  end
+
+  @doc """
+  Which cookie this node shares with its peers, said as a sentence and never as
+  the cookie itself.
+
+  The cookie is the cluster's password: two nodes that do not share one are two
+  clusters that believe they are one, and silently so — the blueprint this design
+  came from records exactly that failure. A page that *printed* the cookie would
+  hand it to anybody who can open a settings screen, so what is said here is where
+  it came from, which is the part a reader can act on.
+
+  `MONTY_COOKIE` is the name a `mix` run reads (see `scripts/cluster-node.sh`); a
+  release reads `RELEASE_COOKIE`, which `rel/env.sh.eex` fills from `NODE_COOKIE`
+  when that is set. Without either, every VM of one user shares
+  `~/.erlang.cookie`, which is why several nodes on one machine need to agree on
+  nothing.
+  """
+  @spec cookie_source() :: String.t()
+  def cookie_source do
+    cond do
+      not distributed?() ->
+        "this node is not a named node, so it shares no cookie"
+
+      System.get_env("MONTY_COOKIE") not in [nil, ""] ->
+        "set by MONTY_COOKIE, the same on every node that is meant to join"
+
+      true ->
+        "the ~/.erlang.cookie of the user that started it"
+    end
   end
 end

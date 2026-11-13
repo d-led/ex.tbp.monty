@@ -120,5 +120,17 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
 
       assert has_element?(view, "#system-Node")
     end
+
+    # The cookie is the cluster's password, so the page says where it came from
+    # and never what it is: a settings screen somebody screenshots is not a place
+    # to print one.
+    test "says where the shared cookie comes from, and does not print it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      cookie = view |> element("#cluster-cookie") |> render()
+
+      assert cookie =~ "cookie:"
+      assert cookie =~ "cookie of the user" or cookie =~ "shares no cookie"
+    end
   end
 end

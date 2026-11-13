@@ -38,5 +38,32 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
     assert has_element?(view, "#cluster-nodes[title]")
   end
 
+  test "a page hears a peer join while it is open", %{conn: conn} do
+    configure(enabled: true, seeds: [])
+
+    {:ok, view, _html} = live(conn, ~p"/settings")
+    assert view |> element("#cluster-nodes") |> render() =~ "1 node"
+
+    # Exactly what the poller announces when the list changes, delivered the way
+    # it delivers it: the page re-renders on it, which is how the footer follows a
+    # node joining without anybody reloading.
+    entries =
+      ExTbpMonty.Cluster.Nodes.of([node(), :"peer@127.0.0.1"], fn _ -> %{version: "0.1.3"} end)
+
+    Phoenix.PubSub.broadcast(
+      ExTbpMonty.PubSub,
+      ExTbpMonty.Cluster.Nodes.topic(),
+      {:cluster_nodes, entries}
+    )
+
+    # PubSub delivery is a message to the LiveView, so the assertion has to be
+    # after the LiveView has handled it: asking for its state is the answer that
+    # everything before it has been processed, and it is not a sleep.
+    _ = :sys.get_state(view.pid)
+
+    assert view |> element("#cluster-nodes") |> render() =~ "2 nodes"
+    assert view |> element("#cluster-nodes") |> render() =~ "peer_127.0.0.1"
+  end
+
   defp configure(settings), do: Application.put_env(:ex_tbp_monty, :cluster, settings)
 end

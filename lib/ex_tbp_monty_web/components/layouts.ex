@@ -383,8 +383,6 @@ defmodule ExTbpMontyWeb.Layouts do
   attr :repo, :string, default: nil, doc: "the repository the octocat links to"
 
   def footer(assigns) do
-    assigns = assign(assigns, :cluster, cluster())
-
     ~H"""
     <footer class="border-t border-base-300 bg-base-100/60">
       <div class="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-4 text-xs text-base-content/60 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
@@ -395,17 +393,13 @@ defmodule ExTbpMontyWeb.Layouts do
           is one of several changes what a run's numbers mean. A node that runs
           alone shows nothing here: it has no cluster to report, and “1 node” in
           the chrome of every page would be noise about a setting nobody turned
-          on. The settings page is where the list itself lives. --%>
-          <.link
-            :if={@cluster}
-            id="cluster-nodes"
-            navigate={~p"/settings"}
-            title={@cluster.title}
-            class="inline-flex items-center gap-1 hover:opacity-70"
-          >
-            <.icon name="hero-server-stack-mini" class="size-3.5" />
-            <span class="font-mono">{@cluster.label}</span>
-          </.link>
+          on. The badge is a component so that it can hear a peer join by
+          itself — `ExTbpMontyWeb.ClusterBadge` says why that matters. --%>
+          <.live_component
+            :if={ExTbpMonty.Cluster.enabled?()}
+            module={ExTbpMontyWeb.ClusterBadge}
+            id="cluster-badge"
+          />
 
           <%!--
             The whole build as one sentence in the tooltip, the short label in
@@ -457,22 +451,6 @@ defmodule ExTbpMontyWeb.Layouts do
     :ex_tbp_monty
     |> Application.get_env(:source, [])
     |> Keyword.get(:repo)
-  end
-
-  # What the footer says about the cluster, or `nil` on a node that runs alone.
-  #
-  # The list is the poller's answer rather than a question asked of the peers
-  # while a page renders: an `:rpc` to a node that has just died waits for its
-  # timeout, and a footer is not a place to wait.
-  defp cluster do
-    if ExTbpMonty.Cluster.enabled?() do
-      nodes = ExTbpMonty.Cluster.Nodes.snapshot()
-
-      %{
-        label: "#{length(nodes)} node#{if length(nodes) == 1, do: "", else: "s"}",
-        title: Enum.map_join(nodes, ", ", &"#{&1.name} #{&1.version || "no answer"}")
-      }
-    end
   end
 
   # The run that built this release, when a pipeline did. A footer link to a

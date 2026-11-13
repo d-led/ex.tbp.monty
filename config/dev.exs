@@ -3,17 +3,29 @@ import Config
 # The repo this machine runs. `ExTbpMonty.Database.repo_module/0` asks the
 # environment when nothing is configured, and a development machine has a
 # Postgres of its own rather than a file — say so here, once.
-config :ex_tbp_monty, :repo, ExTbpMonty.Repo.Postgres
+#
+# `MONTY_DB=sqlite` is the exception, and it exists for one thing: several nodes
+# of this application on one machine (`process-compose.yaml`), where each node
+# keeps its own file under `nodes/<its name>` and there is no server to point at.
+#
+# What it deliberately does *not* do is configure that file: which repo it is, and
+# where its file lives, are `ExTbpMonty.Database`'s answers, and they are given in
+# `config/runtime.exs`. This file cannot ask the application anything — a dev
+# config is evaluated before the modules are compiled, and the call raises
+# `UndefinedFunctionError` (it did).
+if System.get_env("MONTY_DB") != "sqlite" do
+  config :ex_tbp_monty, :repo, ExTbpMonty.Repo.Postgres
 
-# Configure your database
-config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "ex_tbp_monty_dev",
-  stacktrace: true,
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+  # Configure your database
+  config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
+    username: "postgres",
+    password: "postgres",
+    hostname: "localhost",
+    database: "ex_tbp_monty_dev",
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 10
+end
 
 # The studio shows what happened; the console keeps the structured log. SQL at
 # debug level is far too chatty to be useful in development.
@@ -38,10 +50,18 @@ config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
   code_reloader: true,
   debug_errors: true,
   secret_key_base: "0x7o+lWzH/iyrxzFC00Z5szS5dBsP20uWCRBb45X2a31QHQDMN7PUhJPrHEAaXCD",
-  watchers: [
-    esbuild: {Esbuild, :install_and_run, [:ex_tbp_monty, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:ex_tbp_monty, ~w(--watch)]}
-  ],
+  # Assets are built once, by one node. Several development nodes on one machine
+  # share a checkout and a bundle, so a node that joined a cluster takes the
+  # bundle that is there rather than having a watcher of its own write the same
+  # files as every other node's: `mix assets.build` is how it is refreshed.
+  watchers:
+    if(System.get_env("MONTY_CLUSTER") in [nil, ""],
+      do: [
+        esbuild: {Esbuild, :install_and_run, [:ex_tbp_monty, ~w(--sourcemap=inline --watch)]},
+        tailwind: {Tailwind, :install_and_run, [:ex_tbp_monty, ~w(--watch)]}
+      ],
+      else: []
+    ),
   # The tab reloads itself when the bundle, the stylesheet or a page changes.
   #
   # Without this there was no reloader at all: a hook lives in `app.js`, the

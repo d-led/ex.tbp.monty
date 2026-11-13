@@ -47,9 +47,46 @@ cluster_seeds =
   |> Enum.reject(&(&1 == ""))
   |> Enum.map(&String.to_atom/1)
 
-config :ex_tbp_monty, :cluster,
-  enabled: System.get_env("MONTY_CLUSTER", "false") in ~w(true 1) or cluster_seeds != [],
-  seeds: cluster_seeds
+cluster_on? = System.get_env("MONTY_CLUSTER", "false") in ~w(true 1) or cluster_seeds != []
+
+config :ex_tbp_monty, :cluster, enabled: cluster_on?, seeds: cluster_seeds
+
+# A named node in a cluster keeps its own folder — its database, its runs, its own
+# output under `nodes/<its name>`; a node that runs alone keeps the one it always
+# had. Decided from the same value the line above was set from, and *here* rather
+# than at application start, because every VM reads this file: the `mix run
+# --no-start` process that migrates a node's database never starts the
+# application, and a folder decided there was the shared one (it was, and the
+# migration landed in the wrong file).
+#
+# The name is `ExTbpMonty.Node.safe_name/1` — the node's own name with everything a
+# path cannot hold replaced — and `:nonode@nohost` never gets one.
+data_dir_name =
+  if cluster_on? and node() != :nonode@nohost,
+    do: ExTbpMonty.Node.safe_name(node())
+
+# Written *now* as well as configured below, and the difference is not cosmetic: a
+# `config/2` in this file is applied after the whole file has been evaluated, and
+# the SQLite repository's own configuration — a few lines down — asks
+# `Monty.Paths.database()`, which reads this. Without the immediate write a named
+# node migrated the *shared* file and left its own folder empty (it did).
+Application.put_env(:ex_tbp_monty, :data_dir_name, data_dir_name)
+config :ex_tbp_monty, :data_dir_name, data_dir_name
+
+# A development node that keeps its runs in a file (`MONTY_DB=sqlite`, which is
+# what `process-compose.yaml` starts): the same four answers the release gives
+# itself below, for the same reason — and given *here* because this file is
+# evaluated after the application is compiled, so `ExTbpMonty.Database` can be
+# asked. `config/dev.exs` can only say which repo is not wanted, because at that
+# point the module does not exist yet.
+if config_env() == :dev and System.get_env("MONTY_DB") == "sqlite" do
+  repo = ExTbpMonty.Database.repo_module()
+
+  config :ex_tbp_monty, :repo, repo
+  config :ex_tbp_monty, ecto_repos: [repo]
+  config :ex_tbp_monty, repo, ExTbpMonty.Database.repo()
+  config :ex_tbp_monty, Oban, repo: repo, engine: ExTbpMonty.Database.oban_engine()
+end
 
 # Which port a development or test run dials Postgres on. `docker-compose.yml`
 # publishes it on a port of this project's own rather than the default one,

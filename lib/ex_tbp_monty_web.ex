@@ -55,7 +55,18 @@ defmodule ExTbpMontyWeb do
       # connection opens and one when it closes, and the reason if it closes
       # badly (`ExTbpMontyWeb.Telemetry.ConnectionLog`). A page being debugged
       # says the same by putting `log: :debug` back on its own module.
+      #
+      # `on_mount`: every page hears the cluster change, so the footer's node
+      # count follows a peer joining or leaving without anybody reloading. A
+      # component cannot subscribe by itself — the parent has to receive and
+      # `send_update/3` — and this is that parent clause, once, for every page.
+      #
+      # Spelled as the `on_mount` macro rather than `use Phoenix.LiveView,
+      # on_mount: [...]`: the macro appends to the attribute `__live__/0` reads,
+      # while the `use` option is shadowed by that same attribute list — a page
+      # with no other hook would silently run nothing.
       use Phoenix.LiveView, log: false
+      on_mount {ExTbpMontyWeb.ClusterLive, :default}
 
       unquote(html_helpers())
     end
