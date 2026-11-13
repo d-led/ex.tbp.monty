@@ -403,6 +403,11 @@ defmodule Monty.Studio.Jobs.Run do
         {:error, reason, record} -> {{:failed, reason}, record}
       end
 
+    # The division closes with the run, before anything reads it: a part that
+    # started and never finished, or one the waves never reached, must not be left
+    # saying it is still queued or running about a run that has ended.
+    RunHistory.settle_parts(run_id)
+
     # The parts' steps are the run's transcript, written once and in part order,
     # and only then are the streams let go: they are the only copy until then.
     record = store_parts(record, parts)

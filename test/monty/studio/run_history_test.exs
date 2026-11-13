@@ -63,6 +63,42 @@ defmodule Monty.Studio.RunHistoryTest do
       assert second.status == "queued"
     end
 
+    # A run that ended must not leave the division describing work in progress:
+    # a part that started and did not finish is `failed`, one the run never got to
+    # is `skipped`, and both say when. The same lie an abandoned run's row used to
+    # tell, one level down.
+    test "are closed when the run is over, whatever happened to them" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      :ok =
+        RunHistory.plan_parts(run.id, [
+          %{index: 0, of: 3},
+          %{index: 1, of: 3},
+          %{index: 2, of: 3}
+        ])
+
+      :ok = RunHistory.part_started(run.id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.part_finished(run.id, 0, 40)
+      :ok = RunHistory.part_started(run.id, 1, "node1_127.0.0.1")
+
+      assert :ok = RunHistory.settle_parts(run.id)
+
+      assert [
+               %{part: 0, status: "finished", steps: 40},
+               %{part: 1, status: "failed", steps: 0},
+               %{part: 2, status: "skipped", steps: 0}
+             ] = RunHistory.parts(run.id)
+
+      assert RunHistory.parts(run.id) |> Enum.all?(&(&1.finished_at != nil))
+    end
+
+    test "close nothing for a run that was never divided" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      assert :ok = RunHistory.settle_parts(run.id)
+      assert RunHistory.parts(run.id) == []
+    end
+
     test "are none for a run that is not there, or was never divided" do
       {:ok, run} = RunHistory.start(@attributes)
 

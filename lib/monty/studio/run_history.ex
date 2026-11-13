@@ -790,6 +790,35 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
+  Closes the division: nothing is left saying a finished run is still working.
+
+  A part that started and never finished — a wave that failed around it, a run
+  stopped between waves — becomes `failed`; one the run never got to becomes
+  `skipped`. Both carry the moment, so a page can say when the run's attempt at
+  that part ended.
+
+  Called by the worker once the waves are over, whatever the outcome: the rows
+  describe an attempt, and an attempt that ended must not look like one in
+  progress.
+  """
+  @spec settle_parts(binary()) :: :ok
+  def settle_parts(run_id) do
+    with {:ok, uuid} <- Ecto.UUID.cast(run_id) do
+      moment = now()
+
+      _ =
+        from(part in Part, where: part.run_id == ^uuid and part.status == "queued")
+        |> Repo.update_all(set: [status: "skipped", finished_at: moment, updated_at: moment])
+
+      _ =
+        from(part in Part, where: part.run_id == ^uuid and part.status == "running")
+        |> Repo.update_all(set: [status: "failed", finished_at: moment, updated_at: moment])
+    end
+
+    :ok
+  end
+
+  @doc """
   The parts of a run, in the order the division numbered them.
 
   Empty for a run that was not divided, which is the run of one part: there is no

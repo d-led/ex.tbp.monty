@@ -20,7 +20,10 @@ defmodule Monty.Studio.RunHistory.Part do
 
   alias Monty.Studio.RunHistory.Run
 
-  @statuses ~w(queued running finished failed)
+  # `skipped` is a part the run never got to — a wave that failed before it, or a
+  # run stopped between waves. Without it a settled run would leave rows saying
+  # `queued` for ever, which is the same lie an abandoned run's row used to tell.
+  @statuses ~w(queued running finished failed skipped)
 
   @typedoc """
   One part's row: which part of how many, what state it is in, and the node that

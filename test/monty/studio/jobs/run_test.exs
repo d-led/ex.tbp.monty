@@ -438,6 +438,10 @@ defmodule Monty.Studio.Jobs.RunTest do
       parts = RunHistory.parts(closed.id)
 
       assert Enum.map(parts, &{&1.part, &1.status}) == [{0, "finished"}, {1, "finished"}]
+
+      # Nothing in the division is left describing work in progress about a run
+      # that has ended: `settle_parts/1` closes whatever the waves did not.
+      assert Enum.all?(parts, &(&1.status in ["finished", "failed", "skipped"]))
       assert Enum.all?(parts, &(&1.node == Monty.Paths.data_dir_name()))
       assert Enum.all?(parts, &(&1.finished_at != nil))
       assert Enum.sum(Enum.map(parts, & &1.steps)) == length(closed.log)
