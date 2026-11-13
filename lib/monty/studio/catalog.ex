@@ -11,6 +11,7 @@ defmodule Monty.Studio.Catalog do
   listing every experiment is cheap enough to do on a page load.
   """
 
+  alias ExTbpMonty.Cluster.Nodes
   alias Monty.Config.Source
 
   # The groups that shape *what runs*: the model's modules and the corpus it is
@@ -82,6 +83,36 @@ defmodule Monty.Studio.Catalog do
       nil -> read(conf_dir)
       stamp -> cached({__MODULE__, :experiments, stamp}, fn -> read(conf_dir) end)
     end
+  end
+
+  @doc """
+  The experiments this **cluster** offers that no config here defines: what the
+  plugin hosts bring.
+
+  A plugin experiment is defined by the plugin, so nothing about it is copied into
+  this catalogue: `Monty.Studio.PluginExperiment.open/2` asks the host that
+  defined it, and a plugin that changes its definition is never a stale entry
+  here. This list says *what exists and where*, which is what a page needs to show
+  it and what a person needs to find it instead of knowing its name beforehand.
+
+  The names arrive free with the cluster poll — a plugin host answers
+  `MontyPlugin.Registry.identity/0` from its own `:pg` (`ExTbpMonty.Cluster.Nodes`
+  carries `plugins` per entry) — so listing them costs no message and no registry
+  of our own. An experiment this node's own configs define wins over a plugin's:
+  two things of one name is one experiment, and the config here is the one a
+  reader can read.
+  """
+  @spec plugin_experiments() :: [%{name: String.t(), host: String.t(), node: node()}]
+  def plugin_experiments do
+    ours = MapSet.new(experiments(), & &1.name)
+
+    Nodes.snapshot()
+    |> Enum.flat_map(fn entry ->
+      for %{"kind" => "experiment", "name" => name} <- entry.plugins,
+          not MapSet.member?(ours, name),
+          do: %{name: name, host: entry.name, node: entry.node}
+    end)
+    |> Enum.uniq_by(& &1.name)
   end
 
   @doc """
