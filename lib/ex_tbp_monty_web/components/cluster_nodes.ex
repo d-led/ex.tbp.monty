@@ -85,14 +85,23 @@ defmodule ExTbpMontyWeb.ClusterNodes do
         The other direction of the same question. A node's row says what it can
         do; this says who can do a thing — and it is the only place where a tag
         two nodes spell differently shows up as a tag with one node under it.
+
+        Indented like the node lists above, and in two columns: a tag is a key and
+        the nodes under it are its value, so they line up as a table rather than
+        as a sentence that happens to be short. `contents` puts each row's two
+        spans into the list's own columns, which is what makes the columns line up
+        across rows.
       --%>
       <div :if={@capabilities != []} class="space-y-0.5 pt-1">
         <p class="text-xs font-semibold text-base-content/90">What this cluster can do</p>
-        <ul id="cluster-capabilities" class="space-y-0.5 text-xs">
+        <ul
+          id="cluster-capabilities"
+          class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 ps-2 text-xs"
+        >
           <li
             :for={{tag, names} <- @capabilities}
             id={"capability-" <> ExTbpMonty.Node.safe_name(tag)}
-            class="flex flex-wrap items-baseline gap-2"
+            class="contents"
           >
             <span class="font-mono text-base-content/70">{tag}</span>
             <span class="truncate text-base-content/50">{Enum.join(names, ", ")}</span>
