@@ -37,7 +37,15 @@ Application.put_env(:ex_tbp_monty, :monty_libraries_dir, library)
 {:ok, opened} =
   Monty.Studio.open("base_config_10distinctobj_surf_agent", world_simulator: :cad)
 
-{:ok, run} = Run.start(opened.setup, steps: steps, mode: :eval, episode: 0, epoch: 0)
+# The seed is the exploration the policy draws — the world starts in the pose the
+# *part* decides — so a probe of one seed says what that exploration did, and the
+# same probe of another says whether the run's failure was the seed's.
+seed = System.get_env("CAD_SEED")
+
+setup =
+  if seed in [nil, ""], do: opened.setup, else: %{opened.setup | seed: String.to_integer(seed)}
+
+{:ok, run} = Run.start(setup, steps: steps, mode: :eval, episode: 0, epoch: 0)
 
 # The config's own recognition policy is what ends an episode, so the probe
 # asks it each step rather than counting to a number of its own.

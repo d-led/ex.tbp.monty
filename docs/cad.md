@@ -166,6 +166,27 @@ scene, not a config, knows where the object is.
    | plate | boss and an off-centre hole  | **4** — seeds 1, 3, 5, 7      |
    | blend | a 40 × 30 × 20 rounded block | **0**                         |
 
+   What the six failing seeds fail at, asked of the runs themselves. The plate
+   against its own memory, probed with `CAD_SEED` on three of them:
+
+   | seed | steps | terminal | objects possible | distinct rotations left |
+   | ---- | ----- | -------- | ---------------- | ----------------------- |
+   | 0    | 500   | nil      | `["plate"]`      | 1099                    |
+   | 2    | 500   | nil      | `["plate"]`      | 8                       |
+   | 4    | 500   | nil      | `["plate"]`      | 58                      |
+   | 1    | 418   | `:match` | `["plate"]`      | 339                     |
+
+   So the part is identified in every one of them — the right object is the only
+   one left after five hundred steps — and what does not happen is the pose
+   settling. Recognition is a conjunction: one object _and_ a nameable pose, and
+   on these seeds only the first half arrives inside the config's own budget.
+
+   The last column is the probe's honest negative result: the size of the
+   rotation set does **not** separate the two outcomes — 8 and 1099 both fail,
+   339 passes — so it is not a proxy for `unique_pose?/4` and should not be read
+   as one. It is printed because it is what the module can be asked for from
+   outside, not because it explains anything.
+
    The control row is what makes the rest of the table readable.
    `CAD_SENSE_ONLY=1` leaves the sensed part out of the memory, and the answer
    is _no conclusion_ rather than a confident wrong name: the run did not
