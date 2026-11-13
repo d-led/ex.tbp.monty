@@ -15,8 +15,8 @@ defmodule ExTbpMontyWeb.SettingsLive do
 
   use ExTbpMontyWeb, :live_view
 
-  alias Monty.Studio.{Settings, System}
   alias ExTbpMonty.Cluster.Capabilities
+  alias Monty.Studio.{Settings, System}
 
   @impl true
   def mount(_params, _session, socket) do
