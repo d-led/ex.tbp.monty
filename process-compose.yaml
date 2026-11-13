@@ -124,6 +124,17 @@ processes:
         host: 127.0.0.1
         port: 4001
         path: "/"
+      # A cold boot compiles, and both nodes share one `_build`: the second one
+      # waits on the first one's Mix lock ("Waiting for lock on the build
+      # directory"), so its endpoint is not listening for a minute or more. With
+      # no delay the probe reads that as unhealthy, the supervisor sends SIGTERM,
+      # `mix phx.server` shuts down **cleanly**, and the node is `Completed` — it
+      # never comes back. What is left in the log is the plugins retrying the
+      # handshake against a name epmd still advertises: "invalid challenge reply".
+      initial_delay_seconds: 120
+      period_seconds: 5
+      timeout_seconds: 5
+      failure_threshold: 24
 
   node2:
     command: "elixir --name node2@127.0.0.1 -S mix phx.server"
@@ -140,6 +151,13 @@ processes:
         host: 127.0.0.1
         port: 4002
         path: "/"
+      # The same patience as node1, and for the same reason: on a cold boot the
+      # two nodes take turns over the Mix lock, so the probe must not read
+      # "still compiling" as "unhealthy".
+      initial_delay_seconds: 120
+      period_seconds: 5
+      timeout_seconds: 5
+      failure_threshold: 24
 
   # Not a studio node: a plugin host, in the same cluster, from a project of its
   # own. It has no HTTP to probe and no database to migrate — it registers what it
