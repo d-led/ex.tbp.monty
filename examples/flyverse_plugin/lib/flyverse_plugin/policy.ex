@@ -105,6 +105,13 @@ defmodule FlyversePlugin.Policy do
   # four neurons produces in a 20 ms window.
   @wish_scale 2.0
 
+  # The animal's steering is asymmetric: its two descending-neuron populations are
+  # not identical instruments, and the same imbalance of spikes turns it further
+  # one way than the other. That is why a walking fly traces curves and never a
+  # line. The gain below one is the weaker side; the wander turns the wish over
+  # often enough that the weaker side still gets walked.
+  @right_gain 0.8
+
   # The wander: a small rate added to one side and taken from the other, turning
   # over every `@wander_steps`. A fly with nothing in view is not aimed at
   # anything, and a network perfectly balanced between two halves would walk a
@@ -117,6 +124,15 @@ defmodule FlyversePlugin.Policy do
   # flyverse's `MOTOR_TAU_S`: the low-pass its own body applies to a motor
   # read-out before the body acts on it.
   @motor_tau_s 0.030
+
+  # The looming reflex, which is not the standoff. A fly's LC4 descends on a
+  # growth *rate*, and what it commands is an escape: something that was already
+  # in view and suddenly fills more of it is not walked at, whatever the network
+  # was saying. `@loom_floor` is the nearness (`1/d`) of a metre — below it the
+  # view held nothing to loom at, and a first appearance is a landing, not an
+  # approach. `@loom_threshold` is the growth in one step that counts as a loom.
+  @loom_floor 1.0
+  @loom_threshold 0.5
 
   # flyverse's `DT_MS`, in seconds: the tick a window is counted in. A plan
   # counts ticks, and the wish is a first-order update over the time they took.
@@ -253,6 +269,7 @@ defmodule FlyversePlugin.Policy do
         | wish: wish,
           spikes: window.spikes,
           last: window,
+          nearness: window.nearness,
           steps: simulation.steps + 1
       }
 
@@ -373,7 +390,13 @@ defmodule FlyversePlugin.Policy do
 
     case Native.reset(simulation.sim) do
       :ok ->
-        {:ok, policy, put(state, policy.sim, %{simulation | wish: 0.0, spikes: 0})}
+        {:ok, policy,
+         put(state, policy.sim, %{
+           simulation
+           | wish: 0.0,
+             spikes: 0,
+             nearness: {0.0, 0.0}
+         })}
 
       {:error, {code, sentence}} ->
         {:error, "#{code}: #{sentence}"}
@@ -451,6 +474,7 @@ defmodule FlyversePlugin.Policy do
            wish: 0.0,
            spikes: 0,
            steps: 0,
+           nearness: {0.0, 0.0},
            last: %{left: 0, right: 0, spikes: 0, rates: [0.0, 0.0]}
          }}
 
@@ -460,7 +484,8 @@ defmodule FlyversePlugin.Policy do
   end
 
   defp step(simulation, rows) do
-    {left_nearness, right_nearness} = Percept.nearness(rows)
+    nearness = Percept.nearness(rows)
+    {left_nearness, right_nearness} = nearness
     wander = wander(simulation.steps)
 
     rates = [
@@ -475,7 +500,9 @@ defmodule FlyversePlugin.Policy do
            left: Enum.at(counts, 0, 0),
            right: Enum.at(counts, 1, 0),
            spikes: spikes,
-           rates: rates
+           rates: rates,
+           nearness: nearness,
+           loom: loom(simulation.nearness, nearness)
          }}
 
       {:error, {code, sentence}} ->
@@ -496,16 +523,18 @@ defmodule FlyversePlugin.Policy do
 
   defp result(policy, wish, window, percept, observations) do
     [left_hz, right_hz] = window.rates
+    depth = mean_depth(percept, @visible)
 
     %MotorPolicyResult{
-      actions: [action(policy, wish, mean_depth(percept, @visible), observations)],
+      actions: [action(policy, wish, depth, window.loom, observations)],
       telemetry: %{
         left_hz: left_hz,
         right_hz: right_hz,
         left_spikes: window.left,
         right_spikes: window.right,
         spikes: window.spikes,
-        wish: wish
+        wish: wish,
+        loom: window.loom
       }
     }
   end
@@ -536,12 +565,12 @@ defmodule FlyversePlugin.Policy do
   # the patch, and the network decides which way, because the sign of the wish
   # is the side its readouts preferred. That is Monty's own
   # `MoveTangentially`-between-touches cycle, made one action instead of four.
-  defp action(%__MODULE__{} = policy, wish, depth, observations) do
+  defp action(%__MODULE__{} = policy, wish, depth, loom, observations) do
     %OrientHorizontal{
       agent_id: policy.agent_id,
       rotation_degrees: turn(policy, wish, centring(observations, policy.agent_id)),
       left_distance: side(wish) * slide(policy, depth),
-      forward_distance: crawl(policy, depth)
+      forward_distance: crawl(policy, depth, loom)
     }
   end
 
@@ -558,10 +587,31 @@ defmodule FlyversePlugin.Policy do
   # nearer than the standoff backs away by the shortfall, and one further from it
   # takes the crawl step; the surface keeps a fingertip's distance without the
   # policy being told where the surface's normal is.
-  defp crawl(%__MODULE__{} = policy, depth) when depth >= @desired_object_distance,
+  #
+  # The loom outranks all of that: something already in view that suddenly fills
+  # half again as much of it is closing on the sensor, and the step is the other
+  # way. It is bounded by the crawl step, so a loom costs a step's retreat rather
+  # than a flight, and it is measured from the view rather than from the depth the
+  # percept reports, so it needs nothing the world does not already show.
+  defp crawl(%__MODULE__{} = policy, _depth, loom) when loom > @loom_threshold do
+    -min(loom * policy.distance, @touch_stride)
+  end
+
+  defp crawl(%__MODULE__{} = policy, depth, _loom) when depth >= @desired_object_distance,
     do: policy.distance
 
-  defp crawl(_policy, depth), do: depth - @desired_object_distance
+  defp crawl(_policy, depth, _loom), do: depth - @desired_object_distance
+
+  # How fast what is in view is growing, as the growth of the nearer half over the
+  # nearness it had. A view that held nothing has nothing to have grown from: what
+  # arrives there is a landing, and the standoff rule has already spoken about it.
+  defp loom({previous_left, previous_right}, {left, right}) do
+    before = max(previous_left, previous_right)
+
+    if before < @loom_floor,
+      do: 0.0,
+      else: max(max(left - previous_left, right - previous_right) / before, 0.0)
+  end
 
   # Which way along the surface the network leans. A wish of nought has no side
   # to prefer, and a step has to go somewhere: left is the fly's own convention
@@ -599,9 +649,16 @@ defmodule FlyversePlugin.Policy do
   # towards the side the view finder sees something on — so the two add, and the
   # sum is held to a full bend so neither term can spin the fly past its gait.
   defp turn(policy, wish, centring) do
-    rotation = centring - policy.turn_degrees * :math.tanh(wish / @wish_scale)
+    rotation = centring - bend(policy, wish)
     rotation |> max(-@max_turn_degrees) |> min(@max_turn_degrees)
   end
+
+  # The bend the network asked for, at the strength the side it asked for is
+  # worth. A wish to the right is a negative angle here, which is the weak side.
+  defp bend(policy, wish) when wish < 0.0,
+    do: policy.turn_degrees * @right_gain * :math.tanh(wish / @wish_scale)
+
+  defp bend(policy, wish), do: policy.turn_degrees * :math.tanh(wish / @wish_scale)
 
   # How far to turn to put what the view finder sees back in the middle of the
   # picture, in the frame `rotation_degrees` uses: negative is left. The nearer

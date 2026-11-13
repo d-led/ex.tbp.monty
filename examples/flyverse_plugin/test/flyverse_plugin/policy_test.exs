@@ -5,7 +5,7 @@ defmodule FlyversePlugin.PolicyTest do
 
   alias FlyversePlugin.{Demonstrator, Pack, Policy}
 
-  alias Monty.Frameworks.Actions.{MoveForward, OrientHorizontal}
+  alias Monty.Frameworks.Actions.OrientHorizontal
 
   setup do
     directory =
@@ -130,6 +130,51 @@ defmodule FlyversePlugin.PolicyTest do
 
     assert one_way * other_way < 0.0,
            "a lean one way slides one way: #{one_way} then #{other_way}"
+  end
+
+  # The animal's steering is asymmetric: its two descending-neuron populations
+  # are not identical instruments, and the same imbalance of spikes turns it
+  # further one way than the other. A mirrored scene is the same imbalance, so a
+  # mirrored scene is where the asymmetry shows.
+  test "the same imbalance bends it further to the left than to the right", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {left, policy, state} = step(policy, state, [[0.02, 0.02, 100.0, 100.0]])
+    {:ok, policy, state} = Policy.reset(policy, state)
+    {right, _policy, _state} = step(policy, state, [[100.0, 100.0, 0.02, 0.02]])
+
+    assert [%OrientHorizontal{rotation_degrees: leftwards}] = left.actions
+    assert [%OrientHorizontal{rotation_degrees: rightwards}] = right.actions
+
+    assert abs(leftwards) > abs(rightwards),
+           "left #{leftwards} against right #{rightwards}"
+  end
+
+  # LC4's reflex, which the standoff rule cannot see: the standoff says where the
+  # patch is, and a thing that is *closing* is one the view remembers. Something
+  # already in view that suddenly fills half again as much of it is not walked
+  # at — the step goes the other way, by no more than a step, because a loom is
+  # a reason to stop closing rather than to fly across the room.
+  test "something that looms is stepped away from, while a slow approach is not", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    # The patch is at the standoff throughout, so the standoff rule alone would
+    # crawl at every one of these steps.
+    {_first, policy, state} =
+      step(policy, state, observations([[0.2, 0.2, 100.0, 100.0]]), touching(0.025))
+
+    {closer, policy, state} =
+      step(policy, state, observations([[0.15, 0.15, 100.0, 100.0]]), touching(0.025))
+
+    {closest, _policy, _state} =
+      step(policy, state, observations([[0.08, 0.08, 100.0, 100.0]]), touching(0.025))
+
+    assert [%OrientHorizontal{forward_distance: 0.004}] = closer.actions,
+           "a third nearer is an approach, not a loom"
+
+    assert [%OrientHorizontal{forward_distance: retreat}] = closest.actions
+    assert retreat < 0.0, "half again as large is a loom: stepped away from"
+    assert abs(retreat) <= 0.05, "and no further than a step"
   end
 
   # The slide is what the fly does *at* the surface. While there is room to walk
