@@ -324,6 +324,23 @@ of 4 parts done`) and names each part's node in the count's title. Today every
   so that the day it is not, the page and the record already say so. They cost no
   message: a page reads a table.
 
+  A part is in one of six states — `queued`, `running`, `finished`, `failed`,
+  `stopped`, `skipped` — and every way a run ends closes all of them: the worker
+  settles the rows itself when it is done (`queued` becomes `skipped` for a part
+  no wave reached, `running` becomes `failed` for one that never came back), and
+  the Reaper settles them when the job died with its node. A part the stop
+  reached is `stopped`, with the steps it managed, which is the run's own word for
+  the same moment. `Monty.Studio.RunHistory.Part.ended?/1` is the one answer to
+  "how many parts are there nothing more to happen to", so the page's count and an
+  assistant's report cannot disagree about it.
+
+- **Stopping a divided run reaches every part.** A part steps in a process of its
+  own, so `Jobs.Run.stop/1` sends `:stop` to the job _and_ to each part's
+  stream — the streams read from the record, because a stop may come from a page,
+  an MCP tool, or a peer's `:rpc` call. A wave that starts with a stop already
+  waiting does not start at all, and a part that ends `stopped` ends its wave and
+  the run with it, so the evaluation wave never runs after a stop.
+
 ### What one database gives you today, measured
 
 Two development nodes told about **one** Postgres
