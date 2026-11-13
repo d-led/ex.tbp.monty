@@ -155,7 +155,8 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
 
     # The tags say a machine hosts plugins; a reader's next question is which.
     # The list is what the poller's own answer carried, so the component asks
-    # nothing and no plugin is called to draw a page.
+    # nothing and no plugin is called to draw a page. The name is the part a run
+    # asks for, so it is what the line says first; the kind follows in brackets.
     test "a node that brings plugins names them" do
       html =
         render_component(ExTbpMontyWeb.ClusterNodes, %{
@@ -163,8 +164,25 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
           nodes: [plugin_host()]
         })
 
-      assert html =~ "experiment first_object"
-      assert html =~ "motor_policy follow_chamfers"
+      offered = offered_by(html, "plugins-example_plugin_127.0.0.1")
+
+      assert offered =~ "first_object" and offered =~ "(experiment)"
+      assert offered =~ "follow_chamfers" and offered =~ "(motor_policy)"
+    end
+
+    # A node is a machine and a plugin is a piece fitted into one, and the page
+    # says so before it says anything else about either.
+    test "a node is drawn as a server, and each plugin it offers as a puzzle piece" do
+      html =
+        render_component(ExTbpMontyWeb.ClusterNodes, %{
+          id: "cluster-nodes",
+          nodes: [plugin_host(), peer()]
+        })
+
+      document = LazyHTML.from_fragment(html)
+
+      assert Enum.count(LazyHTML.query(document, ".hero-server")) == 2
+      assert Enum.count(LazyHTML.query(document, ".hero-puzzle-piece")) == 2
     end
 
     test "a node with no plugins to show gets no line" do
@@ -185,6 +203,15 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
           %{"kind" => "motor_policy", "name" => "follow_chamfers"}
         ]
       })
+    end
+
+    # The id carries a dot, and `#plugins-example_plugin_127.0.0.1` is not a
+    # selector — the same reason the node's own name is asked for by text.
+    defp offered_by(html, id) do
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(~s([id="#{id}"]))
+      |> LazyHTML.text()
     end
 
     defp peer do

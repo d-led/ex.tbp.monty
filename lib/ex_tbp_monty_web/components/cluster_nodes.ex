@@ -87,7 +87,7 @@ defmodule ExTbpMontyWeb.ClusterNodes do
         two nodes spell differently shows up as a tag with one node under it.
       --%>
       <div :if={@capabilities != []} class="space-y-0.5 pt-1">
-        <p class="text-xs text-base-content/60">What this cluster can do</p>
+        <p class="text-xs font-semibold text-base-content/90">What this cluster can do</p>
         <ul id="cluster-capabilities" class="space-y-0.5 text-xs">
           <li
             :for={{tag, names} <- @capabilities}
@@ -113,9 +113,9 @@ defmodule ExTbpMontyWeb.ClusterNodes do
   defp group(assigns) do
     ~H"""
     <div class="space-y-0.5">
-      <p class="text-xs font-medium text-base-content/80">
+      <p class="text-xs font-semibold text-base-content/90">
         {@title}
-        <span id={@count_id} class="font-normal text-base-content/50">{length(@nodes)}</span>
+        <span id={@count_id} class="font-normal text-base-content/40">{length(@nodes)}</span>
       </p>
       <ul :if={@nodes != []} id={@id} class="space-y-0.5 ps-2 text-xs">
         <li
@@ -123,6 +123,13 @@ defmodule ExTbpMontyWeb.ClusterNodes do
           id={"node-" <> entry.name}
           class="flex flex-wrap items-baseline gap-2 font-mono"
         >
+          <%!--
+            A machine, drawn as one. The icon is what makes a reader read the
+            name as a node rather than as a version string beside a link, and it
+            is the only mark in the row: a node is a server whether or not it
+            brings anything.
+          --%>
+          <.icon name="hero-server" class="size-3.5 shrink-0 text-base-content/60" />
           <%!--
             A peer is a place a reader can go: its name is a link to the page it
             answers on, which is the address it advertised. This node's own name
@@ -133,20 +140,31 @@ defmodule ExTbpMontyWeb.ClusterNodes do
           <.link
             :if={entry.web && not entry.self}
             href={entry.web}
-            class={["truncate select-all hover:underline", not entry.alive && "text-base-content/50"]}
+            class={[
+              "truncate select-all font-semibold hover:underline",
+              not entry.alive && "text-base-content/50"
+            ]}
             title={"Open " <> entry.web <> " — or copy the name into MONTY_SEEDS"}
           >
             {name(entry)}
           </.link>
           <span
             :if={is_nil(entry.web) || entry.self}
-            class={["truncate select-all", not entry.alive && "text-base-content/50"]}
+            class={[
+              "truncate select-all font-semibold",
+              not entry.alive && "text-base-content/50"
+            ]}
             title={hint(entry)}
           >
             {name(entry)}
           </span>
           <span class="text-base-content/50">{entry.version || "no answer"}</span>
           <span :if={entry.self} class="badge badge-xs badge-ghost">this node</span>
+          <%!--
+            Dimmer than the plugin names below it: this is the node's own answer
+            about what it provides, and the list underneath is the same fact said
+            in the words a run uses.
+          --%>
           <span class="text-base-content/40">{Enum.join(entry.capabilities, " ")}</span>
           <%!--
             Which plugins this machine brings, not only that it brings some. The
@@ -154,15 +172,29 @@ defmodule ExTbpMontyWeb.ClusterNodes do
             is the question a run that names a module is really asking. The list
             came with the poller's own answer (`Cluster.Nodes`), so nothing here
             asks a plugin anything.
+
+            A plugin is a piece fitted into a node, so it carries the puzzle
+            piece — and the name is what a run asks for, so it is the part of the
+            line that reads first, with the kind smaller beside it. One to a
+            line, because three names on one line are three names nobody scans.
           --%>
-          <span
+          <div
             :if={plugins(entry) != []}
             id={"plugins-" <> entry.name}
-            class="w-full text-base-content/40 ps-2"
+            class="w-full space-y-0.5 ps-2"
             title="What this node offers, as its own plugin registry lists it"
           >
-            {Enum.map_join(plugins(entry), " · ", &"#{&1["kind"]} #{&1["name"]}")}
-          </span>
+            <span :for={plugin <- plugins(entry)} class="flex items-center gap-1">
+              <.icon
+                name="hero-puzzle-piece"
+                class="size-3 shrink-0 text-base-content/40"
+              />
+              <span class="font-medium text-base-content/80">{plugin_name(plugin)}</span>
+              <span :if={plugin_kind(plugin)} class="font-sans text-base-content/45">
+                ({plugin_kind(plugin)})
+              </span>
+            </span>
+          </div>
         </li>
       </ul>
       <p :if={@nodes == []} class="ps-2 text-xs text-base-content/50">{@empty}</p>
@@ -187,6 +219,15 @@ defmodule ExTbpMontyWeb.ClusterNodes do
   # existed, and a node that says nothing about its plugins is a node with none to
   # show.
   defp plugins(entry), do: Map.get(entry, :plugins, [])
+
+  # One offered plugin, as the registry names it. A kind is part of the answer and
+  # a name without one would not say what the thing is; an entry that lost its kind
+  # on the way (a snapshot from before this shape) is still worth naming.
+  defp plugin_name(%{"name" => name}), do: name
+  defp plugin_name(_plugin), do: "unnamed"
+
+  defp plugin_kind(%{"kind" => kind}), do: kind
+  defp plugin_kind(_plugin), do: nil
 
   defp hint(entry) do
     case Map.get(entry, :address) do
