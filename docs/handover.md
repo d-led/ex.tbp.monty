@@ -2591,8 +2591,9 @@ not spread; this note is only the method and the traps.
 The visible parts beyond the chrome: `studio_runs.node` says whose run a row is
 (written once, in `RunHistory.start/1`, from the same setting that chose the
 folder; `nil` on a node that runs alone, and the runs list shows the column only
-when clustering is on); `/runs` has a read-only "Running on other nodes" panel
-(`Cluster.Peers` asks, `ClusterWeb.ClusterPeerRuns` draws, every row links to the
+when clustering is on); `/runs` has a read-only "On other nodes" panel
+(`Cluster.Peers` asks each peer for the runs it has last dealt with, settled or
+not, `ClusterWeb.ClusterPeerRuns` draws them, every row links to the
 peer's own page for it); and `monty_cluster_nodes` answers an MCP client with the
 nodes, their builds and `by_capability`.
 

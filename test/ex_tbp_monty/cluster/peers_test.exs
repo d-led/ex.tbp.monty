@@ -3,7 +3,7 @@ defmodule ExTbpMonty.Cluster.PeersTest do
   What a page is told about the other nodes' work: which peers are worth asking,
   and what a peer answers when it is asked.
 
-  The answer a peer gives is this node's own `local_in_flight/0` — the same
+  The answer a peer gives is this node's own `local_recent/0` — the same
   function, over `:rpc` — so these cases state both halves.
   """
 
@@ -17,14 +17,14 @@ defmodule ExTbpMonty.Cluster.PeersTest do
   test "a cluster of one has nothing to report" do
     # There is no other node whose work this page could show, and an empty panel
     # is the honest answer rather than a panel naming this node.
-    assert Peers.in_flight() == []
+    assert Peers.recent() == []
   end
 
   test "a peer's runs come back under the node that has them" do
     entries = [this_node(), peer("gpu_127.0.0.1")]
 
     groups =
-      Peers.in_flight(entries, fn _name ->
+      Peers.recent(entries, fn _name ->
         [
           %{
             id: "abc",
@@ -43,44 +43,45 @@ defmodule ExTbpMonty.Cluster.PeersTest do
   test "this node is not asked about its own work" do
     # Its own runs are the list this page already draws; asking itself would be a
     # row twice.
-    assert Peers.in_flight([this_node()], fn _name -> flunk("asked this node") end) == []
+    assert Peers.recent([this_node()], fn _name -> flunk("asked this node") end) == []
   end
 
   # A peer the poller could not reach is a peer whose list the reader is not
   # shown: an empty panel beside its name says nothing a reader can act on.
   test "a peer that did not answer is not a panel" do
-    assert Peers.in_flight([peer("gone_1")], fn _name -> nil end) == []
+    assert Peers.recent([peer("gone_1")], fn _name -> nil end) == []
 
     dead = %{peer("gone_1") | alive: false}
 
-    assert Peers.in_flight([dead], fn _name -> flunk("asked a node that is not alive") end) == []
+    assert Peers.recent([dead], fn _name -> flunk("asked a node that is not alive") end) == []
   end
 
-  # What a peer gets when it asks this node: the runs it has not settled, and no
-  # transcript — a row of somebody else's list does not need 53 MB of pictures.
-  test "this node answers with the runs it has not settled" do
+  # What a peer gets when it asks this node: its latest runs with their states and
+  # no transcript — a row of somebody else's list does not need 53 MB of pictures.
+  # A settled run is in the answer too: "what has that machine been doing" is the
+  # question a cluster's other nodes are asked.
+  test "this node answers with its latest runs, settled or not" do
     {:ok, queued} = RunHistory.start(@attributes)
     {:ok, finished} = RunHistory.start(Map.put(@attributes, :experiment, "tutorial/other"))
     {:ok, _closed} = RunHistory.finish(finished, %{"steps" => 1})
 
-    answers = Peers.local_in_flight()
-
-    assert [%{id: id, experiment: "tutorial/first_experiment", state: "queued", steps: 0}] =
-             answers
+    assert [%{id: closed_id, experiment: "tutorial/other", state: "finished"}, %{id: id}] =
+             Peers.local_recent()
 
     assert id == queued.id
+    assert closed_id == finished.id
   end
 
   # One runs table for the whole cluster is a deployment away, and there this
-  # matters: a peer that answered with every unsettled run in the table would hand
-  # this page its own runs back as somebody else's.
+  # matters: a peer that answered with every run in the table would hand this page
+  # its own runs back as somebody else's.
   test "a run another node owns is not this node's answer" do
     name = Monty.Paths.data_dir_name() || "node1_127.0.0.1"
 
     {:ok, theirs} = in_a_node("node2_127.0.0.1", fn -> RunHistory.start(@attributes) end)
     {:ok, ours} = in_a_node(name, fn -> RunHistory.start(@attributes) end)
 
-    assert [%{id: id}] = Peers.local_in_flight()
+    assert [%{id: id}] = Peers.local_recent()
     assert id == ours.id
     refute id == theirs.id
   end

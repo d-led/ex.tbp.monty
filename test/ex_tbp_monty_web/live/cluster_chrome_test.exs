@@ -105,9 +105,9 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
     end
   end
 
-  # What the other nodes are working on: read-only, and each run is a link to the
-  # place the run actually is — the peer's own page for it.
-  describe "what the other nodes are working on" do
+  # What the other nodes have been running: read-only, and each run is a link to
+  # the place the run actually is — the peer's own page for it.
+  describe "what the other nodes have been running" do
     test "a peer's run is named and links to the peer's own page for it" do
       html =
         render_component(ExTbpMontyWeb.ClusterPeerRuns, %{
@@ -129,7 +129,7 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
 
       document = LazyHTML.from_fragment(html)
 
-      assert html =~ "Running on other nodes"
+      assert html =~ "On other nodes"
 
       # Two places to go: the node, and the run on that node. Nothing here acts on
       # the run itself — its files and its worker are there.
@@ -150,18 +150,6 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
       {:ok, view, _html} = live(conn, ~p"/runs")
 
       refute has_element?(view, "#peer-runs")
-    end
-
-    defp peer do
-      %{
-        node: :"gpu@127.0.0.1",
-        name: "gpu_127.0.0.1",
-        version: "0.1.3",
-        self: false,
-        alive: true,
-        capabilities: ["gpu", "monty"],
-        web: "http://127.0.0.1:4002"
-      }
     end
   end
 end

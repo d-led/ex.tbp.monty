@@ -1757,12 +1757,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # The staleness check this page asked for when it loaded.
   def handle_info(:reap, socket), do: {:noreply, after_reap(socket, Reaper.sweep())}
 
-  # What the peers are working on, asked for after the first render and asked
+  # What the peers have been running, asked for after the first render and asked
   # again on a clock — one timer, re-armed by the scan it belongs to, so a page
   # has one of them however often it is asked.
   def handle_info(:scan_peers, socket) do
-    {:noreply,
-     socket |> assign(:peer_runs, ExTbpMonty.Cluster.Peers.in_flight()) |> keep_scanning()}
+    {:noreply, socket |> assign(:peer_runs, ExTbpMonty.Cluster.Peers.recent()) |> keep_scanning()}
   end
 
   # The run said something: a step, the end of it, or a failure. The worker

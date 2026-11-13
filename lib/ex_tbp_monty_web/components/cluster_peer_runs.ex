@@ -1,10 +1,12 @@
 defmodule ExTbpMontyWeb.ClusterPeerRuns do
   @moduledoc """
-  What the other nodes are working on, under this node's own list of runs.
+  What the other nodes have been running, under this node's own list of runs.
 
   Read-only, and it says so: a run's files, its worker and its page are on the
   node that owns it, so the one thing a reader can do with a row here is follow it
-  to the node it belongs to (`ExTbpMonty.Cluster.Peers` asks, this draws).
+  to the node it belongs to (`ExTbpMonty.Cluster.Peers` asks, this draws). A row's
+  state is printed beside it, so a run still going and one that settled an hour
+  ago are told apart without opening either.
 
   A component because the list is not known when the page first draws — it is an
   `:rpc` per peer — and because a component is where a list that arrives late
@@ -22,9 +24,9 @@ defmodule ExTbpMontyWeb.ClusterPeerRuns do
   def render(assigns) do
     ~H"""
     <section id="peer-runs" class="space-y-2 rounded-box border border-base-300 bg-base-100 p-3">
-      <h2 class="text-xs font-semibold text-base-content/60">Running on other nodes</h2>
+      <h2 class="text-xs font-semibold text-base-content/60">On other nodes</h2>
       <p class="text-[11px] text-base-content/50">
-        Their runs, their files — what this page can do with one is open it there.
+        Their latest runs, their files — what this page can do with one is open it there.
       </p>
       <ul class="space-y-2 text-xs">
         <li
