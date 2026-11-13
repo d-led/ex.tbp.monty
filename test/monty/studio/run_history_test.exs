@@ -45,6 +45,22 @@ defmodule Monty.Studio.RunHistoryTest do
       end)
     end
 
+    # One runs table for a cluster means the node that asked and the node that
+    # claimed the job can be two different nodes, and the one a reader has to open
+    # to see the run is the second: its worker, its steps, and in a release its
+    # files are there. So the column follows the claim.
+    test "an asking node gives way to the node that claims the run" do
+      in_a_cluster(fn ->
+        {:ok, run} = RunHistory.start(@attributes)
+        assert run.node == "node1_127.0.0.1"
+
+        {:ok, claimed} = in_a_node("node2_127.0.0.1", fn -> RunHistory.mark_running(run) end)
+
+        assert claimed.node == "node2_127.0.0.1"
+        assert RunHistory.get(run.id).node == "node2_127.0.0.1"
+      end)
+    end
+
     test "says running only when a worker claims it" do
       # Asking for a run is not running it: the job may wait for a slot, or never
       # be picked up. The two words are the difference between "somebody asked
@@ -769,9 +785,13 @@ defmodule Monty.Studio.RunHistoryTest do
   # A node that was given a name keeps its own folder, and its runs say so. The
   # value is what `config/runtime.exs` puts there at boot; a test puts it there
   # itself, because a test is not a node.
-  defp in_a_cluster(fun) do
+  defp in_a_cluster(fun), do: in_a_node("node1_127.0.0.1", fun)
+
+  # The same, for a test that needs two nodes in one VM: run something as one,
+  # then as the other.
+  defp in_a_node(name, fun) do
     previous = Application.get_env(:ex_tbp_monty, :data_dir_name)
-    Application.put_env(:ex_tbp_monty, :data_dir_name, "node1_127.0.0.1")
+    Application.put_env(:ex_tbp_monty, :data_dir_name, name)
     on_exit(fn -> Application.put_env(:ex_tbp_monty, :data_dir_name, previous) end)
 
     fun.()

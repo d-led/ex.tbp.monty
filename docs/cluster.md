@@ -157,10 +157,9 @@ That is not an oversight, it is where the two hard problems are:
   table for the whole cluster (`DATABASE_URL` pointing every node at one Postgres,
   which `ExTbpMonty.Database` already supports, in development too) or a merged
   view over the nodes' own tables. The row already says whose run it is —
-  `studio_runs.node`, the node's folder name, written when the run is recorded —
-  so a merged view has the column it needs; the runs list shows it only on a node
-  that was asked to cluster, because with one node it is a column saying "this
-  one" on every row.
+  `studio_runs.node`, the node's folder name — so a merged view has the column it
+  needs; the runs list shows it only on a node that was asked to cluster, because
+  with one node it is a column saying "this one" on every row.
 - **A part writes files and publishes its steps into memory.** A part's log and
   pictures go to `Artifacts.dir/1` and its steps to `Monty.Studio.RunStream`, on
   the node performing it; the run that owns the parts reads both, from its own
@@ -190,9 +189,11 @@ mix phx.server`), a run recorded on node1:
   two dev nodes share them by accident).
 
 One consequence worth deciding before relying on it: with one table, `node` means
-_who recorded the run_, and the node that **performs** it may be a different one
-(the run above was node1's and ran on node2). The column's meaning — recorder or
-performer — and the folder the files land in have to be the same answer.
+_who has the run_. While it is queued that is the node that asked; the worker
+overwrites it with its own name when it claims the job (the same setting, read at
+`mark_running/1`), because that is the node whose memory holds the steps and, in a
+release, whose folder holds the files. So the column always points at the node a
+reader has to open — and the node whose queue took the job is the one it names.
 
 Until those are answered, `Nodes.offering/1` answers a question nobody acts on
 yet, and a cluster of several nodes is several studios that see each other and

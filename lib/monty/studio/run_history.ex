@@ -46,11 +46,12 @@ defmodule Monty.Studio.RunHistory do
       # be picked up at all. `mark_running/1` is the worker's word that it began.
       |> Map.put_new(:status, "queued")
       |> Map.put_new(:started_at, DateTime.utc_now())
-      # Which node owns it, which is the node recording it: the run's row, its
-      # log and its pictures are in this node's folder, and a cluster of several
-      # nodes has several run lists. The name is the folder's name
-      # (`Monty.Paths.data_dir_name/0`), `nil` on a node that runs alone — the
-      # same value that decided the folder, so the two cannot disagree.
+      # Which node has it, which while it is queued is the node that asked. The
+      # worker overwrites it with its own name when it claims the job, because with
+      # one runs table for a cluster those are not always the same node. The name is
+      # the folder's name (`Monty.Paths.data_dir_name/0`), `nil` on a node that
+      # runs alone — the same value that decided the folder, so the two cannot
+      # disagree.
       |> Map.put_new(:node, Monty.Paths.data_dir_name())
 
     %Run{}
@@ -419,6 +420,13 @@ defmodule Monty.Studio.RunHistory do
   A record is written when somebody asks for a run, and asking is not running:
   the job may wait for a slot, or never be picked up at all. This is the worker's
   own word, and the only thing on a record that may say `running`.
+
+  It is also where `node` becomes the **node that has the run**. A row is recorded
+  by the node that asked and performed by the node that claimed the job, and with
+  one runs table for a cluster those are not always the same node — so the name is
+  written here, from the same setting, once the answer is known. The run's live
+  steps, its worker and (in a release) its files are that node's, which is why the
+  column means the node a reader has to open rather than the one that asked.
   """
   @spec mark_running(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
   def mark_running(%Run{status: "running"} = run), do: {:ok, run}
@@ -428,7 +436,7 @@ defmodule Monty.Studio.RunHistory do
   # on its tick.
   def mark_running(%Run{} = run) do
     run
-    |> Ecto.Changeset.change(status: "running")
+    |> Ecto.Changeset.change(status: "running", node: Monty.Paths.data_dir_name())
     |> Repo.update()
   end
 
