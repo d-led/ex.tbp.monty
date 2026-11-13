@@ -17,6 +17,16 @@ defmodule FlyversePlugin.Percept do
   an unrendered pixel arrives) contributes nothing rather than an infinite
   closeness.
 
+  ## The nearest thing, not the average of the frame
+
+  A side's nearness is the closest thing on it, not the mean over its pixels. A
+  wide view is mostly room: averaging `1 / depth` across it answers the distance
+  to the walls, and a mug half a metre away on one side of the frame moves that
+  average by almost nothing — which is why an approach driven by the mean is a
+  lazy arc that takes a hundred and fifty steps. What a fly turns toward is what
+  looms. Beyond `@horizon` metres a pixel is landscape and not a destination: the
+  far wall of this world is 799 m away, and `1/799` is noise dressed as a drive.
+
   ## Which half is which
 
   The image is split at its middle column, and an odd column goes to the right
@@ -28,6 +38,9 @@ defmodule FlyversePlugin.Percept do
   # The sensors Monty's own configs name, in the order an agent's view is worth
   # trying them: the wide one first, because the patch is small by design.
   @preferred ["view_finder", "patch"]
+
+  # Beyond this, a depth pixel is landscape rather than a thing to walk to.
+  @horizon 10.0
 
   @doc """
   The depth image to drive from, and which sensor it came from.
@@ -91,15 +104,16 @@ defmodule FlyversePlugin.Percept do
   end
 
   @doc """
-  How close the world is on the left half and on the right half of the image.
+  How close the nearest thing is on the left half and on the right half.
 
-  Two rates in inverse metres: `0.0` for a side that saw nothing at all.
+  Two rates in inverse metres: `0.0` for a side that saw nothing within the
+  horizon at all.
   """
   @spec nearness([[number()]]) :: {float(), float()}
   def nearness(rows) do
     {left, right} = Enum.unzip(Enum.map(rows, &Enum.split(&1, div(length(&1), 2))))
 
-    {mean_nearness(left), mean_nearness(right)}
+    {nearest_nearness(left), nearest_nearness(right)}
   end
 
   defp no_image(agent_id) do
@@ -118,15 +132,18 @@ defmodule FlyversePlugin.Percept do
     {:error, "a depth image is a list of rows, and this is not one"}
   end
 
-  defp mean_nearness(rows) do
-    values = Enum.flat_map(rows, fn row -> Enum.map(row, &nearness_of/1) end)
-
-    case values do
+  defp nearest_nearness(rows) do
+    rows
+    |> Enum.flat_map(fn row -> Enum.map(row, &nearness_of/1) end)
+    |> Enum.reject(&(&1 == 0.0))
+    |> case do
       [] -> 0.0
-      values -> Enum.sum(values) / length(values)
+      values -> Enum.max(values)
     end
   end
 
-  defp nearness_of(depth) when is_number(depth) and depth > 0, do: 1.0 / depth
-  defp nearness_of(_nothing_or_invalid), do: 0.0
+  defp nearness_of(depth) when is_number(depth) and depth > 0 and depth <= @horizon,
+    do: 1.0 / depth
+
+  defp nearness_of(_nothing_or_invalid_or_far), do: 0.0
 end

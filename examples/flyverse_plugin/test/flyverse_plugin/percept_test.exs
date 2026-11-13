@@ -18,8 +18,23 @@ defmodule FlyversePlugin.PerceptTest do
 
     test "an odd column goes to the right half" do
       # One column on the left at 0.5 m (2.0), two on the right at 0.25 and
-      # 0.5 m (4.0 and 2.0): a mean of 2.0 against a mean of 3.0.
-      assert Percept.nearness([[0.5, 0.25, 0.5]]) == {2.0, 3.0}
+      # 0.5 m (4.0 and 2.0): the odd column is counted with the right half, and a
+      # side answers its nearest thing rather than its mean.
+      assert Percept.nearness([[0.5, 0.25, 0.5]]) == {2.0, 4.0}
+    end
+
+    # A wide view is mostly room, and a mean over it answers the distance to the
+    # room. One looming pixel is what a fly turns toward.
+    test "one thing near on a side makes that side near" do
+      mostly_far = [[799.0, 799.0, 0.3, 799.0]]
+
+      assert {left, right} = Percept.nearness(mostly_far)
+      assert left == 0.0
+      assert right > left + 3.0, "the one near pixel is the whole of the right's nearness"
+    end
+
+    test "the far wall is not a destination" do
+      assert Percept.nearness([[799.0, 799.0, 799.0, 799.0]]) == {0.0, 0.0}
     end
   end
 
