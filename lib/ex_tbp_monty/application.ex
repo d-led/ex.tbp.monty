@@ -9,49 +9,55 @@ defmodule ExTbpMonty.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      ExTbpMontyWeb.Telemetry,
-      # The repo this instance was started with: Postgres when `DATABASE_URL`
-      # names one, SQLite in a file otherwise.
-      ExTbpMonty.Database.repo_module(),
-      {DNSCluster, query: Application.get_env(:ex_tbp_monty, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: ExTbpMonty.PubSub},
-      # Every sensor and learning module registers here, so the step
-      # coordinator can address a module by name across restarts, and one child
-      # per running model is started under `ExTbpMonty.Core.ModelSupervisor`
-      # (module servers + step coordinator). Both are the library's own names by
-      # now: a host that starts models — this application is one — stops them
-      # with `Monty.Runtime.Model.stop/1`, which terminates a model's supervisor
-      # in the tree it was started in.
-      ExTbpMonty.Core.Supervisor,
-      # The steps of runs that are still stepping, kept in memory: a run's
-      # transcript reaches its page from here, and the database is written when
-      # the run settles rather than once per step.
-      Monty.Studio.RunStream,
-      # The pictures of those steps, drawn and written after the step is in the
-      # table: a boundary waits for the steps, not for a JPEG per sensor per
-      # step, and the drawing catches up behind it.
-      Monty.Studio.RunStream.Pictures,
-      # The one process that writes a run's steps: a boundary hands them over and
-      # steps on, so the experiment never waits for Postgres.
-      Monty.Studio.RunWriter,
-      # The readiness survey over every config, composed by one process: a page
-      # opened on a node that has just started asks for it, and every page used
-      # to compose a copy of its own (three tabs: three times all 132 configs).
-      Monty.Studio.Readiness.Cache,
-      # One child per prerequisite download, restarted never: a download either
-      # finishes or is started again deliberately.
-      {DynamicSupervisor, name: ExTbpMonty.PrerequisitesSupervisor, strategy: :one_for_one},
-      # The world: MuJoCo, through this application's own Python
-      # (`priv/monty_py`), hosted in the interpreter this application carries.
-      # One process, because a step is a model, an agent and a camera read in
-      # sequence, and two runs must not interleave inside one.
-      Monty.Simulators.Mujoco.Host,
-      # Experiment runs are queued jobs, so closing a page does not close a run.
-      {Oban, Application.fetch_env!(:ex_tbp_monty, Oban)},
-      # Start to serve requests, typically the last entry
-      ExTbpMontyWeb.Endpoint
-    ]
+    # libcluster, Horde's registry and Horde's supervisor — or nothing at all,
+    # which is every node that was not asked to join a cluster.
+    children =
+      [
+        ExTbpMontyWeb.Telemetry,
+        # The repo this instance was started with: Postgres when `DATABASE_URL`
+        # names one, SQLite in a file otherwise.
+        ExTbpMonty.Database.repo_module(),
+        {DNSCluster, query: Application.get_env(:ex_tbp_monty, :dns_cluster_query) || :ignore},
+        {Phoenix.PubSub, name: ExTbpMonty.PubSub}
+      ] ++
+        ExTbpMonty.Cluster.children() ++
+        [
+          # Every sensor and learning module registers here, so the step
+          # coordinator can address a module by name across restarts, and one child
+          # per running model is started under `ExTbpMonty.Core.ModelSupervisor`
+          # (module servers + step coordinator). Both are the library's own names by
+          # now: a host that starts models — this application is one — stops them
+          # with `Monty.Runtime.Model.stop/1`, which terminates a model's supervisor
+          # in the tree it was started in.
+          ExTbpMonty.Core.Supervisor,
+          # The steps of runs that are still stepping, kept in memory: a run's
+          # transcript reaches its page from here, and the database is written when
+          # the run settles rather than once per step.
+          Monty.Studio.RunStream,
+          # The pictures of those steps, drawn and written after the step is in the
+          # table: a boundary waits for the steps, not for a JPEG per sensor per
+          # step, and the drawing catches up behind it.
+          Monty.Studio.RunStream.Pictures,
+          # The one process that writes a run's steps: a boundary hands them over and
+          # steps on, so the experiment never waits for Postgres.
+          Monty.Studio.RunWriter,
+          # The readiness survey over every config, composed by one process: a page
+          # opened on a node that has just started asks for it, and every page used
+          # to compose a copy of its own (three tabs: three times all 132 configs).
+          Monty.Studio.Readiness.Cache,
+          # One child per prerequisite download, restarted never: a download either
+          # finishes or is started again deliberately.
+          {DynamicSupervisor, name: ExTbpMonty.PrerequisitesSupervisor, strategy: :one_for_one},
+          # The world: MuJoCo, through this application's own Python
+          # (`priv/monty_py`), hosted in the interpreter this application carries.
+          # One process, because a step is a model, an agent and a camera read in
+          # sequence, and two runs must not interleave inside one.
+          Monty.Simulators.Mujoco.Host,
+          # Experiment runs are queued jobs, so closing a page does not close a run.
+          {Oban, Application.fetch_env!(:ex_tbp_monty, Oban)},
+          # Start to serve requests, typically the last entry
+          ExTbpMontyWeb.Endpoint
+        ]
 
     # See https://elixir.hexdocs.pm/Supervisor.html
     # for other strategies and supported options

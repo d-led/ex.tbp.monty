@@ -30,6 +30,27 @@ config :ex_tbp_monty_core,
 config :ex_tbp_monty, ExTbpMontyWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# Clustering is a start-up decision, like the node's own name: `MONTY_CLUSTER=1`
+# asks for the tree that joins a cluster, and `MONTY_SEEDS` names the nodes to
+# join (`monty@10.0.0.7,monty2@10.0.0.8`). Either turns it on — a seed list alone
+# is enough, because a list of nodes to dial is already the request. No seeds
+# means gossip discovery, which is what several nodes on one machine need: they
+# cannot know each other's names in advance.
+#
+# The names become atoms because that is what a node name is. This is
+# configuration, read once at boot, not user input.
+cluster_seeds =
+  "MONTY_SEEDS"
+  |> System.get_env("")
+  |> String.split(",")
+  |> Enum.map(&String.trim/1)
+  |> Enum.reject(&(&1 == ""))
+  |> Enum.map(&String.to_atom/1)
+
+config :ex_tbp_monty, :cluster,
+  enabled: System.get_env("MONTY_CLUSTER", "false") in ~w(true 1) or cluster_seeds != [],
+  seeds: cluster_seeds
+
 # Which port a development or test run dials Postgres on. `docker-compose.yml`
 # publishes it on a port of this project's own rather than the default one,
 # because the default belongs to whichever container started first — on a machine

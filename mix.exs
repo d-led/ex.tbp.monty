@@ -135,6 +135,11 @@ defmodule ExTbpMonty.MixProject do
       # SQLite in a file otherwise. Both drivers are compiled into the release,
       # so which one is used is decided when the instance starts.
       {:ecto_sqlite3, "~> 0.26"},
+      # Clustering is an addition, not a requirement: `ExTbpMonty.Cluster` starts
+      # these only when the environment asks for a cluster (`MONTY_CLUSTER`, or a
+      # seed list), and a node that was not asked never touches either.
+      {:libcluster, "~> 3.5"},
+      {:horde, "~> 0.9"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.0"},

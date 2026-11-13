@@ -166,6 +166,12 @@ config :ex_tbp_monty, Oban,
   repo: ExTbpMonty.Repo.Postgres,
   queues: [studio: 2]
 
+# Clustering: off unless the environment asks for it. `config/runtime.exs` turns
+# it on from `MONTY_CLUSTER` or from a seed list, because which nodes to join is a
+# start-up decision — and `ExTbpMonty.Cluster.children/0` is empty while this is,
+# so a single node starts nothing it did not start before.
+config :ex_tbp_monty, :cluster, enabled: false, seeds: []
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 # The Python interpreter Monty's wandb loggers run in, in every environment.
