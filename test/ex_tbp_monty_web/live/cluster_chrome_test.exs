@@ -66,4 +66,42 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
   end
 
   defp configure(settings), do: Application.put_env(:ex_tbp_monty, :cluster, settings)
+
+  # The list is drawn from whatever it is given, and a peer is a place a reader
+  # can go: its name is a link to the address it advertised. This node's own name
+  # is text, because a link to the page a reader is already on is not a link.
+  describe "a node's name in the list" do
+    test "is a link to the address a peer advertised" do
+      html = render_component(ExTbpMontyWeb.ClusterNodes, %{id: "cluster-nodes", nodes: [peer()]})
+
+      [link] = html |> LazyHTML.from_fragment() |> LazyHTML.query("a") |> Enum.to_list()
+
+      # Asked for by text rather than by an id built from the name: a node name
+      # carries a dot, and `#node-gpu_127.0.0.1` is not a selector.
+      assert LazyHTML.text(link) |> String.trim() == "gpu_127.0.0.1"
+      assert LazyHTML.attribute(link, "href") == ["http://127.0.0.1:4002"]
+    end
+
+    test "is text when the node is this one, or has no address to link to" do
+      html =
+        render_component(ExTbpMontyWeb.ClusterNodes, %{
+          id: "cluster-nodes",
+          nodes: [%{peer() | self: true}, %{peer() | name: "quiet_1", web: nil, node: :quiet@1}]
+        })
+
+      assert html |> LazyHTML.from_fragment() |> LazyHTML.query("a") |> Enum.to_list() == []
+    end
+
+    defp peer do
+      %{
+        node: :"gpu@127.0.0.1",
+        name: "gpu_127.0.0.1",
+        version: "0.1.3",
+        self: false,
+        alive: true,
+        capabilities: ["gpu", "monty"],
+        web: "http://127.0.0.1:4002"
+      }
+    end
+  end
 end

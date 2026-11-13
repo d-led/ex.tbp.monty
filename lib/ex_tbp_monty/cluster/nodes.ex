@@ -16,7 +16,8 @@ defmodule ExTbpMonty.Cluster.Nodes do
   ## What an entry is
 
       %{node: :monty@10.0.0.7, name: "monty_10.0.0.7", self: true,
-        version: "0.1.3", capabilities: ["gpu", "monty"], alive: true}
+        version: "0.1.3", capabilities: ["gpu", "monty"],
+        web: "http://10.0.0.7:4000", alive: true}
 
   `name` is the node's name made safe for a path — the same name its data folder
   carries (`ExTbpMonty.Node.safe_name/1`), so a reader who sees a node in this
@@ -24,11 +25,13 @@ defmodule ExTbpMonty.Cluster.Nodes do
   not answer is `alive: false` with no version, which is the difference between
   "there is a node I cannot reach" and "there is no node".
 
-  `capabilities` travel with the version because both come from the same `:rpc`
-  (`identity/0`) and both are answers to "what is that node": a heterogeneous
-  cluster is one where the tags decide which node a run may go to, and a node
-  whose tags cost a second round trip would be a list that is half up to date.
-  `ExTbpMonty.Cluster.Capabilities` is the vocabulary.
+  `capabilities` and `web` travel with the version because all three come from the
+  same `:rpc` (`identity/0`) and all three are answers to "what is that node": a
+  heterogeneous cluster is one where the tags decide which node a run may go to,
+  and a node whose tags cost a second round trip would be a list that is half up
+  to date. `ExTbpMonty.Cluster.Capabilities` is the vocabulary; `web` is there so
+  a page can link to a peer's run rather than only name it, because a node name is
+  not a URL (`ExTbpMonty.Node.web_url/1`).
   """
 
   use GenServer
@@ -89,6 +92,7 @@ defmodule ExTbpMonty.Cluster.Nodes do
         self: name == node(),
         version: version,
         capabilities: capabilities_of(answer),
+        web: web_of(answer),
         alive: is_binary(version)
       }
     end)
@@ -109,15 +113,25 @@ defmodule ExTbpMonty.Cluster.Nodes do
   end
 
   @doc """
-  What this node tells a peer that asks: its node name, the build it runs and
-  what it can do.
+  What this node tells a peer that asks: its node name, the build it runs, what
+  it can do, and where it answers.
 
   Called by `:rpc` from another node's poller, so it must stay cheap and must not
   touch anything a page owns.
   """
-  @spec identity() :: %{node: node(), version: String.t(), capabilities: [String.t()]}
+  @spec identity() :: %{
+          node: node(),
+          version: String.t(),
+          capabilities: [String.t()],
+          web: String.t() | nil
+        }
   def identity do
-    %{node: node(), version: version(), capabilities: Capabilities.declared()}
+    %{
+      node: node(),
+      version: version(),
+      capabilities: Capabilities.declared(),
+      web: Node.web_url()
+    }
   end
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -189,6 +203,11 @@ defmodule ExTbpMonty.Cluster.Nodes do
   # the work that asks for nothing in particular.
   defp capabilities_of(%{} = answer), do: Capabilities.of_entry(answer)
   defp capabilities_of(_no_answer), do: []
+
+  # Where it answers, when it said. A peer that did not say, or that has no name
+  # to put in a URL, is a node a page can only name.
+  defp web_of(%{web: web}) when is_binary(web), do: web
+  defp web_of(_answer), do: nil
 
   defp version do
     case Application.spec(:ex_tbp_monty, :vsn) do

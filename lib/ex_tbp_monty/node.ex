@@ -110,6 +110,7 @@ defmodule ExTbpMonty.Node do
 
   @doc """
   A node name as a directory name.
+
   A node's name is `name@host`, and `@` and `:` are exactly the characters a path
   cannot carry everywhere (a Windows path cannot hold `:` at all). Everything
   outside letters, digits, the dot, the dash and the underscore becomes an
@@ -121,6 +122,30 @@ defmodule ExTbpMonty.Node do
     node_name
     |> to_string()
     |> String.replace(~r/[^A-Za-z0-9._-]/, "_")
+  end
+
+  @doc """
+  The address a node answers HTTP on, as a browser can open it — `nil` when the
+  name it was given has no host to build one from.
+
+  A node name is not a URL, and a page that lists what is running on a peer needs
+  one: "run it on node2" is not something a reader can click. The port is the one
+  the endpoint was configured with; the host is the host part of the node's own
+  name, because that is the address its peers reached it at — `node1@127.0.0.1`
+  answers on `127.0.0.1`, and a node named on a private network answers on that
+  network's address.
+
+  Takes the name rather than reading this VM's, so the rule can be stated for a
+  node this one is not.
+  """
+  @spec web_url(node() | String.t()) :: String.t() | nil
+  def web_url(node_name \\ name()) do
+    with host when is_binary(host) <- host_of(node_name),
+         port when is_integer(port) <- http_port() do
+      "http://#{host}:#{port}"
+    else
+      _no_address -> nil
+    end
   end
 
   @doc """
@@ -151,5 +176,26 @@ defmodule ExTbpMonty.Node do
       true ->
         "the ~/.erlang.cookie of the user that started it"
     end
+  end
+
+  # The host part of a node name, which is the address a peer dialled. A node
+  # that was never given a name is `:nonode@nohost`, and `nohost` is not an
+  # address — a short name (`:monty`, no `@`) carries none either.
+  defp host_of(node_name) do
+    with name when name != "nonode@nohost" <- to_string(node_name),
+         [_short, host] when host != "" <- String.split(name, "@") do
+      host
+    else
+      _no_host -> nil
+    end
+  end
+
+  # The port the endpoint was configured with. Read from the config rather than
+  # asked of the running endpoint, so it answers on a node that is not this one.
+  defp http_port do
+    :ex_tbp_monty
+    |> Application.get_env(ExTbpMontyWeb.Endpoint, [])
+    |> Keyword.get(:http, [])
+    |> Keyword.get(:port)
   end
 end

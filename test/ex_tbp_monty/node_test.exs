@@ -51,4 +51,25 @@ defmodule ExTbpMonty.NodeTest do
       assert Node.safe_name(:monty) == "monty"
     end
   end
+
+  # A node name is not a URL, and a page that says "the run is on node2" has to
+  # give a reader somewhere to click: the host is the one its peers dialled, the
+  # port is the one the endpoint was configured with.
+  describe "the address a node answers on" do
+    test "is the host of its own name, on the port the endpoint was given" do
+      port =
+        :ex_tbp_monty |> Application.get_env(ExTbpMontyWeb.Endpoint, []) |> get_in([:http, :port])
+
+      assert Node.web_url(:"monty@127.0.0.1") == "http://127.0.0.1:#{port}"
+      assert Node.web_url(:"monty2@10.0.0.7") == "http://10.0.0.7:#{port}"
+    end
+
+    test "is nothing at all for a node nobody could dial" do
+      # A node that was never given a name has no address, and inventing one
+      # would be a link that leads nowhere.
+      assert Node.web_url() == nil
+      assert Node.web_url(:nonode@nohost) == nil
+      assert Node.web_url(:monty) == nil
+    end
+  end
 end

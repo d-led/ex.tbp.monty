@@ -51,7 +51,25 @@ defmodule ExTbpMontyWeb.ClusterNodes do
           id={"node-" <> entry.name}
           class="flex flex-wrap items-baseline gap-2 font-mono"
         >
-          <span class={["truncate", not entry.alive && "text-base-content/50"]}>{entry.name}</span>
+          <%!--
+            A peer is a place a reader can go: its name is a link to the page it
+            answers on, which is the address it advertised. This node's own name
+            is text — a link to the page a reader is already on is not a link.
+          --%>
+          <.link
+            :if={entry.web && not entry.self}
+            href={entry.web}
+            class={["truncate hover:underline", not entry.alive && "text-base-content/50"]}
+            title={"Open " <> entry.web}
+          >
+            {entry.name}
+          </.link>
+          <span
+            :if={is_nil(entry.web) || entry.self}
+            class={["truncate", not entry.alive && "text-base-content/50"]}
+          >
+            {entry.name}
+          </span>
           <span class="text-base-content/50">{entry.version || "no answer"}</span>
           <span :if={entry.self} class="badge badge-xs badge-ghost">this node</span>
           <span class="text-base-content/40">{Enum.join(entry.capabilities, " ")}</span>

@@ -45,7 +45,8 @@ defmodule ExTbpMonty.Mcp.Tools.Cluster do
             "version" => entry.version,
             "self" => entry.self,
             "alive" => entry.alive,
-            "capabilities" => entry.capabilities
+            "capabilities" => entry.capabilities,
+            "web" => Map.get(entry, :web)
           }
         end),
       "by_capability" => Map.new(Capabilities.by_tag(entries))
@@ -90,7 +91,8 @@ defmodule ExTbpMonty.Mcp.Tools.Cluster do
       entry.name,
       entry.version || "no answer",
       entry.self && "this node",
-      entry.capabilities != [] && Enum.join(entry.capabilities, " ")
+      entry.capabilities != [] && Enum.join(entry.capabilities, " "),
+      Map.get(entry, :web)
     ]
 
     "  " <> Enum.join(Enum.reject(parts, &(&1 in [nil, false])), " · ")

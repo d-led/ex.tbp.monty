@@ -87,6 +87,25 @@ defmodule ExTbpMonty.Cluster.NodesTest do
     assert entry.capabilities == ["gpu", "world:mujoco"]
   end
 
+  # A node name is not a URL, so the address travels with the rest of the answer:
+  # a page that says a run is on a peer has to be able to link to it.
+  test "a peer says where it answers, when it says at all" do
+    [reachable] =
+      Nodes.of([:"gpu@127.0.0.1"], fn _name ->
+        %{version: "0.1.3", capabilities: ["gpu"], web: "http://127.0.0.1:4002"}
+      end)
+
+    assert reachable.web == "http://127.0.0.1:4002"
+
+    [silent] = Nodes.of([:"old@127.0.0.1"], &answered(&1, "0.1.2"))
+    assert silent.web == nil
+  end
+
+  test "it tells a peer where this one answers" do
+    assert %{web: web} = Nodes.identity()
+    assert web == ExTbpMonty.Node.web_url()
+  end
+
   test "a peer that says nothing about itself has no tags" do
     [entry] = Nodes.of([:"old@127.0.0.1"], &answered(&1, "0.1.2"))
 

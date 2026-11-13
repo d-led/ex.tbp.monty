@@ -84,6 +84,13 @@ nothing for a while, so no page ever waits behind one) and announces the list on
 `"cluster:nodes"` when it changes — only when it changes, because a page that
 re-renders every three seconds for nothing is a page that never stops working.
 
+A peer's name is a link, because a node name is not a URL and "the run is on
+node2" is not something a reader can click. The address comes from the node
+itself: its host is the host part of its own name — the address its peers dialled
+— and its port is the one its endpoint was configured with
+(`ExTbpMonty.Node.web_url/1`). A node with no name to build one from is a name
+and not a link, which is the honest thing to show.
+
 A node with no name at all cannot join anything, and the settings page says so
 with the variable and the `mix` line that would fix it.
 
@@ -162,7 +169,9 @@ migration a release applies, so the script runs those two and then serves.
 Two nodes on one machine (`4201`, `4202`, the second with
 `MONTY_CAPABILITIES=gpu,world:mujoco`): both footers said "2 nodes", both settings
 pages listed both nodes with their own tags and both tag groups, and stopping one
-node moved the footer and the list to one node with no reload.
+node moved the footer and the list to one node with no reload. On the page that
+was still open, the peer's name was a link to `http://127.0.0.1:4202` — the port
+it advertised — and this node's own name was text.
 `test/ex_tbp_monty_web/live/cluster_chrome_test.exs` and
 `test/ex_tbp_monty_web/live/settings_live_test.exs` pin the two live updates; the
 cluster's own decisions are pinned in `test/ex_tbp_monty/cluster_test.exs`,
