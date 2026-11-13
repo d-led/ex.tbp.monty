@@ -22,9 +22,16 @@ defmodule ExamplePlugin.Experiment do
   naming it would be refused: a learning module is **advertised rather than
   routed** — a step asks it thousands of times over hypotheses and a k-d tree, so
   a node running an experiment has to have the module's code, which it does not
-  have for another node's. The policy is the kind that can be called across, so
-  the definition names the policy and leaves the learning modules to the config.
+  have for another node's. The policies are the kind that can be called across, so
+  the definition names one of them and leaves the learning modules to the config.
   `docs/plugins.md` keeps the score.
+
+  ## Which policy, and why
+
+  `example_plugin.surface_stepper` moves — a step is a translation along the
+  surface — so the sensor walks the object and the learning module has something
+  to recognise. `example_plugin.spiral_scan` is offered as well and only turns in
+  place: it is the cheap smoke test, not an experiment that can succeed.
   """
 
   @doc "The name a cluster registers it under, and the name a run asks for."
@@ -54,7 +61,7 @@ defmodule ExamplePlugin.Experiment do
     %{
       "base" => "base_10simobj_surf_agent",
       "learning_modules" => [],
-      "motor_system" => ExamplePlugin.Policy.name(),
+      "motor_system" => ExamplePlugin.SurfaceStepper.name(),
       "episodes" => 1,
       "seed" => 42
     }

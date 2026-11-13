@@ -18,7 +18,7 @@ defmodule ExamplePlugin.DefinitionTest do
     assert {:ok, definition} = GenServer.call(provider.pid, :run)
 
     assert definition["base"] == "base_10simobj_surf_agent"
-    assert definition["motor_system"] == ExamplePlugin.Policy.name()
+    assert definition["motor_system"] == ExamplePlugin.SurfaceStepper.name()
   end
 
   # The learning module cannot be stepped from another node (`docs/plugins.md`),

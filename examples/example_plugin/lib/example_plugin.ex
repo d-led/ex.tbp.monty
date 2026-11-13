@@ -48,22 +48,31 @@ defmodule ExamplePlugin do
     * Settings → Nodes lists it as a plugin node, because
       `MontyPlugin.Registry.identity/0` answers the studio's question about a
       peer that does not run the studio's code;
-    * `cad_plugin_list` — the CAD server's MCP tool — names each of the three
-      with the node that offers it, and `cad_plugin_describe` asks one of them
-      what it says about itself;
-    * `mix test` in this directory holds the three descriptions to the contract,
-      registers them exactly as the release does, and steps both decisions.
+    * `cad_plugin_list` — the CAD server's MCP tool — names each of them with the
+      node that offers it, and `cad_plugin_describe` asks one what it says about
+      itself;
+    * the studio can **start the experiment defined here** and step it with the
+      policy offered here: `Monty.Studio.PluginExperiment` reads the definition
+      over the cluster, composes the config it names and calls
+      `example_plugin.surface_stepper` once per step. The run's record says both.
+    * `mix test` in this directory holds the descriptions to the contract,
+      registers them exactly as the release does, and steps their decisions.
 
   ## What it does not do
 
-  Nothing in a studio node executes a remote plugin yet: a learning module is
-  advertised, not routed, so the caller compiles the module in and the cluster's
-  job is to say what is offered where. `ExamplePlugin.Experiment.run/0` is the
-  definition a caller would read; performing it is the next piece of work, and it
-  is named as such rather than pretended.
+  A learning module is still **advertised, not routed**: `example_plugin.evidence_threshold`
+  is offered and readable, and a definition that asked for it would be refused,
+  because a node running a run has to have the module's code and this one is
+  another app's. Routing one is the next piece of work, and it is named as such
+  rather than pretended.
   """
 
-  @plugins [ExamplePlugin.Experiment, ExamplePlugin.LearningModule, ExamplePlugin.Policy]
+  @plugins [
+    ExamplePlugin.Experiment,
+    ExamplePlugin.LearningModule,
+    ExamplePlugin.Policy,
+    ExamplePlugin.SurfaceStepper
+  ]
 
   @doc "The plugins this node offers, one process each."
   @spec plugins() :: [module()]

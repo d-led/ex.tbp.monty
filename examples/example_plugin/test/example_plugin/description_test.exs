@@ -34,10 +34,11 @@ defmodule ExamplePlugin.DescriptionTest do
     end
   end
 
-  test "the three kinds a run is assembled from are each represented once" do
+  test "every kind a run is assembled from is represented, and one of them twice" do
     offered = Enum.map(ExamplePlugin.plugins(), & &1.describe()["kind"])
 
-    assert Enum.sort(offered) == Enum.sort(MontyPlugin.kinds())
+    assert Enum.sort(Enum.uniq(offered)) == Enum.sort(MontyPlugin.kinds())
+    assert Enum.count(offered, &(&1 == :motor_policy)) == 2
   end
 
   test "each plugin is registered under a name of its own" do

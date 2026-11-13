@@ -69,9 +69,27 @@ therefore namespaces its names, as the example's do.
    (`GenServer.call` to a dead remote pid exits with `:noproc`), so every caller
    invents its own answer. `RemotePolicy` invents one: a 5 s timeout, and an exit
    that becomes an `ArgumentError` naming the policy and the node it stopped on.
-5. **Only a motor policy is called.** A learning module is still advertised and
-   not routed, and an experiment offered by a plugin is a description a page can
-   read rather than a run somebody can start.
+5. **Only a motor policy is called per step; a learning module is not routed.**
+   A learning module is still advertised and not routed: a step asks it thousands
+   of times over hypotheses and a k-d tree, so the node that runs a run has to
+   have its code, and it does not have another app's. A definition naming one is
+   refused by name (`Monty.Studio.PluginExperiment`).
+
+## A plugin's experiment runs
+
+What used to be "a description a page can read" is now a run:
+`Monty.Studio.PluginExperiment` asks the plugin for its definition (`run/0`, once),
+composes the config it names here, and resolves the modules it asks for against
+what this cluster can serve. `Monty.Studio.open/2` falls through to it, so the
+`experiment page <http://localhost:4001/experiments>`_, its Run button, the queue
+and the run page are the ones that already exist — a name this node cannot
+compose is a question for the cluster.
+
+The record keeps both halves: `defined_by` (which plugin, which version, which
+node answered the definition) and `motor_policy` (which policy was called). Run on
+the local pair: `example_plugin.10simobj_surf_agent_one_episode`, one episode in
+MuJoCo, 94 steps, `outcome: learning_module_0=match` — the plugin's surface policy
+walked the sensor over the object until the learning module recognised it.
 
 ## The loop rules
 
