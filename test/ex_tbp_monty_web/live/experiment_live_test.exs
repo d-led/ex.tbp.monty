@@ -225,6 +225,35 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       refute has_element?(view, "#experiment-run-#{elsewhere.id}")
     end
 
+    # The runs topic is the cluster's, so a run recorded on a peer arrives here
+    # too. This page follows the run it can see — one this node has a row for —
+    # and following a peer's would be a page drawing a run whose steps this node
+    # never receives.
+    test "does not follow a run this node has no row for", %{conn: conn, queued: queued} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      # Following it is the id behind the History link.
+      assert view |> element("#open-history") |> render() =~ ~p"/runs/#{queued.id}"
+
+      recorded_elsewhere = %RunHistory.Run{
+        id: Ecto.UUID.generate(),
+        experiment: "base_config_10distinctobj_dist_agent",
+        status: "running",
+        steps: 10
+      }
+
+      Phoenix.PubSub.broadcast(
+        ExTbpMonty.PubSub,
+        RunHistory.topic(),
+        {:recorded, recorded_elsewhere}
+      )
+
+      _ = :sys.get_state(view.pid)
+
+      refute render(view) =~ recorded_elsewhere.id
+      assert view |> element("#open-history") |> render() =~ ~p"/runs/#{queued.id}"
+    end
+
     test "a run that is still going says how long it has been going", %{
       conn: conn,
       queued: queued

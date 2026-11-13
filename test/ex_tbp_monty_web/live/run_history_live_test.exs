@@ -706,6 +706,28 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       refute "node" in headings
     end
+
+    # Phoenix's pubsub is the distributed one, so the runs topic reaches every
+    # node: this page hears about a run recorded on a peer. That run is a row of
+    # the peer's list — its files, its worker and its page are there — and a row
+    # here would offer Stop and Delete beside a link this node cannot answer.
+    test "a run this node does not have is not a row of this list", %{conn: conn, run: run} do
+      in_a_cluster(fn ->
+        {:ok, view, _html} = live(conn, ~p"/runs")
+
+        elsewhere = %{run | id: Ecto.UUID.generate(), experiment: "someone/else"}
+
+        Phoenix.PubSub.broadcast(
+          ExTbpMonty.PubSub,
+          RunHistory.topic(),
+          {:recorded, elsewhere}
+        )
+
+        _ = :sys.get_state(view.pid)
+
+        refute has_element?(view, "#run-#{elsewhere.id}")
+      end)
+    end
   end
 
   describe "narrowing the list" do

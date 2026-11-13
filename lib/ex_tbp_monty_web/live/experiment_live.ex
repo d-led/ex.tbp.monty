@@ -1218,19 +1218,30 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # A run of this experiment was written down, or settled. The row this page
   # draws is the record the database just wrote, so a run that is still queued is
   # in the table from the moment it is queued — not when a worker picks it up.
+  #
+  # The topic is the cluster's, so a run recorded on a peer arrives here too.
+  # This page follows the run it can see: one this node has a row for. A peer's
+  # run has its files, its worker and its page on that node, and following it here
+  # would be a page drawing a run whose steps this node never receives.
   def handle_info({:recorded, run}, %{assigns: %{opened: %{name: name}}} = socket)
       when run.experiment == name do
-    {:noreply,
-     socket
-     |> put_run(run, :first)
-     |> follow_if_idle(run)}
+    if RunHistory.exists?(run.id) do
+      {:noreply,
+       socket
+       |> put_run(run, :first)
+       |> follow_if_idle(run)}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_info({:recorded, _other}, socket), do: {:noreply, socket}
 
   def handle_info({:settled, run}, %{assigns: %{opened: %{name: name}}} = socket)
       when run.experiment == name do
-    {:noreply, put_run(socket, run, :in_place)}
+    if RunHistory.exists?(run.id),
+      do: {:noreply, put_run(socket, run, :in_place)},
+      else: {:noreply, socket}
   end
 
   def handle_info({:settled, _other}, socket), do: {:noreply, socket}

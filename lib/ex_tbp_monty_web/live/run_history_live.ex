@@ -1863,15 +1863,29 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   defp refresh_own_run(socket), do: {:noreply, socket}
 
-  defp recorded(%{assigns: %{live_action: :index}} = socket, run),
-    do: {:noreply, stream_insert(socket, :runs, run, at: 0)}
+  defp recorded(%{assigns: %{live_action: :index}} = socket, run) when is_map(run) do
+    if known?(run),
+      do: {:noreply, stream_insert(socket, :runs, run, at: 0)},
+      else: {:noreply, socket}
+  end
 
   defp recorded(socket, _run), do: {:noreply, socket}
 
-  defp settled(%{assigns: %{live_action: :index}} = socket, run),
-    do: {:noreply, stream_insert(socket, :runs, run)}
+  defp settled(%{assigns: %{live_action: :index}} = socket, run) when is_map(run) do
+    if known?(run), do: {:noreply, stream_insert(socket, :runs, run)}, else: {:noreply, socket}
+  end
 
   defp settled(socket, _run), do: {:noreply, socket}
+
+  # One topic for the whole cluster — Phoenix's pubsub is the distributed one — so
+  # this page also hears about a run recorded on a *peer*. Whether that run
+  # belongs in this list is a fact this node can check rather than a policy it has
+  # to guess: a row it can act on is a row it has. With a file per node a peer's
+  # run is not here and is dropped — its files, its worker and its page are all on
+  # that node, so a row here would offer Stop and Delete beside a link this node
+  # cannot answer. With one database for the whole cluster the row is here, and
+  # the message is news like any other.
+  defp known?(%{id: id}), do: RunHistory.exists?(id)
 
   defp replay_to(socket, run, step) do
     step = step |> max(Replay.first_step(run) || 0) |> min(Replay.last_step(run) || 0)
