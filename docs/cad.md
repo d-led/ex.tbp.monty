@@ -134,8 +134,28 @@ scene, not a config, knows where the object is.
    `needs: [:monty]` — is still worth having, because it is what the finished
    140-episode run already steered by.
 
-3. **A library the CAD world can be recognised against — the units are done,
-   the last mile is not.** `MontyCad.Training` now writes the framework's metres
+3. **A library the CAD world can be recognised against — the loop closes, and
+   what it found first is a defect in burst sampling.** The memory is buildable
+   and loadable: `MontyCad.Training.write/4` on the fixture part writes 1557
+   nodes (892 with no feature family, 593 riser, 56 boss, 16 hole) with
+   `pose_vectors`, `pose_fully_defined`, the curvatures and `hsv`, and a run
+   reads it by pointing `:monty_libraries_dir` at a directory holding
+   `pretrained_ycb_v14/surf_agent_1lm_10distinctobj.jsonl.gz` — the address the
+   config's `model_name_or_path` already names, so no config was edited to try
+   it. `mix run` with that setting, `MONTY_CAD_PART` at the fixture and
+   `--world cad` gets as far as three matching steps with the graph in memory
+   (`models_in_memory: %{"golden_simple_through_hole" => …}`), and then the
+   learning module dies in burst sampling:
+   `SpatialArithmetics.align_orthonormal_vectors_as_matrix/2` is handed
+   `[[[…], […], […]]]` — a one-element list of a matrix — where a matrix
+   belongs, from `BurstSamplingHypothesesUpdater.rotations/6`'s
+   `align_multiple_orthonormal_vectors_as_matrices(directions, sensed)`. That is
+   the first defect the CAD seam has exposed in the port rather than in the CAD
+   package, and it is where the experiment stands: a part is a world, a part is
+   a memory, and the port cannot yet sample a hypothesis against it.
+
+   The older note on this item, kept because it is still what "naming it"
+   means: `MontyCad.Training` now writes the framework's metres
    and the framework's record shape (`e9bcdca`, `ex.monty.cad`), and a library
    trained from the fixture part loads through `Monty.Studio.Memory.load/3` as a
    `GraphMemory` — checked, not assumed. What is left is _naming_ it: a run picks
