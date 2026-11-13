@@ -23,6 +23,7 @@ defmodule Monty.Studio.Jobs do
 
   require Logger
 
+  alias ExTbpMonty.Cluster.Owner
   alias ExTbpMonty.Repo
   alias Monty.Studio.Jobs.Run, as: Worker
   alias Monty.Studio.RunHistory
@@ -188,7 +189,7 @@ defmodule Monty.Studio.Jobs do
   defp stop_executing(job) do
     Logger.warning("studio job #{job.id} was asked to stop while executing")
 
-    case Worker.stop(run_id(job)) do
+    case at(run_id(job), {Worker, :stop, [run_id(job)]}) do
       :ok ->
         {:ok, :stopping}
 
@@ -230,12 +231,13 @@ defmodule Monty.Studio.Jobs do
   def halt(job_id) when is_integer(job_id) do
     case Repo.get(Oban.Job, job_id) do
       %Oban.Job{state: "executing"} = job ->
-        # The owner is read first: cancelling the row ends the worker, and with it
-        # the registry entry that says which model to stop.
-        owner = Worker.owner(run_id(job))
+        # The worker is asked first: cancelling the row ends it, and the registry
+        # entry that says which process and model to end goes with it.
+        run_id = run_id(job)
+        _ = at(run_id, {Worker, :halt, [run_id]})
         _ = cancel_row(job)
         Logger.warning("studio job #{job.id} was halted: its process was killed")
-        {:ok, kill(run_id(job), owner)}
+        {:ok, settle(run_id, @killed)}
 
       _not_executing ->
         {:error, :not_executing}
@@ -255,17 +257,30 @@ defmodule Monty.Studio.Jobs do
   # The worker first, the model second: the model is a supervised child and would
   # otherwise outlive the run it belonged to. The world goes with the worker,
   # which is the process that started it.
-  defp kill(nil, _owner), do: :settled
+  # Where a run is performed, and how to reach it.
+  #
+  # The process that steps a run is one node's, and `Monty.Runtime.Registry` — the
+  # only thing that can say which process it is — is that node's own. With one
+  # runs table for a cluster, a row on this page can be a run another node is
+  # stepping, and Stop on it must reach a process this node cannot look up: the
+  # ask is sent to the node the row names (`ExTbpMonty.Cluster.Owner`).
+  #
+  # A node that does not answer holds nothing this node can reach, which is the
+  # same answer as a run nobody holds — `{:error, :not_found}` — and the row is
+  # then all that is left to close. On a node that runs alone `at/2` is a plain
+  # call, exactly as before.
+  @rpc_timeout 5_000
 
-  defp kill(run_id, owner) do
-    case owner do
-      [{pid, model_id}] ->
-        Process.exit(pid, :kill)
-        if is_binary(model_id), do: Monty.Runtime.Model.stop(model_id)
-        settle(run_id, @killed)
+  defp at(run_id, {module, function, args}) do
+    case Owner.elsewhere(run_id) do
+      {:ok, node} ->
+        case :rpc.call(node, module, function, args, @rpc_timeout) do
+          {:badrpc, _reason} -> {:error, :not_found}
+          result -> result
+        end
 
-      [] ->
-        settle(run_id, @killed)
+      :here ->
+        apply(module, function, args)
     end
   end
 

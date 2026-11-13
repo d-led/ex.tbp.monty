@@ -34,10 +34,15 @@ defmodule Monty.Studio.RunHistory.Run do
     field :log, Monty.Studio.RunHistory.Json, default: []
     field :timeline, Monty.Studio.RunHistory.Json, default: []
     field :log_path, :string
-    # Which node's run this is: the name of the node's own folder, so a reader
-    # who sees it here and a folder on disk is looking at one thing. `nil` on a
-    # node that runs alone (`Monty.Paths.data_dir_name/0`).
+    # Which node's run this is, in the spelling that decided the node's folder
+    # (`Monty.Paths.data_dir_name/0`, `ExTbpMonty.Node.safe_name/1`), `nil` on a
+    # node that runs alone. A page translates it to the name peers dial —
+    # `node1@10.0.0.7` — because that is the string a person reads and copies.
     field :node, :string
+    # Where the run was asked for, when that is not where it runs: `node` is the
+    # node that has it (a claim moves it), and this one never moves. Same spelling
+    # as `node`, `nil` on a node that runs alone.
+    field :started_on, :string
     field :started_at, :utc_datetime_usec
     field :finished_at, :utc_datetime_usec
     field :duration_us, :integer, default: 0
@@ -69,6 +74,7 @@ defmodule Monty.Studio.RunHistory.Run do
       :timeline,
       :log_path,
       :node,
+      :started_on,
       :started_at,
       :finished_at,
       :duration_us

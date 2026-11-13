@@ -34,6 +34,14 @@ defmodule ExTbpMonty.Cluster.Nodes do
   to date. `ExTbpMonty.Cluster.Capabilities` is the vocabulary; `web` is there so
   a page can link to a peer's run rather than only name it, because a node name is
   not a URL (`ExTbpMonty.Node.web_url/1`).
+
+  An entry may also be a node that does not run this application at all. A plugin
+  host is one — it offers learning modules, experiments or motor policies to the
+  cluster without being the studio — and it answers the same three questions from
+  what its own registry holds (`MontyPlugin.Registry.identity/0`), so its tags are
+  `plugin` and one `plugin:<kind>` per kind it offers. Nothing here asks what code
+  a peer loaded: the tags say what it provides, and a peer that answers neither
+  question is the one entry that is not alive.
   """
 
   use GenServer
@@ -204,8 +212,32 @@ defmodule ExTbpMonty.Cluster.Nodes do
 
   # The version on a node that is not there is `nil`, which is what `alive:
   # false` means.
+  #
+  # A peer that does not run this application cannot answer `identity/0`, and a
+  # plugin host is exactly that peer: it is in the cluster on purpose, and the
+  # module below is the package that answers the same three questions from what
+  # it has registered. `:rpc` needs no compile-time dependency, so the module is
+  # named as an atom and asked rather than linked — a studio node must not have
+  # to depend on the plugin package in order to see one.
+  @plugin_identity Module.concat(["MontyPlugin", "Registry"])
+
   defp ask(name) do
-    case :rpc.call(name, __MODULE__, :identity, [], @probe_ms) do
+    :rpc.call(name, __MODULE__, :identity, [], @probe_ms)
+    |> answer_of(fn -> :rpc.call(name, @plugin_identity, :identity, [], @probe_ms) end)
+  end
+
+  @doc """
+  The answer one peer gave, or the one its plugin registry gave in its place.
+
+  Public because the fallback is the interesting half and a test cannot make this
+  VM stop being a studio node: given what the first question returned, this is
+  what the poller does next. `nil` is a node that answered neither question.
+  """
+  @spec answer_of(term(), (-> term())) :: map() | nil
+  def answer_of(%{} = answer, _ask_plugin_host), do: answer
+
+  def answer_of(_not_a_studio_node, ask_plugin_host) do
+    case ask_plugin_host.() do
       %{} = answer -> answer
       _unreachable -> nil
     end

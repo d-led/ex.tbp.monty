@@ -677,8 +677,11 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     end
 
     # A cluster has one run list per node, and a list merged over them has to say
-    # whose each row is. The value is the node folder's name, so a reader who
-    # follows it to disk finds the run's files.
+    # whose each row is. A row carries the spelling that decided the node's folder
+    # (`node1_127.0.0.1`); the page translates it to the name peers dial
+    # (`node1@127.0.0.1`) whenever that node is in the cluster's list, and keeps
+    # the row's own spelling when it is not — a node that has gone still has runs,
+    # and this test is that second case, a test VM being no node at all.
     test "says which node owns a run when this instance is one of several", %{conn: conn} do
       in_a_cluster(fn ->
         {:ok, run} =

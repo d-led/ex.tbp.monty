@@ -202,8 +202,24 @@ a job is **discard** it, not re-run it: the worker allows one attempt
 (`Jobs.Run`), and a second attempt would start the experiment from its first step
 on another node beside a record that already has steps in it. The record itself is
 settled by the reaper (`Monty.Studio.Jobs.Reaper`), which runs when a node starts
-and when `/runs` or an experiment page loads — so a dead node's last run is closed
-by the next node that restarts, or by the next person who looks.
+and when `/runs` or an experiment page loads — **on the node the row names**. That
+node closing its own run is the whole rule: a peer's row is a peer's, however
+quiet it looks.
+
+The rule was wider for a day, and the trial that widened it is why it was narrowed
+again. It said a row from a node *no longer in the cluster* was anybody's to
+close, and liveness in this cluster is a 500 ms `:rpc` to each peer's poller
+(`ExTbpMonty.Cluster.Nodes`). Two runs saturating one machine made that probe time
+out, node1 concluded node2 had gone, and abandoned node2's **live** runs twice —
+at 95 steps and at 50. Nothing else was wrong: both jobs had executed at the same
+time on different nodes, which is the point of the exercise. A run is not worth a
+heuristic, so the only rows this node closes are the ones it recorded or claimed. A
+node that really died leaves rows saying `running` until it comes back — which is
+true, and is not improved by a guess.
+
+Closing another node's run is still possible, but as a **statement** rather than an
+inference: Stop on a shared row is asked of the node that has the run (see
+"Stopping a run that another node has").
 
 Its window is a **day**, and that is not caution for its own sake: Lifeline is
 purely time-based — it cannot ask whether the node is alive — so any window
@@ -212,6 +228,50 @@ marked `discarded` while still stepping, and this page decides "is it in flight"
 from the job, so a live run longer than the window would lose its Stop button. A
 run of ours is minutes to hours; a day is past all of them. On a node that runs
 alone nothing is configured that was not configured before.
+
+## Where a run was asked for, and where it runs
+
+With one runs table for a cluster those are two different nodes, so the list has
+two columns, drawn only when clustering is on:
+
+| column       | who writes it                                   | what it answers                                      |
+| ------------ | ----------------------------------------------- | ---------------------------------------------------- |
+| `started on` | `RunHistory.start/1` (`studio_runs.started_on`) | the node the run was asked for on. It never moves.    |
+| `running on` | `RunHistory.mark_running/1` (`studio_runs.node`) | the node performing it: the worker's own claim.       |
+
+A claim that moved the run is drawn underlined with a dotted rule, and its title
+says so, because "asked for here, running there" is the cluster working rather than
+a detail to be inferred. A row written before `started_on` existed has no value
+there and is shown as started where it runs — the honest answer about a row from a
+build that could not have had a second node.
+
+Both columns are written in the spelling that decided the node's folder
+(`node2_127.0.0.1`), and a page translates each to the name peers dial
+(`node2@127.0.0.1`) from the cluster's own list, which is the spelling
+`MONTY_SEEDS` takes.
+
+> "Split runs" in the sense of *parts of one run on several nodes* do not exist yet
+> — see "What is not spread yet". What the two columns do is make the split that
+> **does** exist, the split between asking and performing, visible and
+> attributable: a row can no longer be read as though it ran where it was asked
+> for.
+
+## Stopping a run that another node has
+
+`Monty.Studio.Jobs.cancel/1` and `halt/1` reach the worker through
+`ExTbpMonty.Cluster.Owner`, which reads the row's `node` and asks **that** node over
+`:rpc` — `Run.stop/1` and `Run.halt/1` run where the process is, and `halt/1` stops
+the model on the node that supervises it. Three answers come out:
+
+- **on a node that runs alone, and on this node's own runs, nothing changed**: same
+  calls, locally, in the same order, and the same `{:ok, :stopping}` /
+  `{:ok, :settled}` back;
+- **a node that does not answer** holds nothing this node can reach, which is the
+  same answer as a run nobody holds — `{:error, :not_found}` — so the row is
+  cancelled and settled as `cancelled`, and the list says what a person asked for.
+  Cancelling is therefore the one cross-node action that does not depend on the peer
+  being alive, and it is deliberately the only one;
+- **the reaper is not on this path**. A person asked; that is the difference.
 
 ## What is not spread yet
 
@@ -299,6 +359,21 @@ folder and runs `ExTbpMonty.Release.migrate/0` — the migration a release appli
 before the tree that reads the schema starts. That is also why this is a decision
 of the node and not of a launcher: the same code path serves `mix phx.server` on
 Windows, where a launcher script would not exist.
+
+## Two runs, two nodes, at the same time
+
+The trial below asked whether the cluster performs work in parallel, not merely
+whether it places it. Two nodes, one scratch Postgres, MuJoCo parallelism pinned to
+one per node (so that a node cannot answer the question by itself), one run queued
+through each node's MCP endpoint:
+
+- both jobs were taken, **one by each node** (`attempted_by` node1 and node2), and
+  both runs stepped at the same time — 68 steps each at twenty seconds in;
+- one run finished in 70 s, the other was abandoned at 50 steps **by the other
+  node's reaper** — the bug described above, and the only thing the trial found.
+
+With that fixed the shape is: the queue spreads, the work runs beside itself, and
+the only rows a node closes are its own.
 
 ## What was verified
 

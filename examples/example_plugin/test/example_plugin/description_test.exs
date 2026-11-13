@@ -1,0 +1,40 @@
+defmodule ExamplePlugin.DescriptionTest do
+  @moduledoc """
+  What the three plugins say about themselves, which is the part of a plugin a
+  cluster can check: a description is a map, so nothing in the compiler holds it
+  to the contract.
+
+  A case per property rather than one case for all three, because the failure a
+  reader needs is *which* plugin and *which* field.
+  """
+
+  use ExUnit.Case, async: true
+
+  for plugin <- ExamplePlugin.plugins() do
+    describe "#{inspect(plugin)}.describe/0" do
+      test "says enough for a cluster to use it" do
+        assert :ok = MontyPlugin.conforms?(unquote(plugin).describe())
+      end
+
+      test "reports this application's version, so a run records what answered" do
+        assert unquote(plugin).describe()["version"] == ExamplePlugin.version()
+      end
+
+      test "could be called from any node" do
+        assert unquote(plugin).describe()["placement"] == :anywhere
+      end
+    end
+  end
+
+  test "the three kinds a run is assembled from are each represented once" do
+    offered = Enum.map(ExamplePlugin.plugins(), & &1.describe()["kind"])
+
+    assert Enum.sort(offered) == Enum.sort(MontyPlugin.kinds())
+  end
+
+  test "each plugin is registered under a name of its own" do
+    names = Enum.map(ExamplePlugin.plugins(), & &1.describe()["name"])
+
+    assert names == Enum.uniq(names)
+  end
+end

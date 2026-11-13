@@ -22,12 +22,26 @@ defmodule Monty.Studio.Jobs.Reaper do
   with no pid and no job, and the only one judged by how recently its record was
   written.
 
-  This is a one-node judgement, and it is worth saying so: the registry is this
-  node's, so two nodes executing the same queue would each need to prove
-  ownership somewhere they both read — a Postgres advisory lock, which is how the
-  mirror this queue's design comes from settles it. This application runs one
-  node (`Oban.Engines.Basic`, `queues: [studio: 2]`), and with one node the
-  registry is exactly true.
+  ## Whose run is it
+
+  The registry is this node's, and with one runs table for a cluster every node
+  sees every open row — so "nothing is working on it" would be said by this node
+  about a peer's run it cannot see the process of. It was, once, in a two-node
+  trial: the second of two parallel runs was abandoned at step 95 by the node that
+  was not stepping it.
+
+  A row is therefore **this node's to close only when it names this node** (in
+  either spelling), or names no node at all. A peer's run is that peer's, however
+  quiet it looks — and the tempting extra clause, "and a node that is no longer in
+  the cluster", is exactly the mistake this page's own design records: liveness
+  here is a 500 ms `:rpc` to a poller (`ExTbpMonty.Cluster.Nodes`), and two runs
+  saturating one machine made that probe time out, so node1 "knew" node2 had gone
+  and abandoned its live run twice. A run is not worth a heuristic.
+
+  What closes the run of a node that really died is that node: its own boot sweeps
+  its own rows (they are its folder's), and until then the row says `running` and
+  a page says it has been quiet for a while — which is true, and is not a lie an
+  inference can improve on.
   """
 
   import Ecto.Query
@@ -55,6 +69,7 @@ defmodule Monty.Studio.Jobs.Reaper do
   @spec sweep() :: non_neg_integer()
   def sweep do
     RunHistory.running()
+    |> Enum.filter(&ours?(&1, mine()))
     |> Enum.reject(&(Run.held?(&1.id) or alive?(&1)))
     |> Enum.map(&abandon/1)
     |> length()
@@ -77,11 +92,35 @@ defmodule Monty.Studio.Jobs.Reaper do
   def reap(run_id) do
     case RunHistory.progress(run_id) do
       %{status: status} = record when status in ["queued", "running"] ->
-        if Run.held?(record.id) or alive?(record), do: false, else: abandon(record)
+        cond do
+          not ours?(record, mine()) -> false
+          Run.held?(record.id) or alive?(record) -> false
+          true -> abandon(record)
+        end
 
       _settled ->
         false
     end
+  end
+
+  @doc """
+  Whether a run's record is this node's to close.
+
+  `mine` is this node in both spellings — the address a peer dials and the name
+  its folder has — because a row from an older build carries the second one.
+
+  A row that names no node is a lone node's, and this node is that node. Any other
+  name is another node's run, and this node has no business closing it.
+  """
+  @spec ours?(map(), [String.t()]) :: boolean()
+  def ours?(%{node: owner}, mine) when is_binary(owner), do: owner in mine
+  def ours?(_record, _mine), do: true
+
+  # This node, in both spellings: `nil` on a node that runs alone, which writes no
+  # name at all and therefore matches no row.
+  defp mine do
+    [ExTbpMonty.Node.address(node()), Monty.Paths.data_dir_name()]
+    |> Enum.filter(&is_binary/1)
   end
 
   # A run is alive if a process is stepping it. Oban says what has become of the

@@ -64,7 +64,10 @@ config :ex_tbp_monty, :cluster, enabled: cluster_on?, seeds: cluster_seeds
 # boot — not from user input, and one per VM.
 cluster_secret = System.get_env("MONTY_CLUSTER_SECRET") || System.get_env("MONTY_COOKIE")
 
-if cluster_on? and cluster_secret not in [nil, ""] do
+# `Node.set_cookie/1` raises on a node without a name (`:nonode@nohost`), and a
+# node without a name is not in a cluster to have a cookie for — `MONTY_CLUSTER`
+# set but no `--name` given is a start that will not cluster whatever it is told.
+if cluster_on? and cluster_secret not in [nil, ""] and node() != :nonode@nohost do
   Node.set_cookie(String.to_atom(cluster_secret))
 end
 

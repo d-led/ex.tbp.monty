@@ -311,6 +311,12 @@ MUJOCO_LOG.TXT
 *.tar
 fprof.trace
 
+# The example plugin is a project of its own too: its `mix.lock` is committed,
+# because an example that resolves differently every time it is opened is an
+# example that stops working quietly, and the trees it resolves into are not.
+/examples/*/deps
+/examples/*/_build
+
 # `process-compose up` writes the log of the nodes it started next to the file
 # that describes them.
 /processes.log

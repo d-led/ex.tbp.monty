@@ -312,4 +312,27 @@ defmodule Monty.Studio.Jobs.ReaperTest do
       0 -> []
     end
   end
+
+  # With one runs table for a cluster, every node sees every open row, and the
+  # registry a run is held in is the stepping node's own. So "nothing is working on
+  # it" has to be asked only about this node's runs, and about a node that has
+  # gone — never about a peer that is answering. (Two parallel runs, and the one
+  # stepped by the other node was abandoned at step 95: this is that case.)
+  describe "whose run it is" do
+    test "another node's run is not this node's to close, whether it answers or not" do
+      # The clause that used to allow this — "and the node is not in the cluster" —
+      # rested on a 500 ms probe, and two runs saturating one machine made it time
+      # out: node1 "knew" node2 had gone and abandoned its live run, twice. A run
+      # is not worth a guess about liveness.
+      assert Reaper.ours?(%{node: "node2@127.0.0.1"}, ["node1@127.0.0.1"]) == false
+
+      assert Reaper.ours?(%{node: "node2_127.0.0.1"}, ["node1_127.0.0.1", "node1@127.0.0.1"]) ==
+               false
+    end
+
+    test "a run this node has, and one that names no node, are both this node's" do
+      assert Reaper.ours?(%{node: "node1_127.0.0.1"}, ["node1_127.0.0.1", "node1@127.0.0.1"])
+      assert Reaper.ours?(%{node: nil}, [])
+    end
+  end
 end

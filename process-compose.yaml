@@ -38,6 +38,20 @@ version: "0.5"
 # Add `DATABASE_URL=postgres://…` to both nodes and drop `MONTY_DB`: then the
 # queue spreads across the nodes instead of each keeping its own (see
 # `docs/cluster.md`).
+#
+# ## A third process that is not a studio node
+#
+# `example_plugin` is `examples/example_plugin`: a plugin host, which offers an
+# experiment, a learning module and a motor policy to the cluster without being
+# this application. It is a plain `mix` project with its own dependencies, so
+# `cd examples/example_plugin && mix deps.get` once before the first `up` — a
+# plugin host fetches its own packages, as anything else would.
+#
+# It joins with the same secret and the seeds, and Settings → Nodes files it under
+# **Ex.Monty.Plugin nodes** with the tags it derived from what it registered. Its
+# name is on the `elixir` command line because a VM cannot be renamed after it
+# starts; what it joins is the environment, which is why it can start before the
+# nodes it wants and still arrive.
 log_location: processes.log
 log_level: debug
 
@@ -76,3 +90,13 @@ processes:
         host: 127.0.0.1
         port: 4002
         path: "/"
+
+  # Not a studio node: a plugin host, in the same cluster, from a project of its
+  # own. It has no HTTP to probe and no database to migrate — it registers what it
+  # offers and stays up.
+  example_plugin:
+    command: "elixir --name example_plugin@127.0.0.1 -S mix run --no-halt"
+    working_dir: "./examples/example_plugin"
+    environment:
+      - "MONTY_CLUSTER_SECRET=local-dev-secret"
+      - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"

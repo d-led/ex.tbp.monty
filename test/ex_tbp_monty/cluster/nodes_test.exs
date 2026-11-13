@@ -118,6 +118,36 @@ defmodule ExTbpMonty.Cluster.NodesTest do
     assert %{capabilities: [], alive: false} = entry
   end
 
+  # A plugin host is a node that does not run this application: it has no
+  # `identity/0` of its own, and its package answers the same three questions
+  # from what it registered. The poller asks the second question when the first
+  # goes unanswered, and this is that decision — a second VM would be the only
+  # other way to see it, and it is not what is being specified.
+  test "a peer that is a plugin host rather than a studio node is alive, with its tags" do
+    answer =
+      Nodes.answer_of({:badrpc, {:EXIT, {:undef, []}}}, fn ->
+        %{version: "0.1.1", capabilities: ["plugin", "plugin:learning_module"], web: nil}
+      end)
+
+    [entry] = Nodes.of([:"example_plugin@127.0.0.1"], fn _name -> answer end)
+
+    assert entry.alive
+    assert entry.version == "0.1.1"
+    assert entry.name == "example_plugin_127.0.0.1"
+    assert ExTbpMonty.Cluster.Capabilities.plugin?(entry)
+  end
+
+  test "a peer that answered as a studio node is not asked a second time" do
+    answer = %{version: "0.1.3", capabilities: ["monty"]}
+
+    assert Nodes.answer_of(answer, fn -> flunk("asked a studio node twice") end) == answer
+  end
+
+  test "a peer that answers neither question is not alive" do
+    assert Nodes.answer_of({:badrpc, :nodedown}, fn -> {:badrpc, :nodedown} end) == nil
+    assert Nodes.answer_of(nil, fn -> nil end) == nil
+  end
+
   # What a scheduler asks before it puts work somewhere: the tag is not a
   # preference, so a cluster with no node that has it is a cluster that cannot
   # run that work — an empty list, which is an answer.

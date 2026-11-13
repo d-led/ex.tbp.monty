@@ -12,6 +12,20 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
 
   import Phoenix.LiveViewTest
 
+  alias Monty.Studio.RunHistory
+
+  defp record(attributes) do
+    {:ok, run} =
+      RunHistory.start(
+        Map.merge(
+          %{experiment: "tutorial/first_experiment", source: "monty", steps: 3},
+          attributes
+        )
+      )
+
+    run
+  end
+
   setup do
     previous = Application.get_env(:ex_tbp_monty, :cluster)
     on_exit(fn -> Application.put_env(:ex_tbp_monty, :cluster, previous) end)
@@ -63,6 +77,37 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
 
     assert view |> element("#cluster-nodes") |> render() =~ "2 nodes"
     assert view |> element("#cluster-nodes") |> render() =~ "peer_127.0.0.1"
+  end
+
+  test "the runs table says where a run started and where it runs", %{conn: conn} do
+    configure(enabled: true, seeds: [])
+    run = record(%{node: "peer_127.0.0.1", started_on: "this_1"})
+
+    {:ok, view, _html} = live(conn, ~p"/runs")
+
+    # Two questions, because with one runs table for a cluster they have two
+    # answers: a run asked for here and performed there is the cluster working,
+    # and a single "node" column could only have said half of it.
+    assert view |> element("#started-on-#{run.id}") |> render() =~ "this_1"
+    assert view |> element("#node-#{run.id}") |> render() =~ "peer_127.0.0.1"
+  end
+
+  test "a run still on the node it was asked for says so without a claim's mark", %{conn: conn} do
+    configure(enabled: true, seeds: [])
+    run = record(%{node: "this_1", started_on: "this_1"})
+
+    {:ok, view, _html} = live(conn, ~p"/runs")
+
+    refute has_element?(view, "#node-#{run.id}.underline")
+  end
+
+  test "a row from before the column existed started where it runs", %{conn: conn} do
+    configure(enabled: true, seeds: [])
+    run = record(%{node: "this_1"})
+
+    {:ok, view, _html} = live(conn, ~p"/runs")
+
+    assert view |> element("#started-on-#{run.id}") |> render() =~ "this_1"
   end
 
   defp configure(settings), do: Application.put_env(:ex_tbp_monty, :cluster, settings)

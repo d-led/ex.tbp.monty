@@ -188,6 +188,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
     socket
     |> assign(
+      # The `node` column is written in the spelling that decided each node's
+      # folder (`node1_127.0.0.1`); a reader wants the name peers dial
+      # (`node1@127.0.0.1`). One map, from the cluster's own list, and a row of a
+      # node that is not in the list keeps the spelling it has.
+      node_names: node_names(),
       state: state,
       states: @states,
       text: text,
@@ -269,6 +274,34 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   defp page_of(_params), do: 1
+
+  # Both spellings of every node in the cluster, keyed by the one a row carries.
+  defp node_names do
+    for entry <- Nodes.snapshot(),
+        spelling <- [Map.get(entry, :name), Map.get(entry, :address)],
+        is_binary(spelling),
+        into: %{},
+        do: {spelling, Map.get(entry, :address) || entry.name}
+  end
+
+  # A row's node as a person reads it: the name its peers dial, from the cluster's
+  # list, or the row's own spelling when that node is not in the list — a node
+  # that has gone still has runs, and they are still its.
+  defp node_name(_names, nil), do: "—"
+  defp node_name(names, node), do: Map.get(names, node, node)
+
+  # A row written before the column existed was started on the node it names.
+  defp started_on(%{started_on: started_on}) when is_binary(started_on), do: started_on
+  defp started_on(%{node: node}), do: node
+
+  defp claimed_elsewhere?(run), do: started_on(run) != run.node
+
+  defp running_on_title(run) do
+    case claimed_elsewhere?(run) do
+      false -> "The node that has this run — a name MONTY_SEEDS takes"
+      true -> "Claimed here: the run was asked for on another node and this one is performing it"
+    end
+  end
 
   # The run in the queue that is executing it, keyed by run id — the page reads it
   # only to know whether a run is queued or going, and to have something to stop.
@@ -1051,12 +1084,28 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               <th>experiment</th>
               <th>state</th>
               <%!--
-                Whose run it is. Only on a node that was asked to cluster: with one
-                node there is no second one to tell a row apart from, and a column
-                saying "this one" on every row is a column nobody reads.
+                Two nodes, not one, because with a shared runs table they are two
+                different answers: `started on` is where the run was asked for and
+                never moves, `running on` is where it is being performed and is the
+                worker's own claim — a run asked for on node1 may run on node2,
+                which is the whole point of a cluster. Only on a node that was
+                asked to cluster: with one node there is no second one to tell a
+                row apart from, and a column saying "this one" is a column nobody
+                reads.
               --%>
-              <th :if={@cluster_mode} title="The node whose folder this run's files are in">
-                node
+              <th
+                :if={@cluster_mode}
+                class="whitespace-nowrap"
+                title="The node the run was asked for on — a name MONTY_SEEDS takes"
+              >
+                started on
+              </th>
+              <th
+                :if={@cluster_mode}
+                class="whitespace-nowrap"
+                title="The node performing it: the worker's own claim, which may be another node"
+              >
+                running on
               </th>
               <th class="text-right whitespace-nowrap">steps</th>
               <th
@@ -1136,10 +1185,27 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               </td>
               <td
                 :if={@cluster_mode}
-                id={"node-#{run.id}"}
-                class="font-mono text-xs whitespace-nowrap"
+                id={"started-on-#{run.id}"}
+                class="font-mono text-xs select-all whitespace-nowrap"
+                title="The node the run was asked for on — a name MONTY_SEEDS takes"
               >
-                {run.node || "—"}
+                {node_name(@node_names, started_on(run))}
+              </td>
+              <%!--
+                Where it is being performed. Dashed while it is on the node that was
+                asked, underlined when a claim moved it: the difference is the
+                cluster working, and a reader should see it rather than infer it.
+              --%>
+              <td
+                :if={@cluster_mode}
+                id={"node-#{run.id}"}
+                class={[
+                  "font-mono text-xs select-all whitespace-nowrap",
+                  claimed_elsewhere?(run) && "underline decoration-dotted underline-offset-4"
+                ]}
+                title={running_on_title(run)}
+              >
+                {node_name(@node_names, run.node)}
               </td>
               <td
                 id={"steps-#{run.id}"}

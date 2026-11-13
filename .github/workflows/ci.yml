@@ -137,6 +137,45 @@ jobs:
       - run: scripts/build-nifs.sh
       - run: mix lint
 
+  # `examples/example_plugin` is a project of its own, with its own lockfile, and
+  # it is the one thing here that holds the plugin contract against the published
+  # packages rather than against this tree. A job of its own, so that a failure
+  # names the example instead of appearing inside a quarter of the suite.
+  example:
+    name: example plugin
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-24.04
+    # The dependency that carries the NIF is compiled here, which is most of it.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Erlang/Elixir
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Cache deps and build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            examples/example_plugin/deps
+            examples/example_plugin/_build
+          key: ${{ runner.os }}-example-${{ hashFiles('examples/example_plugin/mix.lock') }}
+          restore-keys: ${{ runner.os }}-example-
+
+      # The example's dependency compiles a NIF, so this runner needs Rust.
+      - run: scripts/install-rust.sh
+      - run: mix deps.get
+        working-directory: examples/example_plugin
+      - run: mix compile --warnings-as-errors
+        working-directory: examples/example_plugin
+      - run: mix format --check-formatted
+        working-directory: examples/example_plugin
+      - run: mix test
+        working-directory: examples/example_plugin
+
   # `mix test --partitions 4` hands each runner a slice of the test *files*, the
   # only split that asks nothing of the tests themselves. A partition sees a
   # quarter of the lines the suite can reach, so it runs with the threshold off

@@ -79,6 +79,32 @@ defmodule Monty.Studio.Jobs.Run do
     end
   end
 
+  @doc """
+  Ends the worker's process now, on this node.
+
+  The version of `stop/1` for a step that will not finish: the worker is killed
+  rather than asked, so the run cannot write its own summary. The model goes with
+  it — a model is a supervised child of its own and would outlive the run — and so
+  does the world, which the worker started and which therefore dies with the
+  process that started it.
+
+  `{:error, :not_found}` means no worker here holds that run. A caller that means
+  to stop a run wherever it is asks this on the node the row names
+  (`Monty.Studio.Jobs.halt/1`).
+  """
+  @spec halt(binary()) :: :ok | {:error, :not_found}
+  def halt(run_id) do
+    case owner(run_id) do
+      [{pid, model_id}] ->
+        Process.exit(pid, :kill)
+        if is_binary(model_id), do: Monty.Runtime.Model.stop(model_id)
+        :ok
+
+      [] ->
+        {:error, :not_found}
+    end
+  end
+
   @doc "The topic a run's progress is broadcast on."
   @spec topic(binary()) :: String.t()
   def topic(run_id), do: "studio:run:" <> run_id

@@ -48,11 +48,16 @@ defmodule Monty.Studio.RunHistory do
       |> Map.put_new(:started_at, DateTime.utc_now())
       # Which node has it, which while it is queued is the node that asked. The
       # worker overwrites it with its own name when it claims the job, because with
-      # one runs table for a cluster those are not always the same node. The name is
-      # the folder's name (`Monty.Paths.data_dir_name/0`), `nil` on a node that
-      # runs alone — the same value that decided the folder, so the two cannot
-      # disagree.
+      # one runs table for a cluster those are not always the same node. The value
+      # is the one that decided this node's folder (`Monty.Paths.data_dir_name/0`),
+      # `nil` on a node that runs alone, so the row and the directory cannot
+      # disagree; a page shows the node's own name — `node1@10.0.0.7` — by asking
+      # the cluster which node that is (`ExTbpMonty.Node.address/1`).
       |> Map.put_new(:node, Monty.Paths.data_dir_name())
+      # Where it was asked for, which a claim does not change: the run may be
+      # performed by another node, and a reader who found it there is owed the
+      # name of the node it started from.
+      |> Map.put_new(:started_on, Monty.Paths.data_dir_name())
 
     %Run{}
     |> Run.changeset(attributes)
