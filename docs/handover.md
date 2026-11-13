@@ -2713,14 +2713,17 @@ sets are listed, because the tree is the state, not my half of it.
 | `13d0d6b`, `4f979a7`, `e0845f4`, `6b98cbe`, `69c16b6`, `0a5b46e`, `720655b` | the other agent: a node is a server whose plugins are pieces, a capability names the modules that provide it, a run's motor policy can be another node's plugin, the sample plugins named under the host that owns them, a plugin-defined experiment a node can start, a policy that moves, and a policy per run so two episodes cannot share one |
 | `1545a45`, `21ab5bc`                                                        | an episode's line stays inside its own band, and the zooming case that still named the old axis (41.1)                                                                                                                                                                                                                                            |
 
-`1545a45` came in after `9521023` and left `main` red on one case; `21ab5bc` is the repair. The chart now gives every episode one x unit
-of its own so two episodes cannot share a column, which makes two episodes of two
-steps _four_ columns — and the run page's zooming case still named the old
-extent in three assertions (`steps 0–2`, `of 2`). The chart was right and the
-assertions were incidental numbers that had quietly become false, so they now
-say `steps 0–3` and `steps 1–2 of 3`, with the commit that moved the axis named
-in the comment. **A number a test asserts on a drawing is a specification of the
-drawing; when the drawing changes on purpose, the number is what moves.**
+`1545a45` came in after `9521023` and left `main` red on one case — CI's `test`
+job failed on it, which is the second, independent confirmation that the case
+was the broken thing and not the chart; `21ab5bc` is the repair. The chart now
+gives every episode one x unit of its own so two episodes cannot share a column,
+which makes two episodes of two steps _four_ columns — and the run page's
+zooming case still named the old extent in three assertions (`steps 0–2`, `of
+2`). The chart was right and the assertions were incidental numbers that had
+quietly become false, so they now say `steps 0–3` and `steps 1–2 of 3`, with the
+commit that moved the axis named in the comment. **A number a test asserts on a
+drawing is a specification of the drawing; when the drawing changes on purpose,
+the number is what moves.**
 
 ### 41.2 The stop that never reached the parts
 
