@@ -97,6 +97,30 @@ defmodule ExTbpMontyWeb.SettingsLive do
             </div>
           </dl>
         </section>
+
+        <%!-- Which nodes there are, and which build each one runs. A page cannot
+        change any of it — the cluster is a start-up decision — so it is shown
+        here rather than offered as a control. On a node that runs alone the
+        list is one entry long and the sentence under it says what would make it
+        more. --%>
+        <section id="cluster" class="space-y-1 border-t border-base-300 pt-3">
+          <h2 class="text-sm font-semibold">Nodes</h2>
+          <p id="cluster-count" class="text-xs text-base-content/70">{@cluster.summary}</p>
+          <ul id="cluster-node-list" class="space-y-0.5 text-xs">
+            <li
+              :for={entry <- @cluster.nodes}
+              id={"node-" <> entry.name}
+              class="flex flex-wrap items-baseline gap-2 font-mono"
+            >
+              <span class={["truncate", not entry.alive && "text-base-content/50"]}>{entry.name}</span>
+              <span class="text-base-content/50">{entry.version || "no answer"}</span>
+              <span :if={entry.self} class="badge badge-xs badge-ghost">this node</span>
+            </li>
+          </ul>
+          <p :if={@cluster.why_not} id="cluster-why-not" class="text-xs text-base-content/60">
+            {@cluster.why_not}
+          </p>
+        </section>
       </section>
     </Layouts.app>
     """
@@ -105,7 +129,33 @@ defmodule ExTbpMontyWeb.SettingsLive do
   defp assign_page(socket, _flash_kind) do
     assign(socket,
       page_title: "Settings",
-      form: to_form(Settings.form_values(), as: :settings)
+      form: to_form(Settings.form_values(), as: :settings),
+      cluster: cluster()
     )
+  end
+
+  # The cluster as this page tells it: the nodes, why there is only one when there
+  # is only one, and one sentence saying which case a reader is in.
+  defp cluster do
+    nodes = ExTbpMonty.Cluster.Nodes.snapshot()
+
+    %{
+      nodes: nodes,
+      summary: summary(nodes),
+      why_not: ExTbpMonty.Node.why_not()
+    }
+  end
+
+  defp summary(nodes) do
+    case {ExTbpMonty.Cluster.enabled?(), length(nodes)} do
+      {false, _} ->
+        "This instance runs alone: clustering is off, and MONTY_CLUSTER (with a node name) turns it on."
+
+      {true, 1} ->
+        "One node in this cluster — this one. A peer appears here as soon as it connects."
+
+      {true, count} ->
+        "#{count} nodes in this cluster, this one first."
+    end
   end
 end

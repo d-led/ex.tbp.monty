@@ -49,7 +49,10 @@ defmodule ExTbpMonty.ClusterTest do
       assert [
                {Elixir.Cluster.Supervisor, [_topologies]},
                {Horde.Registry, registry},
-               {Horde.DynamicSupervisor, supervisor}
+               {Horde.DynamicSupervisor, supervisor},
+               # The poller is last: it is the only child that asks the others
+               # anything, so it must not start before there is a cluster.
+               ExTbpMonty.Cluster.Nodes
              ] = Cluster.children()
 
       assert registry[:name] == Cluster.registry()

@@ -93,4 +93,32 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
       assert render(view) =~ "adapter"
     end
   end
+
+  describe "the nodes this instance knows" do
+    # The list is where "how many nodes are there, and which" is answered: the
+    # footer says the count, and this is the page that names them. A node that
+    # runs alone is a cluster of one — one row, marked — and, when it has no
+    # name at all, the sentence that says what would give it one.
+    test "a node that runs alone lists itself once and says why", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      assert view |> element("#cluster-count") |> render() =~ "runs alone"
+
+      list = view |> element("#cluster-node-list") |> render()
+      assert list =~ "this node"
+      assert length(String.split(list, "<li")) == 2
+
+      if ExTbpMonty.Node.distributed?() do
+        refute has_element?(view, "#cluster-why-not")
+      else
+        assert view |> element("#cluster-why-not") |> render() =~ "--sname monty"
+      end
+    end
+
+    test "the node's own name is a fact about this instance too", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      assert has_element?(view, "#system-Node")
+    end
+  end
 end

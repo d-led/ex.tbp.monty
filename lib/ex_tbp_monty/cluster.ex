@@ -115,7 +115,11 @@ defmodule ExTbpMonty.Cluster do
            members: :auto,
            max_restarts: 90,
            max_seconds: 30
-         ]}
+         ]},
+        # And the list a page reads: which nodes there are, and which build each
+        # one runs. Last because it is the only one that asks the others
+        # anything — it must not start before there is a cluster to ask about.
+        ExTbpMonty.Cluster.Nodes
       ]
     else
       []

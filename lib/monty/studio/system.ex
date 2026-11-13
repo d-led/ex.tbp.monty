@@ -46,6 +46,11 @@ defmodule Monty.Studio.System do
         value: Monty.Paths.root(),
         note: "runs, frames and the database live under it"
       },
+      %{
+        label: "Node",
+        value: inspect(node()),
+        note: node_note()
+      },
       %{label: "Elixir", value: System.version(), note: nil},
       %{label: "OTP", value: otp(), note: nil},
       %{label: "Machine", value: machine(), note: nil},
@@ -57,6 +62,14 @@ defmodule Monty.Studio.System do
   # loops are the Rust kernels or the Elixir fallback, where its writes land (a
   # file on a synced volume behaves nothing like a file on disk), and what it is
   # running on. Each of these has cost a session of guessing when it was missing.
+  defp node_note do
+    if ExTbpMonty.Node.distributed?() do
+      "the name another node reaches this one by"
+    else
+      "not a named node, so no other node can connect — see the Nodes section below"
+    end
+  end
+
   defp kernels do
     if ExTbpMonty.Core.MatcherNif.loaded?() and ExTbpMonty.Core.KdTreeNif.loaded?(),
       do: "native (Rust)",
