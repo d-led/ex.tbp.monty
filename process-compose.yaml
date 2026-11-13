@@ -55,13 +55,59 @@ version: "0.5"
 # name is on the `elixir` command line because a VM cannot be renamed after it
 # starts; what it joins is the environment, which is why it can start before the
 # nodes it wants and still arrive.
-log_location: processes.log
+#
+# ## A fourth process, whose decision is a simulation
+#
+# `flyverse_plugin` is `examples/flyverse_plugin`: a plugin host whose motor
+# policy steps a real spiking connectome — flyverse's leaky integrate-and-fire
+# engine, compiled into this node by Rustler. It offers
+# `flyverse_plugin.lif_steering`, which decides where a sensor looks next from
+# the spikes its network produced, and `flyverse_plugin.10simobj_surf_agent`,
+# which is Monty's own ten-similar-objects experiment with that policy as its
+# motor system. Open it by name on either studio node:
+#
+#   http://localhost:4001/experiments/flyverse_plugin.10simobj_surf_agent
+#
+# It needs a connectome, and the dataset is 150 MB and not in this repository, so
+# `tmp/flyverse-pack` holds the four-neuron demonstrator. It is written once, by
+# hand, and both `tmp/` and the pack survive a restart:
+#
+#   cd examples/flyverse_plugin
+#   mix deps.get
+#   mix flyverse_plugin.pack ../../tmp/flyverse-pack
+#
+# A pack is data, so it is not a process here: this project starts nodes, and
+# `flyverse_plugin` is one process like every other. A node whose pack is missing
+# still starts and refuses a policy with the sentence that names the command
+# above, rather than inventing a connectome to stand in for one.
+#
+# ## Where the output goes
+#
+# Every process writes its own file under `logs/`, which is ignored by git, so a
+# traceback in one node is a file to read rather than a pane to scroll:
+#
+#   tail -f logs/node1.log                              # one process
+#   tail -f logs/node1.log logs/flyverse_plugin.log      # several, by name
+#   process-compose process logs node1 --follow          # the TUI's own answer
+#
+# Three things about these files, all checked rather than assumed:
+#
+#   * a per-process `log_location` **replaces** the shared file instead of
+#     copying into it — with one set for every process, a top-level
+#     `log_location` stays empty, which is why there is none here any more (the
+#     old `processes.log` is a leftover on disk and nothing writes to it);
+#   * the directory is created if it is missing, so a fresh clone needs nothing
+#     but `mix deps.get`;
+#   * a file is truncated when its process starts again, so a log after a
+#     restart is that run and not the run before it (verified: two starts, one
+#     line each).
 log_level: debug
 
 processes:
   node1:
     command: "elixir --name node1@127.0.0.1 -S mix phx.server"
     working_dir: "./"
+    log_location: "./logs/node1.log"
     environment:
       - "PORT=4001"
       - "MONTY_CLUSTER=true"
@@ -82,6 +128,7 @@ processes:
   node2:
     command: "elixir --name node2@127.0.0.1 -S mix phx.server"
     working_dir: "./"
+    log_location: "./logs/node2.log"
     environment:
       - "PORT=4002"
       - "MONTY_CLUSTER=true"
@@ -100,6 +147,26 @@ processes:
   example_plugin:
     command: "elixir --name example_plugin@127.0.0.1 -S mix run --no-halt"
     working_dir: "./examples/example_plugin"
+    log_location: "./logs/example_plugin.log"
     environment:
       - "MONTY_CLUSTER_SECRET=local-dev-secret"
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
+
+  # The pack the flyverse plugin steps is `tmp/flyverse-pack`, written once with
+  # `mix flyverse_plugin.pack` (see this file's header). A connectome is data, so
+  # it is not a process: the node reads the pack it was pointed at, and a missing
+  # one is a refusal with a sentence, not a process to wait for.
+  #
+  # The second plugin host, and the only one whose decision is a spiking network:
+  # `flyverse_plugin.lif_steering` steps the connectome in Rust once per step and
+  # turns the sensor by what its readout neurons did. Its policy is `:owner_only`
+  # — the simulation cannot leave this node — so this process is where the run's
+  # motor system actually lives.
+  flyverse_plugin:
+    command: "elixir --name flyverse_plugin@127.0.0.1 -S mix run --no-halt"
+    working_dir: "./examples/flyverse_plugin"
+    log_location: "./logs/flyverse_plugin.log"
+    environment:
+      - "MONTY_CLUSTER_SECRET=local-dev-secret"
+      - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
+      - "FLYVERSE_PACK=../../tmp/flyverse-pack"
