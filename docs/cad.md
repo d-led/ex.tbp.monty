@@ -1,0 +1,115 @@
+# A CAD part in a run
+
+A part can be the world an episode steps: `--world cad`, with `MONTY_CAD_PART`
+naming the STEP file. This page says what that is, how to see it, and what is
+next.
+
+## What it is
+
+`MontyCad.Scene` (`ex.monty.cad`) is a **scene**, not a world. The port's world
+(`Monty.Simulators.Synthetic.Environment`) steps the kinematics, applies the
+actions and answers the proprioceptive state; a scene answers only what a sensor
+sees. So a part runs through the same world the stand-in sphere does, and only
+the picture comes from CAD — one ray-cast pass over the exact B-rep
+(`Quiddity.frame/2`) per sensor per step.
+
+Three things this buys, and one it does not:
+
+- **Exactness.** A depth is the point the surface is at, not a renderer's
+  approximation of it, and the part's face ids are the recognition's own.
+- **Units.** A part is millimetres and the framework is metres; the conversion is
+  in the scene and nowhere else, so a policy that moves a centimetre moves a
+  centimetre of part.
+- **Ground truth.** The scene names the object (`primary_target/1`,
+  `semantic_id_to_label/1`), which is what lets a supervised episode score itself
+  against a part. The port's world used to answer `nil` unconditionally; it now
+  passes a scene's answer through.
+- **Not** the experiment. No config was written for a part, so every page says a
+  CAD run's numbers are not the experiment's.
+
+## Seeing it
+
+`mix monty.run` needs `MontyCad.Scene` on the node's code path, and the studio
+does not depend on `ex_monty_cad` (that package brings quiddity and its Rust
+build). A script does it:
+
+```elixir
+cad = Path.expand("~/src/ex.monty.cad")
+
+for app <- ["ex_monty_cad", "ex_quiddity"] do
+  true = Code.append_path(Path.join([cad, "_build/dev/lib", app, "ebin"]))
+end
+
+System.put_env("MONTY_CAD_PART", Path.join(cad, "test/fixtures/golden_simple_through_hole.step"))
+
+Mix.Tasks.Monty.Run.run(["base_10simobj_surf_agent", "--world", "cad", "--episodes", "1", "--steps", "400", "--no-record"])
+```
+
+`-pa` does not survive `mix`'s own code-path setup, which is why this is a script
+and not a flag. On a node that carries the CAD application the world needs
+nothing at all.
+
+Measured on the fixture part: a 64×64 frame costs about 5 ms to cast, and a
+400-step surf-agent episode spent 6.7 s in the world and 3.6 s in the model,
+issued 3 goals, and concluded nothing — the model it loaded
+(`surf_agent_1lm_10similarobj`) was trained on MuJoCo's YCB objects and this is a
+bracket it has never seen. That "no conclusion" is the measurement that the next
+two steps are for.
+
+## What a scene has to answer
+
+`render/3` takes a pose in metres and answers, for a sensor that looks along its
+own −z with depth measured along that axis:
+
+```elixir
+%{
+  depth: [[float()]],      # metres; 0.0 where the ray met nothing
+  rgba: [[[float()]]],     # 0..1 per channel; shading, since a B-rep has no colour
+  semantic: [[float()]],   # 1.0 on the part, 0.0 elsewhere
+  centre: %{on_object: boolean(), depth: float() | nil, rgba: [float()] | nil}
+}
+```
+
+Options are the experiment's (`:resolution`, `:zoom`, `:hfov`) and are passed
+through by the world. A scene that can also answer `primary_target/1`,
+`semantic_id_to_label/1` and `start_pose/2` should: the first two make a
+supervised episode possible, and the third is where a sensor starts when the
+scene, not a config, knows where the object is.
+
+## What is next, in order
+
+1. **Teach the pages the word `cad`.** `mix monty.run` takes it; a run queued from
+   the browser cannot, because the vocabulary is in five places
+   (`Jobs.Run.world_of/1`, `experiment_live`'s selector and `world_of/1`, the MCP
+   tool's validation, `Monty.Readiness`'s world table). The one that must not be
+   forgotten is `Jobs.Run.world_of/1`: a record whose world it does not recognise
+   becomes `nil`, which `Setup` reads as "nothing chosen" — so a record saying
+   `cad` would step whatever the worker is configured for. **Blocked on the other
+   agent's uncommitted `lib/monty/studio/jobs/run.ex`**; the change is one clause:
+   `defp world_of(%{"world" => "cad"}), do: :cad`.
+
+2. **The edge-walk policy** — the ask this estate was built for: walking a surface
+   from feature to feature, or along an edge. `MontyCad.Gen.Policy` already writes
+   the shape (`:owner_only`, `needs: [:quiddity, :monty]`, `call/6` raising), and
+   a CAD host now answers `quiddity` without configuration (see
+   [`plugins.md`](plugins.md)). The decision inside `call/6`: sensor pose → part
+   frame, ray-cast for the surface point, the face's principal curvature
+   direction, step along the face or across the nearest edge, emit Turn/Move.
+   `MontyCad.Training`'s traversal is the offline version of the same loop. The
+   variant worth having first as a control is a shell around the ported
+   `SurfacePolicyCurvatureInformed` (`:anywhere`, `needs: [:monty]`) — it cannot
+   tell a hole from a fillet, and that is the point of comparing.
+
+3. **A library the CAD world can be recognised against — the units are done,
+   the last mile is not.** `MontyCad.Training` now writes the framework's metres
+   and the framework's record shape (`e9bcdca`, `ex.monty.cad`), and a library
+   trained from the fixture part loads through `Monty.Studio.Memory.load/3` as a
+   `GraphMemory` — checked, not assumed. What is left is *naming* it: a run picks
+   its library from the config's `model_name_or_path`, so recognising against a
+   part needs an experiment config of this study's own
+   (`priv/monty/libraries/<release>/<name>.jsonl.gz` plus a config naming
+   `<name>`) rather than a Monty config borrowed for the occasion.
+
+4. **A part per episode.** A CAD world steps one part; the object-per-episode
+   interfaces walk a list. That is where "ten similar parts" becomes an
+   experiment rather than a demonstration.
