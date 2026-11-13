@@ -675,6 +675,37 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert has_element?(view, "#runs")
     end
+
+    # A cluster has one run list per node, and a list merged over them has to say
+    # whose each row is. The value is the node folder's name, so a reader who
+    # follows it to disk finds the run's files.
+    test "says which node owns a run when this instance is one of several", %{conn: conn} do
+      in_a_cluster(fn ->
+        {:ok, run} =
+          RunHistory.start(%{experiment: "tutorial/first_experiment", source: "monty", steps: 2})
+
+        {:ok, view, _html} = live(conn, ~p"/runs")
+
+        assert view |> element("#node-#{run.id}") |> render() =~ "node1_127.0.0.1"
+      end)
+    end
+
+    # On a node that runs alone there is no second node to tell a row apart from,
+    # and a column saying "this one" on every row is a column nobody reads.
+    test "a node that runs alone has no node column", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      refute has_element?(view, "#node-#{run.id}")
+
+      headings =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("thead th")
+        |> Enum.map(&LazyHTML.text/1)
+
+      refute "node" in headings
+    end
   end
 
   describe "narrowing the list" do
@@ -1918,5 +1949,22 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       # Nothing left to select, so the sentence is not offered again.
       refute has_element?(view, "#select-all")
     end
+  end
+
+  # A node that was asked to cluster and was given a name: what
+  # `config/runtime.exs` decides at boot, put there by a test, because a test is
+  # not a node. Both settings are restored, so the cases beside these are told
+  # the truth about the instance they run in.
+  defp in_a_cluster(fun) do
+    previous = Enum.map(~w(cluster data_dir_name)a, &{&1, Application.get_env(:ex_tbp_monty, &1)})
+
+    Application.put_env(:ex_tbp_monty, :cluster, enabled: true, seeds: [])
+    Application.put_env(:ex_tbp_monty, :data_dir_name, "node1_127.0.0.1")
+
+    on_exit(fn ->
+      Enum.each(previous, fn {key, value} -> Application.put_env(:ex_tbp_monty, key, value) end)
+    end)
+
+    fun.()
   end
 end

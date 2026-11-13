@@ -133,7 +133,10 @@ That is not an oversight, it is where the two hard problems are:
   node neither sees the job nor can take it. Spreading the _queue_ needs one runs
   table for the whole cluster (`DATABASE_URL` pointing every node at one Postgres,
   which `ExTbpMonty.Database` already supports) or a merged view over the nodes'
-  own tables. The owner column in the runs list waits on the same decision.
+  own tables. The row already says whose run it is — `studio_runs.node`, the
+  node's folder name, written when the run is recorded — so a merged view has the
+  column it needs; the runs list shows it only on a node that was asked to
+  cluster, because with one node it is a column saying "this one" on every row.
 - **A part writes files and publishes its steps into memory.** A part's log and
   pictures go to `Artifacts.dir/1` and its steps to `Monty.Studio.RunStream`, on
   the node performing it; the run that owns the parts reads both, from its own

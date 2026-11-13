@@ -46,6 +46,12 @@ defmodule Monty.Studio.RunHistory do
       # be picked up at all. `mark_running/1` is the worker's word that it began.
       |> Map.put_new(:status, "queued")
       |> Map.put_new(:started_at, DateTime.utc_now())
+      # Which node owns it, which is the node recording it: the run's row, its
+      # log and its pictures are in this node's folder, and a cluster of several
+      # nodes has several run lists. The name is the folder's name
+      # (`Monty.Paths.data_dir_name/0`), `nil` on a node that runs alone — the
+      # same value that decided the folder, so the two cannot disagree.
+      |> Map.put_new(:node, Monty.Paths.data_dir_name())
 
     %Run{}
     |> Run.changeset(attributes)

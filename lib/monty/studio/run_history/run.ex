@@ -34,6 +34,10 @@ defmodule Monty.Studio.RunHistory.Run do
     field :log, Monty.Studio.RunHistory.Json, default: []
     field :timeline, Monty.Studio.RunHistory.Json, default: []
     field :log_path, :string
+    # Which node's run this is: the name of the node's own folder, so a reader
+    # who sees it here and a folder on disk is looking at one thing. `nil` on a
+    # node that runs alone (`Monty.Paths.data_dir_name/0`).
+    field :node, :string
     field :started_at, :utc_datetime_usec
     field :finished_at, :utc_datetime_usec
     field :duration_us, :integer, default: 0
@@ -64,6 +68,7 @@ defmodule Monty.Studio.RunHistory.Run do
       :log,
       :timeline,
       :log_path,
+      :node,
       :started_at,
       :finished_at,
       :duration_us

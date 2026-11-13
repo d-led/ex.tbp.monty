@@ -101,7 +101,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
        # whole experiment has one part, which is the run the page already draws.
        parts: [],
        parts_held: %{},
-       setup: nil
+       setup: nil,
+       # Whether this instance is one of several, which is the only case in which
+       # a run's node is a column worth having: a cluster has several run lists,
+       # and a page merged over them needs to say whose each row is.
+       cluster_mode: ExTbpMonty.Cluster.enabled?()
      )
      |> stream_configure(:log, dom_id: &log_id/1)
      |> stream_configure(:runs, dom_id: &"run-#{&1.id}")
@@ -1000,6 +1004,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               <th class="whitespace-nowrap">started</th>
               <th>experiment</th>
               <th>state</th>
+              <%!--
+                Whose run it is. Only on a node that was asked to cluster: with one
+                node there is no second one to tell a row apart from, and a column
+                saying "this one" on every row is a column nobody reads.
+              --%>
+              <th :if={@cluster_mode} title="The node whose folder this run's files are in">
+                node
+              </th>
               <th class="text-right whitespace-nowrap">steps</th>
               <th
                 class="text-right whitespace-nowrap"
@@ -1013,7 +1025,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           </thead>
           <tbody id="runs" phx-update="stream">
             <tr id="runs-empty" class="hidden only:table-row">
-              <td colspan="8" class="text-sm text-base-content/60">
+              <td colspan={if(@cluster_mode, do: 9, else: 8)} class="text-sm text-base-content/60">
                 No run matches.
                 <.link patch={filter_href(@state, "")} class="link link-primary">Clear the filter</.link>
               </td>
@@ -1075,6 +1087,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
                 >
                   quiet {quiet(run)}
                 </span>
+              </td>
+              <td
+                :if={@cluster_mode}
+                id={"node-#{run.id}"}
+                class="font-mono text-xs whitespace-nowrap"
+              >
+                {run.node || "—"}
               </td>
               <td
                 id={"steps-#{run.id}"}

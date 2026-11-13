@@ -30,6 +30,21 @@ defmodule Monty.Studio.RunHistoryTest do
       assert run.finished_at == nil
     end
 
+    # A run's files are one node's, so a record that does not say whose cannot be
+    # told apart from a row merged over several nodes' lists. The name is the
+    # node folder's own (`Monty.Paths.data_dir_name/0`), which is nil on a node
+    # that runs alone — the same value that decided the folder, so the two cannot
+    # disagree.
+    test "says which node owns it, and nothing when it is one of several" do
+      assert {:ok, alone} = RunHistory.start(@attributes)
+      assert alone.node == Monty.Paths.data_dir_name()
+
+      in_a_cluster(fn ->
+        assert {:ok, owned} = RunHistory.start(@attributes)
+        assert owned.node == "node1_127.0.0.1"
+      end)
+    end
+
     test "says running only when a worker claims it" do
       # Asking for a run is not running it: the job may wait for a slot, or never
       # be picked up. The two words are the difference between "somebody asked
@@ -749,5 +764,16 @@ defmodule Monty.Studio.RunHistoryTest do
       # Neither is a run at all, and neither is worth an error page.
       refute RunHistory.exists?("not-an-id")
     end
+  end
+
+  # A node that was given a name keeps its own folder, and its runs say so. The
+  # value is what `config/runtime.exs` puts there at boot; a test puts it there
+  # itself, because a test is not a node.
+  defp in_a_cluster(fun) do
+    previous = Application.get_env(:ex_tbp_monty, :data_dir_name)
+    Application.put_env(:ex_tbp_monty, :data_dir_name, "node1_127.0.0.1")
+    on_exit(fn -> Application.put_env(:ex_tbp_monty, :data_dir_name, previous) end)
+
+    fun.()
   end
 end
