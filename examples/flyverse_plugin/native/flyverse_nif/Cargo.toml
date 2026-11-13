@@ -1,0 +1,28 @@
+[package]
+name = "flyverse_nif"
+version = "0.1.0"
+authors = []
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "flyverse_nif"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+rustler = "0.38"
+
+# The engine, not a copy of it. `flyverse`'s library face is exactly the three
+# files the native simulation runs — `lif.rs` (the leaky integrate-and-fire
+# step over a signed CSR connectome), `pack.rs` (the strict pack loader) and
+# `npy.rs` — so this crate is a boundary over the same code the fly's own
+# `serve` and `analyze` commands run, at the commit pinned here.
+#
+# A git dependency rather than a path: the plugin is meant to be readable and
+# buildable by somebody who has not cloned flyverse. Change the rev to move.
+flyverse = { git = "https://github.com/djmango/flyverse", rev = "8499227fdcdc519844b30fb7a70e88860f72c2a6" }
+
+[profile.release]
+opt-level = 3
+lto = true

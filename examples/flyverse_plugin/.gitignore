@@ -1,0 +1,13 @@
+# A project of its own: `mix.lock` is committed, because an example that
+# resolves differently every time it is opened is one that stops working
+# quietly, and the trees it resolves into are not.
+/_build/
+/deps/
+/cover/
+/doc/
+/native/*/target/
+# The NIF itself: `mix compile` builds it from `native/`, so a copy on disk is
+# a build artefact and not source.
+/priv/native/
+*.tar
+erl_crash.dump
