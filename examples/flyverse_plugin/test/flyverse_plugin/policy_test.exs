@@ -5,7 +5,7 @@ defmodule FlyversePlugin.PolicyTest do
 
   alias FlyversePlugin.{Demonstrator, Pack, Policy}
 
-  alias Monty.Frameworks.Actions.{MoveForward, OrientHorizontal}
+  alias Monty.Frameworks.Actions.OrientHorizontal
 
   setup do
     directory =
@@ -24,39 +24,48 @@ defmodule FlyversePlugin.PolicyTest do
     {:ok, state: Policy.initial_state()}
   end
 
-  # A surf agent turns by yawing, which is `OrientHorizontal`'s
-  # `rotation_degrees`, and the world yaws by the negative of it: a wish to the
-  # left is therefore a negative angle here.
-  test "a nearer left side turns the sensor left", %{state: state} do
+  # A surf agent walks by `OrientHorizontal`: `left_distance` is the slide and the
+  # world yaws by `-rotation_degrees`, so a left turn is a negative angle and a
+  # positive leftward slide. Every walk bends by the policy's base turn, so the
+  # two direction cases are stated against it: `-5.0` is the spiral a silent
+  # network walks (the next test pins it).
+  test "a nearer left side bends the walk left, past the base turn", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    {result, _policy, _state} = step(policy, state, [[0.02, 0.02, 100.0, 100.0]])
+    {result, _policy, _state} = step(policy, state, [[0.005, 0.005, 100.0, 100.0]])
 
-    assert [%OrientHorizontal{agent_id: "agent_id_0", rotation_degrees: -5.0}] = result.actions
+    assert [%OrientHorizontal{agent_id: "agent_id_0"} = walked] = result.actions
+    assert walked.rotation_degrees < -5.0, "left of where a silent network walks"
+    assert walked.left_distance > 0.0, "with a slide to match"
   end
 
-  test "a nearer right side turns it right", %{state: state} do
+  test "a nearer right side bends it right, back from the base turn", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    {result, _policy, _state} = step(policy, state, [[100.0, 100.0, 0.02, 0.02]])
+    {result, _policy, _state} = step(policy, state, [[100.0, 100.0, 0.005, 0.005]])
 
-    assert [%OrientHorizontal{agent_id: "agent_id_0", rotation_degrees: 5.0}] = result.actions
+    assert [%OrientHorizontal{} = walked] = result.actions
+    assert walked.rotation_degrees > -5.0
+    assert walked.left_distance < 0.0
   end
 
-  test "a turn keeps the agent where it stands", %{state: state} do
-    {:ok, policy, state} = Policy.new([], state)
-
-    {result, _policy, _state} = step(policy, state, [[0.02, 0.02, 100.0, 100.0]])
-
-    assert [%OrientHorizontal{left_distance: 0.0, forward_distance: 0.0}] = result.actions
-  end
-
-  test "a view with nothing in reach walks straight", %{state: state} do
+  test "a silent view still crawls, on the policy's own spiral", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
     {result, _policy, _state} = step(policy, state, [[0.0, 0.0, 0.0, 0.0]])
 
-    assert [%MoveForward{distance: 0.004}] = result.actions
+    assert [%OrientHorizontal{} = walked] = result.actions
+    assert walked.rotation_degrees == -5.0, "the base turn, and no more"
+    assert walked.left_distance > 0.0
+  end
+
+  test "every step travels, and keeps the sensor at its standoff", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {result, _policy, _state} = step(policy, state, [[0.005, 0.005, 100.0, 100.0]])
+
+    assert [walked] = result.actions
+    assert walked.forward_distance > 0.0, "pressed back onto the surface"
   end
 
   test "the telemetry is the spikes the decision was made of", %{state: state} do

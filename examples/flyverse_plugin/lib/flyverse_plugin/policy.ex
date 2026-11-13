@@ -24,10 +24,13 @@ defmodule FlyversePlugin.Policy do
       30 ms time constant flyverse's own body uses for its motor readouts
       (`MOTOR_TAU_S` in `sim.rs`);
     * **a wish becomes an action**: positive turns left, negative turns right,
-      and a network with no preference walks straight. A turn is
-      `OrientHorizontal`, the surf agent's own, because an action a world does
-      not implement is one it skips — and a skipped action is a policy that
-      decides and is never obeyed.
+      and a network with no preference still walks — a base turn is added to
+      what the spikes ask for, because a turn with no slide is a turn on the
+      spot, and a sensor that turns on the spot gathers one percept for ever.
+      The action is `OrientHorizontal`, the surf agent's own: its
+      `rotation_degrees` is the turn, its `left_distance` the slide that turn is
+      worth at this depth, and its `forward_distance` the press back to the
+      standoff. An action a world does not implement is one it skips.
 
   With the demonstrator pack (`mix flyverse_plugin.pack`) that wiring is two
   excitatory edges, so a nearer left side turns the sensor left — towards what
@@ -51,7 +54,8 @@ defmodule FlyversePlugin.Policy do
 
   alias FlyversePlugin.{Native, Networks, Percept}
 
-  alias Monty.Frameworks.Actions.{MoveForward, OrientHorizontal}
+  alias Monty.Cmp.Message
+  alias Monty.Frameworks.Actions.OrientHorizontal
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
 
   @enforce_keys [:sim]
@@ -67,10 +71,24 @@ defmodule FlyversePlugin.Policy do
 
   # Monty's own surf-agent experiments turn five degrees and step four
   # millimetres; the same numbers here so a comparison is about the policy and
-  # not about the gait.
+  # not about the gait. The five degrees are a *base* turn, kept even when the
+  # network is indifferent — see `crawl/3` for why that is what makes a step a
+  # step rather than a turn on the spot.
   @turn_degrees 5.0
   @distance 0.004
   @agent_id "agent_id_0"
+
+  # How far a spike of disagreement may bend the base turn, each way. A fly does
+  # not spin on one leg because one readout fired; thirty degrees is a corner,
+  # and the low-pass already keeps the wish from changing that fast.
+  @max_turn_degrees 30.0
+
+  # The difference of spike counts a full bend is worth. `tanh` maps it, because
+  # counts have no ceiling: one runaway readout should mean "turn hard", not
+  # "turn three hundred degrees". Two spikes: a demonstrator pack of four neurons
+  # over a 20 ms window produces counts of that order, and a scale that ignored
+  # them would make the base turn the whole of the steering.
+  @wish_scale 2.0
 
   # The ride height of the drive: at 25 mm from a surface, `1/d` is 40 and the
   # drive is 160 Hz, which is the rate flyverse's own world stimulates its
@@ -149,14 +167,18 @@ defmodule FlyversePlugin.Policy do
   the network decides the rest.
   """
   @impl FlyversePlugin.Plugin
-  def call(%__MODULE__{} = policy, {_ctx, observations, _motor_state, _percept, _goal}, state) do
+  def call(
+        %__MODULE__{} = policy,
+        {_ctx, observations, _motor_state, percept, _goal},
+        state
+      ) do
     simulation = Map.fetch!(state.simulations, policy.sim)
 
     with {:ok, {_sensor_id, rows}} <-
            Percept.image(observations, policy.agent_id, policy.sensor_id),
          {:ok, window} <- step(simulation, rows) do
       wish = smoothed(simulation, window.left - window.right)
-      result = result(policy, wish, window)
+      result = result(policy, wish, window, percept)
 
       simulation = %{simulation | wish: wish, spikes: window.spikes, last: window}
 
@@ -283,50 +305,75 @@ defmodule FlyversePlugin.Policy do
     simulation.wish + alpha * (differential - simulation.wish)
   end
 
-  defp result(policy, wish, window) do
+  defp result(policy, wish, window, percept) do
     [left_hz, right_hz] = window.rates
+    turn = turn_degrees(policy, wish)
+    depth = mean_depth(percept, policy.distance)
 
     %MotorPolicyResult{
-      actions: [action(policy, wish)],
+      actions: [crawl(policy, turn, depth)],
       telemetry: %{
         left_hz: left_hz,
         right_hz: right_hz,
         left_spikes: window.left,
         right_spikes: window.right,
         spikes: window.spikes,
-        wish: wish
+        wish: wish,
+        turn_degrees: turn,
+        mean_depth: depth
       }
     }
   end
 
-  # Positive is left and negative is right because that is how the drives were
-  # named; a network with no preference walks straight rather than inventing a
-  # turn it did not decide.
+  # Positive is left, because that is how the drives were named. Nothing here
+  # ever returns zero: the base turn is added to what the network asks for, so a
+  # silent or perfectly balanced network still walks its spiral instead of
+  # standing still and gathering the same percept for ever.
+  defp turn_degrees(policy, wish) do
+    policy.turn_degrees + @max_turn_degrees * :math.tanh(wish / @wish_scale)
+  end
+
+  # Monty's own surface arithmetic (`SurfacePolicy.distances/2`): a slide whose
+  # length the angle and the depth decide, and the press that keeps the sensor at
+  # its standoff. `left_distance` is the travel — an angle with no distance is a
+  # turn on the spot, which is what made 1275 steps of evidence rise for every
+  # object at once.
   #
-  # A turn is `OrientHorizontal` and not `TurnLeft`/`TurnRight`: those are the
-  # distant agent's actions, and the surf agent a MuJoCo world hands us has no
-  # `actuate_turn_*` at all — it steers by yawing, which is this action's
-  # `rotation_degrees` (`world.py`'s `SurfaceAgent.actuate_orient_horizontal`
-  # rotates by `-rotation_degrees`, so it is clockwise for a positive angle).
-  defp action(%__MODULE__{} = policy, wish) do
-    cond do
-      wish > 0.0 -> turn(policy, -policy.turn_degrees)
-      wish < 0.0 -> turn(policy, policy.turn_degrees)
-      true -> %MoveForward{agent_id: policy.agent_id, distance: policy.distance}
+  # The world yaws by `-rotation_degrees`, so a left turn is a negative angle
+  # while `left_distance` is positive leftwards.
+  defp crawl(policy, turn, depth) do
+    radians = rad(abs(turn))
+
+    %OrientHorizontal{
+      agent_id: policy.agent_id,
+      rotation_degrees: -turn,
+      left_distance: sign(turn) * depth * :math.tan(radians),
+      forward_distance: depth * (1.0 - :math.cos(radians)) / :math.cos(radians)
+    }
+  end
+
+  # The percept's own depth, when it carries one. A policy that hears nothing
+  # about the surface steps its own four millimetres rather than refusing to walk.
+  defp mean_depth(nil, fallback), do: fallback
+
+  defp mean_depth(percept, fallback) do
+    case Message.feature(percept, "mean_depth") do
+      {:ok, [value | _rest] = values} when is_number(value) ->
+        Enum.sum(values) / length(values)
+
+      {:ok, value} when is_number(value) ->
+        value
+
+      _absent ->
+        fallback
     end
   end
 
-  # The distances orbit an agent around the object it stands on, and stay zero:
-  # this policy has no surface geometry to orbit with, so it turns where it is
-  # and leaves the walking to `MoveForward`.
-  defp turn(policy, rotation_degrees) do
-    %OrientHorizontal{
-      agent_id: policy.agent_id,
-      rotation_degrees: rotation_degrees,
-      left_distance: 0.0,
-      forward_distance: 0.0
-    }
-  end
+  defp rad(degrees), do: degrees * :math.pi() / 180.0
+
+  defp sign(value) when value > 0.0, do: 1.0
+  defp sign(value) when value < 0.0, do: -1.0
+  defp sign(_zero), do: 0.0
 
   defp rate(nearness), do: min(nearness * @drive_gain, @max_hz)
 
