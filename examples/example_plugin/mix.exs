@@ -23,7 +23,7 @@ defmodule ExamplePlugin.MixProject do
   # a re-implementation of a threshold but the ported one.
   defp deps do
     [
-      {:ex_monty_plugin, "~> 0.1"},
+      {:ex_monty_plugin, "~> 0.1.2"},
       {:ex_tbp_monty_core, "~> 0.1"}
     ]
   end
