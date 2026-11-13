@@ -134,35 +134,29 @@ scene, not a config, knows where the object is.
    `needs: [:monty]` — is still worth having, because it is what the finished
    140-episode run already steered by.
 
-3. **A library the CAD world can be recognised against — the loop closes, and
-   what it found first is a defect in burst sampling.** The memory is buildable
-   and loadable: `MontyCad.Training.write/4` on the fixture part writes 1557
-   nodes (892 with no feature family, 593 riser, 56 boss, 16 hole) with
-   `pose_vectors`, `pose_fully_defined`, the curvatures and `hsv`, and a run
-   reads it by pointing `:monty_libraries_dir` at a directory holding
-   `pretrained_ycb_v14/surf_agent_1lm_10distinctobj.jsonl.gz` — the address the
-   config's `model_name_or_path` already names, so no config was edited to try
-   it. `mix run` with that setting, `MONTY_CAD_PART` at the fixture and
-   `--world cad` gets as far as three matching steps with the graph in memory
-   (`models_in_memory: %{"golden_simple_through_hole" => …}`), and then the
-   learning module dies in burst sampling:
-   `SpatialArithmetics.align_orthonormal_vectors_as_matrix/2` is handed
-   `[[[…], […], […]]]` — a one-element list of a matrix — where a matrix
-   belongs, from `BurstSamplingHypothesesUpdater.rotations/6`'s
-   `align_multiple_orthonormal_vectors_as_matrices(directions, sensed)`. That is
-   the first defect the CAD seam has exposed in the port rather than in the CAD
-   package, and it is where the experiment stands: a part is a world, a part is
-   a memory, and the port cannot yet sample a hypothesis against it.
+3. **A library the CAD world can be recognised against — it recognises, and it
+   concludes.** `MontyCad.Training.write/4` on the fixture part writes 1557 nodes
+   (892 with no feature family, 593 riser, 56 boss, 16 hole); a run reads it by
+   pointing `:monty_libraries_dir` at a directory holding
+   `pretrained_ycb_v14/surf_agent_1lm_10distinctobj.jsonl.gz` — the address
+   `base_config_10distinctobj_surf_agent` already names, so no config was edited
+   to try it — with `MONTY_CAD_PART` at the fixture and `--world cad`.
 
-   The older note on this item, kept because it is still what "naming it"
-   means: `MontyCad.Training` now writes the framework's metres
-   and the framework's record shape (`e9bcdca`, `ex.monty.cad`), and a library
-   trained from the fixture part loads through `Monty.Studio.Memory.load/3` as a
-   `GraphMemory` — checked, not assumed. What is left is _naming_ it: a run picks
-   its library from the config's `model_name_or_path`, so recognising against a
-   part needs an experiment config of this study's own
-   (`priv/monty/libraries/<release>/<name>.jsonl.gz` plus a config naming
-   `<name>`) rather than a Monty config borrowed for the occasion.
+   The result, at the config's own 500-step cap: **`learning_module_0: match`,
+   match 1 of 1, 483 steps**, evidence ~13, one possible pose, 8 goals emitted,
+   1.97 s in the model and 4.42 s in the world. A memory written from a part
+   recognises that part from a sensor walking over it.
+
+   Two defects had to be found for that to be true, and both were ours rather
+   than the port's. The first: `pose_vectors` were written as three rows of
+   three, while a graph column holds numbers and
+   `GraphMemory.get_rotation_features_at_nodes/4` chunks a value by three — so
+   every value was one level deeper than the reader assumed and the episode died
+   in burst sampling aligning a matrix against `[[matrix]]` (`a8628fe` in
+   `ex.monty.cad`, with the shape now stated in the percept and in the library
+   format cases). The second, earlier: the run needs a 500-step cap to conclude;
+   at 400 it is still converging, which is information about the experiment, not
+   a bug.
 
 4. **A part per episode.** A CAD world steps one part; the object-per-episode
    interfaces walk a list. That is where "ten similar parts" becomes an
