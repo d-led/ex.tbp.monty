@@ -66,8 +66,11 @@ reset(simulation)     -> :ok
 
 `FlyversePlugin.Policy` turns a depth image into two Poisson drives (`1 / depth`
 per half of the image, × 4 Hz per inverse metre, capped at 400 Hz), steps the
-network, and turns the difference of the two readout spike counts into a
-`TurnLeft`, `TurnRight` or `MoveForward`.
+network, and turns the difference of the two readout spike counts into an
+`OrientHorizontal` turn or a `MoveForward`. The turn is the surf agent's own,
+not the distant agent's `TurnLeft`/`TurnRight`: a MuJoCo world gives a surf agent
+a yaw and no `actuate_turn_*` at all, and an action it does not implement is an
+action it skips.
 
 Measured on the four-neuron demonstrator the pack task writes (seed 7, 200 ticks
 = 20 ms per step, 10 steps):

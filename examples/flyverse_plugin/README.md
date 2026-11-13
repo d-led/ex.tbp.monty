@@ -29,7 +29,9 @@ Each step: nearness (`1 / depth`) per half of the image becomes a Poisson drive
 on one neuron group; the network steps 20 ms of 0.1 ms ticks in Rust; and the
 difference of the two readout spike counts, low-passed with flyverse's own 30 ms
 motor time constant, decides the action. Positive turns left, negative turns
-right, and a network with no preference walks forward.
+right, and a network with no preference walks forward. A turn is
+`OrientHorizontal` — the surf agent's own action, which yaws where the agent
+stands — because an action a world does not implement is one it skips.
 
 The rates, the gain and the action mapping are this plugin's and
 `FlyversePlugin.Policy` says so line by line. The dynamics are flyverse's. With

@@ -24,7 +24,10 @@ defmodule FlyversePlugin.Policy do
       30 ms time constant flyverse's own body uses for its motor readouts
       (`MOTOR_TAU_S` in `sim.rs`);
     * **a wish becomes an action**: positive turns left, negative turns right,
-      and a network with no preference walks straight.
+      and a network with no preference walks straight. A turn is
+      `OrientHorizontal`, the surf agent's own, because an action a world does
+      not implement is one it skips — and a skipped action is a policy that
+      decides and is never obeyed.
 
   With the demonstrator pack (`mix flyverse_plugin.pack`) that wiring is two
   excitatory edges, so a nearer left side turns the sensor left — towards what
@@ -48,7 +51,7 @@ defmodule FlyversePlugin.Policy do
 
   alias FlyversePlugin.{Native, Networks, Percept}
 
-  alias Monty.Frameworks.Actions.{MoveForward, TurnLeft, TurnRight}
+  alias Monty.Frameworks.Actions.{MoveForward, OrientHorizontal}
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
 
   @enforce_keys [:sim]
@@ -299,12 +302,30 @@ defmodule FlyversePlugin.Policy do
   # Positive is left and negative is right because that is how the drives were
   # named; a network with no preference walks straight rather than inventing a
   # turn it did not decide.
+  #
+  # A turn is `OrientHorizontal` and not `TurnLeft`/`TurnRight`: those are the
+  # distant agent's actions, and the surf agent a MuJoCo world hands us has no
+  # `actuate_turn_*` at all — it steers by yawing, which is this action's
+  # `rotation_degrees` (`world.py`'s `SurfaceAgent.actuate_orient_horizontal`
+  # rotates by `-rotation_degrees`, so it is clockwise for a positive angle).
   defp action(%__MODULE__{} = policy, wish) do
     cond do
-      wish > 0.0 -> %TurnLeft{agent_id: policy.agent_id, rotation_degrees: policy.turn_degrees}
-      wish < 0.0 -> %TurnRight{agent_id: policy.agent_id, rotation_degrees: policy.turn_degrees}
+      wish > 0.0 -> turn(policy, -policy.turn_degrees)
+      wish < 0.0 -> turn(policy, policy.turn_degrees)
       true -> %MoveForward{agent_id: policy.agent_id, distance: policy.distance}
     end
+  end
+
+  # The distances orbit an agent around the object it stands on, and stay zero:
+  # this policy has no surface geometry to orbit with, so it turns where it is
+  # and leaves the walking to `MoveForward`.
+  defp turn(policy, rotation_degrees) do
+    %OrientHorizontal{
+      agent_id: policy.agent_id,
+      rotation_degrees: rotation_degrees,
+      left_distance: 0.0,
+      forward_distance: 0.0
+    }
   end
 
   defp rate(nearness), do: min(nearness * @drive_gain, @max_hz)

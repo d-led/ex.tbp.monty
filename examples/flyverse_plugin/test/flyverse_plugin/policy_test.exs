@@ -5,7 +5,7 @@ defmodule FlyversePlugin.PolicyTest do
 
   alias FlyversePlugin.{Demonstrator, Pack, Policy}
 
-  alias Monty.Frameworks.Actions.{MoveForward, TurnLeft, TurnRight}
+  alias Monty.Frameworks.Actions.{MoveForward, OrientHorizontal}
 
   setup do
     directory =
@@ -24,12 +24,15 @@ defmodule FlyversePlugin.PolicyTest do
     {:ok, state: Policy.initial_state()}
   end
 
+  # A surf agent turns by yawing, which is `OrientHorizontal`'s
+  # `rotation_degrees`, and the world yaws by the negative of it: a wish to the
+  # left is therefore a negative angle here.
   test "a nearer left side turns the sensor left", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
     {result, _policy, _state} = step(policy, state, [[0.02, 0.02, 100.0, 100.0]])
 
-    assert [%TurnLeft{agent_id: "agent_id_0", rotation_degrees: 5.0}] = result.actions
+    assert [%OrientHorizontal{agent_id: "agent_id_0", rotation_degrees: -5.0}] = result.actions
   end
 
   test "a nearer right side turns it right", %{state: state} do
@@ -37,7 +40,15 @@ defmodule FlyversePlugin.PolicyTest do
 
     {result, _policy, _state} = step(policy, state, [[100.0, 100.0, 0.02, 0.02]])
 
-    assert [%TurnRight{rotation_degrees: 5.0}] = result.actions
+    assert [%OrientHorizontal{agent_id: "agent_id_0", rotation_degrees: 5.0}] = result.actions
+  end
+
+  test "a turn keeps the agent where it stands", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {result, _policy, _state} = step(policy, state, [[0.02, 0.02, 100.0, 100.0]])
+
+    assert [%OrientHorizontal{left_distance: 0.0, forward_distance: 0.0}] = result.actions
   end
 
   test "a view with nothing in reach walks straight", %{state: state} do

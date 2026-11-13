@@ -49,7 +49,7 @@ defmodule FlyversePlugin.OfferTest do
     assert {:ok, %MotorPolicyResult{} = result, policy} =
              GenServer.call(pid, {:call, policy, nil, near_left(), nil, nil, [nil]})
 
-    assert [%Monty.Frameworks.Actions.TurnLeft{}] = result.actions
+    assert [%Monty.Frameworks.Actions.OrientHorizontal{}] = result.actions
     assert result.telemetry.left_spikes > 0
 
     assert {:ok, recorded} = GenServer.call(pid, {:state_dict, policy})
