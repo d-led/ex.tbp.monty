@@ -3,6 +3,7 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias ExTbpMonty.Cluster.Nodes
   alias ExTbpMontyWeb.Tour
   alias Monty.Studio.Drafts
   alias Monty.Test.Tmp
@@ -11,6 +12,75 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
     tmp = Tmp.env_dir("studio-index", :experiments_dir)
 
     {:ok, tmp: tmp}
+  end
+
+  describe "the experiments a plugin host brings" do
+    # A plugin defines its experiment, so this node has no config to read — but the
+    # cluster poll already carries what every plugin host offers
+    # (`MontyPlugin.Registry.identity/0` → `plugins`), so the list can show it
+    # mixed in with ours and say which node brings it.
+    setup do
+      previous = :persistent_term.get({Nodes, :snapshot}, :none)
+
+      on_exit(fn ->
+        case previous do
+          :none -> :persistent_term.erase({Nodes, :snapshot})
+          entries -> :persistent_term.put({Nodes, :snapshot}, entries)
+        end
+      end)
+
+      :ok
+    end
+
+    test "are listed with the node that brings them", %{conn: conn} do
+      cluster_with_a_plugin_host("flyverse_plugin.10simobj_surf_agent")
+
+      {:ok, view, _html} = live(conn, ~p"/experiments?q=flyverse")
+
+      assert has_element?(view, "#experiments")
+      assert render(view) =~ "flyverse_plugin.10simobj_surf_agent"
+      assert render(view) =~ "pluginhost_127.0.0.1"
+    end
+
+    test "can be found by typing the name of the node that brings them", %{conn: conn} do
+      cluster_with_a_plugin_host("flyverse_plugin.10simobj_surf_agent")
+
+      {:ok, view, _html} = live(conn, ~p"/experiments?q=pluginhost")
+
+      assert render(view) =~ "flyverse_plugin.10simobj_surf_agent"
+    end
+  end
+
+  # The cluster as the page sees it: this node, and a host that offers one
+  # experiment. `Nodes.snapshot/0` is what the list reads, so a list put there is
+  # the whole of "a plugin host joined" for a test.
+  defp cluster_with_a_plugin_host(experiment) do
+    identity = Nodes.identity()
+
+    here =
+      Map.merge(identity, %{
+        name: Monty.Paths.data_dir_name(),
+        self: true,
+        alive: true,
+        plugins: []
+      })
+
+    host = %{
+      node: :"pluginhost@127.0.0.1",
+      name: "pluginhost_127.0.0.1",
+      address: "pluginhost@127.0.0.1",
+      self: false,
+      alive: true,
+      version: identity.version,
+      protocol: identity.protocol,
+      capabilities: ["monty", "plugin"],
+      artifacts: identity.artifacts,
+      web: nil,
+      plugins: [%{"kind" => "experiment", "name" => experiment}]
+    }
+
+    :persistent_term.put({Nodes, :snapshot}, [here, host])
+    :ok
   end
 
   describe "the list of experiments" do

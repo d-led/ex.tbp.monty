@@ -24,6 +24,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
 
   use ExTbpMontyWeb, :live_view
 
+  alias ExTbpMonty.Cluster.Nodes
   alias Monty.Studio.{Catalog, Drafts, Index, Readiness}
 
   @page_size 30
@@ -31,6 +32,8 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket), do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Nodes.topic())
+
     # The rows are streamed by `handle_params/3`, which runs before the first
     # render and is where the filters arrive. Streaming here as well would put a
     # page of unfiltered rows in the first paint and then replace it — the
@@ -39,7 +42,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
     {:ok,
      socket
      |> assign(
-       index: Index.build(Catalog.experiments(), labels()),
+       index: Index.build(Catalog.experiments() ++ Catalog.plugin_experiments(), labels()),
        templates: Catalog.templates(),
        drafts: Drafts.names(),
        filters: %{},
@@ -63,6 +66,22 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
      )
      |> narrow()}
   end
+
+  # A plugin host that joins the cluster brings its experiments with it, and one
+  # that leaves takes them away. The names arrive with the poll the cluster list
+  # already does (`ExTbpMonty.Cluster.Nodes`), so this is a re-read of a list we
+  # hold, not a request.
+  @impl true
+  def handle_info({:cluster_nodes, _entries}, socket) do
+    {:noreply,
+     socket
+     |> assign(
+       index: Index.build(Catalog.experiments() ++ Catalog.plugin_experiments(), labels())
+     )
+     |> narrow()}
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("toggle", %{"facet" => facet, "option" => option}, socket) do
@@ -390,10 +409,20 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   # whole reason the column exists.
   defp column(entry, %{key: "ready"} = facet), do: Index.label(facet.key, entry.ready)
   defp column(entry, %{key: "world"} = facet), do: Index.label(facet.key, entry.world)
-  defp column(entry, %{key: "modules"}), do: "#{entry.modules} lm"
+  defp column(entry, %{key: "modules"}), do: modules(entry.modules)
   defp column(entry, %{key: "agent"}), do: entry.agent
   defp column(entry, %{key: "learning_module"}), do: entry.learning_module
   defp column(entry, %{key: "model"}), do: entry.model
+
+  # A plugin's experiment is brought by the node that hosts the plugin; ours is
+  # not brought by a node at all — it is a config in this release, and any node
+  # may step it.
+  defp column(entry, %{key: "host"}), do: entry.host || "—"
+
+  # A count for an experiment we can read, "unknown" for one a plugin defines: the
+  # number of learning modules is in a config, and a plugin's is not here.
+  defp modules(count) when is_integer(count), do: "#{count} lm"
+  defp modules(unknown), do: unknown
 
   # The readiness column is the one a reader scans, so it is the one that carries
   # a colour — pastel, because the row is information rather than a warning. The

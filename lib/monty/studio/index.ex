@@ -24,8 +24,9 @@ defmodule Monty.Studio.Index do
 
   @type entry :: %{
           name: String.t(),
+          host: String.t() | nil,
           agent: String.t(),
-          modules: non_neg_integer(),
+          modules: non_neg_integer() | String.t(),
           learning_module: String.t(),
           model: String.t(),
           ready: String.t(),
@@ -57,7 +58,8 @@ defmodule Monty.Studio.Index do
     %{key: "agent", label: "Agent"},
     %{key: "modules", label: "Learning modules"},
     %{key: "learning_module", label: "Learning module"},
-    %{key: "model", label: "Starts from"}
+    %{key: "model", label: "Starts from"},
+    %{key: "host", label: "From node"}
   ]
 
   @doc """
@@ -112,13 +114,35 @@ defmodule Monty.Studio.Index do
 
   # -- entries --------------------------------------------------------------
 
+  # Two kinds of entry, and the difference is what can be read. Ours has a config
+  # here — groups, an environment, a learning module — and every row is derived
+  # from it. A plugin's has none of that: the plugin defines it, so the list can
+  # say only that it exists and which node brings it, and everything a config would
+  # have said is "unknown" rather than a guess (`Monty.Studio.Catalog
+  # .plugin_experiments/0`).
+  defp entry(%{host: host} = experiment, _labels) when is_binary(host) do
+    %{
+      name: experiment.name,
+      host: host,
+      ready: "unknown",
+      world: "unknown",
+      agent: "unknown",
+      modules: "unknown",
+      learning_module: "unknown",
+      model: "unknown",
+      groups: %{}
+    }
+    |> with_search()
+  end
+
   defp entry(experiment, labels) do
     groups = experiment.groups
     config = Map.get(experiment, :config) || %{}
     label = Map.get(labels, experiment.name, %{})
 
-    entry = %{
+    %{
       name: experiment.name,
+      host: nil,
       ready: Map.get(label, :ready, "unknown"),
       world: Map.get(label, :world, "unknown"),
       agent: agent(groups["environment"]),
@@ -127,9 +151,10 @@ defmodule Monty.Studio.Index do
       model: model(config),
       groups: groups
     }
-
-    Map.put(entry, :search, searchable(entry))
+    |> with_search()
   end
+
+  defp with_search(entry), do: Map.put(entry, :search, searchable(entry))
 
   defp agent(environment) when is_binary(environment) do
     case Regex.run(~r/_(dist|surf|noop)_agent/, environment) do
@@ -173,12 +198,14 @@ defmodule Monty.Studio.Index do
   defp searchable(entry) do
     [
       entry.name,
-      entry.agent,
+      entry.host,
       "#{entry.modules} lm",
+      entry.agent,
       entry.learning_module,
       entry.model,
       label("world", entry.world)
     ]
+    |> Enum.reject(&is_nil/1)
     |> Enum.join(" ")
     |> String.downcase()
   end
@@ -220,9 +247,14 @@ defmodule Monty.Studio.Index do
   defp value_of(entry, "ready"), do: entry.ready
   defp value_of(entry, "world"), do: entry.world
   defp value_of(entry, "agent"), do: entry.agent
-  defp value_of(entry, "modules"), do: Integer.to_string(entry.modules)
+
+  defp value_of(entry, "modules") when is_integer(entry.modules),
+    do: Integer.to_string(entry.modules)
+
+  defp value_of(entry, "modules"), do: entry.modules
   defp value_of(entry, "learning_module"), do: entry.learning_module
   defp value_of(entry, "model"), do: entry.model
+  defp value_of(entry, "host"), do: entry.host || ""
   defp value_of(_entry, _unknown), do: ""
 
   # -- facets ---------------------------------------------------------------
@@ -236,6 +268,10 @@ defmodule Monty.Studio.Index do
         entries
         |> apply_filters(Map.delete(active, key))
         |> Enum.frequencies_by(&value_of(&1, key))
+        # A facet that does not apply to a row — an experiment no node brings —
+        # is not a pill: "From node (no node)" is not a filter anybody wants.
+        |> Enum.reject(fn {value, _count} -> value == "" end)
+        |> Map.new()
 
       %{
         key: key,
@@ -286,6 +322,7 @@ defmodule Monty.Studio.Index do
   defp label_for("world", "mujoco"), do: "MuJoCo"
   defp label_for("world", "habitat"), do: "Habitat"
 
+  defp label_for("modules", "unknown"), do: "unknown"
   defp label_for("modules", "1"), do: "one"
   defp label_for("modules", value), do: value <> " modules"
   defp label_for("agent", "dist"), do: "distant"

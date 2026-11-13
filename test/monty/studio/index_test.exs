@@ -18,6 +18,69 @@ defmodule Monty.Studio.IndexTest do
     }
   end
 
+  # An experiment a plugin defines: no groups, no config here — only the node that
+  # brings it (`Monty.Studio.Catalog.plugin_experiments/0`).
+  defp plugin(name, host), do: %{name: name, host: host, node: :"#{host}@127.0.0.1"}
+
+  describe "an experiment a plugin brings" do
+    test "is listed with the ones this node has, and says which node brings it" do
+      index =
+        Index.build([
+          experiment("ours", "habitat_ycb_dist_agent", "evidence_1lm", "1lm_1sm"),
+          plugin("theirs", "node2_127.0.0.1")
+        ])
+
+      assert [%{name: "ours", host: nil}, %{name: "theirs", host: "node2_127.0.0.1"}] =
+               index.entries
+    end
+
+    # What a config would have said is not knowable here: the plugin defines it, so
+    # the row says unknown rather than guessing "scratch" or "0 lm".
+    test "says unknown about everything it would have to read a config for" do
+      index = Index.build([plugin("theirs", "node2_127.0.0.1")])
+
+      assert [entry] = index.entries
+
+      assert {entry.agent, entry.modules, entry.learning_module, entry.model} ==
+               {"unknown", "unknown", "unknown", "unknown"}
+
+      assert {entry.ready, entry.world} == {"unknown", "unknown"}
+    end
+
+    test "can be found by typing the node that brings it" do
+      index =
+        Index.build([
+          experiment("ours", "habitat_ycb_dist_agent", "evidence_1lm", "1lm_1sm"),
+          plugin("theirs", "node2_127.0.0.1")
+        ])
+
+      assert [%{name: "theirs"}] = Index.filter(index, %{"q" => "node2"}).entries
+    end
+
+    test "can be filtered to the nodes that bring something, and only those" do
+      index =
+        Index.build([
+          experiment("ours", "habitat_ycb_dist_agent", "evidence_1lm", "1lm_1sm"),
+          plugin("one", "node2_127.0.0.1"),
+          plugin("two", "node2_127.0.0.1"),
+          plugin("three", "node3_127.0.0.1")
+        ])
+
+      assert %{values: values} = Enum.find(index.facets, &(&1.key == "host"))
+
+      assert values == [
+               %{value: "node2_127.0.0.1", label: "node2_127.0.0.1", count: 2},
+               %{value: "node3_127.0.0.1", label: "node3_127.0.0.1", count: 1}
+             ]
+
+      assert index
+             |> Index.filter(%{"host" => ["node2_127.0.0.1"]})
+             |> Map.get(:entries)
+             |> Enum.map(& &1.name) ==
+               ["one", "two"]
+    end
+  end
+
   defp index do
     Index.build([
       experiment(
