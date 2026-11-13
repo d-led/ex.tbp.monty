@@ -153,6 +153,40 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
       assert html |> LazyHTML.from_fragment() |> LazyHTML.query("a") |> Enum.to_list() == []
     end
 
+    # The tags say a machine hosts plugins; a reader's next question is which.
+    # The list is what the poller's own answer carried, so the component asks
+    # nothing and no plugin is called to draw a page.
+    test "a node that brings plugins names them" do
+      html =
+        render_component(ExTbpMontyWeb.ClusterNodes, %{
+          id: "cluster-nodes",
+          nodes: [plugin_host()]
+        })
+
+      assert html =~ "experiment first_object"
+      assert html =~ "motor_policy follow_chamfers"
+    end
+
+    test "a node with no plugins to show gets no line" do
+      html = render_component(ExTbpMontyWeb.ClusterNodes, %{id: "cluster-nodes", nodes: [peer()]})
+
+      refute html =~ "plugins-"
+    end
+
+    defp plugin_host do
+      Map.merge(peer(), %{
+        node: :"example_plugin@127.0.0.1",
+        name: "example_plugin_127.0.0.1",
+        address: "example_plugin@127.0.0.1",
+        web: nil,
+        capabilities: ["plugin", "plugin:experiment", "plugin:motor_policy"],
+        plugins: [
+          %{"kind" => "experiment", "name" => "first_object"},
+          %{"kind" => "motor_policy", "name" => "follow_chamfers"}
+        ]
+      })
+    end
+
     defp peer do
       %{
         node: :"gpu@127.0.0.1",

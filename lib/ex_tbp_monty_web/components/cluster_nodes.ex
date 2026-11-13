@@ -148,6 +148,21 @@ defmodule ExTbpMontyWeb.ClusterNodes do
           <span class="text-base-content/50">{entry.version || "no answer"}</span>
           <span :if={entry.self} class="badge badge-xs badge-ghost">this node</span>
           <span class="text-base-content/40">{Enum.join(entry.capabilities, " ")}</span>
+          <%!--
+            Which plugins this machine brings, not only that it brings some. The
+            tags above say a node is a plugin host; this says what it hosts, which
+            is the question a run that names a module is really asking. The list
+            came with the poller's own answer (`Cluster.Nodes`), so nothing here
+            asks a plugin anything.
+          --%>
+          <span
+            :if={plugins(entry) != []}
+            id={"plugins-" <> entry.name}
+            class="w-full text-base-content/40 ps-2"
+            title="What this node offers, as its own plugin registry lists it"
+          >
+            {Enum.map_join(plugins(entry), " · ", &"#{&1["kind"]} #{&1["name"]}")}
+          </span>
         </li>
       </ul>
       <p :if={@nodes == []} class="ps-2 text-xs text-base-content/50">{@empty}</p>
@@ -166,6 +181,12 @@ defmodule ExTbpMontyWeb.ClusterNodes do
   # peer joining leaves an entry of the old shape in place. A page draws what it
   # is given rather than raising at it.
   defp name(entry), do: Map.get(entry, :address) || "unnamed"
+
+  # What a node says it offers, or nothing. `Map.get/3` for the same reason `name/1`
+  # uses it: the list a page draws can be a snapshot written before this field
+  # existed, and a node that says nothing about its plugins is a node with none to
+  # show.
+  defp plugins(entry), do: Map.get(entry, :plugins, [])
 
   defp hint(entry) do
     case Map.get(entry, :address) do

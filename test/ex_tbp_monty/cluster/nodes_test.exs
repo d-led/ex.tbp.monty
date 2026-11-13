@@ -137,6 +137,43 @@ defmodule ExTbpMonty.Cluster.NodesTest do
     assert ExTbpMonty.Cluster.Capabilities.plugin?(entry)
   end
 
+  # The tags say a machine hosts plugins; this says which. It arrives with the
+  # same answer, so a page can show it without a question of its own — and the
+  # answering side reads its own `:pg` rather than asking anybody, which is what
+  # keeps a poll from fanning out (`docs/plugins.md`, rule 1).
+  test "a plugin host's entry says which plugins it offers" do
+    answer = %{
+      version: "0.1.1",
+      capabilities: ["plugin", "plugin:experiment", "plugin:motor_policy"],
+      web: nil,
+      plugins: [
+        %{"kind" => "experiment", "name" => "first_object"},
+        %{"kind" => "motor_policy", "name" => "follow_chamfers"}
+      ]
+    }
+
+    [entry] = Nodes.of([:"example_plugin@127.0.0.1"], fn _name -> answer end)
+
+    assert entry.plugins == [
+             %{"kind" => "experiment", "name" => "first_object"},
+             %{"kind" => "motor_policy", "name" => "follow_chamfers"}
+           ]
+  end
+
+  test "a node that says nothing about plugins offers none" do
+    [entry] = Nodes.of([:"old@127.0.0.1"], &answered(&1, "0.1.2"))
+
+    assert entry.plugins == []
+  end
+
+  test "an entry that is not a kind and a name is not shown as a plugin" do
+    answer = %{version: "0.1.1", plugins: [%{"kind" => "experiment"}, %{"name" => "x"}, :junk]}
+
+    [entry] = Nodes.of([:"odd@127.0.0.1"], fn _name -> answer end)
+
+    assert entry.plugins == []
+  end
+
   test "a peer that answered as a studio node is not asked a second time" do
     answer = %{version: "0.1.3", capabilities: ["monty"]}
 

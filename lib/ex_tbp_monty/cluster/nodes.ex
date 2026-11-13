@@ -121,6 +121,7 @@ defmodule ExTbpMonty.Cluster.Nodes do
         version: version,
         capabilities: capabilities_of(answer),
         web: web_of(answer),
+        plugins: plugins_of(answer),
         alive: is_binary(version)
       }
     end)
@@ -256,6 +257,26 @@ defmodule ExTbpMonty.Cluster.Nodes do
   # to put in a URL, is a node a page can only name.
   defp web_of(%{web: web}) when is_binary(web), do: web
   defp web_of(_answer), do: nil
+
+  # What a plugin host offers, in the words its own registry uses
+  # (`MontyPlugin.Registry.offered/0`: one `%{"kind" =>, "name" =>}` per plugin).
+  #
+  # Free, and that is the point of it being here: the list arrives with the answer
+  # the poller already asks for, so a page can say *which* plugins a machine
+  # brings without a single extra message. Two of the loop rules hold it up — the
+  # host answers from its own `:pg` rather than asking anybody (so no fan-out), and
+  # the poller announces only when the entries changed (so no echo): see
+  # `docs/plugins.md`.
+  #
+  # A studio node has no `plugins` key and offers none, which is the same empty
+  # list a build too old to say would give.
+  defp plugins_of(%{plugins: plugins}) when is_list(plugins) do
+    for %{"kind" => kind, "name" => name} <- plugins, is_binary(kind), is_binary(name) do
+      %{"kind" => kind, "name" => name}
+    end
+  end
+
+  defp plugins_of(_answer), do: []
 
   defp version do
     case Application.spec(:ex_tbp_monty, :vsn) do
