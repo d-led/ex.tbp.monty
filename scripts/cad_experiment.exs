@@ -26,18 +26,58 @@ parts = %{
   "plate" => Path.expand("~/src/ex.monty.cad/test/fixtures/golden_simple_through_hole.step"),
   "blend" => Path.expand("~/src/ex.quiddity/test/fixtures/blend_r5.step"),
   "blend-big" => Path.expand("~/src/ex.quiddity/test/fixtures/blend_r5_enlarged.step"),
-  "plate-big" => Path.expand("/tmp/cad-experiment/parts/plate_big.step")
+  "plate-big" => Path.expand("/tmp/cad-experiment/parts/plate_big.step"),
+  "plate-huge" => Path.expand("/tmp/cad-experiment/parts/plate_huge.step")
 }
 
-# `plate-big` is derived rather than checked in: it is the plate at 1.5x, the
-# same nine faces and eighteen edges, and it exists so that two parts differ in
-# one thing only — size — while both have a pose the sensor can name (a rounded
-# block's cannot, `docs/cad.md`). Every point *and* every radius is scaled: a
-# file with scaled points and unscaled radii is a different, broken part, and
-# the numbers are the only place the geometry lives.
-scale = 1.5
+# Two parts that differ in one thing only — size — while both have a pose the
+# sensor can name (a rounded block's cannot, `docs/cad.md`). They are derived
+# rather than checked in: the same nine faces and eighteen edges, and every
+# point *and* every radius scaled, because a file with scaled points and
+# unscaled radii is a different, broken part and the numbers are the only place
+# the geometry lives.
+#
+# Two scales, because the question they ask is where the feature tolerances
+# stop telling sizes apart: `principal_curvatures_log` is compared with a
+# tolerance of 1.0, and a scale `s` moves a curvature by `log s` — 0.4 at 1.5×,
+# 1.6 at 5×. A pair the sensor cannot separate by feature is not a test of
+# matching, it is a test of which graph wins a tie.
+derived = %{
+  "plate-big" => {"plate", 1.5},
+  "plate-huge" => {"plate", 5.0}
+}
 
-scaled = fn source, target ->
+# Sampling is relative to the part, unless `CAD_ABSOLUTE_SPACING=1` asks for the
+# absolute dial. A fixed spacing gives a 5× part the same number of nodes over
+# twenty-five times the area, so a library of two sizes is also a library of two
+# node densities — and the denser graph wins: sensing the 5× part against a
+# library of both concluded the *small* one at evidence 15.5, and at 1.5× it did
+# the same at 12.0. Sample each part at its own scale's spacing and the two
+# memories hold about as many nodes (1557 against 1581 at 1.5×, 1557 against
+# 1602 at 5×), and both questions come out right: the sensed part is the one on
+# top in every seed, at higher evidence than either wrong answer had.
+#
+# The rule is one sentence rather than a table of scales: never finer than two
+# millimetres, never coarser than the part's largest extent over thirty. The
+# floor is what a single part has always been written with — a 60 mm plate is
+# 2.0 both ways — so the single-part rates above are untouched, while a part
+# five times the size is sampled at 10 mm and gets a memory of the same size.
+#
+# The absolute dial is kept because it is what every measurement before this was
+# made with, and a rate over seeds that changed two things would say nothing.
+base_spacing = 2.0
+absolute? = System.get_env("CAD_ABSOLUTE_SPACING") in ["1", "true"]
+
+spacing = fn part, absolute? ->
+  if absolute? do
+    base_spacing
+  else
+    extent = part.summary["extent"] |> Enum.max()
+    max(base_spacing, extent / 30)
+  end
+end
+
+scaled = fn source, target, scale ->
   # `Float.parse/1` leaves the rest of the number behind: a STEP real may be
   # written `4.`, which it reads as `4.0` and a stray `.` it does not consume.
   real = fn value ->
@@ -87,9 +127,10 @@ memory = Enum.uniq(remembered ++ if(sense_only?, do: [], else: [sensed]))
 
 # A derived part is written when a run names it, so a run that does not is not
 # made to depend on a writable `/tmp`.
-if "plate-big" in (memory ++ [sensed]) do
-  File.mkdir_p!(Path.dirname(parts["plate-big"]))
-  scaled.(parts["plate"], parts["plate-big"])
+for name <- Enum.uniq(memory ++ [sensed]), Map.has_key?(derived, name) do
+  {from, scale} = Map.fetch!(derived, name)
+  File.mkdir_p!(Path.dirname(parts[name]))
+  scaled.(parts[from], parts[name], scale)
 end
 
 if memory == [] do
@@ -120,7 +161,12 @@ records =
     {:ok, recognition} = Quiddity.features(part)
 
     each = Path.join([libraries, "each", object_id <> ".jsonl.gz"])
-    {:ok, written} = MontyCad.Training.write(part, object_id, each, recognition: recognition)
+
+    {:ok, written} =
+      MontyCad.Training.write(part, object_id, each,
+        recognition: recognition,
+        spacing: spacing.(part, absolute?)
+      )
 
     IO.puts(
       "#{object_id}: #{written.nodes} nodes, #{written.skipped} skipped, " <>

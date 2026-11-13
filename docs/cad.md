@@ -195,37 +195,66 @@ scene, not a config, knows where the object is.
    object — which is the difference between "not recognised" and "recognised,
    and this many ways round".
 
-   **A library of two names the wrong one.** `plate-big` is the plate at 1.5×,
+   **A library of two named the wrong one — until the memory was sampled for a
+   library.** `plate-big` and `plate-huge` are the plate at 1.5× and at 5×,
    derived in the script rather than checked in — every point _and_ every
-   radius scaled, which is why it opens as the same solid: nine faces, eighteen
-   edges, one valid shell, extent 90 × 75 × 27 mm against the plate's
-   60 × 50 × 18. Two parts that differ in one thing only is the pair a matching
-   test should be able to tell apart, and both have a pose worth naming.
+   radius scaled, which is why they open as the same solid: nine faces,
+   eighteen edges, one valid shell, 90 × 75 × 27 mm and 300 × 250 × 90 against
+   the plate's 60 × 50 × 18. Two parts differing in one thing only, size, is
+   the pair a matching test should tell apart, and both have a pose worth
+   naming.
 
-   | memory           | sensed    | seeds 1 and 7          | seeds 3 and 5                |
-   | ---------------- | --------- | ---------------------- | ---------------------------- |
-   | plate, plate-big | plate-big | **concluded: "plate"** | no conclusion, both possible |
-   | plate-big        | plate-big | concluded: "plate-big" | no conclusion                |
+   With the memory written the way a single part is written — an absolute 2 mm
+   sampling spacing — sensing the large part concluded the **small** one:
 
-   The bottom row is what makes the top one a finding rather than a setup
-   error: the world does serve the large part, and it recognises itself. The
-   written memory is not at fault either — its two records are at their own
-   scales, `plate` within ±30 mm and `plate-big` within ±45 mm, measured from
-   the JSONL. So against a library of two, sensing the large plate concludes
-   **the small one**, with evidence 12.0 and one object possible, and the run
-   that says nothing at all is the _better_ of the two outcomes.
+   | memory            | sensed     | result over seeds 1, 3, 5, 7                               |
+   | ----------------- | ---------- | ---------------------------------------------------------- |
+   | plate, plate-big  | plate-big  | 2 concluded, **both naming "plate"** (evidence 12.0)       |
+   | plate, plate-huge | plate-huge | 3 concluded, **two naming "plate"** (15.5, 5.2); one right |
 
-   That is the first result here that matters for using this on real parts, and
-   it is the one thing this document cannot yet say is the port's or the
-   config's. `max_match_distance` is 10 mm and a 1.5× scale moves the plate's
-   own surface by up to 15 mm, which is the order of the dial — but a wrong
-   answer with a conclusion is not a tolerance being generous, it is the
-   wrong graph winning. The next step is therefore a parity question, not a
-   tuning one: run Monty's own Python over the same percepts (the recording
-   seam is `Monty.Test.MontyRecording` plus the Python peer in
-   `scripts/monty_simulator_peer.py`) and see whether its module also prefers
-   the smaller graph. If it does, this is a config that was never asked to tell
-   two sizes apart; if it does not, there is a defect here with a name.
+   That the 5× pair is _worse_ than the 1.5× pair is what rules out the obvious
+   explanation. `principal_curvatures_log` is compared with a tolerance of 1.0
+   and a scale `s` moves a curvature by `log s`, so 1.5× (0.41) should be the
+   hard case and 5× (1.6) the easy one; if feature tolerance were the cause, the
+   bigger pair would have been separated, not confused more confidently.
+
+   **The cause was the memory's node count, which is ours.** A fixed spacing
+   gives the 5× part the same number of nodes over twenty-five times the area,
+   so a library of two sizes was also a library of two densities, and the
+   candidate search is a radius: the denser graph has more nodes within
+   `max_match_distance` of every percept, so it has more chances of a
+   well-matched hypothesis. Nothing about the LM prefers the small part; the
+   library asked a question about density and answered it.
+
+   Sampling each part at its own scale's spacing gives two memories of about
+   the same size: 1557 and 1581 nodes at 1.5×, 1557 and 1602 at 5×. Then both
+   questions come out right, and with more evidence than either wrong answer
+   had:
+
+   | memory            | sensed     | result over seeds 1, 3, 5, 7                                               |
+   | ----------------- | ---------- | -------------------------------------------------------------------------- |
+   | plate, plate-big  | plate-big  | **"plate-big" on top in all four**; 1 concluded (12.5), 3 held at 6.2–26.6 |
+   | plate, plate-huge | plate-huge | **"plate-huge" on top in all four**; 3 concluded (16.3, 39.8, 33.9)        |
+
+   The rule is one sentence rather than a table of scales: never finer than two
+   millimetres, never coarser than the part's largest extent over thirty. A
+   60 mm plate is 2.0 mm either way, so every single-part measurement above
+   stands unchanged; a part five times the size is sampled at 10 mm and gets a
+   memory of the same size. The script does that by default now, and
+   `CAD_ABSOLUTE_SPACING=1` writes the fixed 2 mm that produced the wrong
+   answers, because a rate over seeds that changed two things would say
+   nothing.
+
+   Two things this leaves standing. A right answer is still seed-dependent —
+   the plate is recognised in 4 of 10 seeds on its own — and a symmetric part
+   still never concludes. Both are questions about evidence and exploration,
+   and neither is about which part was named. The lesson that belongs in
+   `ex.monty.cad` is narrower and is written down here because it was learned
+   the hard way: `Training`'s `:spacing` is an absolute number of millimetres,
+   which is right for one part and wrong for a library, and a library builder
+   has to choose it so that every part in it is sampled at the same resolution
+   relative to itself. Every number in this document before this section was
+   written with the absolute dial, which is why they are single-part numbers.
 
    Two readings from an earlier pass of this document were wrong, and the
    measurement is what corrected them. The curvature in a CAD-written memory is
