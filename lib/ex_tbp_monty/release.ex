@@ -47,6 +47,55 @@ defmodule ExTbpMonty.Release do
   end
 
   @doc """
+  The automatic migrations this database has not applied.
+
+  A node that runs alone migrates itself at boot only when it was given a name
+  (`ExTbpMonty.Application`): a named node owns its own database, while a
+  developer's unnamed node is migrated by `mix ecto.migrate`, on purpose. The
+  cost of that split is a database that is behind, and the first page to read a
+  new column is a stack trace — so the boot asks this, and says what to type.
+
+  The manual directory (`priv/repo/manual_migrations`) is not part of the answer:
+  those are not applied automatically anywhere, so "behind" would be a word
+  without a repair. Empty for a database that is up to date, which is every
+  database a test opens.
+  """
+  @spec pending() :: [non_neg_integer()]
+  def pending do
+    load_app()
+
+    repos()
+    |> Enum.map(fn repo ->
+      path = Ecto.Migrator.migrations_path(repo)
+
+      # At boot the repo is not started yet — `prepare_data_folder/0` runs before
+      # the tree — so `with_repo/2` starts it for the question and stops it again.
+      # A node that is already running asks directly.
+      if Process.whereis(repo) do
+        pending_in(repo, path)
+      else
+        {:ok, _repo, pending} = Ecto.Migrator.with_repo(repo, &pending_in(&1, path))
+        pending
+      end
+    end)
+    |> List.flatten()
+  end
+
+  # What `migrate/0` would apply and this database has not: the files on disk
+  # minus the versions the repository's own migrations table holds.
+  defp pending_in(repo, path) do
+    applied = MapSet.new(Ecto.Migrator.migrated_versions(repo))
+
+    # `Ecto.Migrator.migrations/2` answers `[{:up | :down, version, name}]`, in
+    # the order the files sort: the versions the database is missing are the ones
+    # `migrate/0` would apply.
+    repo
+    |> Ecto.Migrator.migrations(path)
+    |> Enum.map(fn {_direction, version, _name} -> version end)
+    |> Enum.reject(&MapSet.member?(applied, &1))
+  end
+
+  @doc """
   Downloads whatever an experiment needs that is not on disk yet, and waits.
 
   Nothing is fetched when everything is already there, which is the case on

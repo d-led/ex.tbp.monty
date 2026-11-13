@@ -161,10 +161,36 @@ defmodule ExTbpMonty.Application do
   #
   # Gated on the folder, not on clustering: a node that runs alone keeps the one
   # database it always had, prepared the way it always was (`mix ecto.setup`).
+  defp warn_if_behind do
+    case ExTbpMonty.Release.pending() do
+      [] ->
+        :ok
+
+      pending ->
+        Logger.warning(
+          "this node's database is #{length(pending)} migration(s) behind " <>
+            "(#{Enum.map_join(pending, ", ", &Integer.to_string/1)}): " <>
+            "run `mix ecto.migrate` — a page that reads a new column fails until you do"
+        )
+    end
+  rescue
+    # The database may not be reachable yet, and a node that cannot migrate itself
+    # is not the node to refuse to start: this is a sentence in the log, not a gate.
+    error ->
+      Logger.debug("could not ask whether the database is behind: #{inspect(error)}")
+      :ok
+  end
+
   # sobelow_skip ["Traversal.FileModule"]
   defp prepare_data_folder do
     case Monty.Paths.data_dir_name() do
+      # A developer's node does not migrate itself — `mix ecto.migrate` is the
+      # developer's move, and a server started from an editor should not change a
+      # database nobody asked it to. What it must not do is stay silent while the
+      # database is behind: the first page to read a new column is a stack trace,
+      # and the log line that says which migrations are waiting is the repair.
       nil ->
+        warn_if_behind()
         :ok
 
       _named ->
