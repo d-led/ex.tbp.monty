@@ -18,6 +18,24 @@ for, and whether a real spiking simulation can be reached from the BEAM at all.
 [flyBrain](https://github.com/mehrantsi/flyBrain) each make possible, what does
 not fit the plugin contract, and what is left to do.
 
+## What this is not
+
+**This is not an optimum, and nothing here is optimised.** It is not a claim
+about how a fly steers, not a claim about Monty, and not an attempt to beat or
+reproduce Monty's own results. Monty's experiments are a reference
+implementation of a theory, tuned against measurements over years; this is an
+exercise in joining unlike parts — a Rust spiking engine, a Rustler boundary, a
+plugin contract, an Elixir framework, a MuJoCo world in a Python interpreter,
+and a studio that queues the run — and asking whether the joint holds.
+
+The constants are chosen to be readable, not to be right: four millimetres a
+step, five degrees of base turn, two spikes for a full bend, `1/depth` at four
+hertz per inverse metre. A pack of four neurons is not a nervous system, and a
+score it produces is a score of this wiring, not of a fly, a brain, or Monty.
+What would support a claim is the dataset's connectome, a body with muscles, and
+a measured comparison against Monty's own surf policy; none of those are here,
+and no number on any page of a run should be read as if they were.
+
 ## What the decision is
 
 ```
@@ -28,10 +46,17 @@ not fit the plugin contract, and what is left to do.
 Each step: nearness (`1 / depth`) per half of the image becomes a Poisson drive
 on one neuron group; the network steps 20 ms of 0.1 ms ticks in Rust; and the
 difference of the two readout spike counts, low-passed with flyverse's own 30 ms
-motor time constant, decides the action. Positive turns left, negative turns
-right, and a network with no preference walks forward. A turn is
-`OrientHorizontal` — the surf agent's own action, which yaws where the agent
-stands — because an action a world does not implement is one it skips.
+motor time constant, decides how the walk bends. Positive bends left, negative
+bends right, and a network with no preference still walks — five degrees of base
+turn are added to whatever the spikes asked for, so a silent connectome crawls
+its spiral instead of turning on the spot and gathering one percept for ever.
+
+The action is `OrientHorizontal`, the surf agent's own, because an action a
+world does not implement is one it skips. Its `rotation_degrees` is the turn,
+its `left_distance` is the slide that turn is worth at this depth
+(`depth · tan θ`, Monty's own surface arithmetic) and its `forward_distance` is
+the press back to the standoff. That is the whole crawl: every step turns and
+travels, which is what a surface agent walking an object does.
 
 The rates, the gain and the action mapping are this plugin's and
 `FlyversePlugin.Policy` says so line by line. The dynamics are flyverse's. With
