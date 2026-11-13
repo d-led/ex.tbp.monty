@@ -2,13 +2,15 @@ defmodule ExTbpMonty.Mcp.Tools do
   @moduledoc """
   The tools the MCP server offers, and the one place a name becomes a function.
 
-  Four groups, one per question a caller actually has:
+  Five groups, one per question a caller actually has:
 
     * the documentation — what the project says (`Tools.Docs`);
     * the roadmap — what the project intends (`Tools.Roadmap`);
     * the port — where that lives here (`Tools.Port`);
     * experiments — what is configured, what could be, and starting one
-      (`Tools.Experiments`).
+      (`Tools.Experiments`);
+    * the cluster — which nodes there are and what each one can do
+      (`Tools.Cluster`).
 
   A tool answers `{:ok, %{text: text, structured: map}}` or `{:error, message}`.
   The text is what a model reads; the structured part is the same answer for a
@@ -16,11 +18,12 @@ defmodule ExTbpMonty.Mcp.Tools do
   form into a tool execution error, which is the specification's way of saying
   "this call failed, the message says how" rather than "the server is broken".
 
-  Every tool's annotations are honest about what it does: the ten that only read
-  say so, and the two that write — a draft, a queued run — say that too.
+  Every tool's annotations are honest about what it does: the ones that only read
+  say so, and the ones that write — a draft, a queued run, a deletion — say that
+  too.
   """
 
-  alias ExTbpMonty.Mcp.Tools.{Docs, Experiments, Port, Roadmap, Studio}
+  alias ExTbpMonty.Mcp.Tools.{Cluster, Docs, Experiments, Port, Roadmap, Studio}
 
   @type ctx :: %{base_url: String.t()}
   @type result :: {:ok, %{text: String.t(), structured: map()}} | {:error, String.t()}
@@ -531,6 +534,20 @@ defmodule ExTbpMonty.Mcp.Tools do
         }
       },
       "annotations" => @destructive
+    },
+    %{
+      "name" => "monty_cluster_nodes",
+      "title" => "Cluster nodes",
+      "description" =>
+        "Which nodes are in this cluster, which build each one runs, and what each " <>
+          "one can do (its capability tags). A node that runs alone answers with one " <>
+          "entry: clustering is off, which is a different answer from a cluster of one.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{},
+        "additionalProperties" => false
+      },
+      "annotations" => @read_only
     }
   ]
 
@@ -559,7 +576,8 @@ defmodule ExTbpMonty.Mcp.Tools do
     "monty_run_experiment" => {Experiments, :run},
     "monty_run_report" => {Experiments, :run_report},
     "monty_list_runs" => {Experiments, :list_runs},
-    "monty_delete_runs" => {Experiments, :delete_runs}
+    "monty_delete_runs" => {Experiments, :delete_runs},
+    "monty_cluster_nodes" => {Cluster, :nodes}
   }
 
   # How a reader asks for them, which is not how the protocol needs them ordered.
@@ -574,7 +592,8 @@ defmodule ExTbpMonty.Mcp.Tools do
     {"Experiments", ~w(monty_list_experiments monty_describe_experiment monty_experiment_options
         monty_read_option monty_preview_experiment monty_create_experiment
         monty_export_experiment monty_import_experiment monty_run_experiment)},
-    {"Runs", ~w(monty_list_runs monty_run_report monty_delete_runs)}
+    {"Runs", ~w(monty_list_runs monty_run_report monty_delete_runs)},
+    {"The cluster", ~w(monty_cluster_nodes)}
   ]
 
   # A family that names a tool nobody defined is a compile error, not a page

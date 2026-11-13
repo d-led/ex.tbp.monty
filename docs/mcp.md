@@ -77,9 +77,14 @@ of theory to source).
 
 **Runs** — `monty_list_runs`, `monty_run_report`, `monty_delete_runs`.
 
+**The cluster** — `monty_cluster_nodes`: which nodes there are, which build each
+one runs, and what each one can do. A node that runs alone answers with one
+entry, because clustering being off is not the same answer as a cluster of one.
+
 Every tool has an `inputSchema` and honest annotations: the ones that only read
-say `readOnlyHint`; the two that write — a draft, a queued run — say that too;
-and `monty_delete_runs` says `destructiveHint`, because it is.
+say `readOnlyHint`; the ones that write — a draft, an imported file, a queued
+run — say that too; and `monty_delete_runs` says `destructiveHint`, because it
+is.
 
 ### Asking about this deployment
 
