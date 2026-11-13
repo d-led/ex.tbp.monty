@@ -51,7 +51,9 @@ defmodule FlyversePlugin.Policy do
 
   alias FlyversePlugin.{Native, Networks, Percept}
 
+  alias Monty.Cmp.Message
   alias Monty.Frameworks.Actions.{MoveForward, OrientHorizontal}
+  alias Monty.Frameworks.Environments.PositioningProcedures
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
 
   @enforce_keys [:sim]
@@ -85,6 +87,33 @@ defmodule FlyversePlugin.Policy do
   # flyverse's `DT_MS`, in seconds: the tick a window is counted in. A plan
   # counts ticks, and the wish is a first-order update over the time they took.
   @tick_seconds 0.0001
+
+  # -- Monty's own opening ---------------------------------------------------
+  #
+  # The network steers a sensor that is already on something. It cannot walk to
+  # the object: spikes about where the object is exist only once the object is
+  # in the patch, and before that the whole policy is what Monty's surface
+  # policy does before its walk — `SurfacePolicy.__call__`'s first branch and
+  # `_touch_object`. The numbers are Monty's, quoted from
+  # `motor_policies.py` so they can be compared line for line.
+
+  # `object_coverage` below this is a sensor that has left the object, or has
+  # not reached it (`SurfPolicy`'s threshold).
+  @coverage_to_touch 0.1
+
+  # What the view finder must see to be worth walking at, in metres, and where a
+  # `MoveForward` puts the sensor: Monty's `desired_object_distance` in
+  # `base_10simobj_surf_agent`, a fingertip from the surface.
+  @visible 1.0
+  @desired_object_distance 0.025
+
+  # The circle a search steps round, as a multiple of the standoff — ten
+  # centimetres in front of the agent, as Monty's comment says — and how far
+  # round it one step goes.
+  @search_circle_factor 4.0
+  @search_degrees 30.0
+
+  @view_finder "view_finder"
 
   @doc "The name a cluster registers it under."
   @spec name() :: String.t()
@@ -143,13 +172,27 @@ defmodule FlyversePlugin.Policy do
   @doc """
   Steps the network on what the sensor saw, and answers the action that follows.
 
-  The rates are computed from the image, the window is stepped in Rust, and the
-  difference of the readout counts is the steering wish. What this function does
-  *not* do is decide anything about the world: it decides how hard to drive, and
-  the network decides the rest.
+  Two halves, in Monty's order. While the patch is not on the object —
+  `object_coverage` below a tenth — the answer is Monty's `_touch_object`: one
+  `MoveForward` across the whole gap the view finder can see, or a step round a
+  search circle when it can see nothing. The network is not asked, because it
+  has nothing to steer by: its input is how near the left half of the patch is
+  compared with the right, and an empty patch says the same thing everywhere.
+
+  Once the patch is on the object, the network decides: the rates are computed
+  from the image, the window is stepped in Rust, and the difference of the
+  readout counts is the steering wish.
   """
   @impl FlyversePlugin.Plugin
-  def call(%__MODULE__{} = policy, {_ctx, observations, _motor_state, _percept, _goal}, state) do
+  def call(%__MODULE__{} = policy, {_ctx, observations, _motor_state, percept, _goal}, state) do
+    if on_object?(percept) do
+      steer(policy, observations, state)
+    else
+      {:ok, touch(policy, observations), policy, state}
+    end
+  end
+
+  defp steer(policy, observations, state) do
     simulation = Map.fetch!(state.simulations, policy.sim)
 
     with {:ok, {_sensor_id, rows}} <-
@@ -162,6 +205,53 @@ defmodule FlyversePlugin.Policy do
 
       {:ok, result, policy, put(state, policy.sim, simulation)}
     end
+  end
+
+  # Whether the patch is on the object at all, which is Monty's own question and
+  # his own threshold. A percept carrying no coverage — a policy driven by
+  # something other than a surface sensor — leaves the walk to the network.
+  defp on_object?(nil), do: true
+
+  defp on_object?(percept) do
+    case Message.feature(percept, "object_coverage") do
+      {:ok, coverage} when is_number(coverage) -> coverage >= @coverage_to_touch
+      _absent -> true
+    end
+  end
+
+  # Monty's `_touch_object`, step for step: the object is in view, so walk the
+  # whole gap in one step — twenty centimetres, where a four-millimetre crawl is
+  # fifty steps of no new view — and when it is not in view, step round a circle
+  # ten centimetres ahead until it is.
+  defp touch(policy, observations) do
+    depth = PositioningProcedures.depth_at_center(observations, policy.agent_id, @view_finder)
+
+    action =
+      if depth < @visible do
+        %MoveForward{agent_id: policy.agent_id, distance: depth - @desired_object_distance}
+      else
+        search(policy)
+      end
+
+    %MotorPolicyResult{
+      actions: [action],
+      # Monty does not show the learning module a step whose whole job was to
+      # find the object; there is nothing on it to learn from yet.
+      motor_only_step: true,
+      telemetry: %{depth_at_center: depth, searching: depth >= @visible}
+    }
+  end
+
+  defp search(policy) do
+    radius = @desired_object_distance * @search_circle_factor
+    radians = rad(@search_degrees)
+
+    %OrientHorizontal{
+      agent_id: policy.agent_id,
+      rotation_degrees: @search_degrees,
+      left_distance: :math.tan(radians) * radius,
+      forward_distance: radius * (1.0 - :math.cos(radians)) / :math.cos(radians)
+    }
   end
 
   @doc "Starts the next episode at the connectome's resting state."
@@ -329,6 +419,8 @@ defmodule FlyversePlugin.Policy do
   end
 
   defp rate(nearness), do: min(nearness * @drive_gain, @max_hz)
+
+  defp rad(degrees), do: degrees * :math.pi() / 180.0
 
   defp put(state, key, simulation),
     do: %{state | simulations: Map.put(state.simulations, key, simulation)}

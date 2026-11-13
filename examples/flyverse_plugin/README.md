@@ -56,8 +56,19 @@ The action is one or the other, never both. A turn is `OrientHorizontal` with no
 slide — five degrees per step — because `TurnLeft`/`TurnRight` are the distant
 agent's actions and the surf agent a MuJoCo world hands us has no
 `actuate_turn_*` at all. A walk is `MoveForward` at four millimetres, Monty's own
-surf-agent step. That pair is what takes a sixty-step episode from the agent's
-start to a hypothesis on the object: walk while balanced, yaw while not.
+surf-agent step.
+
+The beginning of an episode is not the network's, and this is the part worth
+being honest about: a patch that is not on the object has no left-versus-right
+difference to steer by, so a network asked to walk to the object can only turn on
+the spot. The first steps are therefore Monty's `SurfacePolicy._touch_object`,
+copied with its own numbers — below a tenth of the patch covered
+(`object_coverage`), one `MoveForward` across the whole gap the view finder can
+see, and, when the view finder sees nothing within a metre, a step round a search
+circle ten centimetres ahead, thirty degrees at a time, until something comes
+into view. Twenty centimetres is one step that way, where a four-millimetre crawl
+is fifty steps of the same view. Network steering starts when the patch is on
+something, and stops when it is not.
 
 The rates, the gain and the action mapping are this plugin's and
 `FlyversePlugin.Policy` says so line by line. The dynamics are flyverse's. With
