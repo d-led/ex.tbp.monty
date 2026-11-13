@@ -329,8 +329,10 @@ node2@127.0.0.1`, and still on its first attempt — a snooze is not a failed
   keeps one row per part: how many the experiment was divided into, what state
   each is in, and the node that has it — written when the worker divides the run
   and updated as each part starts and ends. The run page's header counts them (`3
-of 4 parts done`) and names each part's node in the count's title. Today every
-  row says this node, because a part is a task inside one job; the rows are there
+of 4 parts done`) and its title names each part's node and the steps it took, so a
+  part that ended at 68 of the 70 steps it was given reads differently from one
+  that did all of them. Today every row says this node, because a part is a task
+  inside one job; the rows are there
   so that the day it is not, the page and the record already say so. They cost no
   message: a page reads a table.
 
