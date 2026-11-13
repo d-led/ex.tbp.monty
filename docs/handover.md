@@ -3136,30 +3136,51 @@ tree for named processes, and `:pg` for the plugin registry.
   `stop_parts_there/1`. The stop path failing as a `BadMapError` under test is what
   found the third one.
 
-### 44.3 What is not resumable, said plainly
+### 44.3 What a part does now, and where it stops
 
-A part that is given to another node **starts its episodes from the beginning**.
-The lease keeps that safe — nothing the lost holder writes can land — but it is
-repeated work, not resumed work. Resuming from episode _k_ needs a part to write
-its progress episode by episode; today its file is written when the part ends.
-That is the next slice, and the row keeps `steps` for it.
+**A part writes as it goes** (`7922172`). At every episode boundary `keep/2`
+appends what it took to `<run>/parts/<phase>-<index>.jsonl` and one line to
+`<phase>-<index>.progress`; `Artifacts.progress/3` counts the second and
+`remaining/2` drops that many episodes from the front of what the part was given.
+So a part given to a second node after its first went silent **picks up at its
+first unfinished episode** — the transcript keeps the steps of both attempts in
+order, and the episodes that finished are not taken twice.
+
+Two boundaries on that, both deliberate:
+
+- **training parts restart.** A part's episodes build on each other — the graph
+  one made is the graph the next extends — and the model that took them did not
+  travel with the part. Resuming a training part needs a model checkpoint, which
+  is a different piece of work and is not claimed here.
+- **the marker is per episode, not per step.** One append an episode is cheap; a
+  step is not the unit anyone can resume at, because an episode's beliefs are the
+  model's, not the transcript's.
 
 ### 44.4 What is left
 
-- **Resume from the last finished episode** (above), which is also what would make
-  a training part survive a node loss at sub-part cost.
-- **A supervisor for the recovery path.** `lapsed_parts/1` exists and is tested;
-  nothing sweeps a whole run's parts and re-divides them after a node loss at the
-  _run_ level — the wave now recovers inside itself, which covers one node dying
-  while a part is in hand.
+- **A model checkpoint, for a training part** (above): the one kind of part that
+  still starts its stretch again.
+- **A sweep for the recovery path.** `lapsed_parts/1` exists and is tested;
+  nothing reclaims a whole run after the node that owned it died — the wave
+  recovers inside itself, which covers a node dying while a part is in hand, not
+  a run whose owner went with it.
+- **`flyverse_plugin` in CI.** It is linted with everything else and built by
+  nobody: Rustler 0.38 registers no `compile.rustler` task, so its crate is built
+  by hand into `priv/native`. It needs a compiler of its own, and then a matrix
+  leg in `.github/workflows/ci.yml` (the workflow says so where the matrix is).
+- The examples are not decrapped: CRAP needs a `mix test --cover` export per
+  example, which the gate does not collect.
 - The run list across per-node databases, a part's live steps not crossing, and
   `route/4` — unchanged from §43.4.
 
 ### 44.5 The gate
 
-`mix compile --warnings-as-errors` clean, `mix lint` exit 0, `mix credo --strict`
-no issues; the touched suites green (claim 9, run_history 68, partition 17, run
-42 — including the recovery case where a part's first candidate is a peer that is
-not there — reaper + MCP experiments 51); full `mix test` **3137 passed** (67
-properties, 3070 tests) before the first two commits were pushed. Dialyzer runs
-in CI's types job.
+`mix compile --warnings-as-errors` clean, `mix lint` exit 0 (now including
+`examples/*/lib` and `examples/*/test`), `mix credo --strict` no issues over 539
+files; the touched suites green — claim 9, run_history 68, partition 17, run 44
+(the recovery cases and the two resume cases), indices and pages 67, artifacts 27.
+CI's own answer, from the runs of these commits: `lint`, `types`, `test 2/4`,
+`test 3/4`, `test 4/4` and the `example_plugin` leg all green; the only reds were
+a facet list this change made stale (fixed in the next commit) and
+`flyverse_plugin`'s crate, which is §44.4's first item. Dialyzer runs in CI's
+types job.
