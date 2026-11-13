@@ -2675,6 +2675,17 @@ concluding early), passes alone, and is written up in MemPalace under
 `suspected-issues` — the candidate is an unseeded RNG where the episode's own
 stream should be used.
 
+**Two candidates measured and killed (2026-11-13, `a3cf660`+).** The vote round
+was the better guess than the RNG: `Barrier.run/2` _drops_ a vote that misses its
+deadline, so a loaded machine would decide the answer. It is not, for this case:
+five runs against eight busy cores reached 27 every time, and so did a run with
+the deadline set to one millisecond, where every vote is dropped — the episode has
+one learning module and no cross-module voting (`lm_to_lm_vote: %{module_id =>
+[]}`), so its votes cannot change it. The RNG candidate is still unmeasured. What
+did land is the faithfulness half: Python's vote round has no deadline at all, so
+this case now runs with `vote_timeout: :infinity` and its parity claim no longer
+has a machine in it.
+
 ## 41. 2026-11-13: split runs, and what is left of them
 
 This session was the division of a run across nodes, taken from "the row exists"
@@ -3075,8 +3086,9 @@ In the order I would take it, none of it started:
   it wants the user's nod.
 - **`collect/2`'s error branch has no test.** It has now been _run_ (43.2, by a
   peer that could not start), and a test still wants an injected failure.
-- The `RecordingEpisodeTest` flake, unchanged: the candidate is an unseeded RNG
-  where the episode's stream belongs.
+- The `RecordingEpisodeTest` flake, unchanged: the vote deadline and the RNG are
+  both still unexplained (the deadline is measured out — see §40), and the case
+  now takes the deadline out of its own fidelity claim.
 
 ### 43.5 The gate
 
@@ -3269,7 +3281,7 @@ line is a log written for whoever debugs the page.
 `statistics could not be written: …` and — worst of the three —
 `could not close the record: [steps: {"is invalid", [type: :integer]}]`; and the
 MCP answers pasted terms too, one of them (`Mcp.Experiments`) returning
-`inspect(reason)` as the *entire* error message. So `Failure` gained two more
+`inspect(reason)` as the _entire_ error message. So `Failure` gained two more
 phrases: `file/1`, which asks OTP for the words it already keeps
 (`:file.format_error(:enospc)` is "no space left on device") and describes a shape
 that is not an error at all, and `complaints/1`, which turns a changeset's keyword

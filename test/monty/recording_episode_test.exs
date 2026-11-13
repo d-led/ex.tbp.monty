@@ -162,7 +162,20 @@ defmodule Monty.RecordingEpisodeTest do
             }
           ],
           sm_to_lm: %{module_id => [@channel]},
-          lm_to_lm_vote: %{module_id => []}
+          lm_to_lm_vote: %{module_id => []},
+          # Monty's vote round is one process calling each module in turn, so it
+          # has no deadline at all; the port's five seconds are a concession to a
+          # module that stops answering, and a vote that misses them is dropped
+          # (`Barrier.run/2`). A parity claim should not leave the machine a say
+          # in an answer, so this case removes the deadline.
+          #
+          # Measured, because the guess was wrong once: this is *not* what made
+          # the case report 21 steps instead of 27 under a loaded suite. Five runs
+          # against eight busy cores with the deadline removed all reached 27, and
+          # a one-millisecond deadline — every vote dropped — also reached 27: the
+          # episode has one learning module and no cross-module voting, so the
+          # votes are not the variable here. That flake has no explanation yet.
+          vote_timeout: :infinity
         })
         # The recording holds what the sensors saw, not where the agent stood,
         # so Monty's own motor system has nothing here to plan a jump from.
