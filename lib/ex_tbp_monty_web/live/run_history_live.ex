@@ -2266,7 +2266,37 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp inputs(%{inputs: inputs}) do
     inputs
     |> Enum.sort_by(fn {key, _value} -> key end)
-    |> Enum.map(fn {key, value} -> {key, format(value)} end)
+    |> Enum.map(&input_line/1)
+  end
+
+  # A divided run's `parts` is a list of maps — the episodes each part was given,
+  # and the stream its steps are kept in while it runs — and printing that is
+  # unreadable: a person asked how the experiment was split, not what the map
+  # holds. The parts themselves are drawn below with their nodes and steps
+  # (`#run-division`), so this line is the shape of the division and nothing else.
+  defp input_line({"parts", [_ | _] = parts}), do: {"parts", parts_line(parts)}
+  defp input_line({key, value}), do: {key, format(value)}
+
+  # "2 parts, 70 episodes (eval) each" — one clause per part when the parts were
+  # given different things, because then the difference is the fact worth reading.
+  defp parts_line(parts) do
+    of = parts |> List.first() |> Map.get("of") || length(parts)
+
+    given =
+      parts
+      |> Enum.map(fn part ->
+        phases = part["phases"] || %{}
+        episodes = phases |> Map.values() |> Enum.map(&length/1) |> Enum.sum()
+        named = phases |> Map.keys() |> Enum.sort() |> Enum.join("+")
+
+        "#{episodes} episodes (#{named})"
+      end)
+      |> Enum.uniq()
+
+    case given do
+      [one] -> "#{of} parts, #{one} each"
+      several -> "#{of} parts: " <> Enum.map_join(several, " · ", & &1)
+    end
   end
 
   # The config the run was started with, read back from its own snapshot: the

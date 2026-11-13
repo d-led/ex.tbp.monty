@@ -403,6 +403,53 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert has_element?(view, "#log-0-0")
     end
 
+    # A divided run's inputs are a data structure — the episodes each part was
+    # given and the stream its steps live in — and printing it dumped an episode
+    # list and a UUID at a reader who asked how the experiment was split. The parts
+    # are drawn below with their nodes and steps; this says the shape.
+    test "a divided run's parts read as a sentence, not as their map", %{conn: conn} do
+      episodes = Enum.to_list(0..69)
+
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 100,
+          inputs: %{
+            "episodes" => 140,
+            "parts" => [
+              %{
+                "index" => 0,
+                "of" => 2,
+                "phase" => "eval",
+                "phases" => %{"eval" => episodes},
+                "stream" => Ecto.UUID.generate()
+              },
+              %{
+                "index" => 1,
+                "of" => 2,
+                "phase" => "eval",
+                "phases" => %{"eval" => Enum.to_list(70..139)},
+                "stream" => Ecto.UUID.generate()
+              }
+            ]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      inputs = view |> element("#run-inputs") |> render()
+
+      assert inputs =~ "2 parts, 70 episodes (eval) each"
+
+      # None of what made it unreadable: the per-part keys, the episode list, and
+      # the stream a part's steps are kept in, which is nobody's choice.
+      refute inputs =~ "index="
+      refute inputs =~ "phases="
+      refute inputs =~ "stream="
+      refute inputs =~ "0, 1, 2, 3,"
+    end
+
     # The reason the step path exists: a step the worker publishes is in memory on
     # this node, so showing it must not ask the database anything. A page that
     # read the record per step competed with the run it was watching — the reason
