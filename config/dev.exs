@@ -4,16 +4,22 @@ import Config
 # environment when nothing is configured, and a development machine has a
 # Postgres of its own rather than a file — say so here, once.
 #
-# `MONTY_DB=sqlite` is the exception, and it exists for one thing: several nodes
-# of this application on one machine (`process-compose.yaml`), where each node
-# keeps its own file under `nodes/<its name>` and there is no server to point at.
+# Two exceptions, both about nodes rather than about this machine:
 #
-# What it deliberately does *not* do is configure that file: which repo it is, and
-# where its file lives, are `ExTbpMonty.Database`'s answers, and they are given in
-# `config/runtime.exs`. This file cannot ask the application anything — a dev
+#   * `MONTY_DB=sqlite` — several nodes on one machine (`process-compose.yaml`),
+#     where each node keeps its own file under `nodes/<its name>`;
+#   * `DATABASE_URL` — several nodes told about **one** database, which is what a
+#     cluster with a shared runs table is, and what a release does by itself.
+#     Naming it here would refuse it: the release's answer is the environment's,
+#     so a development node that was given a URL leaves the choice to
+#     `ExTbpMonty.Database` too.
+#
+# What it deliberately does *not* do is configure the file case: which repo it is,
+# and where its file lives, are `ExTbpMonty.Database`'s answers, and they are given
+# in `config/runtime.exs`. This file cannot ask the application anything — a dev
 # config is evaluated before the modules are compiled, and the call raises
 # `UndefinedFunctionError` (it did).
-if System.get_env("MONTY_DB") != "sqlite" do
+if System.get_env("MONTY_DB") != "sqlite" and System.get_env("DATABASE_URL") in [nil, ""] do
   config :ex_tbp_monty, :repo, ExTbpMonty.Repo.Postgres
 
   # Configure your database

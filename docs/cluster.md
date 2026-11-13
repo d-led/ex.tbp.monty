@@ -155,17 +155,44 @@ That is not an oversight, it is where the two hard problems are:
 - **The run's job lives in that node's database.** With a file per node, a second
   node neither sees the job nor can take it. Spreading the _queue_ needs one runs
   table for the whole cluster (`DATABASE_URL` pointing every node at one Postgres,
-  which `ExTbpMonty.Database` already supports) or a merged view over the nodes'
-  own tables. The row already says whose run it is — `studio_runs.node`, the
-  node's folder name, written when the run is recorded — so a merged view has the
-  column it needs; the runs list shows it only on a node that was asked to
-  cluster, because with one node it is a column saying "this one" on every row.
+  which `ExTbpMonty.Database` already supports, in development too) or a merged
+  view over the nodes' own tables. The row already says whose run it is —
+  `studio_runs.node`, the node's folder name, written when the run is recorded —
+  so a merged view has the column it needs; the runs list shows it only on a node
+  that was asked to cluster, because with one node it is a column saying "this
+  one" on every row.
 - **A part writes files and publishes its steps into memory.** A part's log and
   pictures go to `Artifacts.dir/1` and its steps to `Monty.Studio.RunStream`, on
   the node performing it; the run that owns the parts reads both, from its own
   node. Running a part elsewhere therefore needs either a filesystem the owning
   node can read (a mount, which is a deployment decision, not a code change) or an
   explicit transfer of what the part produced.
+
+### What one database gives you today, measured
+
+Two development nodes told about **one** Postgres
+(`DATABASE_URL=… MONTY_CLUSTER=1 MONTY_SEEDS=… elixir --name nodeN@127.0.0.1 -S
+mix phx.server`), a run recorded on node1:
+
+- **the queue spreads.** The job was inserted by node1 and taken by **node2**
+  (`Jobs.Run.held?/1` answered `true` on node2, `false` on node1), and the steps
+  went to 87 while both nodes read the same row;
+- **the list is one list.** Both nodes' `/runs` show the run, with
+  `owner=node1_127.0.0.1` — the node that recorded it;
+- **the peer panel stays honest**: a node answers a peer with the runs **it owns**
+  (`RunHistory.search(state: "running", node: …)`), so a shared table does not
+  make every node report the others' runs as "somebody else's";
+- **what is still one node's**: the live steps, which live in the memory of the
+  node performing the run (the row is the record, written at every episode
+  boundary, so a page elsewhere is that much behind), and — in a **release** —
+  the run's files, which are written under the performing node's folder
+  (`:studio_artifacts_dir`; a development node writes them into the checkout, so
+  two dev nodes share them by accident).
+
+One consequence worth deciding before relying on it: with one table, `node` means
+_who recorded the run_, and the node that **performs** it may be a different one
+(the run above was node1's and ran on node2). The column's meaning — recorder or
+performer — and the folder the files land in have to be the same answer.
 
 Until those are answered, `Nodes.offering/1` answers a question nobody acts on
 yet, and a cluster of several nodes is several studios that see each other and

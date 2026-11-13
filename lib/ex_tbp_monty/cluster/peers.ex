@@ -60,10 +60,15 @@ defmodule ExTbpMonty.Cluster.Peers do
   (`RunHistory.search/1` reads a row's columns without them), and only a handful
   of them. The time is a string because the page that shows it is on another node,
   with another clock's idea of now — the browser renders it in its own.
+
+  **This node's own**, which is the same thing as "every unsettled run" with a
+  file per node and is not with one runs table for the whole cluster: there, a
+  peer that answered with everything would hand this page its own runs back as
+  somebody else's.
   """
   @spec local_in_flight() :: [map()]
   def local_in_flight do
-    RunHistory.search(state: "running", per_page: @limit).runs
+    RunHistory.search(state: "running", node: Monty.Paths.data_dir_name(), per_page: @limit).runs
     |> Enum.map(fn run ->
       %{
         id: run.id,

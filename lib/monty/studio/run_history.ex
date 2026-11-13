@@ -507,12 +507,14 @@ defmodule Monty.Studio.RunHistory do
   @per_page 25
 
   @doc """
-  One page of runs, narrowed by state and by text.
+  One page of runs, narrowed by state, by text and — when asked — by node.
 
   `state` is a run's own status (`"running"`, `"finished"`, `"stopped"`,
   `"failed"`), or `"all"` for every one. `text` filters on the experiment's name,
   and **every word of it must match** — two words narrow the list instead of
-  widening it, which is what a person typing a second word means.
+  widening it, which is what a person typing a second word means. `node` keeps
+  only the runs one node owns, which with a file per node is every run in the
+  table and with one table for the whole cluster is not.
 
   Answers the page, the total it is a page of, and how many pages that makes, so
   a view can draw its pager without asking again. A run on the page is a row:
@@ -529,10 +531,11 @@ defmodule Monty.Studio.RunHistory do
   def search(options \\ []) do
     state = Keyword.get(options, :state, "all")
     text = Keyword.get(options, :text, "")
+    node = Keyword.get(options, :node)
     page = options |> Keyword.get(:page, 1) |> max(1)
     per_page = Keyword.get(options, :per_page, @per_page)
 
-    narrowed = Run |> by_state(state) |> by_text(text)
+    narrowed = Run |> by_state(state) |> by_text(text) |> by_node(node)
     total = Repo.aggregate(narrowed, :count, :id)
 
     runs =
@@ -602,6 +605,11 @@ defmodule Monty.Studio.RunHistory do
     do: where(query, [run], run.status == ^state)
 
   defp by_state(query, _every_state), do: query
+
+  # A row recorded before the column existed has no node, and there is one node it
+  # can belong to: the one it is in the table of.
+  defp by_node(query, nil), do: query
+  defp by_node(query, node), do: where(query, [run], is_nil(run.node) or run.node == ^node)
 
   # Every word is its own condition, so the conditions narrow each other. What a
   # word may not do is act as a wildcard: `%` and `_` are characters a person

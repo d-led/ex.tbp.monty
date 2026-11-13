@@ -71,6 +71,30 @@ defmodule ExTbpMonty.Cluster.PeersTest do
     assert id == queued.id
   end
 
+  # One runs table for the whole cluster is a deployment away, and there this
+  # matters: a peer that answered with every unsettled run in the table would hand
+  # this page its own runs back as somebody else's.
+  test "a run another node owns is not this node's answer" do
+    name = Monty.Paths.data_dir_name() || "node1_127.0.0.1"
+
+    {:ok, theirs} = in_a_node("node2_127.0.0.1", fn -> RunHistory.start(@attributes) end)
+    {:ok, ours} = in_a_node(name, fn -> RunHistory.start(@attributes) end)
+
+    assert [%{id: id}] = Peers.local_in_flight()
+    assert id == ours.id
+    refute id == theirs.id
+  end
+
+  # The node a run was recorded on is the setting `config/runtime.exs` puts there
+  # at boot; a test puts it there itself, because a test is not a node.
+  defp in_a_node(name, fun) do
+    previous = Application.get_env(:ex_tbp_monty, :data_dir_name)
+    Application.put_env(:ex_tbp_monty, :data_dir_name, name)
+    on_exit(fn -> Application.put_env(:ex_tbp_monty, :data_dir_name, previous) end)
+
+    fun.()
+  end
+
   defp this_node,
     do: %{node: node(), name: "this_1", self: true, alive: true, capabilities: ["monty"]}
 

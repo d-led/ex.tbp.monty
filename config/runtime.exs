@@ -73,13 +73,17 @@ data_dir_name =
 Application.put_env(:ex_tbp_monty, :data_dir_name, data_dir_name)
 config :ex_tbp_monty, :data_dir_name, data_dir_name
 
-# A development node that keeps its runs in a file (`MONTY_DB=sqlite`, which is
-# what `process-compose.yaml` starts): the same four answers the release gives
-# itself below, for the same reason — and given *here* because this file is
-# evaluated after the application is compiled, so `ExTbpMonty.Database` can be
-# asked. `config/dev.exs` can only say which repo is not wanted, because at that
-# point the module does not exist yet.
-if config_env() == :dev and System.get_env("MONTY_DB") == "sqlite" do
+# A development node whose database the environment chose — a file per node
+# (`MONTY_DB=sqlite`, which is what `process-compose.yaml` starts) or one database
+# for the whole cluster (`DATABASE_URL`, the arrangement a release uses): the same
+# four answers the release gives itself below, for the same reason — and given
+# *here* because this file is evaluated after the application is compiled, so
+# `ExTbpMonty.Database` can be asked. `config/dev.exs` can only say which repo is
+# not wanted, because at that point the module does not exist yet.
+chosen_by_environment? =
+  System.get_env("MONTY_DB") == "sqlite" or System.get_env("DATABASE_URL") not in [nil, ""]
+
+if config_env() == :dev and chosen_by_environment? do
   repo = ExTbpMonty.Database.repo_module()
 
   config :ex_tbp_monty, :repo, repo
