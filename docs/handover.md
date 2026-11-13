@@ -3160,10 +3160,8 @@ Two boundaries on that, both deliberate:
 
 - **A model checkpoint, for a training part** (above): the one kind of part that
   still starts its stretch again.
-- **A sweep for the recovery path.** `lapsed_parts/1` exists and is tested;
-  nothing reclaims a whole run after the node that owned it died — the wave
-  recovers inside itself, which covers a node dying while a part is in hand, not
-  a run whose owner went with it.
+- ~~A sweep for the recovery path~~ — **done, §46**: the boot sweep re-queues a
+  run whose division has something done and something left.
 - **`flyverse_plugin` in CI.** It is linted with everything else and built by
   nobody: Rustler 0.38 registers no `compile.rustler` task, so its crate is built
   by hand into `priv/native`. It needs a compiler of its own, and then a matrix
@@ -3259,3 +3257,73 @@ so `psql` sees one node's truth at best and nothing at worst. What worked:
   with `:rpc.call(:"node1@127.0.0.1", Monty.Studio.RunHistory, :list, [[limit: 5]])`
   — the query runs on the node that owns the rows. `--hidden` keeps it out of
   every `Node.list/0` the pages draw.
+
+## 46. 2026-11-13: a run continues the division its dead worker left
+
+The forum's question — _are partitions stateless workers or resumable experiment
+owners?_ — was answered "stateless work" in §44.3, with the part-lost case as the
+only exception. It is answered "owners" now, at both levels: a part given away
+resumes its evaluation episodes, and a **run** whose worker died is put back in the
+queue and continues its division instead of being closed.
+
+### 46.1 What landed
+
+- `d0bc2a0` — the division survives an attempt. `run_partitioned/3` keeps the rows
+  and the part files it finds (`plan_parts/2` and `Artifacts.clear_parts/1` were
+  erasing both on every execution), `RunHistory.ended_parts/1` says which parts an
+  earlier attempt ended, and `step_wave/6` does not perform those again. The run's
+  log names them, one line each, before the first step.
+- `3738467` — `Reaper.recover/0` at boot, before `sweep/0`: every run of this
+  node's whose division has **something done and something left** goes back in the
+  queue; everything else is still closed. `RunHistory.requeue/1` writes the true
+  word, `queued`.
+- The numbers survive too: `RunHistory.checkpoint_summary/2` writes the total at
+  the training wave's boundary, and `Summary.restore/1` reads it back.
+- `7787329` — not the feature, but it was red at HEAD and would have failed CI's
+  lint: sobelow 0.19's new `DOS.Tar`/`DOS.Zip`/`DOS.Decompression` checks (five
+  findings in files nobody had touched), and `Stops.start_link/1`'s `@impl true`,
+  which is not a callback and breaks `mix compile --warnings-as-errors`.
+
+### 46.2 The traps, which are the part worth keeping
+
+- **`plan_parts/2` deletes what it replaces, and `Artifacts.clear_parts/1` deletes
+  the files.** Both are right for a second _attempt_ at one experiment and fatal for
+  the same attempt continuing: a resume that calls either has already lost the
+  checkpoint. The division's presence is what decides which branch runs.
+- **`Summary` has two spellings.** A record keeps `"match"`; the live fold counts
+  `:match`. Restoring without converting makes `merge_tally/2` keep both, and a page
+  shows one module twice — a wrong number that looks like two modules that each
+  concluded. `restore/1` converts the three places ids and states are stored.
+- **An ended part is not a part in hand.** `ended_parts/1` counts `finished`,
+  `failed` and `stopped`; a `running` row whose lease has not expired is somebody's
+  live work, and skipping it would be skipping work, not saving it.
+- **The bound for recovery is the boot, not a counter.** `sweep/0` runs on every
+  tick of every open page. A recovering sweep would put a crash-looping run back in
+  the queue once a tick; a boot puts it back once, and says so in the run's log
+  where whoever wonders why it ran twice will look.
+- **Queue first, status second.** `Run.enqueue_run/1` before
+  `RunHistory.requeue/1`: a run that could not be queued must not say `queued` —
+  the failure returns `false` and the sweep closes it.
+
+### 46.3 What is still not resumed
+
+- A **training** part interrupted mid-episode starts that episode again. The model
+  that took the earlier episodes did not travel with the part, and a checkpoint is
+  the only thing that would change that.
+- A worker that dies **inside** a wave loses that wave's numbers: the checkpoint is
+  at wave boundaries, because until a wave ends its numbers exist only in the
+  process. The steps are not lost — each part keeps its own — so the transcript is
+  whole and the tally is short of that wave.
+- The run list across per-node stores stays a per-node list with a peer panel
+  (`ExTbpMonty.Cluster.Peers`) instead of one merged list: a merged row would offer
+  Stop and Delete for a run the page cannot see.
+
+### 46.4 The gate
+
+`mix lint` 0 (compile `--warnings-as-errors`, format, credo 5606 mods/funs with no
+issues, sobelow); the full suite **3188 passed** — twice, because the first run
+lost `recording_episode_test.exs`' fidelity case to the machine being loaded (21
+steps against 27); that case passes alone and on the second full run. The three
+CRAP paths 20.00/20, 20.00/20, 29.85/30 over a fresh `mix cover` export; dialyzer
+0 errors. CI: `80a78ec` and `afcb43f` **success** on every job including the three
+desktop legs, `d0bc2a0` in progress, `3738467` behind it.

@@ -356,13 +356,39 @@ naming the things that make the second true:
   part's row returned to `queued`, the second candidate claimed it, and the old
   token's later `finished` was refused.
 
-What is **not** resumable yet, said plainly: a part that is given away starts its
-episodes from the beginning. The lease makes that safe — nothing the lost holder
-writes can land — but it is repeated work rather than resumed work. `n_train_epochs`
-and the episode list are in the record, so resuming from episode _k_ is a matter of
-a part writing its progress episode by episode, which its file does not do today
-(it is written when the part ends). That is the next slice, and it is why the row
-keeps `steps`.
+What a lost part does next, said plainly: an **evaluation** part given to another
+node picks up where the one that had it stopped. Its file carries the episodes it
+finished (`Artifacts.append_part/6`, written at every boundary), and
+`Jobs.Run.remaining/2` drops those from what the new owner is given. A **training**
+part still starts its stretch again, because the episodes build on each other and
+the model that took them did not travel with the part. The lease is what makes
+either safe: nothing the lost holder writes can land.
+
+### A run whose worker died, which is not the same failure
+
+A node dying _while a part is in hand_ is the case above — the part is re-taken
+inside the wave that was already running. A node dying _with the run_ is another:
+nothing is left to walk the division, and until `3738467` the answer was to close
+the run as failed (`Monty.Studio.Jobs.Reaper.sweep/0`) and lose the work.
+
+Now the boot sweep asks first. `Reaper.recover/0` runs once at boot, before the
+sweep, and put back in the queue every run of this node's whose division has
+**something done and something left**; the sweep then closes whatever it did not
+take. What a resumed run keeps:
+
+| it keeps                       | where it comes from                                            |
+| ------------------------------ | -------------------------------------------------------------- |
+| the division, one row per part | `RunHistory.parts/1` — a run that finds one does not plan      |
+| the parts an attempt ended     | `RunHistory.ended_parts/1`; `step_wave/6` skips them           |
+| each part's steps              | the part files (`Jobs.Run.store_parts/2`)                      |
+| the numbers so far             | `RunHistory.checkpoint_summary/2`, read by `Summary.restore/1` |
+
+Three things it does not keep, and says so in the run's own log: a training part
+interrupted mid-episode starts that episode again; a worker that dies **inside** a
+wave loses that wave's numbers (the checkpoint is at wave boundaries, because until
+a wave ends its numbers are in memory only); and a run whose parts are all ended is
+closed rather than resumed — there is nothing to perform, and re-queueing it would
+be a second attempt wearing the first one's record.
 
 **On Horde and consistent hashing**, the suggestion this design did not take
 literally. `Horde.Registry` and `Horde.DynamicSupervisor` are already in the
