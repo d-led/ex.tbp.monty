@@ -34,6 +34,7 @@ defmodule Monty.Studio.RemotePolicy do
 
   @behaviour Monty.Frameworks.Models.MotorPolicySelectors.MotorPolicySelector
 
+  alias ExTbpMonty.Cluster.Capabilities
   alias ExTbpMonty.Cluster.Nodes
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
   alias Monty.Frameworks.Models.MotorPolicySelectors.MotorPolicySelector
@@ -96,22 +97,51 @@ defmodule Monty.Studio.RemotePolicy do
   end
 
   def among(hosts, name, kind) do
-    hosts
-    |> Enum.reduce_while([], fn entry, asked ->
-      case :rpc.call(entry.node, @registry, :lookup, [kind, name], @timeout) do
-        {:ok, provider} -> {:halt, {:ok, of(provider)}}
-        _not_there -> {:cont, [entry.name | asked]}
-      end
-    end)
-    |> case do
-      {:ok, policy} ->
-        {:ok, policy}
+    answers = Enum.map(hosts, &ask(&1, name, kind))
+    offerings = for {:offered, host, provider} <- answers, do: offering(host, provider)
 
-      asked ->
-        {:error,
-         "#{inspect(name)} is offered by no node that hosts plugins; asked " <>
-           Enum.map_join(Enum.reverse(asked), ", ", &inspect/1)}
+    case Enum.filter(offerings, &(&1.missing == [])) do
+      [fit | _] -> {:ok, fit.policy}
+      [] -> {:error, refusal(answers, offerings, name)}
     end
+  end
+
+  # Every host is asked, and the answer is kept with the host it came from: which
+  # node offers a plugin and whether that node can serve it are two facts, and a
+  # caller that stopped at the first answer would be handed the second-best one
+  # without knowing there was a better.
+  defp ask(host, name, kind) do
+    case :rpc.call(host.node, @registry, :lookup, [kind, name], @timeout) do
+      {:ok, provider} -> {:offered, host, provider}
+      _not_there -> {:not_offered, host}
+    end
+  end
+
+  # What an offering is worth. A plugin says what it needs to answer at all
+  # (`MontyPlugin`'s `needs`: the geometry, the file, the framework), and a node
+  # that offers the plugin without offering one of them is a node where the call
+  # fails inside the plugin, at a step, where the cluster cannot predict it — so
+  # it is not a candidate, and `refusal/3` says what it lacks rather than leaving
+  # a reader to guess.
+  defp offering(host, provider), do: %{policy: of(provider), missing: lacking(host, provider)}
+
+  defp lacking(host, %{describe: {:ok, describe}}) do
+    describe
+    |> Map.get("needs", [])
+    |> Enum.reject(&Capabilities.offers?(host.capabilities, &1))
+  end
+
+  defp refusal(answers, [], name) do
+    "#{inspect(name)} is offered by no node that hosts plugins; asked " <>
+      Enum.map_join(answers, ", ", fn {_answer, host} -> inspect(host.name) end)
+  end
+
+  defp refusal(_answers, offerings, name) do
+    "#{inspect(name)} is offered, but by no node that can serve it: " <>
+      Enum.map_join(offerings, "; ", fn offering ->
+        "#{offering.policy.name} on #{offering.policy.node} does not offer " <>
+          Enum.map_join(offering.missing, ", ", &inspect/1)
+      end)
   end
 
   defp hosts do

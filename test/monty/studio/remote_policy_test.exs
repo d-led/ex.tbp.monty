@@ -156,6 +156,40 @@ defmodule Monty.Studio.RemotePolicyTest do
       assert why =~ "no node in this cluster says it hosts plugins"
     end
 
+    # A plugin says what it needs to answer at all (`MontyPlugin`'s `needs`), and a
+    # node can host plugins without having the geometry. Handing the caller a copy
+    # on that node is a call that fails inside the plugin, at a step, in a run —
+    # where the cluster cannot say why.
+    test "a host that cannot serve what the plugin needs is not used", %{provider: provider} do
+      MontyPlugin.Registry.offer(
+        :motor_policy,
+        "example_scan",
+        {:ok, needing(provider, [:quiddity])}
+      )
+
+      here_without_quiddity = host(node(), ["monty", "plugin"])
+
+      assert {:error, why} =
+               RemotePolicy.among([here_without_quiddity], "example_scan", :motor_policy)
+
+      assert why =~ "is offered, but by no node that can serve it"
+      assert why =~ "does not offer :quiddity"
+    end
+
+    test "a host that offers what the plugin needs is the one used", %{provider: provider} do
+      MontyPlugin.Registry.offer(
+        :motor_policy,
+        "example_scan",
+        {:ok, needing(provider, [:quiddity])}
+      )
+
+      thin = host(node(), ["monty", "plugin"])
+      with_geometry = host(node(), ["monty", "plugin", "quiddity"])
+
+      assert {:ok, %RemotePolicy{pid: ^provider}} =
+               RemotePolicy.among([thin, with_geometry], "example_scan", :motor_policy)
+    end
+
     test "a plugin offered but unusable is named, not skipped", %{provider: provider} do
       MontyPlugin.Registry.offer(
         :motor_policy,
@@ -179,9 +213,23 @@ defmodule Monty.Studio.RemotePolicyTest do
     }
   end
 
+  defp needing(pid, needs) do
+    %{
+      node: node(),
+      name: "example_scan",
+      pid: pid,
+      describe: {:ok, %{"name" => "example_scan", "version" => "0.2.0", "needs" => needs}}
+    }
+  end
+
   defp here, do: host(node())
 
-  defp host(name), do: %{node: name, name: to_string(name)}
+  # A host as the poller writes one: the tags it advertises are the question a
+  # caller asks before it trusts a plugin to answer.
+  defp host(name), do: host(name, ["monty", "plugin"])
+
+  defp host(name, capabilities),
+    do: %{node: name, name: to_string(name), capabilities: capabilities}
 
   defp restore(nil), do: System.delete_env("MONTY_REMOTE_POLICY")
   defp restore(value), do: System.put_env("MONTY_REMOTE_POLICY", value)
