@@ -76,6 +76,73 @@ defmodule Monty.Studio.Jobs.Reaper do
   end
 
   @doc """
+  Puts the runs whose worker disappeared back in the queue, and returns how many.
+
+  Run **once at boot**, before `sweep/0`, and never from a page. A node that
+  starts knows the one thing a page cannot: that nothing it was doing is still
+  doing it. A run of several parts that had got some of them done is not closed,
+  it is continued — the division, the part files and the numbers written down so
+  far are all on disk, and `Monty.Studio.Jobs.Run` picks them up when the new job
+  takes the run.
+
+  A boot rather than every sweep is also the bound. A sweep runs on every tick of
+  every open page, and a run that crashes as it starts would then be put back in
+  the queue once a tick; a boot puts it back once, and leaves the fact in the
+  run's own log where a person looking for why it ran twice will find it.
+
+  A run with no division, or one with nothing left to perform, is not continued:
+  `sweep/0`, which runs right after this, closes it. Re-enqueueing it would be a
+  second attempt wearing the first one's name.
+  """
+  @spec recover() :: non_neg_integer()
+  def recover do
+    RunHistory.running()
+    |> Enum.filter(&ours?(&1, mine()))
+    |> Enum.reject(&(Run.held?(&1.id) or alive?(&1)))
+    |> Enum.count(&resume/1)
+  end
+
+  # A division with something done and something left is the only shape worth
+  # continuing: anything else either has nothing to resume from or nothing to do,
+  # and both are the sweep's to close.
+  defp resume(record) do
+    parts = RunHistory.parts(record.id)
+    ended = RunHistory.ended_parts(record.id)
+
+    if MapSet.size(ended) > 0 and length(parts) > MapSet.size(ended) do
+      queue_again(record, length(parts), MapSet.size(ended))
+    else
+      false
+    end
+  end
+
+  defp queue_again(record, of, done) do
+    # The queue first: a run that cannot be put back is a run to close, not a
+    # record saying `queued` about a job that was never made.
+    case Run.enqueue_run(record) do
+      {:ok, _job} ->
+        _ = Artifacts.start(record.id)
+
+        _ =
+          Artifacts.append(
+            record.id,
+            "the attempt before this one ended with #{done} of #{of} part(s) done: " <>
+              "the run is queued again and continues from them"
+          )
+
+        _ = RunHistory.requeue(record.id)
+        true
+
+      {:error, reason} ->
+        Logger.warning(
+          "studio run #{record.id} could not be put back in the queue: #{inspect(reason)}"
+        )
+
+        false
+    end
+  end
+
+  @doc """
   Closes `run_id` if nothing is working on it, and answers `:ok` when it did.
 
   The one-run form of `sweep/0`, for a page that already watches that run. A page

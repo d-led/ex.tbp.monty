@@ -821,6 +821,25 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
+  The run is waiting for a worker again.
+
+  What a run is after the worker that had it disappeared and the run was put back
+  in the queue (`Monty.Studio.Jobs.Reaper.recover/0`). `queued` is the true word
+  for that: the page that reads `running` draws work, and there is no work until a
+  worker takes it.
+  """
+  @spec requeue(binary()) :: :ok
+  def requeue(run_id) do
+    with {:ok, uuid} <- Ecto.UUID.cast(run_id) do
+      _ =
+        from(run in Run, where: run.id == ^uuid)
+        |> Repo.update_all(set: [status: "queued", updated_at: now()])
+    end
+
+    :ok
+  end
+
+  @doc """
   The node that is to perform a part takes it, and the row says so before it starts.
 
   `node` is the spelling that decided the node's folder (`Monty.Paths.data_dir_name/0`),

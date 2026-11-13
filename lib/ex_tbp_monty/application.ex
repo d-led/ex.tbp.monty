@@ -90,7 +90,10 @@ defmodule ExTbpMonty.Application do
         ExTbpMontyWeb.Telemetry.ConnectionLog.attach()
         # A run's record is closed by the job that executes it, and a node that
         # restarts takes those jobs with it: whatever was `running` a moment ago
-        # is not running now.
+        # is not running now. A run of several parts that had some of them done is
+        # put back in the queue first — it continues from them — and what is left
+        # is closed.
+        _ = Monty.Studio.Jobs.Reaper.recover()
         Monty.Studio.Jobs.Reaper.sweep()
         warm_catalogue()
         prefetch()

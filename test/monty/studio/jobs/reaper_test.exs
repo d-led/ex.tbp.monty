@@ -99,6 +99,56 @@ defmodule Monty.Studio.Jobs.ReaperTest do
     end
   end
 
+  # The forum's question one level up from the parts: a run whose owner died is
+  # not abandoned if it can be continued. The division is the evidence — a part
+  # that ended is work somebody paid for — and the boot is the moment a node knows
+  # its own runs are not running.
+  describe "a run whose worker disappeared with parts done" do
+    test "is put back in the queue instead of being closed" do
+      record = start_run()
+      :ok = RunHistory.plan_parts(record.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      {:ok, done} = RunHistory.claim_part(record.id, 0, Monty.Paths.data_dir_name())
+      :ok = RunHistory.release_part(done, "finished", 3)
+      _quiet = quiet_since(record, 61)
+
+      assert Reaper.recover() == 1
+      assert RunHistory.get(record.id).status == "queued"
+
+      assert File.read!(Artifacts.log_path(record.id)) =~
+               "1 of 2 part(s) done: the run is queued again"
+
+      # And the sweep that follows a recovery leaves it alone: it has a job
+      # waiting its turn, which is what a queued run is.
+      assert Reaper.sweep() == 0
+      assert RunHistory.get(record.id).status == "queued"
+    end
+
+    test "is closed, not re-run, when nothing of it is left to perform" do
+      record = start_run()
+      :ok = RunHistory.plan_parts(record.id, [%{index: 0, of: 2}])
+
+      {:ok, done} = RunHistory.claim_part(record.id, 0, Monty.Paths.data_dir_name())
+      :ok = RunHistory.release_part(done, "finished", 3)
+      _quiet = quiet_since(record, 61)
+
+      assert Reaper.recover() == 0
+      assert Reaper.sweep() == 1
+      assert RunHistory.get(record.id).status == "failed"
+    end
+
+    # Nothing to resume from: a run of one part has no division, and putting it
+    # back in the queue would be a second attempt wearing the first one's record.
+    test "a run that was never divided is still closed" do
+      record = start_run()
+      _quiet = quiet_since(record, 61)
+
+      assert Reaper.recover() == 0
+      assert Reaper.sweep() == 1
+      assert RunHistory.get(record.id).status == "failed"
+    end
+  end
+
   describe "a run whose job is still waiting" do
     test "is not abandoned: it is a run that has not started yet" do
       record = queue_run()
