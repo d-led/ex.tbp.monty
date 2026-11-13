@@ -1020,12 +1020,16 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       perform_run(view)
 
       # Unzoomed, the label names the run and there is nothing to go back to.
-      assert view |> element("#chart-extent") |> render() =~ "steps 0–2"
+      # Two episodes of two steps are four columns (`1545a45`): an episode
+      # begins one step after the one before it ends, so no two episodes share a
+      # column and the axis is a step longer per boundary.
+      assert view |> element("#chart-extent") |> render() =~ "steps 0–3"
       assert has_element?(view, "#zoom-all[disabled]")
 
       view |> element("#zoom-in") |> render_click()
 
-      assert view |> element("#chart-extent") |> render() =~ "of 2"
+      # Zoomed, the label says which stretch is drawn and how much run there is.
+      assert view |> element("#chart-extent") |> render() =~ "steps 1–2 of 3"
       assert has_element?(view, "#zoom-all:not([disabled])")
 
       # The patch is the window and nothing else: a chart link used to carry the
@@ -1038,7 +1042,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       view |> element("#zoom-all") |> render_click()
 
-      assert view |> element("#chart-extent") |> render() =~ "steps 0–2"
+      assert view |> element("#chart-extent") |> render() =~ "steps 0–3"
       refute has_element?(view, "#zoom-all:not([disabled])")
     end
 
