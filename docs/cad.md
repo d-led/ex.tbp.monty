@@ -150,18 +150,51 @@ scene, not a config, knows where the object is.
    | plate                     | plate  | **match, 1 of 1, 483 steps**, evidence ~13, one possible pose       |
    | plate + blend             | blend  | top object right (`blend_r5` ev 6.5), **2 possible**, no conclusion |
    | plate + blend + blend-big | blend  | top object right, **3 possible**, no conclusion                     |
+   | blend                     | blend  | **1 possible, no conclusion** — evidence stalls at 6.5              |
+   | plate                     | blend  | **1 possible, no conclusion** — evidence stalls at 6.5 (control)    |
 
-   So a memory written from a part recognises that part from a sensor walking
-   over it, and a memory of several parts puts _the right one on top_ but never
-   narrows to it. The borrowed config is for distinct objects, which the second
-   row is, so the gap is in the percept rather than in the config: two objects
-   that differ only in their features leave the evidence flat, and
-   `x_percent_threshold` keeps both possible by design. The next question is
-   therefore what would make a CAD patch discriminative — the patch's resolution
-   and standoff, the feature set (`pose_fully_defined` is false on most of this
-   part's surface, which is 892 of 1557 nodes on no feature family at all), or
-   the exploration the policy drives — and the similar pair (`blend` and
-   `blend-big`) is where that question is sharpest.
+   The last two rows are what makes the table readable. `CAD_SENSE_ONLY=1`
+   leaves the sensed part out of the memory, and the answer is _no conclusion_
+   rather than a confident wrong name: the run did not recognise a part it was
+   never shown, which is the thing a library of one's own parts must be able to
+   say. And the third row is the same stall as the two multiple-object rows,
+   produced by the blend against **its own** memory and nothing else — so the
+   blend's percept is weak on its own terms, and several candidates in the
+   memory are not what stops the evidence. A right answer separates cleanly:
+   plate-against-plate reaches evidence ~13 and concludes at 483 steps; a weak
+   one sits at 6.5 whatever else is in the library.
+
+   Where the weakness is, measured rather than guessed. The blend is a rounded
+   block: most of its surface is flat, and the fits on it are degenerate. Its
+   memory holds 947 nodes, of which 174 — 18 % — carry a principal curvature
+   the geometry cannot resolve: `principal_curvatures` reach
+   1 394 mm⁻¹ on a part whose tightest feature is a 5 mm fillet (κ = 0.2 mm⁻¹),
+   and `principal_curvatures_log` spans −6.85 … 7.22 where Monty's own
+   pretrained graphs stay within about −5 … 2 (checked against
+   `priv/monty/libraries/pretrained_ycb_v13/surf_agent_1lm_10distinctobj`). A
+   regular sample lattice fitted for curvature answers second differences of
+   the lattice at edges, and nothing in the pipeline rejects an absurd
+   magnitude — `valid_curvatures?` gates whether a curvature is _reported_, not
+   whether it is _possible_. Those nodes are compared, through
+   `principal_curvatures_log` with a tolerance of 1.0, against sensed patches
+   that have no such values, so they can only fail, and they dilute the
+   evidence of the nodes that would match.
+
+   Two further facts the measurement settled, both of which had been read
+   wrongly the first time. The two blends are not near-duplicates: `blend_r5`
+   is 40 × 30 × 20 mm and `blend_r5_enlarged` is 270 × 100 × 100 mm, so scale
+   _is_ carried into the memory (an earlier comparison that found the two
+   identical had measured a folder that held neither). And `pose_fully_defined`
+   is written as a one-element list — `[false]`, `[true]` — which is the arity
+   Monty's export uses (`[1.0]`) but not its type; whether a consumer that
+   treats the column as a flag reads `[false]` as true is not yet settled, and
+   it is one line to find out.
+
+   So the next step is a memory whose curvature is not nonsense — either a
+   sample set whose fits are not lattice-degenerate (jitter, or a patch grid
+   rather than an object-space lattice) or a rejection of the fits the patch
+   cannot resolve — and the blend is where it will show, because it is the part
+   that fails against its own memory.
 
    Two defects had to be found for the single-object result, and both were ours
    rather than the port's. `pose_vectors` were written as three rows of three,

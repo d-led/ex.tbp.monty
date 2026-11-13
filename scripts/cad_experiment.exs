@@ -38,16 +38,25 @@ end
 
 names = System.argv()
 
-# The remembered parts, and the one the world steps: the last name is always
-# remembered too, because "recognise a part that is not in memory" is a
-# different experiment (`docs/cad.md`).
+# The remembered parts, and the one the world steps. The last name is remembered
+# too unless `CAD_SENSE_ONLY` asks otherwise: sensing a part the memory does not
+# hold is the control that says whether the run's answer means anything — a run
+# that names the part it was told about has measured its own memory, and a run
+# that names something else has not recognised at all.
 {sensed, remembered} =
   case names do
     [] -> {"plate", []}
     given -> {List.last(given), Enum.drop(given, -1)}
   end
 
-memory = Enum.uniq(remembered ++ [sensed])
+sense_only? = System.get_env("CAD_SENSE_ONLY") in ["1", "true"]
+memory = Enum.uniq(remembered ++ if(sense_only?, do: [], else: [sensed]))
+
+if memory == [] do
+  Mix.raise(
+    "CAD_SENSE_ONLY needs a part to remember: mix run scripts/cad_experiment.exs <remembered> <sensed>"
+  )
+end
 
 unknown = Enum.reject(memory ++ [sensed], &Map.has_key?(parts, &1))
 
@@ -55,7 +64,8 @@ if unknown != [] do
   Mix.raise("unknown part(s) #{inspect(unknown)}; this script knows #{inspect(Map.keys(parts))}")
 end
 
-libraries = Path.expand("/tmp/cad-experiment/#{Enum.join(memory, "+")}")
+folder = Enum.join(memory, "+") <> if(sense_only?, do: "+control", else: "")
+libraries = Path.expand("/tmp/cad-experiment/#{folder}")
 release = "pretrained_ycb_v14"
 name = "surf_agent_1lm_10distinctobj"
 path = Path.join([libraries, release, name <> ".jsonl.gz"])
@@ -82,7 +92,9 @@ records =
 
 path |> then(&File.write!(&1, :zlib.gzip(Enum.join(records, "\n"))))
 
-IO.puts("memory: #{path} — #{length(records)} object(s), sensing #{sensed}\n")
+control = if(sense_only?, do: " (control: the sensed part is not remembered)", else: "")
+
+IO.puts("memory: #{path} — #{length(records)} object(s), sensing #{sensed}#{control}\n")
 
 Application.put_env(:ex_tbp_monty, :monty_libraries_dir, libraries)
 System.put_env("MONTY_CAD_PART", parts[sensed])
