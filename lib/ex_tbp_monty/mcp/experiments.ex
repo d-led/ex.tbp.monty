@@ -232,8 +232,31 @@ defmodule ExTbpMonty.Mcp.Experiments do
   def report(run_id) do
     case RunHistory.head(run_id) do
       nil -> {:error, "No run `#{run_id}`. See monty_list_runs."}
-      run -> {:ok, report_of(run)}
+      run -> {:ok, Map.put(report_of(run), :parts, parts_of(run))}
     end
+  end
+
+  # The division of a run, as a reader of a report wants it: which part, where it
+  # was performed, how it ended, and the steps it took. Empty for a run of one
+  # part, which is a run that was not divided — the same "nothing to say" the run
+  # page draws.
+  #
+  # Asked per run rather than per list: a report is one run, and a page of fifty
+  # runs carrying fifty divisions each is a query nobody asked for.
+  defp parts_of(run) do
+    run.id
+    |> RunHistory.parts()
+    |> Enum.map(fn part ->
+      %{
+        part: part.part + 1,
+        of: part.of,
+        node: part.node,
+        status: part.status,
+        steps: part.steps,
+        started_at: part.started_at,
+        finished_at: part.finished_at
+      }
+    end)
   end
 
   @doc """

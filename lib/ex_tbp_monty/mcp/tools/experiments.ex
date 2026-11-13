@@ -325,8 +325,25 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
     `#{report.experiment}` — #{report.status}, #{report.steps_done}/#{report.steps} steps
     #{url}
 
-    #{summary_text(report.summary)}#{log_text(report.log_tail)}
+    #{summary_text(report.summary)}#{parts_text(report[:parts])}#{log_text(report.log_tail)}
     """
+  end
+
+  # A run of several parts is one record and one transcript, so the report is the
+  # only place an assistant learns the experiment was divided, which part is on
+  # which node, and how each one ended. Silent for a run of one part.
+  defp parts_text(nil), do: ""
+  defp parts_text([]), do: ""
+
+  defp parts_text(parts) do
+    done = Enum.count(parts, &(&1.status in ["finished", "failed"]))
+
+    "\n#{done} of #{List.first(parts).of} parts done:\n" <>
+      Enum.map_join(parts, "\n", fn part ->
+        where = if is_binary(part.node), do: " on #{part.node}", else: ""
+
+        "- part #{part.part}: #{part.status}#{where}, #{part.steps} step(s)"
+      end) <> "\n"
   end
 
   defp summary_text(nil), do: ""

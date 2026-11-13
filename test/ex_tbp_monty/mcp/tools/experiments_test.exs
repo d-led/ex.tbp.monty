@@ -312,6 +312,49 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       assert report_text =~ run.url
     end
 
+    # A parted run is one record with one transcript, so the report is the only
+    # place an assistant learns the experiment was divided — and, once a part may
+    # be handed to a peer, which node performed which part.
+    test "a divided run's report says which part is on which node" do
+      assert {:ok, %{structured: run}} =
+               Tools.call("monty_run_experiment", %{"name" => @experiment, "steps" => 2}, @ctx)
+
+      :ok = RunHistory.plan_parts(run.run_id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+      :ok = RunHistory.part_started(run.run_id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.part_finished(run.run_id, 0, 12)
+
+      assert {:ok, %{text: text, structured: report}} =
+               Tools.call("monty_run_report", %{"run_id" => run.run_id}, @ctx)
+
+      assert [%{part: 1, of: 2, node: "node1_127.0.0.1", status: "finished"}, second] =
+               report.parts
+
+      assert second == %{
+               part: 2,
+               of: 2,
+               node: nil,
+               status: "queued",
+               steps: 0,
+               started_at: nil,
+               finished_at: nil
+             }
+
+      assert text =~ "1 of 2 parts done:"
+      assert text =~ "part 1: finished on node1_127.0.0.1, 12 step(s)"
+      assert text =~ "part 2: queued, 0 step(s)"
+    end
+
+    test "a run of one part says nothing about parts" do
+      assert {:ok, %{structured: run}} =
+               Tools.call("monty_run_experiment", %{"name" => @experiment, "steps" => 2}, @ctx)
+
+      assert {:ok, %{text: text, structured: report}} =
+               Tools.call("monty_run_report", %{"run_id" => run.run_id}, @ctx)
+
+      assert report.parts == []
+      refute text =~ "parts done"
+    end
+
     test "the world is the caller's choice, and the record keeps it" do
       experiment = draft_without_memory()
       download_prerequisites(experiment)
