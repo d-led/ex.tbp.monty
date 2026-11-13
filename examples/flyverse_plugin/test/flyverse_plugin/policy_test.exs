@@ -97,6 +97,24 @@ defmodule FlyversePlugin.PolicyTest do
     assert close.telemetry.walk_speed > far.telemetry.walk_speed
   end
 
+  # The long stretch at the start of a run, where no theory has any evidence, is
+  # the agent crawling across a flat table on its way to the object. A patch with
+  # no relief in it is flown over instead, and the bend is damped so the crossing
+  # is a crossing rather than a spiral on the spot.
+  test "a patch with no relief is flown over", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+    near_left = [[0.005, 0.005, 0.5, 0.5]]
+
+    {flying, _policy, _state} = step(policy, state, near_left, percept(0.05, 0.0))
+    {crawling, _policy, _state} = step(policy, state, near_left, percept(0.05, 0.01))
+
+    assert flying.telemetry.walk_speed > crawling.telemetry.walk_speed
+
+    assert [%OrientHorizontal{rotation_degrees: flight_angle}] = flying.actions
+    assert [%OrientHorizontal{rotation_degrees: crawl_angle}] = crawling.actions
+    assert abs(flight_angle) < abs(crawl_angle), "the crossing is not a spiral"
+  end
+
   test "the telemetry is the spikes the decision was made of", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
@@ -161,11 +179,27 @@ defmodule FlyversePlugin.PolicyTest do
     assert sentence =~ "mix flyverse_plugin.pack"
   end
 
-  defp step(policy, state, depth) do
+  defp step(policy, state, depth), do: step(policy, state, depth, percept(0.05, 0.01))
+
+  defp step(policy, state, depth, percept) do
     {:ok, result, policy, state} =
-      Policy.call(policy, {nil, observations(depth), nil, nil, nil}, state)
+      Policy.call(policy, {nil, observations(depth), nil, percept, nil}, state)
 
     {result, policy, state}
+  end
+
+  # A percept carrying the depth under the patch and how much it varies: the two
+  # numbers the policy reads to tell a surface with something on it from a table.
+  defp percept(mean_depth, relief) do
+    %Monty.Cmp.Message{
+      sender_id: "patch",
+      sender_type: :sm,
+      morphological_features: %{
+        "mean_depth" => List.duplicate(mean_depth, 16),
+        "min_depth" => mean_depth - relief / 2,
+        "max_depth" => mean_depth + relief / 2
+      }
+    }
   end
 
   # Two sensors, because a config usually gives an agent both: the policy reads

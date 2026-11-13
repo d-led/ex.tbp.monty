@@ -101,6 +101,15 @@ defmodule FlyversePlugin.Policy do
   @min_walk 0.25
   @max_walk 1.5
 
+  # A patch with no relief is the table between the agent and the object: there is
+  # nothing in it to learn from, and crawling across it is the long stretch at the
+  # start of a run where no theory has any evidence. While the surface is that
+  # flat the step is taken `@flight_walk` times over and the bend is damped, so the
+  # flat is crossed rather than spiralled around.
+  @flat_relief 0.001
+  @flight_walk 3.0
+  @flight_bend 0.25
+
   # The ride height of the drive: at 25 mm from a surface, `1/d` is 40 and the
   # drive is 160 Hz, which is the rate flyverse's own world stimulates its
   # sensory population at. It is a gain, not a law.
@@ -320,8 +329,10 @@ defmodule FlyversePlugin.Policy do
   defp result(policy, %{previous: previous, wish: wish}, window, percept) do
     [left_hz, right_hz] = window.rates
     depth = mean_depth(percept, policy.distance)
-    turn = turn_degrees(policy, wish, saccade?(previous, wish))
-    walk = walk_speed(driven(left_hz, right_hz))
+    relief = relief(percept)
+    flight? = relief == nil or relief < @flat_relief
+    turn = turn_degrees(policy, wish, saccade?(previous, wish), flight?)
+    walk = if flight?, do: @flight_walk, else: walk_speed(driven(left_hz, right_hz))
 
     %MotorPolicyResult{
       actions: [crawl(policy, turn, depth, walk)],
@@ -334,6 +345,7 @@ defmodule FlyversePlugin.Policy do
         wish: wish,
         turn_degrees: turn,
         mean_depth: depth,
+        relief: relief,
         walk_speed: walk
       }
     }
@@ -343,9 +355,10 @@ defmodule FlyversePlugin.Policy do
   # ever returns zero: the base turn is added to what the network asks for, so a
   # silent or perfectly balanced network still walks its spiral instead of
   # standing still and gathering the same percept for ever.
-  defp turn_degrees(policy, wish, saccade?) do
+  defp turn_degrees(policy, wish, saccade?, flight?) do
     bend = @max_turn_degrees * :math.tanh(wish / @wish_scale)
     bend = if saccade?, do: @saccade_gain * bend, else: bend
+    bend = if flight?, do: @flight_bend * bend, else: bend
     limit = @saccade_gain * @max_turn_degrees
 
     (policy.turn_degrees + bend)
@@ -400,6 +413,19 @@ defmodule FlyversePlugin.Policy do
 
       _absent ->
         fallback
+    end
+  end
+
+  # How much the depths under the patch differ: zero on a flat surface, and the
+  # question this policy asks to tell a table from a thing on it.
+  defp relief(nil), do: nil
+
+  defp relief(percept) do
+    with {:ok, max} when is_number(max) <- Message.feature(percept, "max_depth"),
+         {:ok, min} when is_number(min) <- Message.feature(percept, "min_depth") do
+      max - min
+    else
+      _absent -> nil
     end
   end
 
