@@ -2899,3 +2899,96 @@ MIX_ENV=test mix dialyzer                # the separate types job; ~5 s, not in 
 
 Measured at this hand-over: 3 088 passing (67 properties, 3 021 cases), worst CRAP 29.85,
 dialyzer 0 errors, CI success on `9521023`.
+
+## 42. 2026-11-13: a run's duration is its work, and the number of runs a node takes is now a test's
+
+Two items §41.5 left in the list below the division — one a defect the
+optimisation hand-over had recorded and nobody had fixed, one a wiring nothing
+tested. Both are small, and both were statements the application made that were
+not true.
+
+### 42.1 `started_at` was the moment somebody asked
+
+`RunHistory.start/1` stamped `started_at: DateTime.utc_now()` when a run was
+**asked for**, and `finish/3` took the duration as `finished_at − started_at`.
+So every run's duration included its wait in the queue, and `mark_running/1` —
+the worker's own word that it has the run in hand — wrote the status and the node
+and left the clock alone. Measured in the dev database: `started_at` was 13–26 ms
+**before** `inserted_at` on every row, which is the row being written after the
+clock was read.
+
+The shape `optimisation-handover.md` named is the one that is there now:
+
+- `start/1` stamps nothing. The row's own `inserted_at` is when it was asked, and
+  that is also the clock a queued run's wait is counted from.
+- `mark_running/1` writes `started_at` — the claim is the start, and the clause
+  that answers a second claim unchanged therefore keeps the first instant.
+- `finish/3` is untouched: the number it keeps is now the work.
+- `Duration.of_run/1` and `elapsed_us/1` answer two clocks: a `queued` run gets
+  the wait measured from `inserted_at`, a `running` one the elapsed time from
+  `started_at`, a closed one `duration_us`.
+- The run page says **"waiting for 40s since 23:33:19"** for a run no worker has
+  claimed. It used to say "started 23:33:19, 40s", which is the page saying a
+  worker is on a run that is still waiting for one.
+- `mix monty.run --record` claims its own record (`RunHistory.mark_running/1`)
+  before it steps. The task works in its own process, so there is no queue
+  between asking and working — and a headless run left saying `queued` for six
+  minutes was the record disagreeing with the run it was writing.
+
+Cases: `run_history_test` "keeps the duration of its work, not of the wait in the
+queue" (asks for a run, backdates `inserted_at` an hour, claims it, closes it —
+the hour must not be in the duration) and the amended "says running only when a
+worker claims it" (no start while queued, a start after the claim, none on the
+second claim); `duration_test` "is the wait of a run nobody has claimed yet" and
+"is a dash for a queued run with no asked-at clock"; the run page's "a run nobody
+has claimed yet says how long it has been waiting"; the experiment page's
+"a run that is still going says how long it has been going" now sets the status
+as well as the clock, because a `queued` row no longer has one.
+
+### 42.2 `MONTY_STUDIO_CONCURRENCY` is parsed by something a test can call
+
+The parse lived inline in `config/runtime.exs`, so its three answers — a count,
+the default, and a refusal — were verified by booting three ways and by nothing
+else. It is `Monty.Studio.Jobs.studio_concurrency/1` now: unset or empty is two,
+a whole number of at least one is itself, and anything else raises a message that
+names the variable and the value it read. `runtime.exs` keeps the guard that
+matters more than the parse — "only where a queue runs", so the suite's
+`queues: false` cannot be undone by a lever — and one line calls the function.
+
+### 42.3 Two traps, both about believing a run
+
+- **A duration written against the wall clock in a test is a flake.** The first
+  case asserted `of_run(queued) == "40s"` for a run asked for forty seconds
+  earlier; the full-suite run read `40.6s`, because constructing the instant and
+  reaching the assertion took 600 ms. The quantity is what the behaviour is
+  (`elapsed_us` within five seconds of forty million), and the string is
+  `humanize/1`'s business, which has its own cases.
+- **A full gate run in this tree reports failures that are not there**, because
+  another agent is writing in it. Two attempts were needed. The suite came back
+  `3101/3102` twice; both times the red case was the other agent's newest one
+  (`run_history_live_test.exs`, written and committed while the suite compiled),
+  and re-running that file gave **102 passed**. The complexity step failed with
+  `worst 20.00, 0 function(s) above 20` — which is not a threshold failure at all:
+  `ExCrap.Report.failing?/2` is true for a row whose `status` is `{:error, _}`, so
+  a module the export no longer matched was _unscorable_, not high. Re-ranking the
+  export kept from the completed run gives **exit 0 for all three trees** (worst
+  20.00 `lib/monty`, 20.00 `lib/ex_tbp_monty`, 29.85 `lib/ex_tbp_monty_web`, the
+  same 29.85 §41.8 recorded). `mix crap --coverdata /tmp/<copy>.coverdata` is how
+  to keep a ranking from being deleted by the other run between the two steps.
+
+### 42.4 What is left
+
+Unchanged from §41.5, in its order: **parts across nodes** (the decision still
+open is how a part's steps come back; (b), a file per part in the run's own
+directory, is the one to build first and to exercise on one node); the run list
+across per-node databases (the cluster view's area — coordinate first); `route/4`
+in `ex_monty_plugin` (wants the user's nod); and the `RecordingEpisodeTest` flake,
+still the same candidate (an unseeded RNG where the episode's stream belongs).
+Of the two untested wirings §41.5 named, `MONTY_STUDIO_CONCURRENCY` is closed
+above; **`collect/2`'s error branch still waits for an injected failure**.
+
+### 42.5 The gate
+
+`./scripts/quality.sh --fast` green; `mix cover` **3 101 of 3 102** with the one
+red case re-run alone to 102 passed (42.3); the three CRAP trees exit 0 against
+the export that run left; `MIX_ENV=test mix dialyzer` 0 errors.

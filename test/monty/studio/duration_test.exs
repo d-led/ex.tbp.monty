@@ -48,6 +48,23 @@ defmodule Monty.Studio.DurationTest do
                "1min 30s"
     end
 
+    # A run nobody has claimed has not begun, so it has no elapsed time — what it
+    # has is the wait, and that is counted from the moment it was asked for. The
+    # quantity is what this states: the string is `humanize/1`'s business, and how
+    # many tenths of a second the machine took to reach the assertion is not.
+    test "is the wait of a run nobody has claimed yet" do
+      asked = DateTime.add(DateTime.utc_now(), -40, :second)
+      queued = %{status: "queued", inserted_at: asked, duration_us: 0}
+
+      assert_in_delta Duration.elapsed_us(queued), 40_000_000, 5_000_000
+      refute Duration.of_run(queued) == "—"
+      assert Duration.of_run(queued) =~ ~r/[0-9]/
+    end
+
+    test "is a dash for a queued run with no asked-at clock and no duration" do
+      assert Duration.of_run(%{status: "queued", duration_us: 0}) == "—"
+    end
+
     test "is what the record says once it has stopped" do
       started = DateTime.add(DateTime.utc_now(), -3600, :second)
 

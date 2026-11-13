@@ -26,6 +26,30 @@ defmodule Monty.Studio.JobsTest do
     running
   end
 
+  describe "how many runs a node performs at once" do
+    test "is two when the deployment says nothing" do
+      assert Jobs.studio_concurrency(nil) == 2
+      assert Jobs.studio_concurrency("") == 2
+    end
+
+    test "is the number the deployment named" do
+      assert Jobs.studio_concurrency("1") == 1
+      assert Jobs.studio_concurrency("3") == 3
+    end
+
+    # A typo in a container's environment is a start that should not happen: a
+    # nought would be a node that takes no work, and "3 runs" would be a two read
+    # as a three.
+    test "refuses a start that is not a count of at least one, naming the variable" do
+      for setting <- ["zero", "0", "-1", "3 runs", "2.5"] do
+        error = assert_raise RuntimeError, fn -> Jobs.studio_concurrency(setting) end
+
+        assert error.message =~ "MONTY_STUDIO_CONCURRENCY"
+        assert error.message =~ inspect(setting)
+      end
+    end
+  end
+
   describe "a queued run" do
     test "is listed with its Oban state and the status of its record" do
       record = record_run()

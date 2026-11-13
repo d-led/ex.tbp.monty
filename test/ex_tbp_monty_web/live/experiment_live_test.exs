@@ -177,6 +177,9 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
           inputs: %{"seed" => 7, "world" => "synthetic"}
         })
 
+      # Claimed before it closed, like any run: a record that never says a worker
+      # began it has no duration to keep.
+      {:ok, finished} = RunHistory.mark_running(finished)
       {:ok, finished} = RunHistory.finish(finished, %{"steps" => 2})
 
       {:ok, elsewhere} =
@@ -187,6 +190,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
           config: %{}
         })
 
+      {:ok, elsewhere} = RunHistory.mark_running(elsewhere)
       {:ok, finished_elsewhere} = RunHistory.finish(elsewhere, %{})
 
       {:ok, queued: queued, finished: finished, elsewhere: finished_elsewhere}
@@ -260,11 +264,12 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     } do
       # `duration_us` is written when a run closes, so the column holds the
       # schema's nought while the run steps — and the table printed it as "0µs"
-      # for a run hours into its work.
+      # for a run hours into its work. A running row's clock is its start, which
+      # a worker stamps when it claims the run.
       {1, _} =
         ExTbpMonty.Repo.update_all(
           from(r in Monty.Studio.RunHistory.Run, where: r.id == ^queued.id),
-          set: [started_at: DateTime.add(DateTime.utc_now(), -90, :second)]
+          set: [status: "running", started_at: DateTime.add(DateTime.utc_now(), -90, :second)]
         )
 
       {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")

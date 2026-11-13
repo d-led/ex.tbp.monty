@@ -134,8 +134,30 @@ defmodule Monty.Studio.RunHistoryTest do
       assert run.experiment == "tutorial/first_experiment"
       assert run.config["experiment"]["config"]["seed"] == 42
       assert run.inputs["groups"]["monty/learning_module"] == "displacement_1lm"
-      assert %DateTime{} = run.started_at
+      # Nothing has begun, so nothing is stamped as begun: the wait a queued run
+      # has is counted from when it was asked for, which the row's own
+      # `inserted_at` already says.
+      assert run.started_at == nil
+      assert %DateTime{} = run.inserted_at
       assert run.finished_at == nil
+    end
+
+    # The number a run's row keeps is the work it did. Stamping the start at the
+    # asking put the queue inside it — measured in the dev database, a run began
+    # 13–26 ms before the row it was written in, and its duration included the
+    # wait.
+    test "keeps the duration of its work, not of the wait in the queue" do
+      assert {:ok, run} = RunHistory.start(@attributes)
+      asked = DateTime.add(DateTime.utc_now(), -3600, :second)
+
+      {1, _} =
+        Repo.update_all(from(r in Run, where: r.id == ^run.id), set: [inserted_at: asked])
+
+      {:ok, begun} = RunHistory.mark_running(RunHistory.get(run.id))
+      {:ok, closed} = RunHistory.finish(begun, %{}, "finished")
+
+      assert closed.duration_us < 60_000_000,
+             "the hour it waited is not the hour it took"
     end
 
     # A run's files are one node's, so a record that does not say whose cannot be
@@ -176,11 +198,13 @@ defmodule Monty.Studio.RunHistoryTest do
       {:ok, queued} = RunHistory.start(@attributes)
 
       assert RunHistory.get(queued.id).status == "queued"
+      assert RunHistory.get(queued.id).started_at == nil
       assert RunHistory.in_flight?(queued)
 
       {:ok, began} = RunHistory.mark_running(queued)
 
       assert began.status == "running"
+      assert %DateTime{} = began.started_at
       assert RunHistory.get(queued.id).status == "running"
 
       # Asking twice is not an error, and not a second start.

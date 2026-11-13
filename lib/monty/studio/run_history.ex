@@ -32,12 +32,20 @@ defmodule Monty.Studio.RunHistory do
   @table_fields @without_log
 
   @doc """
-  Records a run that is starting.
+  Records a run that is being asked for.
 
   `attributes` are the experiment's name and source, the number of steps, and
   what the run was given: the config text and the inputs that produced it. A
   run without inputs is still a run, so only the name and the step count are
   required.
+
+  Nothing is stamped as started here. Asking for a run is not running it — the
+  job may wait a minute for a slot, or never be picked up at all — so the row
+  records *when it was asked for* (its own `inserted_at`, which is also the
+  moment a queued run's wait is measured from) and `started_at` stays empty
+  until a worker has the run in hand (`mark_running/1`). A start stamped at the
+  asking made every run's duration include the wait in the queue: measured in
+  the dev database, it began 13–26 ms before the row it was written in.
   """
   @spec start(map()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
   def start(attributes) do
@@ -46,7 +54,6 @@ defmodule Monty.Studio.RunHistory do
       # Asked for is not running: the job may wait a minute for a slot, or never
       # be picked up at all. `mark_running/1` is the worker's word that it began.
       |> Map.put_new(:status, "queued")
-      |> Map.put_new(:started_at, DateTime.utc_now())
       # Which node has it, which while it is queued is the node that asked. The
       # worker overwrites it with its own name when it claims the job, because with
       # one runs table for a cluster those are not always the same node. The value
@@ -440,9 +447,18 @@ defmodule Monty.Studio.RunHistory do
   # No announcement of its own: the worker says `{:started, steps}` on the run's
   # topic, which is what a page draws from, and every page reads the record again
   # on its tick.
+  #
+  # The claim is also the run's start, for the reason `start/1` is not: the clock
+  # that belongs on the record is the one that began the work. Claiming twice is
+  # not a second start, and the first clause above therefore keeps the first
+  # instant.
   def mark_running(%Run{} = run) do
     run
-    |> Ecto.Changeset.change(status: "running", node: Monty.Paths.data_dir_name())
+    |> Ecto.Changeset.change(
+      status: "running",
+      node: Monty.Paths.data_dir_name(),
+      started_at: DateTime.utc_now()
+    )
     |> Repo.update()
   end
 

@@ -289,6 +289,11 @@ defmodule Mix.Tasks.Monty.Run do
     unless opts[:quiet], do: Mix.shell().info("episode #{index + 1}/#{count}")
   end
 
+  # The record this task writes, claimed the way a worker claims one: this task
+  # steps the run in its own process, so there is no queue between asking and
+  # working, and a row left saying `queued` would be the record disagreeing with
+  # the run it is writing. The claim is also where a run's start is stamped
+  # (`RunHistory.mark_running/1`), so the duration this task leaves is its work.
   defp record(opened, opts) do
     if opts[:record] == false do
       nil
@@ -300,6 +305,7 @@ defmodule Mix.Tasks.Monty.Run do
           Monty.Studio.RunLog.attributes(opened, steps(opened, opts), 0, 1, episodes)
         )
 
+      {:ok, history} = Monty.Studio.RunHistory.mark_running(history)
       history
     end
   end

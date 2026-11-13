@@ -107,23 +107,15 @@ end
 # Only where a queue runs. The suite says `queues: false`, because a test that
 # races a queue is a test that flakes, and a lever must not undo that — a node
 # whose environment has no queue keeps having none.
+#
+# The value itself is read by `Monty.Studio.Jobs.studio_concurrency/1`, so the
+# three answers it has (a count, the default, and a refusal) are a test's rather
+# than a boot's.
 if Application.get_env(:ex_tbp_monty, Oban, [])[:queues] do
-  # A value that is not a whole number of at least one is refused at boot rather
-  # than rounded into something nobody asked for: a typo in a container's
-  # environment is a start that should not happen, and `MONTY_STUDIO_CONCURRENCY
-  # must be …` is cheaper to read than wondering why a node takes no work.
-  concurrency =
-    case Integer.parse(System.get_env("MONTY_STUDIO_CONCURRENCY", "2")) do
-      {runs, ""} when runs > 0 ->
-        runs
-
-      _not_a_count ->
-        raise "MONTY_STUDIO_CONCURRENCY must be a whole number of runs this node may " <>
-                "perform at once (one or more), and it is " <>
-                inspect(System.get_env("MONTY_STUDIO_CONCURRENCY"))
-    end
-
-  config :ex_tbp_monty, Oban, queues: [studio: concurrency]
+  config :ex_tbp_monty, Oban,
+    queues: [
+      studio: Monty.Studio.Jobs.studio_concurrency(System.get_env("MONTY_STUDIO_CONCURRENCY"))
+    ]
 end
 
 # A named node in a cluster keeps its own folder — its database, its runs, its own

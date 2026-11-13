@@ -103,6 +103,38 @@ defmodule Monty.Studio.Jobs do
   @spec parallelism(pos_integer()) :: :ok | {:error, term()}
   def parallelism(limit), do: Oban.scale_queue(queue: :studio, limit: limit)
 
+  # What a deployment gets for saying nothing about how many runs a node takes.
+  @studio_concurrency 2
+
+  @doc """
+  How many runs a node performs at once, read from `MONTY_STUDIO_CONCURRENCY` at
+  start-up (`config/runtime.exs` sets the studio queue from it).
+
+  Two unless the deployment says otherwise, because the number is a machine's: a
+  laptop sharing four cores with two MuJoCo worlds is slower per run than one
+  world at a time, and a node with a GPU is not. In a cluster of two it is also
+  how the work divides — the queue is one queue, so two nodes at two each is four
+  runs at once, and a node told to take one leaves the other for its peer.
+
+  A value that is not a whole number of at least one is refused rather than
+  rounded into something nobody asked for: a typo in a container's environment is
+  a start that should not happen, and a message naming the variable is cheaper to
+  read than wondering why a node takes no work.
+  """
+  @spec studio_concurrency(String.t() | nil) :: pos_integer()
+  def studio_concurrency(setting) when setting in [nil, ""], do: @studio_concurrency
+
+  def studio_concurrency(setting) do
+    case Integer.parse(setting) do
+      {runs, ""} when runs > 0 ->
+        runs
+
+      _not_a_count ->
+        raise "MONTY_STUDIO_CONCURRENCY must be a whole number of runs this node may " <>
+                "perform at once (one or more), and it is " <> inspect(setting)
+    end
+  end
+
   @doc """
   The latest job of each of `run_ids`, keyed by run id — absent where a run has
   none any more.

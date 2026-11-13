@@ -27,19 +27,24 @@ defmodule Monty.Studio.Duration do
   def humanize(us), do: hours(div(us, 3_600_000_000), div(rem(us, 3_600_000_000), 60_000_000))
 
   @doc """
-  How long a run has taken: its elapsed time while it is still going, and what
-  the record says once it has stopped.
+  How long a run has taken: the wait of one that has not begun, the elapsed
+  time of one that is stepping, and what the record kept once it has stopped.
 
   `duration_us` is written when a run closes (`RunHistory.finish/3`), so a row
-  that is still stepping holds the column's default nought — and a table that
-  printed that column said "0µs" about a run an hour into its work. The elapsed
-  time is the same quantity the record will keep (it is `finished_at −
-  started_at` when it settles), so the number only stops growing.
+  that is still going holds the column's default nought — and a table that
+  printed that column said "0µs" about a run an hour into its work.
+
+  A queued run has not begun, so it has no elapsed time: what it has is a wait,
+  counted from the moment it was asked for. That clock is the row's own
+  `inserted_at`, because `started_at` is only written when a worker claims the
+  run (`RunHistory.mark_running/1`) — the run's work is its duration, and the
+  queue is not work.
   """
   @spec of_run(map()) :: String.t()
-  def of_run(%{status: status, started_at: %DateTime{} = started})
-      when status in ["queued", "running"],
-      do: humanize(since(started))
+  def of_run(%{status: "queued", inserted_at: %DateTime{} = asked}), do: humanize(since(asked))
+
+  def of_run(%{status: "running", started_at: %DateTime{} = started}),
+    do: humanize(since(started))
 
   def of_run(%{duration_us: us}) when is_integer(us) and us > 0, do: humanize(us)
   def of_run(_run), do: "—"
@@ -53,9 +58,10 @@ defmodule Monty.Studio.Duration do
   collection does.
   """
   @spec elapsed_us(map()) :: non_neg_integer()
-  def elapsed_us(%{status: status, started_at: %DateTime{} = started})
-      when status in ["queued", "running"],
-      do: since(started)
+  def elapsed_us(%{status: "queued", inserted_at: %DateTime{} = asked}), do: since(asked)
+
+  def elapsed_us(%{status: "running", started_at: %DateTime{} = started}),
+    do: since(started)
 
   def elapsed_us(%{duration_us: us}) when is_integer(us) and us > 0, do: us
   def elapsed_us(_run), do: 0
