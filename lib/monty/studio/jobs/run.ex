@@ -46,6 +46,8 @@ defmodule Monty.Studio.Jobs.Run do
     Summary
   }
 
+  alias Monty.Studio.Jobs.Stops
+
   @doc "Enqueues a run of `attributes` (see `RunLog.attributes/2`) and returns the job."
   @spec enqueue(map()) :: {:ok, Oban.Job.t()} | {:error, term()}
   def enqueue(attributes) do
@@ -87,6 +89,9 @@ defmodule Monty.Studio.Jobs.Run do
         {:error, :not_found}
 
       pids ->
+        # The message reaches the worker, which owns the clock; the flag reaches
+        # the tasks it started, which is where the steps actually happen.
+        Stops.ask(run_id)
         Enum.each(pids, &send(&1, :stop))
         :ok
     end
@@ -399,7 +404,7 @@ defmodule Monty.Studio.Jobs.Run do
         ground_truth: &ground_truth(&1),
         step: &step_once(run_id, &1, sensor_ids),
         finished?: fn %{run: run} -> Run.finished?(run) end,
-        stopped?: &stop_requested?/0,
+        stopped?: fn -> stop_requested?(run_id) end,
         post_episode: &end_episode(run_id, &1, &2, &3)
       })
 
@@ -575,7 +580,7 @@ defmodule Monty.Studio.Jobs.Run do
   # One pass over a wave: `n` parts at a time, each writing its own stream, the
   # run's transcript written as each part falls out of the pool.
   defp run_wave(record, opened, wave, memory) do
-    if stop_requested?() do
+    if stop_requested?(record.id) do
       # A stop that arrived before this wave started: not one part of it steps,
       # and the parts it would have stepped stay `queued` until the run settles
       # them as `skipped` — nothing happened to them, which is the truth about a
@@ -1664,12 +1669,15 @@ defmodule Monty.Studio.Jobs.Run do
     end
   end
 
-  # The stop lands in this process's mailbox because this process owns the clock.
-  defp stop_requested? do
+  # The stop lands in this process's mailbox because this process owns the clock —
+  # and, for the steps that happen in tasks it started, in `Stops`, because a
+  # task's mailbox is its own: a stop that only asked the worker was read at the
+  # next wave boundary, which for a run of one part is after a whole phase.
+  defp stop_requested?(run_id) do
     receive do
       :stop -> true
     after
-      0 -> false
+      0 -> Stops.asked?(run_id)
     end
   end
 
@@ -1852,7 +1860,12 @@ defmodule Monty.Studio.Jobs.Run do
     end
   end
 
-  defp unregister(run_id), do: Registry.unregister(Monty.Runtime.Registry, key(run_id))
+  defp unregister(run_id) do
+    Registry.unregister(Monty.Runtime.Registry, key(run_id))
+    # A run that has closed has no steps left to ask, and a run of the same id
+    # started later is not this one's to stop.
+    Stops.clear(run_id)
+  end
 
   defp key(run_id), do: {:studio_run, run_id}
 end

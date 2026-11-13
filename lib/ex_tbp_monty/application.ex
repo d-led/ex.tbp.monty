@@ -48,6 +48,10 @@ defmodule ExTbpMonty.Application do
           # The one process that writes a run's steps: a boundary hands them over and
           # steps on, so the experiment never waits for Postgres.
           Monty.Studio.RunWriter,
+          # Which runs have been asked to stop. One table, because a run's steps
+          # happen in tasks its worker started, and a stop written only to the
+          # worker is read only between waves.
+          Monty.Studio.Jobs.Stops,
           # The readiness survey over every config, composed by one process: a page
           # opened on a node that has just started asks for it, and every page used
           # to compose a copy of its own (three tabs: three times all 132 configs).

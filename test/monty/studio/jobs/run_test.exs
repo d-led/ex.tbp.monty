@@ -16,6 +16,7 @@ defmodule Monty.Studio.Jobs.RunTest do
     Summary
   }
 
+  alias Monty.Studio.Jobs.Stops
   alias Monty.Test.Tmp
 
   # The experiment a run of this file steps: an evaluation config whose classes
@@ -986,6 +987,23 @@ defmodule Monty.Studio.Jobs.RunTest do
 
     test "asking a run that is not running to stop is not an error" do
       assert Jobs.Run.stop("00000000-0000-4000-8000-000000000000") == {:error, :not_found}
+    end
+
+    # The message reaches the worker that owns the clock; the flag reaches the
+    # tasks it started, which is where a run's steps happen. Without it a stop
+    # was read only between waves — a whole phase for a run of one part — and a
+    # page's Stop looked like it did nothing for as long as that took.
+    test "a stop is a flag every process stepping the run can read, not only a message" do
+      {:ok, record} = start_run(5)
+
+      {:ok, _owner} = Registry.register(Monty.Runtime.Registry, {:studio_run, record.id}, :owner)
+
+      on_exit(fn -> Stops.clear(record.id) end)
+
+      assert Jobs.Run.stop(record.id) == :ok
+
+      assert_receive :stop, 1_000
+      assert Stops.asked?(record.id), "the flag the tasks read"
     end
 
     # A divided run's parts may be stepped by peers, where this node's registry
