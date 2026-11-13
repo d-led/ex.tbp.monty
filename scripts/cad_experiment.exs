@@ -25,8 +25,44 @@
 parts = %{
   "plate" => Path.expand("~/src/ex.monty.cad/test/fixtures/golden_simple_through_hole.step"),
   "blend" => Path.expand("~/src/ex.quiddity/test/fixtures/blend_r5.step"),
-  "blend-big" => Path.expand("~/src/ex.quiddity/test/fixtures/blend_r5_enlarged.step")
+  "blend-big" => Path.expand("~/src/ex.quiddity/test/fixtures/blend_r5_enlarged.step"),
+  "plate-big" => Path.expand("/tmp/cad-experiment/parts/plate_big.step")
 }
+
+# `plate-big` is derived rather than checked in: it is the plate at 1.5x, the
+# same nine faces and eighteen edges, and it exists so that two parts differ in
+# one thing only — size — while both have a pose the sensor can name (a rounded
+# block's cannot, `docs/cad.md`). Every point *and* every radius is scaled: a
+# file with scaled points and unscaled radii is a different, broken part, and
+# the numbers are the only place the geometry lives.
+scale = 1.5
+
+scaled = fn source, target ->
+  # `Float.parse/1` leaves the rest of the number behind: a STEP real may be
+  # written `4.`, which it reads as `4.0` and a stray `.` it does not consume.
+  real = fn value ->
+    {number, _rest} = Float.parse(value)
+    Float.to_string(number * scale)
+  end
+
+  text =
+    Regex.replace(
+      ~r/(CIRCLE|CYLINDRICAL_SURFACE|SPHERICAL_SURFACE|TOROIDAL_SURFACE)\('',(\s*#\d+)\s*,\s*([-0-9.eE+]+)\)/,
+      File.read!(source),
+      fn _, kind, axis, radius -> "#{kind}('',#{axis},#{real.(radius)})" end
+    )
+
+  text =
+    Regex.replace(~r/CARTESIAN_POINT\('',\(([^)]*)\)\);/, text, fn _, coords ->
+      numbers = coords |> String.split(",") |> Enum.map_join(",", real)
+      "CARTESIAN_POINT('',(#{numbers}));"
+    end)
+
+  File.write!(target, text)
+end
+
+File.mkdir_p!(Path.dirname(parts["plate-big"]))
+scaled.(parts["plate"], parts["plate-big"])
 
 for ebin <- [
       Path.expand("~/src/ex.monty.cad/_build/dev/lib/ex_monty_cad/ebin"),

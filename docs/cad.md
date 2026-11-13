@@ -195,6 +195,38 @@ scene, not a config, knows where the object is.
    object — which is the difference between "not recognised" and "recognised,
    and this many ways round".
 
+   **A library of two names the wrong one.** `plate-big` is the plate at 1.5×,
+   derived in the script rather than checked in — every point _and_ every
+   radius scaled, which is why it opens as the same solid: nine faces, eighteen
+   edges, one valid shell, extent 90 × 75 × 27 mm against the plate's
+   60 × 50 × 18. Two parts that differ in one thing only is the pair a matching
+   test should be able to tell apart, and both have a pose worth naming.
+
+   | memory           | sensed    | seeds 1 and 7          | seeds 3 and 5                |
+   | ---------------- | --------- | ---------------------- | ---------------------------- |
+   | plate, plate-big | plate-big | **concluded: "plate"** | no conclusion, both possible |
+   | plate-big        | plate-big | concluded: "plate-big" | no conclusion                |
+
+   The bottom row is what makes the top one a finding rather than a setup
+   error: the world does serve the large part, and it recognises itself. The
+   written memory is not at fault either — its two records are at their own
+   scales, `plate` within ±30 mm and `plate-big` within ±45 mm, measured from
+   the JSONL. So against a library of two, sensing the large plate concludes
+   **the small one**, with evidence 12.0 and one object possible, and the run
+   that says nothing at all is the _better_ of the two outcomes.
+
+   That is the first result here that matters for using this on real parts, and
+   it is the one thing this document cannot yet say is the port's or the
+   config's. `max_match_distance` is 10 mm and a 1.5× scale moves the plate's
+   own surface by up to 15 mm, which is the order of the dial — but a wrong
+   answer with a conclusion is not a tolerance being generous, it is the
+   wrong graph winning. The next step is therefore a parity question, not a
+   tuning one: run Monty's own Python over the same percepts (the recording
+   seam is `Monty.Test.MontyRecording` plus the Python peer in
+   `scripts/monty_simulator_peer.py`) and see whether its module also prefers
+   the smaller graph. If it does, this is a config that was never asked to tell
+   two sizes apart; if it does not, there is a defect here with a name.
+
    Two readings from an earlier pass of this document were wrong, and the
    measurement is what corrected them. The curvature in a CAD-written memory is
    not anomalous: `principal_curvatures_log` spans −6.85 … 7.22 here, and
