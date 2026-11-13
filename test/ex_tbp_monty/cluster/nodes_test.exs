@@ -89,6 +89,49 @@ defmodule ExTbpMonty.Cluster.NodesTest do
 
   # A node name is not a URL, so the address travels with the rest of the answer:
   # a page that says a run is on a peer has to be able to link to it.
+  describe "where a node writes a run's files" do
+    test "this node says its own directory" do
+      assert Nodes.identity().artifacts == Monty.Paths.artifacts()
+      assert [entry] = Nodes.snapshot()
+      assert entry.artifacts == Monty.Paths.artifacts()
+    end
+
+    test "a peer's entry carries the directory it named" do
+      [entry] =
+        Nodes.of([:"peer@127.0.0.1"], fn _node -> %{version: "0.1.3", artifacts: "/mnt/runs"} end)
+
+      assert entry.artifacts == "/mnt/runs"
+    end
+
+    # Files do not travel: a part is written by whoever performed it and read by
+    # the node that owns the run, so "the same directory" is the only answer that
+    # lets the two be different machines.
+    test "two nodes that name one directory share their run files" do
+      here = %{node: :"here@127.0.0.1", artifacts: "/mnt/runs"}
+      peer = %{node: :"peer@127.0.0.1", artifacts: "/mnt/runs"}
+
+      assert Nodes.shares_run_files?(here, peer)
+    end
+
+    test "two nodes that name different directories do not" do
+      here = %{node: :"here@127.0.0.1", artifacts: "/home/one/runs"}
+      peer = %{node: :"peer@127.0.0.1", artifacts: "/home/two/runs"}
+
+      refute Nodes.shares_run_files?(here, peer)
+    end
+
+    # A peer older than this question says nothing, and nothing is not "yes": a
+    # run's output is not handed to a node on a guess.
+    test "a node that did not say where it writes shares nothing" do
+      here = %{node: :"here@127.0.0.1", artifacts: "/mnt/runs"}
+      quiet = %{node: :"peer@127.0.0.1"}
+
+      refute Nodes.shares_run_files?(here, quiet)
+      refute Nodes.shares_run_files?(quiet, here)
+      refute Nodes.shares_run_files?(quiet, quiet)
+    end
+  end
+
   test "a peer says where it answers, when it says at all" do
     [reachable] =
       Nodes.of([:"gpu@127.0.0.1"], fn _name ->

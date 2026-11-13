@@ -316,6 +316,15 @@ node2@127.0.0.1`, and still on its first attempt — a snooze is not a failed
   so a page on the owner sees a peer part's steps as they happen and only the
   catch-up read (a page opened later) would need an `:rpc`.
 
+  What a node now _does_ say is where it writes — `Nodes.identity/0` carries the
+  directory, so a peer's entry has one beside its build and its tags, and
+  `Nodes.shares_run_files?/2` answers whether two nodes name the same one. Files do
+  not travel: a part's log, pictures and statistics are written by whoever
+  performed it and read by the node that owns the run, so that question is what
+  decides whether a part may be handed to a peer at all. A node that did not say —
+  an older build — shares nothing, because "probably the same path" is not a fact
+  to hand a run's output to.
+
 - **A run's division is recorded, its parts' nodes included.** `studio_run_parts`
   keeps one row per part: how many the experiment was divided into, what state
   each is in, and the node that has it — written when the worker divides the run

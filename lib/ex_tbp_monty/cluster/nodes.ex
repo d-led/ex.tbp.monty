@@ -17,7 +17,7 @@ defmodule ExTbpMonty.Cluster.Nodes do
 
       %{node: :monty@10.0.0.7, name: "monty_10.0.0.7", address: "monty@10.0.0.7",
         self: true, version: "0.1.3", capabilities: ["gpu", "monty"],
-        web: "http://10.0.0.7:4000", alive: true}
+        web: "http://10.0.0.7:4000", artifacts: "/mnt/runs", alive: true}
 
   Two spellings of the name travel because two readers ask for different ones.
   `address` is the node's own name — `monty@10.0.0.7`, the string a person copies
@@ -121,6 +121,7 @@ defmodule ExTbpMonty.Cluster.Nodes do
         version: version,
         capabilities: capabilities_of(answer),
         web: web_of(answer),
+        artifacts: artifacts_of(answer),
         plugins: plugins_of(answer),
         alive: is_binary(version)
       }
@@ -143,7 +144,14 @@ defmodule ExTbpMonty.Cluster.Nodes do
 
   @doc """
   What this node tells a peer that asks: its node name, the build it runs, what
-  it can do, and where it answers.
+  it can do, where it answers, and where it writes a run's files.
+
+  The last one is not a detail about this node's disk: a part of a run is a log, a
+  handful of pictures and a statistics file, and the node that owns the run reads
+  them from its own directory. A part may therefore only be performed where the
+  same directory is written — `shares_run_files?/2` is that question — and a
+  deployment answers it by pointing `MONTY_ARTIFACTS_DIR` at one place
+  (`Monty.Paths.artifacts/0`).
 
   Called by `:rpc` from another node's poller, so it must stay cheap and must not
   touch anything a page owns.
@@ -152,16 +160,33 @@ defmodule ExTbpMonty.Cluster.Nodes do
           node: node(),
           version: String.t(),
           capabilities: [String.t()],
-          web: String.t() | nil
+          web: String.t() | nil,
+          artifacts: String.t()
         }
   def identity do
     %{
       node: node(),
       version: version(),
       capabilities: Capabilities.declared(),
-      web: Node.web_url()
+      web: Node.web_url(),
+      artifacts: Monty.Paths.artifacts()
     }
   end
+
+  @doc """
+  Whether two nodes write a run's files where the other can read them.
+
+  Files do not travel: a part's log, its pictures and the statistics it merged
+  from are written by whoever performed it and read by the node that owns the run.
+  Two nodes answer `true` here only when both say they write the same directory —
+  a mount, a share, or one machine's own folder reached by the same path. A node
+  that did not say (an older build, or an answer with no `:artifacts`) is not known
+  to share anything, and `false` is the answer: "probably the same path" is not a
+  fact to hand a run's output to.
+  """
+  @spec shares_run_files?(map(), map()) :: boolean()
+  def shares_run_files?(%{artifacts: where}, %{artifacts: where}) when is_binary(where), do: true
+  def shares_run_files?(_left, _right), do: false
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -257,6 +282,11 @@ defmodule ExTbpMonty.Cluster.Nodes do
   # to put in a URL, is a node a page can only name.
   defp web_of(%{web: web}) when is_binary(web), do: web
   defp web_of(_answer), do: nil
+
+  # Where it writes a run's files, when it said. `nil` is a peer older than this
+  # question, and `shares_run_files?/2` reads it as "not known to share".
+  defp artifacts_of(%{artifacts: where}) when is_binary(where), do: where
+  defp artifacts_of(_answer), do: nil
 
   # What a plugin host offers, in the words its own registry uses
   # (`MontyPlugin.Registry.offered/0`: one `%{"kind" =>, "name" =>}` per plugin).
