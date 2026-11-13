@@ -789,6 +789,28 @@ defmodule Monty.Studio.Setup do
       "scene to run a config of its shape, or run one whose world this build has."
   end
 
+  @doc """
+  The worlds this node can step, in the order a page offers them.
+
+  `:mujoco` and `:synthetic` are this application's own. `:cad` is a part, which
+  is `ex_monty_cad`'s scene, and a node that does not carry that application
+  cannot step one — so the list is the node's answer and not a constant in a
+  page. A part also has to be named: a node with the application and no
+  `MONTY_CAD_PART` has nothing to open.
+
+  Kept here because three callers ask the same question — the experiment page,
+  the MCP tool and the mix tasks — and a list written into each is a list that
+  disagrees.
+  """
+  @spec worlds() :: [atom()]
+  def worlds do
+    [:mujoco, :synthetic] ++ if cad_step?(), do: [:cad], else: []
+  end
+
+  # Carried and named: a scene module with no part is an option a reader would
+  # choose and a run would then refuse.
+  defp cad_step?, do: Code.ensure_loaded?(cad_module()) and cad_part() != nil
+
   # The scene module, by name: the studio does not depend on `ex_monty_cad`,
   # which brings quiddity and its Rust build, and a run on a node without it is
   # refused here — with the two things that would make it work — instead of

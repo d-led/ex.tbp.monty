@@ -78,15 +78,14 @@ scene, not a config, knows where the object is.
 
 ## What is next, in order
 
-1. **Teach the pages the word `cad`.** `mix monty.run` takes it; a run queued from
-   the browser cannot, because the vocabulary is in five places
-   (`Jobs.Run.world_of/1`, `experiment_live`'s selector and `world_of/1`, the MCP
-   tool's validation, `Monty.Readiness`'s world table). The one that must not be
-   forgotten is `Jobs.Run.world_of/1`: a record whose world it does not recognise
-   becomes `nil`, which `Setup` reads as "nothing chosen" — so a record saying
-   `cad` would step whatever the worker is configured for. **Blocked on the other
-   agent's uncommitted `lib/monty/studio/jobs/run.ex`**; the change is one clause:
-   `defp world_of(%{"world" => "cad"}), do: :cad`.
+1. **The word `cad` is in every place a run is asked for.** Done:
+   `--world cad` (the task), the experiment page's selector, the queued run's
+   `Jobs.Run.world_of/1`, the MCP tool and `mix monty.readiness`. The list of
+   worlds a node can step is now one answer — `Monty.Studio.Setup.worlds/0`,
+   `[:mujoco, :synthetic]` plus `:cad` only when this node carries
+   `ex_monty_cad` **and** `MONTY_CAD_PART` names a part — so a page cannot offer
+   a world the node would refuse, and a record that names `cad` is asked for
+   rather than quietly replaced by the worker's own default.
 
 2. **The feature walk — built and tested, not yet reachable from a run.**
    `MontyCad.Policy.FeatureWalk` (`ade1dd3`, `ex.monty.cad`) walks a part to the

@@ -548,11 +548,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               class="select select-xs w-72"
               aria-label="Which world the run steps"
             >
-              <%!-- Two worlds, each named for what it is: Monty's own MuJoCo
-              simulator (copied in, run in this application's interpreter), or
-              this port's stand-in sphere. --%>
+              <%!-- Each world named for what it is: Monty's own MuJoCo
+              simulator (copied in, run in this application's interpreter), this
+              port's stand-in sphere, or a CAD part when this node carries the
+              application and a part is named. --%>
               <option
-                :for={world <- [:mujoco, :synthetic]}
+                :for={world <- Setup.worlds()}
                 value={world}
                 selected={world == @opened.setup.world}
               >
@@ -2534,9 +2535,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # neither is nothing to do, because a page cannot ask for a world no port here
   # has. `"habitat"` is kept for a browser sitting on the old page: it is the
   # world this build no longer carries, so asking for it changes nothing.
-  defp world_of("mujoco"), do: :mujoco
-  defp world_of("synthetic"), do: :synthetic
-  defp world_of(_other), do: nil
+  defp world_of(value), do: Enum.find(Setup.worlds(), &(Atom.to_string(&1) == value))
 
   # How many episodes to run at once. Eight is a ceiling rather than a judgement
   # about what a machine can do: each run is its own world and its own simulator

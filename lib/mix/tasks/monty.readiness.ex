@@ -60,7 +60,7 @@ defmodule Mix.Tasks.Monty.Readiness do
   # The worlds a setup can be read for. Named here rather than turned into atoms
   # from the command line, which is how a typo becomes a crash instead of a
   # sentence.
-  @worlds %{"mujoco" => :mujoco, "synthetic" => :synthetic}
+  @worlds %{"mujoco" => :mujoco, "synthetic" => :synthetic, "cad" => :cad}
 
   defp world_named(world) do
     Map.get(@worlds, world) ||

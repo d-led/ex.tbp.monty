@@ -1726,6 +1726,11 @@ defmodule Monty.Studio.Jobs.Run do
   # run recorded as MuJoCo must not step a sphere.
   defp world_of(%{"world" => "mujoco"}), do: :mujoco
   defp world_of(%{"world" => "synthetic"}), do: :synthetic
+  # A part is the one world this node may not carry. It is still the world the
+  # record names, so the run refuses it — `Setup.world/4` says which application
+  # is missing — rather than stepping this worker's own default and reporting
+  # numbers for a run nobody asked for.
+  defp world_of(%{"world" => "cad"}), do: :cad
   defp world_of(_inputs), do: nil
 
   defp attach_log(record, run_id, :ok) do

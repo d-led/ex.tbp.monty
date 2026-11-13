@@ -189,14 +189,25 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
   # than quietly answered with MuJoCo.
   defp world(args) do
     case Args.optional(args, "world") do
-      {:ok, nil} -> {:ok, nil}
-      {:ok, "synthetic"} -> {:ok, :synthetic}
-      {:ok, world} when world in ["monty", "mujoco"] -> {:ok, :mujoco}
-      {:ok, other} -> {:error, "`world` must be `synthetic` or `mujoco`, not `#{other}`."}
+      {:ok, nil} ->
+        {:ok, nil}
+
+      {:ok, "synthetic"} ->
+        {:ok, :synthetic}
+
+      {:ok, "cad"} ->
+        {:ok, :cad}
+
+      {:ok, world} when world in ["monty", "mujoco"] ->
+        {:ok, :mujoco}
+
+      {:ok, other} ->
+        {:error, "`world` must be `synthetic`, `mujoco` or `cad`, not `#{other}`."}
     end
   end
 
   defp world_name("mujoco"), do: "Monty's MuJoCo simulator, in this application"
+  defp world_name("cad"), do: "a CAD part, stepped through ex_monty_cad"
   defp world_name(_synthetic), do: "this port's synthetic scene"
 
   @doc "`monty_run_report`: what a run did, and what it is doing."

@@ -641,6 +641,12 @@ defmodule Monty.Studio.SetupTest do
       end
     end
 
+    test "offers only the worlds this node can step" do
+      # This suite carries no `ex_monty_cad`, so a part is not one of them: a
+      # selector that offered it would be offering a world the node refuses.
+      assert Setup.worlds() == [:mujoco, :synthetic]
+    end
+
     # A CAD part is stepped by another application's scene (`MontyCad.Scene`),
     # which a studio node need not carry, so the part is asked for by name and
     # the answer here is what such a node says instead of a FunctionClauseError
