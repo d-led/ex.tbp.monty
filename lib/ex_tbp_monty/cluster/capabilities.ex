@@ -26,7 +26,8 @@ defmodule ExTbpMonty.Cluster.Capabilities do
   * `"monty"` — always, because every node in this cluster runs this
     application's modules. It is what a run with no special needs asks for.
   * `MONTY_CAPABILITIES`, comma-separated, so a deployment says what its machine
-    has without a code change. `scripts/cluster-node.sh` passes it through.
+    has without a code change. `process-compose.yaml` passes it through, and
+    `elixir --name … -S mix phx.server` reads it on every platform the same way.
   * A node that brings plugins declares the tags of the plugins it brings, in the
     same list. What a plugin contributes is that work's own business; that it is
     advertised here is the seam.

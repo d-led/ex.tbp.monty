@@ -9,6 +9,15 @@ defmodule ExTbpMonty.Application do
 
   @impl true
   def start(_type, _args) do
+    # A named node keeps its own folder and its own database, and nobody else
+    # migrates it. A release's own `bin/server` does this before it serves; a node
+    # started with `mix` has no such script — and a launcher script would be one
+    # more thing that does not exist on Windows — so the node does it itself, here,
+    # before anything that reads the schema starts. A node that runs alone is
+    # untouched: it has no folder of its own, and its database is prepared the way
+    # it always was.
+    prepare_data_folder()
+
     children =
       [
         ExTbpMontyWeb.Telemetry,
@@ -141,5 +150,25 @@ defmodule ExTbpMonty.Application do
   def config_change(changed, _new, removed) do
     ExTbpMontyWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  # A named node is a node with a folder of its own, and a database in it that
+  # nobody has made yet: `Monty.Paths.database/0` names a file under
+  # `nodes/<its name>/`, and the first start of that node is the first start of
+  # that file. Migrating it here is the same call the release's `bin/server` makes
+  # before it serves, and the same one `scripts/migrate` is; a node started with
+  # `mix` needs it just as much and has no shell to put it in.
+  #
+  # Gated on the folder, not on clustering: a node that runs alone keeps the one
+  # database it always had, prepared the way it always was (`mix ecto.setup`).
+  defp prepare_data_folder do
+    case Monty.Paths.data_dir_name() do
+      nil ->
+        :ok
+
+      _named ->
+        File.mkdir_p!(Path.dirname(Monty.Paths.database()))
+        :ok = ExTbpMonty.Release.migrate()
+    end
   end
 end

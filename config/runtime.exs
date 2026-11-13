@@ -51,6 +51,23 @@ cluster_on? = System.get_env("MONTY_CLUSTER", "false") in ~w(true 1) or cluster_
 
 config :ex_tbp_monty, :cluster, enabled: cluster_on?, seeds: cluster_seeds
 
+# The cluster's password, when a deployment hands one over. `MONTY_CLUSTER_SECRET`
+# is the name to use; `MONTY_COOKIE` is the same thing under the name the first
+# launcher gave it, still read so an old start-up keeps working.
+#
+# A `mix`-started node takes its cookie from `--cookie`, and without one every VM
+# of a user shares that user's `~/.erlang.cookie` — three machines, three files,
+# three clusters that believe they are one. So the secret is applied *here*: this
+# file is evaluated in the booting VM, before the supervision tree and before any
+# cluster child connects, which is the only moment a cookie can be set for the
+# connections that follow. The atom is made from configuration read once at
+# boot — not from user input, and one per VM.
+cluster_secret = System.get_env("MONTY_CLUSTER_SECRET") || System.get_env("MONTY_COOKIE")
+
+if cluster_on? and cluster_secret not in [nil, ""] do
+  Node.set_cookie(String.to_atom(cluster_secret))
+end
+
 # A node that dies mid-run leaves its job saying `executing` in a database that
 # outlives it, and with one runs table for the cluster that is a run no other
 # node will ever take. Oban's Lifeline is the part that tidies that: it looks for

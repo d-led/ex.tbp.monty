@@ -310,3 +310,7 @@ MUJOCO_LOG.TXT
 /packages/*/_build
 *.tar
 fprof.trace
+
+# `process-compose up` writes the log of the nodes it started next to the file
+# that describes them.
+/processes.log

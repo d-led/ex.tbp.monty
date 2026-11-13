@@ -19,18 +19,22 @@ $ open http://localhost:4001   # node1
 $ open http://localhost:4002   # node2
 ```
 
-`process-compose.yaml` runs `scripts/cluster-node.sh` twice. The script is the
-whole recipe:
+`process-compose.yaml` runs two nodes with `elixir --name … -S mix phx.server` and
+nothing else — no shell script, because the same file is read on Windows. The
+recipe is three decisions, all of them environment:
 
-```console
-$ scripts/cluster-node.sh name port
-```
+| what | how |
+| --- | --- |
+| the node's name | `--name node1@127.0.0.1` — the only thing that makes it a node |
+| the cluster | `MONTY_CLUSTER=true` (or `MONTY_SEEDS`), see [The variables](#the-variables) |
+| its own database | `MONTY_DB=sqlite` — a file per node under `nodes/<its name>/` |
+| the cluster's password | `MONTY_CLUSTER_SECRET`, the same on every node that should join |
 
-It exports `MONTY_CLUSTER=1` and `MONTY_DB=sqlite`, starts the VM as
-`name@127.0.0.1`, migrates that node's own database in a VM of its own (see
-[below](#why-the-script-migrates-by-hand)), and then serves. Both nodes are
-named, so nothing about them can be confused with the single node a bare
-`mix phx.server` is.
+A named node prepares its own folder: on boot it makes
+`nodes/<its name>/` and migrates the database in it
+(`ExTbpMonty.Application.prepare_data_folder/0`), which is what a release's
+`bin/server` does before it serves. A node that runs alone has no such folder and
+is not touched.
 
 ## What a node keeps, and what they share
 
@@ -61,17 +65,19 @@ always had. `Monty.Paths.node_root/0` is the only thing that knows the rule.
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `MONTY_CLUSTER`      | `1`/`true` asks for the cluster's children. Not needed when `MONTY_SEEDS` is set — a list of nodes to dial is already the request                                                         |
 | `MONTY_SEEDS`        | the peers to dial, `node1@10.0.0.7,node2@10.0.0.8`. Empty means gossip discovery, which is what several nodes on one machine need, because they cannot know each other's names in advance |
-| `MONTY_COOKIE`       | a development node's cookie, passed to the VM as `--cookie`. A release reads `RELEASE_COOKIE`, which `rel/env.sh.eex` fills from `NODE_COOKIE`                                            |
+| `MONTY_CLUSTER_SECRET` | the cluster's shared secret, the same on every node that should join. `config/runtime.exs` sets it as the VM's cookie before any cluster child connects, which is how nodes on different machines — with different `~/.erlang.cookie` files — join one cluster. `MONTY_COOKIE` is the same thing under the name the first launcher gave it, still read. A release reads `RELEASE_COOKIE`, which `rel/env.sh.eex` fills from `NODE_COOKIE` |
 | `PORT`               | that node's HTTP port                                                                                                                                                                     |
 | `MONTY_CAPABILITIES` | what this node can do, comma-separated (see [capability tags](#capability-tags))                                                                                                          |
 | `MONTY_DB`           | `sqlite` gives a development node a file instead of the Postgres a developer's machine has. A release asks `DATABASE_URL` instead                                                         |
 | `NODE_NAME`          | a release's node name, the alias of `RELEASE_NODE`; in development the name is the VM's (`--name`/`--sname`)                                                                              |
 
-**The cookie is the cluster's password.** Two nodes that disagree about it are two
+**The secret is the cluster's password.** Two nodes that disagree about it are two
 clusters that quietly believe they are one: nothing fails, nothing is logged, and
 each page shows one node. That is the failure this design's blueprint records, so
-the settings page says where a node's cookie came from — and never what it is,
-because a settings screen is not a place to print a password.
+the settings page says where a node's secret came from — and never what it is,
+because a settings screen is not a place to print a password. A node given none
+falls back to its user's `~/.erlang.cookie`, which is right for several nodes on
+one machine and wrong for several machines.
 
 ## What the pages say
 
@@ -283,13 +289,16 @@ still one node's is a run's **parts**: those are what the next change is about,
 and they need one of the two answers this section lists — a filesystem the owning
 node can read, or an explicit transfer of what a part produced.
 
-## Why the script migrates by hand
+## Why the node migrates itself
 
 An Ecto mix task reads configuration _before_ `config/runtime.exs`, which is where
 a node's database is chosen — `mix ecto.create` would try the Postgres this
-checkout was written around and find no database named in its config. `mix run
---no-start` does read that file, and `ExTbpMonty.Release.migrate/0` is the
-migration a release applies, so the script runs those two and then serves.
+checkout was written around and find no database named in its config. A node's own
+start does read that file, so the migration belongs to the node: boot makes the
+folder and runs `ExTbpMonty.Release.migrate/0` — the migration a release applies —
+before the tree that reads the schema starts. That is also why this is a decision
+of the node and not of a launcher: the same code path serves `mix phx.server` on
+Windows, where a launcher script would not exist.
 
 ## What was verified
 

@@ -1,6 +1,9 @@
 version: "0.5"
 
-# Two nodes of this application on one machine, each with its own name, its own
+# https://f1bonacc1.github.io/process-compose/
+# process-compose
+#
+# Two nodes of Elixir Monty Studio on one machine, each with its own name, its own
 # port and its own database file.
 #
 #   process-compose up
@@ -8,33 +11,50 @@ version: "0.5"
 #
 # Both pages say "2 nodes" in the footer and name both in Settings → Nodes. The
 # files are separate on purpose: `nodes/node1_127.0.0.1/` and
-# `nodes/node2_127.0.0.1/` under this application's data folder, each with its
-# own `ex_tbp_monty.db` and its own `runs/`. What is shared is what is
-# downloaded — `data/` and `models/` — because fetching a gigabyte twice would be
-# the only thing worse than fetching it once.
+# `nodes/node2_127.0.0.1/` under this application's data folder, each with its own
+# `ex_tbp_monty.db` and its own `runs/`. What is shared is what is downloaded —
+# `data/` and `models/` — because fetching a gigabyte twice would be the only
+# thing worse than fetching it once.
 #
-# A node on its own (`mix phx.server`) is unchanged: no name, no cluster, no
-# second folder.
+# **Every command here is `elixir` and `mix`, and nothing else.** No shell script:
+# this file is read on Windows too, where `scripts/*.sh` does not run. A node is
+# named by `--name`, which is the whole of what makes it a node; it migrates its
+# own database on boot (`ExTbpMonty.Application`), because a named node owns its
+# folder and nothing else can prepare it; and joining the cluster is environment.
 #
-# Across machines rather than one: give each node its own host (`--name
-# monty1@10.0.0.7`), point `MONTY_SEEDS` at the others, and export the same
-# `MONTY_COOKIE` everywhere — the cookie is the cluster's password, and nodes that
-# disagree about it stay silently separate. `scripts/cluster-node.sh` passes it to
-# the VM as `--cookie`, and the settings page says where a node got its own.
+# A node on its own (`mix phx.server`, no name) is unchanged: no name, no cluster,
+# no second folder.
+#
+# ## Across machines rather than one
+#
+# Give each node its own host (`--name monty1@10.0.0.7`), name the others in
+# `MONTY_SEEDS`, and set the **same `MONTY_CLUSTER_SECRET`** everywhere. The secret
+# is the cluster's password: nodes that disagree about it stay silently separate,
+# and a node that has none falls back to its user's `~/.erlang.cookie` — three
+# machines have three of those. Settings → Nodes says where a node got its own.
+#
+# ## One runs table instead of one per node
+#
+# Add `DATABASE_URL=postgres://…` to both nodes and drop `MONTY_DB`: then the
+# queue spreads across the nodes instead of each keeping its own (see
+# `docs/cluster.md`).
 log_location: processes.log
 log_level: debug
 
 processes:
   node1:
-    command: "scripts/cluster-node.sh node1 4001"
+    command: "elixir --name node1@127.0.0.1 -S mix phx.server"
     working_dir: "./"
     environment:
+      - "PORT=4001"
+      - "MONTY_CLUSTER=true"
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
-      # Two nodes of one machine are two nodes that can do the same things. A
-      # cluster of unlike machines is where the tags matter, and this is where a
-      # node declares its own (see `ExTbpMonty.Cluster.Capabilities`): uncomment
-      # on one side only, and Settings → Nodes says what each one can do, and
-      # who can do what.
+      - "MONTY_DB=sqlite"
+      - "MONTY_CLUSTER_SECRET=local-dev-secret"
+      # Two nodes of one machine can do the same things. A cluster of unlike
+      # machines is where the tags matter, and this is where a node declares its
+      # own (`ExTbpMonty.Cluster.Capabilities`): uncomment on one side only, and
+      # Settings → Nodes says what each one can do, and who can do what.
       # - "MONTY_CAPABILITIES=gpu,world:mujoco"
     readiness_probe:
       http_get:
@@ -43,10 +63,14 @@ processes:
         path: "/"
 
   node2:
-    command: "scripts/cluster-node.sh node2 4002"
+    command: "elixir --name node2@127.0.0.1 -S mix phx.server"
     working_dir: "./"
     environment:
+      - "PORT=4002"
+      - "MONTY_CLUSTER=true"
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
+      - "MONTY_DB=sqlite"
+      - "MONTY_CLUSTER_SECRET=local-dev-secret"
     readiness_probe:
       http_get:
         host: 127.0.0.1

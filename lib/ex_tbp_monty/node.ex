@@ -158,17 +158,20 @@ defmodule ExTbpMonty.Node do
   hand it to anybody who can open a settings screen, so what is said here is where
   it came from, which is the part a reader can act on.
 
-  `MONTY_COOKIE` is the name a `mix` run reads (see `scripts/cluster-node.sh`); a
-  release reads `RELEASE_COOKIE`, which `rel/env.sh.eex` fills from `NODE_COOKIE`
-  when that is set. Without either, every VM of one user shares
-  `~/.erlang.cookie`, which is why several nodes on one machine need to agree on
-  nothing.
+  `MONTY_CLUSTER_SECRET` is the name a `mix` run reads, and `MONTY_COOKIE` is the
+  same thing under the name the first launcher gave it; a release reads
+  `RELEASE_COOKIE`, which `rel/env.sh.eex` fills from `NODE_COOKIE` when that is
+  set. Without any of them, every VM of one user shares `~/.erlang.cookie`, which
+  is why several nodes on one machine need to agree on nothing.
   """
   @spec cookie_source() :: String.t()
   def cookie_source do
     cond do
       not distributed?() ->
         "this node is not a named node, so it shares no cookie"
+
+      System.get_env("MONTY_CLUSTER_SECRET") not in [nil, ""] ->
+        "set by MONTY_CLUSTER_SECRET, the same on every node that is meant to join"
 
       System.get_env("MONTY_COOKIE") not in [nil, ""] ->
         "set by MONTY_COOKIE, the same on every node that is meant to join"
