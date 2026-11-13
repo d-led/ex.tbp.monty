@@ -1,7 +1,7 @@
 defmodule ExTbpMonty.Core.MixProject do
   use Mix.Project
 
-  @version "0.1.2"
+  @version "0.1.3"
   @source_url "https://github.com/d-led/ex.tbp.monty"
 
   def project do

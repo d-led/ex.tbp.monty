@@ -12,7 +12,7 @@ supplies.
 ```elixir
 def deps do
   [
-    {:ex_tbp_monty_core, "~> 0.1.2"}
+    {:ex_tbp_monty_core, "~> 0.1.3"}
   ]
 end
 ```
@@ -49,7 +49,7 @@ the repository, word for word, and it downloads nothing but the package.
 #
 #   elixir quickstart.exs
 
-Mix.install([{:ex_tbp_monty_core, "~> 0.1.2"}])
+Mix.install([{:ex_tbp_monty_core, "~> 0.1.3"}])
 
 alias Monty.Runtime.Model
 alias Monty.Simulators.Synthetic.{Environment, LearningModule, Motor, SensorModule}
