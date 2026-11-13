@@ -38,7 +38,9 @@ defmodule Mix.Tasks.Monty.Run do
     * `--seed N` — episode seed, overriding the config's
     * `--pretrained-dir DIR` — the release to load pretrained models from, when
       the one the config names is not on this machine
-    * `--world mujoco|synthetic` — which world to step. The default is this
+    * `--world mujoco|synthetic|cad` — which world to step. `cad` steps the
+      STEP file `MONTY_CAD_PART` names, through `ex_monty_cad` (which the node
+      has to carry). The default is this
       host's, and the stand-in scene is not the experiment: a number it reports
       is not the experiment's, so a run that should be comparable has to say
       `--world mujoco`
@@ -366,9 +368,10 @@ defmodule Mix.Tasks.Monty.Run do
   defp world(nil), do: nil
   defp world("mujoco"), do: :mujoco
   defp world("synthetic"), do: :synthetic
+  defp world("cad"), do: :cad
 
   defp world(other),
-    do: Mix.raise("unknown world #{inspect(other)}: mujoco or synthetic")
+    do: Mix.raise("unknown world #{inspect(other)}: mujoco, synthetic or cad")
 
   # The seed is the input a headless run most often varies: a sweep over seeds
   # is the simplest experiment there is.

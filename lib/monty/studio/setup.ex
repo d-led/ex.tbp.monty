@@ -646,6 +646,11 @@ defmodule Monty.Studio.Setup do
   """
   @spec world_name(t(), atom()) :: String.t()
   def world_name(_setup, :synthetic), do: "stand-in scene (Elixir, one sphere)"
+
+  # A CAD part is named by the deployment (`MONTY_CAD_PART`), so the words say
+  # which part rather than which engine. A page asks this before anything is
+  # built, so a node with no part named says that instead of raising.
+  def world_name(_setup, :cad), do: "CAD part (#{cad_part() |> part_file()})"
   def world_name(setup, :mujoco), do: mujoco_world_name(setup)
 
   # An operator can configure a world this build does not carry. Saying so is
@@ -684,7 +689,7 @@ defmodule Monty.Studio.Setup do
   of Monty — is refused here rather than given MuJoCo's simulator and allowed to
   look as if it ran.
   """
-  @spec world(t(), :synthetic | :mujoco) :: Monty.Simulators.Environment.t()
+  @spec world(t(), :synthetic | :mujoco | :cad) :: Monty.Simulators.Environment.t()
   def world(%__MODULE__{} = setup, world) when is_atom(world), do: world(setup, world, 0)
 
   @spec world(t(), non_neg_integer()) :: Monty.Simulators.Environment.t()
@@ -703,7 +708,8 @@ defmodule Monty.Studio.Setup do
   the agent — a scene built without it would show the first object in every
   episode and call that a run of ten.
   """
-  @spec world(t(), :synthetic | :mujoco, non_neg_integer()) :: Monty.Simulators.Environment.t()
+  @spec world(t(), :synthetic | :mujoco | :cad, non_neg_integer()) ::
+          Monty.Simulators.Environment.t()
   def world(%__MODULE__{} = setup, world, episode) when is_atom(world),
     do: world(setup, world, episode, [])
 
@@ -715,7 +721,7 @@ defmodule Monty.Studio.Setup do
   Both matter: `Predefined` walks its rotations one per epoch, so a world built
   without the epoch shows every episode of a run the same side of the object.
   """
-  @spec world(t(), :synthetic | :mujoco, non_neg_integer(), keyword()) ::
+  @spec world(t(), :synthetic | :mujoco | :cad, non_neg_integer(), keyword()) ::
           Monty.Simulators.Environment.t()
   def world(%__MODULE__{} = setup, :mujoco, episode, opts) do
     case engine(setup) do
@@ -737,12 +743,38 @@ defmodule Monty.Studio.Setup do
     )
   end
 
+  # A CAD part, stepped by the same world the stand-in scene is: the kinematics,
+  # the actions and the proprioceptive state are the port's, and only the picture
+  # comes from the part (`MontyCad.Scene`).
+  #
+  # The part is not this application's code — `ex_monty_cad` is another package
+  # with its own dependencies — so it is asked for by name and a node that does
+  # not have it says so, rather than linking the package to find out.
+  def world(%__MODULE__{} = setup, :cad, _episode, _opts) do
+    scene = cad_scene()
+    # A part is its own scene, so where the agent starts is read from the part
+    # and not from the config's start pose: that one places an agent in MuJoCo's
+    # scene, where the object is where MuJoCo put it.
+    agent = apply(cad_module(), :start_pose, [scene])
+
+    sensors =
+      Map.new(sensor_ids(setup), &{&1, %{position: [0.0, 0.0, 0.0], rotation: agent.rotation}})
+
+    Monty.Simulators.Synthetic.Environment.new(
+      sensor_ids(setup),
+      scene,
+      views: setup.cameras,
+      agent: agent,
+      sensors: sensors
+    )
+  end
+
   # A world this build does not carry — an operator can configure one — is
   # refused with the words a page shows, not a FunctionClauseError.
   def world(%__MODULE__{}, world, _episode, _opts) when is_atom(world) do
     raise ArgumentError,
-          "#{inspect(world)} is not a world this application carries: only MuJoCo " <>
-            "and the stand-in scene can be stepped here."
+          "#{inspect(world)} is not a world this application carries: only MuJoCo, " <>
+            "the stand-in scene and a CAD part can be stepped here."
   end
 
   defp uncarried_world(%__MODULE__{environment: nil}) do
@@ -752,9 +784,48 @@ defmodule Monty.Studio.Setup do
 
   defp uncarried_world(%__MODULE__{environment: %{module: %{class: class}}}) do
     "This experiment's world is #{class}, which this application does not carry: only " <>
-      "MuJoCo and the stand-in scene can be stepped here. Step the stand-in scene to run a " <>
-      "config of its shape, or run one whose world this build has."
+      "MuJoCo, the stand-in scene and a CAD part can be stepped here. Step the stand-in " <>
+      "scene to run a config of its shape, or run one whose world this build has."
   end
+
+  # The scene module, by name: the studio does not depend on `ex_monty_cad`,
+  # which brings quiddity and its Rust build, and a run on a node without it is
+  # refused here — with the two things that would make it work — instead of
+  # failing inside a world.
+  defp cad_scene do
+    module = cad_module()
+
+    cond do
+      not Code.ensure_loaded?(module) ->
+        raise ArgumentError,
+              "a CAD part is stepped through #{inspect(module)}, which this node does not " <>
+                "carry: add `ex_monty_cad` to the node that steps the part, or step MuJoCo " <>
+                "or the stand-in scene."
+
+      cad_part() == nil ->
+        raise ArgumentError,
+              "no CAD part is named: `MONTY_CAD_PART` is the STEP file a run of this world " <>
+                "steps."
+
+      true ->
+        case apply(module, :open, [cad_part()]) do
+          {:ok, scene} ->
+            scene
+
+          {:error, error} ->
+            raise ArgumentError,
+                  "the CAD part this run names could not be opened " <>
+                    "(#{cad_part()}): #{Exception.message(error)}"
+        end
+    end
+  end
+
+  defp cad_module, do: Module.concat(["MontyCad", "Scene"])
+
+  defp cad_part, do: System.get_env("MONTY_CAD_PART")
+
+  defp part_file(nil), do: "no part named"
+  defp part_file(path), do: Path.basename(path)
 
   # Monty's simulator, from the numbers the config states: the data path the
   # meshes load from, the agent its `env_init_args` names (class, start pose and

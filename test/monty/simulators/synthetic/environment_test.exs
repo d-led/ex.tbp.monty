@@ -192,4 +192,45 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
       assert List.flatten(patch["depth"]) == List.duplicate(0.0, 9)
     end
   end
+
+  describe "what the world says it showed" do
+    # A world is only as informative as its scene. A part knows its own name and
+    # the id its pixels carry, so the answer is the scene's; a stand-in sphere is
+    # not an object, and a model told it was one would score itself against
+    # something nobody chose.
+    test "is the scene's answer when the scene has one" do
+      environment = Environment.new(["patch"], __MODULE__.NamedScene.new())
+
+      assert Environment.primary_target(environment) == %{"object_name" => "bracket"}
+      assert Environment.semantic_id_to_label(environment) == %{1 => "bracket"}
+    end
+
+    test "is nothing when the scene is a stand-in with no object in it" do
+      environment = Environment.new(["patch"], Scene.new())
+
+      assert Environment.primary_target(environment) == nil
+      assert Environment.semantic_id_to_label(environment) == %{}
+    end
+
+    defmodule NamedScene do
+      @moduledoc false
+      # A scene that is one named object: the shape of the CAD scene, without its
+      # geometry.
+      defstruct [:name]
+
+      def new, do: %__MODULE__{name: "bracket"}
+
+      def render(_scene, _pose, _options) do
+        %{
+          depth: [[0.05]],
+          rgba: [[[0.5, 0.5, 0.5, 1.0]]],
+          semantic: [[1.0]],
+          centre: %{on_object: true, depth: 0.05, rgba: [0.5, 0.5, 0.5, 1.0]}
+        }
+      end
+
+      def primary_target(scene), do: %{"object_name" => scene.name}
+      def semantic_id_to_label(scene), do: %{1 => scene.name}
+    end
+  end
 end

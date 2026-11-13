@@ -132,15 +132,40 @@ defmodule Monty.Simulators.Synthetic.Environment do
   def agent_id, do: @agent_id
 
   @doc """
-  Nothing: this world places no object it could name.
+  The object this episode is about, when the scene knows of one.
 
-  Monty's worlds sample an object and say which; the stand-in has one sphere at
-  the centre an experiment's scene put it, and calling that an object would tell a
-  model to score itself against something nobody chose.
+  Monty's worlds sample an object and say which; the stand-in's sphere is not an
+  object, and calling it one would tell a model to score itself against something
+  nobody chose. A scene that *is* an object — a CAD part, whose shape and name
+  are exact — answers `primary_target/1` and `semantic_id_to_label/1` itself, and
+  this world passes both through: the world is the same world, and what it shows
+  is the scene's to say.
   """
   @impl true
-  @spec primary_target(t()) :: nil
+  @spec primary_target(t()) :: map() | nil
+  def primary_target(%__MODULE__{scene: scene}) when is_struct(scene) do
+    if function_exported?(scene.__struct__, :primary_target, 1),
+      do: scene.__struct__.primary_target(scene),
+      else: nil
+  end
+
   def primary_target(%__MODULE__{}), do: nil
+
+  @doc """
+  What the semantic ids in this world's images are called.
+
+  Empty unless the scene says: a scene of one part knows the id its pixels carry,
+  and a stand-in sphere has no semantics to report.
+  """
+  @impl true
+  @spec semantic_id_to_label(t()) :: %{optional(integer()) => String.t()}
+  def semantic_id_to_label(%__MODULE__{scene: scene}) when is_struct(scene) do
+    if function_exported?(scene.__struct__, :semantic_id_to_label, 1),
+      do: scene.__struct__.semantic_id_to_label(scene),
+      else: %{}
+  end
+
+  def semantic_id_to_label(%__MODULE__{}), do: %{}
 
   defp observations(environment, world) do
     [x, _y, _z] = world.agent.position

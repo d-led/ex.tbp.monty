@@ -640,6 +640,30 @@ defmodule Monty.Studio.SetupTest do
                "expected #{sensor_id} to see the object, but every ray missed"
       end
     end
+
+    # A CAD part is stepped by another application's scene (`MontyCad.Scene`),
+    # which a studio node need not carry, so the part is asked for by name and
+    # the answer here is what such a node says instead of a FunctionClauseError
+    # or a world that half-works.
+    test "refuses a CAD part on a node that does not carry the CAD application" do
+      setup = setup_for("tutorial/first_experiment")
+
+      assert_raise ArgumentError, ~r/does not carry/, fn -> Setup.world(setup, :cad) end
+    end
+
+    test "names the CAD part a run would step, from the deployment" do
+      setup = setup_for("tutorial/first_experiment")
+      Tmp.system_env("MONTY_CAD_PART", "/parts/bracket.step")
+
+      assert Setup.world_name(setup, :cad) == "CAD part (bracket.step)"
+    end
+
+    test "says no part is named when the deployment names none" do
+      setup = setup_for("tutorial/first_experiment")
+      Tmp.without_env("MONTY_CAD_PART")
+
+      assert Setup.world_name(setup, :cad) == "CAD part (no part named)"
+    end
   end
 
   describe "the model a run starts" do
