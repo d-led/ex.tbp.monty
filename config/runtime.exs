@@ -53,12 +53,28 @@ config :ex_tbp_monty, :cluster, enabled: cluster_on?, seeds: cluster_seeds
 
 # A node that dies mid-run leaves its job saying `executing` in a database that
 # outlives it, and with one runs table for the cluster that is a run no other
-# node will ever take. Lifeline is the part that notices: a job still executing
-# after this long is put back for somebody else to run. It is asked for only when
-# clustering is on — a node that runs alone keeps exactly the queue it had, and a
-# run of its own is never rescued out from under it.
+# node will ever take. Oban's Lifeline is the part that tidies that: it looks for
+# jobs still `executing` and moves them on.
+#
+# The window is a **day**, and the length is the whole point. Lifeline is purely
+# time-based — it cannot ask whether the node is alive — so a window shorter than
+# a run would catch runs that are going perfectly well: with a `max_attempts: 1`
+# worker (`Monty.Studio.Jobs.Run`) such a job is marked `discarded`, and this
+# page's own "is it in flight" reads the job, so a live run longer than the window
+# would lose its Stop button while it stepped. A run of ours is minutes to hours;
+# a day is past all of them, and a truly orphaned job still stops sitting in the
+# queue for ever.
+#
+# What it does to an orphan is *discard* rather than re-run, again because of
+# `max_attempts: 1`, and that is what we want: the second attempt would start the
+# experiment from its first step on another node, beside a record that already has
+# steps in it. The record is settled separately, by the reaper (`Monty.Studio.Jobs.Reaper`)
+# on whichever node sees the heartbeat go quiet.
+#
+# Asked for only when clustering is on: a node that runs alone keeps exactly the
+# queue it had.
 if cluster_on? do
-  config :ex_tbp_monty, Oban, lifeline: [rescue_after: {10, :minutes}]
+  config :ex_tbp_monty, Oban, lifeline: [rescue_after: {24, :hours}]
 end
 
 # A named node in a cluster keeps its own folder — its database, its runs, its own

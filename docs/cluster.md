@@ -191,10 +191,21 @@ gone: the next answer is question three, and the run is performed locally.
 
 With one runs table for the cluster, a node that dies mid-run leaves its job
 saying `executing`, and no other node will ever take it. `Oban.Lifeline` is asked
-for exactly when clustering is on (`config/runtime.exs`): a job still executing
-after ten minutes is put back in the queue for somebody else. On a node that runs
-alone nothing is configured that was not configured before — a lone node's
-longest run is never rescued out from under it.
+for exactly when clustering is on (`config/runtime.exs`), and what it does to such
+a job is **discard** it, not re-run it: the worker allows one attempt
+(`Jobs.Run`), and a second attempt would start the experiment from its first step
+on another node beside a record that already has steps in it. The record itself is
+settled by the reaper (`Monty.Studio.Jobs.Reaper`), which runs when a node starts
+and when `/runs` or an experiment page loads — so a dead node's last run is closed
+by the next node that restarts, or by the next person who looks.
+
+Its window is a **day**, and that is not caution for its own sake: Lifeline is
+purely time-based — it cannot ask whether the node is alive — so any window
+shorter than a run catches runs that are going perfectly well. Such a job would be
+marked `discarded` while still stepping, and this page decides "is it in flight"
+from the job, so a live run longer than the window would lose its Stop button. A
+run of ours is minutes to hours; a day is past all of them. On a node that runs
+alone nothing is configured that was not configured before.
 
 ## What is not spread yet
 

@@ -2603,7 +2603,10 @@ own scene, and anything it pinned in `inputs.capabilities` — and the worker as
 it before it opens a world: perform here if this node offers them; `{:snooze, 15}`
 if only a live peer does; perform here anyway if nobody does, which is why a lone
 node is untouched by any of it. `Oban.Lifeline` is configured only when clustering
-is on, so a job left `executing` by a node that died is put back for somebody else.
+is on, with a **day** as its window: it is time-based, and a `max_attempts: 1`
+worker means a job it catches is discarded rather than re-run — so a shorter window
+would discard a live long run's job and take its Stop button away, while the record
+is settled by the reaper either way.
 `studio_runs.node` follows the claim rather than the asking: with one runs table
 the two differ, and the node a reader has to open for a run's steps and files is
 the node that performed it.
