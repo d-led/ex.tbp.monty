@@ -125,6 +125,30 @@ defmodule ExTbpMonty.Node do
   end
 
   @doc """
+  The node's address as another node names it — `node1@10.0.0.7` — or `nil` for a
+  VM that was never given a name.
+
+  Two spellings of one node, for two readers. This one is what a person copies:
+  `MONTY_SEEDS` is a list of these, and `--name`/`--sname` take one. The other is
+  `safe_name/1`, which is what its folder is called — a path, not something to
+  paste onto another machine.
+
+  The host part is whatever the node was started with: an IP (`--name node1@…`),
+  a short name (`--sname node1` becomes `node1@<this machine's hostname>`) or a
+  fully qualified one. Showing the node's own name rather than guessing from the
+  network is deliberate: it is the identical string its peers have to be told.
+  """
+  @spec address(node() | String.t() | nil) :: String.t() | nil
+  def address(nil), do: nil
+
+  def address(node_name) do
+    case to_string(node_name) do
+      "nonode@nohost" -> nil
+      address -> address
+    end
+  end
+
+  @doc """
   The address a node answers HTTP on, as a browser can open it — `nil` when the
   name it was given has no host to build one from.
 

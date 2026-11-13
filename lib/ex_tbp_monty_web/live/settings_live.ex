@@ -100,13 +100,14 @@ defmodule ExTbpMontyWeb.SettingsLive do
         </section>
 
         <%!-- Which nodes there are, which build each one runs, and what each
-        one can do. A page cannot change any of it — the cluster is a start-up
-        decision — so it is shown here rather than offered as a control. The list
-        itself is a component because it changes while the page is open: a peer
-        joining or leaving moves it without anybody reloading. What stays here is
-        read once, at boot. --%>
+        one can do — the nodes of this application and the nodes that bring
+        plugins, as two chapters. A page cannot change any of it — the cluster is
+        a start-up decision — so it is shown here rather than offered as a
+        control. The list itself is a component because it changes while the page
+        is open: a peer joining or leaving moves it without anybody reloading.
+        What stays here is read once, at boot. --%>
         <section id="cluster" class="space-y-1 border-t border-base-300 pt-3">
-          <h2 class="text-sm font-semibold">Nodes</h2>
+          <h2 class="text-sm font-semibold">Cluster</h2>
           <.live_component module={ExTbpMontyWeb.ClusterNodes} id="cluster-nodes" />
           <p :if={@cluster.why_not} id="cluster-why-not" class="text-xs text-base-content/60">
             {@cluster.why_not}

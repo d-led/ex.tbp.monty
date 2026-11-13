@@ -86,6 +86,41 @@ defmodule ExTbpMonty.Cluster.PeersTest do
     refute id == theirs.id
   end
 
+  # A page of a peer's runs, filtered the way this node's own list is — the
+  # question `/runs?on=<node>` asks. `nil` is "no answer", which is not the same
+  # sentence as "no runs like that".
+  describe "a peer's page of runs" do
+    test "asks the node it was given, with the filters the list uses" do
+      entry = peer("gpu_127.0.0.1")
+
+      asked =
+        Peers.runs_on(entry, [state: "finished", text: "cows", page: 2], fn asked, options ->
+          send(self(), {:asked, asked, options})
+          %{runs: [], total: 0, pages: 1, page: 1}
+        end)
+
+      assert %{runs: []} = asked
+      assert_received {:asked, ^entry, %{"state" => "finished", "text" => "cows", "page" => 2}}
+    end
+
+    # A node that did not answer is not a node with no runs: the page has to say
+    # which of the two happened.
+    test "is nil when the node does not answer" do
+      assert Peers.runs_on(peer("gone_1"), [], fn _entry, _options -> nil end) == nil
+    end
+
+    test "always answers with its own runs, never another node's" do
+      name = Monty.Paths.data_dir_name() || "node1_127.0.0.1"
+
+      {:ok, theirs} = in_a_node("node2_127.0.0.1", fn -> RunHistory.start(@attributes) end)
+      {:ok, ours} = in_a_node(name, fn -> RunHistory.start(@attributes) end)
+
+      assert %{runs: [run], total: 1} = Peers.local_runs(%{"state" => "all"})
+      assert run.id == ours.id
+      refute run.id == theirs.id
+    end
+  end
+
   # The node a run was recorded on is the setting `config/runtime.exs` puts there
   # at boot; a test puts it there itself, because a test is not a node.
   defp in_a_node(name, fun) do

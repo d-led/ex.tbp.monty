@@ -15,15 +15,17 @@ defmodule ExTbpMonty.Cluster.Nodes do
 
   ## What an entry is
 
-      %{node: :monty@10.0.0.7, name: "monty_10.0.0.7", self: true,
-        version: "0.1.3", capabilities: ["gpu", "monty"],
+      %{node: :monty@10.0.0.7, name: "monty_10.0.0.7", address: "monty@10.0.0.7",
+        self: true, version: "0.1.3", capabilities: ["gpu", "monty"],
         web: "http://10.0.0.7:4000", alive: true}
 
-  `name` is the node's name made safe for a path — the same name its data folder
-  carries (`ExTbpMonty.Node.safe_name/1`), so a reader who sees a node in this
-  list and a folder on disk is looking at one thing and not two. A peer that did
-  not answer is `alive: false` with no version, which is the difference between
-  "there is a node I cannot reach" and "there is no node".
+  Two spellings of the name travel because two readers ask for different ones.
+  `address` is the node's own name — `monty@10.0.0.7`, the string a person copies
+  into `MONTY_SEEDS` and the one `--name` takes — and is `nil` for a VM that was
+  never named. `name` is the same name made safe for a path
+  (`ExTbpMonty.Node.safe_name/1`), which is what its data folder is called; a
+  page shows the address, and a reader who sees a folder on disk is looking at
+  the same node under the spelling a path allows.
 
   `capabilities` and `web` travel with the version because all three come from the
   same `:rpc` (`identity/0`) and all three are answers to "what is that node": a
@@ -106,6 +108,7 @@ defmodule ExTbpMonty.Cluster.Nodes do
       %{
         node: name,
         name: Node.safe_name(name),
+        address: Node.address(name),
         self: name == node(),
         version: version,
         capabilities: capabilities_of(answer),

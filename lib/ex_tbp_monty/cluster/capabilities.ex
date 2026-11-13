@@ -36,6 +36,11 @@ defmodule ExTbpMonty.Cluster.Capabilities do
   # What every node of this cluster can do.
   @always "monty"
 
+  # The prefix a node uses to say it *provides* something rather than *has* a
+  # machine that can do it: `plugin`, `plugin:learning_module`,
+  # `plugin:experiment`. See `plugin?/1`.
+  @plugin "plugin"
+
   @variable "MONTY_CAPABILITIES"
 
   @doc """
@@ -101,12 +106,33 @@ defmodule ExTbpMonty.Cluster.Capabilities do
   def by_tag(entries) do
     entries
     |> Enum.flat_map(fn entry ->
-      Enum.map(of_entry(entry), &{normalise(&1), entry.name})
+      Enum.map(of_entry(entry), &{normalise(&1), label(entry)})
     end)
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
     |> Enum.map(fn {tag, names} -> {tag, names |> Enum.uniq() |> Enum.sort()} end)
     |> Enum.sort_by(&elem(&1, 0))
   end
+
+  @doc """
+  Whether an entry is a node that brings plugins.
+  A node is a plugin host when it says so in the one vocabulary there is: a tag
+  beginning with `plugin` — `plugin`, `plugin:learning_module`,
+  `plugin:experiment` — is a claim about what the node *provides* rather than about
+  the machine it runs on, which is the distinction the settings page draws when it
+  groups the cluster in two.
+
+  Kept here, beside the spelling rules, because the page and any future scheduler
+  must agree about what a plugin node is, and the honest answer is "the tags say".
+  """
+  @spec plugin?(map()) :: boolean()
+  def plugin?(entry) do
+    entry |> of_entry() |> Enum.any?(&String.starts_with?(&1, @plugin))
+  end
+
+  # How a page names a node: the address a person can paste (`node1@10.0.0.7`),
+  # or the folder spelling for a VM that was never named — a list that shows
+  # nothing at all is worse than one that shows the name a folder has.
+  defp label(entry), do: Map.get(entry, :address) || entry.name
 
   @doc """
   A node entry's tags, in the spelling comparisons use.

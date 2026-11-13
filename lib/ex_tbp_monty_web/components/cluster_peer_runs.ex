@@ -1,7 +1,6 @@
 defmodule ExTbpMontyWeb.ClusterPeerRuns do
   @moduledoc """
   What the other nodes have been running, under this node's own list of runs.
-
   Read-only, and it says so: a run's files, its worker and its page are on the
   node that owns it, so the one thing a reader can do with a row here is follow it
   to the node it belongs to (`ExTbpMonty.Cluster.Peers` asks, this draws). A row's
@@ -36,9 +35,9 @@ defmodule ExTbpMontyWeb.ClusterPeerRuns do
         >
           <div class="flex flex-wrap items-baseline gap-2 font-mono">
             <.link :if={node.web} href={node.web} class="hover:underline" title={"Open " <> node.web}>
-              {node.name}
+              {label(node)}
             </.link>
-            <span :if={is_nil(node.web)}>{node.name}</span>
+            <span :if={is_nil(node.web)}>{label(node)}</span>
             <span class="text-base-content/50">
               {length(runs)} run{count_s(length(runs))}
             </span>
@@ -64,4 +63,9 @@ defmodule ExTbpMontyWeb.ClusterPeerRuns do
 
   defp count_s(1), do: ""
   defp count_s(_several), do: "s"
+
+  # The node's own name — the string a peer is told, and the one a person can
+  # paste — rather than the spelling its folder has. Read with `Map.get/2`: the
+  # entry may be a snapshot from before the address was on it.
+  defp label(node), do: Map.get(node, :address) || node.name
 end

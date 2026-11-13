@@ -76,10 +76,26 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
 
       [link] = html |> LazyHTML.from_fragment() |> LazyHTML.query("a") |> Enum.to_list()
 
-      # Asked for by text rather than by an id built from the name: a node name
-      # carries a dot, and `#node-gpu_127.0.0.1` is not a selector.
-      assert LazyHTML.text(link) |> String.trim() == "gpu_127.0.0.1"
+      # The node's own name, not the spelling its folder has: `gpu@127.0.0.1` is
+      # what a person copies into MONTY_SEEDS, and `gpu_127.0.0.1` is only what a
+      # path allows. Asked for by text rather than by an id built from the name: a
+      # node name carries a dot, and `#node-gpu_127.0.0.1` is not a selector.
+      assert LazyHTML.text(link) |> String.trim() == "gpu@127.0.0.1"
       assert LazyHTML.attribute(link, "href") == ["http://127.0.0.1:4002"]
+      assert LazyHTML.attribute(link, "class") |> List.first() =~ "select-all"
+    end
+
+    # The snapshot is a cache in `:persistent_term`, rewritten only when the list
+    # changes — so after a code change it can hold entries of the shape it had
+    # before. A page draws what it is given rather than raising at it.
+    test "is the folder spelling when the entry predates the address" do
+      html =
+        render_component(ExTbpMontyWeb.ClusterNodes, %{
+          id: "cluster-nodes",
+          nodes: [peer() |> Map.delete(:address)]
+        })
+
+      assert html =~ "gpu_127.0.0.1"
     end
 
     test "is text when the node is this one, or has no address to link to" do
@@ -96,6 +112,7 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
       %{
         node: :"gpu@127.0.0.1",
         name: "gpu_127.0.0.1",
+        address: "gpu@127.0.0.1",
         version: "0.1.3",
         self: false,
         alive: true,

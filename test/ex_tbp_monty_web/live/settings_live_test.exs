@@ -144,6 +144,14 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
       assert view |> element("#node-" <> name) |> render() =~ "monty"
       assert view |> element("#capability-monty") |> render() =~ name
       assert view |> element("#cluster-capability-source") |> render() =~ "MONTY_CAPABILITIES"
+
+      # Two chapters, always both: this node of the application in the first, and
+      # the second saying plainly that nothing in the cluster brings plugins.
+      assert render(view) =~ "Ex.Monty nodes"
+      assert view |> element("#cluster-node-count") |> render() =~ "1"
+      assert view |> element("#cluster-plugin-node-count") |> render() =~ "0"
+      refute has_element?(view, "#cluster-plugin-node-list")
+      assert render(view) =~ "No node brings plugins"
     end
 
     # The list is the part of the page that moves on its own: a peer joins and
@@ -178,8 +186,8 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
       assert view |> element("#cluster-count") |> render() =~ "2 nodes in this cluster"
       # The id of a row is a node name, and a node name has a dot in it: asked
       # for as text, because `#node-gpu_127.0.0.1` is not a selector.
-      assert view |> element("#cluster-node-list") |> render() =~ "gpu_127.0.0.1"
-      assert view |> element("#capability-gpu") |> render() =~ "gpu_127.0.0.1"
+      assert view |> element("#cluster-node-list") |> render() =~ "gpu@127.0.0.1"
+      assert view |> element("#capability-gpu") |> render() =~ "gpu@127.0.0.1"
     end
   end
 end

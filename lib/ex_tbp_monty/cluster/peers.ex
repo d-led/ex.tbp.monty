@@ -42,7 +42,7 @@ defmodule ExTbpMonty.Cluster.Peers do
   without starting two VMs.
   """
   @spec recent([map()], (node() -> [map()] | nil)) :: [%{node: map(), runs: [map()]}]
-  def recent(entries \\ Nodes.snapshot(), fetch \\ &runs_on/1) do
+  def recent(entries \\ Nodes.snapshot(), fetch \\ &recent_on/1) do
     entries
     # This node's own runs are the list the page already draws, and a peer the
     # poller could not reach is a peer whose list says nothing a reader can act on.
@@ -84,10 +84,64 @@ defmodule ExTbpMonty.Cluster.Peers do
     end)
   end
 
-  defp runs_on(node_name) do
+  defp recent_on(node_name) do
     case :rpc.call(node_name, __MODULE__, :local_recent, [], @timeout) do
       runs when is_list(runs) -> runs
       _no_answer -> []
     end
+  end
+
+  @doc """
+  A peer's own page of runs, filtered the way this node's list is — or `nil` when
+  it does not answer.
+
+  `nil` rather than an empty page, because the two are different answers: "that
+  node has no runs like these" is a list a reader can act on, and "that node did
+  not answer" is a page that has to say so instead of pretending the runs are
+  gone.
+
+  The rows cross as this application's own structs (`RunHistory.Run`), which is
+  honest for a cluster of one build — the version each node runs is in every
+  entry of the node list, and two builds that disagree about a struct are already
+  two builds that disagree about the schema.
+
+  `fetch` is the same kind of seam as `recent/2`'s: a test cannot dial a peer that
+  does not exist, and the shape of the answer is what the page depends on.
+  """
+  @spec runs_on(map() | node(), keyword(), (map() | node(), map() -> map() | nil)) ::
+          map() | nil
+  def runs_on(entry_or_name, options \\ [], fetch \\ &page_on/2) do
+    # The filters travel as the page's params spell them — strings — so the
+    # answering side reads one shape and not two.
+    fetch.(entry_or_name, Map.new(options, fn {key, value} -> {to_string(key), value} end))
+  end
+
+  defp page_on(entry_or_name, options) do
+    name = if is_map(entry_or_name), do: entry_or_name.node, else: entry_or_name
+
+    case :rpc.call(name, __MODULE__, :local_runs, [options], @timeout) do
+      %{runs: _runs, total: _total, pages: _pages, page: _page} = page -> page
+      _no_answer -> nil
+    end
+  end
+
+  @doc """
+  This node's own page of runs — what a peer's page asks for over `:rpc`.
+
+  Filtered exactly as that page is, and always by this node's own name: with one
+  runs table for a cluster, a peer that answered with every matching run would
+  hand this page its own runs back under another node's heading.
+  """
+  @spec local_runs(map()) :: map()
+  def local_runs(options) when is_map(options) do
+    found =
+      RunHistory.search(
+        state: Map.get(options, "state", "all"),
+        text: Map.get(options, "text", ""),
+        page: Map.get(options, "page", 1),
+        node: Monty.Paths.data_dir_name()
+      )
+
+    %{runs: found.runs, total: found.total, pages: found.pages, page: found.page}
   end
 end

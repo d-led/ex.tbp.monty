@@ -161,12 +161,16 @@ defmodule ExTbpMonty.Application do
   #
   # Gated on the folder, not on clustering: a node that runs alone keeps the one
   # database it always had, prepared the way it always was (`mix ecto.setup`).
+  # sobelow_skip ["Traversal.FileModule"]
   defp prepare_data_folder do
     case Monty.Paths.data_dir_name() do
       nil ->
         :ok
 
       _named ->
+        # The path is configuration, not input: the root is this user's
+        # application directory and the name is the node's own, made safe for a
+        # path by `ExTbpMonty.Node.safe_name/1`.
         File.mkdir_p!(Path.dirname(Monty.Paths.database()))
         :ok = ExTbpMonty.Release.migrate()
     end

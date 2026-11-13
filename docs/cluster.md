@@ -23,12 +23,12 @@ $ open http://localhost:4002   # node2
 nothing else — no shell script, because the same file is read on Windows. The
 recipe is three decisions, all of them environment:
 
-| what | how |
-| --- | --- |
-| the node's name | `--name node1@127.0.0.1` — the only thing that makes it a node |
-| the cluster | `MONTY_CLUSTER=true` (or `MONTY_SEEDS`), see [The variables](#the-variables) |
-| its own database | `MONTY_DB=sqlite` — a file per node under `nodes/<its name>/` |
-| the cluster's password | `MONTY_CLUSTER_SECRET`, the same on every node that should join |
+| what                   | how                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| the node's name        | `--name node1@127.0.0.1` — the only thing that makes it a node               |
+| the cluster            | `MONTY_CLUSTER=true` (or `MONTY_SEEDS`), see [The variables](#the-variables) |
+| its own database       | `MONTY_DB=sqlite` — a file per node under `nodes/<its name>/`                |
+| the cluster's password | `MONTY_CLUSTER_SECRET`, the same on every node that should join              |
 
 A named node prepares its own folder: on boot it makes
 `nodes/<its name>/` and migrates the database in it
@@ -61,15 +61,15 @@ always had. `Monty.Paths.node_root/0` is the only thing that knows the rule.
 
 ## The variables
 
-| variable             | what it decides                                                                                                                                                                           |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MONTY_CLUSTER`      | `1`/`true` asks for the cluster's children. Not needed when `MONTY_SEEDS` is set — a list of nodes to dial is already the request                                                         |
-| `MONTY_SEEDS`        | the peers to dial, `node1@10.0.0.7,node2@10.0.0.8`. Empty means gossip discovery, which is what several nodes on one machine need, because they cannot know each other's names in advance |
+| variable               | what it decides                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MONTY_CLUSTER`        | `1`/`true` asks for the cluster's children. Not needed when `MONTY_SEEDS` is set — a list of nodes to dial is already the request                                                                                                                                                                                                                                                                                                         |
+| `MONTY_SEEDS`          | the peers to dial, `node1@10.0.0.7,node2@10.0.0.8`. Empty means gossip discovery, which is what several nodes on one machine need, because they cannot know each other's names in advance                                                                                                                                                                                                                                                 |
 | `MONTY_CLUSTER_SECRET` | the cluster's shared secret, the same on every node that should join. `config/runtime.exs` sets it as the VM's cookie before any cluster child connects, which is how nodes on different machines — with different `~/.erlang.cookie` files — join one cluster. `MONTY_COOKIE` is the same thing under the name the first launcher gave it, still read. A release reads `RELEASE_COOKIE`, which `rel/env.sh.eex` fills from `NODE_COOKIE` |
-| `PORT`               | that node's HTTP port                                                                                                                                                                     |
-| `MONTY_CAPABILITIES` | what this node can do, comma-separated (see [capability tags](#capability-tags))                                                                                                          |
-| `MONTY_DB`           | `sqlite` gives a development node a file instead of the Postgres a developer's machine has. A release asks `DATABASE_URL` instead                                                         |
-| `NODE_NAME`          | a release's node name, the alias of `RELEASE_NODE`; in development the name is the VM's (`--name`/`--sname`)                                                                              |
+| `PORT`                 | that node's HTTP port                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `MONTY_CAPABILITIES`   | what this node can do, comma-separated (see [capability tags](#capability-tags))                                                                                                                                                                                                                                                                                                                                                          |
+| `MONTY_DB`             | `sqlite` gives a development node a file instead of the Postgres a developer's machine has. A release asks `DATABASE_URL` instead                                                                                                                                                                                                                                                                                                         |
+| `NODE_NAME`            | a release's node name, the alias of `RELEASE_NODE`; in development the name is the VM's (`--name`/`--sname`)                                                                                                                                                                                                                                                                                                                              |
 
 **The secret is the cluster's password.** Two nodes that disagree about it are two
 clusters that quietly believe they are one: nothing fails, nothing is logged, and
