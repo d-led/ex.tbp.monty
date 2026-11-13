@@ -115,6 +115,23 @@ defmodule FlyversePlugin.PolicyTest do
     assert abs(flight_angle) < abs(crawl_angle), "the crossing is not a spiral"
   end
 
+  # The empty middle of a room, where an agent that flew blind ends up: every
+  # depth the same and nothing in the view to fly at. A flight there is a flight
+  # away from everything, so the flat is swept instead — the policy's own turn at
+  # the slowest step — until something looms again.
+  test "a flat patch with nothing in sight is swept, not flown", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+    nothing_in_sight = [[799.0, 799.0, 799.0, 799.0]]
+    something_ahead = [[0.005, 0.005, 0.5, 0.5]]
+
+    {swept, _policy, _state} = step(policy, state, nothing_in_sight, percept(0.05, 0.0))
+    {flown, _policy, _state} = step(policy, state, something_ahead, percept(0.05, 0.0))
+
+    assert swept.telemetry.walk_speed < flown.telemetry.walk_speed
+    assert [%OrientHorizontal{rotation_degrees: swept_angle}] = swept.actions
+    assert abs(swept_angle) >= 5.0, "the sweep keeps the policy's own turn"
+  end
+
   test "the telemetry is the spikes the decision was made of", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 

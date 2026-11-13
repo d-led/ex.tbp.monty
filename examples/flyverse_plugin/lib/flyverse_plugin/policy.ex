@@ -115,6 +115,14 @@ defmodule FlyversePlugin.Policy do
   @flight_walk 6.0
   @flight_bend 0.25
 
+  # What counts as something to fly at: a nearness of 2.0 is half a metre away,
+  # and the wide view has to see that much for a flight to be a flight. A flat
+  # patch with nothing in the view is not a table to cross — it is where an agent
+  # that flew blind ends up, in the empty middle of a room with every depth the
+  # same. There, the fly sweeps: the full bend and the slowest step, until
+  # something looms again.
+  @loom 2.0
+
   # The ride height of the drive: at 25 mm from a surface, `1/d` is 40 and the
   # drive is 160 Hz, which is the rate flyverse's own world stimulates its
   # sensory population at. It is a gain, not a law.
@@ -312,7 +320,8 @@ defmodule FlyversePlugin.Policy do
            left: Enum.at(counts, 0, 0),
            right: Enum.at(counts, 1, 0),
            spikes: spikes,
-           rates: rates
+           rates: rates,
+           nearness: {left_nearness, right_nearness}
          }}
 
       {:error, {code, sentence}} ->
@@ -335,7 +344,9 @@ defmodule FlyversePlugin.Policy do
     [left_hz, right_hz] = window.rates
     depth = mean_depth(percept, policy.distance)
     relief = relief(percept)
-    flight? = relief == nil or relief < @flat_relief
+    flat? = relief == nil or relief < @flat_relief
+    {near_left, near_right} = window.nearness
+    flight? = flat? and max(near_left, near_right) >= @loom
     turn = turn_degrees(policy, wish, saccade?(previous, wish), flight?)
     walk = if flight?, do: @flight_walk, else: walk_speed(driven(left_hz, right_hz))
 
