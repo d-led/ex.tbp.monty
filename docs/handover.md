@@ -3162,12 +3162,19 @@ Two boundaries on that, both deliberate:
   still starts its stretch again.
 - ~~A sweep for the recovery path~~ — **done, §46**: the boot sweep re-queues a
   run whose division has something done and something left.
-- **`flyverse_plugin` in CI.** It is linted with everything else and built by
-  nobody: Rustler 0.38 registers no `compile.rustler` task, so its crate is built
-  by hand into `priv/native`. It needs a compiler of its own, and then a matrix
-  leg in `.github/workflows/ci.yml` (the workflow says so where the matrix is).
-- The examples are not decrapped: CRAP needs a `mix test --cover` export per
-  example, which the gate does not collect.
+- ~~`flyverse_plugin` in CI~~ — **done, `207a355`**: `Mix.Tasks.FlyversePlugin.Engine`
+  builds the crate from `mix compile` (an artefact that is absent or older than
+  the crate is rebuilt), and the `example` job's matrix now runs both examples.
+  Its cache grew `priv/native` and the crate's `target/` under a `nif-1` key,
+  because a restored `_build` that believes it is current while the ignored `.so`
+  is missing is the state in which every call raises "not available".
+- The examples are not decrapped, and the reason is measured rather than assumed
+  (2026-11-13): `mix test --cover` in each of them already carries a **90%**
+  threshold and neither reaches it — `example_plugin` **84.78%**, `flyverse_plugin`
+  **74.37%**. A CRAP ranking over either would therefore be a report about missing
+  coverage rather than about shape, so the prerequisite is coverage; the ranking
+  needs `ex_crap` beside the export in each example and a threshold this estate has
+  not picked yet.
 - The run list across per-node databases, a part's live steps not crossing, and
   `route/4` — unchanged from §43.4.
 
