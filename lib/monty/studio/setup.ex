@@ -196,7 +196,10 @@ defmodule Monty.Studio.Setup do
       scene: scene(config),
       motor_system: motor_system(monty_config),
       motor_system_config: Map.get(monty_config, "motor_system_config", %{}),
-      remote_policy: remote_policy(),
+      # A caller that resolved a policy (a plugin's experiment, `Monty.Studio.PluginExperiment`)
+      # says which one it is; otherwise this node's `MONTY_REMOTE_POLICY`, which is
+      # `nil` on every node that does not say otherwise.
+      remote_policy: Keyword.get_lazy(opts, :remote_policy, &remote_policy/0),
       transforms: transforms(config),
       positioning: get_in(config, ["eval_env_interface_args", "positioning_procedures"]) || [],
       object_names: object_names(config),

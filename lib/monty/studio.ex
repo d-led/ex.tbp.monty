@@ -8,11 +8,12 @@ defmodule Monty.Studio do
   page cannot drift apart in how they read a config.
   """
 
-  alias Monty.Studio.{Blueprint, Diagram, Drafts, Setup}
+  alias Monty.Studio.{Blueprint, Diagram, Drafts, PluginExperiment, Setup}
 
   @type opened :: %{
+          optional(:plugin) => map(),
           name: String.t(),
-          source: :draft | :monty,
+          source: :draft | :monty | :plugin,
           setup: Setup.t(),
           diagram: Diagram.t(),
           yaml: String.t() | nil,
@@ -24,8 +25,9 @@ defmodule Monty.Studio do
   Opens an experiment by name.
 
   A draft in `Monty.Studio.Drafts` wins, because that is the one a person just
-  built; otherwise the name is a Monty experiment and is composed from Monty's
-  own conf tree.
+  built; then a Monty experiment composed from Monty's own conf tree; and
+  otherwise a name a plugin offers — which is not a config here at all, but a
+  definition somebody else's node answered.
 
   Options: `:conf_dir`, and `:world_simulator` — which world a run of this setup
   would step, when the caller knows better than this host's configuration. A run
@@ -40,9 +42,22 @@ defmodule Monty.Studio do
         {:ok, describe(name, :draft, tree, text, groups_of(text), opts)}
       end
     else
-      with {:ok, tree} <- Monty.Config.Composer.compose(name, Keyword.take(opts, [:conf_dir])) do
+      open_ours_or_a_plugins(name, opts)
+    end
+  end
+
+  # A config this node has is composed the way it always was, and its failure is
+  # its own: an experiment that exists and does not compose must say that, not
+  # fall through to the cluster and come back with "no plugin offers it".
+  defp open_ours_or_a_plugins(name, opts) do
+    case Monty.Config.Composer.compose(name, Keyword.take(opts, [:conf_dir])) do
+      {:ok, tree} ->
         {:ok, describe(name, :monty, tree, nil, groups_of_name(name), opts)}
-      end
+
+      {:error, why} ->
+        if Monty.Studio.Catalog.experiment(name),
+          do: {:error, why},
+          else: PluginExperiment.open(name, opts)
     end
   end
 

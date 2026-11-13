@@ -761,10 +761,12 @@ defmodule Monty.Studio.Jobs.RunTest do
           inputs: %{}
         })
 
-      # The reason names the experiment whose config could not be read, so the
-      # row says what a person would need to fix.
-      assert {:cancel, {:cannot_read, path, :enoent}} = perform(record)
-      assert path =~ "no/such/experiment"
+      # The reason names the experiment, so the row says what a person would need
+      # to fix. Since a name this node cannot compose is also a question for the
+      # cluster (`Monty.Studio.PluginExperiment`), the answer is both halves: no
+      # config here and no plugin host that offers one.
+      assert {:cancel, why} = perform(record)
+      assert why =~ "no/such/experiment"
 
       closed = RunHistory.get(record.id)
       assert closed.status == "failed"

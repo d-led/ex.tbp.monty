@@ -364,6 +364,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           <span :if={@opened.source == :monty} class="badge badge-ghost badge-sm">
             from Monty's conf
           </span>
+          <%!-- A plugin's experiment is not a config this node has: it is a
+          definition another node answered, and its own name says whose it is. --%>
+          <span
+            :if={@opened.source == :plugin}
+            id="plugin-experiment"
+            class="badge badge-secondary badge-sm"
+            title={plugin_note(@opened)}
+          >
+            from {@opened.plugin.node}
+          </span>
           <%!-- Which world a run here would step. A stand-in scene is not Monty
           and its numbers are this port's own, so the page says which one it is
           before anything is run, not only in a warning further down. --%>
@@ -375,8 +385,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             world: {Setup.world_name(@opened.setup)}
           </span>
           <%!-- The file, not a description of the file: exporting Monty's own
-          experiment is how you take one and change it. --%>
+          experiment is how you take one and change it. A plugin's experiment has
+          no file here — its definition lives on the node that offers it. --%>
           <.link
+            :if={@opened.source != :plugin}
             id="export-experiment"
             href={~p"/export/experiments/#{@opened.name}"}
             download
@@ -2490,6 +2502,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # the experiment's own numbers come from MuJoCo, and a stand-in is not it.
   defp world_badge(%{world: :mujoco}), do: "badge-ghost"
   defp world_badge(_setup), do: "badge-warning"
+
+  # What a plugin's experiment is, said where the badge is: a definition that node
+  # answered, at a version, naming the modules it wants. Which of them this node
+  # can serve is `Monty.Studio.PluginExperiment`'s question and it has already
+  # answered it — the page would not be here otherwise.
+  defp plugin_note(%{plugin: plugin}) do
+    "Offered by #{plugin.name}@#{plugin.version} on #{plugin.node}: " <>
+      "the run it defines, not a config this node has."
+  end
 
   defp world_note(%{world: :mujoco} = setup) do
     "MuJoCo, in the interpreter this application carries: the experiment's " <>

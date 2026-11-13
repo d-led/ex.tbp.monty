@@ -11,10 +11,20 @@ defmodule ExamplePlugin.Experiment do
   definition.
 
   `"base"` names an experiment the application this example lives in ships
-  (`priv/monty/conf/experiment/base_10simobj_surf_agent.yaml`), and the two
-  module names are the other two plugins of this node. A definition that named
+  (`priv/monty/conf/experiment/base_10simobj_surf_agent.yaml`), and
+  `"motor_system"` names the policy plugin of this node. A definition that named
   modules nobody offered would be a run that cannot start, which is the one thing
   this test of the example refuses.
+
+  ## Why the learning module is not in the definition
+
+  This node offers one (`example_plugin.evidence_threshold`), and a definition
+  naming it would be refused: a learning module is **advertised rather than
+  routed** — a step asks it thousands of times over hypotheses and a k-d tree, so
+  a node running an experiment has to have the module's code, which it does not
+  have for another node's. The policy is the kind that can be called across, so
+  the definition names the policy and leaves the learning modules to the config.
+  `docs/plugins.md` keeps the score.
   """
 
   @doc "The name a cluster registers it under, and the name a run asks for."
@@ -29,7 +39,7 @@ defmodule ExamplePlugin.Experiment do
       "kind" => :experiment,
       "version" => ExamplePlugin.version(),
       "placement" => :anywhere,
-      "needs" => [:monty]
+      "needs" => []
     }
   end
 
@@ -43,7 +53,7 @@ defmodule ExamplePlugin.Experiment do
   def run do
     %{
       "base" => "base_10simobj_surf_agent",
-      "learning_modules" => [ExamplePlugin.LearningModule.name()],
+      "learning_modules" => [],
       "motor_system" => ExamplePlugin.Policy.name(),
       "episodes" => 1,
       "seed" => 42

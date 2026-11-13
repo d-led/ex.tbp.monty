@@ -454,9 +454,18 @@ defmodule Monty.Studio.RunLog do
           "parallel" => parallel
         }
         |> Map.merge(policy_input(opened.setup))
+        |> Map.merge(plugin_input(opened))
         |> Map.merge(part_inputs(part))
     }
   end
+
+  # A run whose *definition* came from another node says that too: the experiment
+  # is not one of our configs, so a reader who looks for its YAML will not find
+  # it, and the version is what tells two answers apart.
+  defp plugin_input(%{plugin: plugin}),
+    do: %{"defined_by" => "#{plugin.name}@#{plugin.version} on #{plugin.node}"}
+
+  defp plugin_input(_opened), do: %{}
 
   # A run whose body came from another node says so: the version is the whole
   # point of asking a plugin what it is, and a reader of a finished run has to be

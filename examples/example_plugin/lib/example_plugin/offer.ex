@@ -49,6 +49,18 @@ defmodule ExamplePlugin.Offer do
   def handle_call(:describe, _from, %{plugin: plugin} = offer),
     do: {:reply, plugin.describe(), offer}
 
+  # An experiment is the definition of a run rather than a step of one, so it is
+  # asked once, and what comes back is data: the config's name and the modules the
+  # run wants. Nothing is remembered here — a definition that changed between two
+  # reads would be a run that is not the one the record names.
+  def handle_call(:run, _from, %{plugin: plugin} = offer) do
+    if function_exported?(plugin, :run, 0) do
+      {:reply, {:ok, plugin.run()}, offer}
+    else
+      {:reply, {:error, "#{inspect(plugin)} defines no run and cannot be started"}, offer}
+    end
+  end
+
   # A motor policy is called once per step with the framework's six arguments and
   # answers the result and itself. The result crosses the cluster; the policy does
   # not — it is this process's state, which is why the next step starts from where

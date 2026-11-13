@@ -1,22 +1,3 @@
-# The studio asks a peer for a policy by name — `MontyPlugin.Registry.lookup/2`
-# over `:rpc` — and does not depend on the package that answers, so the module
-# that name resolves to can be this one. Nothing else in this tree defines it; it
-# exists so a case can be the node on the far side of the call.
-defmodule MontyPlugin.Registry do
-  @moduledoc false
-
-  @offers {__MODULE__, :offers}
-
-  def offer(kind, name, answer),
-    do: :persistent_term.put(@offers, Map.put(offers(), {kind, name}, answer))
-
-  def clear, do: :persistent_term.put(@offers, %{})
-
-  def lookup(kind, name), do: Map.get(offers(), {kind, name}, {:error, :not_offered})
-
-  defp offers, do: :persistent_term.get(@offers, %{})
-end
-
 defmodule Monty.Studio.RemotePolicyTest do
   @moduledoc """
   What a policy on another node owes a step, and what the studio owes it back.

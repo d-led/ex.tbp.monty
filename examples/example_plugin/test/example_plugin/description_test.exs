@@ -23,6 +23,14 @@ defmodule ExamplePlugin.DescriptionTest do
       test "could be called from any node" do
         assert unquote(plugin).describe()["placement"] == :anywhere
       end
+
+      # `needs` is what the node that serves the plugin has to carry, and a
+      # plugin host's tags come from what it offers — not from the framework it
+      # runs. Asking for `:monty` would make this plugin unusable by the only
+      # node that can serve it.
+      test "asks nothing of the node that serves it, because that node cannot say" do
+        assert unquote(plugin).describe()["needs"] == []
+      end
     end
   end
 
