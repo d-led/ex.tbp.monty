@@ -80,6 +80,31 @@ defmodule FlyversePlugin.Policy do
   @drive_gain 4.0
   @max_hz 400.0
 
+  # What both drives carry whether or not anything is in view. A leaky
+  # integrate-and-fire network with no input is silent, and a silent network is a
+  # fly that neither walks nor turns: with the nearness drive alone, a flat
+  # patch on a table is 0 Hz on both sides, nought spikes, and a wish that says
+  # "no preference" because there was nothing to prefer. The tonic rate is the
+  # animal's own spontaneous activity — a walking fly in the dark still walks —
+  # so what the two halves decide is the *difference* between them, and an empty
+  # view is a measurement of balance rather than of silence.
+  @tonic_hz 80.0
+
+  # The difference of spike counts a full bend is worth. `tanh` maps it, because
+  # counts have no ceiling: one runaway readout should mean "turn hard", not
+  # "turn three hundred degrees". Two spikes is the order a demonstrator pack of
+  # four neurons produces in a 20 ms window.
+  @wish_scale 2.0
+
+  # The wander: a small rate added to one side and taken from the other, turning
+  # over every `@wander_steps`. A fly with nothing in view is not aimed at
+  # anything, and a network perfectly balanced between two halves would walk a
+  # straight line for ever — which in a room is one wall and then nothing. The
+  # animal wanders, and this is the cheapest honest version of it: a square wave
+  # rather than noise, because a run has to be repeatable.
+  @wander_hz 20.0
+  @wander_steps 40
+
   # flyverse's `MOTOR_TAU_S`: the low-pass its own body applies to a motor
   # read-out before the body acts on it.
   @motor_tau_s 0.030
@@ -113,6 +138,17 @@ defmodule FlyversePlugin.Policy do
   @search_circle_factor 4.0
   @search_degrees 30.0
 
+  # The most one touch step may cover: two standoffs, five centimetres. Monty
+  # walks the whole gap in one \u2014 it knows where the object is, because its
+  # world has one \u2014 and a scene with a table and a room around it does not:
+  # a gap measured past the object is a leap past it, and a run spent a thousand
+  # steps in the void that way. Five centimetres closes a hand's width in four
+  # steps, and cannot fail that way.
+  @touch_stride 0.05
+  # A step that could not travel would be a fly pivoting on the spot, which is
+  # the one thing its locomotion never does: `action/2` carries the crawl step
+  # forward on every step, so the only way to stand still is to have no depth to
+  # judge the step by. The touch opening is the fallback when that happens.
   @view_finder "view_finder"
 
   @doc "The name a cluster registers it under."
@@ -186,22 +222,28 @@ defmodule FlyversePlugin.Policy do
   @impl FlyversePlugin.Plugin
   def call(%__MODULE__{} = policy, {_ctx, observations, _motor_state, percept, _goal}, state) do
     if on_object?(percept) do
-      steer(policy, observations, state)
+      steer(policy, observations, percept, state)
     else
       {:ok, touch(policy, observations), policy, state}
     end
   end
 
-  defp steer(policy, observations, state) do
+  defp steer(policy, observations, percept, state) do
     simulation = Map.fetch!(state.simulations, policy.sim)
 
     with {:ok, {_sensor_id, rows}} <-
            Percept.image(observations, policy.agent_id, policy.sensor_id),
          {:ok, window} <- step(simulation, rows) do
       wish = smoothed(simulation, window.left - window.right)
-      result = result(policy, wish, window)
+      result = result(policy, wish, window, percept)
 
-      simulation = %{simulation | wish: wish, spikes: window.spikes, last: window}
+      simulation = %{
+        simulation
+        | wish: wish,
+          spikes: window.spikes,
+          last: window,
+          steps: simulation.steps + 1
+      }
 
       {:ok, result, policy, put(state, policy.sim, simulation)}
     end
@@ -223,23 +265,57 @@ defmodule FlyversePlugin.Policy do
   # whole gap in one step — twenty centimetres, where a four-millimetre crawl is
   # fifty steps of no new view — and when it is not in view, step round a circle
   # ten centimetres ahead until it is.
+  #
+  # One departure from Monty's line, and the reason for it: Monty's gap is the
+  # depth of the view finder's centre pixel, which in a room is whatever the
+  # middle of the picture happens to be — a wall across the table, in a run this
+  # policy spent a thousand steps recovering from. So the gap is the *nearer* of
+  # that pixel and the nearest thing the view can see: a step that lands on what
+  # is closest rather than past it.
   defp touch(policy, observations) do
     depth = PositioningProcedures.depth_at_center(observations, policy.agent_id, @view_finder)
+    nearest = nearest_in_view(observations, policy.agent_id)
+    gap = if nearest == :infinity, do: depth, else: min(depth, nearest)
 
     action =
-      if depth < @visible do
-        %MoveForward{agent_id: policy.agent_id, distance: depth - @desired_object_distance}
+      if gap < @visible do
+        %MoveForward{
+          agent_id: policy.agent_id,
+          distance: min(max(gap - @desired_object_distance, 0.0), @touch_stride)
+        }
       else
         search(policy)
       end
 
     %MotorPolicyResult{
       actions: [action],
-      # Monty does not show the learning module a step whose whole job was to
-      # find the object; there is nothing on it to learn from yet.
-      motor_only_step: true,
-      telemetry: %{depth_at_center: depth, searching: depth >= @visible}
+      # Monty hides one corrective step from the learning module because nothing
+      # on an out-of-view object is learnable. A search is not one step: it lasts
+      # until something comes into view, and the step it does is the first step
+      # with anything on it. So the module is fed every step — `nothing yet`
+      # until the patch is on the object, and evidence when it is.
+      motor_only_step: false,
+      telemetry: %{depth_at_center: depth, nearest: nearest, searching: gap >= @visible}
     }
+  end
+
+  # The nearest thing the wide view can see, in metres, or `:infinity` when the
+  # horizon holds nothing. `FlyversePlugin.Percept` already answers what a
+  # closer half of the picture means (the drive), so the same nearness is the
+  # nearest thing here.
+  defp nearest_in_view(observations, agent_id) do
+    case Percept.image(observations, agent_id, @view_finder) do
+      {:ok, {_sensor, rows}} ->
+        {left, right} = Percept.nearness(rows)
+
+        case max(left, right) do
+          nearness when nearness <= 0.0 -> :infinity
+          nearness -> 1.0 / nearness
+        end
+
+      {:error, _sentence} ->
+        :infinity
+    end
   end
 
   defp search(policy) do
@@ -260,8 +336,11 @@ defmodule FlyversePlugin.Policy do
     simulation = Map.fetch!(state.simulations, policy.sim)
 
     case Native.reset(simulation.sim) do
-      :ok -> {:ok, policy, put(state, policy.sim, %{simulation | wish: 0.0, spikes: 0})}
-      {:error, {code, sentence}} -> {:error, "#{code}: #{sentence}"}
+      :ok ->
+        {:ok, policy, put(state, policy.sim, %{simulation | wish: 0.0, spikes: 0})}
+
+      {:error, {code, sentence}} ->
+        {:error, "#{code}: #{sentence}"}
     end
   end
 
@@ -335,6 +414,7 @@ defmodule FlyversePlugin.Policy do
            seconds: network.plan.ticks * @tick_seconds,
            wish: 0.0,
            spikes: 0,
+           steps: 0,
            last: %{left: 0, right: 0, spikes: 0, rates: [0.0, 0.0]}
          }}
 
@@ -345,7 +425,12 @@ defmodule FlyversePlugin.Policy do
 
   defp step(simulation, rows) do
     {left_nearness, right_nearness} = Percept.nearness(rows)
-    rates = [rate(left_nearness), rate(right_nearness)]
+    wander = wander(simulation.steps)
+
+    rates = [
+      spread(rate(left_nearness) + wander),
+      spread(rate(right_nearness) - wander)
+    ]
 
     case Native.window(simulation.sim, simulation.connectome, simulation.ticks, rates) do
       {:ok, {counts, spikes, _total}} ->
@@ -373,11 +458,11 @@ defmodule FlyversePlugin.Policy do
     simulation.wish + alpha * (differential - simulation.wish)
   end
 
-  defp result(policy, wish, window) do
+  defp result(policy, wish, window, percept) do
     [left_hz, right_hz] = window.rates
 
     %MotorPolicyResult{
-      actions: [action(policy, wish)],
+      actions: [action(policy, wish, mean_depth(percept, @visible))],
       telemetry: %{
         left_hz: left_hz,
         right_hz: right_hz,
@@ -389,36 +474,68 @@ defmodule FlyversePlugin.Policy do
     }
   end
 
-  # Positive is left and negative is right because that is how the drives were
-  # named; a network with no preference walks straight rather than inventing a
-  # turn it did not decide.
+  # Every step walks *and* turns, because that is what a fly does: its
+  # locomotion is walking with turns in it — bouts of walking, a saccade, more
+  # walking — and an animal that yaws where it stands is an animal standing
+  # still. A run of this policy spent a thousand steps like that: the network
+  # said "left", the action turned left with no distance, and the patch saw the
+  # same three square centimetres of table for ever.
   #
-  # A turn is `OrientHorizontal` and not `TurnLeft`/`TurnRight`: those are the
-  # distant agent's actions, and the surf agent a MuJoCo world hands us has no
-  # `actuate_turn_*` at all — it steers by yawing, which is this action's
-  # `rotation_degrees` (`world.py`'s `SurfaceAgent.actuate_orient_horizontal`
-  # rotates by `-rotation_degrees`, so it is clockwise for a positive angle).
-  defp action(%__MODULE__{} = policy, wish) do
-    cond do
-      wish > 0.0 -> turn(policy, -policy.turn_degrees)
-      wish < 0.0 -> turn(policy, policy.turn_degrees)
-      true -> %MoveForward{agent_id: policy.agent_id, distance: policy.distance}
-    end
-  end
-
-  # The distances orbit an agent around the object it stands on, and stay zero:
-  # this policy has no surface geometry to orbit with, so it turns where it is
-  # and leaves the walking to `MoveForward`.
-  defp turn(policy, rotation_degrees) do
+  # So the turn is `OrientHorizontal` — not `TurnLeft`/`TurnRight`, which are the
+  # distant agent's actions and which a surf agent has no `actuate_turn_*` for —
+  # and it carries the crawl step: the yaw is the spike-driven bend (positive is
+  # left, as the drives are named, and the world yaws by `-rotation_degrees`),
+  # and `forward_distance` is the four millimetres that make the step a step.
+  # A balanced view bends by nought and walks straight; an unbalanced one curves
+  # while walking, exactly as much as the readouts differ.
+  #
+  # The one exception is the loom: something nearer than the standoff is
+  # something the step would walk into, so the step stops travelling and the
+  # bend is taken whole — the fly swings away from what it is touching instead of
+  # pressing through it. A lofty `LC4` firing rate is Monty's own standoff, and
+  # here it is the patch's own depth that says it.
+  defp action(%__MODULE__{} = policy, wish, depth) do
     %OrientHorizontal{
       agent_id: policy.agent_id,
-      rotation_degrees: rotation_degrees,
+      rotation_degrees: -bend(policy, wish),
       left_distance: 0.0,
-      forward_distance: 0.0
+      forward_distance: if(depth < @desired_object_distance, do: 0.0, else: policy.distance)
     }
   end
 
-  defp rate(nearness), do: min(nearness * @drive_gain, @max_hz)
+  # The depth the patch is standing off, as the percept reports it. A percept
+  # that reports no depth is a world this policy cannot measure, and `@visible`
+  # — a metre, the edge of what it walks at — is the honest assumption there:
+  # it walks, which is the one thing the step must do.
+  defp mean_depth(nil, fallback), do: fallback
+
+  defp mean_depth(percept, fallback) do
+    case Message.feature(percept, "mean_depth") do
+      {:ok, [value | _rest] = values} when is_number(value) ->
+        Enum.sum(values) / length(values)
+
+      {:ok, value} when is_number(value) ->
+        value
+
+      _absent ->
+        fallback
+    end
+  end
+
+  # Positive is left and negative is right, and nothing here invents a turn the
+  # network did not decide: a wish of nought is a straight step.
+  defp bend(policy, wish), do: policy.turn_degrees * :math.tanh(wish / @wish_scale)
+
+  defp rate(nearness), do: min(@tonic_hz + nearness * @drive_gain, @max_hz)
+
+  defp spread(hz), do: max(hz, 0.0)
+
+  # Which way the fly leans when nothing in the view does: one way for a while,
+  # then the other. Deterministic on purpose — the same pack and the same scene
+  # must step the same way twice.
+  defp wander(steps) do
+    if rem(div(steps, @wander_steps), 2) == 0, do: @wander_hz, else: -@wander_hz
+  end
 
   defp rad(degrees), do: degrees * :math.pi() / 180.0
 
