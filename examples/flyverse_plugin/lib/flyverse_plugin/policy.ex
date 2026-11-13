@@ -90,6 +90,17 @@ defmodule FlyversePlugin.Policy do
   # them would make the base turn the whole of the steering.
   @wish_scale 2.0
 
+  # A saccade: the sides swapped, so the bend is taken twice as hard. A fly pushed
+  # left and then right does not ease across. The smoothed wish already has a
+  # magnitude, so a crossing is the whole of the condition — doubling a wish that
+  # is near zero doubles nothing worth seeing.
+  @saccade_gain 2.0
+
+  # How fast it walks. A crawler driven by nothing still shuffles; a crawler with
+  # a surface filling its view steps out. In multiples of the four millimetres.
+  @min_walk 0.25
+  @max_walk 1.5
+
   # The ride height of the drive: at 25 mm from a surface, `1/d` is 40 and the
   # drive is 160 Hz, which is the rate flyverse's own world stimulates its
   # sensory population at. It is a gain, not a law.
@@ -177,8 +188,9 @@ defmodule FlyversePlugin.Policy do
     with {:ok, {_sensor_id, rows}} <-
            Percept.image(observations, policy.agent_id, policy.sensor_id),
          {:ok, window} <- step(simulation, rows) do
+      previous = simulation.wish
       wish = smoothed(simulation, window.left - window.right)
-      result = result(policy, wish, window, percept)
+      result = result(policy, %{previous: previous, wish: wish}, window, percept)
 
       simulation = %{simulation | wish: wish, spikes: window.spikes, last: window}
 
@@ -305,13 +317,14 @@ defmodule FlyversePlugin.Policy do
     simulation.wish + alpha * (differential - simulation.wish)
   end
 
-  defp result(policy, wish, window, percept) do
+  defp result(policy, %{previous: previous, wish: wish}, window, percept) do
     [left_hz, right_hz] = window.rates
-    turn = turn_degrees(policy, wish)
     depth = mean_depth(percept, policy.distance)
+    turn = turn_degrees(policy, wish, saccade?(previous, wish))
+    walk = walk_speed(driven(left_hz, right_hz))
 
     %MotorPolicyResult{
-      actions: [crawl(policy, turn, depth)],
+      actions: [crawl(policy, turn, depth, walk)],
       telemetry: %{
         left_hz: left_hz,
         right_hz: right_hz,
@@ -320,7 +333,8 @@ defmodule FlyversePlugin.Policy do
         spikes: window.spikes,
         wish: wish,
         turn_degrees: turn,
-        mean_depth: depth
+        mean_depth: depth,
+        walk_speed: walk
       }
     }
   end
@@ -329,25 +343,45 @@ defmodule FlyversePlugin.Policy do
   # ever returns zero: the base turn is added to what the network asks for, so a
   # silent or perfectly balanced network still walks its spiral instead of
   # standing still and gathering the same percept for ever.
-  defp turn_degrees(policy, wish) do
-    policy.turn_degrees + @max_turn_degrees * :math.tanh(wish / @wish_scale)
+  defp turn_degrees(policy, wish, saccade?) do
+    bend = @max_turn_degrees * :math.tanh(wish / @wish_scale)
+    bend = if saccade?, do: @saccade_gain * bend, else: bend
+    limit = @saccade_gain * @max_turn_degrees
+
+    (policy.turn_degrees + bend)
+    |> max(-limit)
+    |> min(limit)
   end
+
+  # The sides swapped places.
+  defp saccade?(previous, wish), do: previous * wish < 0.0
+
+  # How hard the world is driving the network, as a fraction of the rate cap:
+  # the same two numbers that made the spikes, so how fast it walks and how it
+  # decided where to walk come from one place.
+  defp driven(left_hz, right_hz) do
+    ((left_hz + right_hz) / (2 * @max_hz))
+    |> max(0.0)
+    |> min(1.0)
+  end
+
+  defp walk_speed(driven), do: @min_walk + (@max_walk - @min_walk) * driven
 
   # Monty's own surface arithmetic (`SurfacePolicy.distances/2`): a slide whose
   # length the angle and the depth decide, and the press that keeps the sensor at
   # its standoff. `left_distance` is the travel — an angle with no distance is a
   # turn on the spot, which is what made 1275 steps of evidence rise for every
-  # object at once.
+  # object at once — and `walk` is how much of that travel this step takes.
   #
   # The world yaws by `-rotation_degrees`, so a left turn is a negative angle
   # while `left_distance` is positive leftwards.
-  defp crawl(policy, turn, depth) do
+  defp crawl(policy, turn, depth, walk) do
     radians = rad(abs(turn))
 
     %OrientHorizontal{
       agent_id: policy.agent_id,
       rotation_degrees: -turn,
-      left_distance: sign(turn) * depth * :math.tan(radians),
+      left_distance: walk * sign(turn) * depth * :math.tan(radians),
       forward_distance: depth * (1.0 - :math.cos(radians)) / :math.cos(radians)
     }
   end

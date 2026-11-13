@@ -68,6 +68,35 @@ defmodule FlyversePlugin.PolicyTest do
     assert walked.forward_distance > 0.0, "pressed back onto the surface"
   end
 
+  # The same view, seen after the sides swapped, is a harder turn than the same
+  # view seen fresh: a fly caught between two sides snaps across rather than
+  # easing through the middle.
+  test "a swap of sides snaps the walk further than the view alone would", %{state: state} do
+    near_left = [[0.005, 0.005, 100.0, 100.0]]
+    near_right = [[100.0, 100.0, 0.005, 0.005]]
+
+    {:ok, snapped, state} = Policy.new([], state)
+    {_first, snapped, state} = step(snapped, state, near_left)
+    {after_swap, _policy, _state} = step(snapped, state, near_right)
+
+    {:ok, fresh, state} = Policy.new([], state)
+    {seen_fresh, _policy, _state} = step(fresh, state, near_right)
+
+    [%OrientHorizontal{rotation_degrees: after_swap_angle}] = after_swap.actions
+    [%OrientHorizontal{rotation_degrees: fresh_angle}] = seen_fresh.actions
+
+    assert abs(after_swap_angle) > abs(fresh_angle)
+  end
+
+  test "a surface filling the view is walked faster than one far away", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {close, _policy, _state} = step(policy, state, [[0.005, 0.005, 100.0, 100.0]])
+    {far, _policy, _state} = step(policy, state, [[0.5, 0.5, 100.0, 100.0]])
+
+    assert close.telemetry.walk_speed > far.telemetry.walk_speed
+  end
+
   test "the telemetry is the spikes the decision was made of", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
