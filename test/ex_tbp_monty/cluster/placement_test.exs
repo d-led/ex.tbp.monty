@@ -76,6 +76,27 @@ defmodule ExTbpMonty.Cluster.PlacementTest do
              ["big_127.0.0.1"]
   end
 
+  # What a page can say about a run that is queued: the queue calls a run waiting
+  # for another node `available`, exactly like one nobody has picked up yet, so
+  # without this a reader cannot tell the two apart.
+  describe "a run that waits" do
+    test "names the nodes that could take it, and the tags this one lacks" do
+      entries = [us(["monty"]), %{them(["monty", "world:mujoco"]) | name: "mujoco_127.0.0.1"}]
+
+      assert Placement.awaiting(%{"world" => "mujoco"}, entries) == %{
+               nodes: [%{them(["monty", "world:mujoco"]) | name: "mujoco_127.0.0.1"}],
+               missing: ["world:mujoco"]
+             }
+    end
+
+    test "says nothing when this node is the one that performs it" do
+      # Being able to do it is not waiting for anything, and neither is a tag
+      # nobody offers — both answers are "the run is here".
+      assert Placement.awaiting(%{"world" => "mujoco"}, [us(["monty", "world:mujoco"])]) == nil
+      assert Placement.awaiting(%{"world" => "mujoco"}, [us(["monty"])]) == nil
+    end
+  end
+
   defp us(tags),
     do: %{node: node(), name: "here_127.0.0.1", self: true, alive: true, capabilities: tags}
 

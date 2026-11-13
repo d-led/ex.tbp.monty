@@ -1378,4 +1378,37 @@ defmodule ExTbpMontyWeb.StudioComponents do
       %{level: level, finding: finding, index: index}
     end)
   end
+
+  @doc """
+  Says which node a queued run is waiting for, and why it cannot be this one.
+
+  `ExTbpMonty.Cluster.Placement.awaiting/2` answers it; this only draws the
+  answer. The sentence is worth a badge because the queue uses one word —
+  `available` — for "waiting for the node that offers the tag" and for "nobody
+  has picked it up yet", and a reader cannot tell those apart.
+
+  A run whose needs this node does not offer is put back until a node that offers
+  them takes it, so the badge names that node: a name is something a reader can go
+  and look at, and "one of two machines" is not.
+  """
+  attr :waiting, :map,
+    required: true,
+    doc: "`%{nodes: [entry], missing: [tag]}`, as `Placement.awaiting/2` answers it"
+
+  def waiting_for(assigns) do
+    ~H"""
+    <span id="run-awaiting" class="badge badge-ghost badge-sm" title={explained(@waiting)}>
+      waits for {names(@waiting.nodes)}
+    </span>
+    """
+  end
+
+  # The badge says who, the title says why — in the cluster's own vocabulary, so
+  # the tag it names is the tag an operator would set on the machine.
+  defp explained(%{missing: []}), do: "Another node can take this run before this one."
+
+  defp explained(%{missing: missing}),
+    do: "This node does not offer #{Enum.join(missing, ", ")}."
+
+  defp names(entries), do: Enum.map_join(entries, ", ", & &1.name)
 end

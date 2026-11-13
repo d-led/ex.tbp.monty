@@ -2651,9 +2651,11 @@ today; what is left of (1) is only the node that keeps a file per node and still
 wants the others' runs in one list — the merged view. (2) A part writes its files
 and publishes its steps into the memory of the node performing it, so a part on
 another node needs either a filesystem the owner can read or an explicit transfer
-of what it produced; that is the next change. One gap worth naming: a run that
-waits for another node looks like any run that is simply queued — nothing on the
-page says which tag it is waiting for.
+of what it produced; that is the next change. The one gap that was named — a run
+waiting for another node looking like any run that is simply queued — is closed:
+the run's page draws `waits for <node>` beside its state
+(`Cluster.Placement.awaiting/2` answers it, `StudioComponents.waiting_for/1`
+draws it, and a node that runs alone draws nothing).
 
 One loose end from the same day, unrelated to the cluster: `RecordingEpisodeTest`
 failed once in eight full runs (21 steps against a recording of 27, the port

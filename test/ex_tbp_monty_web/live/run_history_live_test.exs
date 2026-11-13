@@ -907,6 +907,30 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       refute has_element?(view, "#delete-#{run.id}")
     end
 
+    # The "waits for another node" badge is for a run whose tags only a peer
+    # offers. A node that runs alone offers everything a run of it ever asks for,
+    # so a page here says nothing about placement — which is the behaviour it had
+    # before clusters existed, and the one not to disturb. (The decision itself is
+    # `ExTbpMonty.Cluster.Placement.awaiting/2` and its own tests; a test cannot
+    # put a peer into the snapshot without reaching into the poller.)
+    test "says nothing about waiting for another node", %{conn: conn} do
+      {:ok, asked} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 3,
+          config: %{},
+          inputs: %{"world" => "mujoco"}
+        })
+
+      {:ok, _job} = Monty.Studio.Jobs.Run.enqueue_run(asked)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{asked.id}")
+
+      assert view |> element("#run-status") |> render() =~ "queued"
+      refute has_element?(view, "#run-awaiting")
+    end
+
     test "follows the worker: when it finishes, the page says so and Delete appears", %{
       conn: conn,
       running: run

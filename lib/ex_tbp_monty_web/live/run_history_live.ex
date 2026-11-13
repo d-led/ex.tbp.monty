@@ -13,6 +13,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   use ExTbpMontyWeb, :live_view
 
+  alias ExTbpMonty.Cluster.{Nodes, Placement}
   alias ExTbpMontyWeb.RunHistoryLive.Selection
 
   alias Monty.Studio.{
@@ -286,9 +287,22 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     assign(socket,
       run: run,
       files: Artifacts.files(run.id),
-      queue: where_each_run_is([run])
+      queue: where_each_run_is([run]),
+      waiting: waiting(run)
     )
   end
+
+  # A run that is queued because a peer offers what this node does not is not
+  # waiting for a worker like any other — the job is put back until a node that
+  # offers what it needs takes it, and the page says which node and which tag. On
+  # a node that runs alone this answers `nil` without branching: its list of nodes
+  # is itself, and it offers everything any run of it ever asks for
+  # (`ExTbpMonty.Cluster.Placement`).
+  defp waiting(%{status: "queued"} = run) do
+    Placement.awaiting(run.inputs, Nodes.snapshot())
+  end
+
+  defp waiting(_settled), do: nil
 
   # Read once, when the run is opened: a record's config and seed are written
   # when it starts and never change, and reading them back costs a setup.
@@ -1247,6 +1261,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           >
             {run_state(@run, @queue[@run.id])}
           </span>
+          <ExTbpMontyWeb.StudioComponents.waiting_for :if={@waiting} waiting={@waiting} />
           <span
             :if={in_flight?(@run, @queue)}
             id="run-progress"

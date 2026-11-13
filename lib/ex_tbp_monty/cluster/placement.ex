@@ -113,6 +113,40 @@ defmodule ExTbpMonty.Cluster.Placement do
     Enum.all?(needs, &Capabilities.offers?(tags, &1))
   end
 
+  @doc """
+  Who a run is waiting for, when the answer is a peer rather than this node —
+  `nil` when there is nothing to wait for.
+
+  A run whose needs this node does not offer is put back until a node that does
+  takes it, and to a reader that is indistinguishable from a run nobody has
+  picked up yet: the queue calls both `available`. This is the sentence the page
+  is missing — which nodes could take it, and which tags this one lacks.
+
+      %{nodes: [entry, ...], missing: ["world:mujoco"]}
+
+  `nil` covers both answers that need no explanation: this node offers everything
+  (it is performing the run, or will be), and nobody offers it (it is performed
+  here rather than waiting for a node that does not exist).
+  """
+  @spec awaiting(map() | nil, [map()]) :: %{nodes: [map()], missing: [String.t()]} | nil
+  def awaiting(inputs, entries) do
+    needs = needs(inputs)
+
+    case turn(entries, needs) do
+      :here -> nil
+      {:wait, _seconds} -> %{nodes: candidates(entries, needs), missing: lacking(needs, entries)}
+    end
+  end
+
+  # What this node does not offer and the run asked for. Its own tags are read
+  # from the entry that says `self`; a node with no entry of its own (a snapshot
+  # from before it joined, a list that lost it) offers nothing, which makes the
+  # answer the plain list of needs rather than nothing at all.
+  defp lacking(needs, entries) do
+    offered = entries |> Enum.find(& &1.self) |> Capabilities.of_entry()
+    Enum.reject(needs, &Capabilities.offers?(offered, &1))
+  end
+
   defp asked(inputs) do
     inputs
     |> Map.get("capabilities", [])

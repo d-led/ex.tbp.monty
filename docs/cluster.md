@@ -257,9 +257,12 @@ a run recorded on node1:
   the run's files, which are written under the performing node's folder
   (`:studio_artifacts_dir`; a development node writes them into the checkout, so
   two dev nodes share them by accident).
-- **one thing a reader cannot see yet**: a run that is waiting for another node
-  looks like any run that is simply queued. The queue's own state says
-  `available`, and nothing on the page says which tag it is waiting for.
+- **a run that waits says so.** A queued run whose needs this node does not offer
+  owes a reader a sentence, because the queue calls "waiting for the node that has
+  the tag" and "nobody has picked it up" the same word: `available`. The run's page
+  draws `waits for <node>` beside its state (`ExTbpMonty.Cluster.Placement.awaiting/2`
+  answers it, the title says which tag this node lacks). On a node that runs alone
+  there is nothing to say and nothing is drawn.
 
 What has changed since this section was first written: tags no longer only
 describe a cluster, they place work in it (`ExTbpMonty.Cluster.Placement`, above),
