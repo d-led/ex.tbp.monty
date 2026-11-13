@@ -55,6 +55,34 @@ else
   mix format
 fi
 
+banner "the examples (projects of their own)"
+
+# `examples/*` are projects with their own `mix.exs` and their own
+# `.formatter.exs`, and the root `mix format` above reaches neither — its inputs
+# are the root's `lib`, `test`, `config` and `mix_tasks`. CI formats each example
+# inside its own directory, so without this the local check passes and the
+# `example <name>` leg fails at `mix format --check-formatted` before a test
+# runs. It did: `0d8d8b1` committed an unformatted example test and `68d7ac6`
+# went red on it.
+for project in examples/*/mix.exs; do
+  [[ -f $project ]] || continue
+  directory=$(dirname "$project")
+
+  # The formatter wants the project's own deps resolved, and an example nobody
+  # has fetched yet is skipped the way prettier is skipped below.
+  if [[ ! -d $directory/deps ]]; then
+    echo "skipped: $directory has no deps — fetch them there first"
+    continue
+  fi
+
+  echo "  $directory"
+  if [[ $check -eq 1 ]]; then
+    (cd "$directory" && mix format --check-formatted)
+  else
+    (cd "$directory" && mix format)
+  fi
+done
+
 banner "markdown and JavaScript (prettier)"
 
 # `npx` ships with node; this project has node only for the asset build, so its

@@ -3413,3 +3413,14 @@ gate: lint 0, full suite **3191 passed**, the three CRAP paths, dialyzer 0.
 protects a _running_ run, not a queued one, so the only run that is guaranteed to
 be verified is the last pushed — which is why every push here carries its own
 local gate rather than waiting for the previous one to be confirmed.
+
+**And the local formatter did not cover the examples** (`c26f7cc`+): the root
+`.formatter.exs` lists `lib`, `test`, `config` and `mix_tasks`, so `mix format` at
+the root reaches neither `examples/example_plugin` nor `examples/flyverse_plugin` —
+each is a project with its own `mix.exs` and its own formatter — while CI formats
+every example inside its own directory. So `0d8d8b1` committed an unformatted
+example test, `scripts/reformat.sh` said the tree was clean, and `68d7ac6` went red
+on `example flyverse_plugin` at `mix format --check-formatted`, before a test ran.
+`scripts/reformat.sh` now walks `examples/*/` too, in both modes (rewrite and
+`--check`), skipping an example whose `deps/` nobody has fetched; verified by
+re-breaking the file on purpose and watching the check exit 1.
