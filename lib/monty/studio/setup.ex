@@ -839,19 +839,28 @@ defmodule Monty.Studio.Setup do
     end
   end
 
+  # Two questions of the same shape — is there a file to open, and will the scene
+  # open it — asked one at a time. Kept apart because this suite carries no
+  # `ex_monty_cad`, so neither has a test that reaches it: a stair of nested
+  # cases in a function nothing covers is what the CRAP ranking is about, and
+  # saying each answer once keeps it about one refusal rather than two.
   defp open_cad_scene(module) do
+    path = cad_part_path!()
+
+    case module.open(path) do
+      {:ok, scene} ->
+        scene
+
+      {:error, error} ->
+        raise ArgumentError, "#{path} could not be opened: #{Exception.message(error)}"
+    end
+  end
+
+  # The path, or the raise a person reads instead.
+  defp cad_part_path! do
     case cad_part_path() do
-      {:ok, path} ->
-        case module.open(path) do
-          {:ok, scene} ->
-            scene
-
-          {:error, error} ->
-            raise ArgumentError, "#{path} could not be opened: #{Exception.message(error)}"
-        end
-
-      {:error, sentence} ->
-        raise ArgumentError, sentence
+      {:ok, path} -> path
+      {:error, sentence} -> raise ArgumentError, sentence
     end
   end
 
