@@ -146,7 +146,20 @@ defmodule FlyversePlugin.Policy do
   # same approach that landed it the first time.
   @bout_steps 60
   @depart_steps 4
-  @depart_degrees 30.0
+
+  # The departure's turn is a body saccade — the fast, high-angle yaw the animal
+  # uses to change sides — and it is an about-face: 180 degrees, into open space,
+  # away from what it was crawling over. Whatever the surface's shape, turning
+  # round and walking back off it lands the fly facing the side it came from, so
+  # the next approach reads the other half of the object. Its *side* alternates
+  # as well, left then right then left, so that two departures in a row cannot
+  # return to the same face: the animal traces a figure eight rather than a loop.
+  #
+  # No geometry is needed for any of that, which is the point: this policy is
+  # given `1 / depth` per half of the picture and nothing else about the world —
+  # no radius, no centre, no pose — and an about-face is the one instruction that
+  # needs none.
+  @depart_degrees 180.0
 
   # flyverse's `DT_MS`, in seconds: the tick a window is counted in. A plan
   # counts ticks, and the wish is a first-order update over the time they took.
@@ -264,11 +277,12 @@ defmodule FlyversePlugin.Policy do
   def call(%__MODULE__{} = policy, {_ctx, observations, _motor_state, percept, _goal}, state) do
     simulation = Map.fetch!(state.simulations, policy.sim)
     next = bout(simulation, on_object?(percept))
-    state = put(state, policy.sim, advance(simulation, next))
+    advanced = advance(simulation, next)
+    state = put(state, policy.sim, advanced)
 
     case next do
       :explore -> steer(policy, observations, percept, state)
-      :depart -> {:ok, departing(policy), policy, state}
+      :depart -> {:ok, departing(policy, advanced), policy, state}
       :cruise -> {:ok, touch(policy, observations), policy, state}
     end
   end
@@ -294,8 +308,13 @@ defmodule FlyversePlugin.Policy do
 
   defp advance(simulation, next) do
     taken = if(next == simulation.bout, do: simulation.bout_steps + 1, else: 1)
-    %{simulation | bout: next, bout_steps: taken}
+    %{simulation | bout: next, bout_steps: taken, departures: departures(simulation, next)}
   end
+
+  # One side per departure, counted once — when the departure begins.
+  defp departures(%{bout: :depart} = simulation, :depart), do: simulation.departures
+  defp departures(simulation, :depart), do: simulation.departures + 1
+  defp departures(simulation, _next), do: simulation.departures
 
   defp steer(policy, observations, percept, state) do
     simulation = Map.fetch!(state.simulations, policy.sim)
@@ -385,23 +404,29 @@ defmodule FlyversePlugin.Policy do
   # the step is backwards off the surface at the approach stride. It is a hop, not
   # a flight: this world's sensor has no wings, so what a fly does with them is
   # what a step backwards does here.
-  defp leave(policy) do
+  defp leave(policy, departures) do
     %OrientHorizontal{
       agent_id: policy.agent_id,
-      rotation_degrees: @depart_degrees,
+      rotation_degrees: saccade(departures),
       left_distance: 0.0,
       forward_distance: -@touch_stride
     }
   end
 
+  # Right, then left, then right: the first departure turns one way and the next
+  # turns the other, so the two landings are on different faces of what it left.
+  defp saccade(departures) when rem(departures, 2) == 1, do: @depart_degrees
+
+  defp saccade(_departures), do: -@depart_degrees
+
   # A departure is a step the network did not decide, so it says so in the
   # telemetry rather than in the wish: a reader of a run can then tell a fly that
   # left from a fly that was steered off.
-  defp departing(policy) do
+  defp departing(policy, simulation) do
     %MotorPolicyResult{
-      actions: [leave(policy)],
+      actions: [leave(policy, simulation.departures)],
       motor_only_step: false,
-      telemetry: %{leaving: true, turn_degrees: @depart_degrees}
+      telemetry: %{leaving: true, turn_degrees: saccade(simulation.departures)}
     }
   end
 
@@ -464,7 +489,8 @@ defmodule FlyversePlugin.Policy do
              spikes: 0,
              nearness: {0.0, 0.0},
              bout: :cruise,
-             bout_steps: 0
+             bout_steps: 0,
+             departures: 0
          })}
 
       {:error, {code, sentence}} ->
@@ -490,6 +516,7 @@ defmodule FlyversePlugin.Policy do
       spikes: simulation.spikes,
       bout: simulation.bout,
       bout_steps: simulation.bout_steps,
+      departures: simulation.departures,
       last_counts: [simulation.last.left, simulation.last.right]
     }
   end
@@ -548,6 +575,7 @@ defmodule FlyversePlugin.Policy do
            nearness: {0.0, 0.0},
            bout: :cruise,
            bout_steps: 0,
+           departures: 0,
            last: %{left: 0, right: 0, spikes: 0, rates: [0.0, 0.0]}
          }}
 

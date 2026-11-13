@@ -180,8 +180,8 @@ defmodule FlyversePlugin.PolicyTest do
 
   # The animal does not crawl over the first thing it touches for ever: it walks a
   # bout, leaves, and lands again somewhere else. Sixty steps is the bout, and
-  # what ends it is a turn the centring reflex cannot undo and a hop off the
-  # surface.
+  # what ends it is an about-face — 180 degrees, which the centring reflex cannot
+  # pull back — and a hop off the surface.
   test "a bout on the surface ends with the fly leaving it", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
@@ -189,9 +189,27 @@ defmodule FlyversePlugin.PolicyTest do
     {leaving, _policy, _state} = step(policy, state, observations(mug()), touching(0.025))
 
     assert [%OrientHorizontal{} = left] = leaving.actions
-    assert left.rotation_degrees == 30.0, "a turn the centring reflex cannot pull back"
+    assert left.rotation_degrees == 180.0, "an about-face the centring reflex cannot pull back"
     assert left.forward_distance < 0.0, "and a hop off the surface, not along it"
     assert left.left_distance == 0.0
+  end
+
+  # And the side it turns alternates, so two departures cannot return it to the
+  # same face of what it left: left, then right.
+  test "successive departures turn opposite ways", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {_walking, policy, state} = walk(policy, state, 60)
+    {first, policy, state} = step(policy, state, observations(mug()), touching(0.025))
+    {_off, policy, state} = step(policy, state, scene(0.2, 0.3), away())
+    {_walking, policy, state} = walk(policy, state, 60)
+    {second, _policy, _state} = step(policy, state, observations(mug()), touching(0.025))
+
+    assert [%OrientHorizontal{rotation_degrees: one_way}] = first.actions
+    assert [%OrientHorizontal{rotation_degrees: other_way}] = second.actions
+
+    assert one_way * other_way < 0.0,
+           "one departure one way, the next the other: #{one_way} then #{other_way}"
   end
 
   # And the departure is not a second behaviour it gets stuck in: the moment the
@@ -226,7 +244,7 @@ defmodule FlyversePlugin.PolicyTest do
 
     assert [%OrientHorizontal{} = walked] = landed.actions
     assert_in_delta walked.left_distance, 0.004, 1.0e-9, "a slide on the surface, not a departure"
-    refute walked.rotation_degrees == 30.0
+    refute walked.rotation_degrees == 180.0
   end
 
   # The slide is what the fly does *at* the surface. While there is room to walk
