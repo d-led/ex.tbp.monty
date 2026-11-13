@@ -272,3 +272,12 @@ it advertised — and this node's own name was text.
 cluster's own decisions are pinned in `test/ex_tbp_monty/cluster_test.exs`,
 `test/ex_tbp_monty/cluster/nodes_test.exs` and
 `test/ex_tbp_monty/cluster/capabilities_test.exs`.
+
+Placement was checked the same way, on `4211`/`4212`, with no tags declared on
+either node: a run queued through `POST /mcp` (`monty_run_experiment`, a MuJoCo
+config) was performed by the node that was asked, which is the fail-open answer
+and therefore the behaviour a lone node has. Asked from the other node,
+`Cluster.Peers.recent()` came back with the first node's **finished** run and its
+420 steps — the row the in-flight query could never have shown. The decisions
+themselves are `test/ex_tbp_monty/cluster/placement_test.exs`, and the claim
+moving `studio_runs.node` is `test/monty/studio/run_history_test.exs`.
