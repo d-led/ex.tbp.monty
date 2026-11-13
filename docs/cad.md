@@ -134,8 +134,9 @@ scene, not a config, knows where the object is.
    `needs: [:monty]` — is still worth having, because it is what the finished
    140-episode run already steered by.
 
-3. **A library the CAD world can be recognised against — one part recognises,
-   several do not yet.** The experiment is now a script:
+3. **A library the CAD world can be recognised against — a part with a pose
+   recognises, a symmetric one does not conclude.** The experiment is now a
+   script:
    `mix run scripts/cad_experiment.exs [parts…]`, where the last name is the part
    the world steps and every name is remembered. It writes a memory to a
    directory of its own and points `:monty_libraries_dir` at it, at the address
@@ -153,48 +154,73 @@ scene, not a config, knows where the object is.
    | blend                     | blend  | **1 possible, no conclusion** — evidence stalls at 6.5              |
    | plate                     | blend  | **1 possible, no conclusion** — evidence stalls at 6.5 (control)    |
 
-   The last two rows are what makes the table readable. `CAD_SENSE_ONLY=1`
-   leaves the sensed part out of the memory, and the answer is _no conclusion_
-   rather than a confident wrong name: the run did not recognise a part it was
-   never shown, which is the thing a library of one's own parts must be able to
-   say. And the third row is the same stall as the two multiple-object rows,
-   produced by the blend against **its own** memory and nothing else — so the
-   blend's percept is weak on its own terms, and several candidates in the
-   memory are not what stops the evidence. A right answer separates cleanly:
-   plate-against-plate reaches evidence ~13 and concludes at 483 steps; a weak
-   one sits at 6.5 whatever else is in the library.
+   One episode is an anecdote, so the question the table asks is a rate.
+   `CAD_SEED=<n>` runs a chosen seed, and the seed is the only thing a sweep
+   varies — the world starts in the pose the _part_ decides
+   (`Setup.world/4` reads it from `MontyCad.Scene.start_pose/1`, not from the
+   config's start pose), so every seed sees the same first picture and what
+   differs is the exploration the policy draws:
 
-   Where the weakness is, measured rather than guessed. The blend is a rounded
-   block: most of its surface is flat, and the fits on it are degenerate. Its
-   memory holds 947 nodes, of which 174 — 18 % — carry a principal curvature
-   the geometry cannot resolve: `principal_curvatures` reach
-   1 394 mm⁻¹ on a part whose tightest feature is a 5 mm fillet (κ = 0.2 mm⁻¹),
-   and `principal_curvatures_log` spans −6.85 … 7.22 where Monty's own
-   pretrained graphs stay within about −5 … 2 (checked against
-   `priv/monty/libraries/pretrained_ycb_v13/surf_agent_1lm_10distinctobj`). A
-   regular sample lattice fitted for curvature answers second differences of
-   the lattice at edges, and nothing in the pipeline rejects an absurd
-   magnitude — `valid_curvatures?` gates whether a curvature is _reported_, not
-   whether it is _possible_. Those nodes are compared, through
-   `principal_curvatures_log` with a tolerance of 1.0, against sensed patches
-   that have no such values, so they can only fail, and they dilute the
-   evidence of the nodes that would match.
+   | part  | shape                        | seeds that recognised, of ten |
+   | ----- | ---------------------------- | ----------------------------- |
+   | plate | boss and an off-centre hole  | **4** — seeds 1, 3, 5, 7      |
+   | blend | a 40 × 30 × 20 rounded block | **0**                         |
 
-   Two further facts the measurement settled, both of which had been read
-   wrongly the first time. The two blends are not near-duplicates: `blend_r5`
-   is 40 × 30 × 20 mm and `blend_r5_enlarged` is 270 × 100 × 100 mm, so scale
-   _is_ carried into the memory (an earlier comparison that found the two
-   identical had measured a folder that held neither). And `pose_fully_defined`
-   is written as a one-element list — `[false]`, `[true]` — which is the arity
-   Monty's export uses (`[1.0]`) but not its type; whether a consumer that
-   treats the column as a flag reads `[false]` as true is not yet settled, and
-   it is one line to find out.
+   The control row is what makes the rest of the table readable.
+   `CAD_SENSE_ONLY=1` leaves the sensed part out of the memory, and the answer
+   is _no conclusion_ rather than a confident wrong name: the run did not
+   recognise a part it was never shown, which is the thing a library of one's
+   own parts must be able to say.
 
-   So the next step is a memory whose curvature is not nonsense — either a
-   sample set whose fits are not lattice-degenerate (jitter, or a patch grid
-   rather than an object-space lattice) or a rejection of the fits the patch
-   cannot resolve — and the blend is where it will show, because it is the part
-   that fails against its own memory.
+   Why the blend never concludes, read from the module's own rule. Recognition
+   needs one object left **and** a pose it can name —
+   `EvidenceGraphLM.check_terminal_condition/1` asks
+   `get_unique_pose_if_available/2`, which answers a pose only when
+   `unique_pose?/4` holds or a symmetry has been counted. The blend keeps one
+   object and twenty-seven distinct rotations at step 500; the plate keeps
+   forty-two and still concludes, because its hypotheses agree on the pose in
+   the way that rule asks about. A rounded block's faces say the same thing to
+   this sensor — flat, one colour, log curvature near zero — so the rotations
+   that carry one face onto another never separate. The blend is not
+   unrecognised; it is recognised as a shape whose orientation this percept
+   cannot name.
+
+   `scripts/probe_cad_poses.exs` is that answer, on demand:
+
+       CAD_LIBRARY=/tmp/cad-experiment/blend \
+       MONTY_CAD_PART=…/blend_r5.step mix run scripts/probe_cad_poses.exs
+
+   It steps under the config's own recognition policy and prints the terminal
+   state, the objects still possible, and the distinct rotations left per
+   object — which is the difference between "not recognised" and "recognised,
+   and this many ways round".
+
+   Two readings from an earlier pass of this document were wrong, and the
+   measurement is what corrected them. The curvature in a CAD-written memory is
+   not anomalous: `principal_curvatures_log` spans −6.85 … 7.22 here, and
+   Monty's own pretrained graphs span −8.31 … 8.12 with 73 % of their values
+   implying |κ| > 5 (`priv/monty/libraries/pretrained_ycb_v13/…`, all ten
+   objects). The earlier "about −5 … 2" came from reading one node of one
+   object. And `pose_fully_defined` is written as a one-element list —
+   `[false]`, `[true]` — which is the arity Monty's export uses, and it is
+   loaded into the graph as a plain boolean (visible in the module's own graph
+   rows), so nothing reads `[false]` as true.
+
+   So the next question is not "which part is this" but "which parts have a
+   pose worth naming". The plate does and the blends do not, and the library a
+   recognition run is aimed at therefore has to hold parts with a boss, a hole,
+   an off-centre feature — the things that break the symmetry. That is a
+   statement about the parts, and it is the one that `docs/cad.md`'s item 4
+   has to be built on. The plate's six failing seeds are the other half: same
+   part, same start, half the explorations find it inside the config's budget,
+   so either the exploration is too slow for these parts or the evidence needs
+   more steps than the borrowed config allows.
+
+   One measurement kept because the similar-pair question will need it: the two
+   blends are not near-duplicates. `blend_r5` is 40 × 30 × 20 mm and
+   `blend_r5_enlarged` is 270 × 100 × 100 mm, and a memory written from each
+   carries its own scale — the earlier reading that found them identical had
+   measured a folder that held neither of them.
 
    Two defects had to be found for the single-object result, and both were ours
    rather than the port's. `pose_vectors` were written as three rows of three,

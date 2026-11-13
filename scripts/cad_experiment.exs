@@ -99,13 +99,19 @@ IO.puts("memory: #{path} — #{length(records)} object(s), sensing #{sensed}#{co
 Application.put_env(:ex_tbp_monty, :monty_libraries_dir, libraries)
 System.put_env("MONTY_CAD_PART", parts[sensed])
 
-Mix.Tasks.Monty.Run.run([
-  "base_config_10distinctobj_surf_agent",
-  "--world",
-  "cad",
-  "--episodes",
-  "1",
-  "--steps",
-  "500",
-  "--no-record"
-])
+# The seed is the input a rate over seeds varies: one episode recognising a part
+# says it can happen, ten say how often.
+seed = System.get_env("CAD_SEED")
+
+Mix.Tasks.Monty.Run.run(
+  [
+    "base_config_10distinctobj_surf_agent",
+    "--world",
+    "cad",
+    "--episodes",
+    "1",
+    "--steps",
+    "500",
+    "--no-record"
+  ] ++ if(seed in [nil, ""], do: [], else: ["--seed", seed])
+)
