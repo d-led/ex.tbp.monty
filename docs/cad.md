@@ -134,29 +134,44 @@ scene, not a config, knows where the object is.
    `needs: [:monty]` — is still worth having, because it is what the finished
    140-episode run already steered by.
 
-3. **A library the CAD world can be recognised against — it recognises, and it
-   concludes.** `MontyCad.Training.write/4` on the fixture part writes 1557 nodes
-   (892 with no feature family, 593 riser, 56 boss, 16 hole); a run reads it by
-   pointing `:monty_libraries_dir` at a directory holding
-   `pretrained_ycb_v14/surf_agent_1lm_10distinctobj.jsonl.gz` — the address
-   `base_config_10distinctobj_surf_agent` already names, so no config was edited
-   to try it — with `MONTY_CAD_PART` at the fixture and `--world cad`.
+3. **A library the CAD world can be recognised against — one part recognises,
+   several do not yet.** The experiment is now a script:
+   `mix run scripts/cad_experiment.exs [parts…]`, where the last name is the part
+   the world steps and every name is remembered. It writes a memory to a
+   directory of its own and points `:monty_libraries_dir` at it, at the address
+   the config's `model_name_or_path` already names
+   (`pretrained_ycb_v14/surf_agent_1lm_10distinctobj.jsonl.gz`), so no config is
+   edited to try it.
 
-   The result, at the config's own 500-step cap: **`learning_module_0: match`,
-   match 1 of 1, 483 steps**, evidence ~13, one possible pose, 8 goals emitted,
-   1.97 s in the model and 4.42 s in the world. A memory written from a part
-   recognises that part from a sensor walking over it.
+   What it has established, at the config's own 500-step cap:
 
-   Two defects had to be found for that to be true, and both were ours rather
-   than the port's. The first: `pose_vectors` were written as three rows of
-   three, while a graph column holds numbers and
+   | memory                    | sensed | result                                                              |
+   | ------------------------- | ------ | ------------------------------------------------------------------- |
+   | plate                     | plate  | **match, 1 of 1, 483 steps**, evidence ~13, one possible pose       |
+   | plate + blend             | blend  | top object right (`blend_r5` ev 6.5), **2 possible**, no conclusion |
+   | plate + blend + blend-big | blend  | top object right, **3 possible**, no conclusion                     |
+
+   So a memory written from a part recognises that part from a sensor walking
+   over it, and a memory of several parts puts _the right one on top_ but never
+   narrows to it. The borrowed config is for distinct objects, which the second
+   row is, so the gap is in the percept rather than in the config: two objects
+   that differ only in their features leave the evidence flat, and
+   `x_percent_threshold` keeps both possible by design. The next question is
+   therefore what would make a CAD patch discriminative — the patch's resolution
+   and standoff, the feature set (`pose_fully_defined` is false on most of this
+   part's surface, which is 892 of 1557 nodes on no feature family at all), or
+   the exploration the policy drives — and the similar pair (`blend` and
+   `blend-big`) is where that question is sharpest.
+
+   Two defects had to be found for the single-object result, and both were ours
+   rather than the port's. `pose_vectors` were written as three rows of three,
+   while a graph column holds numbers and
    `GraphMemory.get_rotation_features_at_nodes/4` chunks a value by three — so
    every value was one level deeper than the reader assumed and the episode died
    in burst sampling aligning a matrix against `[[matrix]]` (`a8628fe` in
    `ex.monty.cad`, with the shape now stated in the percept and in the library
-   format cases). The second, earlier: the run needs a 500-step cap to conclude;
-   at 400 it is still converging, which is information about the experiment, not
-   a bug.
+   format cases). And the run needs the 500-step cap: at 400 it is still
+   converging, which is information about the experiment rather than a bug.
 
 4. **A part per episode.** A CAD world steps one part; the object-per-episode
    interfaces walk a list. That is where "ten similar parts" becomes an
