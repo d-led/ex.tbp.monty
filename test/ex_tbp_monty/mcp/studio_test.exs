@@ -32,6 +32,21 @@ defmodule ExTbpMonty.Mcp.StudioTest do
       assert studio.parallel.how =~ ":studio"
     end
 
+    # The number an assistant is told is the number the deployment set. It is read
+    # from the queue's configuration rather than remembered, which is what makes
+    # `MONTY_STUDIO_CONCURRENCY` answerable through this tool at all — and what
+    # stops an answer from describing a deployment that no longer exists.
+    test "says how many runs this deployment allows at once" do
+      with_configured_runs(5, fn ->
+        studio = Studio.describe()
+
+        # This process runs no queue, so the number is the configured one and the
+        # answer says it is not live rather than pretending to be a running limit.
+        refute studio.parallel.live?
+        assert studio.parallel.episodes_at_once == 5
+      end)
+    end
+
     test "says which world a run steps, and whether the interpreter is there" do
       studio = Studio.describe()
 
@@ -102,5 +117,12 @@ defmodule ExTbpMonty.Mcp.StudioTest do
       assert text =~ ~r/run artifacts and logs at .*: \d+(\.\d+)? (B|KiB|MiB|GiB|TiB) free of/
       assert text =~ "% used"
     end
+  end
+
+  defp with_configured_runs(runs, work) do
+    previous = Application.get_env(:ex_tbp_monty, Oban)
+    Application.put_env(:ex_tbp_monty, Oban, Keyword.put(previous, :queues, studio: runs))
+    on_exit(fn -> Application.put_env(:ex_tbp_monty, Oban, previous) end)
+    work.()
   end
 end
