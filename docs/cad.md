@@ -88,23 +88,34 @@ scene, not a config, knows where the object is.
    agent's uncommitted `lib/monty/studio/jobs/run.ex`**; the change is one clause:
    `defp world_of(%{"world" => "cad"}), do: :cad`.
 
-2. **The edge-walk policy** — the ask this estate was built for: walking a surface
-   from feature to feature, or along an edge. `MontyCad.Gen.Policy` already writes
-   the shape (`:owner_only`, `needs: [:quiddity, :monty]`, `call/6` raising), and
-   a CAD host now answers `quiddity` without configuration (see
-   [`plugins.md`](plugins.md)). The decision inside `call/6`: sensor pose → part
-   frame, ray-cast for the surface point, the face's principal curvature
-   direction, step along the face or across the nearest edge, emit Turn/Move.
-   `MontyCad.Training`'s traversal is the offline version of the same loop. The
-   variant worth having first as a control is a shell around the ported
-   `SurfacePolicyCurvatureInformed` (`:anywhere`, `needs: [:monty]`) — it cannot
-   tell a hole from a fillet, and that is the point of comparing.
+2. **The feature walk — built and tested, not yet reachable from a run.**
+   `MontyCad.Policy.FeatureWalk` (`ade1dd3`, `ex.monty.cad`) walks a part to the
+   features its recognition names. Each step it ray-casts from the sensor onto
+   the exact surface, corrects the patch's standoff with a `MoveForward`, and
+   only then takes one `MoveTangentially` towards the next target — a hole's
+   centre, a boss's top; a riser is surface, not a destination. Arrival is the
+   ray landing on that feature's own faces, and an empty ray is a through hole's
+   aperture rather than a stop. It never reads `observations` or `percept`, which
+   is the comparison against a surface policy that has only the patch.
+
+   Held to the part by tests: the fixture is walked to both features, and no
+   sideways step is taken from a wrong standoff.
+
+   What is left is the wiring: a CAD host has to register the policy
+   (`ex.monty.cad.server`'s `Cluster.register/3`, one provider process, one
+   `describe/0`), and a definition has to name it as its `"motor_system"`. The
+   studio needs no change for that: `RemotePolicy.among/3` asks every host,
+   checks `:quiddity` and `:monty` against the host's carried tags, and refuses
+   `:owner_only` on a node that cannot serve it. The control variant — a shell
+   around the ported `SurfacePolicyCurvatureInformed`, `:anywhere`,
+   `needs: [:monty]` — is still worth having, because it is what the finished
+   140-episode run already steered by.
 
 3. **A library the CAD world can be recognised against — the units are done,
    the last mile is not.** `MontyCad.Training` now writes the framework's metres
    and the framework's record shape (`e9bcdca`, `ex.monty.cad`), and a library
    trained from the fixture part loads through `Monty.Studio.Memory.load/3` as a
-   `GraphMemory` — checked, not assumed. What is left is *naming* it: a run picks
+   `GraphMemory` — checked, not assumed. What is left is _naming_ it: a run picks
    its library from the config's `model_name_or_path`, so recognising against a
    part needs an experiment config of this study's own
    (`priv/monty/libraries/<release>/<name>.jsonl.gz` plus a config naming
