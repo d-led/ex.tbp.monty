@@ -131,7 +131,16 @@ defmodule Monty.Studio.Run do
             :ok = Monty.Runtime.Model.reset_episode(model_id)
             {:ok, :held}
           else
-            DynamicSupervisor.start_child(ExTbpMonty.Core.ModelSupervisor, {model, spec})
+            # `:temporary`: the run creates its model and the run stops it, so a
+            # model that dies is not started again behind the run's back — the
+            # run's next call fails with the reason the model died of, which is
+            # what a record needs. It also means a burst of failing episodes
+            # cannot be counted against the supervisor's restart budget: six
+            # models dying at once is how one node stopped taking requests.
+            DynamicSupervisor.start_child(
+              ExTbpMonty.Core.ModelSupervisor,
+              Supervisor.child_spec({model, spec}, restart: :temporary)
+            )
           end
         end)
 

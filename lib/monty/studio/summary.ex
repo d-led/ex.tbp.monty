@@ -149,6 +149,11 @@ defmodule Monty.Studio.Summary do
     end)
   end
 
+  # A conclusion that is not a map is no conclusion — a model that answered
+  # nothing at the end of an episode is a case the fold meets, not a case that
+  # should take a run down at its boundary.
+  def tally(tally, _nothing), do: tally
+
   @doc """
   The tally in one line: what each module concluded, over how many episodes.
 

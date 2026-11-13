@@ -176,6 +176,11 @@ defmodule Monty.Runtime.Model do
         end) ++
         [{Step, Map.put(options, :model_id, model_id)}]
 
-    Supervisor.init(children, strategy: :one_for_one)
+    # A model is all of it or none of it. A module or the coordinator that dies
+    # takes the model with it: a model rebuilt under a run's feet is a run that
+    # goes on with a step count nobody reset and modules nobody fed, and the
+    # caller — who holds the model's name — is the one who can say what happened.
+    # Restarting it here would hide that behind a step that quietly starts again.
+    Supervisor.init(children, strategy: :one_for_one, max_restarts: 0)
   end
 end

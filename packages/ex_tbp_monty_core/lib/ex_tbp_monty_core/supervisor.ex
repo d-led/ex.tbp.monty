@@ -39,6 +39,13 @@ defmodule ExTbpMonty.Core.Supervisor do
       {DynamicSupervisor, name: @model_supervisor, strategy: :one_for_one}
     ]
 
-    Supervisor.init(children, strategy: :one_for_one)
+    # A node's two long-lived processes do not get the default budget of three
+    # restarts in five seconds. A burst of failing runs used to be counted
+    # against the model supervisor and then against this supervisor, and a node
+    # that gave up took every other run on it down with a clean exit that said
+    # nothing. A model is `:temporary` to whoever starts it, so deaths of models
+    # are not restarts at all; this is the rest of the story for the two
+    # processes that must outlive any single run.
+    Supervisor.init(children, strategy: :one_for_one, max_restarts: 100, max_seconds: 5)
   end
 end

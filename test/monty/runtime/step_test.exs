@@ -49,7 +49,7 @@ defmodule Monty.Runtime.StepTest do
         Map.new(overrides)
       )
 
-    start_supervised!(Supervisor.child_spec({Model, spec}, id: model_id))
+    start_supervised!(Supervisor.child_spec({Model, spec}, id: model_id, restart: :temporary))
     model_id
   end
 
@@ -650,27 +650,30 @@ defmodule Monty.Runtime.StepTest do
   end
 
   describe "supervision" do
-    test "a learning module that dies is replaced, and the next step still runs" do
+    # The wiring is not a promise that a module can be replaced. A learning module
+    # holds the graph it built; a model that carried on with a fresh one would keep
+    # feeding a module that has forgotten everything, which is the failure that
+    # looks like success — a run that ends green with nothing learned. So a module
+    # that dies ends the model, and the step whose call met the death says so.
+    test "a learning module that dies ends the model, and the step after it says why" do
       model_id = start_model()
       assert {:ok, _, _} = step(model_id)
 
       key = {:learning_module, model_id, :lm_0}
       [{original, _}] = Registry.lookup(key)
-      ref = Process.monitor(original)
+      [{model, _}] = Registry.lookup({:model, model_id})
+
+      module_ref = Process.monitor(original)
+      model_ref = Process.monitor(model)
       Process.exit(original, :kill)
-      assert_receive {:DOWN, ^ref, :process, ^original, :killed}
 
-      # Wait for the supervisor itself to have handled the child's exit, rather
-      # than polling a clock: a system message is answered only after the exit
-      # message that came before it, so the replacement exists by then.
-      _ = :sys.get_state(Monty.Runtime.Model.via(model_id))
+      assert_receive {:DOWN, ^module_ref, :process, ^original, :killed}
+      assert_receive {:DOWN, ^model_ref, :process, ^model, :shutdown}
 
-      replacement = Registry.lookup(key)
-      assert [{pid, _}] = replacement
-      assert pid != original
-      assert {:ok, _, info} = step(model_id)
-      assert info.inputs == %{lm_0: 1}
-      assert_receive {:learning_step, :lm_0, [_percept], :matching}
+      # Not replaced and not rebuilt: the next step has nothing to reach, and a
+      # caller who holds the model's name is told so rather than stepping a
+      # module that has forgotten everything it was given.
+      assert {:noproc, _} = catch_exit(step(model_id))
     end
   end
 

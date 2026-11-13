@@ -130,7 +130,11 @@ defmodule Monty.Studio.PluginExperiment do
   # that disagrees with the thing it came from, and two runs of one experiment
   # would differ for a reason nobody wrote down.
   defp seeded(tree, %{"seed" => seed}) when is_integer(seed) do
-    update_in(tree, ["experiment", "config", "seed"], fn _previous -> seed end)
+    if get_in(tree, ["experiment", "config"]) == nil do
+      tree
+    else
+      put_in(tree, ["experiment", "config", "seed"], seed)
+    end
   end
 
   defp seeded(tree, _definition), do: tree
