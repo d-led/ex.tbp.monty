@@ -3184,3 +3184,78 @@ CI's own answer, from the runs of these commits: `lint`, `types`, `test 2/4`,
 a facet list this change made stale (fixed in the next commit) and
 `flyverse_plugin`'s crate, which is §44.4's first item. Dialyzer runs in CI's
 types job.
+
+## 45. 2026-11-13: a run is told why in words, and the CAD scene's gate
+
+### 45.1 The leak, which is the part worth reading
+
+A run against `flyverse_plugin`'s policy failed, and the reason its page showed
+was:
+
+```
+run failed at step 166 after 1094 step(s): the policy
+flyverse_plugin.lif_steering on flyverse_plugin@127.0.0.1 stopped answering:
+{:noproc, {GenServer, :call, [#PID<26785.216.0>, {:call,
+%{__struct__: FlyversePlugin.Policy, sensor_id: nil, agent_id: "agent_id_0", …
+```
+
+`GenServer.call` exits with **the message it was sending**, and for a policy that
+message holds the policy and the observations it was deciding on. `RemotePolicy`
+built four of these sentences with `inspect(reason)`, `PluginExperiment` a fifth,
+and each one travelled — unchanged — through `Failure.explain/1` (which strips
+the `** (ArgumentError)` banner and keeps the message) into the run's `reason`,
+its own log, and the page. `Monty.Studio.Failure`'s whole mandate is that a
+record never answers "why did this stop" with a dump; the sentences were written
+before anyone asked it.
+
+What landed (`80a78ec`):
+
+- `Failure.lost/1` — an exit reason as a sentence: a process that is gone, a node
+  that left, a node still thinking, an exception's own message. Everything the
+  reason carried is dropped with it, and an unknown shape still gets a sentence
+  ("it stopped without saying why") rather than a term.
+- `Failure.reply/1` — an unexpected reply by its tags: `ok, a FlyversePlugin.Policy`
+  says which message went unanswered without pasting a camera image.
+- `RemotePolicy`'s four `catch :exit` sites and its three `answered …` sites, and
+  `PluginExperiment`'s pair, all use them.
+- `Jobs.Run`'s part log line pasted the _pair_ `Failure.crashed/3` keeps — the
+  sentence **and** the traceback that the page folds out under "technical
+  details". `said/1` now takes the sentence and leaves the trace where it is
+  kept; a division's own tags (`{:unclaimable, {:held, node, until}}` and
+  friends) are still inspected, because they are a node and a time, not a
+  payload.
+
+Three cases state it, and the first fails on the old code: the message holds no
+`GenServer`, no `#PID` and no struct; `start/1` answers the same sentence; and a
+reply carrying a policy is named by its tag.
+
+**The rule for the next pair of hands**: nothing that reaches a record, a run log
+line, or a page may be built with `inspect/1`. `technical` is the only place a
+traceback belongs, and `Failure` is where "why" is turned into words.
+
+### 45.2 The CAD scene was the only red in the CRAP gate
+
+`open_cad_scene/1` asked two questions in one nested `case`, which is one
+decision too many for the ranking; this suite carries no `ex_monty_cad`, so no
+test can reach either branch and the function scored 30.00 against a 20.00
+threshold (a `with`/`else` had scored exactly 20.00 before the world-rule
+commit). It is now `cad_part_path!/0` (the path, or raises with the reason) and
+`open_cad_scene/1` (opens it, or says the scene would not) — 12.00 each at no
+coverage (`b5a3b4c`).
+
+### 45.3 How the state was read, without a database
+
+The user's rule, stated twice in one minute: **do not read a run through the
+database.** Clustered nodes own their own store — SQLite is the per-node case —
+so `psql` sees one node's truth at best and nothing at worst. What worked:
+
+- `logs/<node>.log` — the dev cluster's JSONL of each node's stdout
+  (`process-compose.yaml` writes one per process). The crash, the page-open
+  events and the `{:shutdown, :closed}` of a tab are all there.
+- `priv/studio_runs/<id>/run.log` — a run's own transcript, which is what its
+  page shows and where the leaked sentence above was read from.
+- A hidden node, when a node has to be asked something:
+  `elixir --name probe@127.0.0.1 --hidden --cookie "$(cat ~/.erlang.cookie)" /tmp/ask.exs`
+  with `:rpc.call(:"node1@127.0.0.1", Monty.Studio.RunHistory, :list, [[limit: 5]])`
+  — the query runs on the node that owns the rows. `--hidden` keeps it out of
+  every `Node.list/0` the pages draw.
