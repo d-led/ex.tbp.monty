@@ -46,7 +46,7 @@ defmodule ExamplePlugin.Experiment do
       "kind" => :experiment,
       "version" => ExamplePlugin.version(),
       "placement" => :anywhere,
-      "needs" => []
+      "needs" => [:monty]
     }
   end
 

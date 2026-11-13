@@ -67,15 +67,20 @@ therefore namespaces its names, as the example's do.
    the node holding the state; nothing refuses a call that reaches a copy which
    cannot serve, and `lookup/2` will hand out exactly such a copy. The caller is
    expected to know; a cluster should not depend on that.
-3. **`needs` is advisory in the package, checked by one caller.** A call that
-   arrives on a node without `:quiddity` fails inside the plugin, as an error the
-   cluster did not predict. This repository's caller now checks it itself:
-   `Monty.Studio.RemotePolicy.among/3` asks every plugin host, keeps the host's
-   tags beside the answer, and treats a node that does not offer what the plugin
-   says it needs as no candidate — so the refusal says "offered, but by no node
+3. **`needs` is checked by the caller, and answered by the host.** A plugin says
+   what it calls while it answers (`:quiddity` for the geometry, `:monty` for
+   the framework), and a host publishes what it carries — the packages on its
+   code path, by the name `needs` uses, plus the machine tags in
+   `MONTY_CAPABILITIES` (`MontyPlugin.Capabilities.carried/0`, `ex_monty_plugin`
+   0.1.2). `Monty.Studio.RemotePolicy.among/3` asks every plugin host, keeps the
+   host's tags beside the answer, and treats a node that does not offer what the
+   plugin declares as no candidate — so the refusal says "offered, but by no node
    that can serve it: … does not offer :quiddity" instead of a step failing
    inside a plugin. The check belongs in `route/4` so that the next caller does
-   not have to write it again.
+   not have to write it again. Until 0.1.2 the host's tags came only from the
+   plugins it registered, so no `needs` could be satisfied and the honest value
+   was `[]`; a host on an older lock still answers that way, and a plugin asking
+   for the framework is refused rather than called where the framework is not.
 4. **No answer discipline.** Nothing says whether a request is idempotent, how long
    it may take, or what a call in flight does when the peer dies
    (`GenServer.call` to a dead remote pid exits with `:noproc`), so every caller

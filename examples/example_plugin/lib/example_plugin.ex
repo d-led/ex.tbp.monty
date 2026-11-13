@@ -30,14 +30,16 @@ defmodule ExamplePlugin do
   `example_plugin.spiral_scan`, `example_plugin.evidence_threshold`,
   `example_plugin.10simobj_surf_agent_one_episode`.
 
-  ## Why they ask for nothing (`needs: []`)
+  ## Why they ask for the framework (`needs: [:monty]`)
 
-  `needs` names the tags the node that serves a plugin has to carry. This host
-  runs the Monty framework — the whole node is that — but a plugin host's tags
-  are derived from what it *offers* (`MontyPlugin.Registry.identity/0` derives
-  `plugin` and `plugin:<kind>` and nothing else), so `monty` is a tag the studio
-  writes about itself and this node cannot claim. Asking for it would make every
-  plugin here unofferable to the only node that runs it.
+  `needs` names the tags the node that serves a plugin has to carry, and every
+  plugin here is built from the framework's own modules: a ported policy, a
+  ported learning module, an experiment that composes the framework's configs.
+  `:monty` is therefore what they call, and this host carries it —
+  `ex_tbp_monty_core` is a dependency, so `MontyPlugin.Capabilities.carried/0`
+  publishes `monty` beside the `plugin` tags the registry derives. Until that
+  package function existed the host could not say it, the honest answer was `[]`,
+  and the studio had no way to tell this node from one without the framework.
 
   ## What it proves
 

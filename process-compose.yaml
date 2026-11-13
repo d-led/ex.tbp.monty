@@ -48,7 +48,10 @@ version: "0.5"
 # plugin host fetches its own packages, as anything else would.
 #
 # It joins with the same secret and the seeds, and Settings → Nodes files it under
-# **Ex.Monty.Plugin nodes** with the tags it derived from what it registered. Its
+# **Ex.Monty.Plugin nodes** with the tags it derived from what it registered and
+# what it carries — `MontyPlugin.Capabilities` reports `monty` here because
+# `ex_tbp_monty_core` is one of its dependencies, which is what the plugins'
+# `needs: [:monty]` is checked against. Its
 # name is on the `elixir` command line because a VM cannot be renamed after it
 # starts; what it joins is the environment, which is why it can start before the
 # nodes it wants and still arrive.

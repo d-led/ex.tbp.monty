@@ -47,7 +47,7 @@ defmodule ExamplePlugin.SurfaceStepper do
       "kind" => :motor_policy,
       "version" => ExamplePlugin.version(),
       "placement" => :anywhere,
-      "needs" => []
+      "needs" => [:monty]
     }
   end
 

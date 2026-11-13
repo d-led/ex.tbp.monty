@@ -45,7 +45,7 @@ defmodule ExamplePlugin.LearningModule do
       "kind" => :learning_module,
       "version" => ExamplePlugin.version(),
       "placement" => :anywhere,
-      "needs" => []
+      "needs" => [:monty]
     }
   end
 

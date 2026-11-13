@@ -36,8 +36,15 @@ process-compose up
 named `example_plugin@127.0.0.1`, with the same cluster secret and the same
 seeds. Open <http://localhost:4001/settings>: **Settings → Nodes** puts the two
 studio nodes under *Ex.Monty nodes* and this one under *Ex.Monty.Plugin nodes*,
-with the tags `plugin`, `plugin:experiment`, `plugin:learning_module` and
-`plugin:motor_policy` — the tags are what it offers, not what somebody declared.
+with the tags `plugin`, `plugin:experiment`, `plugin:learning_module`,
+`plugin:motor_policy` and `monty`. The first four are what it offers, read from
+the registry; `monty` is what it carries — `ex_tbp_monty_core` is on this node's
+code path, and a plugin's `needs` (`[:monty]`, below) is answered against that
+half of the answer.
+
+A host on an `ex_monty_plugin` older than 0.1.2 published only the plugin tags,
+so it carries nothing a `needs` could be checked against and the studio refuses
+these plugins instead of calling them where the framework is not.
 
 The CAD server's MCP tools read the same registry, so from a node of that
 application in the same cluster:

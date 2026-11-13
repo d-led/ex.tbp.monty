@@ -24,12 +24,18 @@ defmodule ExamplePlugin.DescriptionTest do
         assert unquote(plugin).describe()["placement"] == :anywhere
       end
 
-      # `needs` is what the node that serves the plugin has to carry, and a
-      # plugin host's tags come from what it offers — not from the framework it
-      # runs. Asking for `:monty` would make this plugin unusable by the only
-      # node that can serve it.
-      test "asks nothing of the node that serves it, because that node cannot say" do
-        assert unquote(plugin).describe()["needs"] == []
+      # `needs` is what the node that serves the plugin has to carry. Every
+      # plugin here is built from the framework's own modules — a ported policy,
+      # a ported learning module, an experiment that composes the framework's
+      # configs — so `:monty` is the honest answer. It is also the answer this
+      # application can keep: `ex_tbp_monty_core` is a dependency, and a host
+      # publishes the packages on its code path as tags
+      # (`MontyPlugin.Capabilities.carried/0`, `ex_monty_plugin` 0.1.2). A
+      # deployment whose lock is older than that package has a host that cannot
+      # say what it carries, and the studio refuses these on purpose rather than
+      # calling a policy on a node without the framework.
+      test "asks for the framework it is made of" do
+        assert unquote(plugin).describe()["needs"] == [:monty]
       end
     end
   end
