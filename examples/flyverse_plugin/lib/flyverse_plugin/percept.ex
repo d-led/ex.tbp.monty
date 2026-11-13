@@ -45,17 +45,19 @@ defmodule FlyversePlugin.Percept do
   end
 
   def image(observations, agent_id, nil) do
-    with {:ok, agent} when is_map(agent) <- Map.fetch(observations || %{}, agent_id) do
-      candidates = @preferred ++ (Map.keys(agent) -- @preferred)
+    case Map.fetch(observations || %{}, agent_id) do
+      {:ok, agent} when is_map(agent) ->
+        candidates = @preferred ++ (Map.keys(agent) -- @preferred)
 
-      Enum.find_value(candidates, no_image(agent_id), fn sensor_id ->
-        case depth(observations, agent_id, sensor_id) do
-          {:ok, rows} -> {:ok, {sensor_id, rows}}
-          {:error, _sentence} -> nil
-        end
-      end)
-    else
-      _no_agent -> no_image(agent_id)
+        Enum.find_value(candidates, no_image(agent_id), fn sensor_id ->
+          case depth(observations, agent_id, sensor_id) do
+            {:ok, rows} -> {:ok, {sensor_id, rows}}
+            {:error, _sentence} -> nil
+          end
+        end)
+
+      _no_agent ->
+        no_image(agent_id)
     end
   end
 

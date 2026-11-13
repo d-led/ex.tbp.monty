@@ -17,8 +17,8 @@ defmodule ExamplePlugin.Policy do
 
   @behaviour Monty.Frameworks.Models.MotorPolicies.MotorPolicy
 
-  alias Monty.Frameworks.Actions.{LookDown, LookUp, TurnLeft, TurnRight}
   alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
+  alias Monty.Frameworks.Actions.{LookDown, LookUp, TurnLeft, TurnRight}
   alias Monty.Frameworks.Models.MotorPolicies.{MotorPolicy, NaiveScanPolicy}
 
   @enforce_keys [:scan, :sensor_id]

@@ -137,16 +137,27 @@ jobs:
       - run: scripts/build-nifs.sh
       - run: mix lint
 
-  # `examples/example_plugin` is a project of its own, with its own lockfile, and
-  # it is the one thing here that holds the plugin contract against the published
-  # packages rather than against this tree. A job of its own, so that a failure
-  # names the example instead of appearing inside a quarter of the suite.
+  # The examples are projects of their own, with their own lockfiles, and one of
+  # them is the one thing here that holds the plugin contract against the published
+  # packages rather than against this tree. A job each, so that a failure names the
+  # example instead of appearing inside a quarter of the suite — and both of them,
+  # because an example nobody builds is an example that has stopped being true.
+  #
+  # Their *sources* are linted by the `lint` job: `examples/*/lib` and
+  # `examples/*/test` are in `.credo.exs`'s `files.included`. What is here is the
+  # part lint cannot see — that they compile against their own lockfiles, are
+  # formatted by their own `.formatter.exs`, and pass their own tests.
   example:
-    name: example plugin
+    name: example ${{ matrix.example }}
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
     # The dependency that carries the NIF is compiled here, which is most of it.
     timeout-minutes: 20
+    strategy:
+      # One example failing is not a reason to hide the other one's answer.
+      fail-fast: false
+      matrix:
+        example: [example_plugin, flyverse_plugin]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -160,21 +171,21 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            examples/example_plugin/deps
-            examples/example_plugin/_build
-          key: ${{ runner.os }}-example-${{ hashFiles('examples/example_plugin/mix.lock') }}
-          restore-keys: ${{ runner.os }}-example-
+            examples/${{ matrix.example }}/deps
+            examples/${{ matrix.example }}/_build
+          key: ${{ runner.os }}-${{ matrix.example }}-${{ hashFiles(format('examples/{0}/mix.lock', matrix.example)) }}
+          restore-keys: ${{ runner.os }}-${{ matrix.example }}-
 
       # The example's dependency compiles a NIF, so this runner needs Rust.
       - run: scripts/install-rust.sh
       - run: mix deps.get
-        working-directory: examples/example_plugin
+        working-directory: examples/${{ matrix.example }}
       - run: mix compile --warnings-as-errors
-        working-directory: examples/example_plugin
+        working-directory: examples/${{ matrix.example }}
       - run: mix format --check-formatted
-        working-directory: examples/example_plugin
+        working-directory: examples/${{ matrix.example }}
       - run: mix test
-        working-directory: examples/example_plugin
+        working-directory: examples/${{ matrix.example }}
 
   # `mix test --partitions 4` hands each runner a slice of the test *files*, the
   # only split that asks nothing of the tests themselves. A partition sees a

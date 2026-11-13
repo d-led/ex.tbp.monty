@@ -24,8 +24,8 @@ defmodule ExamplePlugin.SurfaceStepper do
 
   @behaviour Monty.Frameworks.Models.MotorPolicies.MotorPolicy
 
-  alias Monty.Frameworks.Actions.{MoveForward, MoveTangentially, OrientHorizontal, OrientVertical}
   alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
+  alias Monty.Frameworks.Actions.{MoveForward, MoveTangentially, OrientHorizontal, OrientVertical}
   alias Monty.Frameworks.Models.MotorPolicies.{MotorPolicy, SurfacePolicyCurvatureInformed}
 
   @enforce_keys [:policy]

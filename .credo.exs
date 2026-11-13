@@ -3,8 +3,13 @@
     %{
       name: "default",
       files: %{
-        included: ["lib/", "mix_tasks/", "test/"],
-        excluded: [~r"/_build/", ~r"/deps/"]
+        # The examples are code this repository ships and points at, and one of
+        # them is the only thing here that holds the plugin contract against the
+        # published packages. A project of its own, with its own lockfile, but
+        # linted with everything else: a demonstration that would fail the gate
+        # is a demonstration of the wrong thing.
+        included: ["lib/", "mix_tasks/", "test/", "examples/*/lib/", "examples/*/test/"],
+        excluded: [~r"/_build/", ~r"/deps/", ~r"/native/"]
       },
       strict: true,
       color: true,
