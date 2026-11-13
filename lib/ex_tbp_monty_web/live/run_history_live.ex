@@ -755,8 +755,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       chart_base: chart_base,
       keeping: Map.get(socket.assigns, :keeping),
       # Read once, when the page opens: it is a setting a person changes, not a
-      # value to ask the database for on every tick of a live run.
-      refresh_ms: Monty.Studio.Settings.get("run_refresh_ms")
+      # value to ask the database for on every tick of a live run — and this
+      # pipeline runs on every step, so `Map.get_lazy` is what makes that once.
+      refresh_ms:
+        Map.get_lazy(socket.assigns, :refresh_ms, fn ->
+          Monty.Studio.Settings.get("run_refresh_ms")
+        end)
     )
   end
 

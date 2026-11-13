@@ -429,6 +429,13 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       # that certainly happens, so a wrong event name cannot pass for "no reads".
       assert count_queries(fn -> RunHistory.head(run.id) end) > 0
 
+      # The page's own poll reads the record by design — a worker that died must be
+      # noticed — and it fires two seconds after the page starts following a run.
+      # Taken here, before the measurement, so that a slow test cannot have it
+      # arrive inside the window and be counted as a step's cost.
+      send(view.pid, :show_poll)
+      _ = :sys.get_state(view.pid)
+
       count =
         count_queries(fn ->
           publish(run.id, 2)
