@@ -343,12 +343,16 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   # Each part, its state, and the node that has it — the one question a run's own
-  # row cannot answer once a part may be performed elsewhere.
+  # row cannot answer once a part may be performed elsewhere — and how many steps
+  # it took when it took any: a part that ended at 68 of the 70 it was given is
+  # the difference a reader is looking for, and a part that has not started says
+  # nothing rather than "0 step(s)".
   defp division_title(parts, names) do
     Enum.map_join(parts, " · ", fn part ->
       where = if is_binary(part.node), do: " on #{node_name(names, part.node)}", else: ""
+      took = if part.steps > 0, do: ", #{part.steps} step(s)", else: ""
 
-      "part #{part.part + 1}: #{part.status}#{where}"
+      "part #{part.part + 1}: #{part.status}#{where}#{took}"
     end)
   end
 

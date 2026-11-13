@@ -170,9 +170,12 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       [badge] = LazyHTML.query(title, "#run-division") |> Enum.to_list()
 
       assert LazyHTML.attribute(badge, "title") |> List.first() =~
-               "part 1: finished on node1_127.0.0.1"
+               "part 1: finished on node1_127.0.0.1, 12 step(s)"
 
+      # A part nobody has picked up has no steps to report, and "0 step(s)" would
+      # read as a part that ran and did nothing.
       assert LazyHTML.attribute(badge, "title") |> List.first() =~ "part 2: queued"
+      refute LazyHTML.attribute(badge, "title") |> List.first() =~ "part 2: queued,"
     end
 
     test "is not drawn for a run that was not divided", %{conn: conn, run: run} do
