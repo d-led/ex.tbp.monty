@@ -36,6 +36,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Studio.Finding
   alias Monty.Studio.Learned
   alias Monty.Studio.Memory
+  alias Monty.Studio.RemotePolicy
 
   # What Monty's simulator sees across, and so what `DepthTo3DLocations`
   # inverts. Monty's agents take a resolution and a zoom and no field of view.
@@ -55,6 +56,10 @@ defmodule Monty.Studio.Setup do
             scene: %{agent: nil, sensors: %{}, objects: []},
             motor_system: nil,
             motor_system_config: %{},
+            # A policy another node offers, when this node was told to use one
+            # (`Monty.Studio.RemotePolicy`). `nil` is the config's own policy,
+            # which is every node that does not say otherwise.
+            remote_policy: nil,
             transforms: [],
             attention_system: nil,
             monty_args: %{},
@@ -191,6 +196,7 @@ defmodule Monty.Studio.Setup do
       scene: scene(config),
       motor_system: motor_system(monty_config),
       motor_system_config: Map.get(monty_config, "motor_system_config", %{}),
+      remote_policy: remote_policy(),
       transforms: transforms(config),
       positioning: get_in(config, ["eval_env_interface_args", "positioning_procedures"]) || [],
       object_names: object_names(config),
@@ -288,6 +294,16 @@ defmodule Monty.Studio.Setup do
   # `||`, not a default argument: a key that exists and is nil is "nothing
   # configured", and `Application.get_env/3` would hand that nil on as a world.
   defp configured_world, do: Application.get_env(:ex_tbp_monty, :world_simulator) || :mujoco
+
+  # Resolved when the setup is built, not when the first step asks: a node told to
+  # use a policy nobody offers is a run that must not start, and a finding found
+  # after the world is open is a finding too late.
+  defp remote_policy do
+    case RemotePolicy.configured() do
+      nil -> nil
+      name -> RemotePolicy.find(name)
+    end
+  end
 
   defp resolution_findings(false), do: []
 
@@ -553,6 +569,18 @@ defmodule Monty.Studio.Setup do
   # The body is the config's, when every class it names is ported: the motor
   # system, the selector and every policy. Otherwise the stand-in drives, which
   # moves the agent and leaves the percepts to the learning modules.
+  #
+  # A node told to use another node's policy (`MONTY_REMOTE_POLICY`) has a body
+  # that is the plugin's, and the config's motor system is then not built at all:
+  # the policy that would have driven is not the policy this run is of.
+  defp motor_spec(%__MODULE__{remote_policy: {:ok, policy}}) do
+    {Monty.Frameworks.Models.MotorSystem, Monty.Frameworks.Models.MotorSystem.new(policy)}
+  end
+
+  # A node told to use a policy nobody offers must not quietly drive with its
+  # own: the run would wear an experiment's name and be a different run.
+  defp motor_spec(%__MODULE__{remote_policy: {:error, why}}), do: raise(ArgumentError, why)
+
   defp motor_spec(%__MODULE__{motor_system_config: config}) when map_size(config) > 0 do
     if Monty.Config.Target.implemented?(config) do
       {Monty.Frameworks.Models.MotorSystem,

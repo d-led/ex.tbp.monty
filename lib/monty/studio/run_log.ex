@@ -453,9 +453,18 @@ defmodule Monty.Studio.RunLog do
           # page that started it.
           "parallel" => parallel
         }
+        |> Map.merge(policy_input(opened.setup))
         |> Map.merge(part_inputs(part))
     }
   end
+
+  # A run whose body came from another node says so: the version is the whole
+  # point of asking a plugin what it is, and a reader of a finished run has to be
+  # able to tell two decision-makers apart.
+  defp policy_input(%Setup{remote_policy: {:ok, policy}}),
+    do: %{"motor_policy" => Monty.Studio.RemotePolicy.origin(policy)}
+
+  defp policy_input(%Setup{}), do: %{}
 
   defp part_inputs(part) when map_size(part) == 0, do: %{}
 

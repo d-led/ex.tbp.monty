@@ -26,13 +26,26 @@ node with no transport of our own. Placement vocabulary is in the description
 (`:anywhere` / `:owner_only`) and `lookup/3` answers "on that node" with an error
 that names the nodes that do offer it.
 
+**A motor policy is called once per step.** `Monty.Studio.RemotePolicy` is a
+`MotorPolicySelector` whose policy is a process on the node offering it: the six
+arguments of `call/6` go over `GenServer.call` as
+`{:call, ctx, observations, state, percept, goals}`, the answer is
+`{:ok, %MotorPolicyResult{}}`, and `:reset` and `:state_dict` are the other two
+requests. The policy struct never crosses — the process on the plugin's node _is_
+the state — so a policy that remembers where it was being walked remembers it
+there. `examples/example_plugin` is the plugin's half of that shape; the studio
+picks it up when the node was started with `MONTY_REMOTE_POLICY=example_scan`,
+and the run's record then reads
+`motor_policy: example_scan@0.1.0 on example_plugin@127.0.0.1`, so a run whose
+actions came from another node says so.
+
 ## What is missing before a plugin can be _called_ as intended
 
-1. **There is no call contract.** `MontyPlugin` defines `describe/0` and nothing
-   else. A caller that does not know the plugin's own message shape cannot ask it
-   anything, so "a run is assembled from modules" holds for discovery and stops
-   there. The example plugin says the same thing in its own moduledoc: a learning
-   module is advertised, not routed.
+1. **The call contract is a convention, not a package callback.** `MontyPlugin`
+   defines `describe/0` and nothing else, so the message shape above is agreed by
+   two modules in this repository rather than declared by the package. A second
+   caller would have to be told the shape, which is the reason to put it in the
+   package.
 2. **`placement` is a claim, not a check.** `:owner_only` says a call has to reach
    the node holding the state; nothing refuses a call that reaches a copy which
    cannot serve, and `lookup/2` will hand out exactly such a copy. The caller is
@@ -42,9 +55,11 @@ that names the nodes that do offer it.
 4. **No answer discipline.** Nothing says whether a request is idempotent, how long
    it may take, or what a call in flight does when the peer dies
    (`GenServer.call` to a dead remote pid exits with `:noproc`), so every caller
-   invents its own answer.
-5. **The studio never calls one.** Today the only plugin fact a studio node reads
-   is `identity/0`.
+   invents its own answer. `RemotePolicy` invents one: a 5 s timeout, and an exit
+   that becomes an `ArgumentError` naming the policy and the node it stopped on.
+5. **Only a motor policy is called.** A learning module is still advertised and
+   not routed, and an experiment offered by a plugin is a description a page can
+   read rather than a run somebody can start.
 
 ## The loop rules
 

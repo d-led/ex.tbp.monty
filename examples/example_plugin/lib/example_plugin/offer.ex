@@ -2,17 +2,18 @@ defmodule ExamplePlugin.Offer do
   @moduledoc """
   The process one plugin is, and the one answer the contract asks of it.
 
-  `MontyPlugin.Registry` reaches a plugin by `:pg` and then asks it one question
-  — `:describe` — so a plugin with nothing to keep between calls is still a
-  process, and this is its whole body. The description is checked **at boot**:
-  a plugin that names itself unusably stops the application instead of being
-  offered as though it were a choice, which is the difference between a failed
-  start and a cluster that lists something nobody can call.
+  `MontyPlugin.Registry` reaches a plugin by `:pg` and asks it `:describe`; a
+  motor policy is also *called*, once per step, from whichever node is running
+  the experiment (`MontyPlugin` on kinds). So this process is both: the
+  description a cluster asks for, and — for a plugin that has a decision in it —
+  the place that decision lives.
 
-  Nothing here knows which plugin it holds: the module is the state, and
-  `describe/0` is the only thing it has to define. A plugin with work to do
-  beside its description keeps that work in its own process and hands this one
-  the description to answer with.
+  That is the whole reason a policy is a process rather than a module the caller
+  compiles in: the state belongs here. A policy that remembers where it was being
+  walked remembers it on the plugin's node, and the caller holds a pid.
+
+  The description is checked **at boot**: a plugin that names itself unusably
+  stops the application instead of being offered as though it were a choice.
   """
 
   use GenServer
@@ -38,12 +39,48 @@ defmodule ExamplePlugin.Offer do
           "#{description["version"]} (#{description["placement"]})"
       )
 
-      {:ok, plugin}
+      {:ok, %{plugin: plugin, state: initial_state(plugin)}}
     else
       {:error, reason} -> {:stop, "#{inspect(plugin)} cannot be offered: #{reason}"}
     end
   end
 
   @impl true
-  def handle_call(:describe, _from, plugin), do: {:reply, plugin.describe(), plugin}
+  def handle_call(:describe, _from, %{plugin: plugin} = offer),
+    do: {:reply, plugin.describe(), offer}
+
+  # A motor policy is called once per step with the framework's six arguments and
+  # answers the result and itself. The result crosses the cluster; the policy does
+  # not — it is this process's state, which is why the next step starts from where
+  # the last one stopped.
+  def handle_call(
+        {:call, ctx, observations, state, percept, goals},
+        _from,
+        %{plugin: plugin} = offer
+      ) do
+    if function_exported?(plugin, :call, 6) do
+      {result, policy} =
+        plugin.call(offer.state, ctx, observations, state, percept, List.first(goals))
+
+      {:reply, {:ok, result}, %{offer | state: policy}}
+    else
+      {:reply, {:error, "#{inspect(plugin)} is not a motor policy and decides nothing"}, offer}
+    end
+  end
+
+  def handle_call(:reset, _from, %{plugin: plugin} = offer),
+    do: {:reply, :ok, %{offer | state: initial_state(plugin)}}
+
+  def handle_call(:state_dict, _from, %{plugin: plugin} = offer) do
+    recorded =
+      if function_exported?(plugin, :state_dict, 1), do: plugin.state_dict(offer.state), else: %{}
+
+    {:reply, recorded, offer}
+  end
+
+  # A policy's first state is what its own constructor makes. A plugin of another
+  # kind keeps nothing between calls, so there is nothing to build.
+  defp initial_state(plugin) do
+    if function_exported?(plugin, :new, 0), do: plugin.new(), else: nil
+  end
 end
