@@ -153,22 +153,23 @@ mutated. What follows from that, and what looks wrong upstream, is in
 
 ## Docs
 
-| Doc                                                          | Answers                                                              |
-| ------------------------------------------------------------ | -------------------------------------------------------------------- |
-| [docs/features.md](docs/features.md)                         | what works, and what proves it                                       |
-| [docs/architecture.md](docs/architecture.md)                 | what happens in one timestep?                                        |
-| [docs/module-map.md](docs/module-map.md)                     | where is that Python file here?                                      |
-| [docs/from-monty.md](docs/from-monty.md)                     | what comes from Monty, where it lands, and the task that writes it   |
-| [docs/config-compatibility.md](docs/config-compatibility.md) | which Hydra features are implemented, and how far parity goes        |
-| [docs/validation.md](docs/validation.md)                     | what has been compared with Monty, and how closely                   |
-| [docs/monty-differences.md](docs/monty-differences.md)       | every deliberate difference, and what looks wrong upstream           |
-| [docs/simulator-port.md](docs/simulator-port.md)             | where the world lives, and what is still Python                      |
-| [docs/developers.md](docs/developers.md)                     | how do I work on this?                                               |
-| [docs/container.md](docs/container.md)                       | how do I run the image? every variable, the volumes, what it reports |
-| [docs/desktop.md](docs/desktop.md)                           | how do I open this as an app? the window, the folder it writes to    |
-| [docs/mcp.md](docs/mcp.md)                                   | `POST /mcp` — ask this app about Monty's docs, roadmap and code      |
-| [docs/readiness.md](docs/readiness.md)                       | which experiments run here, and what each missing class unblocks     |
-| [docs/roadmap.md](docs/roadmap.md)                           | the order the rest of Monty arrives in                               |
+| Doc                                                          | Answers                                                               |
+| ------------------------------------------------------------ | --------------------------------------------------------------------- |
+| [docs/features.md](docs/features.md)                         | what works, and what proves it                                        |
+| [docs/architecture.md](docs/architecture.md)                 | what happens in one timestep?                                         |
+| [docs/module-map.md](docs/module-map.md)                     | where is that Python file here?                                       |
+| [docs/from-monty.md](docs/from-monty.md)                     | what comes from Monty, where it lands, and the task that writes it    |
+| [docs/config-compatibility.md](docs/config-compatibility.md) | which Hydra features are implemented, and how far parity goes         |
+| [docs/validation.md](docs/validation.md)                     | what has been compared with Monty, and how closely                    |
+| [docs/monty-differences.md](docs/monty-differences.md)       | every deliberate difference, and what looks wrong upstream            |
+| [docs/simulator-port.md](docs/simulator-port.md)             | where the world lives, and what is still Python                       |
+| [docs/developers.md](docs/developers.md)                     | how do I work on this?                                                |
+| [docs/container.md](docs/container.md)                       | how do I run the image? every variable, the volumes, what it reports  |
+| [docs/cluster.md](docs/cluster.md)                           | how do I run several nodes, what do they share, and what can each do? |
+| [docs/desktop.md](docs/desktop.md)                           | how do I open this as an app? the window, the folder it writes to     |
+| [docs/mcp.md](docs/mcp.md)                                   | `POST /mcp` — ask this app about Monty's docs, roadmap and code       |
+| [docs/readiness.md](docs/readiness.md)                       | which experiments run here, and what each missing class unblocks      |
+| [docs/roadmap.md](docs/roadmap.md)                           | the order the rest of Monty arrives in                                |
 
 ## Licence
 
