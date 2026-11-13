@@ -27,7 +27,7 @@ defmodule Monty.Studio.PluginExperiment do
   own one — not this node's environment.
   """
 
-  alias Monty.Studio.{Diagram, RemotePolicy, Setup}
+  alias Monty.Studio.{Diagram, Failure, RemotePolicy, Setup}
 
   # The kind this module asks for, and the request a definition is read with.
   @kind :experiment
@@ -78,11 +78,11 @@ defmodule Monty.Studio.PluginExperiment do
     case GenServer.call(pid, @read_definition, @timeout) do
       {:ok, %{} = definition} -> {:ok, definition}
       {:error, why} -> {:error, "the experiment #{inspect(name)} cannot be read: #{why}"}
-      other -> {:error, "the experiment #{inspect(name)} answered #{inspect(other)}"}
+      other -> {:error, "the experiment #{inspect(name)} answered #{Failure.reply(other)}"}
     end
   catch
     :exit, reason ->
-      {:error, "the experiment #{inspect(name)} stopped answering: #{inspect(reason)}"}
+      {:error, "the experiment #{inspect(name)} stopped answering: #{Failure.lost(reason)}"}
   end
 
   defp base(name, %{"base" => base}) when is_binary(base) do

@@ -651,16 +651,24 @@ defmodule Monty.Studio.Jobs.Run do
   defp collect({:ok, {:error, part, reason, steps}}, record) do
     say(
       record.id,
-      "part #{part.index + 1} of #{part.of} failed after #{steps} step(s): #{inspect(reason)}"
+      "part #{part.index + 1} of #{part.of} failed after #{steps} step(s): #{said(reason)}"
     )
 
     record
   end
 
   defp collect({:exit, reason}, record) do
-    say(record.id, "a part exited: #{inspect(reason)}")
+    say(record.id, "a part exited: #{said(reason)}")
     record
   end
+
+  # A reason, as the run's own log says it. `Failure` keeps a crash as a sentence
+  # with the traceback beside it, and the sentence is the half that belongs in a
+  # transcript a person reads — pasting the pair here put a whole stack into the
+  # log the page shows. The answers only a division gives are tags (a node, a
+  # status, a position), which is the one thing `inspect` is good for.
+  defp said(%{"reason" => sentence}) when is_binary(sentence), do: sentence
+  defp said(reason), do: inspect(reason)
 
   # The one transcript a run of several parts leaves: part one's steps, then part
   # two's, and so on — which is the order Monty's dashboard draws its sections in,

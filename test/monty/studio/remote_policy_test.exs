@@ -110,6 +110,31 @@ defmodule Monty.Studio.RemotePolicyTest do
                  end
   end
 
+  # A run's page shows the sentence its failure left, so the sentence is a reason
+  # and not the request that was being made: a `:call` exit holds the policy and
+  # the observations it was deciding on, and a reader of a run is not debugging
+  # Elixir.
+  test "a policy that stopped answering says why in words, not in terms", %{policy: policy} do
+    stop_supervised!(Provider)
+
+    exception =
+      assert_raise ArgumentError, fn -> RemotePolicy.call(policy, %{}, nil, %{}, nil, []) end
+
+    message = Exception.message(exception)
+
+    assert message =~ "its process is gone"
+    refute message =~ "GenServer"
+    refute message =~ "#PID"
+    refute message =~ "RemotePolicy"
+  end
+
+  test "a policy nobody is left to start says why in words", %{policy: policy} do
+    stop_supervised!(Provider)
+
+    assert {:error, sentence} = RemotePolicy.start(%{policy | policy: nil})
+    assert sentence =~ "stopped answering: its process is gone"
+  end
+
   test "a run records where its policy came from", %{policy: policy} do
     assert RemotePolicy.origin(policy) == "example_scan@0.1.0 on #{node()}"
   end

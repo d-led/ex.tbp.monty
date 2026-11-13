@@ -62,6 +62,7 @@ defmodule Monty.Studio.RemotePolicy do
   alias ExTbpMonty.Cluster.Nodes
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
   alias Monty.Frameworks.Models.MotorPolicySelectors.MotorPolicySelector
+  alias Monty.Studio.Failure
 
   # Named as an atom rather than linked: see the moduledoc.
   @registry Module.concat(["MontyPlugin", "Registry"])
@@ -156,12 +157,12 @@ defmodule Monty.Studio.RemotePolicy do
     case GenServer.call(remote.pid, {:new, []}, @timeout) do
       {:ok, policy} -> {:ok, %{remote | policy: policy}}
       {:error, why} -> {:error, "#{remote.name} on #{remote.node} could not be built: #{why}"}
-      other -> {:error, "#{remote.name} on #{remote.node} answered #{inspect(other)}"}
+      other -> {:error, "#{remote.name} on #{remote.node} answered #{Failure.reply(other)}"}
     end
   catch
     :exit, reason ->
       {:error,
-       "the policy #{remote.name} on #{remote.node} stopped answering: #{inspect(reason)}"}
+       "the policy #{remote.name} on #{remote.node} stopped answering: #{Failure.lost(reason)}"}
   end
 
   def start(%__MODULE__{} = already_started), do: {:ok, already_started}
@@ -247,12 +248,12 @@ defmodule Monty.Studio.RemotePolicy do
     case GenServer.call(remote.pid, call_args, @timeout) do
       {:ok, %MotorPolicyResult{} = result, policy} -> {result, %{remote | policy: policy}}
       {:error, why} -> raise ArgumentError, "#{remote.name} did not decide: #{why}"
-      other -> raise ArgumentError, "#{remote.name} answered #{inspect(other)}"
+      other -> raise ArgumentError, "#{remote.name} answered #{Failure.reply(other)}"
     end
   catch
     :exit, reason ->
       raise ArgumentError,
-            "the policy #{remote.name} on #{remote.node} stopped answering: #{inspect(reason)}"
+            "the policy #{remote.name} on #{remote.node} stopped answering: #{Failure.lost(reason)}"
   end
 
   @doc "Starts the next episode on the plugin's side: its policy, reset."
@@ -261,12 +262,12 @@ defmodule Monty.Studio.RemotePolicy do
     case GenServer.call(remote.pid, {:reset, remote.policy}, @timeout) do
       {:ok, policy} -> %{remote | policy: policy}
       {:error, why} -> raise ArgumentError, "#{remote.name} could not be reset: #{why}"
-      other -> raise ArgumentError, "#{remote.name} answered #{inspect(other)}"
+      other -> raise ArgumentError, "#{remote.name} answered #{Failure.reply(other)}"
     end
   catch
     :exit, reason ->
       raise ArgumentError,
-            "the policy #{remote.name} on #{remote.node} could not be reset: #{inspect(reason)}"
+            "the policy #{remote.name} on #{remote.node} could not be reset: #{Failure.lost(reason)}"
   end
 
   @doc "What the policy the run holds recorded."
@@ -276,13 +277,13 @@ defmodule Monty.Studio.RemotePolicy do
       case GenServer.call(remote.pid, {:state_dict, remote.policy}, @timeout) do
         {:ok, recorded} -> recorded
         {:error, why} -> raise ArgumentError, "#{remote.name} could not report: #{why}"
-        other -> raise ArgumentError, "#{remote.name} answered #{inspect(other)}"
+        other -> raise ArgumentError, "#{remote.name} answered #{Failure.reply(other)}"
       end
 
     Map.merge(%{policy: remote.name, version: remote.version, node: remote.node}, recorded)
   catch
     :exit, reason ->
       raise ArgumentError,
-            "the policy #{remote.name} on #{remote.node} could not report: #{inspect(reason)}"
+            "the policy #{remote.name} on #{remote.node} could not report: #{Failure.lost(reason)}"
   end
 end

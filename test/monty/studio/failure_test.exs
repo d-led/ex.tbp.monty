@@ -194,4 +194,53 @@ defmodule Monty.Studio.FailureTest do
       assert stored["technical"] == "{:target_not_visible, 3}"
     end
   end
+
+  # A call to another node's process exits with the request it was making, which
+  # for a policy is the policy and the observations it was deciding on. A run's
+  # page showed exactly that as the reason it failed, so the tag is asked for by
+  # name and everything it carried is dropped.
+  describe "why a call to another process did not come back" do
+    test "a process that is gone is said as a process that is gone" do
+      reason = {:noproc, {GenServer, :call, [self(), {:call, %{answer: 42}}, 5_000]}}
+
+      assert Failure.lost(reason) ==
+               "its process is gone: the node restarted, or the plugin stopped"
+    end
+
+    test "a node that left is said as a node that left" do
+      assert Failure.lost({:nodedown, :"plugin@10.0.0.7"}) == "its node left the cluster"
+    end
+
+    test "a node that did not answer says so without the request it sat on" do
+      reason = {:timeout, {GenServer, :call, [self(), {:call, %{answer: 42}}, 5_000]}}
+
+      assert Failure.lost(reason) == "it did not answer in time"
+    end
+
+    test "an exception the call exited with keeps its own sentence, not its trace" do
+      assert Failure.lost({%RuntimeError{message: "the policy refused"}, []}) ==
+               "the policy refused"
+    end
+
+    test "a reason nothing here knows is still a sentence" do
+      assert Failure.lost({:nonsense, [1, 2, 3]}) == "it stopped without saying why"
+      assert Failure.lost(:killed) == "it was killed"
+    end
+  end
+
+  describe "what an unexpected reply was" do
+    test "a reply that carries something big is named by its tags" do
+      assert Failure.reply({:ok, DateTime.utc_now()}) == "ok, a DateTime"
+    end
+
+    test "a reply of plain values keeps its values" do
+      assert Failure.reply({:error, :busy}) == "error, busy"
+      assert Failure.reply(:ok) == "ok"
+      assert Failure.reply(%{"k" => "v"}) == "a map"
+      assert Failure.reply([1, 2]) == "a list"
+      assert Failure.reply("a sentence") == "text"
+      assert Failure.reply(42) == "42"
+      assert Failure.reply({:ok, self()}) == "ok, a value"
+    end
+  end
 end

@@ -102,6 +102,54 @@ defmodule Monty.Studio.Failure do
     do: %{"reason" => what, "technical" => technical}
 
   @doc """
+  Why a call to another process did not come back, in a sentence.
+
+  A `GenServer.call` that exits carries the request it was making, and for a
+  policy that request is the policy itself and the observations it was deciding
+  on. A sentence built by pasting that in is the dump this module exists to keep
+  out of a record — a run's page showed `stopped answering: {:noproc, {GenServer,
+  :call, [#PID<0.216.0>, {:call, %{__struct__: ...` as the reason it failed. The
+  tag says what a person can act on: a process that is gone, a node that left, a
+  node that is still thinking.
+
+  Matched on the shape the exit reason arrives in, and everything it carries is
+  dropped with it. An unknown shape still gets a sentence: the run says it does
+  not know rather than showing a term.
+  """
+  @spec lost(term()) :: String.t()
+  def lost({:noproc, _call}),
+    do: "its process is gone: the node restarted, or the plugin stopped"
+
+  def lost({:nodedown, _call}), do: "its node left the cluster"
+  def lost({:timeout, _call}), do: "it did not answer in time"
+  def lost({%{__exception__: true} = exception, _stacktrace}), do: Exception.message(exception)
+  def lost(:killed), do: "it was killed"
+  def lost(:normal), do: "it had already stopped"
+  def lost(reason) when is_atom(reason), do: "it stopped (#{reason})"
+  def lost(_reason), do: "it stopped without saying why"
+
+  @doc """
+  What an unexpected reply was, by its shape rather than its content.
+
+  The same rule as `lost/1` from the other side: a plugin's reply can carry a
+  policy, which for MuJoCo is a camera image and a step of observations. The tags
+  are what a person needs to know which message went unanswered — `ok, a
+  FlyversePlugin.Policy` says the reply came back in a shape the call does not
+  understand — and the value itself belongs nowhere near a record.
+  """
+  @spec reply(term()) :: String.t()
+  def reply(reply) when is_tuple(reply),
+    do: reply |> Tuple.to_list() |> Enum.map_join(", ", &reply/1)
+
+  def reply(%{__struct__: module}), do: "a #{inspect(module)}"
+  def reply(reply) when is_binary(reply), do: "text"
+  def reply(reply) when is_list(reply), do: "a list"
+  def reply(reply) when is_map(reply), do: "a map"
+  def reply(reply) when is_atom(reply), do: Atom.to_string(reply)
+  def reply(reply) when is_number(reply), do: to_string(reply)
+  def reply(_reply), do: "a value"
+
+  @doc """
   What stopped a run, however it reached us, in the shape a record keeps.
 
   An episode that died on a step carries the pair `crashed/3` built while the
