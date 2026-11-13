@@ -46,26 +46,18 @@ and no number on any page of a run should be read as if they were.
 Each step: nearness (`1 / depth`) per half of the image becomes a Poisson drive
 on one neuron group; the network steps 20 ms of 0.1 ms ticks in Rust; and the
 difference of the two readout spike counts, low-passed with flyverse's own 30 ms
-motor time constant, decides how the walk bends. Positive bends left, negative
-bends right, and a network with no preference still walks — five degrees of base
-turn are added to whatever the spikes asked for, so a silent connectome crawls
-its spiral instead of turning on the spot and gathering one percept for ever.
+motor time constant, decides where the sensor goes next. More spikes on the
+left means the left half of the view is nearer, so the sensor yaws that way;
+spikes on the right yaw the other; no preference at all walks straight ahead,
+because a balanced view is seeing the thing it is meant to reach and moving
+forward is what closes the gap.
 
-The action is `OrientHorizontal`, the surf agent's own, because an action a
-world does not implement is one it skips. Its `rotation_degrees` is the turn,
-its `left_distance` is the slide that turn is worth at this depth
-(`depth · tan θ`, Monty's own surface arithmetic) and its `forward_distance` is
-the press back to the standoff. That is the whole crawl: every step turns and
-travels, which is what a surface agent walking an object does.
-
-A step is never longer than a quarter of what the view can see. A patch with no
-relief in it is a flat table between the agent and the object, and crossing it
-at four millimetres is the long stretch at the start of a run where no theory
-has evidence, so a flat patch is crossed six times faster — but a step that is
-longer than the gap it is looking across lands *inside* what it was flying at,
-with both cameras black, which is a place a run does not come back from. So the
-crossing decelerates onto what it was flying at, and a flat patch with nothing
-in the view at all is swept instead of flown: there is nothing there to fly at.
+The action is one or the other, never both. A turn is `OrientHorizontal` with no
+slide — five degrees per step — because `TurnLeft`/`TurnRight` are the distant
+agent's actions and the surf agent a MuJoCo world hands us has no
+`actuate_turn_*` at all. A walk is `MoveForward` at four millimetres, Monty's own
+surf-agent step. That pair is what takes a sixty-step episode from the agent's
+start to a hypothesis on the object: walk while balanced, yaw while not.
 
 The rates, the gain and the action mapping are this plugin's and
 `FlyversePlugin.Policy` says so line by line. The dynamics are flyverse's. With
