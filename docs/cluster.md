@@ -138,17 +138,68 @@ answer is that it can be given only work that asks for nothing in particular.
 
 `ExTbpMonty.Cluster.Capabilities` is the vocabulary: `declared/0` (this node's),
 `offers?/2` (asked in any spelling), `by_tag/1` (tag → nodes) and `of_entry/1`.
-`ExTbpMonty.Cluster.Nodes.offering/1` is the query placement will ask: the nodes
-that offer a tag, `[]` when none does.
+`ExTbpMonty.Cluster.Nodes.offering/1` is the other direction: the nodes that
+offer a tag, `[]` when none does.
 
 Settings → Nodes shows it both ways round — a node's row carries its tags, and
 "What this cluster can do" puts each tag above the nodes that have it. The second
 direction is where a heterogeneous cluster's differences become visible: a tag
 with one node under it is a decision somebody has to make.
 
+## Where a run goes
+
+Tags are not decoration: `ExTbpMonty.Cluster.Placement` decides from them whether
+the node holding a job may perform it.
+
+A run needs `monty`, plus the world it steps when that world is not the port's
+own scene — a run recorded as MuJoCo needs `world:mujoco`, because a node
+without MuJoCo cannot step it. A run may also add tags of its own in
+`inputs.capabilities`, which is how it is pinned to a machine that has what it
+takes:
+
+```elixir
+Monty.Studio.RunHistory.start(%{
+  # ...
+  inputs: %{"capabilities" => ["gpu"]}
+})
+```
+
+Every run asked for from the studio's own page asks for nothing beyond `monty`
+and its world, because a person who has not heard of tags should not need an
+opinion about them.
+
+The worker asks three questions, in order, before it opens a world:
+
+1. **Does this node offer what the run needs?** Perform it here. A node that
+   offers a tag keeps the work, however many peers also offer it: "which node" is
+   then answered by whichever queue got there first, which is what it always was.
+2. **Does a live peer?** Put the job back (`{:snooze, 15}`) and let that peer's
+   queue take it. Nothing is opened and nothing is written: the run is still
+   `queued`, because it is.
+3. **Does nobody?** Perform it here anyway. A tag nobody declared must not hold a
+   run hostage — a cluster whose nodes are all untagged is one untagged machine,
+   and a node that runs alone cannot tell this answer from doing the work itself.
+
+The third answer is why the single-node studio is untouched: its list of nodes is
+itself, it offers `monty`, and every decision is the first question.
+
+A peer that did not answer its poll is not a place a run can go, whatever it last
+said about itself. And a job that waits does not wait forever on a node that has
+gone: the next answer is question three, and the run is performed locally.
+
+### A node that dies with a run
+
+With one runs table for the cluster, a node that dies mid-run leaves its job
+saying `executing`, and no other node will ever take it. `Oban.Lifeline` is asked
+for exactly when clustering is on (`config/runtime.exs`): a job still executing
+after ten minutes is put back in the queue for somebody else. On a node that runs
+alone nothing is configured that was not configured before — a lone node's
+longest run is never rescued out from under it.
+
 ## What is not spread yet
 
-A run is still performed by the node that owns it, and so are its parts.
+A run of several parts is still performed whole on one node — the parts are
+placed with it, never across the cluster.
 
 That is not an oversight, it is where the two hard problems are:
 

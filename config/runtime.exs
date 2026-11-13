@@ -51,6 +51,16 @@ cluster_on? = System.get_env("MONTY_CLUSTER", "false") in ~w(true 1) or cluster_
 
 config :ex_tbp_monty, :cluster, enabled: cluster_on?, seeds: cluster_seeds
 
+# A node that dies mid-run leaves its job saying `executing` in a database that
+# outlives it, and with one runs table for the cluster that is a run no other
+# node will ever take. Lifeline is the part that notices: a job still executing
+# after this long is put back for somebody else to run. It is asked for only when
+# clustering is on — a node that runs alone keeps exactly the queue it had, and a
+# run of its own is never rescued out from under it.
+if cluster_on? do
+  config :ex_tbp_monty, Oban, lifeline: [rescue_after: {10, :minutes}]
+end
+
 # A named node in a cluster keeps its own folder — its database, its runs, its own
 # output under `nodes/<its name>`; a node that runs alone keeps the one it always
 # had. Decided from the same value the line above was set from, and *here* rather

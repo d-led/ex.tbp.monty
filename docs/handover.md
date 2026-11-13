@@ -2596,6 +2596,17 @@ when clustering is on); `/runs` has a read-only "Running on other nodes" panel
 peer's own page for it); and `monty_cluster_nodes` answers an MCP client with the
 nodes, their builds and `by_capability`.
 
+**A run goes where its tags say it may.** `ExTbpMonty.Cluster.Placement` turns a
+record into needs — `monty`, `world:<its world>` when that world is not the port's
+own scene, and anything it pinned in `inputs.capabilities` — and the worker asks
+it before it opens a world: perform here if this node offers them; `{:snooze, 15}`
+if only a live peer does; perform here anyway if nobody does, which is why a lone
+node is untouched by any of it. `Oban.Lifeline` is configured only when clustering
+is on, so a job left `executing` by a node that died is put back for somebody else.
+`studio_runs.node` follows the claim rather than the asking: with one runs table
+the two differ, and the node a reader has to open for a run's steps and files is
+the node that performed it.
+
 **Four traps, all found by a test or a browser, all now pinned:**
 
 - `use Phoenix.LiveView, on_mount: [Mod]` runs _nothing_. `before_compile` builds
@@ -2628,11 +2639,11 @@ included.
 **Still open, and both are a decision rather than a fix**: (1) one runs table for
 the whole cluster (`DATABASE_URL` at one Postgres — the pages already behave) or a
 merged view over each node's file; until then a run's job lives in its own node's
-database, so the _queue_ cannot spread even though the tags that would route it
-already exist. (2) A part writes its files and publishes its steps into the memory
-of the node performing it, so a part on another node needs either a filesystem the
-owner can read or an explicit transfer of what it produced. Nothing schedules by
-tag yet, and `Nodes.offering/1` is the query waiting for that decision.
+database, so the _queue_ spreads only with a shared table, even though placement
+by tag (`Cluster.Placement`) is already there. (2) A part writes its files and
+publishes its steps into the memory of the node performing it, so a part on
+another node needs either a filesystem the owner can read or an explicit transfer
+of what it produced.
 
 One loose end from the same day, unrelated to the cluster: `RecordingEpisodeTest`
 failed once in eight full runs (21 steps against a recording of 27, the port

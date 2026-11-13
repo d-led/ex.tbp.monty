@@ -25,6 +25,7 @@ defmodule Monty.Studio.Jobs.Run do
 
   require Logger
 
+  alias ExTbpMonty.Cluster.{Nodes, Placement}
   alias Monty.Studio
 
   alias Monty.Studio.{
@@ -120,12 +121,17 @@ defmodule Monty.Studio.Jobs.Run do
 
     try do
       with {:ok, record} <- fetch(run_id),
+           :here <- my_turn(record),
            {:ok, opened} <- opened_for(record) do
         # The record says `queued` until here, because asking for a run is not
         # running it: this is the moment a worker has it in hand.
         {:ok, record} = RunHistory.mark_running(record)
         run_experiment(record, opened)
       else
+        # A peer offers what this run needs and this node does not: the job goes
+        # back to the queue for that peer's worker to take. Nothing is opened,
+        # nothing is recorded — the run is still `queued`, which is true.
+        {:wait, seconds} -> {:snooze, seconds}
         {:error, reason} -> give_up(run_id, reason)
       end
     rescue
@@ -139,6 +145,14 @@ defmodule Monty.Studio.Jobs.Run do
     after
       unregister(run_id)
     end
+  end
+
+  # Whether this node may perform the run, which on a node that runs alone is
+  # always yes: its list of nodes holds itself, it offers `monty`, and a run that
+  # asked for something nobody offers is performed here rather than waiting for
+  # a node that does not exist (`ExTbpMonty.Cluster.Placement`).
+  defp my_turn(%{inputs: inputs}) do
+    Placement.turn(Nodes.snapshot(), Placement.needs(inputs))
   end
 
   @doc """

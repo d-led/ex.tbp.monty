@@ -127,6 +127,24 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert closed.summary["outcome"] == %{"learning_module_0" => nil}
     end
 
+    # A tag is a filter on which nodes may perform a run, and a node that runs
+    # alone is the only one there is: asking for something it does not offer must
+    # not turn a run it always performed into a run that waits forever.
+    test "is performed here when nothing in the cluster offers what it asked for" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      attributes =
+        opened
+        |> RunLog.attributes(1, 0, 1, 1)
+        |> update_in([:inputs], &Map.put(&1, "capabilities", ["gpu"]))
+
+      {:ok, record} = RunHistory.start(attributes)
+      assert record.inputs["capabilities"] == ["gpu"]
+
+      assert {:ok, closed} = perform(record)
+      assert closed.status == "finished"
+    end
+
     test "steps the epochs the config asks for, and only those" do
       # The config switches training off and names fourteen evaluation epochs, so
       # what a run of it does is those fourteen and no training phase.
