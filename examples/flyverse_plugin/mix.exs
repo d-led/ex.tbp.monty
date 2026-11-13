@@ -9,6 +9,11 @@ defmodule FlyversePlugin.MixProject do
       version: @version,
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
+      # The engine is built before the Elixir side, because a `use Rustler`
+      # module is stubs until there is a library behind it — and Rustler only
+      # builds when that module is compiled, which a deleted artefact does not
+      # cause (`mix flyverse_plugin.engine` says why).
+      aliases: [compile: ["flyverse_plugin.engine", "compile"]],
       deps: deps()
     ]
   end

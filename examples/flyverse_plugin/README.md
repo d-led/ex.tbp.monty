@@ -47,6 +47,14 @@ mix flyverse_plugin.pack /tmp/flyverse-demo
 FLYVERSE_PACK=/tmp/flyverse-demo mix run --no-halt
 ```
 
+`mix compile` builds the Rust engine first (`mix flyverse_plugin.engine`), so a
+Rust toolchain is the one prerequisite `mix deps.get` does not fetch. It is built
+when the library is absent or older than the crate, not on every compile — and it
+has to be that way round: `priv/native` is ignored by git, so a `git clean`
+removes the engine while `_build` still looks current, and a node whose NIF is
+missing raises `function FlyversePlugin.Native.open/1 is undefined` and offers
+nothing to the cluster. The task says so in full.
+
 That starts a node that offers both plugins to itself. To offer them to a studio,
 name the node and give it the cluster's secret and a seed — the same three
 variables `examples/example_plugin` uses:
