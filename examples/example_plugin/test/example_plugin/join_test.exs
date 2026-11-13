@@ -28,6 +28,16 @@ defmodule ExamplePlugin.JoinTest do
     assert Join.seeds() == []
   end
 
+  test "the process stays up with nothing to reach, and says so once" do
+    System.delete_env("MONTY_SEEDS")
+
+    join = start_supervised!({Join, name: :join_without_seeds})
+    # The first attempt is a message the process sends itself, so this is how the
+    # test waits for it rather than sleeping: the state is what the attempt left.
+    assert %{reached: [], seeds: []} = :sys.get_state(join)
+    refute_received {:EXIT, ^join, _reason}
+  end
+
   defp restore(nil), do: System.delete_env("MONTY_SEEDS")
   defp restore(value), do: System.put_env("MONTY_SEEDS", value)
 end

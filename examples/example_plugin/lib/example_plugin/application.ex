@@ -16,7 +16,9 @@ defmodule ExamplePlugin.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [ExamplePlugin.Join | Enum.map(ExamplePlugin.plugins(), &{ExamplePlugin.Offer, &1})]
+    children = [
+      ExamplePlugin.Join | Enum.map(ExamplePlugin.plugins(), &{ExamplePlugin.Offer, &1})
+    ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: ExamplePlugin.Supervisor)
   end

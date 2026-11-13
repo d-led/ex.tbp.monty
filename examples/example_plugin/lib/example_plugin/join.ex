@@ -39,7 +39,8 @@ defmodule ExamplePlugin.Join do
   @variable "MONTY_SEEDS"
 
   @doc false
-  def start_link(options \\ []), do: GenServer.start_link(__MODULE__, options, name: __MODULE__)
+  def start_link(options \\ []),
+    do: GenServer.start_link(__MODULE__, options, name: Keyword.get(options, :name, __MODULE__))
 
   @impl true
   def init(_options) do
@@ -50,7 +51,7 @@ defmodule ExamplePlugin.Join do
 
   @impl true
   def handle_info(:join, state) do
-    :ok = set_cookie()
+    set_cookie()
 
     reached = reach(state.seeds)
 
@@ -88,11 +89,14 @@ defmodule ExamplePlugin.Join do
   # would ignore a change that a restart was meant to apply.
   #
   # `Node.set_cookie/1` raises on a VM that was never named, and a node without a
-  # name joins nothing, so there is nothing to set.
+  # name joins nothing, so there is nothing to set. It answers `true` when it has
+  # set one, which is not a value worth matching on: the cookie is set for its
+  # effect.
   defp set_cookie do
     with true <- Node.alive?(),
          secret when secret not in [nil, ""] <- System.get_env("MONTY_CLUSTER_SECRET") do
       Node.set_cookie(atom(secret))
+      :ok
     else
       _unnamed_or_no_secret -> :ok
     end
