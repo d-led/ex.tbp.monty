@@ -42,12 +42,14 @@ defmodule Monty.Studio.RunHistoryTest do
       :ok = RunHistory.part_started(run.id, 0, "node1_127.0.0.1")
       :ok = RunHistory.part_finished(run.id, 0, 68)
       :ok = RunHistory.part_started(run.id, 1, "node2_127.0.0.1")
-      :ok = RunHistory.part_failed(run.id, 1)
+      :ok = RunHistory.part_failed(run.id, 1, 12)
 
       assert [done, broken] = RunHistory.parts(run.id)
       assert {done.status, done.node, done.steps} == {"finished", "node1_127.0.0.1", 68}
       assert %DateTime{} = done.finished_at
-      assert {broken.status, broken.node} == {"failed", "node2_127.0.0.1"}
+
+      # A part that failed took the steps it took before it did.
+      assert {broken.status, broken.node, broken.steps} == {"failed", "node2_127.0.0.1", 12}
     end
 
     # A part that the stop reached is neither finished nor failed: it did the

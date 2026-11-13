@@ -549,24 +549,24 @@ defmodule Monty.Studio.Jobs.Run do
     steps = RunStream.count(part.stream)
     ending = status_of(outcome)
 
-    # The part ends the way its own episodes ended: a stop that reached a part
-    # leaves it `stopped`, not `finished` with fewer steps than it was given.
-    if part.of > 1 do
-      case ending do
-        "finished" -> RunHistory.part_finished(record.id, part.index, steps)
-        "stopped" -> RunHistory.part_stopped(record.id, part.index, steps)
-        "failed" -> RunHistory.part_failed(record.id, part.index)
-      end
-    end
+    if part.of > 1, do: end_part(record.id, part, steps, ending)
 
     say(record.id, "part #{part.index + 1} of #{part.of} #{ending}: #{steps} step(s)")
     record
   end
 
+  # A part that failed took the steps it took before it did, and the row says so:
+  # a division whose failed part reads "0 step(s)" is a part that appears not to
+  # have started, which is the other half of what a reader is counting.
   defp collect({:ok, {:error, part, reason}}, record) do
-    if part.of > 1, do: RunHistory.part_failed(record.id, part.index)
+    steps = RunStream.count(part.stream)
+    if part.of > 1, do: RunHistory.part_failed(record.id, part.index, steps)
 
-    say(record.id, "part #{part.index + 1} of #{part.of} stopped: #{inspect(reason)}")
+    say(
+      record.id,
+      "part #{part.index + 1} of #{part.of} failed after #{steps} step(s): #{inspect(reason)}"
+    )
+
     record
   end
 
@@ -574,6 +574,18 @@ defmodule Monty.Studio.Jobs.Run do
     say(record.id, "a part exited: #{inspect(reason)}")
     record
   end
+
+  # The part's row: how it ended, and the steps it managed before it did. The
+  # part ends the way its own episodes ended, so a stop that reached a part is
+  # `stopped` rather than `finished` with fewer steps than it was given.
+  defp end_part(run_id, part, steps, "finished"),
+    do: RunHistory.part_finished(run_id, part.index, steps)
+
+  defp end_part(run_id, part, steps, "stopped"),
+    do: RunHistory.part_stopped(run_id, part.index, steps)
+
+  defp end_part(run_id, part, steps, "failed"),
+    do: RunHistory.part_failed(run_id, part.index, steps)
 
   # The one transcript a run of several parts leaves: part one's steps, then part
   # two's, and so on — which is the order Monty's dashboard draws its sections in,

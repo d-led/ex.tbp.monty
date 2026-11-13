@@ -779,14 +779,15 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
-  A part stopped without finishing.
+  A part that failed, and the steps it managed before it did.
 
-  The steps stay as they were read at the end: a part that failed at step 40 took
-  40 steps, and that is what a reader can act on.
+  A part that failed at step 40 took 40 steps, and that is what a reader can act
+  on — a row saying `failed` with no steps is a part that appears not to have
+  started.
   """
-  @spec part_failed(binary(), integer()) :: :ok
-  def part_failed(run_id, part) do
-    update_part(run_id, part, status: "failed", finished_at: now())
+  @spec part_failed(binary(), integer(), non_neg_integer()) :: :ok
+  def part_failed(run_id, part, steps) do
+    update_part(run_id, part, status: "failed", steps: steps, finished_at: now())
   end
 
   @doc """
