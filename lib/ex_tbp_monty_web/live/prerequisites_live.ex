@@ -424,7 +424,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
       "MONTY_DATA / MONTY_MODELS / MONTY_LOGS point."
   end
 
-  defp start_error(other), do: "Could not start: #{inspect(other)}"
+  defp start_error(other), do: "Could not start: #{Monty.Studio.Failure.sentence(other)}"
 
   defp status(statuses, id), do: statuses |> Map.get(id) |> then(&(&1 && &1.status))
 

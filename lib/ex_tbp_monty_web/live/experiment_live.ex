@@ -1464,7 +1464,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   defp handle_studio({:failed, %{reason: reason}}, socket) do
     socket
-    |> push(nil, "the run failed: #{inspect(reason)}", :error)
+    |> push(nil, "the run failed: #{Failure.sentence(reason)}", :error)
     |> reconcile()
     |> refresh_runs()
   end
@@ -2248,8 +2248,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
       {:error, reason} ->
         recorded =
-          "The run could not be queued."
-          |> Failure.explain(inspect(reason))
+          Failure.explain(
+            "The run could not be queued. " <> Failure.sentence(reason),
+            inspect(reason)
+          )
           |> Failure.recorded()
 
         {:ok, _closed} = RunHistory.finish(record, recorded, "failed")
@@ -2328,11 +2330,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   def handle_async(:world, {:ok, {:error, reason}}, socket) do
-    {:noreply, put_flash(socket, :error, "That world will not open: #{inspect(reason)}")}
+    {:noreply, put_flash(socket, :error, "That world will not open: #{Failure.sentence(reason)}")}
   end
 
   def handle_async(:world, {:exit, reason}, socket) do
-    {:noreply, put_flash(socket, :error, "Opening that world failed: #{inspect(reason)}")}
+    {:noreply,
+     put_flash(socket, :error, "Opening that world failed: #{Failure.sentence(reason)}")}
   end
 
   # The page's own closing line. A reconnect is a page that closed and opened

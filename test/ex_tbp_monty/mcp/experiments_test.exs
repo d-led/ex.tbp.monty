@@ -40,9 +40,14 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
       assert is_integer(parallel)
     end
 
-    test "is an error for a name that is not an experiment" do
+    # What the caller reads is a tool's answer, so it says what went wrong and
+    # never what the code looks like inside: `{:error, {:noproc, …}}` pasted in
+    # is the dump the studio's `Failure` exists to keep out of an answer.
+    test "is an error for a name that is not an experiment, in words" do
       assert {:error, message} = Experiments.describe("no/such/experiment")
       assert message =~ "no/such/experiment"
+      refute message =~ "{"
+      refute message =~ "~U["
     end
   end
 
@@ -134,6 +139,7 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
     test "cannot be asked for where Monty has no such option" do
       assert {:error, message} = Experiments.option("monty/learning_module", "no-such-option")
       assert message =~ "monty_experiment_options"
+      refute message =~ "{"
     end
 
     test "and the options a group offers are files that exist" do

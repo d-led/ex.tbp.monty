@@ -170,6 +170,51 @@ defmodule Monty.Studio.Failure do
   def part(_reason), do: "it stopped without saying why"
 
   @doc """
+  A failed read or write, in the words the operating system keeps for it.
+
+  `File.write/2` answers `{:error, :enospc}`, and that atom is the one thing the
+  reader needs and the one thing they cannot read. `:file.format_error/1` already
+  keeps the translation, including for a code it does not know; a shape that is
+  not an error at all is described by `reply/1` rather than pasted.
+  """
+  @spec file(term()) :: String.t()
+  def file({:error, reason}), do: file(reason)
+  def file(reason) when is_atom(reason), do: reason |> :file.format_error() |> to_string()
+  def file(reason), do: "for a reason this page cannot read (#{reply(reason)})"
+
+  @doc """
+  A changeset's refusals, as one sentence.
+
+  `inspect/1` of `[steps: {"is invalid", [type: :integer]}]` is the internals of
+  Ecto; what a reader needs is "steps is invalid". This is not a bug report — it
+  is a record saying why it would not be written.
+  """
+  @spec complaints([{atom(), {String.t(), Keyword.t()} | String.t()}]) :: String.t()
+  def complaints([]), do: "it did not pass the record's own checks"
+
+  def complaints(errors) do
+    Enum.map_join(errors, "; ", fn
+      {field, {message, _options}} when is_binary(message) -> "#{field} #{message}"
+      {field, message} when is_binary(message) -> "#{field} #{message}"
+    end)
+  end
+
+  @doc """
+  Whatever arrived, in one sentence.
+
+  A reason a record wrote is already a sentence, and `explain/1` keeps it one — or
+  says plainly that the page cannot put this one in words, with the text kept
+  beside it. Anything that is not text is an exit reason or an answer from
+  somewhere else, and `lost/1` is where those have words. A page that flashes
+  "that world will not open: …" asks this, so the colon is never followed by a
+  tuple.
+  """
+  @spec sentence(term()) :: String.t()
+  def sentence(reason) when is_binary(reason), do: explain(reason).what
+  def sentence(nil), do: explain(nil).what
+  def sentence(reason), do: lost(reason)
+
+  @doc """
   What an unexpected reply was, by its shape rather than its content.
 
   The same rule as `lost/1` from the other side: a plugin's reply can carry a

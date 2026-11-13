@@ -3248,6 +3248,38 @@ Three cases state it, and the first fails on the old code: the message holds no
 `GenServer`, no `#PID` and no struct; `start/1` answers the same sentence; and a
 reply carrying a policy is named by its tag.
 
+**And the pages had the same hole in six places** — found by grepping `inspect(`
+across `lib/ex_tbp_monty_web` rather than by a report, which is the lesson: the
+rule was enforced where the run's record is written, and every page that flashes
+"…: why" built its own sentence from a term. "That world will not open:
+`{:error, :no_python}`", "The runs could not all be deleted:
+`{%RuntimeError{…}, {Task, :await, …}}`", "Could not start: `{:cannot_create, …}`"
+— a person reading those has been handed the internals and nothing to act on.
+`Failure.sentence/1` is the one answer: a reason a record wrote stays the sentence
+it is, text that is a dump is said plainly with the text kept beside it, and
+anything that is not text at all goes through `lost/1`. The six sites —
+`experiment_live`'s run-failed push, its world-open pair and its unqueueable run,
+`run_history_live`'s failed delete, `prerequisites_live`'s failed start — all ask
+it now. Two exceptions were left alone on purpose: the config page's
+`<code>{inspect(@error)}</code>` is the technical fold, and the page's own closing
+line is a log written for whoever debugs the page.
+
+**Two more doors, found by the same grep.** A run's own log wrote
+`the run's steps could not be written: {:error, :enospc}`,
+`statistics could not be written: …` and — worst of the three —
+`could not close the record: [steps: {"is invalid", [type: :integer]}]`; and the
+MCP answers pasted terms too, one of them (`Mcp.Experiments`) returning
+`inspect(reason)` as the *entire* error message. So `Failure` gained two more
+phrases: `file/1`, which asks OTP for the words it already keeps
+(`:file.format_error(:enospc)` is "no space left on device") and describes a shape
+that is not an error at all, and `complaints/1`, which turns a changeset's keyword
+into "steps is invalid; state can't be blank". Six call sites now ask them, and the
+MCP error cases assert their answer holds no `{` and no `~U[`.
+
+The lesson to keep: the rule was enforced where the record is written and nowhere
+else, and one `grep 'inspect('` over the doors a person reads found eleven more
+places. Do that grep when the rule is restated.
+
 **The rule for the next pair of hands**: nothing that reaches a record, a run log
 line, or a page may be built with `inspect/1`. `technical` is the only place a
 traceback belongs, and `Failure` is where "why" is turned into words — however

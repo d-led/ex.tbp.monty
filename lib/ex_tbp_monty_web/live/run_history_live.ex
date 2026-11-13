@@ -2068,7 +2068,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     {:noreply,
      socket
      |> assign(deleting: nil)
-     |> put_flash(:error, "The runs could not all be deleted: #{inspect(reason)}")}
+     |> put_flash(:error, "The runs could not all be deleted: #{Failure.sentence(reason)}")}
   end
 
   # Stamped when the read is finished, not when it started: the window is the

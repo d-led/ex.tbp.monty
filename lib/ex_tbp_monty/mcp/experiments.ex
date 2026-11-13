@@ -21,6 +21,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
     Blueprint,
     Catalog,
     Drafts,
+    Failure,
     Finding,
     Index,
     Jobs,
@@ -76,7 +77,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
         {:ok, summary(opened)}
 
       {:error, reason} ->
-        {:error, "`#{name}` is not an experiment that opens: #{inspect(reason)}"}
+        {:error, "`#{name}` is not an experiment that opens: #{Failure.sentence(reason)}"}
     end
   end
 
@@ -133,8 +134,11 @@ defmodule ExTbpMonty.Mcp.Experiments do
       path = Path.join([Source.conf_dir(), group, option <> ".yaml"])
 
       case File.read(path) do
-        {:ok, yaml} -> {:ok, %{group: group, option: option, path: path, yaml: yaml}}
-        {:error, reason} -> {:error, "`#{group}/#{option}` cannot be read: #{inspect(reason)}"}
+        {:ok, yaml} ->
+          {:ok, %{group: group, option: option, path: path, yaml: yaml}}
+
+        {:error, reason} ->
+          {:error, "`#{group}/#{option}` cannot be read: #{Failure.file(reason)}"}
       end
     else
       {:error, "`#{group}/#{option}` is not a config Monty ships. See monty_experiment_options."}
@@ -180,7 +184,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
        }}
     else
       # `draft_name/1` answers a sentence, `Drafts.save/1` a file-system reason.
-      {:error, reason} -> {:error, inspect(reason)}
+      {:error, reason} -> {:error, Failure.sentence(reason)}
     end
   end
 
@@ -680,13 +684,13 @@ defmodule ExTbpMonty.Mcp.Experiments do
   end
 
   defp error_message(%Ecto.Changeset{} = changeset, name),
-    do: "`#{name}` cannot be recorded as a run: #{inspect(changeset.errors)}"
+    do: "`#{name}` cannot be recorded as a run: #{Failure.complaints(changeset.errors)}"
 
   # A refusal this layer already wrote is a sentence, not a term: inspecting it
-  # would hand a reader `\"…\"` with the quotes escaped inside.
+  # would hand a reader `"…"` with the quotes escaped inside.
   defp error_message(reason, _name) when is_binary(reason), do: reason
 
-  defp error_message(reason, _name), do: inspect(reason)
+  defp error_message(reason, _name), do: Failure.sentence(reason)
 
   # A draft is a file named after the experiment, so the name has to be a file
   # name: no separators to climb out of the draft directory with.

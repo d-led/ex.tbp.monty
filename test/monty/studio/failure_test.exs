@@ -293,6 +293,75 @@ defmodule Monty.Studio.FailureTest do
     end
   end
 
+  # Every page that flashes "…: why" asks this — the world that would not open,
+  # the runs that could not be deleted, the run that could not be queued — so the
+  # colon is never followed by a tuple. The shapes here are the ones those
+  # handlers are actually handed.
+  describe "whatever arrived, in one sentence" do
+    test "a reason a record wrote stays the sentence it is" do
+      assert Failure.sentence("The world could not put the object in front of the agent.") ==
+               "The world could not put the object in front of the agent."
+    end
+
+    test "text that is a dump is said plainly rather than shown" do
+      assert Failure.sentence("{:positioning_did_not_finish, 5}") ==
+               "The run stopped with an error this page cannot put in words."
+    end
+
+    test "a task that died with an exception keeps the exception's own words" do
+      assert Failure.sentence({%RuntimeError{message: "no python in this image"}, []}) ==
+               "no python in this image"
+    end
+
+    test "a task that stopped for a reason with no words is still a sentence" do
+      assert Failure.sentence(:killed) == "it was killed"
+    end
+
+    test "nothing to say is still one sentence" do
+      assert Failure.sentence(nil) == "It stopped without saying why."
+    end
+  end
+
+  # A write that fails answers a POSIX atom, and the run's own log carried it as
+  # `{:error, :enospc}`. The translation already exists in OTP; it just has to be
+  # asked for.
+  describe "a failed read or write" do
+    test "a full disk says the disk is full" do
+      assert Failure.file({:error, :enospc}) == "no space left on device"
+    end
+
+    test "a missing file says the file is missing, and a bare reason works too" do
+      assert Failure.file(:enoent) == "no such file or directory"
+    end
+
+    test "a code OTP does not know is still named" do
+      assert Failure.file(:not_a_posix_code) == "unknown POSIX error: not_a_posix_code"
+    end
+
+    test "a shape that is not an error at all is described, not pasted" do
+      assert Failure.file({:something, :else}) ==
+               "for a reason this page cannot read (something, else)"
+    end
+  end
+
+  # A record that will not be written says so because a field is wrong, and the
+  # keyword Ecto answers is not that sentence.
+  describe "a changeset's refusals" do
+    test "a field that is invalid is named with what is wrong with it" do
+      assert Failure.complaints(steps: {"is invalid", [type: :integer]}) ==
+               "steps is invalid"
+    end
+
+    test "several fields are one sentence" do
+      assert Failure.complaints(steps: {"is invalid", []}, state: {"can't be blank", []}) ==
+               "steps is invalid; state can't be blank"
+    end
+
+    test "a changeset that refused nothing is still a sentence" do
+      assert Failure.complaints([]) == "it did not pass the record's own checks"
+    end
+  end
+
   describe "what an unexpected reply was" do
     test "a reply that carries something big is named by its tags" do
       assert Failure.reply({:ok, DateTime.utc_now()}) == "ok, a DateTime"

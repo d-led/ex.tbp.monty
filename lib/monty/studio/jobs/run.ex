@@ -719,7 +719,7 @@ defmodule Monty.Studio.Jobs.Run do
 
       {:error, reason} ->
         publish(record.id, :kept)
-        say(record.id, "the run's steps could not be written: #{inspect(reason)}")
+        say(record.id, "the run's steps could not be written: #{Failure.file(reason)}")
         record
     end
   end
@@ -1700,7 +1700,7 @@ defmodule Monty.Studio.Jobs.Run do
         reported
 
       {:error, reason} ->
-        say(run_id, "statistics could not be written: #{inspect(reason)}")
+        say(run_id, "statistics could not be written: #{Failure.file(reason)}")
         logging
     end
   end
@@ -1745,7 +1745,7 @@ defmodule Monty.Studio.Jobs.Run do
         {:ok, record}
 
       {:error, changeset} ->
-        say(run_id, "could not close the record: #{inspect(changeset.errors)}")
+        say(run_id, "could not close the record: #{Failure.complaints(changeset.errors)}")
         broadcast(run_id, {:failed, %{reason: {:cannot_close, changeset.errors}}})
         {:cancel, {:cannot_close, changeset.errors}}
     end
