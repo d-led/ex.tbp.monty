@@ -49,6 +49,28 @@ defmodule ExTbpMontyWeb.EvidenceChartTest do
     assert html =~ "new_object0"
   end
 
+  # The evidence axis says how sure a module was; the steps under the plot say
+  # when. Without them a reader answers "where was it at step eighty" by
+  # counting pixels.
+  test "names the steps under the plot" do
+    steps = for step <- 0..399, do: {0, step + 1, belief(%{"new_object0" => step / 100})}
+    chart = Chart.new(steps, width: 960)
+
+    html =
+      render_component(&EvidenceChart.evidence_chart/1, %{
+        module_id: "learning_module_0",
+        chart: chart
+      })
+
+    labels =
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("[data-step-label]")
+      |> Enum.map(&(LazyHTML.text(&1) |> String.trim()))
+
+    assert labels == Enum.map(chart.x_ticks, & &1.label)
+  end
+
   # A drag and a hover each move one drawn thing: the box the drag is choosing,
   # and the line a hover stands on. Both are the picture's own, hidden until a
   # gesture uses them, so the hook only says where they stand — a node it made

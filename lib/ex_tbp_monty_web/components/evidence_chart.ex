@@ -227,6 +227,31 @@ defmodule ExTbpMontyWeb.EvidenceChart do
               {tick.label}
             </text>
           </g>
+          <%!-- How many steps have passed. The evidence axis says how sure a module
+        was; without the steps beside it, a reader answers "where was it at step
+        eight hundred" by counting pixels. The verticals are the same grid the
+        evidence ticks draw, so the two axes are one grid rather than two. --%>
+          <g :for={tick <- @chart.x_ticks}>
+            <line
+              x1={tick.x}
+              x2={tick.x}
+              y1={@chart.margin_top}
+              y2={@chart.height - @chart.margin_bottom}
+              stroke="var(--chart-grid, #e5e7eb)"
+              stroke-width="0.5"
+            />
+            <text
+              x={tick.x}
+              y={@chart.height - 8}
+              text-anchor="middle"
+              fill="currentColor"
+              font-size="8"
+              class="text-base-content/50"
+              data-step-label={tick.label}
+            >
+              {tick.label}
+            </text>
+          </g>
           <%!-- Zero: what evidence is measured from. Every episode starts on this
         line and a hypothesis can be penalised below it, so it is drawn heavier
         than the grid and under the lines — a chart of a signed quantity that

@@ -68,6 +68,7 @@ defmodule Monty.Studio.Chart do
             labels: %{},
             legend: [],
             ticks: [],
+            x_ticks: [],
             episode_bands: [],
             episode_starts: [],
             episode_labels: [],
@@ -133,6 +134,7 @@ defmodule Monty.Studio.Chart do
           labels: labels(),
           legend: [series()],
           ticks: [%{value: float(), y: number(), label: String.t()}],
+          x_ticks: [%{value: non_neg_integer(), x: number(), label: String.t()}],
           episode_bands: [
             %{episode: non_neg_integer(), x: number(), width: number(), colour: String.t()}
           ],
@@ -271,6 +273,7 @@ defmodule Monty.Studio.Chart do
         labels: labels,
         legend: legend,
         ticks: ticks(chart),
+        x_ticks: x_ticks(chart),
         # Evidence is measured from zero and can fall under it, so the line it is
         # measured from is drawn: the floor keeps zero inside the range, every
         # episode starts on it, and a reader comparing two objects is reading the
@@ -606,7 +609,7 @@ defmodule Monty.Studio.Chart do
   # zero unnamed, and a reader could not tell how far down a line had gone.
   defp ticks(chart) do
     step = tick_step(chart.y_max - chart.y_min)
-    first = (chart.y_min / step) |> Float.ceil() |> trunc() |> Kernel.*(step)
+    first = ceil_to(chart.y_min, step)
 
     first
     |> Stream.iterate(&(&1 + step))
@@ -616,10 +619,55 @@ defmodule Monty.Studio.Chart do
     end)
   end
 
-  # The smallest round step that keeps the axis to `@max_ticks` labels. Every
-  # step is a whole number, so every label is one.
-  defp tick_step(span) do
-    Enum.find(round_steps(), fn step -> span / step + 1 <= @max_ticks end) ||
+  # The steps along the bottom, in the same round numbers the evidence axis uses.
+  # A run's chart is asked where it was at a step — "the answer came at eight
+  # hundred" — and an axis that names only the evidence leaves the reader counting
+  # pixels to answer. The ticks are of the window being drawn, not of the run: a
+  # zoomed chart is a different stretch, and its own numbers are the only ones
+  # whose position on it means anything.
+  defp x_ticks(chart) do
+    if chart.x_max <= chart.x_min do
+      []
+    else
+      step = tick_step(chart.x_max - chart.x_min, x_label_room(chart))
+
+      chart.x_min
+      |> ceil_to(step)
+      |> Stream.iterate(&(&1 + step))
+      |> Enum.take_while(&(&1 <= chart.x_max))
+      |> Enum.map(fn value ->
+        %{
+          value: value,
+          x: rounded(x_coordinate(value, chart)),
+          label: Integer.to_string(value)
+        }
+      end)
+    end
+  end
+
+  # How many step labels the plot is wide enough for. A chart drawn into half a
+  # card is not a small copy of a wide one: the same eight numbers in three
+  # hundred pixels are eight numbers written over each other, so the count
+  # follows the pixels — about a label's width each, and never fewer than two.
+  @label_room 64
+  @min_x_ticks 2
+
+  defp x_label_room(chart) do
+    plot = chart.width - @margin_left - @margin_right
+
+    div(trunc(plot), @label_room)
+    |> max(@min_x_ticks)
+    |> min(@max_ticks)
+  end
+
+  # The first whole multiple of `step` at or above `value`: where an axis begins
+  # labelling, so the numbers it names are the round ones.
+  defp ceil_to(value, step), do: (value / step) |> Float.ceil() |> trunc() |> Kernel.*(step)
+
+  # The smallest round step that keeps the axis to `most` labels. Every step is a
+  # whole number, so every label is one.
+  defp tick_step(span, most \\ @max_ticks) do
+    Enum.find(round_steps(), fn step -> span / step + 1 <= most end) ||
       List.last(round_steps())
   end
 

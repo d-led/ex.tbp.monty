@@ -32,6 +32,10 @@ defmodule Monty.Studio.ChartTest do
     }
   end
 
+  defp steps(count) do
+    for step <- 0..(count - 1), do: {0, step + 1, belief(%{"mug" => step * 1.0})}
+  end
+
   describe "the vertical axis" do
     # Evidence is a sum that can fall: a hypothesis is penalised as well as
     # rewarded. The axis used to be pinned at zero whatever the data did, so
@@ -102,6 +106,62 @@ defmodule Monty.Studio.ChartTest do
 
         assert length(chart.ticks) <= 8, "#{length(chart.ticks)} labels for evidence #{evidence}"
       end
+    end
+  end
+
+  describe "the horizontal axis" do
+    # A run's chart is asked where it was at a step — "the answer came at eight
+    # hundred" — and an axis that names only the evidence leaves the reader
+    # counting pixels to answer it.
+    test "names the steps in round numbers a reader can divide by" do
+      chart = Chart.new(steps(401))
+
+      assert chart.x_ticks |> Enum.map(& &1.label) == ~w(0 100 200 300 400)
+    end
+
+    # A zoomed chart is a stretch of the run, not the run: its numbers have to be
+    # the stretch's own, or a tick would point at a step that is not on it.
+    test "names the stretch it draws, not the run it came from" do
+      chart = Chart.new(steps(401), window: {150, 350})
+
+      labels = chart.x_ticks |> Enum.map(& &1.label) |> Enum.map(&String.to_integer/1)
+
+      assert Enum.all?(labels, &(&1 >= 150 and &1 <= 350))
+      assert 200 in labels
+      assert 300 in labels
+    end
+
+    test "never draws more step labels than a reader can count" do
+      for length <- [2, 11, 37, 120, 401, 1001, 5000] do
+        chart = Chart.new(steps(length))
+
+        assert length(chart.x_ticks) <= 8,
+               "#{length(chart.x_ticks)} labels for a run of #{length}"
+      end
+    end
+
+    # A chart drawn into half a card is not a small copy of a wide one: the same
+    # eight numbers in three hundred pixels are eight numbers written over each
+    # other. The count follows the pixels, at about a label's width each.
+    test "a narrow chart names fewer steps, far enough apart to read" do
+      wide = Chart.new(steps(1001), width: 960)
+      narrow = Chart.new(steps(1001), width: 360)
+
+      assert length(narrow.x_ticks) < length(wide.x_ticks)
+
+      gaps =
+        narrow.x_ticks
+        |> Enum.map(& &1.x)
+        |> Enum.chunk_every(2, 1, :discard)
+        |> Enum.map(fn [left, right] -> right - left end)
+
+      assert Enum.all?(gaps, &(&1 >= 60)), "labels #{inspect(gaps)} apart"
+    end
+
+    # A run of one step has no axis to divide: a single label would be a tick
+    # mark, not a scale.
+    test "labels nothing when there is a single step to show" do
+      assert Chart.new(steps(1)).x_ticks == []
     end
   end
 
