@@ -3311,6 +3311,18 @@ queue and continues its division instead of being closed.
 - **Queue first, status second.** `Run.enqueue_run/1` before
   `RunHistory.requeue/1`: a run that could not be queued must not say `queued` —
   the failure returns `false` and the sweep closes it.
+- **A part in a peer's hands is not this node's silence** (`c1e976c`). The first
+  version of `recover/0` decided "nobody is working on this run" from this node's
+  registry, which a cluster contradicts: after a reboot part 3 can still be a
+  peer's, and re-queueing makes the new worker ask for it, the claim refuse it
+  (`{:held, node, until}`), and the recovery fail the run at its first wave.
+  `RunHistory.claimed_parts/1` is the answer — a live claim on a node that has just
+  booted can only be a peer's — and `recover/0` asks it.
+- **…but the sweep must not.** The same guard on `sweep/0` would have left a
+  _cancelled_ run saying `running` for ever, because a dead worker's claim outlives
+  its job by a lease; "closes the division with it" caught that. Closing a
+  cancelled run is the operator's intent, and the reaper's moduledoc now says which
+  of the two asks the claims.
 
 ### 46.3 What is still not resumed
 
@@ -3332,5 +3344,7 @@ issues, sobelow); the full suite **3188 passed** — twice, because the first ru
 lost `recording_episode_test.exs`' fidelity case to the machine being loaded (21
 steps against 27); that case passes alone and on the second full run. The three
 CRAP paths 20.00/20, 20.00/20, 29.85/30 over a fresh `mix cover` export; dialyzer
-0 errors. CI: `80a78ec` and `afcb43f` **success** on every job including the three
-desktop legs, `d0bc2a0` in progress, `3738467` behind it.
+0 errors. CI: `80a78ec`, `afcb43f` and `d0bc2a0` **success** on every job including
+the three desktop legs; `3738467` and `c1e976c` (the correction above) queue behind
+them, because main's runs finish rather than cancel. The correction's own gate: lint
+0, full suite **3191 passed**, the three CRAP paths, dialyzer 0.
