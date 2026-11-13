@@ -125,14 +125,28 @@ defmodule FlyversePlugin.Policy do
   # read-out before the body acts on it.
   @motor_tau_s 0.030
 
-  # The looming reflex, which is not the standoff. A fly's LC4 descends on a
-  # growth *rate*, and what it commands is an escape: something that was already
-  # in view and suddenly fills more of it is not walked at, whatever the network
-  # was saying. `@loom_floor` is the nearness (`1/d`) of a metre — below it the
-  # view held nothing to loom at, and a first appearance is a landing, not an
-  # approach. `@loom_threshold` is the growth in one step that counts as a loom.
+  # The loom only counts when the view *doubles* in one step. The first version
+  # of this read half again, and a half is what an ordinary approach towards a
+  # standoff looks like: the fly then braked on nearly every step and read as too
+  # careful. A doubling is the thing that is not an approach.
   @loom_floor 1.0
-  @loom_threshold 0.5
+  @loom_threshold 1.0
+
+  # The bout, which is the animal's own way of exploring: it does not crawl over
+  # the first thing it touches for ever. It walks a bout on the surface, leaves,
+  # and lands again somewhere else — Monty's `_touch_object` cycle, driven by a
+  # timer rather than by a spike.
+  #
+  # A spiking connectome does not decide *when* to change behaviour over seconds;
+  # in the animal that is the neuromodulatory state, and here it is a counter with
+  # the one rule a run can be read against: sixty steps of walking, then a turn
+  # away that the centring reflex cannot pull back, and a hop off the surface.
+  # The hop is the whole of "flight" this world offers — the sensor has no wings,
+  # so leaving is a step backwards into open view, and what comes next is the
+  # same approach that landed it the first time.
+  @bout_steps 60
+  @depart_steps 4
+  @depart_degrees 30.0
 
   # flyverse's `DT_MS`, in seconds: the tick a window is counted in. A plan
   # counts ticks, and the wish is a first-order update over the time they took.
@@ -248,11 +262,39 @@ defmodule FlyversePlugin.Policy do
   """
   @impl FlyversePlugin.Plugin
   def call(%__MODULE__{} = policy, {_ctx, observations, _motor_state, percept, _goal}, state) do
-    if on_object?(percept) do
-      steer(policy, observations, percept, state)
-    else
-      {:ok, touch(policy, observations), policy, state}
+    simulation = Map.fetch!(state.simulations, policy.sim)
+    next = bout(simulation, on_object?(percept))
+    state = put(state, policy.sim, advance(simulation, next))
+
+    case next do
+      :explore -> steer(policy, observations, percept, state)
+      :depart -> {:ok, departing(policy), policy, state}
+      :cruise -> {:ok, touch(policy, observations), policy, state}
     end
+  end
+
+  # Which of the animal's three behaviours this step is in. A bout is a walk on
+  # the surface; it ends on the timer, and the departure lasts until the patch is
+  # off the object — or `@depart_steps` steps, whichever comes first, because an
+  # object large enough to walk off for ever must not become a fly that never
+  # lands on anything.
+  defp bout(_simulation, false), do: :cruise
+
+  defp bout(%{bout: :depart, bout_steps: taken}, true) when taken < @depart_steps, do: :depart
+
+  defp bout(%{bout_steps: taken}, true) when taken >= @bout_steps, do: :depart
+
+  defp bout(_simulation, true), do: :explore
+
+  # A counter counts only while the behaviour it counts is the one being done,
+  # and the step that enters a behaviour is its first: landing again is a new
+  # bout, not the continuation of the old one. Being off the object is not a
+  # behaviour it counts, because there is nothing there to time.
+  defp advance(simulation, :cruise), do: %{simulation | bout: :cruise, bout_steps: 0}
+
+  defp advance(simulation, next) do
+    taken = if(next == simulation.bout, do: simulation.bout_steps + 1, else: 1)
+    %{simulation | bout: next, bout_steps: taken}
   end
 
   defp steer(policy, observations, percept, state) do
@@ -338,6 +380,31 @@ defmodule FlyversePlugin.Policy do
     }
   end
 
+  # The departure. A turn is taken whole — the centring reflex would pull the fly
+  # back onto what it is looking at, and this step is the one that must not — and
+  # the step is backwards off the surface at the approach stride. It is a hop, not
+  # a flight: this world's sensor has no wings, so what a fly does with them is
+  # what a step backwards does here.
+  defp leave(policy) do
+    %OrientHorizontal{
+      agent_id: policy.agent_id,
+      rotation_degrees: @depart_degrees,
+      left_distance: 0.0,
+      forward_distance: -@touch_stride
+    }
+  end
+
+  # A departure is a step the network did not decide, so it says so in the
+  # telemetry rather than in the wish: a reader of a run can then tell a fly that
+  # left from a fly that was steered off.
+  defp departing(policy) do
+    %MotorPolicyResult{
+      actions: [leave(policy)],
+      motor_only_step: false,
+      telemetry: %{leaving: true, turn_degrees: @depart_degrees}
+    }
+  end
+
   # How far the step travels towards something the view finder can see: the
   # shortfall against the standoff, and no more than a stride of it forwards.
   #
@@ -395,7 +462,9 @@ defmodule FlyversePlugin.Policy do
            simulation
            | wish: 0.0,
              spikes: 0,
-             nearness: {0.0, 0.0}
+             nearness: {0.0, 0.0},
+             bout: :cruise,
+             bout_steps: 0
          })}
 
       {:error, {code, sentence}} ->
@@ -419,6 +488,8 @@ defmodule FlyversePlugin.Policy do
       ticks_per_step: simulation.ticks,
       wish: simulation.wish,
       spikes: simulation.spikes,
+      bout: simulation.bout,
+      bout_steps: simulation.bout_steps,
       last_counts: [simulation.last.left, simulation.last.right]
     }
   end
@@ -475,6 +546,8 @@ defmodule FlyversePlugin.Policy do
            spikes: 0,
            steps: 0,
            nearness: {0.0, 0.0},
+           bout: :cruise,
+           bout_steps: 0,
            last: %{left: 0, right: 0, spikes: 0, rates: [0.0, 0.0]}
          }}
 

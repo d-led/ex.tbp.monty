@@ -151,10 +151,11 @@ defmodule FlyversePlugin.PolicyTest do
   end
 
   # LC4's reflex, which the standoff rule cannot see: the standoff says where the
-  # patch is, and a thing that is *closing* is one the view remembers. Something
-  # already in view that suddenly fills half again as much of it is not walked
-  # at — the step goes the other way, by no more than a step, because a loom is
-  # a reason to stop closing rather than to fly across the room.
+  # patch is, and a thing that is *closing* is one the view remembers. A thing
+  # already in view that doubles — not one that merely comes nearer, because a
+  # half was an approach and read as too careful — is not walked at: the step goes
+  # the other way, by no more than a step, because a loom is a reason to stop
+  # closing rather than to fly across the room.
   test "something that looms is stepped away from, while a slow approach is not", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
@@ -167,14 +168,65 @@ defmodule FlyversePlugin.PolicyTest do
       step(policy, state, observations([[0.15, 0.15, 100.0, 100.0]]), touching(0.025))
 
     {closest, _policy, _state} =
-      step(policy, state, observations([[0.08, 0.08, 100.0, 100.0]]), touching(0.025))
+      step(policy, state, observations([[0.07, 0.07, 100.0, 100.0]]), touching(0.025))
 
     assert [%OrientHorizontal{forward_distance: 0.004}] = closer.actions,
            "a third nearer is an approach, not a loom"
 
     assert [%OrientHorizontal{forward_distance: retreat}] = closest.actions
-    assert retreat < 0.0, "half again as large is a loom: stepped away from"
+    assert retreat < 0.0, "twice as near is a loom: stepped away from"
     assert abs(retreat) <= 0.05, "and no further than a step"
+  end
+
+  # The animal does not crawl over the first thing it touches for ever: it walks a
+  # bout, leaves, and lands again somewhere else. Sixty steps is the bout, and
+  # what ends it is a turn the centring reflex cannot undo and a hop off the
+  # surface.
+  test "a bout on the surface ends with the fly leaving it", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {_walking, policy, state} = walk(policy, state, 60)
+    {leaving, _policy, _state} = step(policy, state, observations(mug()), touching(0.025))
+
+    assert [%OrientHorizontal{} = left] = leaving.actions
+    assert left.rotation_degrees == 30.0, "a turn the centring reflex cannot pull back"
+    assert left.forward_distance < 0.0, "and a hop off the surface, not along it"
+    assert left.left_distance == 0.0
+  end
+
+  # And the departure is not a second behaviour it gets stuck in: the moment the
+  # patch is off the object the search is the policy again, which is Monty's own
+  # `_touch_object` walking back to what it left.
+  test "the departure ends when the patch is off the object, and it approaches again", %{
+    state: state
+  } do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {_walking, policy, state} = walk(policy, state, 60)
+    {_leaving, policy, state} = step(policy, state, observations(mug()), touching(0.025))
+    {returning, _policy, _state} = step(policy, state, scene(0.2, 0.3), away())
+
+    assert [%OrientHorizontal{rotation_degrees: degrees, forward_distance: forward}] =
+             returning.actions
+
+    assert forward > 0.0, "back towards what it left"
+    assert abs(degrees) <= 10.0, "and the turn is the view finder's, not the departure's"
+  end
+
+  # Landing again is the start of a new bout, not the continuation of the old one:
+  # the first step back on the object is a slide, not another departure.
+  test "landing again starts a new bout", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {_walking, policy, state} = walk(policy, state, 60)
+    {_leaving, policy, state} = step(policy, state, observations(mug()), touching(0.025))
+    {_returning, policy, state} = step(policy, state, scene(0.2, 0.3), away())
+
+    {landed, _policy, _state} = step(policy, state, observations(mug()), touching(0.01))
+
+    assert [%OrientHorizontal{} = walked] = landed.actions
+    assert_in_delta walked.left_distance, 0.004, 1.0e-9, "a slide on the surface, not a departure"
+    refute walked.rotation_degrees == 30.0
   end
 
   # The slide is what the fly does *at* the surface. While there is room to walk
@@ -400,6 +452,16 @@ defmodule FlyversePlugin.PolicyTest do
 
     {result, policy, state}
   end
+
+  # Steps of a bout on the surface: the patch sits at the standoff on something,
+  # and the fly walks it.
+  defp walk(policy, state, steps) do
+    Enum.reduce(1..steps, {nil, policy, state}, fn _step, {_result, policy, state} ->
+      step(policy, state, observations(mug()), touching(0.025))
+    end)
+  end
+
+  defp mug, do: [[0.02, 0.02, 100.0, 100.0]]
 
   # A perspective on the world: what the wide view sees and what the patch is on.
   defp scene(view_depth, patch_depth) do
