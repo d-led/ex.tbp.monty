@@ -11,6 +11,7 @@
 # the answer is not "unrecognised" but "recognised, and this is how many ways
 # round it could be". This prints which of the two happened.
 
+alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
 alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
 alias Monty.Studio.Run
 
@@ -53,6 +54,60 @@ setup =
 # The belief and the pose set are read *during* the episode: an episode's
 # modules stop with it, and the question is what the run knew while it was
 # looking, not what survived it.
+# The angle between two rotations, the way `unique_pose?/4` measures it: the
+# turn each pose needs to become the most likely one.
+turn_degrees = fn most_likely, pose ->
+  product =
+    Monty.Geometry.mul(
+      Monty.Geometry.transpose(Monty.Geometry.Rotation.to_matrix(most_likely)),
+      pose
+    )
+
+  diagonal = product |> Enum.with_index() |> Enum.map(fn {row, index} -> Enum.at(row, index) end)
+
+  :math.acos(Monty.Math.clip((Enum.sum(diagonal) - 1) / 2, -1.0, 1.0)) * 180 / :math.pi()
+end
+
+# What a conclusion is waiting for, in the module's own terms.
+#
+# `unique_pose?/4` answers true only when every *possible* hypothesis agrees with
+# the most likely rotation to within `pose_similarity_threshold` (0.35 rad, 20°
+# by default), so the largest turn among them is the distance from settling — and
+# the number of distinct rotations says how many ways round the part could be.
+poses_of = fn
+  %EvidenceGraphLM{} = module ->
+    case EvidenceGraphLM.current_mlh(module) do
+      nil ->
+        %{}
+
+      # Before the first percept the module answers a placeholder MLH rather than
+      # nil, and there are no hypotheses to measure (`EvidenceGraphLM` names the
+      # same two ids when it decides what to put in a report).
+      %{graph_id: graph_id} when graph_id in ["no_observations_yet", "new_object0"] ->
+        %{}
+
+      %{graph_id: graph_id, rotation: most_likely} ->
+        hypotheses = Map.fetch!(module.hypotheses, graph_id)
+        possible = EvidenceGraphLM.get_possible_hypothesis_ids(module, graph_id)
+
+        turns =
+          for id <- possible,
+              do: turn_degrees.(most_likely, Hypotheses.pose(hypotheses, id))
+
+        %{
+          graph_id => %{
+            possible: length(possible),
+            rotations:
+              possible |> Enum.map(&Hypotheses.pose(hypotheses, &1)) |> Enum.uniq() |> length(),
+            max_turn: turns |> Enum.max(fn -> 0.0 end) |> Float.round(1)
+          }
+        }
+    end
+
+  _not_an_evidence_module ->
+    %{}
+end
+
 read = fn run ->
   try do
     belief = run |> Run.beliefs() |> Map.values() |> List.first()
@@ -60,16 +115,8 @@ read = fn run ->
     poses =
       run
       |> Run.statistics(fn
-        %EvidenceGraphLM{} = module ->
-          # One entry per hypothesis, and many hypotheses agree on the same
-          # rotation: what decides a conclusion is the number of *distinct*
-          # rotations left, which is what `get_unique_pose_if_available/2` tests.
-          module
-          |> EvidenceGraphLM.get_possible_poses(false)
-          |> Map.new(fn {graph_id, rotations} -> {graph_id, length(Enum.uniq(rotations))} end)
-
-        _not_an_evidence_module ->
-          %{}
+        %EvidenceGraphLM{} = module -> poses_of.(module)
+        _not_an_evidence_module -> %{}
       end)
       |> then(fn state -> Map.new(state.learning_modules, &{&1.id, &1.state}) end)
 

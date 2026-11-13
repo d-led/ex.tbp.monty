@@ -181,6 +181,50 @@ scene, not a config, knows where the object is.
    settling. Recognition is a conjunction: one object _and_ a nameable pose, and
    on these seeds only the first half arrives inside the config's own budget.
 
+   The rule that decides it is worth saying in its own terms, because "pose not
+   settled" sounds like a knob: `unique_pose?/4` answers true only when **every**
+   remaining possible hypothesis is within `path_similarity_threshold` of the
+   centre of their locations **and** within `pose_similarity_threshold` of the
+   most likely rotation. Both are the module's defaults — 0.1 m and 0.35 rad
+   (20°) — and no config here overrides them. A plate 60 mm across cannot fail
+   the first: the whole part is inside 100 mm of its own centre. So what decides
+   these six seeds is the 20°: at the last step some possible hypothesis still
+   disagrees with the most likely rotation by more than that, and one hypothesis
+   is enough to keep the episode open.
+
+   Where the disagreement is, measured. The probe turns the rule into two
+   numbers — how many possible hypotheses there are, and the largest turn any of
+   them needs to become the most likely one:
+
+   | seed | outcome  | possible hypotheses | distinct rotations | largest turn |
+   | ---- | -------- | ------------------- | ------------------ | ------------ |
+   | 0    | nil      | 51                  | 4                  | **180.0°**   |
+   | 1    | `:match` | 3                   | 1                  | 0.0°         |
+
+   A failing seed keeps a hypothesis a **half turn** away from the best one, and
+   a flat patch cannot rule that out: in its own plane a plane has no direction,
+   so the two look identical until something curved is seen. The passing seed
+   ends with a single rotation and nothing to disagree with.
+
+   Why the memory is so short of orientation, and it is ours to state plainly:
+   `pose_fully_defined` is true on **233 of the plate's 1557 nodes (14 %)**,
+   while Monty's own pretrained graphs carry it on **13 416 of 15 679 (85 %)**.
+   Both numbers come from the same rule: the two principal curvatures must
+   differ by more than `pc1_is_pc2_threshold`, which is 10 m⁻¹ — a curvature
+   radius of ten centimetres. An exactly flat CAD face has nought for both, so
+   their difference is nought and the rule says, correctly, that the face has no
+   orientation. A depth camera never reports nought: its noise makes almost every
+   node anisotropic, and that is how a real memory comes to be 85 % pose-defined.
+   Our memory is the honest one, and the honest one has less to match on.
+
+   So a part made mostly of flat faces can only be oriented by the geometry that
+   is not flat — the boss and the through hole here — and whether a run finds
+   them is what these six seeds are deciding. That is exactly what
+   `MontyCad.Policy.FeatureWalk` exists to guarantee (`docs/cad.md`'s item 2):
+   walk to the features the part's recognition names, rather than wherever the
+   generic surface policy happens to drift. The next experiment is that one,
+   and it is a wiring job rather than a measurement.
+
    The last column is the probe's honest negative result: the size of the
    rotation set does **not** separate the two outcomes — 8 and 1099 both fail,
    339 passes — so it is not a proxy for `unique_pose?/4` and should not be read
