@@ -105,7 +105,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
        # Whether this instance is one of several, which is the only case in which
        # a run's node is a column worth having: a cluster has several run lists,
        # and a page merged over them needs to say whose each row is.
-       cluster_mode: ExTbpMonty.Cluster.enabled?()
+       cluster_mode: ExTbpMonty.Cluster.enabled?(),
+       # What the peers are working on, which is asked after this render rather
+       # than in front of it: the answer is an `:rpc` per peer.
+       peer_runs: []
      )
      |> stream_configure(:log, dom_id: &log_id/1)
      |> stream_configure(:runs, dom_id: &"run-#{&1.id}")
@@ -126,10 +129,22 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     socket = assign(socket, :params, params)
 
     case socket.assigns.live_action do
-      :index -> {:noreply, load_runs(socket, params)}
+      :index -> {:noreply, socket |> load_runs(params) |> scan_peers()}
       :show -> assign_run(params, socket)
     end
   end
+
+  # The peers' runs are asked for here and answered in `handle_info(:scan_peers,
+  # ...)`, for the same reason the reap is: it is an `:rpc` per peer, and a page
+  # that waited for one before drawing would be a page that shows nothing until
+  # the slowest node answers. Nothing to ask on a node that runs alone.
+  defp scan_peers(%{assigns: %{cluster_mode: true, live_action: :index}} = socket) do
+    if connected?(socket), do: send(self(), :scan_peers)
+
+    socket
+  end
+
+  defp scan_peers(socket), do: socket
 
   # Asked for here and answered in `handle_info(:reap, ...)`: the check reads
   # every open run and asks Oban about each, so it belongs after this render and
@@ -1156,6 +1171,17 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         <ExTbpMontyWeb.LocalTime.local_time_hook />
       </div>
 
+      <%!-- What the other nodes are working on, when this instance is one of
+      several and they have something to say. Read-only and beside the list
+      rather than in it: a run's files, its worker and its page are on the node
+      that owns it, so the one thing to do with a peer's run is open it there. --%>
+      <.live_component
+        :if={@cluster_mode && @peer_runs != []}
+        module={ExTbpMontyWeb.ClusterPeerRuns}
+        id="peer-runs-panel"
+        peer_runs={@peer_runs}
+      />
+
       <div class="flex items-center gap-3 text-xs">
         <.link
           :if={@page > 1}
@@ -1714,6 +1740,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # The staleness check this page asked for when it loaded.
   def handle_info(:reap, socket), do: {:noreply, after_reap(socket, Reaper.sweep())}
 
+  # What the peers are working on, asked for after the first render and asked
+  # again when a peer announces a run this node does not have.
+  def handle_info(:scan_peers, socket) do
+    {:noreply, assign(socket, :peer_runs, ExTbpMonty.Cluster.Peers.in_flight())}
+  end
+
   # The run said something: a step, the end of it, or a failure. The worker
   # publishes on the run's topic as `{:studio, run_id, event}`, and reading the
   # record again is what keeps one source of truth — the worker writes it, the
@@ -1866,13 +1898,15 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp recorded(%{assigns: %{live_action: :index}} = socket, run) when is_map(run) do
     if known?(run),
       do: {:noreply, stream_insert(socket, :runs, run, at: 0)},
-      else: {:noreply, socket}
+      else: {:noreply, scan_peers(socket)}
   end
 
   defp recorded(socket, _run), do: {:noreply, socket}
 
   defp settled(%{assigns: %{live_action: :index}} = socket, run) when is_map(run) do
-    if known?(run), do: {:noreply, stream_insert(socket, :runs, run)}, else: {:noreply, socket}
+    if known?(run),
+      do: {:noreply, stream_insert(socket, :runs, run)},
+      else: {:noreply, scan_peers(socket)}
   end
 
   defp settled(socket, _run), do: {:noreply, socket}

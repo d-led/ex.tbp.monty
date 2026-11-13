@@ -104,4 +104,64 @@ defmodule ExTbpMontyWeb.ClusterChromeTest do
       }
     end
   end
+
+  # What the other nodes are working on: read-only, and each run is a link to the
+  # place the run actually is — the peer's own page for it.
+  describe "what the other nodes are working on" do
+    test "a peer's run is named and links to the peer's own page for it" do
+      html =
+        render_component(ExTbpMontyWeb.ClusterPeerRuns, %{
+          id: "peer-runs-panel",
+          peer_runs: [
+            %{
+              node: peer(),
+              runs: [
+                %{
+                  id: "11111111-1111-1111-1111-111111111111",
+                  experiment: "base_config_10distinctobj_dist_agent",
+                  state: "running",
+                  steps: 41
+                }
+              ]
+            }
+          ]
+        })
+
+      document = LazyHTML.from_fragment(html)
+
+      assert html =~ "Running on other nodes"
+
+      # Two places to go: the node, and the run on that node. Nothing here acts on
+      # the run itself — its files and its worker are there.
+      assert document |> LazyHTML.query("a") |> Enum.map(&LazyHTML.attribute(&1, "href")) == [
+               ["http://127.0.0.1:4002"],
+               ["http://127.0.0.1:4002/runs/11111111-1111-1111-1111-111111111111"]
+             ]
+
+      assert html =~ "running · 41 steps"
+    end
+
+    # Whether there is a panel at all is the page's decision, so a page with no
+    # peers to report has no heading over an empty list. `@cluster_mode` is off
+    # here, which is the same "nothing to report" a cluster of one gives.
+    test "a node that runs alone draws no such panel", %{conn: conn} do
+      configure(enabled: false, seeds: [])
+
+      {:ok, view, _html} = live(conn, ~p"/runs")
+
+      refute has_element?(view, "#peer-runs")
+    end
+
+    defp peer do
+      %{
+        node: :"gpu@127.0.0.1",
+        name: "gpu_127.0.0.1",
+        version: "0.1.3",
+        self: false,
+        alive: true,
+        capabilities: ["gpu", "monty"],
+        web: "http://127.0.0.1:4002"
+      }
+    end
+  end
 end
