@@ -178,6 +178,14 @@ install a Python, and `MONTY_PYTHON` is not what a run looks at. The third
 choice a run has is the stand-in scene, which is Elixir and needs no interpreter
 at all.
 
+A fourth is a **CAD part** (`--world cad`, `MONTY_CAD_PART=part.step`): the same
+world as the stand-in — its kinematics, actions and proprioceptive state — with
+`MontyCad.Scene` rendering the picture by ray-casting the exact B-rep. That
+module is `ex_monty_cad`'s, which a studio node need not carry, so it is asked
+for by name and a node without it refuses the world with a sentence. It is not a
+world Monty's own configs were written for: every page says so, because a number
+it reports is not the experiment's.
+
 ```mermaid
 ---
 config:
@@ -188,6 +196,7 @@ flowchart TD
     studio -->|"a run steps MuJoCo<br/>one JSON round trip per step"| world["priv/monty_py/world.py<br/>MuJoCo's scene, agents and cameras"]
     embedded --> world
     studio -->|"or no world at all"| synthetic["stand-in scene (Elixir)<br/>one sphere, in the BEAM"]
+    studio -->|"or a part"| cad["CAD part (ex_monty_cad)<br/>exact B-rep, ray-cast per pixel"]
 ```
 
 That the interpreter is a real dependency rather than a decoration is reported at
