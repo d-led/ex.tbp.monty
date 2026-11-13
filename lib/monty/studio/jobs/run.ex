@@ -459,7 +459,14 @@ defmodule Monty.Studio.Jobs.Run do
     # The division is a row per part before any of them starts: how many there
     # are, and — as each is taken — where it is performed. A run of one part has
     # no division to record.
-    if length(parts) > 1, do: RunHistory.plan_parts(run_id, parts)
+    #
+    # The division also starts with no parts on disk: a run performed once and
+    # performed again begins its transcript again, and a part file left by the
+    # first attempt is not this one's steps.
+    if length(parts) > 1 do
+      Artifacts.clear_parts(run_id)
+      RunHistory.plan_parts(run_id, parts)
+    end
 
     say(
       run_id,
@@ -984,16 +991,25 @@ defmodule Monty.Studio.Jobs.Run do
 
   # A part's steps, written where its run can read them.
   #
-  # Written when the part ends rather than a step at a time: while the run goes,
-  # a page reads this node's `RunStream`, and the file is the transcript's copy —
-  # one write of a few hundred kilobytes a part, instead of one more file handle
-  # in every step.
+  # Most of them are already there: a part appends what it took at every episode
+  # boundary (`keep/2`), so what is left is the tail after the last boundary — and
+  # a part that failed or was stopped has a tail too, because the steps it took in
+  # the episode it never finished are real.
+  #
+  # The count is the file's, not the stream's: a part performed by a peer has no
+  # stream on this node, and a part that was resumed has the steps of both
+  # attempts in one file.
   defp keep_steps(run_id, part) do
-    {entries, moments} = RunStream.steps(part.stream)
+    # From what the file already holds, which is the cursor: the boundaries wrote
+    # everything up to their last one, and what is left is the tail. Asking the
+    # file rather than a counter in memory is also what makes a boundary whose
+    # write failed cost a duplicate of nothing rather than a lost episode.
+    written = Artifacts.part_steps(run_id, part.phase, part.index)
+    {entries, moments} = RunStream.steps_from(part.stream, written - 1)
 
-    case Artifacts.store_part(run_id, part.phase, part.index, entries, moments) do
-      {:ok, steps} ->
-        steps
+    case Artifacts.append_part(run_id, part.phase, part.index, entries, moments) do
+      :ok ->
+        Artifacts.part_steps(run_id, part.phase, part.index)
 
       {:error, reason} ->
         # The stream still holds them and `part_transcript/2` falls back to it,
@@ -1021,11 +1037,30 @@ defmodule Monty.Studio.Jobs.Run do
             # run's, because a part's stream id is a stream and not a run
             # (`db/1`).
             "parent" => record.id,
-            "phases" => %{to_string(part.phase) => part.episodes},
+            # The phase as a word, so the boundary that appends a part's steps
+            # knows which file to append them to without reading the plan.
+            "phase" => to_string(part.phase),
+            "phases" => %{to_string(part.phase) => remaining(record.id, part)},
             "memory" => memory
           })
     }
   end
+
+  # The episodes a part still has to take: its own, less the ones it already
+  # finished.
+  #
+  # A part given to a second node after the first went silent picks up where it
+  # stopped rather than starting its stretch again — the episodes it finished are
+  # on disk with their steps (`Artifacts.append_part/6`), so taking them twice
+  # would be work duplicated and a transcript with two copies of them.
+  #
+  # Only an evaluation part resumes. A training part's episodes build on each
+  # other — the graph one made is the graph the next extends — and the model that
+  # took them did not travel with the part.
+  defp remaining(run_id, %{phase: :eval} = part),
+    do: Enum.drop(part.episodes, Artifacts.progress(run_id, part.phase, part.index))
+
+  defp remaining(_run_id, part), do: part.episodes
 
   # The plan the record was started with (`Monty.Studio.Partition`), as parts.
   defp planned(%{inputs: %{"parts" => [_ | _] = parts}}) do
@@ -1260,7 +1295,7 @@ defmodule Monty.Studio.Jobs.Run do
     {conclusion, memories, logging, closing} = close_episode(run_id, state, outcome, run)
 
     {stopping, _} = :timer.tc(fn -> stop_episode(run, state, outcome) end)
-    {handed, record} = :timer.tc(fn -> keep(state.record) end)
+    {handed, record} = :timer.tc(fn -> keep(state.record, state.episodes_started - 1) end)
 
     # `infos` arrive newest first; the fold does not care about order, but the
     # report a reader gets is written oldest first, so it is the same list either
@@ -1358,12 +1393,32 @@ defmodule Monty.Studio.Jobs.Run do
   # A write that fails does not stop a run: the steps are still in memory for the
   # page, and the next boundary tries again.
   #
-  # A part writes nothing: its steps are the run's, and the run writes them as
-  # each part finishes (`collect/2`). Four parts keeping a cursor of their own on
-  # one column was four parts rewriting each other's transcript.
-  defp keep(%{inputs: %{"part" => %{}}} = part), do: part
+  # A part writes nothing to the record: its steps are the run's, and the run
+  # writes them to the database when it settles (`collect/2`). Four parts keeping
+  # a cursor of their own on one column was four parts rewriting each other's
+  # transcript.
+  #
+  # It writes to its own file, though, and at every boundary: the steps it has
+  # taken since the last one, and the fact that this episode finished. That is
+  # what makes a part resumable — the next node to have it starts at its first
+  # unfinished episode (`remaining/2`) — and what keeps a node that dies from
+  # taking the part's transcript with it.
+  defp keep(%{inputs: %{"part" => %{"phase" => phase} = part}} = record, episode) do
+    # `steps_from/2` reads the steps *after* the position it is given, and a step's
+    # position is its place from nought — so the last one written is `count - 1`,
+    # and a part that has written nothing asks from `-1`, which is every step.
+    {entries, moments} = RunStream.steps_from(record.id, (record.steps_done || 0) - 1)
 
-  defp keep(record) do
+    case Artifacts.append_part(record.id, phase, part["index"], entries, moments, episode) do
+      :ok -> %{record | steps_done: (record.steps_done || 0) + length(entries)}
+      # The stream still holds them and the next boundary tries again: an episode
+      # whose steps could not be written is a resume point one episode behind,
+      # not a run that stops.
+      {:error, _reason} -> record
+    end
+  end
+
+  defp keep(record, _episode) do
     {saved, _held?} = keep_with_state(record)
     saved
   end

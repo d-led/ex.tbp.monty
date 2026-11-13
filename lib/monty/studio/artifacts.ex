@@ -150,6 +150,95 @@ defmodule Monty.Studio.Artifacts do
   end
 
   @doc """
+  Appends the steps a part has taken since its last boundary, and — when
+  `episode` is given — the fact that this episode finished.
+
+  A part is written as it goes rather than only when it ends, because a part may
+  be given to another node: the steps of the episodes it finished are on disk
+  before the next one starts, which is what lets a part resume at its first
+  unfinished episode (`Monty.Studio.Jobs.Run`), and what keeps a lost node from
+  taking a part's transcript with it.
+
+  Two files, because they answer two questions. The steps go to
+  `<phase>-<index>.jsonl`, one pair a line, in the order they were taken. Which
+  episodes finished goes to `<phase>-<index>.progress`, one line each: a count of
+  them is the resume point, and a marker per episode keeps that answer cheap to
+  read and impossible to confuse with a step.
+  """
+  # The paths are `dir/1`'s, which refuses a run id that is not a UUID.
+  # sobelow_skip ["Traversal.FileModule"]
+  @spec append_part(
+          binary(),
+          atom() | String.t(),
+          non_neg_integer(),
+          [map()],
+          [map()],
+          non_neg_integer() | nil
+        ) :: :ok | {:error, term()}
+  def append_part(run_id, phase, index, entries, moments, episode \\ nil) do
+    path = part_path(run_id, phase, index)
+
+    with :ok <- File.mkdir_p(Path.dirname(path)),
+         :ok <- append_lines(path, Enum.zip_with(entries, moments, &[&1, &2])) do
+      case episode do
+        nil -> :ok
+        number -> append_lines(progress_path(run_id, phase, index), [number])
+      end
+    end
+  end
+
+  @doc """
+  How many of one part's episodes finished: the number its progress file counts,
+  and the number to drop from the front of the episodes it was given.
+
+  `0` for a part that has not finished one — and for one whose progress could not
+  be written, which is a part that starts again rather than a part that skips.
+  """
+  @spec progress(binary(), atom() | String.t(), non_neg_integer()) :: non_neg_integer()
+  def progress(run_id, phase, index) do
+    case File.read(progress_path(run_id, phase, index)) do
+      {:ok, text} -> text |> String.split("\n", trim: true) |> length()
+      {:error, _no_file} -> 0
+    end
+  end
+
+  @doc "How many steps one part has written so far — what its row shows."
+  @spec part_steps(binary(), atom() | String.t(), non_neg_integer()) :: non_neg_integer()
+  def part_steps(run_id, phase, index) do
+    case File.read(part_path(run_id, phase, index)) do
+      {:ok, text} -> text |> String.split("\n", trim: true) |> length()
+      {:error, _no_file} -> 0
+    end
+  end
+
+  @doc """
+  Forgets the parts of an earlier attempt at this run id.
+
+  A division starts by planning its parts (`Monty.Studio.RunHistory.plan_parts/2`)
+  and a transcript starts at its beginning: a part file left by a run that was
+  performed once and performed again is not this attempt's steps, and appending to
+  it would be a transcript with two attempts in it.
+  """
+  @spec clear_parts(binary()) :: :ok
+  def clear_parts(run_id) do
+    _ = File.rm_rf(Path.join(dir(run_id), "parts"))
+    :ok
+  end
+
+  @doc "Where one part's finished episodes are counted."
+  @spec progress_path(binary(), atom() | String.t(), non_neg_integer()) :: Path.t()
+  def progress_path(run_id, phase, index) do
+    Path.join([dir(run_id), "parts", "#{phase}-#{index}.progress"])
+  end
+
+  defp append_lines(_path, []), do: :ok
+
+  # sobelow_skip ["Traversal.FileModule"]
+  defp append_lines(path, rows) do
+    File.write(path, Enum.map(rows, &(Jason.encode!(&1) <> "\n")), [:append])
+  end
+
+  @doc """
   One part's steps, as the part wrote them: `{:ok, {entries, moments}}` in the
   order they were taken, which is the order the run's transcript keeps them in.
   """

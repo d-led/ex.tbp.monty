@@ -596,6 +596,55 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert RunHistory.parts(record.id) == []
     end
 
+    # A part appends its steps at every episode boundary, so the episodes it
+    # finished are on disk before the next one starts. A part that is given to a
+    # second node therefore picks up at its first unfinished episode instead of
+    # taking its stretch again — work not repeated, and no episode written twice
+    # into one transcript.
+    test "a part given to a second node picks up at its first unfinished episode" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+      [part | _rest] = parts
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 2, 4, %{parts: parts}))
+
+      assert length(part.episodes) == 2
+      assert part.phase == :eval
+
+      # The node that had it finished its first episode and then went silent: the
+      # progress is a marker per finished episode, and the steps of that episode
+      # are in the part's file.
+      :ok = Artifacts.append_part(record.id, part.phase, part.index, [], [], 0)
+
+      assert Artifacts.progress(record.id, part.phase, part.index) == 1
+
+      assert {:ok, {:finished, _summary}, steps} = Jobs.Run.perform_part(record, part, nil)
+
+      # One episode left to take, one step each: the part took one, not two.
+      assert steps == 1
+      assert Artifacts.part_steps(record.id, part.phase, part.index) == 1
+
+      assert {:ok, {entries, _moments}} = Artifacts.read_part(record.id, part.phase, part.index)
+      assert entries |> Enum.map(& &1["episode"]) |> Enum.uniq() == [1]
+    end
+
+    # The other half: a part with nothing on disk takes its whole stretch, which
+    # is what a first attempt is.
+    test "a part nobody has started takes every episode it was given" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+      [part | _rest] = parts
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 2, 4, %{parts: parts}))
+
+      assert Artifacts.progress(record.id, part.phase, part.index) == 0
+      assert {:ok, {:finished, _summary}, 2} = Jobs.Run.perform_part(record, part, nil)
+    end
+
     # The door of a node that performs parts: a caller of another protocol is
     # refused by name, before any work is done — a node that answered a request
     # of a shape it does not know would fail half-way through the part instead of
