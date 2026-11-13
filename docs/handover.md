@@ -3157,7 +3157,9 @@ That is the next slice, and the row keeps `steps` for it.
 
 ### 44.5 The gate
 
-`mix compile --warnings-as-errors` clean; the touched suites green (claim 9,
-run_history 68, partition 17, run 41, reaper + MCP experiments 51); full `mix
-test`, `./scripts/reformat.sh`, `./scripts/quality.sh --fast` and dialyzer run
-before the push, and the numbers are the ones in the summary of this commit.
+`mix compile --warnings-as-errors` clean, `mix lint` exit 0, `mix credo --strict`
+no issues; the touched suites green (claim 9, run_history 68, partition 17, run
+42 — including the recovery case where a part's first candidate is a peer that is
+not there — reaper + MCP experiments 51); full `mix test` **3137 passed** (67
+properties, 3070 tests) before the first two commits were pushed. Dialyzer runs
+in CI's types job.
