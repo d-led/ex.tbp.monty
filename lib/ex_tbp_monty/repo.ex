@@ -55,7 +55,14 @@ defmodule ExTbpMonty.Repo do
   @spec delete(struct() | Ecto.Changeset.t(), keyword()) :: {:ok, term()} | {:error, term()}
   def delete(struct_or_changeset, opts \\ []), do: current().delete(struct_or_changeset, opts)
 
-  @spec update_all(Ecto.Queryable.t(), keyword() | term(), keyword()) :: non_neg_integer()
+  # The count of the rows it changed, and the rows themselves when the query asks
+  # for them (`:returning`). The spec said only the count, which is not what the
+  # function returns: a caller that matched the count — `{1, _}` is how "I changed
+  # the row I meant to" is read, and a claim on a part of a run is exactly that
+  # (`Monty.Studio.RunHistory.claim_part/3`) — was a dialyzer error about correct
+  # code.
+  @spec update_all(Ecto.Queryable.t(), keyword() | term(), keyword()) ::
+          {non_neg_integer(), nil | [term()]}
   def update_all(queryable, updates, opts \\ []),
     do: current().update_all(queryable, updates, opts)
 

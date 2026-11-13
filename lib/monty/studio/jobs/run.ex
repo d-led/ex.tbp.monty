@@ -951,17 +951,23 @@ defmodule Monty.Studio.Jobs.Run do
           {:ok, term(), non_neg_integer()} | {:error, term(), non_neg_integer()}
   def perform_part(%RunHistory.Run{} = record, part, memory \\ nil, caller \\ Protocol.local()) do
     if Protocol.compatible?(caller) do
-      with {:ok, opened} <- opened_for(record) do
-        case run_part_here(record, opened, part, memory, record.id) do
-          {:ok, _part, result, steps} -> {:ok, result, steps}
-          {:error, _part, reason, steps} -> {:error, reason, steps}
-        end
+      case opened_for(record) do
+        {:ok, opened} -> answer(run_part_here(record, opened, part, memory, record.id))
+        # A peer that cannot open the experiment answers the same shape as a peer
+        # that ran it and failed: the owner matches three-tuples, and a two-tuple
+        # here was a `CaseClauseError` on the node that owns the run.
+        {:error, reason} -> {:error, reason, 0}
       end
     else
       {:error,
        {:incompatible_peer, Protocol.describe(caller), Protocol.describe(Protocol.local())}, 0}
     end
   end
+
+  # What the owner reads: how the part ended and what it concluded. The part is
+  # not in the answer — the owner already has it.
+  defp answer({:ok, _part, result, steps}), do: {:ok, result, steps}
+  defp answer({:error, _part, reason, steps}), do: {:error, reason, steps}
 
   # Who performs each part of this wave, and the run says so before any of it
   # runs: the assignment is the cluster's answer to a question the run cannot ask

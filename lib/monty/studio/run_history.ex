@@ -833,6 +833,10 @@ defmodule Monty.Studio.RunHistory do
         {0, _nothing} ->
           {:error, refusal(uuid, part)}
       end
+    else
+      # Not a run id, so not a part of any run: the answer the claim gets is the
+      # one a part that was never planned gets.
+      :error -> {:error, :not_planned}
     end
   end
 
