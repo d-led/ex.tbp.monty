@@ -755,7 +755,8 @@ defmodule Monty.Studio.Setup do
     # A part is its own scene, so where the agent starts is read from the part
     # and not from the config's start pose: that one places an agent in MuJoCo's
     # scene, where the object is where MuJoCo put it.
-    agent = apply(cad_module(), :start_pose, [scene])
+    module = cad_module()
+    agent = module.start_pose(scene)
 
     sensors =
       Map.new(sensor_ids(setup), &{&1, %{position: [0.0, 0.0, 0.0], rotation: agent.rotation}})
@@ -808,7 +809,7 @@ defmodule Monty.Studio.Setup do
                 "steps."
 
       true ->
-        case apply(module, :open, [cad_part()]) do
+        case module.open(cad_part()) do
           {:ok, scene} ->
             scene
 

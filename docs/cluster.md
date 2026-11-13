@@ -275,14 +275,111 @@ the model on the node that supervises it. Three answers come out:
   being alive, and it is deliberately the only one;
 - **the reaper is not on this path**. A person asked; that is the difference.
 
-## What is not spread yet
+## What is spread, and what is not
 
-A run of several parts is still performed whole on one node — the parts are
-placed with it, never across the cluster.
+A run of several parts is divided across the nodes that can be given a part.
+`Monty.Studio.Partition.hosts/3` keeps the nodes that are alive, offer what the run
+needs (`ExTbpMonty.Cluster.Placement.candidates/2` — the same tags that decide
+whether a node may perform the run at all), write a run's files where this node
+reads them (`Nodes.shares_run_files?/2`) and speak this protocol; then it deals
+the parts round robin, this node first, and the owner calls
+`Monty.Studio.Jobs.Run.perform_part/4` on each of them over `:rpc`.
 
-That is not an oversight, it is where the two hard problems are:
+Measured on two nodes (`probe` and `node2`) sharing one `MONTY_ARTIFACTS_DIR` and
+a two-part division of four episodes: part 0 performed by `probe` and part 1 by
+`node2`, four steps each; the run `finished` with eight steps in its transcript,
+in part order. A stop asked on the owner — `Jobs.Run.stop/1` — reached both:
+`run=stopped` with both parts `stopped` at eight steps each, the peer's included,
+which is the `:rpc` cast that `stop_part/1` answers.
 
-- **The run's job lives in that node's database.** With a file per node, a second
+Three things carry a part across nodes, and each had to be true first:
+
+- **Its steps come back as a file.** A part's steps live in the performing node's
+  `RunStream`, a table on one machine. Every part now writes its own steps to
+  `<run>/parts/<phase>-<index>.jsonl` when it ends — one step a line, its entry and
+  its moment — and the run's transcript is those files in part order
+  (`Artifacts.store_part/5`, `read_part/3`, and `store_parts/2` reading them). A
+  part this node performed writes the same file, so the reader is the same
+  wherever a part ran, and a part that failed leaves the steps it took, which is
+  the number its row shows.
+- **The run's directory is one answer.** A part may only go where that directory
+  can be read, so `Nodes.identity/0` reports the directory a run's files are
+  _written_ to — `Artifacts.root/0` — rather than a second setting saying where
+  they ought to be. Those were two levers (`:studio_artifacts_dir` and
+  `MONTY_ARTIFACTS_DIR`) and, outside a release, two answers: the first run of the
+  two-node check refused the peer, correctly, because the two nodes named
+  different directories.
+- **The peer is asked with the record.** A peer has no row for a run it does not
+  own — a node's runs table is its own — so everything a part needs travels with
+  the call: the record, the part, and, for an evaluation part, the merged
+  memory's _description_, which names a directory in the run's own folder and is
+  readable by whoever can read the run's files. The peer opens the experiment
+  itself (`opened_for/1`) and writes nothing to the run's row.
+
+### Who owns a part, and what happens when a node dies
+
+A part is an owner, not a work item. It has a row, a claim, a lease and a
+transcript file of its own, so the question a reader of this design asks — _are
+partitions stateless workers or resumable experiment owners?_ — is answered by
+naming the four things that make the second true:
+
+| the question                            | where it is answered                                                                                        |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| who has part 2, and since when          | `studio_run_parts.node`, `.claim`, `.started_at`, written before the first step (`RunHistory.claim_part/3`) |
+| how long that stays true without a word | the lease, `Monty.Studio.Claim.ttl_seconds/0`, renewed while the part works                                 |
+| who may write how it ended              | only the holder of the token; anybody else is `{:error, :not_owner}` (`RunHistory.release_part/3`)          |
+| what happens when that node dies        | the part is listed as recoverable (`lapsed_parts/1`) and given to the next candidate — one owner at a time  |
+| what a node may be asked at all         | `ExTbpMonty.Cluster.Protocol`, advertised with the version and refused at the door (`perform_part/4`)       |
+
+- **A part is claimed before it is performed.** `RunHistory.claim_part/3` takes
+  the row only if nobody holds it — or if the holder's lease has run out — and
+  answers the token that fences the writes about it. A second node asking for the
+  same part is told who has it (`{:error, {:held, node, until}}`) rather than given
+  it, and a part that has ended cannot be claimed at all
+  (`{:error, {:settled, status}}`). That refusal is the whole answer to
+  "reassign without silently duplicating runs": two nodes cannot both be told to
+  perform part 2.
+- **The claim is renewed while the part works.** The owner waits for its part in
+  `Jobs.Run.await/3`, which renews the claim at a third of the lease and stops the
+  work if a renewal is refused. A part is minutes to hours, so a lease that was
+  only taken once would lapse under a working node; a lease that is renewed is a
+  part nobody else can take.
+- **A write is fenced.** A node that lost its part still holds its token, and the
+  row no longer does: its `finished` is refused with `{:error, :not_owner}` and
+  logged, instead of overwriting the work of the node that has the part now. This
+  is the case the forum's wording is about — a node believed dead that comes back.
+- **A lost node costs a part an attempt, not the part.** `Partition.hosts/3`
+  answers an **ordered list** per part — the primary first, then the rest in round
+  robin order — and `run_part/5` walks it when a peer stops answering: the row goes
+  back to `queued` (`RunHistory.abandon_part/1`), and the next node claims it with a
+  new token. Measured on the two-node probe by killing the peer mid-part: the
+  part's row returned to `queued`, the second candidate claimed it, and the old
+  token's later `finished` was refused.
+
+What is **not** resumable yet, said plainly: a part that is given away starts its
+episodes from the beginning. The lease makes that safe — nothing the lost holder
+writes can land — but it is repeated work rather than resumed work. `n_train_epochs`
+and the episode list are in the record, so resuming from episode _k_ is a matter of
+a part writing its progress episode by episode, which its file does not do today
+(it is written when the part ends). That is the next slice, and it is why the row
+keeps `steps`.
+
+**On Horde and consistent hashing**, the suggestion this design did not take
+literally. `Horde.Registry` and `Horde.DynamicSupervisor` are already in the
+supervision tree (`ExTbpMonty.Cluster`), and `:pg` carries the plugin registry
+across nodes. What is _not_ Horde's is the division: consistent hashing answers
+"which node should own partition k" for a cluster whose parts have no shared
+record, and it re-maps on membership change — which is exactly the moment this
+design must not move a part that somebody is performing. The claim is that
+coordination instead: assignment may be as simple as round robin because the
+_candidacy_ is decided by tags, build and shared files, and because taking a part
+is a compare-and-set in the one table both nodes can see. A Horde ring on top
+would give a stable preference order — which `Partition.hosts/3` already provides,
+as a list — without deciding ownership.
+
+### What is still not spread
+
+- **A run's job lives in that node's database.** With a file per node, a second
   node neither sees the job nor can take it. Spreading the _queue_ needs one runs
   table for the whole cluster (`DATABASE_URL` pointing every node at one Postgres,
   which `ExTbpMonty.Database` already supports, in development too) or a merged
@@ -300,30 +397,19 @@ node2@127.0.0.1`, and still on its first attempt — a snooze is not a failed
   same thing with the tagged node stopped, the first node performed the run
   itself: the run was not held hostage by a tag nothing alive offered.
 
-- **A part writes files and publishes its steps into memory.** A part's log and
-  pictures go to `Artifacts.dir/1` and its steps to `Monty.Studio.RunStream`, on
-  the node performing it; the run that owns the parts reads both, from its own
-  node. Running a part elsewhere therefore needs either a filesystem the owning
-  node can read or an explicit transfer of what the part produced.
+- **A part's live steps are the performing node's memory.** Its steps and pictures
+  are written where the run's files go — which a division requires to be shared —
+  but a page on the owner reads a part's _live_ steps from `RunStream`, which is
+  the memory of this node. A page opened on the owner while a peer steps a part
+  therefore sees the transcript only once the part ends and its file is read.
+  PubSub here is the cluster-wide adapter, so the events themselves already cross;
+  what would need an `:rpc` is the catch-up read for a page opened later.
 
-  The first is now a lever rather than a build: `MONTY_ARTIFACTS_DIR` points a
-  node's run files at any directory, so several nodes can be given one, and the
-  settings page says which of the two states a node is in — the directory, and
-  whether that directory came from the variable or is this node's own. It does not
-  say "shared": nothing here can tell a mount from a mistake, so it says what it
-  knows. Live steps are still memory of the performing node, though the events
-  themselves already cross the cluster — PubSub here is the cluster-wide adapter,
-  so a page on the owner sees a peer part's steps as they happen and only the
-  catch-up read (a page opened later) would need an `:rpc`.
-
-  What a node now _does_ say is where it writes — `Nodes.identity/0` carries the
-  directory, so a peer's entry has one beside its build and its tags, and
-  `Nodes.shares_run_files?/2` answers whether two nodes name the same one. Files do
-  not travel: a part's log, pictures and statistics are written by whoever
-  performed it and read by the node that owns the run, so that question is what
-  decides whether a part may be handed to a peer at all. A node that did not say —
-  an older build — shares nothing, because "probably the same path" is not a fact
-  to hand a run's output to.
+- **A peer on another build is refused, not tolerated.** Handing a part over is
+  calling into the peer's own code with this build's record and reading this
+  build's answer, so `Partition.hosts/3` keeps only nodes whose `version` is this
+  node's — a peer mid-boot answers `"unknown"` for a few seconds and is not a
+  candidate until it has the real one.
 
 - **A run's division is recorded, its parts' nodes included.** `studio_run_parts`
   keeps one row per part: how many the experiment was divided into, what state
@@ -331,10 +417,9 @@ node2@127.0.0.1`, and still on its first attempt — a snooze is not a failed
   and updated as each part starts and ends. The run page's header counts them (`3
 of 4 parts done`) and its title names each part's node and the steps it took, so a
   part that ended at 68 of the 70 steps it was given reads differently from one
-  that did all of them. Today every row says this node, because a part is a task
-  inside one job; the rows are there
-  so that the day it is not, the page and the record already say so. They cost no
-  message: a page reads a table.
+  that did all of them. The row's `node` is the node that performed the part: the
+  owner writes it when it makes the assignment, because a peer has no row to
+  write. They cost no message: a page reads a table.
 
   A part is in one of six states — `queued`, `running`, `finished`, `failed`,
   `stopped`, `skipped` — and every way a run ends closes all of them: the worker

@@ -25,16 +25,18 @@ defmodule Monty.Studio.Jobs.Run do
 
   require Logger
 
-  alias ExTbpMonty.Cluster.{Nodes, Placement}
+  alias ExTbpMonty.Cluster.{Nodes, Placement, Protocol}
   alias Monty.Studio
 
   alias Monty.Studio.{
     Artifacts,
     CentreView,
+    Claim,
     Failure,
     Learned,
     Logging,
     Memories,
+    Partition,
     Run,
     RunHistory,
     RunLog,
@@ -62,14 +64,25 @@ defmodule Monty.Studio.Jobs.Run do
   end
 
   @doc """
-  Asks the worker of a run to stop at the next step boundary.
+  Asks every worker of a run to stop at the next step boundary.
 
   `:not_found` means no worker holds that run — it finished, or it never
   started — which is nothing to panic about.
+
+  A divided run's parts may be performed by peers, and a stop that reached only
+  this node's processes would leave them stepping: the run would say `stopped`
+  with work still running on a machine the page cannot see. So the stop is also
+  cast to the node each part was given to (`stop_part/1`), before the local
+  answer is decided.
   """
   @spec stop(binary()) :: :ok | {:error, :not_found}
   def stop(run_id) do
-    case workers(run_id) do
+    # One read for both halves: the run's own plan says which parts exist and
+    # which of them are stepping on another node.
+    record = RunHistory.get(run_id)
+    stop_parts_there(record)
+
+    case workers(record, run_id) do
       [] ->
         {:error, :not_found}
 
@@ -79,13 +92,52 @@ defmodule Monty.Studio.Jobs.Run do
     end
   end
 
+  @doc """
+  Asks one part to stop, on the node performing it.
+
+  The other half of `stop/1`, and public because it is called over `:rpc`: a part
+  on a peer is a process in that peer's registry, under its stream id. A node that
+  is not performing that part answers `:not_found`, which is why the stop is a
+  cast — nobody waits for a peer to say it had nothing to stop.
+  """
+  @spec stop_part(binary()) :: :ok | {:error, :not_found}
+  def stop_part(stream_id) do
+    case Registry.lookup(Monty.Runtime.Registry, key(stream_id)) do
+      [] ->
+        {:error, :not_found}
+
+      owners ->
+        Enum.each(owners, fn {pid, _value} -> send(pid, :stop) end)
+        :ok
+    end
+  end
+
+  # The parts a peer is performing. Recomputed from the plan and the cluster
+  # rather than read from the part rows: the rows name a node per part, and a run
+  # that trains and then evaluates has two parts numbered nought. A cast to a node
+  # this run never had is harmless (`stop_part/1` finds no process), and the
+  # recomputation is the same answer `hosts_for/2` acted on.
+  defp stop_parts_there(%{inputs: inputs} = record) do
+    for {part, [host | _rest]} <-
+          Partition.hosts(planned(record), Nodes.snapshot(), Placement.needs(inputs)),
+        host.node != node() do
+      :rpc.cast(host.node, __MODULE__, :stop_part, [part.stream])
+    end
+
+    :ok
+  end
+
+  defp stop_parts_there(_no_run), do: :ok
+
   # Everyone stepping the run, which is the job that holds it and each part it is
   # stepping. A part runs in a process of its own (`Task.async_stream/3`), so a
   # stop that reached only the job would wait in a mailbox the job cannot read
   # while it is waiting for its parts: the run would finish, not stop.
-  defp workers(run_id) do
-    run_id
-    |> working_on()
+  #
+  # A record that cannot be read is still an id a worker may have registered
+  # under before its row existed, and the id is all the message needs.
+  defp workers(record, run_id) do
+    if(record, do: working_on(record), else: [run_id])
     |> Enum.flat_map(&Registry.lookup(Monty.Runtime.Registry, key(&1)))
     |> Enum.map(fn {pid, _value} -> pid end)
     |> Enum.uniq()
@@ -94,15 +146,10 @@ defmodule Monty.Studio.Jobs.Run do
   # The run and the streams its parts are stepping. A run of one part has no
   # division to read, and the record is asked rather than kept here because the
   # stop may be asked from a page, a tool, or a peer's rpc call.
-  defp working_on(run_id) do
-    case RunHistory.get(run_id) do
-      %{inputs: %{"parts" => [_ | _] = parts}} ->
-        [run_id | Enum.map(parts, & &1["stream"])]
+  defp working_on(%{id: run_id, inputs: %{"parts" => [_ | _] = parts}}),
+    do: [run_id | Enum.map(parts, & &1["stream"])]
 
-      _one_part_or_no_run ->
-        [run_id]
-    end
-  end
+  defp working_on(%{id: run_id}), do: [run_id]
 
   @doc """
   Ends the worker's process now, on this node.
@@ -535,7 +582,9 @@ defmodule Monty.Studio.Jobs.Run do
   defp step_wave(record, opened, wave, memory) do
     results =
       wave
-      |> Task.async_stream(&run_part(record, opened, &1, memory),
+      |> hosts_for(record)
+      |> Task.async_stream(
+        fn {part, host} -> run_part(record, opened, part, memory, host) end,
         max_concurrency: max(length(wave), 1),
         ordered: false,
         timeout: :infinity
@@ -546,7 +595,7 @@ defmodule Monty.Studio.Jobs.Run do
     carried = carried(results)
 
     case Enum.find(results, &broken?/1) do
-      {:ok, {:error, part, reason}} ->
+      {:ok, {:error, part, reason, _steps}} ->
         {:error, "part #{part.index + 1} of #{part.of} stopped: #{inspect(reason)}", record,
          carried}
 
@@ -562,41 +611,37 @@ defmodule Monty.Studio.Jobs.Run do
   # began contributes what it got through, which is the truth about the work.
   defp carried(results) do
     Enum.reduce(results, %Summary{}, fn
-      {:ok, {:ok, _part, {_outcome, summary}}}, carried -> Summary.merge(carried, summary)
+      {:ok, {:ok, _part, {_outcome, summary}, _steps}}, carried -> Summary.merge(carried, summary)
       _nothing, carried -> carried
     end)
   end
 
-  defp broken?({:ok, {:error, _part, _reason}}), do: true
+  defp broken?({:ok, {:error, _part, _reason, _steps}}), do: true
   defp broken?(_result), do: false
 
   # A part that ended in a stop rather than in the work it was given: the wave it
   # is in ends there too, because the run has been asked to stop, and the parts
   # that had not started are `skipped` when the run settles.
-  defp stopped?({:ok, {:ok, _part, {outcome, _summary}}}), do: outcome == :stopped
+  defp stopped?({:ok, {:ok, _part, {outcome, _summary}, _steps}}), do: outcome == :stopped
   defp stopped?(_result), do: false
 
   # A part that has finished says so, and leaves its steps where they are: the
   # run's transcript is the parts' transcripts one after another, written once
   # when the run closes (`store_parts/2`), because a row holds one transcript and
   # four parts each writing theirs is four parts overwriting one another.
-  defp collect({:ok, {:ok, part, {outcome, _summary}}}, record) do
-    steps = RunStream.count(part.stream)
-    ending = status_of(outcome)
-
-    if part.of > 1, do: end_part(record.id, part, steps, ending)
-
-    say(record.id, "part #{part.index + 1} of #{part.of} #{ending}: #{steps} step(s)")
+  #
+  # The step count is the part's own answer: it is the number of steps it kept
+  # (`keep_steps/2`), which for a part performed by a peer is a file's lines here
+  # and nothing in this node's stream.
+  defp collect({:ok, {:ok, part, {outcome, _summary}, steps}}, record) do
+    say(record.id, "part #{part.index + 1} of #{part.of} #{status_of(outcome)}: #{steps} step(s)")
     record
   end
 
   # A part that failed took the steps it took before it did, and the row says so:
   # a division whose failed part reads "0 step(s)" is a part that appears not to
   # have started, which is the other half of what a reader is counting.
-  defp collect({:ok, {:error, part, reason}}, record) do
-    steps = RunStream.count(part.stream)
-    if part.of > 1, do: RunHistory.part_failed(record.id, part.index, steps)
-
+  defp collect({:ok, {:error, part, reason, steps}}, record) do
     say(
       record.id,
       "part #{part.index + 1} of #{part.of} failed after #{steps} step(s): #{inspect(reason)}"
@@ -610,29 +655,20 @@ defmodule Monty.Studio.Jobs.Run do
     record
   end
 
-  # The part's row: how it ended, and the steps it managed before it did. The
-  # part ends the way its own episodes ended, so a stop that reached a part is
-  # `stopped` rather than `finished` with fewer steps than it was given.
-  defp end_part(run_id, part, steps, "finished"),
-    do: RunHistory.part_finished(run_id, part.index, steps)
-
-  defp end_part(run_id, part, steps, "stopped"),
-    do: RunHistory.part_stopped(run_id, part.index, steps)
-
-  defp end_part(run_id, part, steps, "failed"),
-    do: RunHistory.part_failed(run_id, part.index, steps)
-
   # The one transcript a run of several parts leaves: part one's steps, then part
   # two's, and so on — which is the order Monty's dashboard draws its sections in,
   # and the order a reader of the record expects.
+  #
+  # The steps are read from the parts' own files, which every part writes when it
+  # ends (`keep_steps/2`) — including a part this node performed, so the reader is
+  # the same whatever performed the part. A run of several parts may therefore be
+  # divided across the nodes that share its directory, and its transcript is still
+  # one transcript.
   defp store_parts(record, parts) do
     {log, timeline} =
       parts
       |> Enum.sort_by(&{&1.phase, &1.index})
-      |> Enum.flat_map(fn part ->
-        {steps, moments} = RunStream.steps(part.stream)
-        Enum.zip(steps, moments)
-      end)
+      |> Enum.flat_map(&part_transcript(record.id, &1))
       |> Enum.unzip()
 
     publish(record.id, {:keeping, length(log)})
@@ -649,33 +685,320 @@ defmodule Monty.Studio.Jobs.Run do
     end
   end
 
-  # One part, as the run the rest of this module already knows how to step: the
-  # same record, with its own stream and the episodes it was given. Everything the
+  # One part's steps, in the order it took them: what it wrote for its run, or —
+  # for a part this node performed whose file could not be written — the stream it
+  # is still held in. A part performed by a peer has no stream here: its file is
+  # the only copy, and a part with neither contributes nothing, which is the truth
+  # about a part that never ran.
+  defp part_transcript(run_id, part) do
+    case Artifacts.read_part(run_id, part.phase, part.index) do
+      {:ok, {entries, moments}} ->
+        Enum.zip(entries, moments)
+
+      {:error, _no_file} ->
+        {entries, moments} = RunStream.steps(part.stream)
+        Enum.zip(entries, moments)
+    end
+  end
+
+  # One part, performed by the first node that can take it.
+  #
+  # A part is somebody's while it is being performed: the node it was given to
+  # claims it in its row before the first step (`RunHistory.claim_part/3`), and the
+  # claim is renewed as the part works. A node that stops answering loses the
+  # claim when its lease lapses, and the part goes to the next candidate — one
+  # owner at a time, which is the difference between a recovery and two runs of one
+  # experiment overlapping (`Monty.Studio.Claim`).
+  defp run_part(record, opened, part, memory, [host | rest]) do
+    case attempt(record, opened, part, memory, host) do
+      {:done, result} ->
+        result
+
+      # The node had the part and stopped answering. The row goes back to
+      # `queued` — the part is unfinished, not failed — and the next node takes
+      # it. A node that comes back still holds the old token, and the row does
+      # not, so what it writes afterwards is refused.
+      {:lost, claim, name, reason} when rest != [] ->
+        _ = forget(claim)
+        [next | _] = rest
+
+        say(
+          record.id,
+          "part #{part.index + 1} of #{part.of} lost #{name} (#{inspect(reason)}); " <>
+            "#{next.name} takes it"
+        )
+
+        run_part(record, opened, part, memory, rest)
+
+      # Nobody is left to give it to: the part failed, and it failed with the
+      # death of the node that had it.
+      {:lost, claim, name, reason} ->
+        settle(
+          record,
+          part,
+          claim,
+          {:error, part, {:peer_failed, name, reason}, steps_on_disk(record.id, part)}
+        )
+    end
+  end
+
+  defp run_part(_record, _opened, part, _memory, []) do
+    {:error, part, {:no_node_for_part, part.index}, 0}
+  end
+
+  # Taking the part, performing it, and writing down how it ended — the three
+  # things that make a part an object with an owner rather than a function call.
+  defp attempt(record, opened, part, memory, host) do
+    case claim(record.id, part, host) do
+      {:ok, claim} ->
+        task = Task.async(fn -> perform(record, opened, part, memory, host) end)
+
+        case await(task, claim, part) do
+          {:error, ^part, {:peer_failed, name, reason}, _steps} ->
+            {:lost, claim, name, reason}
+
+          result ->
+            settle(record, part, claim, result)
+            {:done, result}
+        end
+
+      # Somebody has this part: it is not this wave's to perform, and performing
+      # it anyway is the duplicate the claim exists to refuse.
+      {:error, reason} ->
+        say(
+          record.id,
+          "part #{part.index + 1} of #{part.of} is not this run's to take: #{inspect(reason)}"
+        )
+
+        {:done, {:error, part, {:unclaimable, reason}, steps_on_disk(record.id, part)}}
+    end
+  end
+
+  defp perform(record, opened, part, memory, host) do
+    if host.node == node() do
+      run_part_here(record, opened, part, memory, record.id)
+    else
+      run_part_there(record, part, memory, host)
+    end
+  end
+
+  # Waits for the part, and keeps the claim alive while it waits.
+  #
+  # A part is minutes to hours of work, and a claim nobody renews is a part the
+  # cluster is entitled to give to somebody else — so the renewal is part of the
+  # wait, not something the part has to remember to do. Asking a third of the
+  # lease ahead means a renewal that is missed twice still lands before the claim
+  # lapses.
+  defp await(task, claim, part) do
+    case Task.yield(task, renew_every()) do
+      {:ok, answer} ->
+        answer
+
+      {:exit, reason} ->
+        {:error, part, Failure.crashed(:exit, reason, []), 0}
+
+      nil ->
+        case renew(claim) do
+          :ok ->
+            await(task, claim, part)
+
+          # The part was given away while this node worked on it: stopping is the
+          # only honest answer, because whatever this work concludes is about a
+          # part somebody else has now.
+          {:error, :lapsed} ->
+            _ = Task.shutdown(task, :brutal_kill)
+            {:error, part, {:lease_lost, claim_node(claim)}, 0}
+        end
+    end
+  end
+
+  defp renew_every, do: div(Monty.Studio.Claim.ttl_seconds() * 1000, 3)
+
+  # A run of one part has no division to record, so there is nothing to claim: the
+  # run's own row says the node has it.
+  defp claim(run_id, part, host) do
+    if part.of > 1, do: RunHistory.claim_part(run_id, part.index, host.name), else: {:ok, nil}
+  end
+
+  defp renew(nil), do: :ok
+  defp renew(%Claim{} = claim), do: RunHistory.renew_claim(claim)
+
+  # Whose claim it is: the node the part was given to. Only reached for a claim
+  # that lapsed or was taken away, which a run of one part — a run with no division
+  # and so nothing to claim — cannot have.
+  defp claim_node(%Claim{node: holder}), do: holder
+
+  defp release(nil, _status, _steps), do: :ok
+  defp release(%Claim{} = claim, status, steps), do: RunHistory.release_part(claim, status, steps)
+
+  defp forget(nil), do: :ok
+  defp forget(%Claim{} = claim), do: RunHistory.abandon_part(claim)
+
+  # How the part ended is the part's own answer, and the row may only be written
+  # by the node that still holds it: a node whose claim was given away is told so
+  # rather than allowed to overwrite the new owner's work.
+  defp settle(record, part, claim, result) do
+    {status, steps} = verdict(result)
+
+    case release(claim, status, steps) do
+      :ok ->
+        :ok
+
+      {:error, :not_owner} ->
+        say(
+          record.id,
+          "part #{part.index + 1} of #{part.of}: #{claim_node(claim)} lost it while it " <>
+            "worked, so its #{status} was refused"
+        )
+    end
+
+    result
+  end
+
+  defp verdict({:ok, _part, {outcome, _summary}, steps}), do: {status_of(outcome), steps}
+  defp verdict({:error, _part, _reason, steps}), do: {"failed", steps}
+
+  # A part that never got to write its file — the node died before it finished a
+  # step — left no steps, and the file is the only copy a peer's part has.
+  defp steps_on_disk(run_id, part) do
+    case Artifacts.read_part(run_id, part.phase, part.index) do
+      {:ok, {entries, _moments}} -> length(entries)
+      {:error, _no_file} -> 0
+    end
+  end
+
+  # A part this node performs: the run the rest of this module already knows how
+  # to step, with its own stream and the episodes it was given. Everything the
   # step loop derives from a record — the phase, the episodes, the memory — is
   # read from it here, so a part is not a second kind of run.
-  defp run_part(record, opened, part, memory) do
-    # A part names the node that has it before it starts stepping, which is the
-    # run's own claim one level down: today that node is always this one, and the
-    # row is what would say otherwise the day a part may be handed to a peer.
-    if part.of > 1,
-      do: RunHistory.part_started(record.id, part.index, Monty.Paths.data_dir_name())
-
+  defp run_part_here(record, opened, part, memory, run_id) do
     record = part_record(record, part, memory)
     # A part owns its stream the way a run owns its id: `Stop` reaches it, and the
     # Reaper can see that something is working on it, until it is done.
     register(record.id)
 
-    try do
-      case run_alone(record, opened) do
-        {:error, reason} -> {:error, part, reason}
-        outcome -> {:ok, part, outcome}
+    outcome =
+      try do
+        case run_alone(record, opened) do
+          {:error, reason} -> {:error, part, reason}
+          outcome -> {:ok, part, outcome}
+        end
+      rescue
+        exception -> {:error, part, Failure.crashed(:error, exception, __STACKTRACE__)}
+      catch
+        kind, reason -> {:error, part, Failure.crashed(kind, reason, __STACKTRACE__)}
+      after
+        unregister(record.id)
       end
-    rescue
-      exception -> {:error, part, Failure.crashed(:error, exception, __STACKTRACE__)}
-    catch
-      kind, reason -> {:error, part, Failure.crashed(kind, reason, __STACKTRACE__)}
-    after
-      unregister(record.id)
+
+    # The steps leave this node's memory with the part, and they leave it through
+    # the run's directory: whatever performed this part, and however it ended, the
+    # run's transcript can be read from what is on disk (`store_parts/2`).
+    steps = keep_steps(run_id, part)
+
+    case outcome do
+      {:error, _part, reason} -> {:error, part, reason, steps}
+      {:ok, _part, result} -> {:ok, part, result, steps}
+    end
+  end
+
+  # A part another node performs. The record travels with the call: a node's runs
+  # table is its own (`docs/cluster.md`), so a peer has no row for a run it does
+  # not own, and what the part needs is everything the owner already knows. The
+  # merged memory an evaluation part starts from travels as its description — a
+  # directory in the run's own folder, which the peer reads because it is only a
+  # candidate when it shares that folder.
+  #
+  # `:infinity` is the timeout because a part is minutes to hours of work, and a
+  # peer that stops answering mid-part is a part that failed, not a run that
+  # asked too early.
+  defp run_part_there(record, part, memory, host) do
+    case :rpc.call(
+           host.node,
+           __MODULE__,
+           :perform_part,
+           [
+             record,
+             part,
+             memory,
+             Protocol.local()
+           ],
+           :infinity
+         ) do
+      {:ok, result, steps} -> {:ok, part, result, steps}
+      {:error, reason, steps} -> {:error, part, reason, steps}
+      {:badrpc, reason} -> {:error, part, {:peer_failed, host.name, reason}, 0}
+    end
+  end
+
+  @doc """
+  Performs one part of a run **on this node**, for the node that owns the run.
+
+  Called over `:rpc` (`run_part_there/4`), and called by a test directly: this is
+  the whole of what a peer does for a part, so what a peer does is specified on
+  one node.
+
+  A part that ends here leaves its steps in the run's own directory
+  (`Artifacts.store_part/5`), where the owner reads them for the run's transcript;
+  the answer is only what the owner cannot read from a file — how the part ended
+  and what it concluded.
+
+  A peer answers only when it speaks the same protocol: a node of another build
+  that was handed a record of a shape it does not know is refused here, by name,
+  rather than half-way through the part.
+  """
+  @spec perform_part(map(), map(), map() | nil, map()) ::
+          {:ok, term(), non_neg_integer()} | {:error, term(), non_neg_integer()}
+  def perform_part(%RunHistory.Run{} = record, part, memory \\ nil, caller \\ Protocol.local()) do
+    if Protocol.compatible?(caller) do
+      with {:ok, opened} <- opened_for(record) do
+        case run_part_here(record, opened, part, memory, record.id) do
+          {:ok, _part, result, steps} -> {:ok, result, steps}
+          {:error, _part, reason, steps} -> {:error, reason, steps}
+        end
+      end
+    else
+      {:error,
+       {:incompatible_peer, Protocol.describe(caller), Protocol.describe(Protocol.local())}, 0}
+    end
+  end
+
+  # Who performs each part of this wave, and the run says so before any of it
+  # runs: the assignment is the cluster's answer to a question the run cannot ask
+  # itself (`Monty.Studio.Partition.hosts/3`).
+  defp hosts_for(wave, record) do
+    hosts = Partition.hosts(wave, Nodes.snapshot(), Placement.needs(record.inputs))
+
+    for {part, [host | _rest]} <- hosts, host.node != node() do
+      say(record.id, "part #{part.index + 1} of #{part.of} is performed by #{host.name}")
+    end
+
+    hosts
+  end
+
+  # A part's steps, written where its run can read them.
+  #
+  # Written when the part ends rather than a step at a time: while the run goes,
+  # a page reads this node's `RunStream`, and the file is the transcript's copy —
+  # one write of a few hundred kilobytes a part, instead of one more file handle
+  # in every step.
+  defp keep_steps(run_id, part) do
+    {entries, moments} = RunStream.steps(part.stream)
+
+    case Artifacts.store_part(run_id, part.phase, part.index, entries, moments) do
+      {:ok, steps} ->
+        steps
+
+      {:error, reason} ->
+        # The stream still holds them and `part_transcript/2` falls back to it,
+        # but a part performed by a peer has no stream here — so this line is the
+        # one that says a division lost its steps.
+        say(
+          run_id,
+          "part #{part.index + 1} of #{part.of}: its steps could not be kept: #{inspect(reason)}"
+        )
+
+        length(entries)
     end
   end
 

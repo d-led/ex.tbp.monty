@@ -141,7 +141,7 @@ defmodule Monty.Studio.Jobs.ReaperTest do
     test "closes the division with it" do
       record = start_run()
       :ok = RunHistory.plan_parts(record.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
-      :ok = RunHistory.part_started(record.id, 0, "node1_127.0.0.1")
+      {:ok, _claim} = RunHistory.claim_part(record.id, 0, "node1_127.0.0.1")
 
       job = enqueue(record)
       :ok = Oban.cancel_job(job)

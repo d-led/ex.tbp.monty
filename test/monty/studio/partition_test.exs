@@ -11,6 +11,7 @@ defmodule Monty.Studio.PartitionTest do
 
   use ExUnit.Case, async: true
 
+  alias ExTbpMonty.Cluster.Protocol
   alias Monty.Studio
   alias Monty.Studio.{Partition, Setup}
 
@@ -147,4 +148,131 @@ defmodule Monty.Studio.PartitionTest do
       assert plan.eval == []
     end
   end
+
+  # A part's steps are a file in the run's own directory, written by whoever
+  # performed it and read by the node that owns the run. So a part may only be
+  # given to a node that writes that directory, can step what the run needs, and
+  # runs this build — and the division of a symmetric cluster is that list, split
+  # as evenly as it goes.
+  describe "where each part is performed" do
+    setup do
+      parts = [
+        %{index: 0, of: 2, phase: :eval, episodes: [0]},
+        %{index: 1, of: 2, phase: :eval, episodes: [1]}
+      ]
+
+      {:ok, parts: parts}
+    end
+
+    test "every part stays here when no peer writes the run's files where this node reads them",
+         %{parts: parts} do
+      here = entry("node1", self: true)
+      elsewhere = entry("node2", artifacts: "/somewhere/else")
+      silent = entry("node3", artifacts: nil)
+
+      assert [{_, [first]}, {_, [second]}] =
+               Partition.hosts(parts, [here, elsewhere, silent], ["monty"])
+
+      assert first.self
+      assert second.self
+    end
+
+    # Each part is given an ordered list, and the first of it is where the part
+    # goes: the rest are where it goes if that node stops answering, which is how
+    # a lost node costs a part an attempt rather than the part itself.
+    test "the parts go round robin between the nodes that share them, this node first",
+         %{parts: parts} do
+      # The cluster lists this node last, and it still takes the first part: the
+      # node that owns the run is the one that answers the page, so it is the one
+      # whose work a reader can watch.
+      here = entry("node2", self: true)
+      peer = entry("node1")
+
+      assert [{_, [first, first_backup]}, {_, [second, second_backup]}] =
+               Partition.hosts(parts, [peer, here], ["monty"])
+
+      assert first.self
+      assert first_backup.name == "node1"
+      assert second.name == "node1"
+      assert second_backup.self
+    end
+
+    test "a node that cannot step what the run needs is not handed a part", %{parts: parts} do
+      here = entry("node1", self: true, capabilities: ["monty", "world:mujoco"])
+      laptop = entry("node2")
+
+      assert [{_, [first]}, {_, [second]}] =
+               Partition.hosts(parts, [here, laptop], ["monty", "world:mujoco"])
+
+      assert first.self
+      assert second.self
+    end
+
+    test "a node on another build is not handed a part", %{parts: parts} do
+      # Handing a part over is calling into the peer's own code with this build's
+      # record and reading this build's answer.
+      here = entry("node1", self: true)
+      older = entry("node2", version: "0.0.1")
+
+      assert [{_, [first]}, {_, [second]}] = Partition.hosts(parts, [here, older], ["monty"])
+
+      assert first.self
+      assert second.self
+    end
+
+    test "a node speaking another protocol is not handed a part", %{parts: parts} do
+      # The build says which record may travel; the protocol says what can be
+      # asked of a node at all (`ExTbpMonty.Cluster.Protocol`). A peer that does
+      # not speak it would fail half-way through the part instead of at the door.
+      here = entry("node1", self: true)
+      foreign = entry("node2", protocol: Protocol.version() + 1)
+
+      assert [{_, [first]}, {_, [second]}] = Partition.hosts(parts, [here, foreign], ["monty"])
+
+      assert first.self
+      assert second.self
+    end
+
+    test "a node that is not alive is not a place a part goes", %{parts: parts} do
+      here = entry("node1", self: true)
+      gone = entry("node2", alive: false)
+
+      assert [{_, [first]}, {_, [second]}] = Partition.hosts(parts, [here, gone], ["monty"])
+
+      assert first.self
+      assert second.self
+
+      assert [{_, [primary]}] = Partition.hosts([hd(parts)], [here, gone], ["monty"])
+      assert primary.self
+    end
+
+    test "three parts over two nodes go here, there, here", %{parts: two} do
+      here = entry("node1", self: true)
+      peer = entry("node2")
+      third = %{index: 2, of: 3, phase: :eval, episodes: [2]}
+
+      assert [{_, [first | _]}, {_, [second | _]}, {_, [last | _]}] =
+               Partition.hosts(two ++ [third], [here, peer], ["monty"])
+
+      assert {first.self, second.self, last.self} == {true, false, true}
+    end
+  end
+
+  # A node as `ExTbpMonty.Cluster.Nodes.snapshot/0` describes it, cut down to what
+  # the decision reads. This node's own entry is only ever built by `Partition`
+  # itself, so a test cannot disagree with it about the directory or the build.
+  defp entry(name, options \\ []) do
+    %{
+      node: String.to_atom("#{name}@127.0.0.1"),
+      name: name,
+      self: Keyword.get(options, :self, false),
+      alive: Keyword.get(options, :alive, true),
+      version: Keyword.get(options, :version, build()),
+      protocol: Keyword.get(options, :protocol, Protocol.version()),
+      capabilities: Keyword.get(options, :capabilities, ["monty"]),
+      artifacts: Keyword.get(options, :artifacts, Monty.Studio.Artifacts.root())
+    }
+  end
+
+  defp build, do: to_string(Application.spec(:ex_tbp_monty, :vsn))
 end

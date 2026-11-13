@@ -5,10 +5,11 @@ defmodule Monty.Studio.RunHistory.Part do
 
   The run's own row is the record of the experiment; this is the record of the
   division. A run of four parts has one row here per part, and the question they
-  answer is the one the run's row cannot: *where* each part was performed. Today
-  every part of a run is performed by the node that merges them, and that is what
-  a row will say until a part may be handed to a peer —
-  `ExTbpMonty.Cluster.Placement` is what would decide that.
+  answer is the one the run's row cannot: *where* each part is performed, *who*
+  has it now and how far it got. A part is performed by any node that shares the
+  run's files, so the row is also the place the cluster agrees on ownership: the
+  claim and its lease (`Monty.Studio.Claim`) are what a second node is refused by
+  and what makes a part whose holder went silent recoverable.
 
   `part` is zero-based, as `Monty.Studio.Partition` numbers its parts, so `part`
   plus one is the number a log line prints and a person counts.
@@ -33,6 +34,11 @@ defmodule Monty.Studio.RunHistory.Part do
   One part's row: which part of how many, what state it is in, and the node that
   has it — `nil` until a node takes it, which is the only column that is not a
   fact the moment the row is written.
+
+  `claim` is the token of the claim the node holds and `claimed_until` is when it
+  lapses (`Monty.Studio.Claim`): together they are what a write about the part is
+  checked against, so a node that lost its part cannot overwrite the node that has
+  it now.
   """
   @type t :: %__MODULE__{
           id: Ecto.UUID.t() | nil,
@@ -40,6 +46,8 @@ defmodule Monty.Studio.RunHistory.Part do
           part: non_neg_integer() | nil,
           of: pos_integer() | nil,
           node: String.t() | nil,
+          claim: String.t() | nil,
+          claimed_until: DateTime.t() | nil,
           status: String.t(),
           steps: non_neg_integer(),
           started_at: DateTime.t() | nil,
@@ -51,6 +59,8 @@ defmodule Monty.Studio.RunHistory.Part do
     field :part, :integer
     field :of, :integer
     field :node, :string
+    field :claim, :string
+    field :claimed_until, :utc_datetime_usec
     field :status, :string, default: "queued"
     field :steps, :integer, default: 0
     field :started_at, :utc_datetime_usec

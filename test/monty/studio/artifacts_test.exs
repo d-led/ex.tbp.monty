@@ -20,6 +20,23 @@ defmodule Monty.Studio.ArtifactsTest do
 
   defp run_id, do: Ecto.UUID.generate()
 
+  # A node answers "where do a run's files go" with this, and a peer decides
+  # whether it shares a run's directory by comparing it — so the answer has to be
+  # the directory the files are actually written to, in every environment.
+  test "is where the deployment said, and its own folder otherwise" do
+    Tmp.without_app_env(:studio_artifacts_dir)
+    System.delete_env("MONTY_ARTIFACTS_DIR")
+    assert Artifacts.root() == "priv/studio_runs"
+
+    System.put_env("MONTY_ARTIFACTS_DIR", "/tmp/somewhere/runs")
+    on_exit(fn -> System.delete_env("MONTY_ARTIFACTS_DIR") end)
+    assert Artifacts.root() == "/tmp/somewhere/runs"
+
+    # A release names the directory outright, and so does a test.
+    Tmp.app_env(:studio_artifacts_dir, "/tmp/a-test/studio-runs")
+    assert Artifacts.root() == "/tmp/a-test/studio-runs"
+  end
+
   test "lists the files a run wrote, by name and size, sorted" do
     id = run_id()
     :ok = Artifacts.start(id)
@@ -61,6 +78,52 @@ defmodule Monty.Studio.ArtifactsTest do
 
   test "refuses an id that is not a run id" do
     assert_raise ArgumentError, fn -> Artifacts.files("../../etc") end
+  end
+
+  describe "the steps of one part of a divided run" do
+    test "are written where the run can read them, and read back as they were taken" do
+      # A part may be performed by another node, whose `RunStream` this node cannot
+      # read: the file in the run's own directory is how its steps reach the run's
+      # transcript, so what goes in has to come out unchanged — beliefs and clock
+      # both, since neither is in the human log line.
+      id = run_id()
+
+      entries = [
+        %{
+          "step" => 0,
+          "episode" => 0,
+          "part" => 1,
+          "beliefs" => %{"lm" => %{"evidence" => 0.25}}
+        },
+        %{"step" => 1, "episode" => 0, "part" => 1, "beliefs" => %{"lm" => %{"evidence" => 1.5}}}
+      ]
+
+      moments = [%{"at" => "2026-11-13T10:00:00Z"}, %{"at" => "2026-11-13T10:00:01Z"}]
+
+      assert {:ok, 2} = Artifacts.store_part(id, :eval, 1, entries, moments)
+      assert File.regular?(Artifacts.part_path(id, :eval, 1))
+
+      assert {:ok, {^entries, ^moments}} = Artifacts.read_part(id, :eval, 1)
+    end
+
+    test "are none for a part that never wrote any, which is not an error" do
+      id = run_id()
+      :ok = Artifacts.start(id)
+
+      assert {:error, :enoent} = Artifacts.read_part(id, :train, 0)
+    end
+
+    test "are kept apart per wave, because both waves number their parts from one" do
+      id = run_id()
+      trained = [%{"step" => 0, "part" => 0}]
+      evaluated = [%{"step" => 0, "part" => 0, "episode" => 2}]
+
+      assert {:ok, 1} = Artifacts.store_part(id, :train, 0, trained, [%{"at" => "t"}])
+      assert {:ok, 1} = Artifacts.store_part(id, :eval, 0, evaluated, [%{"at" => "e"}])
+
+      assert {:ok, {^trained, _}} = Artifacts.read_part(id, :train, 0)
+      assert {:ok, {^evaluated, _}} = Artifacts.read_part(id, :eval, 0)
+    end
   end
 
   describe "the pictures of a step" do

@@ -173,8 +173,8 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   describe "the division of a run" do
     test "says how far it has got, and names the node each part is on", %{conn: conn, run: run} do
       :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
-      :ok = RunHistory.part_started(run.id, 0, "node1_127.0.0.1")
-      :ok = RunHistory.part_finished(run.id, 0, 12)
+      {:ok, claimed} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.release_part(claimed, "finished", 12)
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 

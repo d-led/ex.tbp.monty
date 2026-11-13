@@ -91,9 +91,9 @@ defmodule ExTbpMonty.Cluster.NodesTest do
   # a page that says a run is on a peer has to be able to link to it.
   describe "where a node writes a run's files" do
     test "this node says its own directory" do
-      assert Nodes.identity().artifacts == Monty.Paths.artifacts()
+      assert Nodes.identity().artifacts == Monty.Studio.Artifacts.root()
       assert [entry] = Nodes.snapshot()
-      assert entry.artifacts == Monty.Paths.artifacts()
+      assert entry.artifacts == Monty.Studio.Artifacts.root()
     end
 
     test "a peer's entry carries the directory it named" do

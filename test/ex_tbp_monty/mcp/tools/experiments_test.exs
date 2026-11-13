@@ -320,8 +320,8 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                Tools.call("monty_run_experiment", %{"name" => @experiment, "steps" => 2}, @ctx)
 
       :ok = RunHistory.plan_parts(run.run_id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
-      :ok = RunHistory.part_started(run.run_id, 0, "node1_127.0.0.1")
-      :ok = RunHistory.part_finished(run.run_id, 0, 12)
+      {:ok, claimed} = RunHistory.claim_part(run.run_id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.release_part(claimed, "finished", 12)
 
       assert {:ok, %{text: text, structured: report}} =
                Tools.call("monty_run_report", %{"run_id" => run.run_id}, @ctx)

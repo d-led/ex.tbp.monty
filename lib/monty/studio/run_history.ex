@@ -13,6 +13,7 @@ defmodule Monty.Studio.RunHistory do
   import Ecto.Query
 
   alias ExTbpMonty.Repo
+  alias Monty.Studio.Claim
   alias Monty.Studio.RunHistory.Part
   alias Monty.Studio.RunHistory.Run
 
@@ -777,44 +778,177 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
-  A node has a part in hand.
+  The node that is to perform a part takes it, and the row says so before it starts.
 
   `node` is the spelling that decided the node's folder (`Monty.Paths.data_dir_name/0`),
   which is how a page translates it back to the name a peer dials — the same
   translation the run's own `node` column gets.
-  """
-  @spec part_started(binary(), integer(), String.t() | nil) :: :ok
-  def part_started(run_id, part, node) do
-    update_part(run_id, part, status: "running", node: node, started_at: now())
-  end
 
-  @doc "A part is done, with the steps it took."
-  @spec part_finished(binary(), integer(), non_neg_integer()) :: :ok
-  def part_finished(run_id, part, steps) do
-    update_part(run_id, part, status: "finished", steps: steps, finished_at: now())
+  A part is claimed, not merely announced: the answer carries the token that
+  fences the writes about it (`Monty.Studio.Claim`), and a part that another node
+  has — or one that has already ended — is refused rather than taken. That refusal
+  is what stops two nodes performing one part of one experiment at the same time.
+
+  A claim on a part whose previous holder went silent is granted: its lease has
+  lapsed, and the part is nobody's until somebody takes it.
+  """
+  @spec claim_part(binary(), non_neg_integer(), String.t() | nil) ::
+          {:ok, Claim.t()} | {:error, term()}
+  def claim_part(run_id, part, node) do
+    moment = now()
+    claim = Claim.new(run_id, part, node, moment)
+
+    with {:ok, uuid} <- Ecto.UUID.cast(run_id) do
+      free =
+        from(candidate in Part,
+          where:
+            candidate.run_id == ^uuid and candidate.part == ^part and
+              candidate.status in ["queued", "running"] and
+              (is_nil(candidate.claimed_until) or candidate.claimed_until < ^moment)
+        )
+
+      # `started_at` is the first instant a node had the part, not the latest: a
+      # part that lapsed once and was reassigned began when its first holder took
+      # it. Written as a second statement, and only for a part nothing has started
+      # yet, because a column may not refer to itself in one `update_all/3`.
+      case Repo.update_all(free,
+             set: [
+               claim: claim.token,
+               claimed_until: claim.until,
+               node: node,
+               status: "running",
+               updated_at: moment
+             ]
+           ) do
+        {1, _one_part} ->
+          from(candidate in Part,
+            where:
+              candidate.run_id == ^uuid and candidate.part == ^part and
+                is_nil(candidate.started_at)
+          )
+          |> Repo.update_all(set: [started_at: moment])
+
+          {:ok, claim}
+
+        {0, _nothing} ->
+          {:error, refusal(uuid, part)}
+      end
+    end
   end
 
   @doc """
-  A part that failed, and the steps it managed before it did.
+  The holder says it is still working, and the claim stands for another lease.
 
-  A part that failed at step 40 took 40 steps, and that is what a reader can act
-  on — a row saying `failed` with no steps is a part that appears not to have
-  started.
+  Called as the part steps (`Monty.Studio.Jobs.Run`): a part that is alive is
+  never silent for a whole lease, and a part that stopped saying so is one the
+  cluster may give away.
   """
-  @spec part_failed(binary(), integer(), non_neg_integer()) :: :ok
-  def part_failed(run_id, part, steps) do
-    update_part(run_id, part, status: "failed", steps: steps, finished_at: now())
+  @spec renew_claim(Claim.t()) :: :ok | {:error, :lapsed}
+  def renew_claim(%Claim{} = claim) do
+    moment = now()
+    renewed = Claim.renew(claim, moment)
+
+    held =
+      from(candidate in Part,
+        where:
+          candidate.run_id == ^claim.run_id and candidate.part == ^claim.part and
+            candidate.claim == ^claim.token and candidate.status == "running"
+      )
+
+    case Repo.update_all(held, set: [claimed_until: renewed.until, updated_at: moment]) do
+      {1, _one_part} -> :ok
+      {0, _nothing} -> {:error, :lapsed}
+    end
   end
 
   @doc """
-  A part the stop arrived in: cut short, neither finished nor failed.
+  The holder writes how its part ended — and only the holder can.
 
-  Its steps are the ones it managed before the run was asked to stop, which is
-  what a reader of the division is counting.
+  `status` is `"finished"`, `"failed"` or `"stopped"`, and the steps are what the
+  part managed before it did. A node whose claim lapsed, or whose part was given
+  to a peer while it was unreachable, is refused here: its work is not allowed to
+  overwrite the work of the node that has the part now.
   """
-  @spec part_stopped(binary(), integer(), non_neg_integer()) :: :ok
-  def part_stopped(run_id, part, steps) do
-    update_part(run_id, part, status: "stopped", steps: steps, finished_at: now())
+  @spec release_part(Claim.t(), String.t(), non_neg_integer()) :: :ok | {:error, :not_owner}
+  def release_part(%Claim{} = claim, status, steps) when status in ~w(finished failed stopped) do
+    moment = now()
+
+    held =
+      from(candidate in Part,
+        where:
+          candidate.run_id == ^claim.run_id and candidate.part == ^claim.part and
+            candidate.claim == ^claim.token
+      )
+
+    # The claim goes with the ending: a part that is settled is nobody's, and a
+    # holder that lost its part before this call finds no token to match.
+    set = [
+      status: status,
+      steps: steps,
+      finished_at: moment,
+      claim: nil,
+      claimed_until: nil,
+      updated_at: moment
+    ]
+
+    case Repo.update_all(held, set: set) do
+      {1, _one_part} -> :ok
+      {0, _nothing} -> {:error, :not_owner}
+    end
+  end
+
+  @doc """
+  The holder gives the part back without a verdict about it, so another node can
+  take it.
+
+  What a part whose node died mid-wave needs: the part is not finished, not
+  failed and not skipped — it is unfinished, and the run wants it performed. The
+  row goes back to `queued` with the steps it had, and the claim is cleared.
+  """
+  @spec abandon_part(Claim.t()) :: :ok | {:error, :not_owner}
+  def abandon_part(%Claim{} = claim) do
+    moment = now()
+
+    held =
+      from(candidate in Part,
+        where:
+          candidate.run_id == ^claim.run_id and candidate.part == ^claim.part and
+            candidate.claim == ^claim.token
+      )
+
+    case Repo.update_all(held,
+           set: [status: "queued", claim: nil, claimed_until: nil, updated_at: moment]
+         ) do
+      {1, _one_part} -> :ok
+      {0, _nothing} -> {:error, :not_owner}
+    end
+  end
+
+  @doc """
+  The parts of a run that nobody is working on any more: in hand, and the holder
+  has not said a word since its lease ran out.
+
+  These are the parts a lost node leaves behind, and the answer to "what would be
+  reassigned if this run were recovered now".
+  """
+  @spec lapsed_parts(binary()) :: [Part.t()]
+  def lapsed_parts(run_id) do
+    moment = now()
+
+    case Ecto.UUID.cast(run_id) do
+      {:ok, uuid} ->
+        Part
+        |> where(
+          [part],
+          part.run_id == ^uuid and part.status == "running" and
+            (is_nil(part.claimed_until) or part.claimed_until < ^moment)
+        )
+        |> order_by([part], asc: part.part)
+        |> Repo.all()
+
+      :error ->
+        []
+    end
   end
 
   @doc """
@@ -833,14 +967,17 @@ defmodule Monty.Studio.RunHistory do
   def settle_parts(run_id) do
     with {:ok, uuid} <- Ecto.UUID.cast(run_id) do
       moment = now()
+      # A part that is settled is nobody's: the claims go with the status, so a
+      # row of a finished run cannot look like one a node is still working on.
+      nothing_held = [claim: nil, claimed_until: nil, updated_at: moment]
 
       _ =
         from(part in Part, where: part.run_id == ^uuid and part.status == "queued")
-        |> Repo.update_all(set: [status: "skipped", finished_at: moment, updated_at: moment])
+        |> Repo.update_all(set: [status: "skipped", finished_at: moment] ++ nothing_held)
 
       _ =
         from(part in Part, where: part.run_id == ^uuid and part.status == "running")
-        |> Repo.update_all(set: [status: "failed", finished_at: moment, updated_at: moment])
+        |> Repo.update_all(set: [status: "failed", finished_at: moment] ++ nothing_held)
     end
 
     :ok
@@ -866,14 +1003,24 @@ defmodule Monty.Studio.RunHistory do
     end
   end
 
-  defp update_part(run_id, part, attributes) do
-    with {:ok, uuid} <- Ecto.UUID.cast(run_id) do
-      _ =
-        from(candidate in Part, where: candidate.run_id == ^uuid and candidate.part == ^part)
-        |> Repo.update_all(set: Enum.to_list(attributes) ++ [updated_at: now()])
-    end
+  # Why a part could not be claimed, in the words the run logs: a part that ended
+  # has an answer already, and a part somebody else holds names its holder.
+  defp refusal(uuid, part) do
+    row =
+      Repo.one(
+        from candidate in Part, where: candidate.run_id == ^uuid and candidate.part == ^part
+      )
 
-    :ok
+    case row do
+      nil ->
+        :not_planned
+
+      %Part{status: status} when status in ~w(finished failed stopped skipped) ->
+        {:settled, status}
+
+      %Part{node: node, claimed_until: until} ->
+        {:held, node, until}
+    end
   end
 
   defp now, do: DateTime.utc_now() |> DateTime.truncate(:microsecond)

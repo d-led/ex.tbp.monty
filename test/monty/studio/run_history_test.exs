@@ -4,8 +4,8 @@ defmodule Monty.Studio.RunHistoryTest do
   import Ecto.Query
 
   alias ExTbpMonty.Repo
-  alias Monty.Studio.{Artifacts, RunHistory, RunLog}
-  alias Monty.Studio.RunHistory.Run
+  alias Monty.Studio.{Artifacts, Claim, RunHistory, RunLog}
+  alias Monty.Studio.RunHistory.{Part, Run}
   alias Monty.Test.Tmp
 
   @attributes %{
@@ -35,21 +35,121 @@ defmodule Monty.Studio.RunHistoryTest do
       assert first.started_at == nil
     end
 
-    test "say which node has each one, and how it ended" do
+    # A part is claimed, not announced: the node that is to perform it takes it
+    # before the first step, and the token it is given is what makes the writes
+    # about the part its own (`Monty.Studio.Claim`).
+    test "are claimed by the node that performs them, before they start" do
       {:ok, run} = RunHistory.start(@attributes)
       :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
 
-      :ok = RunHistory.part_started(run.id, 0, "node1_127.0.0.1")
-      :ok = RunHistory.part_finished(run.id, 0, 68)
-      :ok = RunHistory.part_started(run.id, 1, "node2_127.0.0.1")
-      :ok = RunHistory.part_failed(run.id, 1, 12)
+      assert {:ok, %Claim{} = claim} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
 
-      assert [done, broken] = RunHistory.parts(run.id)
-      assert {done.status, done.node, done.steps} == {"finished", "node1_127.0.0.1", 68}
+      assert [held, untouched] = RunHistory.parts(run.id)
+      assert {held.status, held.node, held.claim} == {"running", "node1_127.0.0.1", claim.token}
+      assert %DateTime{} = held.started_at
+      assert %DateTime{} = held.claimed_until
+      assert {untouched.status, untouched.node, untouched.claim} == {"queued", nil, nil}
+    end
+
+    # One part of one experiment, performed by one node at a time: the second node
+    # that asks is told who has it rather than given it, which is what keeps a
+    # recovery from becoming two runs of the same episodes.
+    test "are not given to a second node while somebody is working on them" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      {:ok, _first} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+
+      assert {:error, {:held, "node1_127.0.0.1", %DateTime{}}} =
+               RunHistory.claim_part(run.id, 0, "node2_127.0.0.1")
+
+      assert [held, _] = RunHistory.parts(run.id)
+      assert held.node == "node1_127.0.0.1"
+    end
+
+    # The lease is what makes a part recoverable: a node that died saying nothing
+    # loses its part when the lease runs out, and the next node to ask takes it —
+    # without a person unlocking anything.
+    test "are taken over by the next node once the holder's lease has run out" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      {:ok, gone} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+      [first_holder, _] = RunHistory.parts(run.id)
+      let_the_lease_run_out(run.id, 0)
+
+      assert [%{part: 0}] = RunHistory.lapsed_parts(run.id)
+
+      assert {:ok, successor} = RunHistory.claim_part(run.id, 0, "node2_127.0.0.1")
+      assert successor.token != gone.token
+
+      # The part began when its first holder took it: the second claim says who
+      # has it now, not when the work began.
+      assert [taken, _] = RunHistory.parts(run.id)
+      assert {taken.node, taken.claim} == {"node2_127.0.0.1", successor.token}
+      assert taken.started_at == first_holder.started_at
+      assert RunHistory.lapsed_parts(run.id) == []
+    end
+
+    test "are not listed as recoverable while their holder is working" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}])
+
+      {:ok, claim} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+
+      assert RunHistory.lapsed_parts(run.id) == []
+      assert :ok = RunHistory.renew_claim(claim)
+      assert RunHistory.lapsed_parts(run.id) == []
+    end
+
+    # The ending is the holder's to write, and the row is written once: a node
+    # whose part was given away while it worked still has its token, and the row
+    # no longer has it — so its answer is refused rather than allowed to overwrite
+    # the work of the node that has the part now.
+    test "take only their holder's word for how they ended" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}])
+
+      {:ok, first} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+      let_the_lease_run_out(run.id, 0)
+      {:ok, second} = RunHistory.claim_part(run.id, 0, "node2_127.0.0.1")
+
+      assert {:error, :not_owner} = RunHistory.release_part(first, "finished", 68)
+
+      assert :ok = RunHistory.release_part(second, "finished", 68)
+      assert [done] = RunHistory.parts(run.id)
+      assert {done.status, done.node, done.steps} == {"finished", "node2_127.0.0.1", 68}
       assert %DateTime{} = done.finished_at
+    end
 
-      # A part that failed took the steps it took before it did.
-      assert {broken.status, broken.node, broken.steps} == {"failed", "node2_127.0.0.1", 12}
+    # A part that ended has an answer, and the answer is not given away: claiming
+    # it again is the duplicate a claim exists to refuse.
+    test "are not claimed again once they have ended" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}])
+
+      {:ok, claim} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.release_part(claim, "failed", 12)
+
+      assert {:error, {:settled, "failed"}} = RunHistory.claim_part(run.id, 0, "node2_127.0.0.1")
+    end
+
+    # A part whose node died before the first step, or one a wave gave up on, is
+    # not finished, failed or skipped: it is unfinished, and the row goes back to
+    # where another node can take it.
+    test "can be given back unfinished, so another node can take them" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}])
+
+      {:ok, claim} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+      assert :ok = RunHistory.abandon_part(claim)
+
+      assert [given_back] = RunHistory.parts(run.id)
+
+      assert {given_back.status, given_back.claim, given_back.claimed_until} ==
+               {"queued", nil, nil}
+
+      assert {:ok, _another} = RunHistory.claim_part(run.id, 0, "node2_127.0.0.1")
     end
 
     # A part that the stop reached is neither finished nor failed: it did the
@@ -59,8 +159,8 @@ defmodule Monty.Studio.RunHistoryTest do
       {:ok, run} = RunHistory.start(@attributes)
       :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
 
-      :ok = RunHistory.part_started(run.id, 0, "node1_127.0.0.1")
-      :ok = RunHistory.part_stopped(run.id, 0, 17)
+      {:ok, claim} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.release_part(claim, "stopped", 17)
 
       assert [stopped, _never_reached] = RunHistory.parts(run.id)
       assert {stopped.status, stopped.steps} == {"stopped", 17}
@@ -70,20 +170,22 @@ defmodule Monty.Studio.RunHistoryTest do
     test "are replaced, not doubled, when a run is performed again" do
       {:ok, run} = RunHistory.start(@attributes)
       :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
-      :ok = RunHistory.part_started(run.id, 0, "node1_127.0.0.1")
+      {:ok, _claim} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
 
       :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
 
       assert [first, second] = RunHistory.parts(run.id)
       assert first.status == "queued"
       assert first.node == nil
+      assert first.claim == nil
       assert second.status == "queued"
     end
 
     # A run that ended must not leave the division describing work in progress:
     # a part that started and did not finish is `failed`, one the run never got to
     # is `skipped`, and both say when. The same lie an abandoned run's row used to
-    # tell, one level down.
+    # tell, one level down. A claim goes with the status: a row of a finished run
+    # is nobody's.
     test "are closed when the run is over, whatever happened to them" do
       {:ok, run} = RunHistory.start(@attributes)
 
@@ -94,9 +196,9 @@ defmodule Monty.Studio.RunHistoryTest do
           %{index: 2, of: 3}
         ])
 
-      :ok = RunHistory.part_started(run.id, 0, "node1_127.0.0.1")
-      :ok = RunHistory.part_finished(run.id, 0, 40)
-      :ok = RunHistory.part_started(run.id, 1, "node1_127.0.0.1")
+      {:ok, done} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.release_part(done, "finished", 40)
+      {:ok, _in_hand} = RunHistory.claim_part(run.id, 1, "node1_127.0.0.1")
 
       assert :ok = RunHistory.settle_parts(run.id)
 
@@ -107,6 +209,7 @@ defmodule Monty.Studio.RunHistoryTest do
              ] = RunHistory.parts(run.id)
 
       assert RunHistory.parts(run.id) |> Enum.all?(&(&1.finished_at != nil))
+      assert RunHistory.parts(run.id) |> Enum.all?(&(&1.claim == nil))
     end
 
     test "close nothing for a run that was never divided" do
@@ -123,6 +226,19 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.parts(Ecto.UUID.generate()) == []
       assert RunHistory.parts("not a run id") == []
     end
+  end
+
+  # Time passing, said once: a part's lease is in the past, which is what a node
+  # that died without a word looks like from here. Everything else about the row
+  # is untouched, so what a test then sees is the part and not the edit.
+  defp let_the_lease_run_out(run_id, part) do
+    {:ok, uuid} = Ecto.UUID.cast(run_id)
+    past = DateTime.add(DateTime.utc_now(), -1, :second) |> DateTime.truncate(:microsecond)
+
+    Repo.update_all(
+      from(candidate in Part, where: candidate.run_id == ^uuid and candidate.part == ^part),
+      set: [claimed_until: past]
+    )
   end
 
   describe "a run that starts" do

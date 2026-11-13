@@ -42,6 +42,7 @@ defmodule Monty.Studio.Partition do
   work is Monty's; only the number of pieces the page shows is the studio's.
   """
 
+  alias ExTbpMonty.Cluster.{Nodes, Placement, Protocol}
   alias Monty.Studio.Setup
 
   @typedoc """
@@ -92,6 +93,84 @@ defmodule Monty.Studio.Partition do
   @doc "Every part of a plan, in the order the waves run: training first."
   @spec parts(t()) :: [part()]
   def parts(%{train: train, eval: eval}), do: train ++ eval
+
+  @doc """
+  Which node performs each part: the part beside the node that is to take it.
+
+  A part may only be given to a node that can be given it:
+
+    * it offers what the run needs (`ExTbpMonty.Cluster.Placement.candidates/2` —
+      the same tags that decide whether a node may perform the run at all), so a
+      peer that cannot step the world is not handed half the world's episodes;
+    * it writes a run's files where this node reads them
+      (`ExTbpMonty.Cluster.Nodes.shares_run_files?/2`) — a part's steps are a file
+      in the run's own directory (`Monty.Studio.Artifacts.store_part/5`), and a
+      peer with a directory of its own would keep a piece of the transcript to
+      itself;
+    * it runs this build, because handing a part over is calling into the peer's
+      own code with this build's record and reading this build's answer.
+
+  Symmetric nodes are interchangeable, so the parts go round robin: this node
+  first, then the peers in the order the cluster lists them. A cluster with no such
+  peer — one node, or peers with their own disks — answers every part with this
+  node, and the run is performed exactly as one node has always performed it.
+
+  The answer is a **list** per part rather than one node: the first is where the
+  part is performed, and the rest are where it goes if the first one stops
+  answering. A part is a piece of a run somebody owns, so losing the node that has
+  it must not lose the part — `Monty.Studio.Jobs.Run` walks the list, and the
+  part's claim is what keeps the walk from being two owners
+  (`Monty.Studio.Claim`).
+  """
+  @spec hosts([part()], [map()], [String.t()]) :: [{part(), [map()]}]
+  def hosts(parts, entries, needs) do
+    case eligible(entries, needs) do
+      [] -> Enum.map(parts, &{&1, [here()]})
+      hosts -> round_robin(parts, hosts)
+    end
+  end
+
+  # The nodes that could be given a part, this node first: the order is the
+  # division, and a division that changed order between two reads of the same
+  # cluster would be two different runs of one experiment.
+  #
+  # This node's own entry is replaced by what it says about itself (`here/0`), not
+  # by what the list says: a part row names the node by the name its folder has
+  # (`Monty.Paths.data_dir_name/0`), and the row and the directory must not be two
+  # spellings of one node.
+  defp eligible(entries, needs) do
+    here = here()
+
+    entries
+    |> Placement.candidates(needs)
+    |> Enum.map(&if(&1.self, do: here, else: &1))
+    |> Enum.filter(
+      &(Nodes.shares_run_files?(here, &1) and &1.version == here.version and
+          Protocol.compatible?(&1))
+    )
+    |> Enum.sort_by(&{not &1.self, &1.name})
+  end
+
+  defp round_robin(parts, hosts) do
+    count = length(hosts)
+
+    parts
+    |> Enum.with_index()
+    |> Enum.map(fn {part, position} -> {part, from(hosts, rem(position, count))} end)
+  end
+
+  # Every candidate, starting at this part's place in the round robin: the part
+  # goes to the first and falls back to the next one down the list.
+  defp from(hosts, position), do: Enum.drop(hosts, position) ++ Enum.take(hosts, position)
+
+  # This node, as its own poller describes it (`ExTbpMonty.Cluster.Nodes
+  # .identity/0`), with the three things only a list entry has. Asked rather than
+  # assumed: a node whose answer disagrees with its own table entry is a bug in one
+  # place, not two.
+  defp here do
+    Nodes.identity()
+    |> Map.merge(%{name: Monty.Paths.data_dir_name(), self: true, alive: true})
+  end
 
   @doc """
   Whether the evaluation wave waits for the training one.

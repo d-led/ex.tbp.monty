@@ -1,6 +1,7 @@
 defmodule Monty.Studio.Jobs.RunTest do
   use ExTbpMontyWeb.ConnCase, async: false
 
+  alias ExTbpMonty.Cluster.Protocol
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
 
   alias Monty.Studio.{
@@ -492,6 +493,96 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert Enum.count(stats, &(&1 == header)) == 1
     end
 
+    # A part is performed wherever the run is divided to, and its steps are in
+    # that node's memory — a table this node cannot read. So they leave through
+    # the run's own directory, which is the one place every candidate for a part
+    # shares (`ExTbpMonty.Cluster.Nodes.shares_run_files?/2`), and the transcript
+    # is those files in part order, whichever node wrote them.
+    test "keeps every part's steps in the run's own directory, and reads them in part order" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 2, 4, %{parts: parts}))
+
+      assert {:ok, closed} = perform(record)
+
+      for part <- parts do
+        path = Artifacts.part_path(closed.id, part.phase, part.index)
+        assert File.regular?(path), "part #{part.index} of #{part.phase} left no steps"
+
+        assert {:ok, {entries, moments}} = Artifacts.read_part(closed.id, part.phase, part.index)
+        assert length(entries) == length(moments)
+        assert Enum.all?(entries, &(&1["part"] == part.index))
+      end
+
+      # What the record holds is those files, not a second copy of them: a part
+      # this node performed is read back off disk like any other.
+      {entries, _moments} =
+        parts
+        |> Enum.sort_by(&{&1.phase, &1.index})
+        |> Enum.flat_map(fn part ->
+          {:ok, {entries, moments}} = Artifacts.read_part(closed.id, part.phase, part.index)
+          Enum.zip(entries, moments)
+        end)
+        |> Enum.unzip()
+
+      assert closed.log == entries
+      assert closed.log |> Enum.map(& &1["part"]) == [0, 0, 1, 1]
+    end
+
+    # The other half of a division across nodes: a part performed for the node
+    # that owns the run leaves its steps where the owner reads them, and touches
+    # nothing of the owner's record — a node's runs table is its own
+    # (`docs/cluster.md`), so a peer has no row to write.
+    test "a part performed for another node leaves its steps, and writes no row" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+      [part | _rest] = parts
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 2, 4, %{parts: parts}))
+
+      # What `:rpc` calls on the peer: the record, the part, and the memory an
+      # evaluation part would start from (`nil` in a wave that trains nothing).
+      assert {:ok, {:finished, _summary}, 2} = Jobs.Run.perform_part(record, part, nil)
+
+      assert {:ok, {entries, moments}} = Artifacts.read_part(record.id, part.phase, part.index)
+      assert {length(entries), length(moments)} == {2, 2}
+      assert Enum.all?(entries, &(&1["part"] == part.index))
+
+      # The owner's row is the owner's: the part was performed, not recorded.
+      assert RunHistory.get(record.id).status == "queued"
+      assert RunHistory.parts(record.id) == []
+    end
+
+    # The door of a node that performs parts: a caller of another protocol is
+    # refused by name, before any work is done — a node that answered a request
+    # of a shape it does not know would fail half-way through the part instead of
+    # at the door (`ExTbpMonty.Cluster.Protocol`).
+    test "a peer speaking another protocol is refused rather than half-performed" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+      [part | _rest] = parts
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 2, 4, %{parts: parts}))
+
+      further = Protocol.version() + 1
+
+      assert {:error, {:incompatible_peer, theirs, ours}, 0} =
+               Jobs.Run.perform_part(record, part, nil, %{protocol: further})
+
+      assert theirs == "monty-cluster/#{further}"
+      assert ours == Protocol.describe(Protocol.local())
+
+      # Nothing was stepped, so there is no part file to read.
+      assert {:error, :enoent} = Artifacts.read_part(record.id, part.phase, part.index)
+    end
+
     # A run of several parts is one run, so its summary is one summary: the
     # parts' steps added up, their tallies one tally. A page that showed four
     # parts' steps and then "0 steps, 0 concluded" was showing the parts' work
@@ -777,6 +868,21 @@ defmodule Monty.Studio.Jobs.RunTest do
 
     test "asking a run that is not running to stop is not an error" do
       assert Jobs.Run.stop("00000000-0000-4000-8000-000000000000") == {:error, :not_found}
+    end
+
+    # A divided run's parts may be stepped by peers, where this node's registry
+    # cannot see them: `stop/1` casts this to the node each part was given to, and
+    # a node that has no such part answers `:not_found` — which is why it is a
+    # cast and not a call.
+    test "a part on another node is asked to stop by its own stream" do
+      stream = Ecto.UUID.generate()
+
+      Registry.register(Monty.Runtime.Registry, {:studio_run, stream}, :starting)
+
+      assert Jobs.Run.stop_part(stream) == :ok
+      assert_received :stop
+
+      assert Jobs.Run.stop_part(Ecto.UUID.generate()) == {:error, :not_found}
     end
 
     test "a stop is a message to the worker that holds the run" do

@@ -49,7 +49,7 @@ defmodule ExTbpMonty.Cluster.Nodes do
   require Logger
 
   alias ExTbpMonty.{Cluster, Node}
-  alias ExTbpMonty.Cluster.Capabilities
+  alias ExTbpMonty.Cluster.{Capabilities, Protocol}
 
   @poll_ms 3_000
 
@@ -119,6 +119,7 @@ defmodule ExTbpMonty.Cluster.Nodes do
         address: Node.address(name),
         self: name == node(),
         version: version,
+        protocol: Protocol.of(answer),
         capabilities: capabilities_of(answer),
         web: web_of(answer),
         artifacts: artifacts_of(answer),
@@ -159,6 +160,7 @@ defmodule ExTbpMonty.Cluster.Nodes do
   @spec identity() :: %{
           node: node(),
           version: String.t(),
+          protocol: pos_integer() | nil,
           capabilities: [String.t()],
           web: String.t() | nil,
           artifacts: String.t()
@@ -167,9 +169,13 @@ defmodule ExTbpMonty.Cluster.Nodes do
     %{
       node: node(),
       version: version(),
+      protocol: Protocol.version(),
       capabilities: Capabilities.declared(),
       web: Node.web_url(),
-      artifacts: Monty.Paths.artifacts()
+      # The directory a run's files are *written* to, not the one a deployment
+      # pointed at: a node that reported a share it does not write would be a
+      # division that lost its parts (`Monty.Studio.Partition.hosts/3`).
+      artifacts: Monty.Studio.Artifacts.root()
     }
   end
 

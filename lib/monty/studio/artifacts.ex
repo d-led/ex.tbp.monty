@@ -16,9 +16,30 @@ defmodule Monty.Studio.Artifacts do
   # The two pictures a sensor draws of a step, as `put_frame/5` names them.
   @kinds ["depth", "colour"]
 
-  @doc "The directory run artifacts are kept under."
+  @doc """
+  The directory run artifacts are kept under.
+
+  Three answers, in the order a deployment's own words come: what the application
+  was configured with (`:studio_artifacts_dir` — a release names it, and a test
+  points it at a temporary folder), else `MONTY_ARTIFACTS_DIR` where the
+  environment said so, else this application's own `priv/studio_runs`.
+
+  That environment variable is the cluster's one lever: a part performed by another
+  node writes its steps, its pictures and its statistics here, and the node that
+  owns the run reads them back — `Monty.Studio.Partition.hosts/3` only puts a part
+  on a node that answers the same directory
+  (`ExTbpMonty.Cluster.Nodes.shares_run_files?/2`). Two answers to "where do a
+  run's files go" would be a division that lost its parts.
+  """
   @spec root() :: Path.t()
-  def root, do: Application.get_env(:ex_tbp_monty, :studio_artifacts_dir, @default_root)
+  def root do
+    Application.get_env(:ex_tbp_monty, :studio_artifacts_dir) || from_environment() ||
+      @default_root
+  end
+
+  defp from_environment do
+    if Monty.Paths.artifacts_from_environment?(), do: Monty.Paths.artifacts()
+  end
 
   @doc """
   A run's own directory.
@@ -76,6 +97,76 @@ defmodule Monty.Studio.Artifacts do
   # time of day: without a stamp, "run started" and "run finished" cannot be
   # lined up with anything else a person did that afternoon.
   defp stamped(line), do: "#{Monty.Studio.LocalClock.now().clock} #{line}"
+
+  @doc """
+  Where one part's steps are kept, for the node that owns the run to read.
+
+  A divided run's parts may be performed by different nodes, and a part's steps
+  live in the performing node's `RunStream` — a table on one machine, holding what
+  that machine is stepping. The run's transcript is written by the node that owns
+  the run, from the parts' transcripts in part order, so each part leaves its own
+  where the owner can read it: inside the run's directory. That is why a peer is
+  only a candidate for a part when it shares that directory
+  (`ExTbpMonty.Cluster.Nodes.shares_run_files?/2`).
+
+  The name carries the wave and the part's number, because a run that trains and
+  then evaluates numbers both waves' parts from nought. The plan in the run's
+  record says which of these files belong to the run, and in what order.
+  """
+  @spec part_path(binary(), atom() | String.t(), non_neg_integer()) :: Path.t()
+  def part_path(run_id, phase, index) do
+    Path.join([dir(run_id), "parts", "#{phase}-#{index}.jsonl"])
+  end
+
+  @doc """
+  Writes one part's steps where its run can read them: one step a line, its entry
+  and its moment.
+
+  Written when the part ends, however it ends — a part that failed took the steps
+  it took before it did, and those are the steps a reader counts. A line is the
+  pair the record keeps, not the sentence the human log carries: a replay needs
+  the beliefs and the clock, and neither survives being rendered.
+
+  Answers how many steps it wrote, which is the number the part's row shows.
+  """
+  # The path is `dir/1`'s, which refuses a run id that is not a UUID.
+  # sobelow_skip ["Traversal.FileModule"]
+  @spec store_part(binary(), atom() | String.t(), non_neg_integer(), [map()], [map()]) ::
+          {:ok, non_neg_integer()} | {:error, term()}
+  def store_part(run_id, phase, index, entries, moments) do
+    path = part_path(run_id, phase, index)
+
+    with :ok <- File.mkdir_p(Path.dirname(path)) do
+      # A line is a two-element JSON array rather than an object with two keys:
+      # it is a pair, the file is not read by a person, and the keys would be a
+      # third of every line of a transcript of thousands.
+      body = Enum.zip_with(entries, moments, fn entry, moment -> [entry, moment] end)
+
+      case File.write(path, Enum.map(body, &(Jason.encode!(&1) <> "\n"))) do
+        :ok -> {:ok, length(entries)}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  @doc """
+  One part's steps, as the part wrote them: `{:ok, {entries, moments}}` in the
+  order they were taken, which is the order the run's transcript keeps them in.
+  """
+  # The path is `dir/1`'s, which refuses a run id that is not a UUID.
+  # sobelow_skip ["Traversal.FileModule"]
+  @spec read_part(binary(), atom() | String.t(), non_neg_integer()) ::
+          {:ok, {[map()], [map()]}} | {:error, term()}
+  def read_part(run_id, phase, index) do
+    with {:ok, text} <- File.read(part_path(run_id, phase, index)) do
+      rows =
+        text
+        |> String.split("\n", trim: true)
+        |> Enum.map(&(Jason.decode!(&1) |> List.to_tuple()))
+
+      {:ok, Enum.unzip(rows)}
+    end
+  end
 
   @doc """
   The statistics a run's parts wrote, gathered into the run's own directory.

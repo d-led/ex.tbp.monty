@@ -2992,3 +2992,172 @@ above; **`collect/2`'s error branch still waits for an injected failure**.
 `./scripts/quality.sh --fast` green; `mix cover` **3 101 of 3 102** with the one
 red case re-run alone to 102 passed (42.3); the three CRAP trees exit 0 against
 the export that run left; `MIX_ENV=test mix dialyzer` 0 errors.
+
+## 43. 2026-11-13: a part of a run is performed by the node that can be given it
+
+§41.5's "one big remaining piece", taken as far as it goes without a second
+machine in CI: a divided run's parts are now placed on the nodes that can be given
+one, each part's steps come back through the run's own directory, and a stop
+reaches a part a peer is stepping.
+
+### 43.1 What landed
+
+| Where                                                  | What it made true                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Monty.Studio.Partition.hosts/3`                       | the decision: alive, offering the run's tags (`Placement.candidates/2`), writing the run's files where this node reads them (`Nodes.shares_run_files?/2`), running this build — then round robin, this node first. No qualifying node means every part here, which is a run performed as one node has always performed it. |
+| `Artifacts.part_path/3`, `store_part/5`, `read_part/3` | one part's steps as a file in the run's directory — `<run>/parts/<phase>-<index>.jsonl`, one step a line as `[entry, moment]`.                                                                                                                                                                                             |
+| `Jobs.Run.keep_steps/2`, `store_parts/2`               | every part writes that file when it ends, and the run's transcript is read from those files in part order (`part_transcript/2` falls back to the stream for a part this node performed whose file could not be written).                                                                                                   |
+| `Jobs.Run.perform_part/3`, `run_part_there/4`          | the part on a peer: `:rpc.call(host.node, __MODULE__, :perform_part, [record, part, memory], :infinity)`. The record travels because a peer has no row for a run it does not own.                                                                                                                                          |
+| `RunHistory.part_started/3` from the owner             | the part row names the node that performs it, written where the row lives.                                                                                                                                                                                                                                                 |
+| `Jobs.Run.stop_part/1`, `stop_parts_there/1`           | a stop cast to the node each part was given to; a node without that part answers `:not_found`, which is why it is a cast.                                                                                                                                                                                                  |
+| `Artifacts.root/0`, `Nodes.identity/0`                 | one answer for "where do a run's files go": `:studio_artifacts_dir`, else `MONTY_ARTIFACTS_DIR`, else `priv/studio_runs` — and the identity reports _that_, so the sharing question is about the directory the files are actually written to.                                                                              |
+| `step_wave/4` (repair)                                 | a part that failed ended the wave with a `CaseClauseError` — the error branch still matched the three-tuple the results had before they carried a step count. The run now fails with `part 1 of 2 stopped: …` and the part's row says how many steps it took.                                                              |
+
+### 43.2 Verified on two nodes, not inferred
+
+Two VMs (`probe@127.0.0.1` and a `:peer` as `node2`), one `MONTY_ARTIFACTS_DIR`,
+each with its own database, the run asked for from the first.
+
+- `Partition.hosts` answered `[{0, "probe_127.0.0.1"}, {1, "node2_dam2.fritz.box"}]`.
+- The run finished with **8 steps** — four from each node — and its transcript is
+  part 0's episodes then part 1's, in order: `{0,0,0}, {0,0,1}, {0,1,0}, {0,1,1},
+{1,2,0}, …`. Both part rows read `finished`, with the performing node's name and
+  `4` steps.
+- A second run of eight episodes, stopped 600 ms in: `stop answered :ok`,
+  `run=stopped`, and **both** parts `stopped` at eight steps — the peer's part
+  included. That is `stop_part/1` reaching a process in another VM's registry.
+- The same tree with nothing shared refuses the peer: hosts answered both parts
+  for this node, which is the fallback working rather than the fallback being
+  reached by accident.
+
+### 43.3 Traps this found
+
+- **A 3-tuple where a 4-tuple now travels is a crash, not a test failure** — see
+  the `step_wave/4` row above. It was found by the two-node check (a peer that
+  could not start), which is the only way to make a part fail on purpose today:
+  there is still no `collect/2` test for that branch, but the branch is now known
+  to work, and the failure it produces is a sentence with the part's number.
+- **Two levers, one fact.** `:studio_artifacts_dir` (a release sets it, a test
+  points it somewhere temporary) and `MONTY_ARTIFACTS_DIR` (the deployment's)
+  named different directories in dev, while `Nodes.identity/0` reported the second
+  and the files went to the first. `Artifacts.root/0` is now the single answer and
+  the identity reports it.
+- **Probe plumbing, for the next pair of hands** (each cost a run):
+  - an anonymous function compiled into a `mix run` script cannot be sent to a
+    peer — it exists on one node. Use an MFA, or
+    `Code.eval_string` on the peer.
+  - a `start_link` made _through_ `:rpc` dies with the call that made it; start it
+    inside `Code.eval_string` and `Process.unlink/1` it.
+  - a peer VM has no Mix, and `phoenix_live_reload`, `esbuild` and `tailwind` are
+    Mix plugins: a peer running the dev tree must be given the runtime children
+    it needs (`Phoenix.PubSub`, `ExTbpMonty.Core.Supervisor`, `RunStream`,
+    `RunStream.Pictures`, `RunWriter`) rather than the whole application.
+  - `:peer.start_link(%{longnames: true})` names the node after the machine
+    (`node2@dam2.fritz.box`), not `127.0.0.1`; take the name from the return
+    value instead of guessing it.
+  - a peer mid-boot answers `version: "unknown"` — `alive` is `is_binary(version)`,
+    so it looks alive — and `Partition.hosts/3` correctly refuses it until it has
+    the real version. A check that waits for "two alive nodes" waits for the wrong
+    thing.
+
+### 43.4 What is left
+
+In the order I would take it, none of it started:
+
+- **The run list across per-node databases** — the cluster view's area
+  (`cluster_nodes.ex`, `cluster_peer_runs.ex`, `settings_live.ex`); coordinate
+  before touching them. `Peers.runs_on/3` exists and the list does not use it.
+- **A part's live steps do not cross** (`docs/cluster.md`): a page on the owner
+  sees a peer's part when the part ends and its file is read; PubSub already
+  carries the events, and what would need an `:rpc` is a late page's catch-up read.
+- **`route/4` in `ex_monty_plugin`** — placement `:owner_only`, answer discipline
+  and timeouts, learning modules through a `:pg` scope. It publishes a version, so
+  it wants the user's nod.
+- **`collect/2`'s error branch has no test.** It has now been _run_ (43.2, by a
+  peer that could not start), and a test still wants an injected failure.
+- The `RecordingEpisodeTest` flake, unchanged: the candidate is an unseeded RNG
+  where the episode's stream belongs.
+
+### 43.5 The gate
+
+`./scripts/quality.sh --fast` green; the touched suites 96 cases (artifacts,
+partition, run, cluster nodes); full `mix cover` and dialyzer run below — the
+numbers are the ones in the summary of this section when it was pushed.
+
+## 44. 2026-11-13: a part of a run is an owner — claimed, leased, fenced
+
+A reader of the clustering direction asked the question this section answers, in
+the TBP forum:
+
+> "…making ownership explicit and recoverable: use a distributed registry such as
+> Horde with consistent hashing for assignment, persist each experiment's
+> checkpoint before handoff, and have nodes advertise protocol/version
+> capabilities. That way a node loss can reassign partitions without silently
+> duplicating runs, and networked sensor, motor or learning processes can reject
+> incompatible peers. Are you treating partitions as stateless workers or as
+> resumable experiment owners?"
+
+### 44.1 What changed
+
+| the ask                   | the answer in this tree                                                                                                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ownership explicit        | `studio_run_parts.claim` / `.claimed_until` / `.node`, written by `RunHistory.claim_part/3` before the first step                                                    |
+| recoverable               | the lease lapses (`Monty.Studio.Claim`), `lapsed_parts/1` lists what a lost node left, and `run_part/5` gives it to the next candidate                               |
+| no silent duplication     | the claim is a compare-and-set: a second node is refused with `{:held, node, until}`, an ended part with `{:settled, status}`                                        |
+| fenced writes             | `RunHistory.release_part/3` and `abandon_part/1` match the token; a holder that lost its part gets `{:error, :not_owner}`                                            |
+| capabilities and protocol | `ExTbpMonty.Cluster.Protocol` (`monty-cluster/1`) is advertised in `Nodes.identity/0`, required by `Partition.hosts/3`, and enforced at the door of `perform_part/4` |
+
+Horde with consistent hashing was **not** taken literally, and `docs/cluster.md`
+says why: Horde's ring re-maps on membership change, which is the one moment a
+part being performed must not move. Its registry and supervisor remain in the
+tree for named processes, and `:pg` for the plugin registry.
+
+### 44.2 The traps, which cost the most time
+
+- **A claim cannot be renewed by a node that is blocked.** The first shape of this
+  had the owner call `:rpc.call(..., :infinity)` and renew "around" it — which is
+  not a thing. `Jobs.Run.await/3` runs the part in a `Task` and yields at a third
+  of the lease, renewing between yields; that wait is also where a lost lease stops
+  the work.
+- **A nil claim has to be a first-class case.** A run of one part has no division
+  and so no row to claim, and every claim function is `nil`-tolerant
+  (`renew/1`, `release/3`, `forget/1`). The compiler is strict about this: it told
+  me `claim_node(nil)` was unreachable, because a nil claim can neither lapse nor
+  be refused.
+- **A released part keeps no token.** `release_part/3` clears `claim` as well as
+  `claimed_until`: a stale holder then matches nothing at all, and "a settled part
+  is nobody's" is one field rather than a status the fence has to remember.
+- **`coalesce` may not be written in one `update_all/3`.** `started_at` has to keep
+  the first instant a part was held; `fragment("coalesce(started_at, ?)", ^moment)`
+  does not compile there, so the claim writes it in a second statement guarded by
+  `is_nil(started_at)`.
+- **`Partition.hosts/3` now answers a list per part**, not one node. Everything
+  that destructured `{part, host}` had to change: `step_wave/4`, `hosts_for/2` and
+  `stop_parts_there/1`. The stop path failing as a `BadMapError` under test is what
+  found the third one.
+
+### 44.3 What is not resumable, said plainly
+
+A part that is given to another node **starts its episodes from the beginning**.
+The lease keeps that safe — nothing the lost holder writes can land — but it is
+repeated work, not resumed work. Resuming from episode _k_ needs a part to write
+its progress episode by episode; today its file is written when the part ends.
+That is the next slice, and the row keeps `steps` for it.
+
+### 44.4 What is left
+
+- **Resume from the last finished episode** (above), which is also what would make
+  a training part survive a node loss at sub-part cost.
+- **A supervisor for the recovery path.** `lapsed_parts/1` exists and is tested;
+  nothing sweeps a whole run's parts and re-divides them after a node loss at the
+  _run_ level — the wave now recovers inside itself, which covers one node dying
+  while a part is in hand.
+- The run list across per-node databases, a part's live steps not crossing, and
+  `route/4` — unchanged from §43.4.
+
+### 44.5 The gate
+
+`mix compile --warnings-as-errors` clean; the touched suites green (claim 9,
+run_history 68, partition 17, run 41, reaper + MCP experiments 51); full `mix
+test`, `./scripts/reformat.sh`, `./scripts/quality.sh --fast` and dialyzer run
+before the push, and the numbers are the ones in the summary of this commit.
