@@ -42,6 +42,50 @@ defmodule Monty.Studio.Summary do
   @type t :: %__MODULE__{}
 
   @doc """
+  A summary read back from a record, so a run that continues can add to it.
+
+  The record keeps the page's spelling (`RunLog.summary/2`): module ids and the
+  times a sensor gave up as strings, every conclusion's name as a string too,
+  because that is what a JSON reader understands. The live fold counts its
+  conclusions under atoms, and a run that resumes is the one place both arrive in
+  one map — so the states are read back as the atoms they were, and a tally
+  added to a restored one does not come out as two rows for one conclusion.
+
+  Only what this struct holds is read: a record also carries why a run stopped,
+  which is not an amount of anything.
+  """
+  @spec restore(map() | nil) :: t()
+  def restore(nil), do: %__MODULE__{}
+
+  def restore(stored) when is_map(stored) do
+    known =
+      stored
+      |> Map.take(Map.keys(%__MODULE__{}) |> Enum.map(&to_string/1))
+      |> Map.new(fn {key, value} -> {String.to_existing_atom(key), value} end)
+
+    struct(__MODULE__, known)
+    |> Map.put(:sensor_timeouts, states(known[:sensor_timeouts] || []))
+    |> Map.put(:outcome, keyed(known[:outcome] || %{}))
+    |> Map.put(:outcomes, tally_of(known[:outcomes] || %{}))
+  end
+
+  # A conclusion's own name, back as the atom the fold counts under.
+  defp states(names), do: Enum.map(names, &as_state/1)
+
+  defp as_state(nil), do: nil
+  defp as_state(name) when is_atom(name), do: name
+  defp as_state(name) when is_binary(name), do: String.to_existing_atom(name)
+
+  defp keyed(conclusions),
+    do: Map.new(conclusions, fn {module, name} -> {module, as_state(name)} end)
+
+  defp tally_of(tally) do
+    Map.new(tally, fn {module, per_module} ->
+      {module, Map.new(per_module, fn {name, count} -> {as_state(name), count} end)}
+    end)
+  end
+
+  @doc """
   Folds the per-step reports into one summary.
 
   `conclusion` is the model's final terminal states, which is what a run owes its

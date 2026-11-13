@@ -1057,6 +1057,54 @@ defmodule Monty.Studio.RunHistoryTest do
     end
   end
 
+  # What a run that is performed again needs to know before it steps a wave: the
+  # parts an earlier attempt already ended, so a division is continued rather than
+  # performed twice.
+  describe "a division that outlived its attempt" do
+    test "says which parts have already ended" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      :ok =
+        RunHistory.plan_parts(run.id, [%{index: 0, of: 3}, %{index: 1, of: 3}, %{index: 2, of: 3}])
+
+      {:ok, done} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.release_part(done, "finished", 40)
+      {:ok, stopped} = RunHistory.claim_part(run.id, 1, "node1_127.0.0.1")
+      :ok = RunHistory.release_part(stopped, "stopped", 12)
+
+      assert RunHistory.ended_parts(run.id) == MapSet.new([0, 1])
+    end
+
+    # A part that is still in hand is not ended: its holder may yet finish it, and
+    # a run that took it for done would be a run that skipped work.
+    test "does not count a part that is still in hand" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      {:ok, _in_hand} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+
+      assert RunHistory.ended_parts(run.id) == MapSet.new()
+    end
+
+    test "counts nothing for a run that was never divided" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      assert RunHistory.ended_parts(run.id) == MapSet.new()
+    end
+
+    # The numbers a run has reached, written before it closes: a worker that
+    # disappears leaves the run a total to continue from instead of a zero.
+    test "keeps the numbers a run had reached, without closing it" do
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, run} = RunHistory.mark_running(run)
+
+      assert :ok = RunHistory.checkpoint_summary(run.id, %{"steps" => 40, "goals" => 3})
+
+      assert %{status: "running", summary: %{"steps" => 40, "goals" => 3}} =
+               RunHistory.progress(run.id)
+    end
+  end
+
   # A node that was given a name keeps its own folder, and its runs say so. The
   # value is what `config/runtime.exs` puts there at boot; a test puts it there
   # itself, because a test is not a node.

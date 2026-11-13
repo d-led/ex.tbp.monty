@@ -778,6 +778,49 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
+  The parts of a run that have already ended, by the number the division gave
+  them.
+
+  The one question a resumed run asks before it steps a wave: a part that
+  finished, failed or was stopped has its steps on disk and its episodes in what
+  the record adds up, so performing it again would be work done twice and a
+  transcript with two copies of it.
+
+  `parts/1` is the division itself, and it is what a run that is performed again
+  re-enters instead of planning: `plan_parts/2` deletes what it replaces, which is
+  right for a second *attempt* at one experiment and wrong for the same attempt
+  continuing.
+  """
+  @spec ended_parts(binary()) :: MapSet.t(non_neg_integer())
+  def ended_parts(run_id) do
+    run_id
+    |> parts()
+    |> Enum.filter(&(&1.status in ~w(finished failed stopped)))
+    |> MapSet.new(& &1.part)
+  end
+
+  @doc """
+  A run's numbers as far as it has got, without closing it.
+
+  A run of several parts adds its parts up in memory and writes the total once,
+  when it ends — right for a run that ends, and wrong for one whose worker
+  disappears: the attempt's numbers would be the only copy, and a run that
+  continues would start counting from zero over episodes that already concluded.
+  This is the map `finish/3` would store, written early, so the resume has
+  something true to add to.
+  """
+  @spec checkpoint_summary(binary(), map()) :: :ok
+  def checkpoint_summary(run_id, summary) when is_map(summary) do
+    with {:ok, uuid} <- Ecto.UUID.cast(run_id) do
+      _ =
+        from(run in Run, where: run.id == ^uuid)
+        |> Repo.update_all(set: [summary: summary, updated_at: now()])
+    end
+
+    :ok
+  end
+
+  @doc """
   The node that is to perform a part takes it, and the row says so before it starts.
 
   `node` is the spelling that decided the node's folder (`Monty.Paths.data_dir_name/0`),

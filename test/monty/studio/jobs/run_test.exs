@@ -768,6 +768,39 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert Memory.releases_for(name, libraries) != []
     end
 
+    # The forum's question, asked where it costs least: are a run's parts stateless
+    # work, or owners that can be resumed? A worker that disappeared after one part
+    # leaves a division behind, and the run performed again continues it — the part
+    # that ended is not performed twice, its steps are still in the transcript, and
+    # the division it found is the one it finishes.
+    test "a run performed again continues the parts its attempt had left" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 2, 4, %{parts: parts}))
+
+      # What such a worker leaves: the division, one part ended and the other
+      # still queued, and no number of the attempt written down (it died before it
+      # had any to write).
+      :ok = RunHistory.plan_parts(record.id, parts)
+      {:ok, claim} = RunHistory.claim_part(record.id, 0, name_of_this_node())
+      :ok = RunHistory.release_part(claim, "finished", 2)
+
+      assert {:ok, closed} = perform(record)
+
+      assert closed.status == "finished"
+
+      assert closed.log |> Enum.map(& &1["part"]) |> Enum.uniq() == [1],
+             "the part that had already ended was performed a second time"
+
+      assert RunHistory.parts(closed.id) |> Enum.map(& &1.status) == ["finished", "finished"]
+
+      assert File.read!(Artifacts.log_path(closed.id)) =~
+               "part 1 of 2 already finished in an earlier attempt"
+    end
+
     test "starts its evaluation from the memory its training wave built" do
       # Monty's `run_parallel` merges the trained model and then evaluates the
       # configs it generated; here the evaluation wave is handed the merged

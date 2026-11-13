@@ -465,10 +465,15 @@ defmodule Monty.Studio.Jobs.Run do
     # are, and — as each is taken — where it is performed. A run of one part has
     # no division to record.
     #
-    # The division also starts with no parts on disk: a run performed once and
-    # performed again begins its transcript again, and a part file left by the
-    # first attempt is not this one's steps.
-    if length(parts) > 1 do
+    # A division that is already there is kept, with the part files beside it: a
+    # run whose worker disappeared is performed again, and its parts are the work
+    # that does not have to happen twice. The wipe below is for the other case —
+    # a second *attempt* at the same experiment, which begins its transcript
+    # again, because a part file left by the first attempt is not this one's steps.
+    kept = if length(parts) > 1, do: RunHistory.parts(run_id), else: []
+    ended = RunHistory.ended_parts(run_id)
+
+    if kept == [] and length(parts) > 1 do
       Artifacts.clear_parts(run_id)
       RunHistory.plan_parts(run_id, parts)
     end
@@ -479,12 +484,19 @@ defmodule Monty.Studio.Jobs.Run do
         "#{min(count, length(parts))} at a time, up to #{record.steps} steps an episode"
     )
 
+    say_kept(run_id, kept, ended)
+
     broadcast(run_id, {:started, record.steps})
 
+    # What the attempt before this one had added up, if it had written it down
+    # (`RunHistory.checkpoint_summary/2`): a resumed run counts its own episodes on
+    # top of the parts that already concluded theirs, rather than from zero.
+    so_far = Summary.restore(record.summary)
+
     {outcome, record, summary} =
-      with {:ok, record, memories, trained} <- train_wave(record, opened, parts),
+      with {:ok, record, memories, trained} <- train_wave(record, opened, parts, ended, so_far),
            {:ok, record, _memories, carried} <-
-             eval_wave(record, opened, parts, memories, trained) do
+             eval_wave(record, opened, parts, memories, trained, ended) do
         {:finished, record, carried}
       else
         {:error, reason, record, carried} -> {{:failed, reason}, record, carried}
@@ -512,14 +524,19 @@ defmodule Monty.Studio.Jobs.Run do
   end
 
   # The training wave, and the memory it built between its parts.
-  defp train_wave(record, opened, parts) do
+  defp train_wave(record, opened, parts, ended, so_far) do
     case wave(parts, "train") do
       [] ->
-        {:ok, record, nil, %Summary{}}
+        {:ok, record, nil, so_far}
 
       wave ->
-        case run_wave(record, opened, wave, nil) do
+        case run_wave(record, opened, wave, nil, ended, so_far) do
           {:ok, record, carried} ->
+            # Written down before the merge, because the merge is the last thing
+            # that happens with numbers only this process holds: a worker that
+            # disappears after this wave leaves the run a total to continue from.
+            _ = RunHistory.checkpoint_summary(record.id, RunLog.summary(carried))
+
             case merge_memories(record, opened, wave) do
               {:ok, record, memory} -> {:ok, record, memory, carried}
               {:error, reason, record} -> {:error, reason, record, carried}
@@ -534,21 +551,21 @@ defmodule Monty.Studio.Jobs.Run do
     end
   end
 
-  defp eval_wave(record, opened, parts, memories, trained) do
+  defp eval_wave(record, opened, parts, memories, trained, ended) do
     case wave(parts, "eval") do
       [] ->
         {:ok, record, memories, trained}
 
       wave ->
-        case run_wave(record, opened, wave, memories) do
+        case run_wave(record, opened, wave, memories, ended, trained) do
           {:ok, record, carried} ->
-            {:ok, record, memories, Summary.merge(trained, carried)}
+            {:ok, record, memories, carried}
 
           {:error, reason, record, carried} ->
-            {:error, reason, record, Summary.merge(trained, carried)}
+            {:error, reason, record, carried}
 
           {:stopped, record, carried} ->
-            {:stopped, record, Summary.merge(trained, carried)}
+            {:stopped, record, carried}
         end
     end
   end
@@ -579,32 +596,39 @@ defmodule Monty.Studio.Jobs.Run do
 
   # One pass over a wave: `n` parts at a time, each writing its own stream, the
   # run's transcript written as each part falls out of the pool.
-  defp run_wave(record, opened, wave, memory) do
+  defp run_wave(record, opened, wave, memory, ended, so_far) do
     if stop_requested?(record.id) do
       # A stop that arrived before this wave started: not one part of it steps,
       # and the parts it would have stepped stay `queued` until the run settles
       # them as `skipped` — nothing happened to them, which is the truth about a
       # wave that never ran. Nothing was added to the run either.
-      {:stopped, record, %Summary{}}
+      {:stopped, record, so_far}
     else
-      step_wave(record, opened, wave, memory)
+      step_wave(record, opened, wave, memory, ended, so_far)
     end
   end
 
-  defp step_wave(record, opened, wave, memory) do
+  defp step_wave(record, opened, wave, memory, ended, so_far) do
+    # The parts this attempt inherits are not performed: the log said which they
+    # are before the first step (`say_kept/3`), their steps are on disk, and what
+    # they concluded is in the total this attempt started from.
+    todo = Enum.reject(wave, &MapSet.member?(ended, &1.index))
+
     results =
-      wave
+      todo
       |> hosts_for(record)
       |> Task.async_stream(
         fn {part, host} -> run_part(record, opened, part, memory, host) end,
-        max_concurrency: max(length(wave), 1),
+        max_concurrency: max(length(todo), 1),
         ordered: false,
         timeout: :infinity
       )
       |> Enum.to_list()
 
     record = Enum.reduce(results, record, fn result, record -> collect(result, record) end)
-    carried = carried(results)
+    # A part that already ended — by the attempt this one continues — adds
+    # nothing to the fold: what it contributed is in the total the record kept.
+    carried = carried(results, so_far)
 
     case Enum.find(results, &broken?/1) do
       {:ok, {:error, part, reason, _steps}} ->
@@ -621,10 +645,13 @@ defmodule Monty.Studio.Jobs.Run do
   # What the parts of this wave added to the run: one summary between them, and
   # the episodes they concluded. A part that failed or was stopped before it
   # began contributes what it got through, which is the truth about the work.
-  defp carried(results) do
-    Enum.reduce(results, %Summary{}, fn
-      {:ok, {:ok, _part, {_outcome, summary}, _steps}}, carried -> Summary.merge(carried, summary)
-      _nothing, carried -> carried
+  defp carried(results, so_far) do
+    Enum.reduce(results, so_far, fn
+      {:ok, {:ok, _part, {_outcome, summary}, _steps}}, carried ->
+        Summary.merge(carried, summary)
+
+      _nothing, carried ->
+        carried
     end)
   end
 
@@ -1091,6 +1118,22 @@ defmodule Monty.Studio.Jobs.Run do
   defp planned(_no_plan), do: []
 
   defp wave(parts, phase), do: Enum.filter(parts, &(to_string(&1.phase) == phase))
+
+  # What the division says before the first step: the parts this attempt inherits,
+  # one line each, with what each of them ended up costing. A run continuing an
+  # attempt that died under it is the case where "nothing happened" and "three of
+  # six parts are done" look the same in a log unless the log says which.
+  defp say_kept(run_id, kept, ended) do
+    kept
+    |> Enum.filter(&(&1.part in ended))
+    |> Enum.each(fn part ->
+      say(
+        run_id,
+        "part #{part.part + 1} of #{part.of} already #{part.status} in an earlier attempt: " <>
+          "keeping its #{part.steps} step(s)"
+      )
+    end)
+  end
 
   defp phase_of("train"), do: :train
   defp phase_of("eval"), do: :eval
