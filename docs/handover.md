@@ -3230,13 +3230,28 @@ What landed (`80a78ec`):
   friends) are still inspected, because they are a node and a time, not a
   payload.
 
+**That last clause was wrong, and it took a test to say so.** A node and a time
+inside a term is still a term: a part another node is performing wrote
+`part 1 of 2 failed after 0 step(s): {:unclaimable, {:held, "peer@10.0.0.7",
+~U[2026-11-13 22:10:59Z]}}` four times over — in the log line, in the part's
+recorded failure, and twice in the run's closing sentence. `Failure.part/1` is the
+answer: one clause per thing that can befall a part, each in words ("it is in
+peer@10.0.0.7's hands until 22:10", "no node could take part 3", "peer@10.0.0.7
+stopped performing it: its node left the cluster"), and `Failure.unclaimable/1`
+was reworded to a phrase that composes ("in …'s hands until …", "already ended
+(finished)") rather than a sentence with its own subject. `said/1` is gone: one
+vocabulary, in `Failure`, and a log line asks it. The case that would have caught
+this is now in the suite — a divided run whose first part a peer holds, asserting
+whose hands the log names and that the log holds no `{:held` and no `~U[`.
+
 Three cases state it, and the first fails on the old code: the message holds no
 `GenServer`, no `#PID` and no struct; `start/1` answers the same sentence; and a
 reply carrying a policy is named by its tag.
 
 **The rule for the next pair of hands**: nothing that reaches a record, a run log
 line, or a page may be built with `inspect/1`. `technical` is the only place a
-traceback belongs, and `Failure` is where "why" is turned into words.
+traceback belongs, and `Failure` is where "why" is turned into words — however
+tempting the term looks, a name and a timestamp included.
 
 ### 45.2 The CAD scene was the only red in the CRAP gate
 

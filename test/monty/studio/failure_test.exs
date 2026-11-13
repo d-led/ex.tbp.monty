@@ -228,6 +228,71 @@ defmodule Monty.Studio.FailureTest do
     end
   end
 
+  describe "why a part could not be taken" do
+    test "a part somebody is performing names whose it is and until when" do
+      assert Failure.unclaimable({:held, "peer@10.0.0.7", ~U[2026-11-13 12:04:11Z]}) ==
+               "in peer@10.0.0.7's hands until 12:04"
+    end
+
+    test "a holder whose lease end is not known is still named" do
+      assert Failure.unclaimable({:held, "peer@10.0.0.7", nil}) == "in peer@10.0.0.7's hands"
+    end
+
+    test "a part that already ended says so, and how" do
+      assert Failure.unclaimable({:settled, "finished"}) == "already ended (finished)"
+    end
+
+    test "a part the run does not have is said as a part the run does not have" do
+      assert Failure.unclaimable(:not_planned) == "not part of this run"
+    end
+
+    test "a refusal nothing here knows is still words" do
+      assert Failure.unclaimable({:nonsense, [1, 2, 3]}) == "somebody else's to take"
+    end
+  end
+
+  # A part's answer is a tag and its arguments. The run wrote the tag, and a tag
+  # with a node and a timestamp inside it says nothing a person can act on.
+  describe "why a part did not finish" do
+    test "a part another node was performing names that node" do
+      assert Failure.part({:unclaimable, {:held, "peer@10.0.0.7", nil}}) ==
+               "it is in peer@10.0.0.7's hands"
+    end
+
+    test "a division with nowhere to put a part says it had nowhere to put it" do
+      assert Failure.part({:no_node_for_part, 2}) == "no node could take it"
+    end
+
+    test "a part whose node died keeps the reason the node died of" do
+      reason = {:noproc, {GenServer, :call, [self(), :part, 5_000]}}
+
+      assert Failure.part({:peer_failed, "peer@10.0.0.7", reason}) ==
+               "peer@10.0.0.7 stopped performing it: its process is gone: " <>
+                 "the node restarted, or the plugin stopped"
+    end
+
+    test "a part taken over mid-work says who took it" do
+      assert Failure.part({:lease_lost, "peer@10.0.0.7"}) ==
+               "peer@10.0.0.7 took it over while it was being performed"
+    end
+
+    test "a part a node could not speak to says which version it speaks" do
+      assert Failure.part({:incompatible_peer, "monty-cluster/9", "monty-cluster/8"}) ==
+               "the node that took it speaks monty-cluster/9, this run speaks monty-cluster/8"
+    end
+
+    test "a part that crashed keeps the sentence its crash was recorded as" do
+      crashed = Failure.crashed(:error, %RuntimeError{message: "the world would not start"}, [])
+
+      assert Failure.part(crashed) == "the world would not start"
+    end
+
+    test "a part that stopped for a reason with no words is still a sentence" do
+      assert Failure.part(:unreadable) == "it stopped (unreadable)"
+      assert Failure.part({:nonsense, [1, 2, 3]}) == "it stopped without saying why"
+    end
+  end
+
   describe "what an unexpected reply was" do
     test "a reply that carries something big is named by its tags" do
       assert Failure.reply({:ok, DateTime.utc_now()}) == "ok, a DateTime"

@@ -702,6 +702,31 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert File.read!(Artifacts.log_path(closed.id)) =~ "lost gone_127.0.0.1"
     end
 
+    # A part somebody is performing is not this wave's to perform — that is the
+    # duplicate the claim exists to refuse — and the line it leaves names whose it
+    # is. The refusal is a row's own words, and a row pasted into a log a person
+    # reads is the dump `Monty.Studio.Failure` exists to keep out of one.
+    test "a part another node is performing is left to it, and the log says whose" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 40, 0, 2, 4, %{parts: parts}))
+      :ok = RunHistory.plan_parts(record.id, parts)
+
+      # A peer has the first part, and has not given it back.
+      {:ok, _theirs} = RunHistory.claim_part(record.id, 0, "peer@10.0.0.7")
+
+      assert {:ok, closed} = perform(record)
+
+      log = File.read!(Artifacts.log_path(closed.id))
+
+      assert log =~ "part 1 of 2 is not this run's to take: it is in peer@10.0.0.7's hands until"
+      refute log =~ "{:held"
+      refute log =~ "~U["
+    end
+
     # A run of several parts is one run, so its summary is one summary: the
     # parts' steps added up, their tallies one tally. A page that showed four
     # parts' steps and then "0 steps, 0 concluded" was showing the parts' work

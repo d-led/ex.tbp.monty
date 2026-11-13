@@ -129,6 +129,47 @@ defmodule Monty.Studio.Failure do
   def lost(_reason), do: "it stopped without saying why"
 
   @doc """
+  Why a part could not be taken, as a phrase that follows "it is".
+
+  The refusal is a row's own words — a holder and the instant its lease runs out —
+  and a run's log carried it whole: `not this run's to take: {:held,
+  "peer@host", ~U[2026-11-13 12:04:11Z]}`. What the reader needs from that is
+  which of two things happened: somebody is performing the part, or it already has
+  an answer. Both are words; the tuple is for the module that asked.
+  """
+  @spec unclaimable(term()) :: String.t()
+  def unclaimable({:held, node, %DateTime{} = until}),
+    do: "in #{node}'s hands until #{Calendar.strftime(until, "%H:%M")}"
+
+  def unclaimable({:held, node, _until}), do: "in #{node}'s hands"
+  def unclaimable({:settled, status}), do: "already ended (#{status})"
+  def unclaimable(:not_planned), do: "not part of this run"
+  def unclaimable(_reason), do: "somebody else's to take"
+
+  @doc """
+  Why a part did not finish, in a sentence.
+
+  A part's answer is a tag and its arguments, and the run wrote the tag itself:
+  `part 1 of 2 failed after 0 step(s): {:unclaimable, {:held, "peer@host",
+  ~U[...]}}` tells a person nothing they can act on and everything about how the
+  code is shaped. Each of those tags is one of six things that can befall a part,
+  and each has words.
+  """
+  @spec part(term()) :: String.t()
+  def part(%{"reason" => sentence}) when is_binary(sentence), do: sentence
+  def part(sentence) when is_binary(sentence), do: sentence
+  def part({:unclaimable, reason}), do: "it is #{unclaimable(reason)}"
+  def part({:no_node_for_part, _index}), do: "no node could take it"
+  def part({:peer_failed, node, reason}), do: "#{node} stopped performing it: #{lost(reason)}"
+  def part({:lease_lost, node}), do: "#{node} took it over while it was being performed"
+
+  def part({:incompatible_peer, theirs, ours}),
+    do: "the node that took it speaks #{theirs}, this run speaks #{ours}"
+
+  def part(reason) when is_atom(reason), do: "it stopped (#{reason})"
+  def part(_reason), do: "it stopped without saying why"
+
+  @doc """
   What an unexpected reply was, by its shape rather than its content.
 
   The same rule as `lost/1` from the other side: a plugin's reply can carry a
