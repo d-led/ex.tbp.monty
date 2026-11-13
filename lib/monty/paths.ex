@@ -141,7 +141,15 @@ defmodule Monty.Paths do
   `MONTY_ARTIFACTS_DIR` chose it.
   """
   @spec artifacts_from_environment?() :: boolean()
-  def artifacts_from_environment?, do: env("MONTY_ARTIFACTS_DIR", nil) != nil
+  def artifacts_from_environment? do
+    # Asked of the shell rather than through `env/2`, whose answer is a path: a
+    # `nil` default would put `nil` in the type of every path this module answers
+    # with, and "nobody said" has to stay the same two cases `env/2` treats as one.
+    case System.get_env("MONTY_ARTIFACTS_DIR") do
+      value when value in [nil, ""] -> false
+      _said -> true
+    end
+  end
 
   @doc "Where wandb writes what a run logs, when it logs anything."
   @spec wandb() :: Path.t()

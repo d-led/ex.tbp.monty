@@ -22,6 +22,23 @@ defmodule Monty.Studio.RunHistory.Part do
 
   @statuses ~w(queued running finished failed)
 
+  @typedoc """
+  One part's row: which part of how many, what state it is in, and the node that
+  has it — `nil` until a node takes it, which is the only column that is not a
+  fact the moment the row is written.
+  """
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t() | nil,
+          run_id: Ecto.UUID.t() | nil,
+          part: non_neg_integer() | nil,
+          of: pos_integer() | nil,
+          node: String.t() | nil,
+          status: String.t(),
+          steps: non_neg_integer(),
+          started_at: DateTime.t() | nil,
+          finished_at: DateTime.t() | nil
+        }
+
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "studio_run_parts" do
     field :part, :integer
