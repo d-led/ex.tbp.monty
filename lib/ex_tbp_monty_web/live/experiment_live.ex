@@ -852,6 +852,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 module_id={module_id}
                 chart={chart}
                 expanded={@expanded == module_id}
+                zoom_event="zoom"
+                size_event="chart-size"
               >
                 <%!-- On the plot, in its top right corner, because the plot is
                 what it acts on: a control in a header row acts on "the chart"

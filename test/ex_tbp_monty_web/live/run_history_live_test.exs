@@ -2,6 +2,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   use ExTbpMontyWeb.ConnCase
 
   import Ecto.Query
+  import ExUnit.CaptureLog
   import Phoenix.LiveViewTest
 
   alias Monty.Studio.RunHistory
@@ -1369,6 +1370,70 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
       refute has_element?(view, "#run-division")
+    end
+  end
+
+  describe "the chart on a part's card" do
+    # The chart is the component the experiment page zooms, and this page has no
+    # window to zoom into — so its chart is a picture. A dataset attribute naming
+    # an event no clause here answers is how the LiveView died: the hook pushed
+    # `zoom`, the page raised, and the remount pushed it again, for as long as the
+    # page was open.
+    test "offers no gesture this page cannot answer", %{conn: conn} do
+      parts =
+        for index <- 0..1 do
+          %{
+            "index" => index,
+            "of" => 2,
+            "phase" => "eval",
+            "stream" => Ecto.UUID.generate(),
+            "phases" => %{"eval" => [index]}
+          }
+        end
+
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 2,
+          inputs: %{"parallel" => 2, "parts" => parts}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      for part <- parts do
+        svg = view |> element("#chart-svg-part-#{part["stream"]}") |> render()
+
+        refute svg =~ "data-zoom-event"
+        refute svg =~ "data-size-event"
+        refute svg =~ "cursor-crosshair"
+      end
+    end
+
+    # A hook can outlive the page's ability to answer it, and a page is not the
+    # place to punish one: the run it draws is still worth reading, and the log is
+    # where a wiring mistake belongs.
+    test "an event nothing answers is logged and the page keeps drawing", %{conn: conn} do
+      {:ok, run} =
+        RunHistory.start(%{experiment: "tutorial/first_experiment", source: "monty", steps: 2})
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      log =
+        capture_log(fn ->
+          html =
+            render_hook(view, "chart-size", %{
+              "width" => 690,
+              "height" => 208,
+              "module" => "part-#{Ecto.UUID.generate()}"
+            })
+
+          # The answer to an event nobody wanted is the page it was on.
+          assert html =~ "tutorial/first_experiment"
+        end)
+
+      assert log =~ "chart-size"
+      assert has_element?(view, "#run-inputs")
     end
   end
 

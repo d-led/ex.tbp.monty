@@ -13,6 +13,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   use ExTbpMontyWeb, :live_view
 
+  require Logger
+
   alias ExTbpMonty.Cluster.{Nodes, Placement}
   alias ExTbpMontyWeb.RunHistoryLive.Selection
 
@@ -1834,6 +1836,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # window of it, pick a line — so they arrive here and leave as one answer.
   def handle_event(event, params, socket) when event in @replay_events do
     {:noreply, replay(event, params, socket)}
+  end
+
+  # Nothing below may be a clause of `handle_event/3`: an event this page does not
+  # answer is a wiring mistake, and a page is not the place to punish one. A
+  # component's hook can outlive the page's ability to answer it — a chart drawn
+  # on a page that never zoomed asked for `zoom` and took the LiveView down, on
+  # every remount, for as long as the page was open. The page keeps drawing and
+  # the log says what arrived, because a silent page hides the mistake instead.
+  def handle_event(event, params, socket) do
+    Logger.warning(
+      "run page: ignoring #{inspect(event)} with #{inspect(params)} — no clause here answers it"
+    )
+
+    {:noreply, socket}
   end
 
   defp replay("replay_seek", %{"step" => step}, %{assigns: %{run: run}} = socket),

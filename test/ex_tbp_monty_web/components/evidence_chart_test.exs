@@ -73,4 +73,48 @@ defmodule ExTbpMontyWeb.EvidenceChartTest do
       assert LazyHTML.attribute(drawn, "visibility") == ["hidden"]
     end
   end
+
+  # The gestures are the host page's, because only the page can answer them. A
+  # chart that named them itself asked every page that drew one to handle `zoom`
+  # and `chart-size` — and the run page, which has no window to zoom into, took
+  # the LiveView down with it.
+  test "offers no gesture until the page names the events it answers" do
+    chart =
+      Chart.new([
+        {0, 1, belief(%{"new_object0" => 2.0})},
+        {1, 2, belief(%{"new_object0" => -0.6})}
+      ])
+
+    html =
+      render_component(&EvidenceChart.evidence_chart/1, %{
+        module_id: "learning_module_0",
+        chart: chart
+      })
+
+    refute html =~ "data-zoom-event"
+    refute html =~ "data-zoom-all-event"
+    refute html =~ "data-size-event"
+    refute html =~ "cursor-crosshair"
+  end
+
+  test "answers to the page's own names for the two gestures" do
+    chart =
+      Chart.new([
+        {0, 1, belief(%{"new_object0" => 2.0})},
+        {1, 2, belief(%{"new_object0" => -0.6})}
+      ])
+
+    html =
+      render_component(&EvidenceChart.evidence_chart/1, %{
+        module_id: "learning_module_0",
+        chart: chart,
+        zoom_event: "zoom",
+        size_event: "chart-size"
+      })
+
+    assert html =~ ~s|data-zoom-event="zoom"|
+    assert html =~ ~s|data-zoom-all-event="zoom"|
+    assert html =~ ~s|data-size-event="chart-size"|
+    assert html =~ "cursor-crosshair"
+  end
 end

@@ -23,6 +23,13 @@ The rules that are specific to it, in priority order:
   order; do not introduce process-local randomness into a step.
 - **Tests specify behaviour**, with Monty numbers as fixtures where the maths
   matters. No `Process.sleep/1`; monitor or `:sys.get_state/1` instead.
+- **A page never dies on a client event.** A hook belongs to a component, and a
+  component that hard-codes an event name asks every host page to answer it —
+  which is how the run page's chart took its LiveView down on every remount, for
+  as long as the page was open. A component names an event only when the page
+  names it (`evidence_chart`'s `zoom_event` / `size_event`), and a LiveView that
+  renders a hook ends with a `handle_event/3` clause that logs what arrived and
+  keeps drawing.
 - **Tests are translations.** A ported module's tests come from Monty's own
   `tests/unit/**/test_*.py`, one case for one case, each naming the case it
   translates. Where Monty's case drives a private method, drive the nearest

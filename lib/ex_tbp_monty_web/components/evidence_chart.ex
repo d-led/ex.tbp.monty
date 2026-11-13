@@ -25,6 +25,15 @@ defmodule ExTbpMontyWeb.EvidenceChart do
   # in the same units, and only the box it is drawn into changes.
   attr :expanded, :boolean, default: false
 
+  # Which of the page's own events this chart may send, and nothing else. The
+  # gestures belong to whoever can answer them: a page that draws a chart it does
+  # not zoom passes neither name, and the chart is then a picture rather than a
+  # promise. Naming them here rather than in the component is the point — a
+  # hard-coded `zoom` asked every host page to handle an event it may never have
+  # heard of, and the page that had not died on it.
+  attr :zoom_event, :string, default: nil
+  attr :size_event, :string, default: nil
+
   # A control drawn *on* the plot, in its top right corner: the page that owns
   # the card decides what it does, and the chart only says where it goes. On the
   # plot rather than above it, because the thing it acts on is the plot.
@@ -106,7 +115,10 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           viewBox={"0 0 #{@chart.width} #{@chart.height}"}
           class={
             [
-              "w-full touch-none cursor-crosshair",
+              "w-full touch-none",
+              # A crosshair promises the pointer is choosing a stretch; a chart no
+              # page zooms says so with a plain cursor.
+              if(@zoom_event, do: "cursor-crosshair", else: "cursor-default"),
               # The height is the page's, not the picture's: a chart given the whole
               # width of a column and its own aspect ratio is a chart twice as tall
               # as it reads well, because the aspect was drawn for half a row.
@@ -116,9 +128,9 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           }
           data-expanded={to_string(@expanded)}
           data-chart-key={@module_id}
-          data-size-event="chart-size"
-          data-zoom-event="zoom"
-          data-zoom-all-event="zoom"
+          data-size-event={@size_event}
+          data-zoom-event={@zoom_event}
+          data-zoom-all-event={@zoom_event}
           role="img"
           aria-label={"evidence per object, step by step and episode by episode, for #{@module_id}"}
           data-x-min={@chart.x_min}
