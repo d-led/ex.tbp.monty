@@ -46,10 +46,17 @@ defmodule Monty.Prerequisites.Archive do
     end
   end
 
+  # sobelow_skip ["DOS.Tar"]
+  # The archive is the ones this application fetched from a prerequisite's own
+  # URL into its data directory (`Monty.Prerequisites`), and its size is the
+  # download's: an archive inside an archive is not a file a request shapes.
   defp extract_tar_files(path, into) do
     :erl_tar.extract(to_charlist(path), [:compressed, {:cwd, to_charlist(into)}])
   end
 
+  # sobelow_skip ["DOS.Zip"]
+  # The same download as `extract_tar_files/2`: a prerequisite's archive, taken
+  # from its own URL and unpacked under this node's data root.
   defp extract_zip(path, into) do
     case :zip.unzip(to_charlist(path), [{:cwd, to_charlist(into)}]) do
       {:ok, names} -> {:ok, length(names)}

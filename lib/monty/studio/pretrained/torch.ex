@@ -51,6 +51,9 @@ defmodule Monty.Studio.Pretrained.Torch do
 
   # Every member of the zip in memory. A model is tens of megabytes and is read
   # once, so unpacking it beside itself would leave a second copy on disk.
+  # sobelow_skip ["DOS.Zip"]
+  # A torch save under the same libraries directory `read!/2` reads: a model this
+  # application exported or a prerequisite fetched, not a file a request names.
   defp members!(path) do
     case :zip.unzip(to_charlist(path), [:memory]) do
       {:ok, entries} ->

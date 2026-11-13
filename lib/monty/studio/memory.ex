@@ -337,9 +337,11 @@ defmodule Monty.Studio.Memory do
     end)
   end
 
-  # sobelow_skip ["Traversal.FileModule"]
+  # sobelow_skip ["Traversal.FileModule", "DOS.Decompression"]
   # The path is a directory from `libraries_dir/0` plus a name `model_name?/1`
-  # has checked, so there is no traversal to guard against here.
+  # has checked, so there is no traversal to guard against here — and the file is
+  # a library this application or a prerequisite wrote, so what it unpacks is the
+  # size of a memory and not something a request chose.
   defp read!(path, module_index) do
     records =
       path
@@ -384,9 +386,10 @@ defmodule Monty.Studio.Memory do
   # Which module memories a library holds, counted once per path: the answer is a
   # property of the file, and reading a few hundred kilobytes to answer it on
   # every page render is not.
-  # sobelow_skip ["Traversal.FileModule"]
-  # Same path as `read!/2` is handed: a library from `libraries_dir/0` plus a name
-  # `model_name?/1` has checked, not a request.
+  # sobelow_skip ["Traversal.FileModule", "DOS.Decompression"]
+  # Same path as `read!/2` is handed — a library from `libraries_dir/0` plus a name
+  # `model_name?/1` has checked, not a request — so it unpacks the same written
+  # file `read!/2` does.
   defp index_counts(path) do
     key = {__MODULE__, :module_counts, path}
 

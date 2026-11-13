@@ -49,7 +49,8 @@ defmodule Monty.Studio.Jobs.Stops do
     :ok
   end
 
-  @impl true
+  # Not `@impl true`: `start_link` is this module's own entry point, not a
+  # `GenServer` callback — the callback is the `init/1` below it.
   def start_link(options \\ []) do
     GenServer.start_link(__MODULE__, options, name: __MODULE__)
   end
