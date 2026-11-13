@@ -120,6 +120,17 @@ defmodule ExTbpMonty.Cluster.NodesTest do
       refute Nodes.shares_run_files?(here, peer)
     end
 
+    # A peer running a build from before this question answers without the key,
+    # and its entry has to keep being an entry: a mixed-version cluster is not a
+    # cluster of crashes.
+    test "a peer that says nothing about it is still an entry" do
+      [entry] =
+        Nodes.of([:"old@127.0.0.1"], fn _node -> %{version: "0.1.2", capabilities: ["monty"]} end)
+
+      assert entry.artifacts == nil
+      refute Nodes.shares_run_files?(Nodes.identity(), entry)
+    end
+
     # A peer older than this question says nothing, and nothing is not "yes": a
     # run's output is not handed to a node on a guess.
     test "a node that did not say where it writes shares nothing" do
