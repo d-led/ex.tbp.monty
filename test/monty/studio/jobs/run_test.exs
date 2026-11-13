@@ -432,6 +432,16 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert closed.log |> Enum.map(& &1["episode"]) |> Enum.sort() == [0, 1, 2, 3]
       assert closed.log |> Enum.map(& &1["part"]) |> Enum.uniq() |> Enum.sort() == [0, 1]
 
+      # The division is a row per part, and each says how it ended and where it
+      # was performed. Today that node is this one — the row exists so a page can
+      # say otherwise the day a part is handed to a peer.
+      parts = RunHistory.parts(closed.id)
+
+      assert Enum.map(parts, &{&1.part, &1.status}) == [{0, "finished"}, {1, "finished"}]
+      assert Enum.all?(parts, &(&1.node == Monty.Paths.data_dir_name()))
+      assert Enum.all?(parts, &(&1.finished_at != nil))
+      assert Enum.sum(Enum.map(parts, & &1.steps)) == length(closed.log)
+
       log = File.read!(closed.log_path)
       assert log =~ "part 1 of 2 finished"
       assert log =~ "part 2 of 2 finished"

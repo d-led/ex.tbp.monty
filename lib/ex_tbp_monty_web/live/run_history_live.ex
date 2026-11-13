@@ -321,7 +321,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       run: run,
       files: Artifacts.files(run.id),
       queue: where_each_run_is([run]),
-      waiting: waiting(run)
+      waiting: waiting(run),
+      division: RunHistory.parts(run.id)
     )
   end
 
@@ -331,6 +332,25 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # a node that runs alone this answers `nil` without branching: its list of nodes
   # is itself, and it offers everything any run of it ever asks for
   # (`ExTbpMonty.Cluster.Placement`).
+  # How far the division has got, as one number: a reader of a parted run wants
+  # the count first, and the title above says the rest. `@division` is the
+  # schedule (`Monty.Studio.RunHistory.Part`); `@parts` is the cards each part's
+  # episodes draw, which is a different question about the same run.
+  defp division_summary([part | _] = parts) do
+    done = Enum.count(parts, &(&1.status in ["finished", "failed"]))
+    "#{done} of #{part.of} parts done"
+  end
+
+  # Each part, its state, and the node that has it — the one question a run's own
+  # row cannot answer once a part may be performed elsewhere.
+  defp division_title(parts, names) do
+    Enum.map_join(parts, " · ", fn part ->
+      where = if is_binary(part.node), do: " on #{node_name(names, part.node)}", else: ""
+
+      "part #{part.part + 1}: #{part.status}#{where}"
+    end)
+  end
+
   defp waiting(%{status: "queued"} = run) do
     Placement.awaiting(run.inputs, Nodes.snapshot())
   end
@@ -1336,6 +1356,22 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
             step {steps_into_episode(@run)} / {@run.steps}
           </span>
           <span class="badge badge-ghost badge-sm">{@run.source}</span>
+
+          <%!--
+            How far the division of the experiment has got. A parted run is one
+            record with one transcript, so the header is the only place a reader
+            learns there *was* a division, and the badge's title is where each
+            part's node is named — part by part, in the spelling a page
+            translates the same way it translates the run's own node.
+          --%>
+          <span
+            :if={@division != []}
+            id="run-division"
+            class="badge badge-ghost badge-sm"
+            title={division_title(@division, Map.get(assigns, :node_names, %{}))}
+          >
+            {division_summary(@division)}
+          </span>
 
           <%!-- Watching happens here: this page follows the run it shows. The
           experiment page is where a run is started, so that is all this link

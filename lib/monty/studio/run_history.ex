@@ -13,6 +13,7 @@ defmodule Monty.Studio.RunHistory do
   import Ecto.Query
 
   alias ExTbpMonty.Repo
+  alias Monty.Studio.RunHistory.Part
   alias Monty.Studio.RunHistory.Run
 
   # One topic for every run of the application: a page that lists runs
@@ -721,6 +722,104 @@ defmodule Monty.Studio.RunHistory do
         nil
     end
   end
+
+  @doc """
+  Records the division of a run: one row per part, none of them on a node yet.
+
+  Written when the worker decides how to divide the experiment, which is before
+  any part starts — a row that says "4 parts, none of them running" is a page that
+  can say how far a run of four has got, and it is the row a peer's claim will
+  later fill in. `parts` are `Monty.Studio.Partition`'s, whose `index` is
+  zero-based.
+
+  Whatever a previous attempt wrote is replaced: a run performed twice is two
+  divisions of the same experiment, and the second is the one that happened.
+  """
+  @spec plan_parts(binary(), [map()]) :: :ok
+  def plan_parts(run_id, parts) do
+    with {:ok, uuid} <- Ecto.UUID.cast(run_id) do
+      _ = Repo.delete_all(from part in Part, where: part.run_id == ^uuid)
+
+      rows =
+        for part <- parts do
+          %{
+            id: Ecto.UUID.generate(),
+            run_id: uuid,
+            part: part.index,
+            of: part.of,
+            status: "queued",
+            steps: 0,
+            inserted_at: now(),
+            updated_at: now()
+          }
+        end
+
+      _ = Repo.insert_all(Part, rows)
+    end
+
+    :ok
+  end
+
+  @doc """
+  A node has a part in hand.
+
+  `node` is the spelling that decided the node's folder (`Monty.Paths.data_dir_name/0`),
+  which is how a page translates it back to the name a peer dials — the same
+  translation the run's own `node` column gets.
+  """
+  @spec part_started(binary(), integer(), String.t() | nil) :: :ok
+  def part_started(run_id, part, node) do
+    update_part(run_id, part, status: "running", node: node, started_at: now())
+  end
+
+  @doc "A part is done, with the steps it took."
+  @spec part_finished(binary(), integer(), non_neg_integer()) :: :ok
+  def part_finished(run_id, part, steps) do
+    update_part(run_id, part, status: "finished", steps: steps, finished_at: now())
+  end
+
+  @doc """
+  A part stopped without finishing.
+
+  The steps stay as they were read at the end: a part that failed at step 40 took
+  40 steps, and that is what a reader can act on.
+  """
+  @spec part_failed(binary(), integer()) :: :ok
+  def part_failed(run_id, part) do
+    update_part(run_id, part, status: "failed", finished_at: now())
+  end
+
+  @doc """
+  The parts of a run, in the order the division numbered them.
+
+  Empty for a run that was not divided, which is the run of one part: there is no
+  division to show.
+  """
+  @spec parts(binary()) :: [Part.t()]
+  def parts(run_id) do
+    case Ecto.UUID.cast(run_id) do
+      {:ok, uuid} ->
+        Part
+        |> where([part], part.run_id == ^uuid)
+        |> order_by([part], asc: part.part)
+        |> Repo.all()
+
+      :error ->
+        []
+    end
+  end
+
+  defp update_part(run_id, part, attributes) do
+    with {:ok, uuid} <- Ecto.UUID.cast(run_id) do
+      _ =
+        from(candidate in Part, where: candidate.run_id == ^uuid and candidate.part == ^part)
+        |> Repo.update_all(set: Enum.to_list(attributes) ++ [updated_at: now()])
+    end
+
+    :ok
+  end
+
+  defp now, do: DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
   @doc """
   What a page polls for: how the run is doing, without what it said.

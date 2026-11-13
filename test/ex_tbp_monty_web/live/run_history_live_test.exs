@@ -153,6 +153,35 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   # picture changes and no other test fails: the chart just stops answering the
   # wheel. So the contract is asserted here, and the behaviour is driven through
   # the names the markup gives it rather than the names this test knows.
+  # A parted run is one record and one transcript, so the page is the only place
+  # a reader learns there was a division at all — and, once a part may be
+  # performed elsewhere, which node has which part.
+  describe "the division of a run" do
+    test "says how far it has got, and names the node each part is on", %{conn: conn, run: run} do
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+      :ok = RunHistory.part_started(run.id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.part_finished(run.id, 0, 12)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#run-division") |> render() =~ "1 of 2 parts done"
+
+      title = view |> element("#run-division") |> render() |> LazyHTML.from_fragment()
+      [badge] = LazyHTML.query(title, "#run-division") |> Enum.to_list()
+
+      assert LazyHTML.attribute(badge, "title") |> List.first() =~
+               "part 1: finished on node1_127.0.0.1"
+
+      assert LazyHTML.attribute(badge, "title") |> List.first() =~ "part 2: queued"
+    end
+
+    test "is not drawn for a run that was not divided", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      refute has_element?(view, "#run-division")
+    end
+  end
+
   describe "the gesture hook's contract with the chart" do
     test "the chart is drawn for the window it says it is drawing", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
@@ -1230,6 +1259,8 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
+      # The cards of the parts, which is this page's own drawing of them — not the
+      # division the header counts (`#run-division`), which is a different thing.
       assert has_element?(view, "#run-parts")
 
       for {part, index} <- Enum.with_index(parts) do
@@ -1243,7 +1274,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      refute has_element?(view, "#run-parts")
+      refute has_element?(view, "#run-division")
     end
   end
 

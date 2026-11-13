@@ -315,6 +315,15 @@ node2@127.0.0.1`, and still on its first attempt — a snooze is not a failed
   so a page on the owner sees a peer part's steps as they happen and only the
   catch-up read (a page opened later) would need an `:rpc`.
 
+- **A run's division is recorded, its parts' nodes included.** `studio_run_parts`
+  keeps one row per part: how many the experiment was divided into, what state
+  each is in, and the node that has it — written when the worker divides the run
+  and updated as each part starts and ends. The run page's header counts them (`3
+of 4 parts done`) and names each part's node in the count's title. Today every
+  row says this node, because a part is a task inside one job; the rows are there
+  so that the day it is not, the page and the record already say so. They cost no
+  message: a page reads a table.
+
 ### What one database gives you today, measured
 
 Two development nodes told about **one** Postgres

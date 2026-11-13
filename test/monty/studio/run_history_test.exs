@@ -17,6 +17,61 @@ defmodule Monty.Studio.RunHistoryTest do
     inputs: %{"groups" => %{"monty/learning_module" => "displacement_1lm"}, "seed" => 42}
   }
 
+  describe "the parts a run was divided into" do
+    # A parted run is one record with one transcript, so the record's own columns
+    # cannot say where each part was performed. These rows are that answer — and
+    # they are written before any part starts, so a page can say how far a run of
+    # four has got rather than only that it is running.
+    test "are recorded before any of them runs, with no node yet" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      assert :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      assert [first, second] = RunHistory.parts(run.id)
+      assert {first.part, second.part} == {0, 1}
+      assert {first.of, second.of} == {2, 2}
+      assert first.status == "queued"
+      assert first.node == nil
+      assert first.started_at == nil
+    end
+
+    test "say which node has each one, and how it ended" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      :ok = RunHistory.part_started(run.id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.part_finished(run.id, 0, 68)
+      :ok = RunHistory.part_started(run.id, 1, "node2_127.0.0.1")
+      :ok = RunHistory.part_failed(run.id, 1)
+
+      assert [done, broken] = RunHistory.parts(run.id)
+      assert {done.status, done.node, done.steps} == {"finished", "node1_127.0.0.1", 68}
+      assert %DateTime{} = done.finished_at
+      assert {broken.status, broken.node} == {"failed", "node2_127.0.0.1"}
+    end
+
+    test "are replaced, not doubled, when a run is performed again" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+      :ok = RunHistory.part_started(run.id, 0, "node1_127.0.0.1")
+
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      assert [first, second] = RunHistory.parts(run.id)
+      assert first.status == "queued"
+      assert first.node == nil
+      assert second.status == "queued"
+    end
+
+    test "are none for a run that is not there, or was never divided" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      assert RunHistory.parts(run.id) == []
+      assert RunHistory.parts(Ecto.UUID.generate()) == []
+      assert RunHistory.parts("not a run id") == []
+    end
+  end
+
   describe "a run that starts" do
     test "is history immediately, with the config and the inputs that produced it" do
       assert {:ok, run} = RunHistory.start(@attributes)

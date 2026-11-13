@@ -382,6 +382,11 @@ defmodule Monty.Studio.Jobs.Run do
     record = attach_log(record, run_id, log_ready)
     parts = planned(record)
 
+    # The division is a row per part before any of them starts: how many there
+    # are, and — as each is taken — where it is performed. A run of one part has
+    # no division to record.
+    if length(parts) > 1, do: RunHistory.plan_parts(run_id, parts)
+
     say(
       run_id,
       "run started: #{record.experiment}, #{length(parts)} part(s) of one experiment, " <>
@@ -492,12 +497,15 @@ defmodule Monty.Studio.Jobs.Run do
   # four parts each writing theirs is four parts overwriting one another.
   defp collect({:ok, {:ok, part, _memories}}, record) do
     steps = RunStream.count(part.stream)
+    if part.of > 1, do: RunHistory.part_finished(record.id, part.index, steps)
 
     say(record.id, "part #{part.index + 1} of #{part.of} finished: #{steps} step(s)")
     record
   end
 
   defp collect({:ok, {:error, part, reason}}, record) do
+    if part.of > 1, do: RunHistory.part_failed(record.id, part.index)
+
     say(record.id, "part #{part.index + 1} of #{part.of} stopped: #{inspect(reason)}")
     record
   end
@@ -539,6 +547,12 @@ defmodule Monty.Studio.Jobs.Run do
   # step loop derives from a record — the phase, the episodes, the memory — is
   # read from it here, so a part is not a second kind of run.
   defp run_part(record, opened, part, memory) do
+    # A part names the node that has it before it starts stepping, which is the
+    # run's own claim one level down: today that node is always this one, and the
+    # row is what would say otherwise the day a part may be handed to a peer.
+    if part.of > 1,
+      do: RunHistory.part_started(record.id, part.index, Monty.Paths.data_dir_name())
+
     record = part_record(record, part, memory)
     # A part owns its stream the way a run owns its id: `Stop` reaches it, and the
     # Reaper can see that something is working on it, until it is done.
