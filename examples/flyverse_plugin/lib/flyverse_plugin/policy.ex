@@ -30,7 +30,12 @@ defmodule FlyversePlugin.Policy do
       The action is `OrientHorizontal`, the surf agent's own: its
       `rotation_degrees` is the turn, its `left_distance` the slide that turn is
       worth at this depth, and its `forward_distance` the press back to the
-      standoff. An action a world does not implement is one it skips.
+      standoff. An action a world does not implement is one it skips;
+    * **a step is never longer than a quarter of what the view can see**, which
+      is the fly's own way of not bumping into things: the crossing is fast while
+      the gap is wide and slows onto what it was flying at, so it arrives rather
+      than passes through. And a flat patch with nothing in the view is swept
+      rather than flown, because there is nothing there to fly at.
 
   With the demonstrator pack (`mix flyverse_plugin.pack`) that wiring is two
   excitatory edges, so a nearer left side turns the sensor left — towards what
@@ -111,9 +116,20 @@ defmodule FlyversePlugin.Policy do
   # millimetres, and the object is a hand's width wide, so 26 mm a step still
   # lands several samples on it. The flat is a place to leave, not a place to be
   # careful in — the care starts the moment `relief` says something is there.
+  # Exactly six steps of it is a crossing; the cap below is what keeps a crossing
+  # a crossing.
   @flat_relief 0.001
   @flight_walk 6.0
   @flight_bend 0.25
+
+  # How much of the gap a view sees one step may take. A step longer than the
+  # distance to what is in front of it lands *in* that thing: at 26 mm a step a
+  # mug a hand's width away is crossed in eight steps, the cameras come out the
+  # far side seeing nothing, and the run spends a thousand steps in the dark. A
+  # quarter of the gap closes the distance geometrically — a hand's width is ten
+  # steps, and the last of them is a millimetre — and cannot pass through what it
+  # was looking at.
+  @sight 0.25
 
   # What counts as something to fly at: a nearness of 2.0 is half a metre away,
   # and the wide view has to see that much for a flight to be a flight. A flat
@@ -348,7 +364,11 @@ defmodule FlyversePlugin.Policy do
     {near_left, near_right} = window.nearness
     flight? = flat? and max(near_left, near_right) >= @loom
     turn = turn_degrees(policy, wish, saccade?(previous, wish), flight?)
-    walk = if flight?, do: @flight_walk, else: walk_speed(driven(left_hz, right_hz))
+
+    walk =
+      if flight?,
+        do: flight_walk(policy, window.nearness),
+        else: walk_speed(driven(left_hz, right_hz))
 
     %MotorPolicyResult{
       actions: [crawl(policy, turn, depth, walk)],
@@ -395,6 +415,22 @@ defmodule FlyversePlugin.Policy do
   end
 
   defp walk_speed(driven), do: @min_walk + (@max_walk - @min_walk) * driven
+
+  # How much of a crossing one step takes, in multiples of the crawl step. The
+  # nearest thing the view can see decides it: the crossing is `@flight_walk`
+  # while the gap is wide — that is what makes a flat a place to leave rather
+  # than a place to be careful in — and then a quarter of the gap as the thing
+  # arrives, so the fly decelerates onto what it was flying at instead of through
+  # it.
+  defp flight_walk(policy, {near_left, near_right}) do
+    nearest = max(near_left, near_right)
+
+    if nearest <= 0.0 do
+      @flight_walk
+    else
+      min(@flight_walk, @sight / nearest / policy.distance)
+    end
+  end
 
   # Monty's own surface arithmetic (`SurfacePolicy.distances/2`): a slide whose
   # length the angle and the depth decide, and the press that keeps the sensor at

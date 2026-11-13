@@ -99,20 +99,25 @@ defmodule FlyversePlugin.PolicyTest do
 
   # The long stretch at the start of a run, where no theory has any evidence, is
   # the agent crawling across a flat table on its way to the object. A patch with
-  # no relief in it is flown over instead, and the bend is damped so the crossing
-  # is a crossing rather than a spiral on the spot.
-  test "a patch with no relief is flown over", %{state: state} do
-    {:ok, policy, state} = Policy.new([], state)
-    near_left = [[0.005, 0.005, 0.5, 0.5]]
+  # no relief in it is crossed instead of crawled: that flat is a place to leave,
+  # and the care starts the moment the patch has relief in it.
+  test "a patch with no relief is crossed faster than it is crawled", %{state: state} do
+    # A mug a hand's width away, across a flat table.
+    mug_ahead = [[0.3, 0.3, 0.5, 0.5]]
 
-    {flying, _policy, _state} = step(policy, state, near_left, percept(0.05, 0.0))
-    {crawling, _policy, _state} = step(policy, state, near_left, percept(0.05, 0.01))
+    {:ok, flying_policy, flying_state} = Policy.new([], state)
+    {flying, _policy, _state} = step(flying_policy, flying_state, mug_ahead, percept(0.05, 0.0))
+
+    {:ok, crawling_policy, crawling_state} = Policy.new([], state)
+
+    {crawling, _policy, _state} =
+      step(crawling_policy, crawling_state, mug_ahead, percept(0.05, 0.01))
 
     assert flying.telemetry.walk_speed > crawling.telemetry.walk_speed
 
+    # A crossing is still a walk and not a turn on the spot.
     assert [%OrientHorizontal{rotation_degrees: flight_angle}] = flying.actions
-    assert [%OrientHorizontal{rotation_degrees: crawl_angle}] = crawling.actions
-    assert abs(flight_angle) < abs(crawl_angle), "the crossing is not a spiral"
+    assert flight_angle == -5.0, "the policy's own turn, and no more on a silent network"
   end
 
   # The empty middle of a room, where an agent that flew blind ends up: every
@@ -122,7 +127,7 @@ defmodule FlyversePlugin.PolicyTest do
   test "a flat patch with nothing in sight is swept, not flown", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
     nothing_in_sight = [[799.0, 799.0, 799.0, 799.0]]
-    something_ahead = [[0.005, 0.005, 0.5, 0.5]]
+    something_ahead = [[0.3, 0.3, 0.5, 0.5]]
 
     {swept, _policy, _state} = step(policy, state, nothing_in_sight, percept(0.05, 0.0))
     {flown, _policy, _state} = step(policy, state, something_ahead, percept(0.05, 0.0))
@@ -130,6 +135,23 @@ defmodule FlyversePlugin.PolicyTest do
     assert swept.telemetry.walk_speed < flown.telemetry.walk_speed
     assert [%OrientHorizontal{rotation_degrees: swept_angle}] = swept.actions
     assert abs(swept_angle) >= 5.0, "the sweep keeps the policy's own turn"
+  end
+
+  # A crossing must arrive at what it was flying at, not pass through it. The
+  # last run took 26 mm steps at a mug a hand's width away: it was inside it in
+  # eight, both cameras black, and the run never saw a surface again.
+  test "a crossing never steps further than a quarter of what the view sees", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+    flat = percept(0.05, 0.0)
+
+    for gap <- [0.4, 0.2, 0.1, 0.05, 0.02] do
+      rows = [[gap, gap, 100.0, 100.0]]
+      {flown, _policy, _state} = step(policy, state, rows, flat)
+      step_length = flown.telemetry.walk_speed * 0.004
+
+      assert step_length <= gap / 4.0,
+             "a #{Float.round(step_length * 1000, 1)} mm step over a #{gap * 1000} mm gap"
+    end
   end
 
   test "the telemetry is the spikes the decision was made of", %{state: state} do

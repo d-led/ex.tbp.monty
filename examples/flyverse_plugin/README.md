@@ -58,6 +58,15 @@ its `left_distance` is the slide that turn is worth at this depth
 the press back to the standoff. That is the whole crawl: every step turns and
 travels, which is what a surface agent walking an object does.
 
+A step is never longer than a quarter of what the view can see. A patch with no
+relief in it is a flat table between the agent and the object, and crossing it
+at four millimetres is the long stretch at the start of a run where no theory
+has evidence, so a flat patch is crossed six times faster — but a step that is
+longer than the gap it is looking across lands *inside* what it was flying at,
+with both cameras black, which is a place a run does not come back from. So the
+crossing decelerates onto what it was flying at, and a flat patch with nothing
+in the view at all is swept instead of flown: there is nothing there to fly at.
+
 The rates, the gain and the action mapping are this plugin's and
 `FlyversePlugin.Policy` says so line by line. The dynamics are flyverse's. With
 the dataset's pack the same code asks a real connectome, and what it does there
