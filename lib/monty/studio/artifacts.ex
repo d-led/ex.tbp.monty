@@ -194,6 +194,8 @@ defmodule Monty.Studio.Artifacts do
   `0` for a part that has not finished one — and for one whose progress could not
   be written, which is a part that starts again rather than a part that skips.
   """
+  # The path is `dir/1`'s, which refuses a run id that is not a UUID.
+  # sobelow_skip ["Traversal.FileModule"]
   @spec progress(binary(), atom() | String.t(), non_neg_integer()) :: non_neg_integer()
   def progress(run_id, phase, index) do
     case File.read(progress_path(run_id, phase, index)) do
@@ -203,6 +205,8 @@ defmodule Monty.Studio.Artifacts do
   end
 
   @doc "How many steps one part has written so far — what its row shows."
+  # The path is `dir/1`'s, which refuses a run id that is not a UUID.
+  # sobelow_skip ["Traversal.FileModule"]
   @spec part_steps(binary(), atom() | String.t(), non_neg_integer()) :: non_neg_integer()
   def part_steps(run_id, phase, index) do
     case File.read(part_path(run_id, phase, index)) do
@@ -219,6 +223,8 @@ defmodule Monty.Studio.Artifacts do
   performed once and performed again is not this attempt's steps, and appending to
   it would be a transcript with two attempts in it.
   """
+  # The path is `dir/1`'s, which refuses a run id that is not a UUID.
+  # sobelow_skip ["Traversal.FileModule"]
   @spec clear_parts(binary()) :: :ok
   def clear_parts(run_id) do
     _ = File.rm_rf(Path.join(dir(run_id), "parts"))
