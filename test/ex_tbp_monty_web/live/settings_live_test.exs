@@ -145,5 +145,41 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
       assert view |> element("#capability-monty") |> render() =~ name
       assert view |> element("#cluster-capability-source") |> render() =~ "MONTY_CAPABILITIES"
     end
+
+    # The list is the part of the page that moves on its own: a peer joins and
+    # the row appears, because a reader who has to reload to see the cluster is a
+    # reader who does not believe the footer beside it.
+    test "a peer that joins appears in the list while the page is open", %{conn: conn} do
+      previous = Application.get_env(:ex_tbp_monty, :cluster)
+      on_exit(fn -> Application.put_env(:ex_tbp_monty, :cluster, previous) end)
+      Application.put_env(:ex_tbp_monty, :cluster, enabled: true, seeds: [])
+
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      assert view |> element("#cluster-count") |> render() =~ "One node in this cluster"
+      refute has_element?(view, "#capability-gpu")
+
+      entries =
+        ExTbpMonty.Cluster.Nodes.of(
+          [node(), :"gpu@127.0.0.1"],
+          fn _ -> %{version: "0.1.3", capabilities: ["gpu"]} end
+        )
+
+      Phoenix.PubSub.broadcast(
+        ExTbpMonty.PubSub,
+        ExTbpMonty.Cluster.Nodes.topic(),
+        {:cluster_nodes, entries}
+      )
+
+      # A message to the page is a message: asking for its state is the answer
+      # that everything before it has been handled.
+      _ = :sys.get_state(view.pid)
+
+      assert view |> element("#cluster-count") |> render() =~ "2 nodes in this cluster"
+      # The id of a row is a node name, and a node name has a dot in it: asked
+      # for as text, because `#node-gpu_127.0.0.1` is not a selector.
+      assert view |> element("#cluster-node-list") |> render() =~ "gpu_127.0.0.1"
+      assert view |> element("#capability-gpu") |> render() =~ "gpu_127.0.0.1"
+    end
   end
 end

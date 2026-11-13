@@ -101,44 +101,13 @@ defmodule ExTbpMontyWeb.SettingsLive do
 
         <%!-- Which nodes there are, which build each one runs, and what each
         one can do. A page cannot change any of it — the cluster is a start-up
-        decision — so it is shown here rather than offered as a control. On a
-        node that runs alone the list is one entry long and the sentence under
-        it says what would make it more. --%>
+        decision — so it is shown here rather than offered as a control. The list
+        itself is a component because it changes while the page is open: a peer
+        joining or leaving moves it without anybody reloading. What stays here is
+        read once, at boot. --%>
         <section id="cluster" class="space-y-1 border-t border-base-300 pt-3">
           <h2 class="text-sm font-semibold">Nodes</h2>
-          <p id="cluster-count" class="text-xs text-base-content/70">{@cluster.summary}</p>
-          <ul id="cluster-node-list" class="space-y-0.5 text-xs">
-            <li
-              :for={entry <- @cluster.nodes}
-              id={"node-" <> entry.name}
-              class="flex flex-wrap items-baseline gap-2 font-mono"
-            >
-              <span class={["truncate", not entry.alive && "text-base-content/50"]}>{entry.name}</span>
-              <span class="text-base-content/50">{entry.version || "no answer"}</span>
-              <span :if={entry.self} class="badge badge-xs badge-ghost">this node</span>
-              <span class="text-base-content/40">{Enum.join(entry.capabilities, " ")}</span>
-            </li>
-          </ul>
-          <%!--
-            The other direction of the same question. A node's row says what it
-            can do; this says who can do a thing, which is the question a reader
-            asks when an experiment needs a machine this one is not — and the
-            only place where a tag two nodes spell differently shows up as a
-            tag with one node under it.
-          --%>
-          <div :if={@cluster.capabilities != []} class="space-y-0.5 pt-1">
-            <p class="text-xs text-base-content/60">What this cluster can do</p>
-            <ul id="cluster-capabilities" class="space-y-0.5 text-xs">
-              <li
-                :for={{tag, names} <- @cluster.capabilities}
-                id={"capability-" <> ExTbpMonty.Node.safe_name(tag)}
-                class="flex flex-wrap items-baseline gap-2"
-              >
-                <span class="font-mono text-base-content/70">{tag}</span>
-                <span class="truncate text-base-content/50">{Enum.join(names, ", ")}</span>
-              </li>
-            </ul>
-          </div>
+          <.live_component module={ExTbpMontyWeb.ClusterNodes} id="cluster-nodes" />
           <p :if={@cluster.why_not} id="cluster-why-not" class="text-xs text-base-content/60">
             {@cluster.why_not}
           </p>
@@ -162,16 +131,12 @@ defmodule ExTbpMontyWeb.SettingsLive do
     )
   end
 
-  # The cluster as this page tells it: the nodes, what each can do, why there is
-  # only one when there is only one, and one sentence saying which case a reader
-  # is in.
+  # What this page says about the cluster that is fixed at boot: whether this node
+  # could be one at all, where its cookie came from, and where its own tags came
+  # from. The list of nodes is not here — it changes while the page is open, and
+  # `ExTbpMontyWeb.ClusterNodes` is the component that follows it.
   defp cluster do
-    nodes = ExTbpMonty.Cluster.Nodes.snapshot()
-
     %{
-      nodes: nodes,
-      summary: summary(nodes),
-      capabilities: Capabilities.by_tag(nodes),
       capability_source: capability_source(),
       why_not: ExTbpMonty.Node.why_not(),
       cookie: ExTbpMonty.Node.cookie_source()
@@ -188,19 +153,6 @@ defmodule ExTbpMontyWeb.SettingsLive do
 
       tags ->
         "this node adds " <> Enum.join(tags, ", ") <> " through MONTY_CAPABILITIES"
-    end
-  end
-
-  defp summary(nodes) do
-    case {ExTbpMonty.Cluster.enabled?(), length(nodes)} do
-      {false, _} ->
-        "This instance runs alone: clustering is off, and MONTY_CLUSTER (with a node name) turns it on."
-
-      {true, 1} ->
-        "One node in this cluster — this one. A peer appears here as soon as it connects."
-
-      {true, count} ->
-        "#{count} nodes in this cluster, this one first."
     end
   end
 end

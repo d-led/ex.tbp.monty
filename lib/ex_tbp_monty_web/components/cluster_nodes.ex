@@ -1,0 +1,97 @@
+defmodule ExTbpMontyWeb.ClusterNodes do
+  @moduledoc """
+  The node list: which nodes there are, which build each one runs, what each one
+  can do — and, under it, each capability tag above the nodes that have it.
+
+  Both directions of one question, because a heterogeneous cluster is one where
+  the answer differs per node: a node's row says what that machine is, and the
+  list under it says who can do a thing, which is what a reader needs when an
+  experiment needs a machine this one is not.
+
+  ## Why a component
+
+  The list changes while the page is open, and the same reason as the footer's
+  `ExTbpMontyWeb.ClusterBadge` applies: `Phoenix.PubSub` delivers to a process,
+  and a component has no `handle_info/2` of its own — the parent receives and
+  `send_update/3`s it. `ExTbpMontyWeb.ClusterLive` is the mount hook every page
+  gets, and it hands the poller's announcement to both components by id; one that
+  a page does not render is not there to update, which is why one hook serves
+  both.
+
+  A node that runs alone is a cluster of one here too: the component asks
+  `ExTbpMonty.Cluster.Nodes.snapshot/0`, which answers with this node on a VM that
+  never started a poller. That is what the settings page shows on every
+  deployment — the footer's badge is the one that is hidden when clustering is
+  off.
+  """
+
+  use ExTbpMontyWeb, :live_component
+
+  alias ExTbpMonty.Cluster
+  alias ExTbpMonty.Cluster.Capabilities
+
+  @impl true
+  def update(assigns, socket) do
+    nodes = assigns[:nodes] || Cluster.Nodes.snapshot()
+
+    {:ok,
+     socket
+     |> assign(assigns)
+     |> assign(nodes: nodes, summary: summary(nodes), capabilities: Capabilities.by_tag(nodes))}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="space-y-1">
+      <p id="cluster-count" class="text-xs text-base-content/70">{@summary}</p>
+      <ul id="cluster-node-list" class="space-y-0.5 text-xs">
+        <li
+          :for={entry <- @nodes}
+          id={"node-" <> entry.name}
+          class="flex flex-wrap items-baseline gap-2 font-mono"
+        >
+          <span class={["truncate", not entry.alive && "text-base-content/50"]}>{entry.name}</span>
+          <span class="text-base-content/50">{entry.version || "no answer"}</span>
+          <span :if={entry.self} class="badge badge-xs badge-ghost">this node</span>
+          <span class="text-base-content/40">{Enum.join(entry.capabilities, " ")}</span>
+        </li>
+      </ul>
+      <%!--
+        The other direction of the same question. A node's row says what it can
+        do; this says who can do a thing — and it is the only place where a tag
+        two nodes spell differently shows up as a tag with one node under it.
+      --%>
+      <div :if={@capabilities != []} class="space-y-0.5 pt-1">
+        <p class="text-xs text-base-content/60">What this cluster can do</p>
+        <ul id="cluster-capabilities" class="space-y-0.5 text-xs">
+          <li
+            :for={{tag, names} <- @capabilities}
+            id={"capability-" <> ExTbpMonty.Node.safe_name(tag)}
+            class="flex flex-wrap items-baseline gap-2"
+          >
+            <span class="font-mono text-base-content/70">{tag}</span>
+            <span class="truncate text-base-content/50">{Enum.join(names, ", ")}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+    """
+  end
+
+  # The one sentence that says which case a reader is in, because "one node" is
+  # three different situations: clustering off, a cluster of one, and a cluster
+  # that happens to have one member up.
+  defp summary(nodes) do
+    case {Cluster.enabled?(), length(nodes)} do
+      {false, _} ->
+        "This instance runs alone: clustering is off, and MONTY_CLUSTER (with a node name) turns it on."
+
+      {true, 1} ->
+        "One node in this cluster — this one. A peer appears here as soon as it connects."
+
+      {true, count} ->
+        "#{count} nodes in this cluster, this one first."
+    end
+  end
+end
