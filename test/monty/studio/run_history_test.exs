@@ -1086,6 +1086,36 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.ended_parts(run.id) == MapSet.new()
     end
 
+    # The other half of the question: a part somebody has just taken is being
+    # worked on, and a part whose lease ran out is not — the two together are how a
+    # node decides whether a run it cannot see the process of is still somebody's.
+    test "says which parts somebody is still working on" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 3}, %{index: 1, of: 3}])
+
+      {:ok, done} = RunHistory.claim_part(run.id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.release_part(done, "finished", 8)
+      {:ok, in_hand} = RunHistory.claim_part(run.id, 1, "node2_127.0.0.1")
+
+      assert RunHistory.claimed_parts(run.id) |> Enum.map(& &1.part) == [1]
+
+      # And once the holder has been silent for a whole lease, nobody is working:
+      # the row keeps the claim, the clock is what makes it nobody's.
+      past = DateTime.add(DateTime.utc_now(), -Claim.ttl_seconds() - 1, :second)
+
+      assert {1, _one} =
+               Repo.update_all(
+                 from(part in Part, where: part.run_id == ^run.id and part.part == 1),
+                 set: [claimed_until: past]
+               )
+
+      assert RunHistory.claimed_parts(run.id) == []
+
+      # The claim in hand is still the row's, which is what a holder that comes
+      # back finds out: the token is refused, and the part is somebody else's.
+      assert in_hand.part == 1
+    end
+
     test "counts nothing for a run that was never divided" do
       {:ok, run} = RunHistory.start(@attributes)
 

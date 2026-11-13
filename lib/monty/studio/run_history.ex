@@ -998,6 +998,30 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
+  The parts of a run that somebody is still working on: in hand, and the holder
+  has renewed its lease since it took it.
+
+  The other half of `lapsed_parts/1`. A run of several parts is performed by the
+  cluster, not by one node: a part can be in a peer's hands while this node's own
+  registry knows nothing about it, so "is anybody still working on this run" cannot
+  be answered from what this node has running — the claim is the answer, and the
+  clock is what makes it expire.
+
+  Which is a question a node asks before it **continues** a run
+  (`Monty.Studio.Jobs.Reaper.recover/0`), not before it closes one: a run whose job
+  was cancelled is one somebody stopped, and a dead worker's claim outliving its job
+  by a lease is not evidence against the person who pressed Stop.
+  """
+  @spec claimed_parts(binary()) :: [Part.t()]
+  def claimed_parts(run_id) do
+    moment = now()
+
+    run_id
+    |> parts()
+    |> Enum.filter(&(&1.status == "running" and not Claim.lapsed?(&1.claimed_until, moment)))
+  end
+
+  @doc """
   The parts of a run that nobody is working on any more: in hand, and the holder
   has not said a word since its lease ran out.
 

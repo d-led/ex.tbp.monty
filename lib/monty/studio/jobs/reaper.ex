@@ -42,6 +42,15 @@ defmodule Monty.Studio.Jobs.Reaper do
   its own rows (they are its folder's), and until then the row says `running` and
   a page says it has been quiet for a while — which is true, and is not a lie an
   inference can improve on.
+
+  ## Whose part is it
+
+  A run of several parts is performed by the cluster, so this node can hold a run
+  it is not performing: part 3 may be a peer's while nothing here knows about it.
+  That is why `recover/0` asks the claims before it queues anything — a part in a
+  peer's hands is a part being performed, and the lease is when that stops being
+  true. `sweep/0` does **not** ask them: a run whose job was cancelled is one
+  somebody stopped, and a stale claim is no reason to leave it saying `running`.
   """
 
   import Ecto.Query
@@ -98,9 +107,20 @@ defmodule Monty.Studio.Jobs.Reaper do
   def recover do
     RunHistory.running()
     |> Enum.filter(&ours?(&1, mine()))
-    |> Enum.reject(&(Run.held?(&1.id) or alive?(&1)))
+    |> Enum.reject(&(Run.held?(&1.id) or alive?(&1) or in_hand?(&1)))
     |> Enum.count(&resume/1)
   end
+
+  # A part in somebody's hands, on a node that has just booted, is a **peer's**:
+  # this node's own claims died with its processes, so a claim that has not lapsed
+  # can only be one a peer renewed. Such a run is being performed, whatever this
+  # node's registry knows, and queueing it again would ask for a part the claim
+  # refuses — which is the run failing at the first wave instead of continuing.
+  #
+  # This is the recovery's own guard and not the sweep's: a run whose job was
+  # cancelled is one somebody stopped, and closing it is the intent — a stale
+  # claim is not evidence against the person who pressed Stop.
+  defp in_hand?(record), do: RunHistory.claimed_parts(record.id) != []
 
   # A division with something done and something left is the only shape worth
   # continuing: anything else either has nothing to resume from or nothing to do,

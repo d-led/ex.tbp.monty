@@ -15,7 +15,7 @@ defmodule Monty.Studio.Jobs.ReaperTest do
   import Ecto.Query
 
   alias ExTbpMonty.Repo
-  alias Monty.Studio.{Artifacts, Jobs, RunHistory}
+  alias Monty.Studio.{Artifacts, Claim, Jobs, RunHistory}
   alias Monty.Studio.Jobs.Reaper
   alias Monty.Test.Tmp
 
@@ -65,6 +65,20 @@ defmodule Monty.Studio.Jobs.ReaperTest do
     :ok
   end
 
+  # A part whose holder has been silent for longer than a lease: the row keeps the
+  # claim, and the clock is what makes the part nobody's.
+  defp lease_ran_out(record, part) do
+    past = DateTime.add(DateTime.utc_now(), -Claim.ttl_seconds() - 1, :second)
+
+    {1, _one} =
+      Repo.update_all(
+        from(p in RunHistory.Part, where: p.run_id == ^record.id and p.part == ^part),
+        set: [claimed_until: past]
+      )
+
+    :ok
+  end
+
   # A run nobody has written to for a while: the other half of "nothing is
   # working on it", now that a record still being written counts as a worker.
   defp quiet_since(record, seconds) do
@@ -96,6 +110,42 @@ defmodule Monty.Studio.Jobs.ReaperTest do
 
       assert Reaper.sweep() == 1
       assert RunHistory.get(record.id).status == "failed"
+    end
+  end
+
+  # A run of several parts is performed by the cluster, so this node can hold a run
+  # it is not performing: part 3 may be a peer's while nothing here knows it. A
+  # claim that has not lapsed, on a node that has just booted, is a peer's — and
+  # queueing that run again would ask for a part the claim refuses, which is the run
+  # failing at its first wave instead of continuing.
+  describe "a run whose part a peer is performing" do
+    test "is not put back in the queue at boot" do
+      record = start_run()
+      :ok = RunHistory.plan_parts(record.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      {:ok, done} = RunHistory.claim_part(record.id, 0, "peer_127.0.0.1")
+      :ok = RunHistory.release_part(done, "finished", 3)
+      {:ok, _in_hand} = RunHistory.claim_part(record.id, 1, "peer_127.0.0.1")
+      _quiet = quiet_since(record, 61)
+
+      assert Reaper.recover() == 0
+      assert RunHistory.get(record.id).status == "running"
+    end
+
+    # Once the peer has been silent for a whole lease nothing is performing the
+    # part, and the run is this node's to continue again.
+    test "is put back in the queue once that claim has lapsed" do
+      record = start_run()
+      :ok = RunHistory.plan_parts(record.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      {:ok, done} = RunHistory.claim_part(record.id, 0, "peer_127.0.0.1")
+      :ok = RunHistory.release_part(done, "finished", 3)
+      {:ok, in_hand} = RunHistory.claim_part(record.id, 1, "peer_127.0.0.1")
+      _lapsed = lease_ran_out(record, in_hand.part)
+      _quiet = quiet_since(record, 61)
+
+      assert Reaper.recover() == 1
+      assert RunHistory.get(record.id).status == "queued"
     end
   end
 
