@@ -45,6 +45,19 @@ defmodule ExTbpMonty.Mcp.ToolsTest do
       end
     end
 
+    # A schema that offered a word `run/2` refuses is a tool no validating client
+    # can call — and the words are the run page's, so `cad` is among them even on
+    # a node that cannot step it: the refusal, not the schema, says what the node
+    # carries.
+    test "the run tool offers exactly the worlds it accepts" do
+      definition = Enum.find(Tools.definitions(), &(&1["name"] == "monty_run_experiment"))
+
+      assert definition["inputSchema"]["properties"]["world"]["enum"] ==
+               Tools.Experiments.worlds()
+
+      assert "cad" in Tools.Experiments.worlds()
+    end
+
     test "docs/mcp.md names every tool, so the document cannot drift" do
       doc = File.read!("docs/mcp.md")
 

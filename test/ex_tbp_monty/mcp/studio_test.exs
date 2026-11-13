@@ -60,6 +60,19 @@ defmodule ExTbpMonty.Mcp.StudioTest do
       assert Map.has_key?(studio.world, :peer_interpreter)
     end
 
+    # The sentence a model reads is the node's answer, not a list written when
+    # there were two worlds: a third world this build can step and does not name
+    # is a world no caller ever asks for.
+    test "the note names every world this node can step, not the ones it was written with" do
+      Tmp.app_env(:world_simulator, :mujoco)
+
+      note = Studio.describe().world.note
+      others = Enum.reject(Monty.Studio.Setup.worlds(), &(&1 == :mujoco))
+
+      assert others != []
+      for world <- others, do: assert(note =~ ~s(`world: "#{world}"`))
+    end
+
     test "says MuJoCo when nothing configured a world, which is every deployment" do
       Tmp.app_env(:world_simulator, nil)
 

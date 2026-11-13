@@ -448,10 +448,17 @@ defmodule ExTbpMonty.Mcp.Tools do
           },
           "world" => %{
             "type" => "string",
-            "enum" => ["synthetic", "monty"],
+            # Every word the tool accepts, taken from the tool itself: a schema
+            # that offered a word `run/2` refuses is a tool no validating client
+            # can call, and a node without the CAD application still answers with
+            # the sentence that names what it does carry.
+            "enum" => Experiments.worlds(),
             "description" =>
-              "`synthetic` steps this port's scene; `monty` steps Monty's own simulator " <>
-                "through a Python peer, and needs MONTY_PYTHON. Default: the deployment's."
+              "`synthetic` steps this port's scene, which is Elixir and needs no " <>
+                "interpreter; `monty` and `mujoco` step Monty's own simulator through a " <>
+                "Python peer, and need MONTY_PYTHON; `cad` steps a CAD part through " <>
+                "ex_monty_cad, which the node must carry, and reads the part named by " <>
+                "MONTY_CAD_PART. Default: the deployment's."
           }
         },
         "required" => ["name"]

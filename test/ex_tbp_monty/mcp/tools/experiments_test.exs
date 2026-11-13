@@ -408,7 +408,7 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                  @ctx
                )
 
-      assert message =~ "`world` must be `synthetic`, `mujoco` or `cad`"
+      assert message =~ "`world` must be one of `synthetic`, `monty`, `mujoco`, `cad`"
     end
 
     test "a run nobody can find is named as missing" do

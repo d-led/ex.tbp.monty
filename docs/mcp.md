@@ -113,6 +113,12 @@ Storage:
   - prerequisite downloads at /app/priv/tbp/data: 412.0 GiB free of 900.0 GiB on / (54% used)
 ```
 
+A node that carries `ex_monty_cad` adds a fourth: `world: "cad"` steps a part
+through the CAD application, which needs `MONTY_CAD_PART` to name the part
+(`docs/cad.md`). The schema offers the word wherever the tool runs and the
+refusal, not the schema, says what this node carries — a schema that hid a world
+would be a tool no validating client could ask.
+
 The limit is read from the running queue, not from the config: the run page
 changes it while the queue drains, so the config value is where it started.
 A process with no queue up (a Mix task, a test run) says so and reports the

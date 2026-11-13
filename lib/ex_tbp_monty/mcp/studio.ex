@@ -14,7 +14,7 @@ defmodule ExTbpMonty.Mcp.Studio do
   """
 
   alias Monty.Prerequisites
-  alias Monty.Studio.{Artifacts, Catalog, RunHistory, Storage}
+  alias Monty.Studio.{Artifacts, Catalog, RunHistory, Setup, Storage}
 
   @queue :studio
 
@@ -111,17 +111,34 @@ defmodule ExTbpMonty.Mcp.Studio do
     %{
       mode: to_string(mode),
       peer_interpreter: System.get_env("MONTY_PYTHON"),
-      note:
-        if(mode == :synthetic,
-          do:
-            "a run steps this port's own scene; Monty's simulator in an external process is " <>
-              "the default, and `monty_run_experiment` with `world: \"monty\"` (or the run " <>
-              "page's selector) chooses it. `MONTY_PYTHON` is the interpreter it runs in",
-          else:
-            "the simulator runs in an external process — the experiment's own engine — " <>
-              "unless the run chooses the stand-in"
-        )
+      note: note(mode)
     }
+  end
+
+  # What the caller can ask this node for, not what the deployment happens to have
+  # configured: `Setup.worlds/0` is the one answer to that question — it drops a
+  # world this build cannot step — and a model that read a sentence naming two
+  # worlds would never ask for the third.
+  defp note(mode) do
+    others =
+      Setup.worlds()
+      |> Enum.reject(&(&1 == mode))
+      |> Enum.map_join(", ", &"`world: \"#{&1}\"`")
+
+    cond do
+      mode == :synthetic ->
+        "a run steps this port's own scene; Monty's simulator in an external process is " <>
+          "the default, and `monty_run_experiment` with #{others} (or the run page's " <>
+          "selector) chooses it. `MONTY_PYTHON` is the interpreter it runs in"
+
+      others == "" ->
+        "the simulator runs in an external process — the experiment's own engine — " <>
+          "and this node carries no other world to step"
+
+      true ->
+        "the simulator runs in an external process — the experiment's own engine — " <>
+          "unless the run chooses another: #{others}"
+    end
   end
 
   # The two places a run adds to the disk: what it leaves behind, and what it had

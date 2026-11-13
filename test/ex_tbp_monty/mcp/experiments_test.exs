@@ -56,9 +56,10 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
 
       # The choices a person asks about, each with the counts the page shows —
       # readiness and the world first, because "what can I run, and in which
-      # world" are the first two questions.
+      # world" are the first two questions. `host` is last: which node brings an
+      # experiment is a question about a cluster, not about a config.
       assert Enum.map(index.facets, & &1.key) ==
-               ~w(ready world agent modules learning_module model)
+               ~w(ready world agent modules learning_module model host)
 
       agents = Enum.find(index.facets, &(&1.key == "agent"))
       assert Enum.sum(Enum.map(agents.values, & &1.count)) == index.total

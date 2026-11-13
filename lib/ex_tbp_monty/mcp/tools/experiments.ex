@@ -184,9 +184,22 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
 
   # `world` is the same choice the run page offers, in the words the page and
   # Monty's configs use: Monty's own simulator answers a different question from
-  # this port's stand-in scene, so the caller says which one it wants. Habitat is
-  # a third thing this application does not carry, so naming it is refused rather
-  # than quietly answered with MuJoCo.
+  # this port's stand-in scene, so the caller says which one it wants. `monty` and
+  # `mujoco` are the two spellings of one world — the page's and the configs' —
+  # and `cad` is a part stepped through `ex_monty_cad`. Habitat is a thing this
+  # application does not carry, so naming it is refused rather than quietly
+  # answered with MuJoCo.
+  @worlds ["synthetic", "monty", "mujoco", "cad"]
+
+  @doc """
+  The words `world` accepts, which is also the schema's `enum`.
+
+  One list, two readers: a schema that offered a word the tool refuses is a
+  tool no validating client can call, and this is the only way to notice.
+  """
+  @spec worlds() :: [String.t()]
+  def worlds, do: @worlds
+
   defp world(args) do
     case Args.optional(args, "world") do
       {:ok, nil} ->
@@ -202,7 +215,8 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
         {:ok, :mujoco}
 
       {:ok, other} ->
-        {:error, "`world` must be `synthetic`, `mujoco` or `cad`, not `#{other}`."}
+        {:error,
+         "`world` must be one of #{Enum.map_join(@worlds, ", ", &"`#{&1}`")}, not `#{other}`."}
     end
   end
 
