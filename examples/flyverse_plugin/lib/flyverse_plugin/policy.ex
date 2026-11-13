@@ -52,7 +52,7 @@ defmodule FlyversePlugin.Policy do
   alias FlyversePlugin.{Native, Networks, Percept}
 
   alias Monty.Cmp.Message
-  alias Monty.Frameworks.Actions.{MoveForward, OrientHorizontal}
+  alias Monty.Frameworks.Actions.OrientHorizontal
   alias Monty.Frameworks.Environments.PositioningProcedures
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
 
@@ -72,6 +72,15 @@ defmodule FlyversePlugin.Policy do
   # not about the gait.
   @turn_degrees 5.0
   @distance 0.004
+
+  # The most a bend ever turns the fly in one step, in degrees. The network's
+  # wish and the centring reflex are added in the same frame, so the sum needs a
+  # ceiling: an animal's saccade is a saccade, not a spin.
+  @max_turn_degrees 30.0
+
+  # The most the centring reflex turns it in one step: a fly that has lost the
+  # object turns at most this far towards whatever the view finder can see.
+  @centring_degrees 10.0
   @agent_id "agent_id_0"
 
   # The ride height of the drive: at 25 mm from a surface, `1/d` is 40 and the
@@ -209,15 +218,17 @@ defmodule FlyversePlugin.Policy do
   Steps the network on what the sensor saw, and answers the action that follows.
 
   Two halves, in Monty's order. While the patch is not on the object —
-  `object_coverage` below a tenth — the answer is Monty's `_touch_object`: one
-  `MoveForward` across the whole gap the view finder can see, or a step round a
-  search circle when it can see nothing. The network is not asked, because it
-  has nothing to steer by: its input is how near the left half of the patch is
-  compared with the right, and an empty patch says the same thing everywhere.
+  `object_coverage` below a tenth — the answer is Monty's `_touch_object` with
+  the one thing a fly must add to it: turn towards what the view finder sees
+  while closing the gap to the standoff, or step round a search circle when it
+  can see nothing. The network is not asked, because it has nothing to steer
+  by: its input is how near the left half of the patch is compared with the
+  right, and an empty patch says the same thing everywhere.
 
   Once the patch is on the object, the network decides: the rates are computed
   from the image, the window is stepped in Rust, and the difference of the
-  readout counts is the steering wish.
+  readout counts is the steering wish — added to the same centring turn, so a
+  fly that is learning a surface keeps it in the middle of the picture.
   """
   @impl FlyversePlugin.Plugin
   def call(%__MODULE__{} = policy, {_ctx, observations, _motor_state, percept, _goal}, state) do
@@ -235,7 +246,7 @@ defmodule FlyversePlugin.Policy do
            Percept.image(observations, policy.agent_id, policy.sensor_id),
          {:ok, window} <- step(simulation, rows) do
       wish = smoothed(simulation, window.left - window.right)
-      result = result(policy, wish, window, percept)
+      result = result(policy, wish, window, percept, observations)
 
       simulation = %{
         simulation
@@ -261,27 +272,33 @@ defmodule FlyversePlugin.Policy do
     end
   end
 
-  # Monty's `_touch_object`, step for step: the object is in view, so walk the
-  # whole gap in one step — twenty centimetres, where a four-millimetre crawl is
-  # fifty steps of no new view — and when it is not in view, step round a circle
-  # ten centimetres ahead until it is.
+  # Monty's `_touch_object`, with the one thing a fly must add to it: Monty's
+  # `MoveForward` walks straight because Monty's world puts the object in the
+  # middle of the view finder for it. A fly that has drifted has to turn towards
+  # what it sees, and a run of this policy showed why — the mug was centred at
+  # step 5 and a sliver at the left edge by step 100, and the patch never landed
+  # on it again. So the step is `OrientHorizontal` carrying both: the centring
+  # turn, and the distance that closes the gap to the standoff.
   #
-  # One departure from Monty's line, and the reason for it: Monty's gap is the
-  # depth of the view finder's centre pixel, which in a room is whatever the
-  # middle of the picture happens to be — a wall across the table, in a run this
-  # policy spent a thousand steps recovering from. So the gap is the *nearer* of
-  # that pixel and the nearest thing the view can see: a step that lands on what
-  # is closest rather than past it.
+  # The gap is not Monty's centre pixel either, and for the reason given below
+  # it: Monty's gap is the depth of the view finder's centre pixel, which in a
+  # room is whatever the middle of the picture happens to be — a wall across the
+  # table, in a run this policy spent a thousand steps recovering from. So the
+  # gap is the *nearer* of that pixel and the nearest thing the view can see: a
+  # step that lands on what is closest rather than past it.
   defp touch(policy, observations) do
     depth = PositioningProcedures.depth_at_center(observations, policy.agent_id, @view_finder)
     nearest = nearest_in_view(observations, policy.agent_id)
     gap = if nearest == :infinity, do: depth, else: min(depth, nearest)
+    centring = centring(observations, policy.agent_id)
 
     action =
       if gap < @visible do
-        %MoveForward{
+        %OrientHorizontal{
           agent_id: policy.agent_id,
-          distance: min(max(gap - @desired_object_distance, 0.0), @touch_stride)
+          rotation_degrees: centring,
+          left_distance: 0.0,
+          forward_distance: approach(gap)
         }
       else
         search(policy)
@@ -295,9 +312,28 @@ defmodule FlyversePlugin.Policy do
       # with anything on it. So the module is fed every step — `nothing yet`
       # until the patch is on the object, and evidence when it is.
       motor_only_step: false,
-      telemetry: %{depth_at_center: depth, nearest: nearest, searching: gap >= @visible}
+      telemetry: %{
+        depth_at_center: depth,
+        nearest: nearest,
+        centring: centring,
+        searching: gap >= @visible
+      }
     }
   end
+
+  # How far the step travels towards something the view finder can see: the
+  # shortfall against the standoff, and no more than a stride of it forwards.
+  #
+  # Backwards when the shortfall is negative, which is the case that cost a run
+  # its episode: a sensor nearer than the standoff — pressed against a surface
+  # by the slide, with the patch off the object — computes a gap that has
+  # already been closed, and a `MoveForward` of nought leaves it exactly where
+  # it is. The run then froze: frames from step 480 to step 1331 were identical
+  # to the byte, and the evidence stayed at the number it had reached. A step
+  # that cannot travel forward travels back — as far as the standoff and no
+  # further, because a gap is never negative — which puts the object at the
+  # standoff again, where the patch can read it and the network can steer.
+  defp approach(gap), do: min(gap - @desired_object_distance, @touch_stride)
 
   # The nearest thing the wide view can see, in metres, or `:infinity` when the
   # horizon holds nothing. `FlyversePlugin.Percept` already answers what a
@@ -458,11 +494,11 @@ defmodule FlyversePlugin.Policy do
     simulation.wish + alpha * (differential - simulation.wish)
   end
 
-  defp result(policy, wish, window, percept) do
+  defp result(policy, wish, window, percept, observations) do
     [left_hz, right_hz] = window.rates
 
     %MotorPolicyResult{
-      actions: [action(policy, wish, mean_depth(percept, @visible))],
+      actions: [action(policy, wish, mean_depth(percept, @visible), observations)],
       telemetry: %{
         left_hz: left_hz,
         right_hz: right_hz,
@@ -489,19 +525,51 @@ defmodule FlyversePlugin.Policy do
   # A balanced view bends by nought and walks straight; an unbalanced one curves
   # while walking, exactly as much as the readouts differ.
   #
-  # The one exception is the loom: something nearer than the standoff is
-  # something the step would walk into, so the step stops travelling and the
-  # bend is taken whole — the fly swings away from what it is touching instead of
-  # pressing through it. A lofty `LC4` firing rate is Monty's own standoff, and
-  # here it is the patch's own depth that says it.
-  defp action(%__MODULE__{} = policy, wish, depth) do
+  # The exception is the loom: something nearer than the standoff is something
+  # the step would walk into, so the step is a *slide across* that surface rather
+  # than a pivot on it — `left_distance`, the same axis Monty's
+  # `horizontal_distances` uses to orbit a point while turning. A fly pressed
+  # against a mug and turning on the spot is a fly that reads the same flat
+  # patch for ever: measured, fifteen hundred steps of it left the hypothesis
+  # set exactly as wide as it started, eight objects possible, while the
+  # evidence climbed to four hundred. Sliding is what sweeps new surface past
+  # the patch, and the network decides which way, because the sign of the wish
+  # is the side its readouts preferred. That is Monty's own
+  # `MoveTangentially`-between-touches cycle, made one action instead of four.
+  defp action(%__MODULE__{} = policy, wish, depth, observations) do
     %OrientHorizontal{
       agent_id: policy.agent_id,
-      rotation_degrees: -bend(policy, wish),
-      left_distance: 0.0,
-      forward_distance: if(depth < @desired_object_distance, do: 0.0, else: policy.distance)
+      rotation_degrees: turn(policy, wish, centring(observations, policy.agent_id)),
+      left_distance: side(wish) * slide(policy, depth),
+      forward_distance: crawl(policy, depth)
     }
   end
+
+  # How far one step slides sideways: the crawl step when the patch is at the
+  # surface, nought while there is still room to walk at it.
+  defp slide(policy, depth),
+    do: if(depth < @desired_object_distance, do: policy.distance, else: 0.0)
+
+  # And how far it travels along its facing, which is the standoff kept rather
+  # than a constant. A step of nought at the surface is a step the slide then
+  # pushes *into* the object: a run of this policy slid until the patch was
+  # inside the mug, where every frame is the same flat colour, and the evidence
+  # and the hypothesis set stopped changing for two thousand steps. So a sensor
+  # nearer than the standoff backs away by the shortfall, and one further from it
+  # takes the crawl step; the surface keeps a fingertip's distance without the
+  # policy being told where the surface's normal is.
+  defp crawl(%__MODULE__{} = policy, depth) when depth >= @desired_object_distance,
+    do: policy.distance
+
+  defp crawl(_policy, depth), do: depth - @desired_object_distance
+
+  # Which way along the surface the network leans. A wish of nought has no side
+  # to prefer, and a step has to go somewhere: left is the fly's own convention
+  # for a positive drive, and the wander turns the wish over often enough that
+  # the choice is not a bias in the run.
+  defp side(wish) when wish < 0.0, do: -1.0
+
+  defp side(_wish), do: 1.0
 
   # The depth the patch is standing off, as the percept reports it. A percept
   # that reports no depth is a world this policy cannot measure, and `@visible`
@@ -522,9 +590,39 @@ defmodule FlyversePlugin.Policy do
     end
   end
 
-  # Positive is left and negative is right, and nothing here invents a turn the
-  # network did not decide: a wish of nought is a straight step.
-  defp bend(policy, wish), do: policy.turn_degrees * :math.tanh(wish / @wish_scale)
+  # The angle the step yaws by, in the frame `OrientHorizontal` uses: positive is
+  # right and negative is left, because the world yaws by the negative of it.
+  #
+  # A wish to the left is therefore a negative angle here, and nothing invents a
+  # turn the network did not decide: a wish of nought turns by the centring
+  # correction alone. The correction is already in this frame — negative is
+  # towards the side the view finder sees something on — so the two add, and the
+  # sum is held to a full bend so neither term can spin the fly past its gait.
+  defp turn(policy, wish, centring) do
+    rotation = centring - policy.turn_degrees * :math.tanh(wish / @wish_scale)
+    rotation |> max(-@max_turn_degrees) |> min(@max_turn_degrees)
+  end
+
+  # How far to turn to put what the view finder sees back in the middle of the
+  # picture, in the frame `rotation_degrees` uses: negative is left. The nearer
+  # half is the side the object has drifted to, so the fly turns towards it —
+  # the centring reflex every seeing animal has, and the one thing that keeps
+  # the patch on the object it is learning. A view with nothing in it is a view
+  # with no opinion, and the step goes where it was going.
+  defp centring(observations, agent_id) do
+    case Percept.image(observations, agent_id, @view_finder) do
+      {:ok, {_sensor, rows}} ->
+        {left, right} = Percept.nearness(rows)
+        total = left + right
+
+        if total <= 0.0,
+          do: 0.0,
+          else: -@centring_degrees * :math.tanh((left - right) / total)
+
+      {:error, _sentence} ->
+        0.0
+    end
+  end
 
   defp rate(nearness), do: min(@tonic_hz + nearness * @drive_gain, @max_hz)
 

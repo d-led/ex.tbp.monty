@@ -74,17 +74,76 @@ defmodule FlyversePlugin.PolicyTest do
   end
 
   # The loom: something nearer than the standoff is something the step would
-  # walk into. The step stops travelling and the turn takes the whole bend, so
-  # the fly swings away from what it is touching rather than pressing through it.
-  test "against something, the step stops travelling and the bend is taken", %{state: state} do
+  # walk into. So the step does not travel forward — it slides along that
+  # surface, the way Monty's surface policy moves tangentially between touches,
+  # and the bend is taken whole so the fly swings along what it is touching
+  # rather than pressing through it. A fly that pivots on the spot reads the same
+  # flat patch for ever, which is what a run of fifteen hundred steps showed.
+  test "against something, the step slides along it instead of pivoting", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
     {result, _policy, _state} =
       step(policy, state, observations([[0.02, 0.02, 100.0, 100.0]]), touching(0.01))
 
-    assert [%OrientHorizontal{} = swung] = result.actions
-    assert swung.forward_distance == 0.0, "no step into what it is touching"
-    assert swung.rotation_degrees < 0.0, "and the turn is the way it was already leaning"
+    assert [%OrientHorizontal{} = slid] = result.actions
+    assert_in_delta slid.left_distance, 0.004, 1.0e-9, "the step goes across it, leftwards"
+    assert_in_delta slid.forward_distance, -0.015, 1.0e-9, "and back to the standoff"
+    assert slid.rotation_degrees < 0.0, "the turn is the way it was already leaning"
+  end
+
+  # The standoff is held, not a constant step: a sensor at 20 mm with 25 mm
+  # wanted backs away by the 5 mm it is too close, and one further off than the
+  # standoff crawls at the four millimetres a step has always been.
+  test "a patch at the standoff crawls, and one nearer it backs away", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {at, _policy, _state} =
+      step(policy, state, observations([[0.02, 0.02, 100.0, 100.0]]), touching(0.025))
+
+    {:ok, policy, state} = Policy.reset(policy, state)
+
+    {nearer, _policy, _state} =
+      step(policy, state, observations([[0.02, 0.02, 100.0, 100.0]]), touching(0.02))
+
+    assert [%OrientHorizontal{forward_distance: crawl}] = at.actions
+    assert_in_delta crawl, 0.004, 1.0e-9
+
+    assert [%OrientHorizontal{forward_distance: back}] = nearer.actions
+    assert_in_delta back, -0.005, 1.0e-9
+  end
+
+  # Which way across the surface is the network's decision, not the policy's:
+  # the side its readouts preferred is the side the step goes.
+  test "the slide goes the way the network leaned", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {left, policy, state} =
+      step(policy, state, observations([[0.02, 0.02, 100.0, 100.0]]), touching(0.01))
+
+    {:ok, policy, state} = Policy.reset(policy, state)
+
+    {right, _policy, _state} =
+      step(policy, state, observations([[100.0, 100.0, 0.02, 0.02]]), touching(0.01))
+
+    assert [%OrientHorizontal{left_distance: one_way}] = left.actions
+    assert [%OrientHorizontal{left_distance: other_way}] = right.actions
+
+    assert one_way * other_way < 0.0,
+           "a lean one way slides one way: #{one_way} then #{other_way}"
+  end
+
+  # The slide is what the fly does *at* the surface. While there is room to walk
+  # there is nothing to slide along, and the step travels forward as it always
+  # did.
+  test "in open view the step walks, and does not slide", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {result, _policy, _state} =
+      step(policy, state, observations([[0.02, 0.02, 100.0, 100.0]]), touching(0.4))
+
+    assert [%OrientHorizontal{} = walked] = result.actions
+    assert walked.forward_distance == 0.004
+    assert walked.left_distance == 0.0
   end
 
   # An empty view still walks: the tonic drive is what makes the network say
@@ -179,11 +238,35 @@ defmodule FlyversePlugin.PolicyTest do
 
       {result, _policy, _state} = step(policy, state, scene(0.2, 0.05), away())
 
-      assert [%MoveForward{agent_id: "agent_id_0", distance: distance}] = result.actions
-      assert_in_delta distance, 0.05, 1.0e-9, "the stride"
+      assert [%OrientHorizontal{agent_id: "agent_id_0"} = hopped] = result.actions
+      assert_in_delta hopped.forward_distance, 0.05, 1.0e-9, "the stride"
 
       refute result.motor_only_step,
              "a search is fed too: the step it finds the object is the one with a view"
+    end
+
+    # Monty's `MoveForward` walks straight because Monty's world centres the
+    # object for it. A fly does not get that: one run had the mug centred at step
+    # 5 and a sliver at the edge of the picture by step 100, and the patch never
+    # landed on it again. So the step turns towards the side the view finder
+    # sees something on, and the turn is the same sign as the network's.
+    test "turns towards what the view finder sees while it closes the gap", %{state: state} do
+      {:ok, policy, state} = Policy.new([], state)
+
+      {result, _policy, _state} = step(policy, state, scene([[0.2, 0.9], [0.9, 0.9]], 0.05), away())
+
+      assert [%OrientHorizontal{} = turned] = result.actions
+      assert turned.rotation_degrees < 0.0, "left, because what is in view is on the left"
+      assert turned.left_distance == 0.0
+    end
+
+    test "walks straight at it when the picture is already centred", %{state: state} do
+      {:ok, policy, state} = Policy.new([], state)
+
+      {result, _policy, _state} = step(policy, state, scene(0.2, 0.05), away())
+
+      assert [%OrientHorizontal{rotation_degrees: turn}] = result.actions
+      assert_in_delta turn, 0.0, 1.0e-9
     end
 
     test "closes a gap shorter than the stride by all of it", %{state: state} do
@@ -191,16 +274,22 @@ defmodule FlyversePlugin.PolicyTest do
 
       {result, _policy, _state} = step(policy, state, scene(0.06, 0.05), away())
 
-      assert [%MoveForward{distance: distance}] = result.actions
+      assert [%OrientHorizontal{forward_distance: distance}] = result.actions
       assert_in_delta distance, 0.035, 1.0e-9, "the gap, minus the standoff"
     end
 
-    test "stops at the standoff when it is already there", %{state: state} do
+    # A sensor nearer than the standoff has no gap left to close, and a step of
+    # nought is a fly that never moves again: frames from step 480 to step 1331
+    # of one run were identical to the byte. So the step backs off to the
+    # standoff, where the patch can read the object and the network can steer.
+    test "backs off when it is nearer than the standoff", %{state: state} do
       {:ok, policy, state} = Policy.new([], state)
 
+      # 20 mm from the thing in front, standing where 25 mm is wanted.
       {result, _policy, _state} = step(policy, state, scene(0.02, 0.05), away())
 
-      assert [%MoveForward{distance: 0.0}] = result.actions
+      assert [%OrientHorizontal{forward_distance: distance}] = result.actions
+      assert_in_delta distance, -0.005, 1.0e-9, "back to the standoff, no further"
     end
 
     # The centre pixel is not always the thing to walk at: in a room the middle
@@ -216,7 +305,7 @@ defmodule FlyversePlugin.PolicyTest do
 
       {result, _policy, _state} = step(policy, state, scene(wall_ahead, 0.05), away())
 
-      assert [%MoveForward{distance: distance}] = result.actions
+      assert [%OrientHorizontal{forward_distance: distance}] = result.actions
       assert_in_delta distance, 0.05, 1.0e-9, "towards the 0.2 m thing, and no further than a hop"
     end
 
@@ -268,7 +357,10 @@ defmodule FlyversePlugin.PolicyTest do
 
   # A perspective on the world: what the wide view sees and what the patch is on.
   defp scene(view_depth, patch_depth) do
-    view = if is_list(view_depth), do: view_depth, else: [[view_depth]]
+    # Two columns, so the two halves the drive reads are the two halves this
+    # scene means: a one-column image is a picture with nothing on the right of
+    # it, and the centring reflex would turn away from it every step.
+    view = if is_list(view_depth), do: view_depth, else: [[view_depth, view_depth]]
 
     %{
       "agent_id_0" => %{
