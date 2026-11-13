@@ -97,6 +97,35 @@ if cluster_on? do
   config :ex_tbp_monty, Oban, lifeline: [rescue_after: {24, :hours}]
 end
 
+# How many runs a node performs at once — `queues: [studio: n]`, two unless the
+# deployment says otherwise. It is a deployment's number because it is a
+# machine's: a laptop sharing four cores with two MuJoCo worlds is slower per run
+# than one world at a time, and a node with a GPU is not. In a cluster of two it
+# is also how the work divides: the queue is one queue, so two nodes at two each
+# is four runs at once and a node told to take one leaves the other for its peer.
+#
+# Only where a queue runs. The suite says `queues: false`, because a test that
+# races a queue is a test that flakes, and a lever must not undo that — a node
+# whose environment has no queue keeps having none.
+if Application.get_env(:ex_tbp_monty, Oban, [])[:queues] do
+  # A value that is not a whole number of at least one is refused at boot rather
+  # than rounded into something nobody asked for: a typo in a container's
+  # environment is a start that should not happen, and `MONTY_STUDIO_CONCURRENCY
+  # must be …` is cheaper to read than wondering why a node takes no work.
+  concurrency =
+    case Integer.parse(System.get_env("MONTY_STUDIO_CONCURRENCY", "2")) do
+      {runs, ""} when runs > 0 ->
+        runs
+
+      _not_a_count ->
+        raise "MONTY_STUDIO_CONCURRENCY must be a whole number of runs this node may " <>
+                "perform at once (one or more), and it is " <>
+                inspect(System.get_env("MONTY_STUDIO_CONCURRENCY"))
+    end
+
+  config :ex_tbp_monty, Oban, queues: [studio: concurrency]
+end
+
 # A named node in a cluster keeps its own folder — its database, its runs, its own
 # output under `nodes/<its name>`; a node that runs alone keeps the one it always
 # had. Decided from the same value the line above was set from, and *here* rather
