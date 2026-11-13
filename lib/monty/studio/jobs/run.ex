@@ -69,13 +69,38 @@ defmodule Monty.Studio.Jobs.Run do
   """
   @spec stop(binary()) :: :ok | {:error, :not_found}
   def stop(run_id) do
-    case Registry.lookup(Monty.Runtime.Registry, key(run_id)) do
-      [{pid, _model_id}] ->
-        send(pid, :stop)
-        :ok
-
+    case workers(run_id) do
       [] ->
         {:error, :not_found}
+
+      pids ->
+        Enum.each(pids, &send(&1, :stop))
+        :ok
+    end
+  end
+
+  # Everyone stepping the run, which is the job that holds it and each part it is
+  # stepping. A part runs in a process of its own (`Task.async_stream/3`), so a
+  # stop that reached only the job would wait in a mailbox the job cannot read
+  # while it is waiting for its parts: the run would finish, not stop.
+  defp workers(run_id) do
+    run_id
+    |> working_on()
+    |> Enum.flat_map(&Registry.lookup(Monty.Runtime.Registry, key(&1)))
+    |> Enum.map(fn {pid, _value} -> pid end)
+    |> Enum.uniq()
+  end
+
+  # The run and the streams its parts are stepping. A run of one part has no
+  # division to read, and the record is asked rather than kept here because the
+  # stop may be asked from a page, a tool, or a peer's rpc call.
+  defp working_on(run_id) do
+    case RunHistory.get(run_id) do
+      %{inputs: %{"parts" => [_ | _] = parts}} ->
+        [run_id | Enum.map(parts, & &1["stream"])]
+
+      _one_part_or_no_run ->
+        [run_id]
     end
   end
 
@@ -401,6 +426,7 @@ defmodule Monty.Studio.Jobs.Run do
         {:finished, record}
       else
         {:error, reason, record} -> {{:failed, reason}, record}
+        {:stopped, record} -> {:stopped, record}
       end
 
     # The division closes with the run, before anything reads it: a part that
@@ -474,6 +500,18 @@ defmodule Monty.Studio.Jobs.Run do
   # One pass over a wave: `n` parts at a time, each writing its own stream, the
   # run's transcript written as each part falls out of the pool.
   defp run_wave(record, opened, wave, memory) do
+    if stop_requested?() do
+      # A stop that arrived before this wave started: not one part of it steps,
+      # and the parts it would have stepped stay `queued` until the run settles
+      # them as `skipped` — nothing happened to them, which is the truth about a
+      # wave that never ran.
+      {:stopped, record}
+    else
+      step_wave(record, opened, wave, memory)
+    end
+  end
+
+  defp step_wave(record, opened, wave, memory) do
     results =
       wave
       |> Task.async_stream(&run_part(record, opened, &1, memory),
@@ -483,28 +521,45 @@ defmodule Monty.Studio.Jobs.Run do
       )
       |> Enum.to_list()
 
-    broken = Enum.find(results, fn result -> match?({:ok, {:error, _part, _reason}}, result) end)
-
     record = Enum.reduce(results, record, fn result, record -> collect(result, record) end)
 
-    case broken do
+    case Enum.find(results, &broken?/1) do
       {:ok, {:error, part, reason}} ->
         {:error, "part #{part.index + 1} of #{part.of} stopped: #{inspect(reason)}", record}
 
       nil ->
-        {:ok, record}
+        if Enum.any?(results, &stopped?/1), do: {:stopped, record}, else: {:ok, record}
     end
   end
+
+  defp broken?({:ok, {:error, _part, _reason}}), do: true
+  defp broken?(_result), do: false
+
+  # A part that ended in a stop rather than in the work it was given: the wave it
+  # is in ends there too, because the run has been asked to stop, and the parts
+  # that had not started are `skipped` when the run settles.
+  defp stopped?({:ok, {:ok, _part, :stopped}}), do: true
+  defp stopped?(_result), do: false
 
   # A part that has finished says so, and leaves its steps where they are: the
   # run's transcript is the parts' transcripts one after another, written once
   # when the run closes (`store_parts/2`), because a row holds one transcript and
   # four parts each writing theirs is four parts overwriting one another.
-  defp collect({:ok, {:ok, part, _memories}}, record) do
+  defp collect({:ok, {:ok, part, outcome}}, record) do
     steps = RunStream.count(part.stream)
-    if part.of > 1, do: RunHistory.part_finished(record.id, part.index, steps)
+    ending = status_of(outcome)
 
-    say(record.id, "part #{part.index + 1} of #{part.of} finished: #{steps} step(s)")
+    # The part ends the way its own episodes ended: a stop that reached a part
+    # leaves it `stopped`, not `finished` with fewer steps than it was given.
+    if part.of > 1 do
+      case ending do
+        "finished" -> RunHistory.part_finished(record.id, part.index, steps)
+        "stopped" -> RunHistory.part_stopped(record.id, part.index, steps)
+        "failed" -> RunHistory.part_failed(record.id, part.index)
+      end
+    end
+
+    say(record.id, "part #{part.index + 1} of #{part.of} #{ending}: #{steps} step(s)")
     record
   end
 

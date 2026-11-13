@@ -33,6 +33,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   alias Monty.Studio.Jobs.Reaper
   alias Monty.Studio.Replay.Chart
+  alias Monty.Studio.RunHistory.Part
 
   # The states a run can be in, in the order the filter pills read them.
   @states ~w(running finished stopped failed)
@@ -337,7 +338,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # schedule (`Monty.Studio.RunHistory.Part`); `@parts` is the cards each part's
   # episodes draw, which is a different question about the same run.
   defp division_summary([part | _] = parts) do
-    done = Enum.count(parts, &(&1.status in ["finished", "failed"]))
+    done = Enum.count(parts, &Part.ended?(&1.status))
     "#{done} of #{part.of} parts done"
   end
 

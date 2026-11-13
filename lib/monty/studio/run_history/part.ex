@@ -23,7 +23,11 @@ defmodule Monty.Studio.RunHistory.Part do
   # `skipped` is a part the run never got to — a wave that failed before it, or a
   # run stopped between waves. Without it a settled run would leave rows saying
   # `queued` for ever, which is the same lie an abandoned run's row used to tell.
-  @statuses ~w(queued running finished failed skipped)
+  #
+  # `stopped` is the part the stop arrived in: it did some of its work and was
+  # cut short, which is neither finished nor failed, and the run's own row has
+  # said `stopped` about the same moment since the stop existed.
+  @statuses ~w(queued running finished failed stopped skipped)
 
   @typedoc """
   One part's row: which part of how many, what state it is in, and the node that
@@ -60,6 +64,16 @@ defmodule Monty.Studio.RunHistory.Part do
   @doc "The states a part can be in: asked for, in hand, done, or stopped early."
   @spec statuses() :: [String.t()]
   def statuses, do: @statuses
+
+  @doc """
+  Whether a part in this state has ended — however it ended.
+
+  The question a progress line asks ("2 of 4 parts done") is how many parts
+  nothing more will happen to, not how many succeeded: a part that failed, was
+  stopped with the run, or was never reached has ended too.
+  """
+  @spec ended?(String.t()) :: boolean()
+  def ended?(status), do: status in ~w(finished failed stopped skipped)
 
   @doc """
   What may be written about a part.

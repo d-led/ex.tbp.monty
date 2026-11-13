@@ -50,6 +50,21 @@ defmodule Monty.Studio.RunHistoryTest do
       assert {broken.status, broken.node} == {"failed", "node2_127.0.0.1"}
     end
 
+    # A part that the stop reached is neither finished nor failed: it did the
+    # steps it managed and nothing more, and the row says so with the count of
+    # them, which is what a reader of the division is counting.
+    test "say a part the stop reached was stopped, with the steps it managed" do
+      {:ok, run} = RunHistory.start(@attributes)
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      :ok = RunHistory.part_started(run.id, 0, "node1_127.0.0.1")
+      :ok = RunHistory.part_stopped(run.id, 0, 17)
+
+      assert [stopped, _never_reached] = RunHistory.parts(run.id)
+      assert {stopped.status, stopped.steps} == {"stopped", 17}
+      assert %DateTime{} = stopped.finished_at
+    end
+
     test "are replaced, not doubled, when a run is performed again" do
       {:ok, run} = RunHistory.start(@attributes)
       :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])

@@ -790,6 +790,17 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
+  A part the stop arrived in: cut short, neither finished nor failed.
+
+  Its steps are the ones it managed before the run was asked to stop, which is
+  what a reader of the division is counting.
+  """
+  @spec part_stopped(binary(), integer(), non_neg_integer()) :: :ok
+  def part_stopped(run_id, part, steps) do
+    update_part(run_id, part, status: "stopped", steps: steps, finished_at: now())
+  end
+
+  @doc """
   Closes the division: nothing is left saying a finished run is still working.
 
   A part that started and never finished — a wave that failed around it, a run

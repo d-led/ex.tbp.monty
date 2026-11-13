@@ -15,6 +15,7 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
   """
 
   alias ExTbpMonty.Mcp.{Args, Experiments}
+  alias Monty.Studio.RunHistory.Part
 
   @doc "`monty_list_experiments`: how many there are, and what shapes they come in."
   def list(args, _ctx) do
@@ -336,7 +337,7 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
   defp parts_text([]), do: ""
 
   defp parts_text(parts) do
-    done = Enum.count(parts, &(&1.status in ["finished", "failed"]))
+    done = Enum.count(parts, &Part.ended?(&1.status))
 
     "\n#{done} of #{List.first(parts).of} parts done:\n" <>
       Enum.map_join(parts, "\n", fn part ->

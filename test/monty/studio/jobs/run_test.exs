@@ -669,6 +669,63 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert closed.summary["steps"] == 0
     end
 
+    # A stopped run of several parts is stopped, not finished: the stop ends the
+    # wave it arrived in and the run with it, and the parts no wave reached say
+    # `skipped` — nothing happened to them.
+    test "a divided run that is stopped says stopped, and never reaches its parts" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 2, 4, %{parts: parts}))
+
+      send(self(), :stop)
+
+      assert {:ok, closed} = perform(record)
+      assert closed.status == "stopped"
+      assert closed.summary["steps"] == 0
+
+      assert Enum.map(RunHistory.parts(closed.id), & &1.status) == ["skipped", "skipped"]
+    end
+
+    # Every process stepping the run is asked to stop, not just the job that holds
+    # it: a part steps in a process of its own, and a stop waiting in the job's
+    # mailbox is a stop that arrives after the run has finished.
+    test "a stop is a message to every part as well as to the job" do
+      {:ok, opened} = Monty.Studio.open(@experiment)
+
+      plan = Partition.plan(opened.setup, 2, 2)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 1, 0, 2, 2, %{parts: parts}))
+
+      # One process per part, as a wave has: each says it holds its part, and
+      # answers when it is asked to stop.
+      for part <- parts do
+        test = self()
+
+        part_pid =
+          spawn(fn ->
+            {:ok, _} =
+              Registry.register(Monty.Runtime.Registry, {:studio_run, part.stream}, :part)
+
+            send(test, {:holding, self()})
+
+            receive do
+              :stop -> send(test, {:asked, self()})
+            end
+          end)
+
+        assert_receive {:holding, ^part_pid}, 1_000
+      end
+
+      assert Jobs.Run.stop(record.id) == :ok
+
+      assert_receive {:asked, _}, 1_000
+      assert_receive {:asked, _}, 1_000
+    end
+
     test "asking a run that is not running to stop is not an error" do
       assert Jobs.Run.stop("00000000-0000-4000-8000-000000000000") == {:error, :not_found}
     end
