@@ -15,6 +15,12 @@
 # clusters that quietly believe they are one, so the same value has to be exported
 # wherever a node is started, and the settings page says where it came from.
 #
+# `MONTY_CAPABILITIES` is what a node says about its machine — `gpu`,
+# `world:mujoco`, the tags of plugins it brings — and it is passed through rather
+# than set here: which machine a node is on is the machine's fact, not this
+# script's. Every node advertises `monty` regardless; the settings page lists the
+# result both ways round.
+#
 # The database is made and migrated by this node itself, in a VM of its own that
 # does not start the application. `mix ecto.create` cannot do it: an Ecto mix task
 # reads configuration *before* `config/runtime.exs`, which is where a node's

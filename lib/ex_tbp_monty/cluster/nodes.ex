@@ -16,13 +16,19 @@ defmodule ExTbpMonty.Cluster.Nodes do
   ## What an entry is
 
       %{node: :monty@10.0.0.7, name: "monty_10.0.0.7", self: true,
-        version: "0.1.3", alive: true}
+        version: "0.1.3", capabilities: ["gpu", "monty"], alive: true}
 
   `name` is the node's name made safe for a path — the same name its data folder
   carries (`ExTbpMonty.Node.safe_name/1`), so a reader who sees a node in this
   list and a folder on disk is looking at one thing and not two. A peer that did
   not answer is `alive: false` with no version, which is the difference between
   "there is a node I cannot reach" and "there is no node".
+
+  `capabilities` travel with the version because both come from the same `:rpc`
+  (`identity/0`) and both are answers to "what is that node": a heterogeneous
+  cluster is one where the tags decide which node a run may go to, and a node
+  whose tags cost a second round trip would be a list that is half up to date.
+  `ExTbpMonty.Cluster.Capabilities` is the vocabulary.
   """
 
   use GenServer
@@ -30,6 +36,7 @@ defmodule ExTbpMonty.Cluster.Nodes do
   require Logger
 
   alias ExTbpMonty.{Cluster, Node}
+  alias ExTbpMonty.Cluster.Capabilities
 
   @poll_ms 3_000
 
@@ -73,13 +80,15 @@ defmodule ExTbpMonty.Cluster.Nodes do
     |> Enum.map(fn name ->
       # This node answers itself: an `:rpc` hop to ask a VM about itself is a hop
       # for nothing, and the fetcher is not called for it either.
-      version = if name == node(), do: version(), else: version_of(fetch.(name))
+      answer = if name == node(), do: identity(), else: fetch.(name)
+      version = version_of(answer)
 
       %{
         node: name,
         name: Node.safe_name(name),
         self: name == node(),
         version: version,
+        capabilities: capabilities_of(answer),
         alive: is_binary(version)
       }
     end)
@@ -87,13 +96,29 @@ defmodule ExTbpMonty.Cluster.Nodes do
   end
 
   @doc """
-  What this node tells a peer that asks: its node name and the build it runs.
+  The nodes that offer `tag` — the question a scheduler asks, and the one a
+  reader asks when an experiment needs a machine this one is not.
+
+  Asked in any spelling (`ExTbpMonty.Cluster.Capabilities.offers?/2`), and `[]`
+  when no node has it, which is an answer and not a fault: a cluster of one that
+  was given a GPU-less machine has no `gpu` in it.
+  """
+  @spec offering(String.t() | atom()) :: [map()]
+  def offering(tag) do
+    Enum.filter(snapshot(), &Capabilities.offers?(&1.capabilities, tag))
+  end
+
+  @doc """
+  What this node tells a peer that asks: its node name, the build it runs and
+  what it can do.
 
   Called by `:rpc` from another node's poller, so it must stay cheap and must not
   touch anything a page owns.
   """
-  @spec identity() :: %{node: node(), version: String.t()}
-  def identity, do: %{node: node(), version: version()}
+  @spec identity() :: %{node: node(), version: String.t(), capabilities: [String.t()]}
+  def identity do
+    %{node: node(), version: version(), capabilities: Capabilities.declared()}
+  end
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -158,6 +183,12 @@ defmodule ExTbpMonty.Cluster.Nodes do
 
   defp version_of(%{} = answer), do: answer[:version]
   defp version_of(_no_answer), do: nil
+
+  # A peer running a build older than the tag vocabulary says nothing about its
+  # capabilities, and an entry with none is the honest reading: it can be given
+  # the work that asks for nothing in particular.
+  defp capabilities_of(%{} = answer), do: Capabilities.of_entry(answer)
+  defp capabilities_of(_no_answer), do: []
 
   defp version do
     case Application.spec(:ex_tbp_monty, :vsn) do

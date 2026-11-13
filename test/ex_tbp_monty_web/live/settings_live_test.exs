@@ -132,5 +132,18 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
       assert cookie =~ "cookie:"
       assert cookie =~ "cookie of the user" or cookie =~ "shares no cookie"
     end
+
+    # What each node can do, and who can do a thing: the two directions of one
+    # question, and the second is what a reader needs when an experiment needs a
+    # machine this one is not.
+    test "says what each node can do, and which nodes can do what", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      name = ExTbpMonty.Node.safe_name(node())
+
+      assert view |> element("#node-" <> name) |> render() =~ "monty"
+      assert view |> element("#capability-monty") |> render() =~ name
+      assert view |> element("#cluster-capability-source") |> render() =~ "MONTY_CAPABILITIES"
+    end
   end
 end

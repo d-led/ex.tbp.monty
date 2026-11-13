@@ -16,6 +16,7 @@ defmodule ExTbpMontyWeb.SettingsLive do
   use ExTbpMontyWeb, :live_view
 
   alias Monty.Studio.{Settings, System}
+  alias ExTbpMonty.Cluster.Capabilities
 
   @impl true
   def mount(_params, _session, socket) do
@@ -98,11 +99,11 @@ defmodule ExTbpMontyWeb.SettingsLive do
           </dl>
         </section>
 
-        <%!-- Which nodes there are, and which build each one runs. A page cannot
-        change any of it — the cluster is a start-up decision — so it is shown
-        here rather than offered as a control. On a node that runs alone the
-        list is one entry long and the sentence under it says what would make it
-        more. --%>
+        <%!-- Which nodes there are, which build each one runs, and what each
+        one can do. A page cannot change any of it — the cluster is a start-up
+        decision — so it is shown here rather than offered as a control. On a
+        node that runs alone the list is one entry long and the sentence under
+        it says what would make it more. --%>
         <section id="cluster" class="space-y-1 border-t border-base-300 pt-3">
           <h2 class="text-sm font-semibold">Nodes</h2>
           <p id="cluster-count" class="text-xs text-base-content/70">{@cluster.summary}</p>
@@ -115,10 +116,34 @@ defmodule ExTbpMontyWeb.SettingsLive do
               <span class={["truncate", not entry.alive && "text-base-content/50"]}>{entry.name}</span>
               <span class="text-base-content/50">{entry.version || "no answer"}</span>
               <span :if={entry.self} class="badge badge-xs badge-ghost">this node</span>
+              <span class="text-base-content/40">{Enum.join(entry.capabilities, " ")}</span>
             </li>
           </ul>
+          <%!--
+            The other direction of the same question. A node's row says what it
+            can do; this says who can do a thing, which is the question a reader
+            asks when an experiment needs a machine this one is not — and the
+            only place where a tag two nodes spell differently shows up as a
+            tag with one node under it.
+          --%>
+          <div :if={@cluster.capabilities != []} class="space-y-0.5 pt-1">
+            <p class="text-xs text-base-content/60">What this cluster can do</p>
+            <ul id="cluster-capabilities" class="space-y-0.5 text-xs">
+              <li
+                :for={{tag, names} <- @cluster.capabilities}
+                id={"capability-" <> ExTbpMonty.Node.safe_name(tag)}
+                class="flex flex-wrap items-baseline gap-2"
+              >
+                <span class="font-mono text-base-content/70">{tag}</span>
+                <span class="truncate text-base-content/50">{Enum.join(names, ", ")}</span>
+              </li>
+            </ul>
+          </div>
           <p :if={@cluster.why_not} id="cluster-why-not" class="text-xs text-base-content/60">
             {@cluster.why_not}
+          </p>
+          <p id="cluster-capability-source" class="text-xs text-base-content/50">
+            {@cluster.capability_source}
           </p>
           <p id="cluster-cookie" class="text-xs text-base-content/60">
             cookie: {@cluster.cookie}
@@ -137,17 +162,33 @@ defmodule ExTbpMontyWeb.SettingsLive do
     )
   end
 
-  # The cluster as this page tells it: the nodes, why there is only one when there
-  # is only one, and one sentence saying which case a reader is in.
+  # The cluster as this page tells it: the nodes, what each can do, why there is
+  # only one when there is only one, and one sentence saying which case a reader
+  # is in.
   defp cluster do
     nodes = ExTbpMonty.Cluster.Nodes.snapshot()
 
     %{
       nodes: nodes,
       summary: summary(nodes),
+      capabilities: Capabilities.by_tag(nodes),
+      capability_source: capability_source(),
       why_not: ExTbpMonty.Node.why_not(),
       cookie: ExTbpMonty.Node.cookie_source()
     }
+  end
+
+  # Where the tags came from, which is the part a reader can act on when a tag
+  # they expected is not in the list above: the built-in one is not a setting,
+  # and the rest arrive through one variable that has to be spelled exactly.
+  defp capability_source do
+    case Capabilities.from_environment() do
+      [] ->
+        "every node advertises monty; MONTY_CAPABILITIES adds what a machine has"
+
+      tags ->
+        "this node adds " <> Enum.join(tags, ", ") <> " through MONTY_CAPABILITIES"
+    end
   end
 
   defp summary(nodes) do

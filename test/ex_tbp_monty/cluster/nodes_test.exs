@@ -68,10 +68,45 @@ defmodule ExTbpMonty.Cluster.NodesTest do
   end
 
   test "it tells a peer its own name and build" do
-    assert %{node: name, version: version} = Nodes.identity()
+    assert %{node: name, version: version, capabilities: capabilities} = Nodes.identity()
 
     assert name == node()
     assert is_binary(version)
+    assert "monty" in capabilities
+  end
+
+  # A heterogeneous cluster is one where the answer differs per node, so the
+  # entry has to carry it — and it comes back with the version, in one answer,
+  # because a second round trip per node is a list that is half up to date.
+  test "a peer's tags arrive with its build" do
+    [entry] =
+      Nodes.of([:"gpu@127.0.0.1"], fn _name ->
+        %{version: "0.1.3", capabilities: ["GPU", "world:mujoco"]}
+      end)
+
+    assert entry.capabilities == ["gpu", "world:mujoco"]
+  end
+
+  test "a peer that says nothing about itself has no tags" do
+    [entry] = Nodes.of([:"old@127.0.0.1"], &answered(&1, "0.1.2"))
+
+    assert %{capabilities: [], alive: true} = entry
+  end
+
+  test "a peer that did not answer has no tags either" do
+    [entry] = Nodes.of([:"gone@127.0.0.1"], fn _name -> nil end)
+
+    assert %{capabilities: [], alive: false} = entry
+  end
+
+  # What a scheduler asks before it puts work somewhere: the tag is not a
+  # preference, so a cluster with no node that has it is a cluster that cannot
+  # run that work — an empty list, which is an answer.
+  test "the nodes offering a tag are the ones that can be given work that needs it" do
+    [entry] = Nodes.offering("MONTY")
+
+    assert entry.self
+    assert Nodes.offering("nobody:has-this") == []
   end
 
   defp answered(_node, version), do: %{version: version}

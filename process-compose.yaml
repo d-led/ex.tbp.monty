@@ -30,6 +30,12 @@ processes:
     working_dir: "./"
     environment:
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
+      # Two nodes of one machine are two nodes that can do the same things. A
+      # cluster of unlike machines is where the tags matter, and this is where a
+      # node declares its own (see `ExTbpMonty.Cluster.Capabilities`): uncomment
+      # on one side only, and Settings → Nodes says what each one can do, and
+      # who can do what.
+      # - "MONTY_CAPABILITIES=gpu,world:mujoco"
     readiness_probe:
       http_get:
         host: 127.0.0.1
