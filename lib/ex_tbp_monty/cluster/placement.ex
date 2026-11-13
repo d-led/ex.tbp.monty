@@ -143,7 +143,12 @@ defmodule ExTbpMonty.Cluster.Placement do
   # from before it joined, a list that lost it) offers nothing, which makes the
   # answer the plain list of needs rather than nothing at all.
   defp lacking(needs, entries) do
-    offered = entries |> Enum.find(& &1.self) |> Capabilities.of_entry()
+    offered =
+      case Enum.find(entries, & &1.self) do
+        nil -> []
+        here -> Capabilities.of_entry(here)
+      end
+
     Enum.reject(needs, &Capabilities.offers?(offered, &1))
   end
 

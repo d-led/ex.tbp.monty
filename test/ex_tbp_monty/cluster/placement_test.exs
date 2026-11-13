@@ -95,6 +95,13 @@ defmodule ExTbpMonty.Cluster.PlacementTest do
       assert Placement.awaiting(%{"world" => "mujoco"}, [us(["monty", "world:mujoco"])]) == nil
       assert Placement.awaiting(%{"world" => "mujoco"}, [us(["monty"])]) == nil
     end
+
+    test "a list that has lost this node still says what the run needs" do
+      # The snapshot is a poll behind, and a node that has just joined is not in
+      # the list it reads: it offers nothing, so every need is one it lacks.
+      assert %{missing: ["monty", "world:mujoco"]} =
+               Placement.awaiting(%{"world" => "mujoco"}, [them(["monty", "world:mujoco"])])
+    end
   end
 
   defp us(tags),
