@@ -26,7 +26,7 @@ node with no transport of our own. Placement vocabulary is in the description
 (`:anywhere` / `:owner_only`) and `lookup/3` answers "on that node" with an error
 that names the nodes that do offer it.
 
-## What is missing before a plugin can be *called* as intended
+## What is missing before a plugin can be _called_ as intended
 
 1. **There is no call contract.** `MontyPlugin` defines `describe/0` and nothing
    else. A caller that does not know the plugin's own message shape cannot ask it

@@ -115,14 +115,33 @@ defmodule Monty.Paths do
   def database, do: env("SQLITE_PATH", Path.join(node_root(), @database_file))
 
   @doc """
-  The files a run leaves beside its record.
+  The files a run leaves beside its record: its log, its pictures, its statistics
+  and the memory it learned.
 
   `config/runtime.exs` points `:studio_artifacts_dir` here, so the desktop build
   writes them under the root above while development keeps writing them into the
-  checkout. A node's own folder: a run belongs to the node that ran it.
+  checkout.
+
+  `MONTY_ARTIFACTS_DIR` is the one lever a cluster has, and it is the whole
+  difference between a part that may run on another node and one that may not: a
+  part performed elsewhere writes all of this here (`Monty.Studio.Artifacts`), and
+  the node that merges the parts reads it back, so both nodes have to be looking at
+  one directory. The default stays this node's own folder — what a node that runs
+  alone wants, and what an unchanged deployment keeps.
   """
   @spec artifacts() :: Path.t()
-  def artifacts, do: Path.join(node_root(), "runs")
+  def artifacts, do: env("MONTY_ARTIFACTS_DIR", Path.join(node_root(), "runs"))
+
+  @doc """
+  Whether anybody pointed a run's files somewhere, rather than leaving the default.
+
+  The fact a page can state. Whether the directory two nodes read is really one
+  directory is a deployment's business — a mount, a share, or a mistake — and
+  nothing here can tell those apart, so it says what it knows: the root, and whether
+  `MONTY_ARTIFACTS_DIR` chose it.
+  """
+  @spec artifacts_from_environment?() :: boolean()
+  def artifacts_from_environment?, do: env("MONTY_ARTIFACTS_DIR", nil) != nil
 
   @doc "Where wandb writes what a run logs, when it logs anything."
   @spec wandb() :: Path.t()

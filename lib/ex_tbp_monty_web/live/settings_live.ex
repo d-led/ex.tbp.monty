@@ -16,6 +16,8 @@ defmodule ExTbpMontyWeb.SettingsLive do
   use ExTbpMontyWeb, :live_view
 
   alias ExTbpMonty.Cluster.Capabilities
+  alias Monty.Paths
+  alias Monty.Studio.Artifacts
   alias Monty.Studio.{Settings, System}
 
   @impl true
@@ -118,6 +120,17 @@ defmodule ExTbpMontyWeb.SettingsLive do
           <p id="cluster-cookie" class="text-xs text-base-content/60">
             cookie: {@cluster.cookie}
           </p>
+          <%!--
+            The one thing a cluster cannot copy cheaply, said where the cluster
+            is described: a part performed on another node leaves its steps,
+            pictures and memory in this directory, and the node merging the parts
+            reads them back. A directory of this node's own is therefore the
+            reason a run's parts stay on one node today, and
+            `MONTY_ARTIFACTS_DIR` is the lever that changes it.
+          --%>
+          <p id="cluster-artifacts" class="text-xs text-base-content/60">
+            run files: {@cluster.artifacts}
+          </p>
         </section>
       </section>
     </Layouts.app>
@@ -140,8 +153,25 @@ defmodule ExTbpMontyWeb.SettingsLive do
     %{
       capability_source: capability_source(),
       why_not: ExTbpMonty.Node.why_not(),
-      cookie: ExTbpMonty.Node.cookie_source()
+      cookie: ExTbpMonty.Node.cookie_source(),
+      artifacts: artifacts_source()
     }
+  end
+
+  # Where a run's files go, and whether anybody chose that place.
+  #
+  # The variable is the fact; "shared" is not. Whether two nodes really see one
+  # directory is a deployment's business — a mount, a network share, one path —
+  # and this page can only say what it knows: the root, and whether it came from
+  # `MONTY_ARTIFACTS_DIR` rather than this node's own folder. That is the part a
+  # reader can act on, because a shared directory is what a part performed on
+  # another node needs (`docs/cluster.md`).
+  defp artifacts_source do
+    if Paths.artifacts_from_environment?() do
+      "#{Artifacts.root()} — from MONTY_ARTIFACTS_DIR, so every node has to see it"
+    else
+      "#{Artifacts.root()} — this node's own; MONTY_ARTIFACTS_DIR is what several nodes can be pointed at"
+    end
   end
 
   # Where the tags came from, which is the part a reader can act on when a tag

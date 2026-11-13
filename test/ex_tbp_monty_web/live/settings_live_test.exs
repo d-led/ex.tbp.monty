@@ -3,7 +3,9 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Monty.Studio.Artifacts
   alias Monty.Studio.Settings
+  alias Monty.Test.Tmp
 
   setup do
     Settings.forget()
@@ -124,6 +126,37 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
     # The cookie is the cluster's password, so the page says where it came from
     # and never what it is: a settings screen somebody screenshots is not a place
     # to print one.
+    # A run's files are the one thing a cluster cannot copy cheaply, so where they
+    # go is part of what a cluster *is*: a directory of this node's own is why a
+    # run's parts stay on one node, and the variable named beside it is the lever
+    # that changes that.
+    test "says where a run's files go, and whether that place is one node's", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      artifacts = view |> element("#cluster-artifacts") |> render()
+
+      assert artifacts =~ "run files:"
+      assert artifacts =~ Artifacts.root()
+      assert artifacts =~ "MONTY_ARTIFACTS_DIR"
+    end
+
+    # A root somebody pointed somewhere is a root every node has to see, and the
+    # page says which of the two it is rather than assuming either.
+    #
+    # Only the variable is set: the directory itself is `:studio_artifacts_dir`,
+    # decided at boot, and a test that moved it would be moving it for the
+    # async cases running beside this one — a run's directory is what they delete.
+    test "names the directory a deployment chose", %{conn: conn} do
+      Tmp.system_env("MONTY_ARTIFACTS_DIR", "/srv/monty/runs")
+
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      artifacts = view |> element("#cluster-artifacts") |> render()
+
+      assert artifacts =~ Artifacts.root()
+      assert artifacts =~ "every node has to see it"
+    end
+
     test "says where the shared cookie comes from, and does not print it", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings")
 

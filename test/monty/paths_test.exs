@@ -25,6 +25,24 @@ defmodule Monty.PathsTest do
     end
   end
 
+  describe "a run's files" do
+    # The one thing a cluster cannot copy cheaply is a run's directory: a part
+    # performed on another node writes its steps, pictures and memory there. So
+    # one directory both nodes can see is the lever, and it has to be a lever —
+    # an environment variable — rather than a rebuild.
+    test "go to a directory one can point both nodes at" do
+      Tmp.system_env("MONTY_ARTIFACTS_DIR", "/srv/monty/runs")
+
+      assert Paths.artifacts() == "/srv/monty/runs"
+    end
+
+    test "go to this node's own folder until something says otherwise" do
+      Tmp.without_env("MONTY_ARTIFACTS_DIR")
+
+      assert Paths.artifacts() == Path.join(Paths.node_root(), "runs")
+    end
+  end
+
   describe "a node that was given a name" do
     # Two nodes on one machine must not open one SQLite file, and the runs each
     # writes are its own — so what is a node's hangs off `nodes/<its name>`. What

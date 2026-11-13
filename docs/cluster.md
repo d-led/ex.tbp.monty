@@ -70,6 +70,7 @@ always had. `Monty.Paths.node_root/0` is the only thing that knows the rule.
 | `MONTY_CAPABILITIES`   | what this node can do, comma-separated (see [capability tags](#capability-tags))                                                                                                                                                                                                                                                                                                                                                          |
 | `MONTY_DB`             | `sqlite` gives a development node a file instead of the Postgres a developer's machine has. A release asks `DATABASE_URL` instead                                                                                                                                                                                                                                                                                                         |
 | `NODE_NAME`            | a release's node name, the alias of `RELEASE_NODE`; in development the name is the VM's (`--name`/`--sname`)                                                                                                                                                                                                                                                                                                                              |
+| `MONTY_ARTIFACTS_DIR`  | where a run's files go (`Monty.Studio.Artifacts`: the log, the pictures, the statistics, the memory it learned). Default: this node's own folder. Point every node at one directory before asking a run's parts to work on more than one node                                                                                                                                                                                             |
 
 **The secret is the cluster's password.** Two nodes that disagree about it are two
 clusters that quietly believe they are one: nothing fails, nothing is logged, and
@@ -207,7 +208,7 @@ node closing its own run is the whole rule: a peer's row is a peer's, however
 quiet it looks.
 
 The rule was wider for a day, and the trial that widened it is why it was narrowed
-again. It said a row from a node *no longer in the cluster* was anybody's to
+again. It said a row from a node _no longer in the cluster_ was anybody's to
 close, and liveness in this cluster is a 500 ms `:rpc` to each peer's poller
 (`ExTbpMonty.Cluster.Nodes`). Two runs saturating one machine made that probe time
 out, node1 concluded node2 had gone, and abandoned node2's **live** runs twice —
@@ -234,10 +235,10 @@ alone nothing is configured that was not configured before.
 With one runs table for a cluster those are two different nodes, so the list has
 two columns, drawn only when clustering is on:
 
-| column       | who writes it                                   | what it answers                                      |
-| ------------ | ----------------------------------------------- | ---------------------------------------------------- |
-| `started on` | `RunHistory.start/1` (`studio_runs.started_on`) | the node the run was asked for on. It never moves.    |
-| `running on` | `RunHistory.mark_running/1` (`studio_runs.node`) | the node performing it: the worker's own claim.       |
+| column       | who writes it                                    | what it answers                                    |
+| ------------ | ------------------------------------------------ | -------------------------------------------------- |
+| `started on` | `RunHistory.start/1` (`studio_runs.started_on`)  | the node the run was asked for on. It never moves. |
+| `running on` | `RunHistory.mark_running/1` (`studio_runs.node`) | the node performing it: the worker's own claim.    |
 
 A claim that moved the run is drawn underlined with a dotted rule, and its title
 says so, because "asked for here, running there" is the cluster working rather than
@@ -250,7 +251,7 @@ Both columns are written in the spelling that decided the node's folder
 (`node2@127.0.0.1`) from the cluster's own list, which is the spelling
 `MONTY_SEEDS` takes.
 
-> "Split runs" in the sense of *parts of one run on several nodes* do not exist yet
+> "Split runs" in the sense of _parts of one run on several nodes_ do not exist yet
 > — see "What is not spread yet". What the two columns do is make the split that
 > **does** exist, the split between asking and performing, visible and
 > attributable: a row can no longer be read as though it ran where it was asked
@@ -302,8 +303,17 @@ node2@127.0.0.1`, and still on its first attempt — a snooze is not a failed
   pictures go to `Artifacts.dir/1` and its steps to `Monty.Studio.RunStream`, on
   the node performing it; the run that owns the parts reads both, from its own
   node. Running a part elsewhere therefore needs either a filesystem the owning
-  node can read (a mount, which is a deployment decision, not a code change) or an
-  explicit transfer of what the part produced.
+  node can read or an explicit transfer of what the part produced.
+
+  The first is now a lever rather than a build: `MONTY_ARTIFACTS_DIR` points a
+  node's run files at any directory, so several nodes can be given one, and the
+  settings page says which of the two states a node is in — the directory, and
+  whether that directory came from the variable or is this node's own. It does not
+  say "shared": nothing here can tell a mount from a mistake, so it says what it
+  knows. Live steps are still memory of the performing node, though the events
+  themselves already cross the cluster — PubSub here is the cluster-wide adapter,
+  so a page on the owner sees a peer part's steps as they happen and only the
+  catch-up read (a page opened later) would need an `:rpc`.
 
 ### What one database gives you today, measured
 
