@@ -61,9 +61,6 @@ scaled = fn source, target ->
   File.write!(target, text)
 end
 
-File.mkdir_p!(Path.dirname(parts["plate-big"]))
-scaled.(parts["plate"], parts["plate-big"])
-
 for ebin <- [
       Path.expand("~/src/ex.monty.cad/_build/dev/lib/ex_monty_cad/ebin"),
       Path.expand("~/src/ex.monty.cad/_build/dev/lib/ex_quiddity/ebin"),
@@ -87,6 +84,13 @@ names = System.argv()
 
 sense_only? = System.get_env("CAD_SENSE_ONLY") in ["1", "true"]
 memory = Enum.uniq(remembered ++ if(sense_only?, do: [], else: [sensed]))
+
+# A derived part is written when a run names it, so a run that does not is not
+# made to depend on a writable `/tmp`.
+if "plate-big" in (memory ++ [sensed]) do
+  File.mkdir_p!(Path.dirname(parts["plate-big"]))
+  scaled.(parts["plate"], parts["plate-big"])
+end
 
 if memory == [] do
   Mix.raise(
