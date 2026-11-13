@@ -27,6 +27,30 @@ Three things this buys, and one it does not:
 - **Not** the experiment. No config was written for a part, so every page says a
   CAD run's numbers are not the experiment's.
 
+## Where a part comes from
+
+The same place MuJoCo's objects come from: a directory under this node's data
+root. Monty's object sets are unpacked into `MONTY_DATA` (`ycb/`,
+`compositional_objects_1.4_mujoco/`, …), and a part is the same kind of input, so
+it lives beside them:
+
+```
+$MONTY_DATA/parts/bracket.step
+```
+
+`MONTY_CAD_PART` is therefore a **name**, not a path — `MONTY_CAD_PART=bracket`
+finds `parts/bracket.step` (or `.stp`). A path to a file that exists still works,
+for a one-off part that should not have to be moved first. `Setup.cad_parts/0`
+lists what the directory holds, and `Setup.cad_part_path/0` is the one answer a
+page, a run and a tool share; a name that is not there says what is.
+
+That is also where an **MCP-assisted plugin** meets the run. The CAD server's
+tools already do the parts of the job that need the geometry — brief a part,
+sense it, train a memory from it, describe the plugins a cluster offers — so the
+flow is: the tools put a part (and, later, the library it trained) in that
+directory, and the experiment a plugin encodes names it as its input. Nothing in
+the studio has to know where it came from beyond the name it was given.
+
 ## Seeing it
 
 `mix monty.run` needs `MontyCad.Scene` on the node's code path, and the studio

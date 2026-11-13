@@ -284,16 +284,21 @@ defmodule Monty.Studio.Setup do
   # rather than pointing a run at a path that does not exist.
   defp monty_root(opts), do: Keyword.get(opts, :monty_root)
 
-  # Which world a run steps is the machine's, not the experiment's: a config
-  # says nothing about whether this host can render a scene, so it stays apart
-  # from the config tree and the finding below says what it means.
+  # Which world a run steps is not a deployment's decision.
   #
-  # MuJoCo is the default because it is the world Monty's own configs are
-  # written for, and here it costs nothing: the interpreter that renders it
-  # travels with the application (`config/pythonx.exs`), so no operator installs
-  # anything and no download stands between a checkout and a run. The stand-in
-  # is the other choice — the selector, or `world_simulator: :synthetic` — and a
-  # test picks it because a sphere needs no interpreter at all.
+  # MuJoCo is what a config written for MuJoCo means, and it costs nothing here:
+  # the interpreter that renders it travels with the application
+  # (`config/pythonx.exs`), so a checkout and a container run the same experiment
+  # without anyone installing anything. A config that names a world this
+  # application does not carry is refused when the world is asked for, with that
+  # world's class in the words (`uncarried_world/1`) — not quietly replaced.
+  #
+  # What remains configurable is a *substitution*, and only a caller asks for it:
+  # the stand-in scene, for a machine with no interpreter and for the test suite
+  # (`config/test.exs`). A plugin that brings a world names it in its own config and
+  # declares it as a capability (`docs/simulator-port.md`); the deployment knob that
+  # used to sit here is gone.
+  #
   # `||`, not a default argument: a key that exists and is nil is "nothing
   # configured", and `Application.get_env/3` would hand that nil on as a world.
   defp configured_world, do: Application.get_env(:ex_tbp_monty, :world_simulator) || :mujoco
@@ -818,30 +823,101 @@ defmodule Monty.Studio.Setup do
   defp cad_scene do
     module = cad_module()
 
-    cond do
-      not Code.ensure_loaded?(module) ->
-        raise ArgumentError,
-              "a CAD part is stepped through #{inspect(module)}, which this node does not " <>
-                "carry: add `ex_monty_cad` to the node that steps the part, or step MuJoCo " <>
-                "or the stand-in scene."
+    refusals = [
+      {not Code.ensure_loaded?(module),
+       "a CAD part is stepped through #{inspect(module)}, which this node does not " <>
+         "carry: add `ex_monty_cad` to the node that steps the part, or step MuJoCo " <>
+         "or the stand-in scene."}
+    ]
 
-      cad_part() == nil ->
-        raise ArgumentError,
-              "no CAD part is named: `MONTY_CAD_PART` is the STEP file a run of this world " <>
-                "steps."
+    case Enum.find(refusals, &elem(&1, 0)) do
+      {_true, sentence} ->
+        raise ArgumentError, sentence
 
-      true ->
-        case module.open(cad_part()) do
-          {:ok, scene} ->
-            scene
+      nil ->
+        open_cad_scene(module)
+    end
+  end
 
-          {:error, error} ->
-            raise ArgumentError,
-                  "the CAD part this run names could not be opened " <>
-                    "(#{cad_part()}): #{Exception.message(error)}"
+  defp open_cad_scene(module) do
+    with {:ok, path} <- cad_part_path() do
+      case module.open(path) do
+        {:ok, scene} ->
+          scene
+
+        {:error, error} ->
+          raise ArgumentError, "#{path} could not be opened: #{Exception.message(error)}"
+      end
+    else
+      {:error, sentence} -> raise ArgumentError, sentence
+    end
+  end
+
+  @doc """
+  The STEP file a run of the CAD world opens, from `MONTY_CAD_PART`.
+
+  A part is **named** rather than pathed, the way the objects MuJoCo steps are:
+  the name is looked for in `parts/` under this node's data root
+  (`parts_dir/0`), which is where a downloaded set and the CAD server's MCP tools
+  both put one. A value that is the path of a file that exists is used as
+  it is, because a one-off part should be openable without moving it first.
+
+  Answers the sentence a page or a run would show when there is no part to open,
+  rather than a `nil` that becomes a different world somewhere else.
+  """
+  @spec cad_part_path() :: {:ok, Path.t()} | {:error, String.t()}
+  def cad_part_path do
+    case cad_part() do
+      nil ->
+        {:error, "no CAD part is named: `MONTY_CAD_PART` is the name of a part in #{parts_dir()}"}
+
+      named ->
+        cond do
+          File.regular?(named) ->
+            {:ok, Path.expand(named)}
+
+          File.regular?(path = Path.join(parts_dir(), named)) ->
+            {:ok, path}
+
+          File.regular?(path = Path.join(parts_dir(), named <> ".step")) ->
+            {:ok, path}
+
+          File.regular?(path = Path.join(parts_dir(), named <> ".stp")) ->
+            {:ok, path}
+
+          true ->
+            {:error,
+             "there is no part #{inspect(named)}: #{parts_dir()} holds #{inspect(cad_parts())}"}
         end
     end
   end
+
+  @doc """
+  The parts this node can step, by name, sorted.
+
+  Read from the directory `cad_part_path/0` looks in, so a part an operator put
+  there — or a tool wrote there — is offered without a second list to keep.
+  """
+  @spec cad_parts() :: [String.t()]
+  def cad_parts do
+    parts_dir()
+    |> Path.join("*")
+    |> Path.wildcard()
+    |> Enum.filter(&File.regular?/1)
+    |> Enum.filter(&(Path.extname(&1) in [".step", ".stp"]))
+    |> Enum.map(&Path.basename/1)
+    |> Enum.sort()
+  end
+
+  @doc """
+  Where this node's parts live: `parts/` under the data root the worlds read.
+
+  Monty's objects arrive in directories under `MONTY_DATA` — a downloaded set per
+  archive — and a part is the same kind of input, so it lives beside them. A
+  downloaded set can fill it, and the CAD server's MCP tools can write one.
+  """
+  @spec parts_dir() :: Path.t()
+  def parts_dir, do: Path.join(Monty.Paths.data(), "parts")
 
   defp cad_module, do: Module.concat(["MontyCad", "Scene"])
 

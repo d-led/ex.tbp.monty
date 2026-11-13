@@ -657,6 +657,39 @@ defmodule Monty.Studio.SetupTest do
       assert_raise ArgumentError, ~r/does not carry/, fn -> Setup.world(setup, :cad) end
     end
 
+    # MuJoCo's objects arrive in directories under `MONTY_DATA`; a part is the
+    # same kind of input, so it is named the same way and lives beside them.
+    # These cases hold the resolution, which is what a page, a run and the CAD
+    # server's tools all have to agree about.
+    test "a part is a name in this node's data root, not a path in someone's home" do
+      data = Tmp.dir("monty-data")
+      Tmp.system_env("MONTY_DATA", data)
+      Tmp.system_env("MONTY_CAD_PART", "bracket")
+      File.mkdir_p!(Path.join(data, "parts"))
+      File.write!(Path.join([data, "parts", "bracket.step"]), "")
+
+      assert Setup.cad_part_path() == {:ok, Path.join([data, "parts", "bracket.step"])}
+      assert Setup.cad_parts() == ["bracket.step"]
+    end
+
+    test "a name the parts directory does not have says which parts it does" do
+      data = Tmp.dir("monty-data")
+      Tmp.system_env("MONTY_DATA", data)
+      Tmp.system_env("MONTY_CAD_PART", "bracket")
+
+      assert {:error, sentence} = Setup.cad_part_path()
+      assert sentence =~ ~s(there is no part "bracket")
+      assert sentence =~ "parts"
+    end
+
+    test "a path to a file that exists is used as it is, for a one-off part" do
+      path = Tmp.file("loose.step")
+      File.write!(path, "")
+      Tmp.system_env("MONTY_CAD_PART", path)
+
+      assert Setup.cad_part_path() == {:ok, path}
+    end
+
     test "names the CAD part a run would step, from the deployment" do
       setup = setup_for("tutorial/first_experiment")
       Tmp.system_env("MONTY_CAD_PART", "/parts/bracket.step")
