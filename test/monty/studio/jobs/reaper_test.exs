@@ -136,6 +136,22 @@ defmodule Monty.Studio.Jobs.ReaperTest do
       assert closed.finished_at
     end
 
+    # A job that dies takes its parts with it: the division must not be left
+    # saying a part is still going about a run that has been closed.
+    test "closes the division with it" do
+      record = start_run()
+      :ok = RunHistory.plan_parts(record.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+      :ok = RunHistory.part_started(record.id, 0, "node1_127.0.0.1")
+
+      job = enqueue(record)
+      :ok = Oban.cancel_job(job)
+
+      assert Reaper.sweep() == 1
+
+      assert Enum.map(RunHistory.parts(record.id), & &1.status) == ["failed", "skipped"]
+      assert Enum.all?(RunHistory.parts(record.id), &(&1.finished_at != nil))
+    end
+
     test "says so in its own log, which exists even though the run never made one" do
       record = start_run()
       job = enqueue(record)

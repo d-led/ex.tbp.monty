@@ -177,6 +177,12 @@ defmodule Monty.Studio.Jobs.Reaper do
     # for whoever is debugging.
     _ = Artifacts.start(record.id)
     _ = Artifacts.append(record.id, "the run was abandoned: #{recorded["reason"]}")
+
+    # The division goes with the run. A job that died took its parts with it, and
+    # a part left saying `running` about a run closed as failed is the same lie
+    # one level down that this module exists to stop telling.
+    _ = RunHistory.settle_parts(record.id)
+
     _ = RunHistory.finish(record, Map.merge(record.summary || %{}, recorded), "failed")
     _ = cancel_job(record.id)
     _ = announce(record.id, recorded["reason"])
