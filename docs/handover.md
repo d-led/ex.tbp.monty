@@ -1,23 +1,32 @@
-# Hand-over — 2026-11-06 (evening), continued through 2026-11-09
+# Hand-over — 2026-11-06 (evening), continued through 2026-11-13
 
-The newest section is 34. Sections 1–15 are the evening of 2026-11-06, sections
-16–33 the days after it, and each is still right where it names a file, a commit
-or a measurement.
+The newest section is 41. Sections 1–15 are the evening of 2026-11-06, sections
+16–40 the days after it, and each is still right where it names a file, a commit
+or a measurement. Note that 35 appears twice — two days of work took the same
+number. Section 41 (2026-11-13) says what is left of the split runs.
 
 What is open, what is already known, and where the evidence is. Written for
 whoever picks this up next; every claim below was measured or read, and the
 file and line that settles each one is named.
 
 State at hand-over: **`scripts/quality.sh` is green** on the tree this file is
-in — lint clean, 2 318 tests (19 properties), CRAP worst 29.85 against a
-threshold of 20. CI's
-last completed run (`42254886887`, on `4d92066`) was **red in two jobs**, both
-fixed by `e5ad552`: `lint` (one unformatted test file) and `types` (a real bug
-dialyzer found — the generator's "map unchanged" guard compared a binary with a
-`File.read/1` result, so it never fired and every `mix test` rewrote the map).
-Check CI on the commit after this one before believing anything in section 10.
+in — lint clean, 3 088 tests (67 properties, 3 021 test cases), CRAP worst 29.85
+against a threshold of 20, `mix dialyzer` 0 errors. CI's last completed run
+(`9521023`) was **success**. The Windows desktop leg failed once on `720655b`
+with no failing step and hung twice earlier the same day, so a lone desktop
+failure is not the signal to act on (section 41.7).
+
+Two CI jobs have their own history worth keeping: a run on `4d92066` was red in
+`lint` (one unformatted test file) and `types` (a real bug dialyzer found — the
+module map's "unchanged" guard compared a binary with a `File.read/1` result, so
+it never fired and every `mix test` rewrote the map), both fixed by `e5ad552`.
+That is why `types` is run before pushing and not left to CI.
 
 What is left, in order:
+
+The cluster and the division are what the newest session left open: §41.5 is the
+whole list, with the one decision still unmade (how a part's steps come back
+from a peer). Behind them, the older queue:
 
 1. **Which experiments run, and what the rest need** — answered by
    `mix monty.readiness` and by the page's first facet since §18. The class that
@@ -2665,3 +2674,225 @@ failed once in eight full runs (21 steps against a recording of 27, the port
 concluding early), passes alone, and is written up in MemPalace under
 `suspected-issues` — the candidate is an unseeded RNG where the episode's own
 stream should be used.
+
+## 41. 2026-11-13: split runs, and what is left of them
+
+This session was the division of a run across nodes, taken from "the row exists"
+to "a reader can tell what happened, and a stop reaches every part". It was
+driven by the user reading the running application and the assistant's own
+reports, in this order: _a run on two nodes must be distinguishable by part,
+and a cancellation must reach every node involved_; _now that we have plugins,
+can we RPC them properly, and do not build self-reinforcing message loops_;
+_how ready are we for two-node clustered experiments_; _the run page repeats
+itself and its division line is unreadable_.
+
+Every claim below is either a commit, a file and line, or a number produced by
+running the thing. Where it is a design that has not been built, it says so.
+
+### 41.1 What landed
+
+Two pairs of hands worked in this tree. The division, the stop and the run page
+were mine; the plugin policy and the cluster view were the other agent's. Both
+sets are listed, because the tree is the state, not my half of it.
+
+| Commits                                                                     | What it made true                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `60551a4`                                                                   | a run can be told to be split: parts recorded per node, a stop asked of the whole cluster                                                                                                                                                                                                                                                         |
+| `859320c`                                                                   | `studio_run_parts` — the row that says which node has which part, and what became of it                                                                                                                                                                                                                                                           |
+| `ba13518`                                                                   | the dialyzer errors the part rows had introduced                                                                                                                                                                                                                                                                                                  |
+| `c3500bd`                                                                   | deleting a run deletes its parts (SQLite cannot add the foreign key, so the cascade is written by hand)                                                                                                                                                                                                                                           |
+| `4190ee7`                                                                   | a node whose database is behind says so at boot instead of failing on the first query                                                                                                                                                                                                                                                             |
+| `04ce380`, `3c88340`, `26a96dc`                                             | the stop that did not reach the parts (41.2), and the reaper that closes a division nobody will close                                                                                                                                                                                                                                             |
+| `b035d70`                                                                   | the MCP report carries the division, so an assistant can answer "which node had part 2"                                                                                                                                                                                                                                                           |
+| `7246005`, `e792631`, `e18f5be`, `0d8168d`, `9521023`                       | the run page: six part states documented, the title says the steps, the parts read as a sentence, Inputs stops repeating Configuration                                                                                                                                                                                                            |
+| `b40dc3d`                                                                   | a plugin is called only on a node whose capabilities satisfy its `needs`                                                                                                                                                                                                                                                                          |
+| `eb2a9b1`, `c1edce0`                                                        | `MONTY_STUDIO_CONCURRENCY` — how many runs a node may perform at once — and the assistant told what the deployment can do                                                                                                                                                                                                                         |
+| `d343995`                                                                   | a step reads no setting (41.4)                                                                                                                                                                                                                                                                                                                    |
+| `8607ce2`                                                                   | a failed part keeps the steps it took, and says how many in its sentence                                                                                                                                                                                                                                                                          |
+| `bdf681d`, `7107243`                                                        | a node says where it writes a run's files; an older peer is still an entry                                                                                                                                                                                                                                                                        |
+| `13d0d6b`, `4f979a7`, `e0845f4`, `6b98cbe`, `69c16b6`, `0a5b46e`, `720655b` | the other agent: a node is a server whose plugins are pieces, a capability names the modules that provide it, a run's motor policy can be another node's plugin, the sample plugins named under the host that owns them, a plugin-defined experiment a node can start, a policy that moves, and a policy per run so two episodes cannot share one |
+| `1545a45`, `21ab5bc`                                                        | an episode's line stays inside its own band, and the zooming case that still named the old axis (41.1)                                                                                                                                                                                                                                            |
+
+`1545a45` came in after `9521023` and left `main` red on one case; `21ab5bc` is the repair. The chart now gives every episode one x unit
+of its own so two episodes cannot share a column, which makes two episodes of two
+steps _four_ columns — and the run page's zooming case still named the old
+extent in three assertions (`steps 0–2`, `of 2`). The chart was right and the
+assertions were incidental numbers that had quietly become false, so they now
+say `steps 0–3` and `steps 1–2 of 3`, with the commit that moved the axis named
+in the comment. **A number a test asserts on a drawing is a specification of the
+drawing; when the drawing changes on purpose, the number is what moves.**
+
+### 41.2 The stop that never reached the parts
+
+The bug the user suspected twice, and it was real both times. A divided run
+performs its parts in `Task.async_stream` (`lib/monty/studio/jobs/run.ex`), so a
+part runs in a task the job did not spawn as a child — and `Run.stop/1` sent its
+`:stop` only to the pid registered under `{:studio_run, run_id}`, which is the
+job. The job was blocked awaiting the tasks that the stop was meant to interrupt,
+so the message sat unread in the job's mailbox and the run finished as if nothing
+had been asked.
+
+Two things fixed it, and the second is the one that matters:
+
+1. `stop/1` messages **every** worker: the job, plus `working_on/1`, which reads
+   the part tasks out of the record and messages each pid once.
+2. `run_wave/4` refuses to start a part when `stop_requested?/0` is already true,
+   so a part that was waiting its turn is never started after the stop arrived.
+
+Measured, not inferred: a two-part run on one node, stopped eight seconds in,
+ended `run=stopped` with **both** parts `stopped`, each at 30 steps. Before the
+fix the same script produced `run=finished` with two `finished` parts.
+
+The part states are now six — `queued running finished failed stopped skipped` —
+and `Monty.Studio.RunHistory.Part.ended?/1` names the closed ones so no caller
+has to keep the list in its head. Who closes each one is in `docs/cluster.md`.
+The reaper settles the rest: `abandon/1` calls `RunHistory.settle_parts/1`
+before `RunHistory.finish/3`, so a node that dies mid-division leaves
+`skipped`/`failed` rows rather than `running` ones forever.
+
+### 41.3 A plugin is called only where it can be served
+
+`RemotePolicy.among/3` asks each host in turn, and now also asks whether the
+host's capabilities satisfy the plugin's own `needs`
+(`lacking/2` → `Capabilities.offers?/2`), and refuses with one plain sentence
+when they do not. The refusal used to come back nested in a tuple, so the caller
+that compared it with `=~` raised instead of reporting. One sentence, one layer.
+
+`needs` itself is still advisory _in the package_: `ex_monty_plugin` does not
+enforce it, one caller here does. That is written in `docs/plugins.md` item 3
+rather than left as a pleasant assumption.
+
+### 41.4 What a reader sees now, and what made it slow
+
+The run page's Inputs panel repeated the Configuration panel: `eval_epochs`,
+`learning_modules`, `sensors` and `train_epochs` are names the configuration
+panel already gives in words. `inputs/1` now rejects those
+(`@stated_in_configuration`) and anything blank, and the run I opened in the
+browser drew seven rows — `defined_by`, `episodes`, `motor_policy`, `parallel`,
+`parts`, `seed`, `world` — none of which the configuration states. The division
+reads as one sentence there too: "2 parts, 70 episodes (eval) each", instead of a
+map printed by `inspect`.
+
+That last line was `stream=ad68fe99-…` and `parts index=0 of=2 phase=eval
+phases=eval=0, 1, 2` in the user's own words, and he was right: it was the
+input map, not the division.
+
+Getting there turned up a real defect. `assign_replay/2` read
+`Settings.get("run_refresh_ms")` on **every step** under a comment saying it was
+read once, which is one database query per step of every replay. CI caught it as
+a single failing case ("a step costs the database nothing") that passed in the
+suite and failed three times alone. The way through was a temporary test that
+attached telemetry to the repo's query events and printed **which process** made
+each one: the view made `studio_settings` (a step) and `oban_jobs` (its own 2 s
+poll). `Map.get_lazy` fixed the first; the test now drives the poll itself. A
+`show_poll_ms` setting was added to test the second hypothesis, disproved, and
+reverted — the record of that is here so it is not tried again.
+
+The lesson is not "the setting was slow". It is that a case which passes in the
+suite and fails alone is _information_: something in the suite was hiding a
+query, and the case was right.
+
+### 41.5 What is left, in the order I would take it
+
+**Parts across nodes — the one big remaining piece.** Everything needed to
+_decide_ is in place and nothing dispatches. A part is still performed by the
+node that owns the run.
+
+- Prerequisite, done: `Cluster.Nodes.identity/0` carries `artifacts:` and
+  `shares_run_files?/2` (`lib/ex_tbp_monty/cluster/nodes.ex`) is true only when
+  two entries name the same binary directory. A peer that writes its files
+  somewhere the owner cannot read is not a candidate, and now can be told apart.
+- Choose peers with `Nodes.snapshot()`, keep those with
+  `shares_run_files?(here, entry) and entry.alive`, and assign parts round-robin.
+  No qualifying peer means the run is performed by the owner alone — a fallback,
+  not an error, because that is what happens today.
+- The entry point is `Run.perform_part(run_id, part_index)`, called over `:rpc`,
+  reusing `opened_for/1` so a peer never opens the world itself.
+- **The decision still open** is how a part's steps come back. Two shapes:
+  (a) the `:rpc` reply carries them — simple, and buffers a few megabytes per
+  wave; (b) the peer writes `runs/<run_id>/parts/<index>.log` into the shared
+  directory and the owner reads them in part order — bounded memory, survives a
+  restart, and needs a format. I would build (b) and exercise it on **one node
+  first**, with the owner writing its own parts that way too, so the reader is
+  tested before any `:rpc` exists. The tests that specify it, in that order:
+  parts stay on the owner when no peer shares the directory; a part handled by a
+  peer is recorded with that peer's name in `studio_run_parts.node`; the run's
+  transcript is the parts' transcripts in part order whichever node wrote them;
+  a peer that dies mid-part fails that part and only that part.
+- Then: stop propagation to a peer (the same `Run.stop/1` message over `:rpc`),
+  refusing a peer on a different `version`, and the run page showing which node
+  is still to answer.
+
+**The run list across per-node databases.** `Peers.runs_on/3` exists and the list
+does not use it, so a divided run's parts are visible only from the node that
+owns the run's row. This is the cluster view's area — coordinate before touching
+`cluster_nodes.ex`, `cluster_peer_runs.ex` or `settings_live.ex`.
+
+**`route/4` in `ex_monty_plugin`.** Enforcement of placement `:owner_only`,
+answer discipline and timeouts, and routing learning modules, not only episode
+steps, through a `:pg` scope. It publishes a version, so it wants the user's
+nod before it is written.
+
+**Two wirings nothing tests.** `collect/2`'s error branch that passes a part's
+step count into `part_failed/3` — no experiment can be made to fail on purpose,
+so the case waits for an injected failure. And `config/runtime.exs`'s parse of
+`MONTY_STUDIO_CONCURRENCY`, which no test loads: verified by booting three ways
+(unset → `[studio: 2]`, `=3` → `[studio: 3]`, `=zero` → raises naming the
+variable). The parse is guarded by `Application.get_env(:ex_tbp_monty, Oban,
+[])[:queues]` because otherwise it overrode `queues: false` in the test
+environment and failed two cases of `ExTbpMonty.Mcp.StudioTest`.
+
+**One loose end from before this session**, unchanged: `RecordingEpisodeTest`
+failed once in eight full runs (21 steps against a recording of 27), passes
+alone, written up in MemPalace under `suspected-issues`; the candidate is an
+unseeded RNG where the episode's own stream belongs.
+
+### 41.6 Loops, since the user asked twice
+
+PubSub here is the cluster-wide adapter and has no de-duplication key, so a relay
+that forwards everything it receives forwards its own forwarding, and it is
+unbounded rather than merely wasteful. `docs/plugins.md` has the five rules under
+"The loop rules", each with what breaks if it is broken: a node answers a peer
+from its own state and never asks another node while answering; one publisher per
+fact, and a subscriber re-renders without re-publishing; an answer is data and
+nothing in a reply may be read as a request; no retry without a deadline and none
+at all of a call that changes state; nothing reaps on an event it publishes. Read
+them before adding a topic or a call that crosses nodes.
+
+### 41.7 Working agreements for the next pair of hands
+
+- **This tree is shared.** Another agent commits in it. Never `git add -A`;
+  stage your own files. When a file is both of yours, take your hunks with
+  `git diff -U3`, write them to a patch and `git apply --cached` — I did exactly
+  that for `run_history_live.ex` while the other agent's changes sat unstaged in
+  it.
+- **A tree that does not compile may be someone mid-save.** Twice this session a
+  file was broken by work that existed nowhere else (`run_partitioned`'s
+  three-tuple return left a two-tuple clause unmatched; a comment swallowed a
+  `defp`). Diagnose it, write the diagnosis down, and do not `git checkout --`
+  another agent's uncommitted file.
+- **Re-run a failure before believing it.** A `--seed 7` run showed eight
+  phantom `ExperimentLiveTest` failures because the tree was being compiled while
+  it was written; the re-run gave 353 passed.
+- **CI on `main` does not cancel a running run.** `concurrency` in
+  `.github/workflows/ci.yml` sets `cancel-in-progress` to the expression
+  `github.ref != 'refs/heads/main'`, so on main a _pending_ run is replaced
+  (reported `cancelled`) and a _running_ one finishes — 40–60 minutes once the
+  desktop leg is in it, with `timeout-minutes: 60`. Pushing often on main queues
+  behind that tail; `gh run cancel <id>` when you only need the fast jobs.
+- **The Windows desktop leg is the unreliable one**: no failing step on
+  `720655b`, and two hangs earlier the same day. A green `test`/`quality` job on
+  the same commit is the signal to look at; a lone desktop failure is not.
+- **Never kill a BEAM that was not started here.** The user runs the app from
+  `process-compose`; a `mix phx.server` on the same port is not yours to stop.
+
+### 41.8 Verify it
+
+```
+./scripts/reformat.sh                    # mix format, then prettier over md/js
+./scripts/quality.sh                     # what CI runs: lint, workflows, cover, complexity
+MIX_ENV=test mix dialyzer                # the separate types job; ~5 s, not in quality.sh
+```
+
+Measured at this hand-over: 3 088 passing (67 properties, 3 021 cases), worst CRAP 29.85,
+dialyzer 0 errors, CI success on `9521023`.
