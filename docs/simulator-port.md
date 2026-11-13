@@ -44,6 +44,44 @@ interpreter ([architecture](architecture.md#where-python-is)), which is why no
 run reaches the peer at all. What is still not done is a camera, which is the
 live-episode case in [`parallel-and-live.md`](parallel-and-live.md), not this one.
 
+## Which world a run steps, and who decides
+
+The world is the experiment's, not the deployment's.
+
+| the experiment's config names                                         | what a run steps                                                                                                                              |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| MuJoCo — `environment.env_init_func` is `MuJoCoSimulator`             | MuJoCo, in the interpreter this application carries; every node has it                                                                        |
+| a world a plugin brings                                               | that world, by the plugin's own name; the node that steps it declares the capability (`world:<name>`, `ExTbpMonty.Cluster.Placement.needs/1`) |
+| a world nobody here carries (`HabitatEnvironment`, an unported class) | nothing: refused with that class named, in the words a page shows (`Monty.Studio.Setup`'s `uncarried_world/1`)                                |
+| nothing at all                                                        | MuJoCo (`Monty.Studio.Setup.configured_world/0`)                                                                                              |
+
+There is **no deployment knob**. This application used to read a
+`world_simulator` from its own configuration, which made "which world" a property
+of the machine — it made sense while a node could be _the Habitat node_, and it
+does not any more: Habitat is on its way out of Monty, MuJoCo costs nothing here
+because its interpreter travels with the release, and a world somebody else owns
+belongs to whoever brings it. So `config/config.exs` names no world, and the
+`world:<name>` capability is how a cluster says which node may step a run whose
+world is not MuJoCo's.
+
+What is left configurable is a **substitution**, and only a caller asks for it:
+
+- `--world synthetic` (the CLI), the run page's selector, and an MCP tool's
+  `world: "synthetic"` ask for this port's stand-in — a sphere in the BEAM, no
+  interpreter, no assets. It is a development world: nothing it produces is a
+  result of the experiment, and a run that stepped it says so in its findings
+  (`:world_is_a_stand_in`).
+- `config/test.exs` substitutes the same stand-in for the whole suite, because a
+  test machine is not required to have an interpreter. That is the suite's
+  setting, not a deployment's.
+
+A world a plugin brings is the plugin's to own: it publishes
+`world:<its name>`, and the core resolves it by name the way a CAD part is
+resolved today (`Monty.Studio.Setup.world/4`'s `:cad` clause — the package is
+asked for by name, and a node that does not have it says so rather than failing
+inside a world). Registering a world generically is the next step; until then a
+non-MuJoCo world that is not the stand-in is refused, and refused by name.
+
 ## The world the runtime develops against
 
 A run that chooses the stand-in steps against

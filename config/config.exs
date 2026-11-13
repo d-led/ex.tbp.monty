@@ -67,13 +67,14 @@ config :ex_tbp_monty, wandb_mode: "disabled"
 # (`config/runtime.exs`); nothing else here is gated that way.
 config :ex_tbp_monty_core, experiment_trace: false
 
-# Which world a run steps when nobody chooses one. MuJoCo is the world Monty's
-# own configs are written for, and it costs nothing here: the interpreter that
-# renders it travels with the application (`config/pythonx.exs`), so a checkout
-# and a container run the same experiment without anyone installing anything.
-# The stand-in scene is the other choice, and what the suite uses — it needs no
-# scene description and no interpreter.
-config :ex_tbp_monty, world_simulator: :mujoco
+# A deployment does not choose a world. There is no `world_simulator` here on
+# purpose: a config written for MuJoCo means MuJoCo, a config that names a world
+# this application does not carry is refused with that world's class named, and a
+# world a plugin brings is the plugin's to name (`docs/simulator-port.md`). The
+# one thing that may still be substituted wholesale — this port's stand-in scene,
+# for a machine with no interpreter and for the test suite — is asked for by the
+# caller that wants it (`--world synthetic`, `world_simulator: :synthetic`), never
+# by a deployment's configuration.
 
 # "Is MuJoCo here?" is answered by the interpreter this application carries, not
 # by whatever `python3` the PATH offers: `config/pythonx.exs` is where the build

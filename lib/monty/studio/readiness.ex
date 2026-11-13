@@ -286,9 +286,14 @@ defmodule Monty.Studio.Readiness do
   # for, and which libraries are on this machine. The library listing is two
   # levels of `ls` — the release directories and the files in them — so a file
   # exported into a release that already exists moves the key too.
+  #
+  # MuJoCo when nobody said otherwise, which is the same default `Monty.Studio.Setup`
+  # reads: a key that changed with whether a deployment's config happened to set
+  # the substitution would make one catalogue look like two.
   defp world(opts),
     do:
-      Keyword.get(opts, :world_simulator) || Application.get_env(:ex_tbp_monty, :world_simulator)
+      Keyword.get(opts, :world_simulator) || Application.get_env(:ex_tbp_monty, :world_simulator) ||
+        :mujoco
 
   defp libraries_stamp do
     dir = Memory.libraries_dir()

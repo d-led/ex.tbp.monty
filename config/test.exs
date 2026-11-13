@@ -1,9 +1,10 @@
 import Config
 
-# A test that steps a world steps this port's stand-in unless it says otherwise:
-# the external process needs an interpreter with `tbp.monty` in it, which a test
-# machine is not required to have. The production default is the other way
-# round — see `Monty.Studio.Setup.configured_world/0`.
+# The suite substitutes this port's stand-in for every world it steps unless a
+# case says otherwise: MuJoCo needs an interpreter with `tbp.monty` in it, which a
+# test machine is not required to have. This is the suite's substitution and not a
+# deployment's choice — there is no `world_simulator` in `config/config.exs` on
+# purpose (`docs/simulator-port.md`).
 config :ex_tbp_monty, world_simulator: :synthetic
 
 # A page in a test has no socket to keep alive, and a test that delivers steps

@@ -796,47 +796,54 @@ defmodule Monty.Studio.RunHistory do
           {:ok, Claim.t()} | {:error, term()}
   def claim_part(run_id, part, node) do
     moment = now()
-    claim = Claim.new(run_id, part, node, moment)
 
-    with {:ok, uuid} <- Ecto.UUID.cast(run_id) do
-      free =
+    case Ecto.UUID.cast(run_id) do
+      {:ok, uuid} ->
+        claim_free(uuid, part, node, Claim.new(run_id, part, node, moment), moment)
+
+      # Not a run id, so not a part of any run: the answer a claim gets is the one
+      # a part that was never planned gets.
+      :error ->
+        {:error, :not_planned}
+    end
+  end
+
+  # The row is taken only if nobody holds it, or if the holder's lease has run
+  # out: the whole of "one owner at a time" is the one `update_all/3` below.
+  defp claim_free(uuid, part, node, claim, moment) do
+    free =
+      from(candidate in Part,
+        where:
+          candidate.run_id == ^uuid and candidate.part == ^part and
+            candidate.status in ["queued", "running"] and
+            (is_nil(candidate.claimed_until) or candidate.claimed_until < ^moment)
+      )
+
+    # `started_at` is the first instant a node had the part, not the latest: a part
+    # that lapsed once and was reassigned began when its first holder took it.
+    # Written as a second statement, and only for a part nothing has started yet,
+    # because a column may not refer to itself in one `update_all/3`.
+    case Repo.update_all(free,
+           set: [
+             claim: claim.token,
+             claimed_until: claim.until,
+             node: node,
+             status: "running",
+             updated_at: moment
+           ]
+         ) do
+      {1, _one_part} ->
         from(candidate in Part,
           where:
             candidate.run_id == ^uuid and candidate.part == ^part and
-              candidate.status in ["queued", "running"] and
-              (is_nil(candidate.claimed_until) or candidate.claimed_until < ^moment)
+              is_nil(candidate.started_at)
         )
+        |> Repo.update_all(set: [started_at: moment])
 
-      # `started_at` is the first instant a node had the part, not the latest: a
-      # part that lapsed once and was reassigned began when its first holder took
-      # it. Written as a second statement, and only for a part nothing has started
-      # yet, because a column may not refer to itself in one `update_all/3`.
-      case Repo.update_all(free,
-             set: [
-               claim: claim.token,
-               claimed_until: claim.until,
-               node: node,
-               status: "running",
-               updated_at: moment
-             ]
-           ) do
-        {1, _one_part} ->
-          from(candidate in Part,
-            where:
-              candidate.run_id == ^uuid and candidate.part == ^part and
-                is_nil(candidate.started_at)
-          )
-          |> Repo.update_all(set: [started_at: moment])
+        {:ok, claim}
 
-          {:ok, claim}
-
-        {0, _nothing} ->
-          {:error, refusal(uuid, part)}
-      end
-    else
-      # Not a run id, so not a part of any run: the answer the claim gets is the
-      # one a part that was never planned gets.
-      :error -> {:error, :not_planned}
+      {0, _nothing} ->
+        {:error, refusal(uuid, part)}
     end
   end
 

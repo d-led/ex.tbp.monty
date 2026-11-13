@@ -3,6 +3,7 @@ defmodule ExTbpMonty.Mcp.StudioTest do
 
   alias ExTbpMonty.Mcp
   alias ExTbpMonty.Mcp.Studio
+  alias Monty.Test.Tmp
 
   describe "what this deployment is" do
     test "counts the experiments, and says how many runs are in each state" do
@@ -50,9 +51,19 @@ defmodule ExTbpMonty.Mcp.StudioTest do
     test "says which world a run steps, and whether the interpreter is there" do
       studio = Studio.describe()
 
-      assert studio.world.mode in ~w(synthetic habitat)
+      # The suite substitutes the stand-in (`config/test.exs`), which is the only
+      # reason this is not `mujoco`: a deployment cannot choose a world, and
+      # MuJoCo is what a config written for MuJoCo means
+      # (`docs/simulator-port.md`).
+      assert studio.world.mode in ~w(mujoco synthetic habitat)
       assert is_binary(studio.world.note)
       assert Map.has_key?(studio.world, :peer_interpreter)
+    end
+
+    test "says MuJoCo when nothing configured a world, which is every deployment" do
+      Tmp.app_env(:world_simulator, nil)
+
+      assert Studio.describe().world.mode == "mujoco"
     end
 
     test "lists the prerequisites with whether each is present" do

@@ -103,7 +103,10 @@ defmodule ExTbpMonty.Mcp.Studio do
   defp running_count(ids), do: length(ids)
 
   defp world do
-    mode = Application.get_env(:ex_tbp_monty, :world_simulator, :synthetic)
+    # `||`, not `Application.get_env/3`'s default: a key that exists and is nil is
+    # "nothing configured", which is every deployment — there is no
+    # `world_simulator` in `config/config.exs` on purpose (`docs/simulator-port.md`).
+    mode = Application.get_env(:ex_tbp_monty, :world_simulator) || :mujoco
 
     %{
       mode: to_string(mode),

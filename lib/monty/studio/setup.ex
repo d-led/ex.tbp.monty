@@ -840,16 +840,18 @@ defmodule Monty.Studio.Setup do
   end
 
   defp open_cad_scene(module) do
-    with {:ok, path} <- cad_part_path() do
-      case module.open(path) do
-        {:ok, scene} ->
-          scene
+    case cad_part_path() do
+      {:ok, path} ->
+        case module.open(path) do
+          {:ok, scene} ->
+            scene
 
-        {:error, error} ->
-          raise ArgumentError, "#{path} could not be opened: #{Exception.message(error)}"
-      end
-    else
-      {:error, sentence} -> raise ArgumentError, sentence
+          {:error, error} ->
+            raise ArgumentError, "#{path} could not be opened: #{Exception.message(error)}"
+        end
+
+      {:error, sentence} ->
+        raise ArgumentError, sentence
     end
   end
 
@@ -867,6 +869,16 @@ defmodule Monty.Studio.Setup do
   """
   @spec cad_part_path() :: {:ok, Path.t()} | {:error, String.t()}
   def cad_part_path do
+    module = Module.concat(["MontyCad", "Inputs"])
+
+    # The CAD package owns the convention (`MontyCad.Inputs`, which the CAD
+    # server uses too). This node asks it when it is carried and answers from its
+    # own paths otherwise — the same directory either way, because both read
+    # `MONTY_DATA` and default to the same folder.
+    if Code.ensure_loaded?(module), do: module.part_path(), else: resolve_part()
+  end
+
+  defp resolve_part do
     case cad_part() do
       nil ->
         {:error, "no CAD part is named: `MONTY_CAD_PART` is the name of a part in #{parts_dir()}"}
@@ -903,8 +915,7 @@ defmodule Monty.Studio.Setup do
     parts_dir()
     |> Path.join("*")
     |> Path.wildcard()
-    |> Enum.filter(&File.regular?/1)
-    |> Enum.filter(&(Path.extname(&1) in [".step", ".stp"]))
+    |> Enum.filter(&(File.regular?(&1) and Path.extname(&1) in [".step", ".stp"]))
     |> Enum.map(&Path.basename/1)
     |> Enum.sort()
   end
