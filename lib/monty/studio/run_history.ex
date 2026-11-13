@@ -955,6 +955,12 @@ defmodule Monty.Studio.RunHistory do
     |> Enum.chunk_every(@delete_chunk)
     |> Enum.reduce(0, fn chunk, deleted ->
       {count, _rows} = Repo.delete_all(from(run in Run, where: run.id in ^chunk))
+
+      # Their divisions too, for the reason `delete/1` gives: no foreign key, so
+      # the statement that deletes a run deletes what belongs to it. A part row
+      # left behind would be a row about a run nobody can open.
+      _ = Repo.delete_all(from(part in Part, where: part.run_id in ^chunk))
+
       Enum.each(chunk, &Monty.Studio.Artifacts.forget/1)
 
       deleted = deleted + count
@@ -966,6 +972,11 @@ defmodule Monty.Studio.RunHistory do
   @doc "Deletes a run, and the files it wrote. Monty's artifacts are not ours to delete."
   @spec delete(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
   def delete(%Run{} = run) do
+    # The division goes with the run. There is no foreign key to do it: the two
+    # adapters this application runs on are Postgres and SQLite, and adding a
+    # constraint to an existing table is a table rebuild SQLite's adapter does
+    # not do — so the one place that deletes a run deletes what belongs to it.
+    _ = Repo.delete_all(from(part in Part, where: part.run_id == ^run.id))
     deleted = Repo.delete(run)
     Monty.Studio.Artifacts.forget(run.id)
     deleted

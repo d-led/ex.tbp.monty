@@ -565,6 +565,33 @@ defmodule Monty.Studio.RunHistoryTest do
   end
 
   describe "deleting a run" do
+    # The division belongs to the run: a part row left behind would be a row about
+    # a run nobody can open, and there is no foreign key to say so (the SQLite
+    # adapter cannot add one to a table that exists).
+    test "deletes the run's parts, and no other run's" do
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, kept} = RunHistory.start(%{@attributes | experiment: "kept"})
+      :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+      :ok = RunHistory.plan_parts(kept.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      assert {:ok, _deleted} = RunHistory.delete(run)
+
+      assert RunHistory.parts(run.id) == []
+      assert length(RunHistory.parts(kept.id)) == 2
+    end
+
+    test "deletes the parts of every run in a batch" do
+      {:ok, first} = RunHistory.start(%{@attributes | experiment: "one"})
+      {:ok, second} = RunHistory.start(%{@attributes | experiment: "two"})
+      :ok = RunHistory.plan_parts(first.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+      :ok = RunHistory.plan_parts(second.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])
+
+      assert RunHistory.delete_ids([first.id, second.id]) == 2
+
+      assert RunHistory.parts(first.id) == []
+      assert RunHistory.parts(second.id) == []
+    end
+
     test "deletes the record and nothing else" do
       {:ok, run} = RunHistory.start(@attributes)
 
