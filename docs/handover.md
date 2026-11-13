@@ -2639,12 +2639,21 @@ included.
 
 **Still open, and both are a decision rather than a fix**: (1) one runs table for
 the whole cluster (`DATABASE_URL` at one Postgres — the pages already behave) or a
-merged view over each node's file; until then a run's job lives in its own node's
-database, so the _queue_ spreads only with a shared table, even though placement
-by tag (`Cluster.Placement`) is already there. (2) A part writes its files and
-publishes its steps into the memory of the node performing it, so a part on
+merged view over each node's file. **The one-table half was measured**
+(2026-11-13, nodes on 4231/4232 over a scratch database, since dropped): with only
+node2 declaring `world:mujoco`, a MuJoCo run asked for through node1's MCP
+endpoint was answered `{:wait, 15}` by node1, taken by node2 (`attempted_by
+node2@127.0.0.1`, still on attempt 1) and finished with `node =
+node2_127.0.0.1`; with node2 stopped, node1 performed the same run itself. Both
+nodes' `/runs` showed one list with the `node` column, and node1's "On other
+nodes" panel listed node2's finished run. So the queue spreads **by capability**
+today; what is left of (1) is only the node that keeps a file per node and still
+wants the others' runs in one list — the merged view. (2) A part writes its files
+and publishes its steps into the memory of the node performing it, so a part on
 another node needs either a filesystem the owner can read or an explicit transfer
-of what it produced.
+of what it produced; that is the next change. One gap worth naming: a run that
+waits for another node looks like any run that is simply queued — nothing on the
+page says which tag it is waiting for.
 
 One loose end from the same day, unrelated to the cluster: `RecordingEpisodeTest`
 failed once in eight full runs (21 steps against a recording of 27, the port

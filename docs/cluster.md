@@ -211,6 +211,16 @@ That is not an oversight, it is where the two hard problems are:
   `studio_runs.node`, the node's folder name — so a merged view has the column it
   needs; the runs list shows it only on a node that was asked to cluster, because
   with one node it is a column saying "this one" on every row.
+
+  With one table it works today, and this is what a trial showed: two nodes on one
+  scratch Postgres, only the second declaring `world:mujoco`, and a MuJoCo run
+  asked for through the first node's MCP endpoint. The first node's answer was
+  `{:wait, 15}`, the job was taken by the second (`attempted_by
+node2@127.0.0.1`, and still on its first attempt — a snooze is not a failed
+  try), and the record ended `finished` with `node = node2_127.0.0.1`. Asked the
+  same thing with the tagged node stopped, the first node performed the run
+  itself: the run was not held hostage by a tag nothing alive offered.
+
 - **A part writes files and publishes its steps into memory.** A part's log and
   pictures go to `Artifacts.dir/1` and its steps to `Monty.Studio.RunStream`, on
   the node performing it; the run that owns the parts reads both, from its own
@@ -221,35 +231,43 @@ That is not an oversight, it is where the two hard problems are:
 ### What one database gives you today, measured
 
 Two development nodes told about **one** Postgres
-(`DATABASE_URL=… MONTY_CLUSTER=1 MONTY_SEEDS=… elixir --name nodeN@127.0.0.1 -S
-mix phx.server`), a run recorded on node1:
+(`DATABASE_URL=… MONTY_CLUSTER=1 elixir --name nodeN@127.0.0.1 -S mix phx.server`),
+a run recorded on node1:
 
 - **the queue spreads.** The job was inserted by node1 and taken by **node2**
   (`Jobs.Run.held?/1` answered `true` on node2, `false` on node1), and the steps
   went to 87 while both nodes read the same row;
-- **the list is one list.** Both nodes' `/runs` show the run, with
-  `owner=node1_127.0.0.1` — the node that recorded it;
-- **the peer panel stays honest**: a node answers a peer with the runs **it owns**
-  (`RunHistory.search(state: "running", node: …)`), so a shared table does not
-  make every node report the others' runs as "somebody else's";
+- **the list is one list.** Both nodes' `/runs` show the run, with the `node`
+  column saying which node has it — the node that **claimed** it, not the one that
+  asked (`RunHistory.mark_running/1` writes it), because the steps, the worker and
+  in a release the files are there;
+- **placement by tag is what picks the node.** With only node2 declaring
+  `world:mujoco`, a MuJoCo run asked for through node1's MCP endpoint was answered
+  `{:wait, 15}` by node1, taken by node2 (`attempted_by node2@127.0.0.1`, still on
+  its first attempt) and finished with `node = node2_127.0.0.1`. With node2
+  stopped, node1 performed the same run itself — a run is not held hostage by a
+  tag nothing alive offers;
+- **the peer panel stays honest**: a node answers a peer with the runs **it has**
+  (`Cluster.Peers.local_recent/0`, filtered to rows whose `node` is its own), so a
+  shared table does not make every node report the others' runs as "somebody
+  else's";
 - **what is still one node's**: the live steps, which live in the memory of the
   node performing the run (the row is the record, written at every episode
   boundary, so a page elsewhere is that much behind), and — in a **release** —
   the run's files, which are written under the performing node's folder
   (`:studio_artifacts_dir`; a development node writes them into the checkout, so
   two dev nodes share them by accident).
+- **one thing a reader cannot see yet**: a run that is waiting for another node
+  looks like any run that is simply queued. The queue's own state says
+  `available`, and nothing on the page says which tag it is waiting for.
 
-One consequence worth deciding before relying on it: with one table, `node` means
-_who has the run_. While it is queued that is the node that asked; the worker
-overwrites it with its own name when it claims the job (the same setting, read at
-`mark_running/1`), because that is the node whose memory holds the steps and, in a
-release, whose folder holds the files. So the column always points at the node a
-reader has to open — and the node whose queue took the job is the one it names.
-
-Until those are answered, `Nodes.offering/1` answers a question nobody acts on
-yet, and a cluster of several nodes is several studios that see each other and
-share their downloads — which is already worth having for the tags and for the
-one place that says what is running where.
+What has changed since this section was first written: tags no longer only
+describe a cluster, they place work in it (`ExTbpMonty.Cluster.Placement`, above),
+and with one runs table that placement has somewhere to take effect — a run is
+performed by a node that offers what it needs, wherever it was asked for. What is
+still one node's is a run's **parts**: those are what the next change is about,
+and they need one of the two answers this section lists — a filesystem the owning
+node can read, or an explicit transfer of what a part produced.
 
 ## Why the script migrates by hand
 
