@@ -118,8 +118,17 @@ defmodule Monty.Studio.Parts do
     cards
   end
 
-  defp parts_of(%{inputs: %{"parts" => [_ | _] = parts}}), do: parts
-  defp parts_of(_run_of_the_whole_experiment), do: []
+  @doc """
+  The parts a run's record was divided into, in the order they were numbered.
+
+  `[]` for a run of the whole experiment: its record's inputs carry no plan, and
+  the page draws it from its own transcript.
+  """
+  @spec parts_of(RunHistory.Run.t() | map()) :: [map()]
+  def parts_of(%{inputs: %{"parts" => [_ | _] = parts}}),
+    do: Enum.sort_by(parts, &{&1["phase"] || "", &1["index"] || 0})
+
+  def parts_of(_run_of_the_whole_experiment), do: []
 
   defp held_up_to_date(nil, record, part) do
     held_up_to_date(

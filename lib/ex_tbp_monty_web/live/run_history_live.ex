@@ -334,6 +334,34 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     )
   end
 
+  # A divided run's steps are its parts', and the record holds none of them until
+  # the run closes — four parts writing one transcript would overwrite each
+  # other, so `store_parts/2` writes them once, in part order, at the end. A page
+  # that read only the record therefore said "this run recorded no steps, so
+  # there is nothing to replay" beside two charts full of evidence, for as long
+  # as the run lasted. The parts' streams are read in the same part order the
+  # record will have them in, so the picture a reader watches and the picture on
+  # the settled run are the same picture.
+  defp with_part_steps(%RunHistory.Run{log: [], timeline: []} = run) do
+    case Parts.parts_of(run) do
+      [] -> run
+      parts -> merged_steps(run, parts)
+    end
+  end
+
+  defp with_part_steps(run), do: run
+
+  defp merged_steps(run, parts) do
+    {log, moments} =
+      parts
+      |> Enum.map(&RunStream.read_from(&1["stream"], -1))
+      |> Enum.map(fn {steps, moments} -> Enum.zip(steps, moments) end)
+      |> Enum.concat()
+      |> Enum.unzip()
+
+    %{run | log: log, timeline: moments, steps_done: length(log)}
+  end
+
   # How many steps a run has taken, as far as this page can see.
   #
   # A run of several parts steps in processes of their own, each writing its own
@@ -446,7 +474,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   # When the run began, as the instant `LocalTime` reads: the page says how long
   # it has been going beside the plot, and the browser is the only clock that
-  # knows how long ago that was.
+  # knows how long ago that was. A run a worker has claimed began when it was
+  # claimed; one written before runs carried that clock is counted from the row.
+  defp started_at(%{started_at: %DateTime{} = at}), do: DateTime.to_iso8601(at)
   defp started_at(%{inserted_at: %DateTime{} = at}), do: DateTime.to_iso8601(at)
   defp started_at(_run), do: nil
 
@@ -455,10 +485,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # and, for a run that has stopped, what it took and the two clocks it took them
   # between. The clocks are the `LocalTime` component's, so a reader sees their
   # own time rather than the UTC the record keeps.
+  #
+  # A queued run is owed a third sentence. It has not begun, so "started …" is
+  # the page saying a worker is on a run that is still waiting for one; what it
+  # has is the wait, counted from the moment it was asked for.
   defp run_timing(assigns) do
     ~H"""
     <span id="run-timing">
       <%= cond do %>
+        <% @run.status == "queued" -> %>
+          waiting for {Duration.of_run(@run)} since
+          <ExTbpMontyWeb.LocalTime.local_time
+            at={began(@run)}
+            style={:clock}
+          />
         <% @run.status == "running" -> %>
           running for {Duration.of_run(@run)} since
           <ExTbpMontyWeb.LocalTime.local_time
@@ -515,8 +555,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # of the two answered is not something a caller has to know.
   defp with_steps(%RunHistory.Run{} = run) do
     case steps_after(run) do
-      {:grown, grown} -> grown
-      _nothing_newer -> run
+      {:grown, grown} -> with_part_steps(grown)
+      _nothing_newer -> with_part_steps(run)
     end
   end
 

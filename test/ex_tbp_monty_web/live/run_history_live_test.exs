@@ -18,7 +18,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       {:ok, running} = RunHistory.mark_running(run)
       running
     else
-      {:ok, closed} = RunHistory.finish(run, %{"reason" => "as the test asked"}, status)
+      # A closed run was worked on before it closed — a record that never says it
+      # began has no duration to keep.
+      {:ok, begun} = RunHistory.mark_running(run)
+      {:ok, closed} = RunHistory.finish(begun, %{"reason" => "as the test asked"}, status)
       closed
     end
   end
@@ -127,6 +130,16 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     Monty.Studio.RunStream.publish(run_id, report(step, beliefs))
   end
 
+  # One step of one episode of one part: a divided run's steps carry the episode
+  # of the experiment they belong to, so the parts' steps make one chart rather
+  # than two charts that each count from nought.
+  defp publish_episode(stream_id, episode, step, object) do
+    beliefs = %{"learning_module_0" => %{"graphs" => %{object => %{"max_evidence" => 5.0}}}}
+    entry = report(step, beliefs) |> Map.put(:episode, episode)
+
+    Monty.Studio.RunStream.publish(stream_id, entry)
+  end
+
   defp report(step, beliefs) do
     %{
       info: %{
@@ -183,6 +196,50 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
       refute has_element?(view, "#run-division")
+    end
+
+    # The record holds none of a divided run's steps until it closes — four parts
+    # writing one transcript would overwrite each other — so a page that read the
+    # record said "this run recorded no steps, so there is nothing to replay"
+    # beside charts full of evidence, for as long as the run lasted. What it draws
+    # is the parts' steps, in the order the record will have them.
+    test "draws the evidence the parts have taken, not an empty chart", %{conn: conn} do
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 10,
+          seed: 42,
+          config: %{"experiment" => %{"config" => %{"seed" => 42}}},
+          inputs: %{
+            "episodes" => 4,
+            "parts" => [
+              %{"index" => 0, "of" => 2, "phase" => "eval", "stream" => Ecto.UUID.generate()},
+              %{"index" => 1, "of" => 2, "phase" => "eval", "stream" => Ecto.UUID.generate()}
+            ]
+          }
+        })
+
+      [first, second] = run.inputs["parts"]
+
+      publish_episode(first["stream"], 0, 0, "mug")
+      publish_episode(first["stream"], 0, 1, "mug")
+      publish_episode(second["stream"], 1, 0, "mug")
+
+      # A step reaches the stream as a cast and the page reads the table, so the
+      # casts have to have landed before the page is opened: a call answers after
+      # them, which is the same order the run's own worker relies on.
+      _ = Monty.Studio.RunStream.count(first["stream"])
+      _ = Monty.Studio.RunStream.count(second["stream"])
+
+      {:ok, view, html} = live(conn, ~p"/runs/#{run.id}")
+
+      refute html =~ "nothing to replay"
+
+      # The objects the parts' steps reported, which is the evidence the chart is
+      # drawn from — and it is there before the run has closed.
+      assert view |> element("#replay-chart-window") |> render() =~ "steps"
+      assert html =~ "mug"
     end
   end
 
@@ -329,6 +386,21 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert timing =~ "since"
       # The clock is the `LocalTime` component's, so the browser is what turns
       # UTC into the reader's own time.
+      assert timing =~ "<time"
+    end
+
+    test "a run nobody has claimed yet says how long it has been waiting", %{conn: conn} do
+      {:ok, queued} =
+        RunHistory.start(%{experiment: "tutorial/first_experiment", source: "monty", steps: 0})
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{queued.id}")
+
+      timing = view |> element("#run-timing") |> render()
+
+      # Not "started": no worker has it, so nothing has begun. What the page owes
+      # a reader is the wait, and when it was asked for.
+      assert timing =~ "waiting for"
+      refute timing =~ "started"
       assert timing =~ "<time"
     end
 
