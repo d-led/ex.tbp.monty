@@ -468,8 +468,14 @@ defmodule Monty.Studio.Chart do
   defp last_sample([]), do: nil
   defp last_sample(segments), do: segments |> List.last() |> List.last()
 
-  defp contiguous?({_episode, x, _evidence}, {_same_episode, previous, _previous_evidence}),
+  # Two samples are on one line when they are the same episode and the step after
+  # the last. An episode boundary is a break by definition: evidence is a sum that
+  # restarts at zero, so a line drawn through the boundary would show the second
+  # episode's climb as the first one's, on an axis longer than either has.
+  defp contiguous?({episode, x, _evidence}, {episode, previous, _previous_evidence}),
     do: x == previous + 1
+
+  defp contiguous?(_sample, _previous), do: false
 
   # The lower of two samples, and the higher: they are the two points of a column
   # a line drawn at this width still shows.
@@ -507,9 +513,12 @@ defmodule Monty.Studio.Chart do
         # eighty episodes copied twenty thousand points eighty times, which was
         # most of what a drawing cost — and a page draws four times a second.
         #
-        # The next episode begins on this one's last step, not after it: a gap
-        # between them is a step the chart would be claiming nobody reported.
-        {[points | chunks], [start | starts], [span | spans], base + (last - first)}
+        # The next episode begins one step after this one ends. Two episodes that
+        # shared a column were two climbs drawn at one x — one continuing the
+        # other's line, which is the thing this chart exists not to do — and the
+        # break between them is a break either way, so nothing is lost by the step
+        # of room it takes.
+        {[points | chunks], [start | starts], [span | spans], base + (last - first) + 1}
       end)
 
     {chunks |> Enum.reverse() |> Enum.concat(), Enum.reverse(starts), Enum.reverse(spans)}

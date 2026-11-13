@@ -135,6 +135,26 @@ defmodule Monty.Studio.ChartTest do
       assert second |> String.split(" ") |> length() == 1
     end
 
+    # The defect this pins: a line drawn through an episode boundary reads as one
+    # climb when it is two, and the first episode looks longer than it was. The
+    # axis lays an episode one step after the one before it, so the two episodes
+    # that meet do so on adjacent x — which is exactly where a line used to be
+    # joined and then wander into the next band.
+    test "never joins two episodes, even the pair the axis lays side by side" do
+      chart =
+        Chart.new([
+          {0, 5, belief(%{"mug" => 1.0})},
+          {0, 6, belief(%{"mug" => 3.0})},
+          {1, 5, belief(%{"mug" => 0.5})},
+          {1, 6, belief(%{"mug" => 2.0})}
+        ])
+
+      mug = Enum.find(chart.series, &(&1.graph_id == "mug"))
+
+      # Two episodes, two lines: each one climbs inside its own band.
+      assert length(mug.points) == 2
+    end
+
     # A run longer than the plot is wide is drawn from a couple of samples per
     # column, and that is decided before the gaps are worked out — because the
     # samples are all a drawing needs, and a page rebuilds ten charts while its
@@ -253,8 +273,8 @@ defmodule Monty.Studio.ChartTest do
     # Every episode starts its evidence again at zero. Drawn against the step
     # alone, the second episode would be laid on top of the first — which is the
     # chart you cannot read. The x axis is the run's, so a new episode begins
-    # where the one before it ended, and the drop back to zero is the boundary.
-    test "begins each episode where the one before it ended, with no gap" do
+    # after the one before it ended, and the drop back to zero is the boundary.
+    test "begins each episode one step after the one before it ends" do
       chart =
         Chart.new([
           {0, 0, belief(%{"mug" => 1.0})},
@@ -263,10 +283,11 @@ defmodule Monty.Studio.ChartTest do
           {1, 1, belief(%{"mug" => 2.0})}
         ])
 
-      # The second episode starts on the first one's last step: a gap would read
-      # as a step that happened and was not reported.
-      assert [%{evidence: [{0, 1.0}, {1, 3.0}, {1, 0.5}, {2, 2.0}]}] = chart.series
-      assert {chart.x_min, chart.x_max} == {0, 2}
+      # Two episodes that shared an x were two climbs drawn as one: the second
+      # continued the first one's line out of the band it belongs to. A step of
+      # room between them is what keeps each episode inside its own stretch.
+      assert [%{evidence: [{0, 1.0}, {1, 3.0}, {2, 0.5}, {3, 2.0}]}] = chart.series
+      assert {chart.x_min, chart.x_max} == {0, 3}
     end
 
     test "marks where each episode begins" do
@@ -327,8 +348,11 @@ defmodule Monty.Studio.ChartTest do
                %{episode: 1, x: second_x}
              ] = chart.episode_bands
 
-      # The first episode ends where the second begins: no gap, no overlap.
-      assert_in_delta first_x + first_width, second_x, 0.01
+      # The first episode ends a step before the second begins: the break is the
+      # boundary, and nothing of one episode is drawn in the other's band.
+      unit = (chart.width - chart.margin_left - chart.margin_right) / (chart.x_max - chart.x_min)
+
+      assert_in_delta first_x + first_width + unit, second_x, 0.01
       assert first_x == chart.margin_left
     end
 
@@ -336,7 +360,7 @@ defmodule Monty.Studio.ChartTest do
       steps =
         for episode <- 0..3, step <- 0..1, do: {episode, step, belief(%{"mug" => 1.0})}
 
-      chart = Chart.new(steps, window: {1, 3})
+      chart = Chart.new(steps, window: {2, 5})
 
       assert chart.episode_bands |> Enum.map(& &1.episode) == [1, 2]
       assert hd(chart.episode_bands).x == chart.margin_left
