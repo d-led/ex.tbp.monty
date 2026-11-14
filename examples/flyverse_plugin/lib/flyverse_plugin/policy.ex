@@ -156,6 +156,20 @@ defmodule FlyversePlugin.Policy do
   @bout_steps 60
   @depart_steps 4
 
+  # How long the patch may show the *same* nearness before the policy stops
+  # believing it is on the object any more. Twenty steps is `n_steps` in the
+  # sensor module's own delta thresholds — the longest the framework will go
+  # without a fresh percept — so the number is the framework's, not a taste.
+  #
+  # It caught the case a bout timer cannot: after two hundred steps on the knife
+  # the patch was hanging half a decimetre above the *table*, every image one
+  # flat grey, every nearness `20.0`, and the evidence frozen at 124.395 for
+  # seventeen hundred steps. The fly was reading a plane that never changed and
+  # walking on it for ever. A patch that has shown the same thing for twenty
+  # steps is a patch that is not being shown the object, so the step is the
+  # search.
+  @stall_steps 20
+
   # The stride of a bout, and it is one centimetre because the framework says so
   # rather than because it looks right: the patch sensor this config gives the
   # agent (`camera_surf_delta`) sends a new percept when the patch has moved
@@ -327,6 +341,11 @@ defmodule FlyversePlugin.Policy do
   # off the object — or `@depart_steps` steps, whichever comes first, because an
   # object large enough to walk off for ever must not become a fly that never
   # lands on anything.
+  #
+  # A patch that has stopped changing outranks both: whatever the percept says,
+  # a view that has shown the same thing for twenty steps is not the object.
+  defp bout(%{still: still}, true) when still >= @stall_steps, do: :cruise
+
   defp bout(_simulation, false), do: :cruise
 
   defp bout(%{bout: :depart, bout_steps: taken}, true) when taken < @depart_steps, do: :depart
@@ -339,7 +358,8 @@ defmodule FlyversePlugin.Policy do
   # and the step that enters a behaviour is its first: landing again is a new
   # bout, not the continuation of the old one. Being off the object is not a
   # behaviour it counts, because there is nothing there to time.
-  defp advance(simulation, :cruise), do: %{simulation | bout: :cruise, bout_steps: 0}
+  defp advance(simulation, :cruise),
+    do: %{simulation | bout: :cruise, bout_steps: 0, still: 0}
 
   defp advance(simulation, next) do
     taken = if(next == simulation.bout, do: simulation.bout_steps + 1, else: 1)
@@ -366,6 +386,7 @@ defmodule FlyversePlugin.Policy do
           spikes: window.spikes,
           last: window,
           nearness: window.nearness,
+          still: window.still,
           steps: simulation.steps + 1
       }
 
@@ -535,6 +556,7 @@ defmodule FlyversePlugin.Policy do
            | wish: 0.0,
              spikes: 0,
              nearness: {0.0, 0.0},
+             still: 0,
              bout: :cruise,
              bout_steps: 0,
              departures: 0
@@ -564,6 +586,7 @@ defmodule FlyversePlugin.Policy do
       bout: simulation.bout,
       bout_steps: simulation.bout_steps,
       departures: simulation.departures,
+      still: simulation.still,
       last_counts: [simulation.last.left, simulation.last.right]
     }
   end
@@ -620,6 +643,7 @@ defmodule FlyversePlugin.Policy do
            spikes: 0,
            steps: 0,
            nearness: {0.0, 0.0},
+           still: 0,
            bout: :cruise,
            bout_steps: 0,
            departures: 0,
@@ -650,6 +674,7 @@ defmodule FlyversePlugin.Policy do
            spikes: spikes,
            rates: rates,
            nearness: nearness,
+           still: still(simulation.nearness, nearness, simulation.still),
            loom: loom(simulation.nearness, nearness)
          }}
 
@@ -749,6 +774,11 @@ defmodule FlyversePlugin.Policy do
     do: policy.distance
 
   defp crawl(_policy, depth, _loom), do: depth - @desired_object_distance
+
+  # How many steps running the patch has shown the same nearness.
+  defp still(previous, nearness, taken) when previous == nearness, do: taken + 1
+
+  defp still(_previous, _nearness, _taken), do: 0
 
   # How fast what is in view is growing, as the growth of the nearer half over the
   # nearness it had. A view that held nothing has nothing to have grown from: what

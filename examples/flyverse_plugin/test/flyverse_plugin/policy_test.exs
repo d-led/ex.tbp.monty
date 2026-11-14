@@ -216,6 +216,36 @@ defmodule FlyversePlugin.PolicyTest do
     assert forward > 0.0, "it goes towards what the view finder can see"
   end
 
+  # A patch that has shown the same thing for twenty steps is not being shown the
+  # object, whatever the percept says — the case a bout timer cannot catch, and
+  # the one that cost seventeen hundred steps: the patch hanging half a decimetre
+  # above the table, every image one flat grey, every nearness 20.0, the evidence
+  # frozen at 124.395. Twenty steps is `n_steps` in the sensor module's own
+  # thresholds, so this is the framework's answer and not a taste.
+  test "a patch that stops changing sends the fly looking again", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    table = %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[0.0, 0.0]]},
+        "patch" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}
+      }
+    }
+
+    {_first, policy, state} = step(policy, state, table, touching(0.05))
+
+    state =
+      Enum.reduce(1..20, state, fn _step, state ->
+        {_result, _policy, state} = step(policy, state, table, touching(0.05))
+        state
+      end)
+
+    {result, _policy, _state} = step(policy, state, table, touching(0.05))
+
+    assert [%OrientHorizontal{} = searching] = result.actions
+    assert searching.rotation_degrees == 30.0, "round the search circle, looking for the object"
+  end
+
   # The animal does not crawl over the first thing it touches for ever: it walks a
   # bout, leaves, and lands again somewhere else. Sixty steps is the bout, and
   # what ends it is an about-face — 180 degrees, which the centring reflex cannot
@@ -513,10 +543,13 @@ defmodule FlyversePlugin.PolicyTest do
   end
 
   # Steps of a bout on the surface: the patch sits at the standoff on something,
-  # and the fly walks it.
+  # and the fly walks it. The depth changes a little from step to step because
+  # that is what walking over a surface looks like — a still picture is a stall,
+  # and the policy now says so.
   defp walk(policy, state, steps) do
-    Enum.reduce(1..steps, {nil, policy, state}, fn _step, {_result, policy, state} ->
-      step(policy, state, observations(mug()), touching(0.025))
+    Enum.reduce(1..steps, {nil, policy, state}, fn step, {_result, policy, state} ->
+      depth = 0.02 + rem(step, 5) * 0.001
+      step(policy, state, observations([[depth, depth, 100.0, 100.0]]), touching(0.025))
     end)
   end
 
