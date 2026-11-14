@@ -258,23 +258,28 @@ scene, not a config, knows where the object is.
    `step_world/3` and so the world's own `step/2` — the actions are applied, one
    step behind, as Monty applies them.
 
-   Read at every step instead of every fifth, the answer is neither of the two
-   candidates: **the action is the same action every step.** Twelve steps of
-   `monty_cad.feature_walk` print
+   A trace of every step was taken and read wrongly, and the mistake is worth
+   recording because it is a trap rather than a typo. `MotorSystem.call/6` builds
+   its record with `action_sequence: action_sequence ++ [{actions, state}]` — an
+   **append** — so `List.first/1` is the *oldest* decision and `List.last/1` the
+   newest. Reading `List.first` after each of twelve steps therefore printed the
+   first step's action twelve times, and the entry that came of it — "the same
+   action every step" — was retracted for that reason, not corrected: no
+   measurement yet says what the twelfth action is.
 
-       step  1  [MoveForward{distance: 0.053}]
-       step  2  [MoveForward{distance: 0.053}]
-       …
-       step 12  [MoveForward{distance: 0.053}]
+   What survives is the earlier one, and it is a live reading rather than a stored
+   entry: `Model.detailed/2` asks the sensor module for its own state, and the
+   patch's pose was `[0.0, 0.0, 0.063]` at the thirty-fifth step and again at the
+   fortieth. So the patch is where `start_pose/2` put it after thirty-five steps of
+   a policy that is issuing `MoveForward`s, and the correction that would have
+   moved it either is not applied or is undone.
 
-   A policy that saw the world change would correct by less on its second step, so
-   the identical correction says the decision is taken from the same state every
-   time. Two things could make that so, and they are told apart by one more
-   measurement rather than by argument: either the world does not apply the action —
-   `Run.step/2` hands it to `Interface.step/2` and so to the world's own step, but
-   whether the world that comes back is the one the next decision is taken from is
-   the question — or the policy is rebuilt per step, so each step is the first
-   decision of a fresh walk, which would also be identical every time.
+   The next measurement is small and now unambiguous: read `List.last` of
+   `action_sequence` at two steps and compare the two actions with the two poses.
+   If the action changes as the pose does not, the world is not applying it; if the
+   action is identical, the policy is deciding from a state that never moves;
+   `MotorSystem.call/6` does keep the selector it gets back, so a policy rebuilt
+   per step would have to come from somewhere else.
 
    Until it is answered the walk is not a comparison for the curvature policy at
    all, and the numbers in the table above measure a stationary patch rather than a
