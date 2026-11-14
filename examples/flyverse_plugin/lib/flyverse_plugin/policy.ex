@@ -87,7 +87,16 @@ defmodule FlyversePlugin.Policy do
   # drive is 160 Hz, which is the rate flyverse's own world stimulates its
   # sensory population at. It is a gain, not a law.
   @drive_gain 4.0
-  @max_hz 400.0
+
+  # The ceiling on a drive, and the floor at nought, are the *band* the network
+  # still answers in. A leaky integrate-and-fire population driven much past this
+  # is not driven faster, it is silenced: with a refractory period of a millisecond
+  # or two, a rate high enough to put most neurons in refractory most of the time
+  # leaves the readouts with nothing to report and the wish clamped at zero — a
+  # fly that is stimulated and does not move. 220 Hz is the top of the band and
+  # `@tonic_hz` the bottom, so neither a very near surface nor the wander can push
+  # a drive out of it.
+  @max_hz 220.0
 
   # What both drives carry whether or not anything is in view. A leaky
   # integrate-and-fire network with no input is silent, and a silent network is a
@@ -590,8 +599,8 @@ defmodule FlyversePlugin.Policy do
     wander = wander(simulation.steps)
 
     rates = [
-      spread(rate(left_nearness) + wander),
-      spread(rate(right_nearness) - wander)
+      band(rate(left_nearness) + wander),
+      band(rate(right_nearness) - wander)
     ]
 
     case Native.window(simulation.sim, simulation.connectome, simulation.ticks, rates) do
@@ -782,9 +791,12 @@ defmodule FlyversePlugin.Policy do
     end
   end
 
-  defp rate(nearness), do: min(@tonic_hz + nearness * @drive_gain, @max_hz)
+  defp rate(nearness), do: @tonic_hz + nearness * @drive_gain
 
-  defp spread(hz), do: max(hz, 0.0)
+  # A drive is a rate in the band the network answers in: never negative, and
+  # never past the ceiling that silences it. One function clamps, so a change to
+  # the ceiling is a change in one place.
+  defp band(hz), do: hz |> max(0.0) |> min(@max_hz)
 
   # Which way the fly leans when nothing in the view does: one way for a while,
   # then the other. Deterministic on purpose — the same pack and the same scene

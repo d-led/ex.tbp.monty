@@ -178,6 +178,20 @@ defmodule FlyversePlugin.PolicyTest do
     assert abs(retreat) <= 0.05, "and no further than a step"
   end
 
+  # A drive past the ceiling does not drive the network harder, it silences it:
+  # with a refractory period of a millisecond or two, a rate high enough to hold
+  # most neurons in refractory leaves the readouts empty. So a surface close
+  # enough to ask for a thousand hertz asks for two hundred and twenty.
+  test "a surface close enough to shout is still driven inside the band", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {result, _policy, _state} =
+      step(policy, state, observations([[0.005, 0.005, 0.005, 0.005]]), touching(0.02))
+
+    assert result.telemetry.left_hz <= 220.0
+    assert result.telemetry.right_hz <= 220.0
+  end
+
   # The animal does not crawl over the first thing it touches for ever: it walks a
   # bout, leaves, and lands again somewhere else. Sixty steps is the bout, and
   # what ends it is an about-face — 180 degrees, which the centring reflex cannot
@@ -282,8 +296,8 @@ defmodule FlyversePlugin.PolicyTest do
     assert result.telemetry.right_spikes == 0
     assert result.telemetry.wish > 0.0
 
-    assert result.telemetry.left_hz >= 280.0,
-           "the tonic 80 Hz plus 200 Hz of nearness, leaned by the wander"
+    assert result.telemetry.left_hz == 220.0,
+           "the tonic plus 200 Hz of nearness, held at the ceiling the network answers in"
 
     assert result.telemetry.right_hz <= 81.0, "and the other half carries the tonic alone"
   end
