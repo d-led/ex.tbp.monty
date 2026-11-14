@@ -52,11 +52,10 @@ defmodule FlyversePlugin.Policy do
   alias FlyversePlugin.{Native, Networks, Percept}
 
   alias Monty.Cmp.Message
-  alias Monty.Frameworks.Actions.{OrientHorizontal, OrientVertical}
+  alias Monty.Frameworks.Actions.OrientHorizontal
   alias Monty.Frameworks.Environments.PositioningProcedures
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
   alias Monty.Frameworks.Models.MotorSystemState.AgentState
-  alias Monty.Geometry.Rotation
 
   @enforce_keys [:sim]
   defstruct [:sim, :agent_id, :sensor_id, :turn_degrees, :distance]
@@ -267,15 +266,6 @@ defmodule FlyversePlugin.Policy do
   @visible 1.0
   @desired_object_distance 0.025
 
-  # Monty's surface policy orients the sensor vertically between its other steps —
-  # `MoveForward -> OrientHorizontal -> OrientVertical -> MoveTangentially` — and
-  # this policy steered without ever doing it, which leaves the patch at whatever
-  # attitude it arrived with. On anything but a level top that is a patch reading a
-  # **ramp**: a run's frames show the near edge at a centimetre and the far edge
-  # clipped white, half the picture thrown away, on every step of a bout. A tilt
-  # smaller than this many degrees is not worth a step's steering.
-  @align_degrees 5.0
-
   # The circle a search steps round, as a multiple of the standoff — ten
   # centimetres in front of the agent, as Monty's comment says — and how far
   # round it one step goes.
@@ -396,7 +386,7 @@ defmodule FlyversePlugin.Policy do
         {:ok, struggling(policy, watched), policy, state}
       else
         case next do
-          :explore -> steer_or_align(policy, observations, percept, motor_state, watched, state)
+          :explore -> steer(policy, observations, state)
           :depart -> {:ok, departing(policy, watched), policy, state}
           :look -> {:ok, looking(policy, simulation, observations), policy, state}
           :cruise -> {:ok, touch(policy, observations), policy, state}
@@ -614,80 +604,6 @@ defmodule FlyversePlugin.Policy do
   defp departures(%{bout: :depart} = simulation, :depart), do: simulation.departures
   defp departures(simulation, :depart), do: simulation.departures + 1
   defp departures(simulation, _next), do: simulation.departures
-
-  # Steering, or turning to face the surface first. The two are one action each and
-  # a step can only be one of them, so a bout spends every second step on the
-  # attitude that makes the other ones worth reading: with the patch square to the
-  # surface, the depth it reports is the standoff on every pixel instead of a ramp
-  # from one centimetre to the clip.
-  #
-  # The angle is Monty's own — `-atan(lean / z)` of the surface normal in the
-  # agent's frame, the vertical lean for a vertical orienting — and so is the pair
-  # of distances that goes with it: `depth tan θ` down and `depth (1 - cos θ)/cos θ`
-  # forward. A percept that carries no surface normal is a patch that has not
-  # computed one yet, and it is steered rather than aligned: guessing an attitude
-  # from nothing is how a fly ends up face down on the table.
-  defp steer_or_align(policy, observations, percept, motor_state, simulation, state) do
-    with tilt when is_float(tilt) <- tilt(policy, percept, motor_state),
-         true <- abs(tilt) > @align_degrees,
-         true <- rem(simulation.bout_steps, 2) == 0 do
-      {:ok, aligning(policy, patch_reach(observations, policy), tilt), policy, state}
-    else
-      _steer -> steer(policy, observations, state)
-    end
-  end
-
-  defp tilt(_policy, nil, _motor_state), do: nil
-
-  defp tilt(policy, percept, motor_state) do
-    with {:ok, normal} <- Message.surface_normal(percept),
-         {:ok, rotation} <- rotation(motor_state, policy.agent_id) do
-      [_across, y, z] = Rotation.apply(Rotation.invert(rotation), normal)
-
-      if z == 0.0 do
-        -sign(y) * 90.0
-      else
-        -(:math.atan(y / z) * 180.0 / :math.pi())
-      end
-    else
-      _none -> nil
-    end
-  end
-
-  defp rotation(motor_state, agent_id) when is_map(motor_state) do
-    case Map.get(motor_state, agent_id) do
-      %AgentState{rotation: rotation} -> {:ok, rotation}
-      _no_report -> :error
-    end
-  end
-
-  defp rotation(_motor_state, _agent_id), do: :error
-
-  defp sign(value) when value < 0.0, do: -1.0
-  defp sign(_value), do: 1.0
-
-  defp aligning(policy, reach, tilt) do
-    depth = reach |> min(@touch_stride) |> max(0.0)
-    radians = rad(tilt)
-    cosine = :math.cos(radians)
-    forward = if cosine > 0.0, do: depth * (1.0 - cosine) / cosine, else: @touch_stride
-
-    %MotorPolicyResult{
-      actions: [
-        %OrientVertical{
-          agent_id: policy.agent_id,
-          rotation_degrees: tilt,
-          down_distance: step_size(depth * :math.tan(radians)),
-          forward_distance: step_size(forward)
-        }
-      ],
-      telemetry: %{aligning: tilt}
-    }
-  end
-
-  # A distance a step may actually take: the orienting pair is the depth times a
-  # tangent, and a depth read at the clip's ceiling would ask for a leap.
-  defp step_size(distance), do: distance |> max(-@touch_stride) |> min(@touch_stride)
 
   defp steer(policy, observations, state) do
     simulation = Map.fetch!(state.simulations, policy.sim)
