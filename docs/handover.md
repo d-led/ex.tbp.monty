@@ -4141,6 +4141,13 @@ to work.
 
 ## 54. 2026-11-14: the open list, aggregated
 
+> **The hand-over lives in the palace now.** This section, and the ones before it,
+> are the record of how it got there — the measurements, the retractions and why.
+> The canonical copy, kept current, is
+> `drawer_ex.tbp.monty_handover_8fbec177134c01cb3b6901fc` in mempalace (wing
+> `ex.tbp.monty`, room `handover`). New state goes there; this file keeps the
+> reasoning, which is what a section can do that a drawer cannot.
+
 There were five by the evening — §47.3, §51.3, §52.3, §53.3 and the plan in §55 —
 and two of them were the same question asked from different ends. This is the one
 list. Nothing here claims somebody is on it; each line says what it needs and who
