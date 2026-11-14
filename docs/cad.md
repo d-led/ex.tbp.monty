@@ -371,11 +371,25 @@ scene, not a config, knows where the object is.
    So the blend's nought of ten is neither the pose rule working nor the
    exploration failing: the hatch that exists for a symmetric part is starved,
    because a patch on a symmetric part is exactly the patch that looks like the
-   last one. That is not yet a defect — the rule is doing what its comment says —
-   but it is the mechanism, and it makes the next experiment a question of the
-   world rather than of the part: a sensor whose filter lets changed patches
-   through more often, or a walk that changes the patch every step, is what the
-   symmetry path needs to be given a chance.
+   last one.
+
+   Two numbers make that a configuration rather than a coincidence, and both are
+   Monty's own. The filter's `delta_thresholds` say a patch passes when the
+   sensor moved `0.01` m or the surface turned `π/4`, and the config's policy
+   steps about four millimetres across a face that turns nought — neither. What
+   is left is `n_steps: 20`, which sends the patch anyway after twenty quiet
+   steps, so processed steps arrive roughly twenty apart. The counter needs
+   `required_symmetry_evidence` of them **consecutively** — 5 here, which is
+   Monty's default, though its own YCB configs ask for 20 — and no cadence that
+   waits for twenty can supply five in a row. The two settings cannot both be
+   satisfied on a surface that does not change, which is why the plate shows the
+   same 7 of 77 as the blend's 2 of 77.
+
+   That is not yet a defect — the rule is doing what its comment says, and the
+   filter is doing what its config says — but it is the mechanism, and it makes
+   the next experiment a question of the world rather than of the part: a filter
+   whose thresholds suit a noiseless surface, or a walk that turns the patch by
+   enough to be counted, is what the symmetry path needs to be given a chance.
 
    `plate-huge` is in the table because it keeps a partner more often than the
    plate — 85 % against 74 % — which is the scale effect seen from the other
