@@ -35,8 +35,15 @@ end
 
 Application.put_env(:ex_tbp_monty, :monty_libraries_dir, library)
 
+# The config decides more than the policy: `camera_surf_delta` filters a patch
+# that has not changed enough into a location-only message, and a location-only
+# step is excluded from the symmetry count. Naming a config whose sensor does no
+# delta filtering (`test/policy/base_surf`, whose `sensor_module` is
+# `camera_surf`) is how that is compared rather than argued.
+experiment = System.get_env("CAD_EXPERIMENT") || "base_config_10distinctobj_surf_agent"
+
 {:ok, opened} =
-  Monty.Studio.open("base_config_10distinctobj_surf_agent", world_simulator: :cad)
+  Monty.Studio.open(experiment, world_simulator: :cad)
 
 # The seed is the exploration the policy draws — the world starts in the pose the
 # *part* decides — so a probe of one seed says what that exploration did, and the
@@ -218,6 +225,7 @@ without_ids = fn poses ->
 end
 
 IO.puts("""
+experiment   #{experiment}
 steps        #{run.step} of #{steps}
 ended        #{if decision.is_done, do: "by the recognition policy", else: "at the probe's limit"}
 terminal     #{inspect(Map.get(belief || %{}, :terminal_state))}

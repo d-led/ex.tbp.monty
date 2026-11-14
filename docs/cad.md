@@ -391,6 +391,15 @@ scene, not a config, knows where the object is.
    whose thresholds suit a noiseless surface, or a walk that turns the patch by
    enough to be counted, is what the symmetry path needs to be given a chance.
 
+   Borrowing a config for that comparison does not work, and it is worth saying
+   because it looks like it should. `test/policy/base_surf` is the config whose
+   sensor is `camera_surf` — no delta filtering — and it also swaps the learning
+   module (`displacement_1lm` for `evidence_1lm_nn5_dod0025`) and the termination
+   (30/30/60 steps for 1000/500/5000). Pointed at the blend it ended at step 16
+   with nothing detected and no hypotheses, so nothing about its counter is
+   comparable. The comparison needs a config of this study's own; that is item 3
+   of the plan, and it is now the item with a reason.
+
    `plate-huge` is in the table because it keeps a partner more often than the
    plate — 85 % against 74 % — which is the scale effect seen from the other
    side: at five times the size, fewer of its nodes carry the features that
