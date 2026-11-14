@@ -304,11 +304,7 @@ defmodule FlyversePlugin.PolicyTest do
 
     assert [%OrientHorizontal{} = left] = second.actions
     assert abs(left.rotation_degrees) == 180.0, "an about-face, not a third look"
-
-    assert_in_delta abs(left.left_distance),
-                    0.05,
-                    1.0e-9,
-                    "and a hop off the surface, to one side"
+    assert left.forward_distance < 0.0, "and off the surface, not along it"
   end
 
   # And off the object the same frozen patch is the same answer, which `:cruise`
@@ -351,8 +347,8 @@ defmodule FlyversePlugin.PolicyTest do
     {_looking, policy, state} = table_steps(policy, state, 22)
     {leaving, _policy, _state} = walk(policy, state, 39)
 
-    assert [%OrientHorizontal{left_distance: hop}] = leaving.actions
-    assert hop != 0.0, "the bout ends on its own clock: at step 61, not at step 81"
+    assert [%OrientHorizontal{forward_distance: hop}] = leaving.actions
+    assert hop < 0.0, "the bout ends on its own clock: at step 61, not at step 81"
   end
 
   # And the step over open ground is the bout's stride, not four millimetres.
@@ -370,12 +366,9 @@ defmodule FlyversePlugin.PolicyTest do
   end
 
   # The animal does not crawl over the first thing it touches for ever: it walks a
-  # bout, leaves, and lands again somewhere else. Sixty steps is the bout, and what
-  # ends it is an about-face — 180 degrees, which the centring reflex cannot pull
-  # back — and a hop *sideways* off the surface. Sideways because a hop backwards
-  # leaves the fly facing the way it came, so the cruise turns it round and walks it
-  # back over the same face; a hop sideways and the same half turn puts the return
-  # approach beside the outbound one, at a face it has not read.
+  # bout, leaves, and lands again somewhere else. Sixty steps is the bout, and
+  # what ends it is an about-face — 180 degrees, which the centring reflex cannot
+  # pull back — and a hop off the surface.
   test "a bout on the surface ends with the fly leaving it", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
@@ -384,18 +377,12 @@ defmodule FlyversePlugin.PolicyTest do
 
     assert [%OrientHorizontal{} = left] = leaving.actions
     assert left.rotation_degrees == 180.0, "an about-face the centring reflex cannot pull back"
-
-    assert_in_delta abs(left.left_distance),
-                    0.05,
-                    1.0e-9,
-                    "and a hop off the surface, to one side"
-
-    assert left.forward_distance == 0.0, "not along the way it was walking"
+    assert left.forward_distance < 0.0, "and a hop off the surface, not along it"
+    assert left.left_distance == 0.0
   end
 
   # And the side it turns alternates, so two departures cannot return it to the
-  # same face of what it left: left, then right. The side of the hop follows the
-  # side of the turn, because both are the one alternation.
+  # same face of what it left: left, then right.
   test "successive departures turn opposite ways", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
@@ -405,16 +392,11 @@ defmodule FlyversePlugin.PolicyTest do
     {_walking, policy, state} = walk(policy, state, 60)
     {second, _policy, _state} = step(policy, state, observations(mug()), touching(0.025))
 
-    assert [%OrientHorizontal{rotation_degrees: one_way, left_distance: one_side}] = first.actions
-
-    assert [%OrientHorizontal{rotation_degrees: other_way, left_distance: other_side}] =
-             second.actions
+    assert [%OrientHorizontal{rotation_degrees: one_way}] = first.actions
+    assert [%OrientHorizontal{rotation_degrees: other_way}] = second.actions
 
     assert one_way * other_way < 0.0,
            "one departure one way, the next the other: #{one_way} then #{other_way}"
-
-    assert one_side * other_side < 0.0,
-           "and the hop follows the turn: #{one_side} then #{other_side}"
   end
 
   # And the departure is not a second behaviour it gets stuck in: the moment the

@@ -714,34 +714,23 @@ defmodule FlyversePlugin.Policy do
 
   # The departure. A turn is taken whole — the centring reflex would pull the fly
   # back onto what it is looking at, and this step is the one that must not — and
-  # the step is a hop *sideways* off the surface, at the approach stride, taken
-  # before the turn because the world applies `left_distance` first.
-  #
-  # Sideways and not backwards, which is where it used to go. A hop backwards
-  # leaves the fly facing the way it came, so the cruise turns it round and walks
-  # it back along the same line: the same face, approached from the same side, and
-  # a whole turnaround spent to reread it. A hop sideways and a half turn lands it
-  # beside where it was, facing back, so the return approach is parallel to the
-  # outbound one and arrives at a face it has not read — Monty's `MoveTangentially`
-  # between touches, which is the axis the slide at the surface already uses. The
-  # distance and the turn are unchanged; only the direction of the hop is.
+  # the step is backwards off the surface at the approach stride. It is a hop, not
+  # a flight: this world's sensor has no wings, so what a fly does with them is
+  # what a step backwards does here.
   defp leave(policy, departures) do
     %OrientHorizontal{
       agent_id: policy.agent_id,
       rotation_degrees: saccade(departures),
-      left_distance: aside(departures) * @touch_stride,
-      forward_distance: 0.0
+      left_distance: 0.0,
+      forward_distance: -@touch_stride
     }
   end
 
   # Right, then left, then right: the first departure turns one way and the next
   # turns the other, so the two landings are on different faces of what it left.
-  # The side of the hop is the side of the turn, from one rule.
-  defp saccade(departures), do: aside(departures) * @depart_degrees
+  defp saccade(departures) when rem(departures, 2) == 1, do: @depart_degrees
 
-  defp aside(departures) when rem(departures, 2) == 1, do: 1.0
-
-  defp aside(_departures), do: -1.0
+  defp saccade(_departures), do: -@depart_degrees
 
   # A departure is a step the network did not decide, so it says so in the
   # telemetry rather than in the wish: a reader of a run can then tell a fly that
@@ -750,11 +739,7 @@ defmodule FlyversePlugin.Policy do
     %MotorPolicyResult{
       actions: [leave(policy, simulation.departures)],
       motor_only_step: false,
-      telemetry: %{
-        leaving: true,
-        turn_degrees: saccade(simulation.departures),
-        left_distance: aside(simulation.departures) * @touch_stride
-      }
+      telemetry: %{leaving: true, turn_degrees: saccade(simulation.departures)}
     }
   end
 
