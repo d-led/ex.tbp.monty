@@ -34,7 +34,7 @@ defmodule FlyversePlugin.PolicyTest do
   test "a nearer left side turns the sensor left while it walks", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    {result, _policy, _state} = step(policy, state, [[0.02, 0.02, 100.0, 100.0]])
+    {result, _policy, _state} = step(policy, state, [[0.04, 0.04, 100.0, 100.0]])
 
     assert [%OrientHorizontal{} = walked] = result.actions
     assert walked.agent_id == "agent_id_0"
@@ -45,7 +45,7 @@ defmodule FlyversePlugin.PolicyTest do
   test "a nearer right side turns it right while it walks", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    {result, _policy, _state} = step(policy, state, [[100.0, 100.0, 0.02, 0.02]])
+    {result, _policy, _state} = step(policy, state, [[100.0, 100.0, 0.04, 0.04]])
 
     assert [%OrientHorizontal{} = walked] = result.actions
     assert walked.rotation_degrees > 0.0, "right, because the right half is nearer"
@@ -87,12 +87,41 @@ defmodule FlyversePlugin.PolicyTest do
     {:ok, policy, state} = Policy.new([], state)
 
     {result, _policy, _state} =
-      step(policy, state, observations([[0.02, 0.02, 100.0, 100.0]]), touching(0.01))
+      step(policy, state, at(0.01, [[0.02, 0.02, 100.0, 100.0]]), touching(0.01))
 
     assert [%OrientHorizontal{} = slid] = result.actions
     assert_in_delta slid.left_distance, 0.01, 1.0e-9, "the bout's centimetre across it, leftwards"
     assert_in_delta slid.forward_distance, -0.015, 1.0e-9, "and back to the standoff"
     assert slid.rotation_degrees < 0.0, "the turn is the way it was already leaning"
+  end
+
+  # The standoff is read from the *nearest* thing in the patch, not from the mean
+  # of its image, and clipping is why the two differ. This config replaces every
+  # reading past five centimetres with five, so a patch pressed against a curve has
+  # half its pixels at the ceiling: the mean of one centimetre and five is three,
+  # which is outside the standoff and asks for one more step into the surface. A
+  # run's frames are the evidence — a dark curved sliver, clipped white everywhere
+  # else, for a whole episode, the sensor pressing into the thing it stands off
+  # from while its own percept reported room.
+  test "a half-clipped patch is measured from its nearest pixel, and back off it goes",
+       %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    clipped = %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[2.0, 2.0]]},
+        "patch" => %{"depth" => [[0.01, 0.05], [0.01, 0.05]]}
+      }
+    }
+
+    {result, _policy, _state} = step(policy, state, clipped, touching(0.03))
+
+    assert [%OrientHorizontal{} = backed] = result.actions
+
+    assert_in_delta backed.forward_distance,
+                    -0.015,
+                    1.0e-9,
+                    "one centimetre from the surface is too close, whatever the rest of the image averages"
   end
 
   # The standoff is held, not a constant step: a sensor at 20 mm with 25 mm
@@ -101,15 +130,13 @@ defmodule FlyversePlugin.PolicyTest do
   test "a patch at the standoff crawls, and one nearer it backs away", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    {at, _policy, _state} =
-      step(policy, state, observations([[0.02, 0.02, 100.0, 100.0]]), touching(0.025))
+    {standing, _policy, _state} = step(policy, state, at(0.025), touching(0.025))
 
     {:ok, policy, state} = Policy.reset(policy, state)
 
-    {nearer, _policy, _state} =
-      step(policy, state, observations([[0.02, 0.02, 100.0, 100.0]]), touching(0.02))
+    {nearer, _policy, _state} = step(policy, state, at(0.02), touching(0.02))
 
-    assert [%OrientHorizontal{forward_distance: crawl}] = at.actions
+    assert [%OrientHorizontal{forward_distance: crawl}] = standing.actions
     assert_in_delta crawl, 0.004, 1.0e-9
 
     assert [%OrientHorizontal{forward_distance: back}] = nearer.actions
@@ -165,11 +192,11 @@ defmodule FlyversePlugin.PolicyTest do
 
     # The patch is at the standoff throughout, so the standoff rule alone would
     # crawl at every one of these steps.
-    {_first, policy, state} = step(policy, state, scene(0.2, 0.02), touching(0.025))
+    {_first, policy, state} = step(policy, state, scene(0.2, 0.025), touching(0.025))
 
-    {closer, policy, state} = step(policy, state, scene(0.15, 0.02), touching(0.025))
+    {closer, policy, state} = step(policy, state, scene(0.15, 0.025), touching(0.025))
 
-    {closest, _policy, _state} = step(policy, state, scene(0.07, 0.02), touching(0.025))
+    {closest, _policy, _state} = step(policy, state, scene(0.07, 0.025), touching(0.025))
 
     assert [%OrientHorizontal{forward_distance: 0.004}] = closer.actions,
            "a third nearer is an approach, not a loom"
@@ -487,15 +514,22 @@ defmodule FlyversePlugin.PolicyTest do
 
   # The slide is what the fly does *at* the surface. While there is room to walk
   # there is nothing to slide along, and the step travels forward as it always
-  # did.
+  # did. The room has to be *inside* the patch's five-centimetre reach: further
+  # off than that the patch reads its ceiling, which is a fly that has lost the
+  # object rather than one with room to walk at it.
   test "in open view the step walks, and does not slide", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
     {result, _policy, _state} =
-      step(policy, state, observations([[0.02, 0.02, 100.0, 100.0]]), touching(0.4))
+      step(policy, state, at(0.045, 0.02), touching(0.045))
 
     assert [%OrientHorizontal{} = walked] = result.actions
-    assert walked.forward_distance == 0.01, "a stride of open view, and no slide across it"
+
+    assert_in_delta walked.forward_distance,
+                    0.01,
+                    1.0e-9,
+                    "a stride of open view, and no slide across it"
+
     assert walked.left_distance == 0.0
   end
 
@@ -725,7 +759,7 @@ defmodule FlyversePlugin.PolicyTest do
     test "hands back to the network once the patch is on the object", %{state: state} do
       {:ok, policy, state} = Policy.new([], state)
 
-      {result, _policy, _state} = step(policy, state, scene(0.2, 0.02), on_object(0.5))
+      {result, _policy, _state} = step(policy, state, scene(0.2, 0.04), on_object(0.5))
 
       assert [%OrientHorizontal{} = walked] = result.actions
       assert walked.rotation_degrees == 0.0, "the search would be thirty degrees"
@@ -827,7 +861,24 @@ defmodule FlyversePlugin.PolicyTest do
       morphological_features: %{"object_coverage" => 0.0}
     }
 
-  # A percept that says how far the patch is standing off what it is on.
+  # What the patch is lying on, as the patch itself reports it: the nearest thing
+  # in its image, which is the number the standoff is held against. The wide view
+  # is the fly's drive and is a room rather than a surface, so a test that means
+  # one of them says which.
+  defp at(depth, view \\ 2.0) do
+    view = if is_list(view), do: view, else: [[view, view]]
+
+    %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => view},
+        "patch" => %{"depth" => [[depth, depth], [depth, depth]]}
+      }
+    }
+  end
+
+  # A percept that says how much of the patch is on the object, and what the
+  # surface it is on averages. The standoff is not read from this: it is read from
+  # the patch's own image, because clipping makes an average over that image lie.
   defp touching(depth) do
     %Monty.Cmp.Message{
       sender_id: "patch",

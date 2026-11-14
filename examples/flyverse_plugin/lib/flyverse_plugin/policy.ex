@@ -386,7 +386,7 @@ defmodule FlyversePlugin.Policy do
         {:ok, struggling(policy, watched), policy, state}
       else
         case next do
-          :explore -> steer(policy, observations, percept, state)
+          :explore -> steer(policy, observations, state)
           :depart -> {:ok, departing(policy, watched), policy, state}
           :look -> {:ok, looking(policy, simulation, observations), policy, state}
           :cruise -> {:ok, touch(policy, observations), policy, state}
@@ -605,14 +605,14 @@ defmodule FlyversePlugin.Policy do
   defp departures(simulation, :depart), do: simulation.departures + 1
   defp departures(simulation, _next), do: simulation.departures
 
-  defp steer(policy, observations, percept, state) do
+  defp steer(policy, observations, state) do
     simulation = Map.fetch!(state.simulations, policy.sim)
 
     with {:ok, {_sensor_id, rows}} <-
            Percept.image(observations, policy.agent_id, policy.sensor_id),
          {:ok, window} <- step(simulation, rows) do
       wish = smoothed(simulation, window.left - window.right)
-      result = result(policy, wish, window, percept, observations)
+      result = result(policy, wish, window, observations)
 
       simulation = %{
         simulation
@@ -1088,12 +1088,12 @@ defmodule FlyversePlugin.Policy do
     simulation.wish + alpha * (differential - simulation.wish)
   end
 
-  defp result(policy, wish, window, percept, observations) do
+  defp result(policy, wish, window, observations) do
     [left_hz, right_hz] = window.rates
-    depth = mean_depth(percept, @visible)
+    reach = patch_reach(observations, policy)
 
     %MotorPolicyResult{
-      actions: [action(policy, wish, depth, window.loom, observations)],
+      actions: [action(policy, wish, reach, window.loom, observations)],
       telemetry: %{
         left_hz: left_hz,
         right_hz: right_hz,
@@ -1101,7 +1101,8 @@ defmodule FlyversePlugin.Policy do
         right_spikes: window.right,
         spikes: window.spikes,
         wish: wish,
-        loom: window.loom
+        loom: window.loom,
+        reach: reach
       }
     }
   end
@@ -1132,19 +1133,19 @@ defmodule FlyversePlugin.Policy do
   # the patch, and the network decides which way, because the sign of the wish
   # is the side its readouts preferred. That is Monty's own
   # `MoveTangentially`-between-touches cycle, made one action instead of four.
-  defp action(%__MODULE__{} = policy, wish, depth, loom, observations) do
+  defp action(%__MODULE__{} = policy, wish, reach, loom, observations) do
     %OrientHorizontal{
       agent_id: policy.agent_id,
       rotation_degrees: turn(policy, wish, centring(observations, policy.agent_id)),
-      left_distance: side(wish) * slide(policy, depth),
-      forward_distance: crawl(policy, depth, loom)
+      left_distance: side(wish) * slide(policy, reach),
+      forward_distance: crawl(policy, reach, loom)
     }
   end
 
   # How far one step slides sideways: the bout's stride when the patch is at the
   # surface, nought while there is still room to walk at it.
-  defp slide(_policy, depth),
-    do: if(depth < @desired_object_distance, do: @explore_stride, else: 0.0)
+  defp slide(_policy, reach),
+    do: if(reach < @desired_object_distance, do: @explore_stride, else: 0.0)
 
   # And how far it travels along its facing, which is the standoff kept rather
   # than a constant. A step of nought at the surface is a step the slide then
@@ -1203,22 +1204,29 @@ defmodule FlyversePlugin.Policy do
 
   defp side(_wish), do: 1.0
 
-  # The depth the patch is standing off, as the percept reports it. A percept
-  # that reports no depth is a world this policy cannot measure, and `@visible`
-  # — a metre, the edge of what it walks at — is the honest assumption there:
-  # it walks, which is the one thing the step must do.
-  defp mean_depth(nil, fallback), do: fallback
+  # How far the patch is from what it is lying on: the **closest** thing it can
+  # see, and not the mean over its image. The difference is clipping. This
+  # config's transform replaces every reading past five centimetres with five,
+  # so a patch pressed against a curve has half its pixels at the ceiling — and
+  # the mean of one centimetre and five is three, which reads as *further out*
+  # than the standoff and asks for one more step into the surface. A run's frames
+  # show the loop plainly: a dark curved sliver with the rest of the patch clipped
+  # white, step after step, the sensor pressing into the thing it is meant to
+  # stand off from while its own percept said it had room.
+  #
+  # The nearest reading cannot lie that way. Its floor is the clip's ceiling, so
+  # "nothing in reach" arrives as exactly five centimetres rather than as a
+  # distance this policy would believe, and a surface one centimetre away arrives
+  # as one centimetre.
+  defp patch_reach(observations, policy) do
+    case Percept.image(observations, policy.agent_id, policy.sensor_id || @patch) do
+      {:ok, {_sensor, rows}} ->
+        {left, right} = Percept.nearness(rows)
+        nearest = max(left, right)
+        if nearest > 0.0, do: 1.0 / nearest, else: @visible
 
-  defp mean_depth(percept, fallback) do
-    case Message.feature(percept, "mean_depth") do
-      {:ok, [value | _rest] = values} when is_number(value) ->
-        Enum.sum(values) / length(values)
-
-      {:ok, value} when is_number(value) ->
-        value
-
-      _absent ->
-        fallback
+      {:error, _no_patch} ->
+        @visible
     end
   end
 

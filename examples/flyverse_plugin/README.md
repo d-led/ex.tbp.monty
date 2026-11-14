@@ -28,8 +28,8 @@ exercise in joining unlike parts — a Rust spiking engine, a Rustler boundary, 
 plugin contract, an Elixir framework, a MuJoCo world in a Python interpreter,
 and a studio that queues the run — and asking whether the joint holds.
 
-The constants are chosen to be readable, not to be right: four millimetres a
-step, five degrees of base turn, two spikes for a full bend, `1/depth` at four
+The constants are chosen to be readable, not to be right: ten millimetres a
+stride with four as the floor, five degrees of base turn, `1/depth` at four
 hertz per inverse metre. A pack of four neurons is not a nervous system, and a
 score it produces is a score of this wiring, not of a fly, a brain, or Monty.
 What would support a claim is the dataset's connectome, a body with muscles, and
@@ -38,42 +38,209 @@ and no number on any page of a run should be read as if they were.
 
 ## What the decision is
 
+Two halves, in Monty's order. While the patch is not on the object — below a
+tenth covered — the answer is Monty's `_touch_object` with the one thing a fly
+must add to it, and the network is not asked at all: its input is how near the
+left half of the patch is compared with the right, and an empty patch says the
+same thing everywhere.
+
+Once the patch is on the object, the network decides:
+
 ```
-   left half of the depth image   --1/depth--> Hz --> neurons (0) --+200--> readout (2)
-   right half of the depth image  --1/depth--> Hz --> neurons (1) --+200--> readout (3)
+ left half   --1/depth-->  80 + 4x Hz  --> drive 0 --> readout 2 --+
+                                                                    +--> difference
+ right half  --1/depth-->  80 + 4x Hz  --> drive 1 --> readout 3 --+
+
+ a sine, +-20 Hz on an 80-step period, goes + on the left rate and
+ - on the right, so two halves that are equal are never quite equal
+
+ difference --30 ms low-pass--> wish --5 deg x tanh(wish/2)--> yaw
 ```
 
-Each step: nearness (`1 / depth`) per half of the image becomes a Poisson drive
-on one neuron group; the network steps 20 ms of 0.1 ms ticks in Rust; and the
-difference of the two readout spike counts, low-passed with flyverse's own 30 ms
-motor time constant, decides where the sensor goes next. More spikes on the
-left means the left half of the view is nearer, so the sensor yaws that way;
-spikes on the right yaw the other; no preference at all walks straight ahead,
-because a balanced view is seeing the thing it is meant to reach and moving
-forward is what closes the gap.
+Each step: nearness (`1 / depth`) per half of the patch becomes a Poisson rate —
+80 Hz, widening four hertz per inverse metre, capped at 220 — the network steps
+20 ms of 0.1 ms ticks in Rust, and the difference of the two readout spike counts
+is low-passed with flyverse's own 30 ms motor time constant. That difference is
+the _wish_. More spikes on the left means the left half of the view is nearer,
+so the sensor yaws that way; spikes on the right yaw the other way; a balanced
+view walks straight ahead, because a balanced view is looking at the thing it is
+meant to reach and moving forward is what closes the gap.
 
-The action is one or the other, never both. A turn is `OrientHorizontal` with no
-slide — five degrees per step — because `TurnLeft`/`TurnRight` are the distant
-agent's actions and the surf agent a MuJoCo world hands us has no
-`actuate_turn_*` at all. A walk is `MoveForward` at four millimetres, Monty's own
-surf-agent step.
+Three of those numbers are not free. The **80 Hz tonic** is the network's resting
+drive: a fly reading nothing still ticks over, so the wish has something to be a
+difference _of_. The **30 ms** is flyverse's own motor constant, so a silent
+network keeps the wish it had instead of snapping to zero, and the walk has
+momentum. The **sine** is the only invented signal: a perfectly symmetric view
+gives a perfectly balanced wish, and a fly that walks a straight line for ever
+never sees anything else, so the drives are pushed apart a little and pulled
+back, eighty steps a cycle.
 
-The beginning of an episode is not the network's, and this is the part worth
-being honest about: a patch that is not on the object has no left-versus-right
-difference to steer by, so a network asked to walk to the object can only turn on
-the spot. The first steps are therefore Monty's `SurfacePolicy._touch_object`,
-copied with its own numbers — below a tenth of the patch covered
-(`object_coverage`), one `MoveForward` across the whole gap the view finder can
-see, and, when the view finder sees nothing within a metre, a step round a search
-circle ten centimetres ahead, thirty degrees at a time, until something comes
-into view. Twenty centimetres is one step that way, where a four-millimetre crawl
-is fifty steps of the same view. Network steering starts when the patch is on
-something, and stops when it is not.
+### The action
 
-The rates, the gain and the action mapping are this plugin's and
-`FlyversePlugin.Policy` says so line by line. The dynamics are flyverse's. With
-the dataset's pack the same code asks a real connectome, and what it does there
-is a question this example does not answer.
+Every step walks _and_ turns: one `OrientHorizontal` carrying a yaw, a forward
+distance and a sideways one. It is not `TurnLeft`/`TurnRight` — those are the
+distant agent's actions, and the surf agent a MuJoCo world hands us has no
+`actuate_turn_*` at all. And an animal that yaws where it stands is an animal
+standing still: an early run of this policy spent a thousand steps like that — the
+network said "left", the action turned left with no distance, and the patch saw
+the same three square centimetres of table until the episode died.
+
+| field              | value                                                                      |
+| ------------------ | -------------------------------------------------------------------------- |
+| `rotation_degrees` | 5°·tanh(wish/2) + 10°·centring, capped at 30°                              |
+| `forward_distance` | the standoff kept: `clamp(depth - 25 mm, 4 mm, 10 mm)`, negative if nearer |
+| `left_distance`    | 10 mm towards the side the wish prefers, but only at the surface           |
+
+The **centring** term is Monty's, not the network's: ten degrees towards the
+side the patch is off-centre by, so a fly learning a surface keeps it in the
+middle of the picture while the wish decides which way to explore it.
+
+The forward distance keeps a **25 mm standoff** rather than being a constant,
+because both ends of that are measured mistakes. At the surface a step of nought
+is a step the slide then pushes _into_ the object — a run slid until the patch
+was inside the mug, where every frame is the same flat colour and the evidence
+stopped moving for two thousand steps. And in open space four millimetres is
+_under the patch's own one-centimetre delta threshold_: the patch reads the same
+place again and again, and a frozen picture is exactly what the stall counter is
+watching for. So the stride is ten millimetres with four as the floor, and it
+shrinks to whatever room is left as the surface arrives.
+
+A **loom** — something in view suddenly filling half again as much of it —
+outranks all of that and turns the forward step into a retreat, bounded by one
+step's stride so it costs a step's retreat rather than a flight.
+
+### The five behaviours
+
+Which of these the step is, is decided before the network is asked. The stall
+counter reads the **patch's** mean depth and not the wide view's, because the
+wide view changes whenever the fly turns while the patch — the thing the learning
+module sees — can be identical for two hundred steps.
+
+| behaviour     | when                                                          | what it does                                                                                    |
+| ------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `:cruise`     | nothing under the patch, and the patch is changing            | walk at whatever the view finder sees: aim at its most varied column and step the gap; a leg of the search circle when it sees nothing within a metre |
+| `:explore`    | something under the patch that is not clipped, bout under 60  | the network steers (above)                                                                       |
+| `:depart`     | 60 steps into a bout, or a second stall in the same one        | about-face (180°, alternating side) and a 50 mm hop, until the patch is off it or four steps are |
+| `:look`       | the patch has shown the same depth for 20 steps                | an aimed look when there is something under it; a quarter turn and a 50 mm leg when there is not |
+| `:struggling` | the body has moved under a millimetre for 12 steps             | a 90° swing, on a 40-step period                                                                 |
+
+`_touch_object`'s own numbers are kept where they were right: below a tenth of
+the patch covered, one step across the gap the view finder can see, aimed at the
+**most varied column** of the depth image rather than its mean, because the mean
+of a table edge and a mug is a place with neither. The search circle is the one
+place this policy departs from Monty's numbers, and it is a measurement that
+made it: the most structured column of an empty room is a wall, and a fly that
+walks at a wall stays at it — one episode took four percepts in five thousand
+steps, its hypothesis set growing from 1776 to 7104. So a fly with nothing under
+the patch sweeps instead: a quarter turn and a stride, alternated so the legs fan
+out over the ground rather than spiral back across it.
+
+A **bout** is what makes the fly stop reading one square centimetre for ever.
+Sixty steps on a surface, then a departure that turns it round and puts it five
+centimetres away; the stall counter fires the same departure sooner if the patch
+stops changing. The departure alternates its half-turn sign, so two bouts in a
+row do not retrace each other.
+
+An **idle** fly is nudged rather than trusted. The measure is the body's own
+position from the motor state, not what the policy believes it is doing: less
+than a millimetre of movement for twelve steps means pressing against a surface,
+wedged in a corner, or asking for a step the world will not take, and the answer
+is a ninety-degree swing on a forty-step period, until it moves. Periodic and
+not one-shot, because the first swing can leave it facing the same wall.
+
+### What the learning module is shown
+
+Monty's own surface policy hides three of its four steps from the learning
+module — every `OrientHorizontal` and every `MoveTangentially`, feeding it only
+the vertical orient — because a step that is not reading the object teaches it
+nothing, and its _displacement_ is what the module would then have to explain.
+Monty matches a location across `max_match_distance: 0.01`.
+
+So this policy's rule is the patch's answer and not the behaviour's name: a step
+is a sensor step exactly when there is something under the patch to read. On the
+object that is every step. Lost, it is none of them — the sweep's quarter turn
+and fifty-millimetre hop are five times the distance Monty will match across, and
+the departure is the same. `silence_if_motor_only` in the framework is where this
+happens: the percept keeps its shape and stops passing on.
+
+## What worked, and what it was worth
+
+Measured on `flyverse_plugin.10simobj_surf_agent`, whole runs, comparing total
+Monty steps first (a run's cost is its steps, not its episode count), then
+completions, then mean steps per completed episode.
+
+| kept                                     | why it is there                                              |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| walk and turn in one action              | a yawing fly reads one patch for ever                        |
+| a 10 mm stride, 4 mm floor               | 4 mm is under the patch's own 10 mm delta threshold          |
+| the standoff instead of a constant       | stops the patch ending up inside the mug                     |
+| the patch's nearness as the stall signal | the wide view changes when the fly turns; the patch does not |
+| aim at the most varied column            | the mean of a table edge and a mug is neither                |
+| sweep instead of aim when lost           | a lost fly that aims is a lost fly                           |
+| depart every 60 steps                    | the only thing that ends a two-thousand-step bout            |
+| a periodic sine wander                   | breaks the symmetric-view deadlock                           |
+| idle detection, measured on the body     | the four original stalls, all of them                        |
+| the clip read as "nothing there"         | a clipped pixel is not a distant one                         |
+| motor-only steps while lost              | the module is not asked to explain a hop                     |
+
+| not kept                                               | what it did         |
+| ------------------------------------------------------ | ------------------- |
+| four aim refinements (spread, weight, contrast, ratio) | flat, within noise  |
+| a 20 mm search leg                                     | overshot the object |
+| distance filters on the depth image                    | no change           |
+| widening the search circle                             | worse, reverted     |
+| walking home to where the object was last seen         | worse, reverted     |
+| a sideways departure                                   | see below           |
+| descending under `OrientVertical` to read the spoon    | see below           |
+
+The **sideways departure** is the one worth keeping as a lesson. At thirty
+episodes it looked like a twenty-seven per cent win. At a hundred and
+thirty-seven it was nothing: 122 of 137 with it against 124 of 137 without,
+mean 100 against 99. Thirty episodes cannot resolve a mean. Read the
+full-budget count first, then the completions, then the mean.
+
+One rule above is in the list on the strength of the argument rather than of a
+measured win: hiding from the learning module the steps that have nothing under
+the patch. It is Monty's own rule and the framework already implements it, so it
+is in — but the run that would price it is the one in flight, and until it lands
+the honest statement is that it cannot make the numbers worse in the way the
+earlier four aim refinements did, because it changes what the module is asked
+rather than what the fly does.
+
+## What a run costs
+
+A whole-run measurement of the baseline, 140 episodes: 127 completed, mean 100
+steps, 7 episodes reaching the 5000-step ceiling, 71,111 Monty steps, 29 minutes
+39 seconds of wall clock. What those steps split into:
+
+| episode outcome          | steps                  | share of the work |
+| ------------------------ | ---------------------- | ----------------- |
+| finished, 133 of them    | 36,111 total, mean 271 | 51%               |
+| abandoned at the ceiling | 5,000 each, 7 of them  | 49%               |
+
+Seven episodes out of a hundred and forty are half of the work. The 41-minute
+run that prompted all of this differed from the 29-minute one in exactly one
+thing: two more episodes that reached the ceiling. So the number to watch is the
+**full-budget count** — and the point of every steering change above is to make
+an episode that cannot finish either finish or leave, never to make a finished
+one finish faster. For scale, the build before the last one spent 11,468 steps on
+its first 41 episodes, mean 279 an episode, with no ceiling episode at all.
+
+## Two things no steering can change
+
+- **The spoon and the fork tines cannot be seen.** The patch sits at the agent's
+  own height, z = 0.1 m above a table at z = 0, and the transform clips any depth
+  under 50 mm. Anything lying on the table lower than about 50 mm is therefore
+  invisible to it — the mug, at seven centimetres, is readable; the spoon, at one
+  and a half centimetres, is not, in any pose. No amount of steering helps, and the
+  tests say so rather than the tuning.
+- **The eval ceiling is 500 steps, the train ceiling 1000, the total 5000.** The
+  baseline's own 7 abandoned episodes sit under those numbers, and the two levers a
+  policy has — get there sooner, or stop where you are — are what the rest of this
+  file is about.
+
+With the dataset's pack the same code asks a real connectome, and what it does
+there is a question this example does not answer.
 
 ## Running it
 
