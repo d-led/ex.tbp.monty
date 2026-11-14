@@ -57,11 +57,18 @@ config :ex_tbp_monty, :cluster, enabled: cluster_on?, seeds: cluster_seeds
 #
 # A `mix`-started node takes its cookie from `--cookie`, and without one every VM
 # of a user shares that user's `~/.erlang.cookie` — three machines, three files,
-# three clusters that believe they are one. So the secret is applied *here*: this
-# file is evaluated in the booting VM, before the supervision tree and before any
-# cluster child connects, which is the only moment a cookie can be set for the
-# connections that follow. The atom is made from configuration read once at
-# boot — not from user input, and one per VM.
+# three clusters that believe they are one. `process-compose.yaml` passes the
+# cookie on the command line, which is earlier than anything in this file: the VM
+# has it before it compiles, so a peer's first handshake is already welcome.
+#
+# This block is the answer for a start that passed no flag — `mix phx.server
+# --sname node1` by hand, or a deployment that only sets the environment. It is
+# evaluated in the booting VM, before the supervision tree and before any cluster
+# child connects, so everything connected after it carries the secret. Applying it
+# to a VM that started with the same cookie is a no-op; applying a different one
+# would leave the connections already made holding the old cookie, which is why
+# the launcher and this file read the one variable. The atom is made from
+# configuration read once at boot — not from user input, and one per VM.
 cluster_secret = System.get_env("MONTY_CLUSTER_SECRET") || System.get_env("MONTY_COOKIE")
 
 # `Node.set_cookie/1` raises on a node without a name (`:nonode@nohost`), and a

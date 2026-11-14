@@ -33,6 +33,23 @@ version: "0.5"
 # and a node that has none falls back to its user's `~/.erlang.cookie` — three
 # machines have three of those. Settings → Nodes says where a node got its own.
 #
+# The secret is written **once**, under `vars`, and every command passes it to the
+# VM as `--cookie`; `environment` below then hands the same value on, so a node
+# that changes its own cookie at runtime and a node that started with it agree.
+#
+# Why the flag rather than only `config/runtime.exs`: that file is evaluated a
+# moment *after* the VM is up, so on every start the first handshakes were refused
+# — `Invalid challenge reply`, about ten seconds of it — and a cluster that was
+# arriving read as a cluster that was broken. With `--cookie` the cookie is there
+# before the VM compiles, before its supervision tree, and before a peer's first
+# attempt.
+#
+# The substitution is `{{.MONTY_CLUSTER_SECRET}}` and not `$MONTY_CLUSTER_SECRET`
+# on purpose: process-compose hands a command to a shell, so `$VAR` works — on
+# macOS and Linux and nowhere this file claims to work. `{{.VAR}}` is
+# process-compose's own substitution, which is why the same file is the same file
+# on Windows.
+#
 # ## One runs table instead of one per node
 #
 # Add `DATABASE_URL=postgres://…` to both nodes and drop `MONTY_DB`: then the
@@ -103,9 +120,13 @@ version: "0.5"
 #     line each).
 log_level: debug
 
+# The one place the cluster's password is written (see the header).
+vars:
+  MONTY_CLUSTER_SECRET: local-dev-secret
+
 processes:
   node1:
-    command: "elixir --name node1@127.0.0.1 -S mix phx.server"
+    command: "elixir --name node1@127.0.0.1 --cookie {{.MONTY_CLUSTER_SECRET}} -S mix phx.server"
     working_dir: "./"
     log_location: "./logs/node1.log"
     environment:
@@ -113,7 +134,7 @@ processes:
       - "MONTY_CLUSTER=true"
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
       - "MONTY_DB=sqlite"
-      - "MONTY_CLUSTER_SECRET=local-dev-secret"
+      - "MONTY_CLUSTER_SECRET={{.MONTY_CLUSTER_SECRET}}"
       # Two nodes of one machine can do the same things. A cluster of unlike
       # machines is where the tags matter, and this is where a node declares its
       # own (`ExTbpMonty.Cluster.Capabilities`): uncomment on one side only, and
@@ -137,7 +158,7 @@ processes:
       failure_threshold: 24
 
   node2:
-    command: "elixir --name node2@127.0.0.1 -S mix phx.server"
+    command: "elixir --name node2@127.0.0.1 --cookie {{.MONTY_CLUSTER_SECRET}} -S mix phx.server"
     working_dir: "./"
     log_location: "./logs/node2.log"
     environment:
@@ -145,7 +166,7 @@ processes:
       - "MONTY_CLUSTER=true"
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
       - "MONTY_DB=sqlite"
-      - "MONTY_CLUSTER_SECRET=local-dev-secret"
+      - "MONTY_CLUSTER_SECRET={{.MONTY_CLUSTER_SECRET}}"
     readiness_probe:
       http_get:
         host: 127.0.0.1
@@ -163,11 +184,11 @@ processes:
   # own. It has no HTTP to probe and no database to migrate — it registers what it
   # offers and stays up.
   example_plugin:
-    command: "elixir --name example_plugin@127.0.0.1 -S mix run --no-halt"
+    command: "elixir --name example_plugin@127.0.0.1 --cookie {{.MONTY_CLUSTER_SECRET}} -S mix run --no-halt"
     working_dir: "./examples/example_plugin"
     log_location: "./logs/example_plugin.log"
     environment:
-      - "MONTY_CLUSTER_SECRET=local-dev-secret"
+      - "MONTY_CLUSTER_SECRET={{.MONTY_CLUSTER_SECRET}}"
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
 
   # The pack the flyverse plugin steps is `tmp/flyverse-pack`, written once with
@@ -181,10 +202,10 @@ processes:
   # — the simulation cannot leave this node — so this process is where the run's
   # motor system actually lives.
   flyverse_plugin:
-    command: "elixir --name flyverse_plugin@127.0.0.1 -S mix run --no-halt"
+    command: "elixir --name flyverse_plugin@127.0.0.1 --cookie {{.MONTY_CLUSTER_SECRET}} -S mix run --no-halt"
     working_dir: "./examples/flyverse_plugin"
     log_location: "./logs/flyverse_plugin.log"
     environment:
-      - "MONTY_CLUSTER_SECRET=local-dev-secret"
+      - "MONTY_CLUSTER_SECRET={{.MONTY_CLUSTER_SECRET}}"
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
       - "FLYVERSE_PACK=../../tmp/flyverse-pack"

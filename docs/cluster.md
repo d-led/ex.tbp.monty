@@ -19,9 +19,9 @@ $ open http://localhost:4001   # node1
 $ open http://localhost:4002   # node2
 ```
 
-`process-compose.yaml` runs two nodes with `elixir --name … -S mix phx.server` and
-nothing else — no shell script, because the same file is read on Windows. The
-recipe is three decisions, all of them environment:
+`process-compose.yaml` runs two nodes with `elixir --name … --cookie … -S mix
+phx.server` and nothing else — no shell script, because the same file is read on
+Windows. The recipe is three decisions, all of them environment:
 
 | what                   | how                                                                          |
 | ---------------------- | ---------------------------------------------------------------------------- |
@@ -29,6 +29,14 @@ recipe is three decisions, all of them environment:
 | the cluster            | `MONTY_CLUSTER=true` (or `MONTY_SEEDS`), see [The variables](#the-variables) |
 | its own database       | `MONTY_DB=sqlite` — a file per node under `nodes/<its name>/`                |
 | the cluster's password | `MONTY_CLUSTER_SECRET`, the same on every node that should join              |
+
+The password is written once in that file, under `vars`, and reaches a node
+twice: as `--cookie` on the command line, and as `MONTY_CLUSTER_SECRET` in its
+environment. The flag is the one that matters at start-up — it is a VM flag, so
+the cookie exists before the node compiles, and a peer's first handshake is
+answered instead of refused. `config/runtime.exs` still applies the secret for a
+start that passed no flag (a hand-typed `mix phx.server --sname node1`), which is
+a no-op when the two agree.
 
 A named node prepares its own folder: on boot it makes
 `nodes/<its name>/` and migrates the database in it
