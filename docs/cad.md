@@ -124,15 +124,25 @@ scene, not a config, knows where the object is.
    Held to the part by tests: the fixture is walked to both features, and no
    sideways step is taken from a wrong standoff.
 
-   What is left is the wiring: a CAD host has to register the policy
-   (`ex.monty.cad.server`'s `Cluster.register/3`, one provider process, one
-   `describe/0`), and a definition has to name it as its `"motor_system"`. The
-   studio needs no change for that: `RemotePolicy.among/3` asks every host,
-   checks `:quiddity` and `:monty` against the host's carried tags, and refuses
-   `:owner_only` on a node that cannot serve it. The control variant — a shell
-   around the ported `SurfacePolicyCurvatureInformed`, `:anywhere`,
-   `needs: [:monty]` — is still worth having, because it is what the finished
-   140-episode run already steered by.
+   What is left is the wiring, and now it has a name rather than a shape: a run
+   picks a policy up from **`MONTY_REMOTE_POLICY`**, which `RemotePolicy.configured/0`
+   reads and `RemotePolicy.find/1` resolves over `:pg` (`MontyPlugin.Registry`),
+   checking `:quiddity` and `:monty` against what the host proves it carries and
+   refusing `:owner_only` on a node that cannot serve it. So one node runs
+   `ex.monty.cad.server` with `MONTY_CAD_PART` set — the provider opens the part
+   itself, and `:owner_only` is exactly the claim that the B-rep handle is a
+   resource of that node's memory — and the node that runs the experiment is
+   given `MONTY_REMOTE_POLICY=monty_cad.feature_walk`.
+
+   The shortcut of hosting the provider inside the experiment script does not
+   work and it is worth saying why, because it looks like it should: the script
+   appends the sibling builds from this checkout, while `ex.monty.cad.server` is
+   built against whichever release Hex holds (0.6.1 today) — two builds of one
+   module set in one node. The designed path is two nodes in one cluster.
+   The control variant — a shell around the ported
+   `SurfacePolicyCurvatureInformed`, `:anywhere`, `needs: [:monty]` — is still
+   worth having, because it is what the finished 140-episode run already steered
+   by.
 
 3. **A library the CAD world can be recognised against — a part with a pose
    recognises, a symmetric one does not conclude.** The experiment is now a
