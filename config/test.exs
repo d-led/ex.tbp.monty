@@ -14,6 +14,12 @@ config :ex_tbp_monty, world_simulator: :synthetic
 # `ExTbpMontyWeb.ExperimentLive`.
 config :ex_tbp_monty, chart_interval: 0
 
+# The studio's long-lived processes hibernate when idle so that the heap of the
+# biggest batch they were handed is given back (`Monty.Studio.RunWriter` measures
+# why). A test cannot wait five seconds to see that, so the idleness is short
+# here; the assertion is still the behaviour — the process gives its heap back.
+config :ex_tbp_monty, studio_idle_hibernate_after: 20
+
 # The suite runs on the Postgres of the CI service, partitioned by
 # `MIX_TEST_PARTITION`. `ExTbpMonty.Database.repo_module/0` follows
 # `DATABASE_URL` when nothing names a repo, which in a test would be a file.

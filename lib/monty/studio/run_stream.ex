@@ -65,9 +65,16 @@ defmodule Monty.Studio.RunStream do
   # wait is generous and the failure is no longer how a run ends.
   @timeout 60_000
 
+  # Idle here for the reason `RunWriter`'s comment measures: a step's entry and
+  # moment are kilobytes, and a process that has handled thousands of them keeps
+  # the heap they needed. Hibernation does not affect the table this process owns.
+  @idle_after Application.compile_env(:ex_tbp_monty, :studio_idle_hibernate_after, 5_000)
+
   @doc "Starts the table. One for the node, owned by this process."
   @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__, hibernate_after: @idle_after)
+  end
 
   @doc """
   Hands one step over: what it reported, what the modules believed, and what the

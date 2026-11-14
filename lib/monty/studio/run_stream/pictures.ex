@@ -26,6 +26,11 @@ defmodule Monty.Studio.RunStream.Pictures do
   alias Monty.Simulators.Synthetic.Camera
   alias Monty.Studio.{Artifacts, RunLog}
 
+  # Idle here for the reason `RunWriter`'s comment measures: this process draws
+  # and encodes every step's pictures, so its heap is the size of the batch that
+  # took longest — 58 MB on a live run, of which 11 MB was live data.
+  @idle_after Application.compile_env(:ex_tbp_monty, :studio_idle_hibernate_after, 5_000)
+
   @doc """
   Draws and writes a step's pictures, and announces the step.
 
@@ -51,7 +56,9 @@ defmodule Monty.Studio.RunStream.Pictures do
   def settle(timeout \\ 5_000), do: GenServer.call(__MODULE__, :settle, timeout)
 
   @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__, hibernate_after: @idle_after)
+  end
 
   @impl true
   def init(_opts), do: {:ok, %{}}

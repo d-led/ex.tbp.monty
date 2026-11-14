@@ -23,6 +23,19 @@ defmodule Monty.Studio.RunWriter do
   alias Monty.Studio.RunHistory
   alias Monty.Studio.RunHistory.Run
 
+  # The heap this process grows to is the heap of the largest thing it was handed:
+  # a checkpoint carries an episode's steps, and an episode of a big run is
+  # megabytes. Nothing in the runtime tells an idle process to give a heap back,
+  # so it kept it for the life of the node. Measured on a live run of 12 448
+  # steps: this process sat on **331 MB of collected-but-unreturned heap** with an
+  # empty mailbox and 2 KB of live data, and one forced GC took the node from
+  # 840 MB to 434 MB. The machine crossed its memory watermark every ten minutes,
+  # and under that watermark the VM suspends processes — sockets lose their
+  # heartbeat, and a reader watches the page disconnect while the run is fine.
+  # Hibernating when idle is how a BEAM process returns that heap; a test sets it
+  # to milliseconds so the behaviour can be asserted.
+  @idle_after Application.compile_env(:ex_tbp_monty, :studio_idle_hibernate_after, 5_000)
+
   @typedoc "A slice of a run's transcript: the entries, and each one's moment."
   @type steps :: {[map()], [map()]}
 
@@ -55,7 +68,10 @@ defmodule Monty.Studio.RunWriter do
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options \\ []) do
-    GenServer.start_link(__MODULE__, :ok, Keyword.put_new(options, :name, __MODULE__))
+    options
+    |> Keyword.put_new(:name, __MODULE__)
+    |> Keyword.put_new(:hibernate_after, @idle_after)
+    |> then(&GenServer.start_link(__MODULE__, :ok, &1))
   end
 
   @impl true
