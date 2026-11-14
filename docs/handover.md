@@ -3995,13 +3995,33 @@ end — a twentieth of a gigabyte, not twenty. Everything else was flat: binarie
 end of every run, which is the world being closed (`start_episode/5` closes the
 previous one, `stop_episode/3` closes its own).
 
-**So nothing in the studio as it stands reproduces it**, and the one bounded
-growth is too small by two orders of magnitude. What the numbers do say is that
-whatever reached 20 GB was not the VM's own heap: RSS stood at 1.3 GB while
+**So no single run reproduces it**, and the one bounded growth is too small for one
+run to explain twenty gigabytes. What the numbers do say is that whatever reached
+20 GB was not the VM's own heap of one run: RSS stood at 1.3 GB while
 `:erlang.memory/0` said 0.9 GB once, and the gap between them is the embedded
 CPython and MuJoCo, which nothing in this application accounts for.
 
-### 52.2 What is left to look at, and what would settle it
+### 52.2 The accumulation, which is what it was
+
+A table that never clears is the answer, and it is a property of the **whole
+checkout's day**, not of one run: this checkout's `run.log`s hold **498 044 steps
+in 98 runs today** (the largest 81 835, then 71 111, 37 371, 37 025, 31 014), and
+at the 10.2 kB a step measured above that is **4.8 GB** if every one of them left
+its transcript in `RunStream`.
+
+The path that leaves it is `Reaper.abandon/1`: it closes a run whose worker is
+gone, and `RunHistory.finish/3` writes the row it is given without asking the
+stream for anything — so a run that no worker survived keeps every step it took
+in the table, for the life of the node, while its pictures and its moments stay
+beside them. The runs that did that are exactly this evening's: 47 of the 63 in
+the list are `failed`, and four of them had five figures of steps.
+
+That is being fixed in another hand while this was written (`Reaper.abandon/1`
+keeps what the stream holds into the record before it closes it, and says so in a
+warning when it cannot), which is the right place: the leak is not a step being
+held, it is a closing that forgets to ask.
+
+### 52.3 What remains to look at, and what would settle it
 
 - `Monty.Simulators.Mujoco.Host` is a single GenServer holding one Python
   namespace per world and `world.close()` runs on every episode and at the end of
