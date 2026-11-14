@@ -1159,13 +1159,16 @@ defmodule ExTbpMontyWeb.StudioComponents do
   end
 
   # The chart's points are thinned to what a pointer can tell apart before they
-  # are sent: this many per line, which is more than the plot has pixels for.
-  # Every drawn point is sent, not a sample of them: a hover reads the value at
-  # the pointer's own place on the line, and a line is only straight between the
-  # points it was drawn through. Twelve hundred points is well over one per pixel
-  # of a plot this wide, so a run zoomed all the way out still has a point under
-  # the pointer without sending a step per pixel.
-  @samples_per_line 1200
+  # are sent: this many per line, which is about one per pixel of a plot drawn at
+  # its usual width (320 units, ~583 px). Every drawn point is sent, not a sample
+  # of them: a hover reads the value at the pointer's own place on the line, and
+  # a line is only straight between the points it was drawn through.
+  #
+  # It was 1 200, which is two per pixel — and on a live run's page these are
+  # re-sent on every patch, where they measured **517 512 bytes** of one DOM
+  # attribute for twelve thousand points over ten lines. Halving it pays for
+  # nothing a pointer can see.
+  @samples_per_line 640
 
   # One entry per drawn point: where it sits, and the words a hover shows. The
   # label is made here, not in the browser, so it says "mug · step 3 · 0.41" like

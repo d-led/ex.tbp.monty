@@ -65,6 +65,39 @@ defmodule Monty.Studio.Replay.ChartTest do
     end
   end
 
+  describe "how much of a long line is drawn" do
+    # A live run's page draws the whole run while it steps: fifty-five episodes of
+    # about five hundred steps each is thirty thousand points, and every one of
+    # them used to be in the path — 126 kB of `d` for one line, re-sent on every
+    # patch. The plot is 320 units across, so a quarter unit is finer than a
+    # stroke can show, and the line is cut to that.
+    test "at the plot's resolution, not a point a step" do
+      points =
+        for step <- 0..29_999 do
+          %{step: step, value: :math.sin(step / 100) * 10.0 + 10.0, episode: div(step, 540)}
+        end
+
+      chart = Chart.new(points, window: {0, 29_999})
+
+      assert [%{path: path}] = chart.paths
+
+      drawn =
+        path
+        |> String.split("M ")
+        |> Enum.reject(&(&1 == ""))
+        |> Enum.flat_map(&String.split(&1, " ", trim: true))
+        |> length()
+
+      # 320 units at four columns each, plus the last point of each of the 56
+      # stretches: about 1 350. A point a step would be 30 000.
+      assert drawn < 2_000
+      assert drawn > 1_000
+
+      # And it is still the whole picture: every episode contributes a stretch.
+      assert runs_of(path) == 56
+    end
+  end
+
   describe "the episodes the chart shades" do
     # Evidence restarts at zero at every boundary, so a run's lines climb and drop
     # in a rhythm. One band per episode, each in a colour of its own — the pyview

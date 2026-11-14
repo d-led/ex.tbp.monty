@@ -31,10 +31,8 @@ defmodule Monty.Studio.Replay.Chart do
   @height 150
 
   # How finely the drawn path is sampled: this many samples to a unit of the plot,
-  # which is more than the pixel a unit is drawn as. A stretch longer than the
-  # plot can show is thinned to it (`thin/1`).
+  # which is more than the pixel a unit is drawn as (`thin/1`).
   @per_unit 4
-  @max_drawn @width * @per_unit
 
   # Four labelled lines is what a plot this tall carries without crowding, and
   # the tolerance that keeps a value sitting exactly on a multiple from being
@@ -413,20 +411,28 @@ defmodule Monty.Studio.Replay.Chart do
   # A plot is `@width` units across however long the run is, so a stretch of five
   # thousand steps puts fifteen samples in every unit: they are drawn on top of
   # one another, and every one of them travels to the browser on every drawing a
-  # live page makes. A stretch with more samples than the plot has room for is
-  # thinned to the first of each quarter unit plus the point it really ends at —
-  # monotone in x, so the stroke never retraces itself. Keeping a column's lowest
-  # *and* highest was tried before and doubled every line: both sit at the same
-  # x, and the retraced stroke looked worse than the sampling it saved.
+  # live page makes. A stretch is thinned to the first of each quarter unit plus
+  # the point it really ends at — monotone in x, so the stroke never retraces
+  # itself. Keeping a column's lowest *and* highest was tried before and doubled
+  # every line: both sit at the same x, and the retraced stroke looked worse than
+  # the sampling it saved.
   #
-  # What a pointer reads is not thinned: `samples` below keeps every point, so a
-  # hover still names the step under the cursor.
+  # **Every** stretch is thinned, not only a long one. There used to be a guard
+  # that skipped this when the stretch was shorter than the plot's own column
+  # count, and it was right while a stretch was its own `<polyline>`. Once a line
+  # became one `<path>`, it was the line that had to fit: one episode of ~540
+  # steps passed the guard, so nothing was thinned, and a fifty-five-episode line
+  # carried nine thousand points — 126 kB of `d` for one line of a live run's
+  # page, re-sent on every step.
+  #
+  # What a pointer reads is not thinned here: the chart keeps every point in
+  # `hover`, and `chart_samples/3` has its own budget for what it sends.
   defp thin(run) do
-    if length(run) <= @max_drawn do
-      run
-    else
-      (run |> Enum.chunk_by(&column/1) |> Enum.map(&hd/1)) ++ [List.last(run)]
-    end
+    run
+    |> Enum.chunk_by(&column/1)
+    |> Enum.map(&hd/1)
+    |> then(&(&1 ++ [List.last(run)]))
+    |> Enum.dedup()
   end
 
   defp column({_episode, _step, {x, _y}}), do: trunc(x * @per_unit)

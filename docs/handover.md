@@ -3967,3 +3967,82 @@ been living on a false assumption:
 Both are worth keeping in mind as a class: a test that names an id a page
 generates, or reads a row a task is about to delete, is a test of the machine's
 timing rather than of the behaviour.
+
+## 52. 2026-11-14: twenty gigabytes, and one path that never lets go
+
+The machine had to be killed: `beam.smp` took 20 GB, which the machine does not
+have. The only evidence left was in `logs/node2.log` — **86**
+`system_memory_high_watermark` alarms in one node's lifetime, set at 20:02,
+cleared at 20:20, set again at 20:22, cleared at 20:45 when the node was killed.
+Twenty-three minutes above the watermark, climbing.
+
+### 52.1 What the node was doing
+
+`priv/studio_runs/f7c051d1-…` — `flyverse_plugin.10simobj_surf_agent`, planned at
+140 episodes of up to 5 000 steps, reached episode 68 at 20:44 after **31 950
+steps**, with 31 950 frame folders (542 MB on disk) and a 6.6 MB log. Then:
+
+```
+20:45:28 the run was abandoned: it stopped before it finished — nothing was
+         working on it any more
+20:45:29 its job #64 was cancelled: it was left executing
+```
+
+### 52.2 One unbounded table, and five paths of which one forgets
+
+`Monty.Studio.RunStream` holds a running run's steps in **one** ETS table
+(`@table __MODULE__`, `:ordered_set`), keyed `{stream_id, position}`, at the
+11 kB a step §48 measured — 521 MB for a 13 000-step run and ~350 MB for this
+31 950-step one. Rows leave only through `RunStream.clear/1`. There is no sweep:
+no `handle_info`, no `:timeout`, nothing that ages a row out.
+
+Every path that closes a run clears it — except the reaper:
+
+| path                                   | clears? |
+| -------------------------------------- | ------- |
+| `Jobs.Run.close/8` (normal end)        | yes — `store_all/1` then `RunStream.clear/1` |
+| a part falling out of the pool         | yes — `run.ex:534` |
+| `Jobs.settle/2` (stop, cancel)         | yes — `RunHistory.keep_streamed/1` |
+| **`Jobs.Reaper.abandon/1`**            | **no** — it calls `RunHistory.finish/3`, which writes the row and does not touch the table |
+
+So every abandoned run leaves its steps in the table for the life of the node.
+A page that reconnects re-reads them; nothing ever removes them. The run above
+was abandoned at 20:45 having put ~350 MB there, and a day of killed runs,
+restarts of the same experiment and cancels is how a table reaches gigabytes.
+
+This is the same shape as §50: the memory was known, the fix was aimed at the
+process heaps (`hibernate_after` compacts a heap; it said so at the time that the
+table is unaffected), and the table was left as the one thing nobody swept.
+
+### 52.3 What was done, and what a run in flight forbade
+
+`scripts/memory_watch.exs` samples while a node is up, because after the kill
+there was nothing to ask:
+
+```
+elixir --sname memory_watch scripts/memory_watch.exs node1 5 10
+19:50:33 rss=1.2 GB beam=50 MB (processes=14 MB ets=620 kB binary=34 kB) \
+         run_steps=0 rows, - | top: :code_server=1 MB …
+```
+
+Two numbers on purpose: `rss` is what the OS says every beam on the machine
+holds — the number the machine runs out of — and `beam` is what the BEAM says it
+holds. A NIF's own heap (CPython under Pythonx, a MuJoCo model) is not in the
+second, so *rss climbing while beam stays flat* says "outside the BEAM, and no
+`:erlang.garbage_collect/1` will return it"; rss tracking beam says a process or
+a table, and the same line names the table.
+
+**The fix is not applied.** A run went in flight (`39c356bd-…`) while this was
+being written, and `lib/` is not editable under a run — see `AGENTS.md`. It is
+one change, in `Jobs.Reaper.abandon/1`: close the way `Jobs.settle/2` closes,
+`RunHistory.keep_streamed/1` then `finish/3`, so the steps the reaper's run took
+reach its row before the table lets go of them. A case for it belongs in
+`test/monty/studio/jobs/reaper_test.exs`: abandon a run that published steps,
+then ask `RunStream.steps/1` for them and assert the table is empty and the row
+has them.
+
+Worth deciding with it: a sweep. `clear/1` is a memory of what the node still
+*wants*, and every path that closes a run has to remember to ask — which is how
+one came to not ask. A periodic `:ets.select` for streams whose run is no longer
+in flight (`RunHistory.in_flight?/1`) would make forgetting harmless instead of
+expensive.
