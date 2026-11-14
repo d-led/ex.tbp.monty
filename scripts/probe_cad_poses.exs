@@ -264,6 +264,24 @@ processed    #{Enum.count(observed, & &1.processed)} of #{length(observed)} step
         "  overlap #{Float.round(row.overlap, 2)}  processed #{row.processed}  symmetry #{row.symmetry}"
     )
   end
+
+  # A set that narrows and then widens is a different failure from one that never
+  # narrows, and only the step says which step did it.
+  jumps =
+    observed
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.filter(fn [before, now] -> now.possible - before.possible >= 10 end)
+
+  if jumps != [] do
+    IO.puts("\n  widening (a possible set that grew by ten or more):")
+
+    for [before, now] <- Enum.take(jumps, 10) do
+      IO.puts(
+        "  step #{String.pad_leading(to_string(now.step), 3)}  #{before.possible} -> #{now.possible}" <>
+          "  processed #{now.processed}  overlap #{Float.round(now.overlap, 2)}"
+      )
+    end
+  end
 end
 
 Run.stop_model(run)

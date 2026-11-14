@@ -208,6 +208,30 @@ scene, not a config, knows where the object is.
    settling. Recognition is a conjunction: one object _and_ a nameable pose, and
    on these seeds only the first half arrives inside the config's own budget.
 
+   Read over the whole episode rather than at its last step, the two seeds do not
+   differ in how far they narrow; they differ in whether they keep it. The probe
+   prints the possible set every step, so the same part and the same 500-step
+   budget give:
+
+   | seed | narrowest set | at step | at the limit        | outcome         |
+   | ---- | ------------- | ------- | ------------------- | --------------- |
+   | 1    | 4             | 174     | 3, **one** rotation | `:match` at 418 |
+   | 0    | 3             | 45      | 51, four rotations  | none at 500     |
+
+   Seed 0 does not fail to narrow — it narrows first and then **reopens**: 4 → 36
+   at step 213, 36 → 70 at 275, 70 → 177 at 287, and 51 at the limit. Every
+   widening of ten or more is a _processed_ step, which is what makes the two
+   findings one finding: the delta filter lets 37 of 497 steps through, those are
+   the only steps on which the set moves at all, and on this seed most of them
+   add alternatives rather than remove them. Seed 1's four surviving poses simply
+   never get reopened.
+
+   The 500 is not this experiment's choice, and worth saying so before anyone
+   looks for room in it: every recognition termination in the port sets
+   `max_eval_steps: 500`, and Monty's own are the same number. A failure that
+   looked like budget would have to be answered by the path, not the cap — and
+   this one is not budget, because the set is not still narrowing when it ends.
+
    The rule that decides it is worth saying in its own terms, because "pose not
    settled" sounds like a knob: `unique_pose?/4` answers true only when **every**
    remaining possible hypothesis is within `path_similarity_threshold` of the
