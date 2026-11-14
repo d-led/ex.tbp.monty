@@ -307,6 +307,31 @@ defmodule FlyversePlugin.PolicyTest do
     assert left.forward_distance < 0.0, "and off the surface, not along it"
   end
 
+  # And off the object the same frozen patch is the same answer, which `:cruise`
+  # had no clock to notice: a plane that has not changed under the sensor for
+  # twenty steps is not being searched, and one run walked a straight line across
+  # a tabletop for 5000 steps reading one flat value at every step because nothing
+  # off the object ever counted the steps.
+  test "a blank plane under the patch is looked around after twenty steps of it", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    blank = %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[0.2, 0.2]]},
+        "patch" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}
+      }
+    }
+
+    {result, _policy, _state} =
+      Enum.reduce(1..22, {nil, policy, state}, fn _step, {_result, policy, state} ->
+        step(policy, state, blank, touching(0.05))
+      end)
+
+    assert [%OrientHorizontal{} = circled] = result.actions
+    assert circled.left_distance > 0.0, "round the search circle, not another hop"
+    assert circled.rotation_degrees > 0.0
+  end
+
   # A look is a step of the bout it interrupts, not the start of a new one: sixty
   # steps of surface is sixty steps, looked at or not.
   test "a look does not restart the bout's clock", %{state: state} do

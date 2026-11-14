@@ -351,14 +351,38 @@ defmodule FlyversePlugin.Policy do
     simulation = Map.fetch!(state.simulations, policy.sim)
     next = bout(simulation, on_object?(percept) and sees_something?(observations, policy))
     advanced = advance(simulation, next)
-    state = put(state, policy.sim, advanced)
+    watched = watch(advanced, patch_nearness(observations, policy))
+    state = put(state, policy.sim, watched)
 
     case next do
       :explore -> steer(policy, observations, percept, state)
-      :depart -> {:ok, departing(policy, advanced), policy, state}
+      :depart -> {:ok, departing(policy, watched), policy, state}
       :look -> {:ok, looking(policy, observations), policy, state}
       :cruise -> {:ok, touch(policy, observations), policy, state}
     end
+  end
+
+  # What the patch answered, watched on every step whatever the behaviour is.
+  #
+  # The stall could only be seen while walking on the object, and being off the
+  # object is exactly when a fly is most stuck: `:cruise` had no clock at all, so
+  # a patch reading one flat plane while the fly crossed the tabletop never
+  # caused anything, and a run spent five thousand steps walking a straight line
+  # with the same image at every step. Watching every step is what gives the
+  # cruise a clock.
+  defp watch(simulation, nil), do: %{simulation | still: 0}
+
+  # A look is already the answer to a stall, so its own steps do not count towards
+  # the next one: the six steps of the circle are one act, not six readings.
+  defp watch(%{bout: :look} = simulation, nearness),
+    do: %{simulation | patch_nearness: nearness, still: 0}
+
+  defp watch(simulation, nearness) do
+    %{
+      simulation
+      | patch_nearness: nearness,
+        still: still(simulation.patch_nearness, nearness, simulation.still)
+    }
   end
 
   # A patch that sees nothing is not on the object, whatever the percept says. A
@@ -398,6 +422,11 @@ defmodule FlyversePlugin.Policy do
   defp bout(%{still: still, looks: looked}, true) when still >= @stall_steps,
     do: if(looked >= @looks_per_bout, do: :depart, else: :look)
 
+  # And off the object the same frozen patch is the same answer, because a plane
+  # that has not changed under the sensor for twenty steps is not being searched:
+  # the fly walks a straight line over it for as long as the episode lasts.
+  defp bout(%{still: still}, false) when still >= @stall_steps, do: :look
+
   defp bout(_simulation, false), do: :cruise
 
   defp bout(%{bout: :depart, bout_steps: taken}, true) when taken < @depart_steps, do: :depart
@@ -411,7 +440,7 @@ defmodule FlyversePlugin.Policy do
   # bout, not the continuation of the old one. Being off the object is not a
   # behaviour it counts, because there is nothing there to time.
   defp advance(simulation, :cruise),
-    do: %{simulation | bout: :cruise, bout_steps: 0, still: 0, look_steps: 0, looks: 0}
+    do: %{simulation | bout: :cruise, bout_steps: 0, look_steps: 0, looks: 0}
 
   defp advance(simulation, :look) do
     looking_on = simulation.bout == :look
@@ -420,7 +449,6 @@ defmodule FlyversePlugin.Policy do
       simulation
       | bout: :look,
         bout_steps: bout_steps(simulation, :look),
-        still: 0,
         look_steps: if(looking_on, do: simulation.look_steps + 1, else: 1),
         looks: if(looking_on, do: simulation.looks, else: simulation.looks + 1)
     }
@@ -470,7 +498,6 @@ defmodule FlyversePlugin.Policy do
          {:ok, window} <- step(simulation, rows) do
       wish = smoothed(simulation, window.left - window.right)
       result = result(policy, wish, window, percept, observations)
-      patch = patch_nearness(observations, policy)
 
       simulation = %{
         simulation
@@ -478,8 +505,6 @@ defmodule FlyversePlugin.Policy do
           spikes: window.spikes,
           last: window,
           nearness: window.nearness,
-          patch_nearness: patch || simulation.patch_nearness,
-          still: still(simulation.patch_nearness, patch, simulation.still),
           steps: simulation.steps + 1
       }
 
