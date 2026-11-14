@@ -4,10 +4,22 @@
 # `system_memory_high_watermark` alarms in a log — after the process that knew
 # where the memory was had been killed. This samples while it happens.
 #
-#   elixir --sname memory_watch scripts/memory_watch.exs [node] [interval_s] [minutes]
+#   elixir --name memory_watch@127.0.0.1 scripts/memory_watch.exs [node] [interval_s] [minutes]
 #
-# A node started with `--sname node1` and no `--cookie` shares this user's
-# `~/.erlang.cookie`, so the probe starts with the same one and asks it directly.
+# The nodes the supervisor starts are long-named and carry an explicit cookie —
+# `elixir --name node1@127.0.0.1 --cookie {{.MONTY_CLUSTER_SECRET}} -S mix
+# phx.server`, process-compose.yaml:138 — so a probe in this machine's short-name
+# namespace cannot reach them at all, whatever it is told. That failure reads
+# `could not reach node1@dam2`, and it was observed twice on the evening this
+# script was written, with a node answering `epmd -names` the whole time.
+#
+# The probe therefore takes a long name of its own, names the node the same way,
+# and asks *that node* to accept the supervisor's secret before connecting — a
+# cookie is per-node, so the probe does not have to be started with one.
+#
+# The times it prints are UTC, and every line says so: the supervisor's logs are
+# local, so a sample taken at 20:28 is a log line at 21:28 on this machine, and an
+# incident is read by lining the two up.
 #
 # Every line reports two numbers that are different on purpose, because the
 # difference *is* the diagnosis:
@@ -33,11 +45,30 @@
 interval = rest |> Enum.at(0, "2") |> String.to_integer()
 minutes = rest |> Enum.at(1, "0") |> String.to_integer()
 
-{:ok, host} = :inet.gethostname()
-target = :"#{node_name}@#{host}"
+# `node1` means `node1@127.0.0.1`, which is how the supervisor writes it; a name
+# that already carries its host is taken as given.
+target =
+  if String.contains?(node_name, "@"),
+    do: String.to_atom(node_name),
+    else: :"#{node_name}@127.0.0.1"
+
+# The supervisor's default is asserted as `MONTY_CLUSTER_SECRET:
+# local-dev-secret` in the same file, so a probe started from a shell without the
+# variable still reaches a stack started from a shell without it.
+#
+# The default cookie of *every* node, not just `target`'s: the kernel's own
+# `global` server connects to every node it hears of, so a probe allowed to read
+# one node and no other fills its own output with `Invalid challenge reply` once
+# a second while a cluster is up. An observer that shares the cluster's cookie is
+# a member of it, which is what a reader of this line wants it to be.
+Node.set_cookie(String.to_atom(System.get_env("MONTY_CLUSTER_SECRET", "local-dev-secret")))
 
 unless Node.connect(target) do
-  IO.puts("could not reach #{target}: start the node with --sname #{node_name}")
+  IO.puts(
+    "could not reach #{target}: the node is started `--name #{target}` with the " <>
+      "supervisor's cookie — set MONTY_CLUSTER_SECRET if it is not local-dev-secret"
+  )
+
   System.halt(1)
 end
 
@@ -67,7 +98,9 @@ sample = fn ->
         out
         |> String.split("\n", trim: true)
         |> Enum.filter(&String.contains?(&1, "beam.smp"))
-        |> Enum.map(fn line -> line |> String.trim() |> String.split(" ", parts: 2) |> hd() |> String.to_integer() end)
+        |> Enum.map(fn line ->
+          line |> String.trim() |> String.split(" ", parts: 2) |> hd() |> String.to_integer()
+        end)
         |> Enum.sum()
 
       _ ->
@@ -121,7 +154,7 @@ sample = fn ->
     end
 
   IO.puts(
-    "#{Calendar.strftime(DateTime.utc_now(), "%H:%M:%S")} " <>
+    "#{Calendar.strftime(DateTime.utc_now(), "%H:%M:%S")} UTC " <>
       "rss=#{Watch.phrase(rss_kb * 1024)} " <>
       "beam=#{Watch.phrase(memory[:total])} " <>
       "(processes=#{Watch.phrase(memory[:processes])} ets=#{Watch.phrase(memory[:ets])} binary=#{Watch.phrase(memory[:binary])}) " <>
@@ -129,7 +162,10 @@ sample = fn ->
   )
 end
 
-IO.puts("watching #{target} every #{interval}s#{if minutes > 0, do: " for #{minutes} min", else: ""}")
+IO.puts(
+  "watching #{target} every #{interval}s#{if minutes > 0, do: " for #{minutes} min", else: ""}"
+)
+
 stop_at = System.monotonic_time(:second) + minutes * 60
 
 Stream.repeatedly(fn ->
