@@ -21,6 +21,15 @@ The rules that are specific to it, in priority order:
   `pose_fully_defined` as feature names.
 - **Determinism is a feature.** One RNG stream per episode, threaded in Python's
   order; do not introduce process-local randomness into a step.
+- **A run in flight forbids editing `lib/`.** The dev server recompiles a changed
+  module on the next request and purges the old version, and a worker stepping
+  through that module dies on it — `the run died: function
+Monty.Studio.RunStream.steps_from/2 is undefined (module … is not available)`,
+  forty-five episodes in, because somebody saved a file to fix something else.
+  Check `ls -lt priv/studio_runs/*/run.log | head -1` against the clock before
+  the first edit; if a run is writing, write the change in `test/` and the
+  message, and apply it when the run has finished. Tests are safe: `MIX_ENV=test`
+  is another build and another VM.
 - **Tests specify behaviour**, with Monty numbers as fixtures where the maths
   matters. No `Process.sleep/1`; monitor or `:sys.get_state/1` instead.
 - **A page never dies on a client event.** A hook belongs to a component, and a
