@@ -4141,9 +4141,10 @@ to work.
 
 ## 54. 2026-11-14: the open list, aggregated
 
-There were four by the evening — §47.3, §51.3, §52.3 and §53.3 — and two of them
-were the same question asked from different ends. This is the one list. Nothing
-here claims somebody is on it; each line says what it needs and who can give it.
+There were five by the evening — §47.3, §51.3, §52.3, §53.3 and the plan in §55 —
+and two of them were the same question asked from different ends. This is the one
+list. Nothing here claims somebody is on it; each line says what it needs and who
+can give it.
 
 ### 54.1 Settled, so nobody does them twice
 
@@ -4167,6 +4168,16 @@ here claims somebody is on it; each line says what it needs and who can give it.
    `DATABASE_URL`. Worth restating what §51.1 settled: this is **not** a
    precondition for division any more, only for the _queue_ spreading. Another
    hand's area (`cluster_nodes.ex`, `cluster_peer_runs.ex`, `settings_live.ex`).
+4. **Where the CAD host lives** — a process of `process-compose.yaml` (which
+   starts this repository's own processes, and the CAD server is a sibling
+   checkout), or a documented `MONTY_SEEDS` addition (§55.5).
+5. **Whether `ex_mujoco` becomes a fourth world** — `Monty.Studio.Setup.world/4`
+   is where a world is added and the only way that library can join a comparison;
+   it means a scene module over `ExMujoco` with the sensors
+   `base_10simobj_surf_agent` expects, which is not a small piece (§55.5).
+6. **Whether a plugin definition may name a world.** Today it cannot, which is
+   why the CAD row's world is a property of _how it is opened_ and has to be
+   documented rather than declared (§55.5).
 
 ### 54.3 Decided, not started
 
@@ -4178,6 +4189,14 @@ here claims somebody is on it; each line says what it needs and who can give it.
    The entry keeps `part`, the card and the frame key use it, `RunLog.line/1`
    does not print it — so a reader of a division sees `step 38` and then
    `step 0`. Left alone while §50.4 has what an entry _is_ in hand.
+3. **The four-variation comparison itself** (§55.3): **no four runs exist** —
+   what is there is the preparation and the proof that a run of each can start.
+   The next job is the numbers, opened with the same budget (`--episodes 1`, the
+   same `--steps`, the CAD row with `--world cad`), after tracing whether those
+   two overrides reach a _plugin_ definition the way they reach a config:
+   `Monty.Studio.open/2` passes `:world_simulator` and `:pretrained_dir` through
+   `PluginExperiment.open/2`, and `with_seed/2` applies the seed, but the episode
+   and step overrides were never traced for that path.
 
 ### 54.4 Questions with no owner
 
@@ -4188,6 +4207,12 @@ here claims somebody is on it; each line says what it needs and who can give it.
    catch the gap growing.
 2. **`collect/2`'s error branch has no test** (§47.3 item 5). It has been _run_,
    by a peer that could not start; a test wants a seam nothing reaches today.
+3. **`ex.monty.cad.server` is still version 0.2.0** and offers more than 0.2.0
+   did — a new offer is a feature, so a minor bump when it is released (§55.4).
+4. **Placement is a claim, not a check.** A cluster-wide name is answered by
+   whoever is up, so `lookup/2` for an `:owner_only` policy asks the wrong
+   question when a peer offers the same name; `docs/plugins.md` has the general
+   hole (§55.4).
 
 ### 54.5 What I did not manage, and why
 
@@ -4204,6 +4229,13 @@ here claims somebody is on it; each line says what it needs and who can give it.
   `scripts/quality.sh` (CI runs it as its own job) and three other hands' commits
   have landed since; the last `MIX_ENV=test mix dialyzer` on this checkout was
   clean, and that is not the same as clean now.
+- **§55's prose rode along in my commit `2fc04ea`.** It was in the working tree
+  when I staged `docs/handover.md` to commit this section, so `git add` took it
+  with mine — 203 insertions where I wrote 83. Nothing was lost and nothing was
+  overwritten; the cost is attribution, which is why the rule is "stage the hunks
+  you wrote". Both sections also claimed §54, so §55 is now numbered after this
+  one and its two self-references (`54.2`, `54.5` in its own text) point at
+  `55.2` and `55.5`.
 
 ### 54.6 One hazard nobody has written down: the gate compiles in dev
 
@@ -4215,26 +4247,26 @@ save does (§50.3). `MIX_ENV=test mix lint` lints without touching `_build/dev`;
 the script does not, and the gate is what CI runs, so the trap is on the machine
 of whoever runs it mid-run.
 
-## 54. 2026-11-14: the four variations of one experiment, and what is left
+## 55. 2026-11-14: the four variations of one experiment, and what is left
 
 The ask was to "prepare the same experiment variation with all our libraries so
 that we compare them against each other", the flyverse one being the pattern. This
 section is the state of that, so that whoever picks it up does not have to rediscover
 which half is real.
 
-### 54.1 What exists
+### 55.1 What exists
 
 One base config, four rows, one rule for each row: the base is
 `base_10simobj_surf_agent`, the seed is written down as `42`, and no definition
 names an `episodes` key (the studio performs one episode of the config it
 describes, so a number nothing read would be a promise the record could not keep).
 
-| Experiment | Defined by | Motor system | World |
-| --- | --- | --- | --- |
-| `base_10simobj_surf_agent` | the config (the control) | `surface_curvature_informed_goal1` | `mujoco` |
-| `example_plugin.10simobj_surf_agent_one_episode` | `examples/example_plugin` | `example_plugin.surface_stepper` | `mujoco` |
-| `flyverse_plugin.10simobj_surf_agent` | `examples/flyverse_plugin` | `flyverse_plugin.lif_steering` | `mujoco` |
-| `monty_cad.10simobj_surf_agent` | `ex.monty.cad.server` | `monty_cad.feature_walk` | `cad` |
+| Experiment                                       | Defined by                 | Motor system                       | World    |
+| ------------------------------------------------ | -------------------------- | ---------------------------------- | -------- |
+| `base_10simobj_surf_agent`                       | the config (the control)   | `surface_curvature_informed_goal1` | `mujoco` |
+| `example_plugin.10simobj_surf_agent_one_episode` | `examples/example_plugin`  | `example_plugin.surface_stepper`   | `mujoco` |
+| `flyverse_plugin.10simobj_surf_agent`            | `examples/flyverse_plugin` | `flyverse_plugin.lif_steering`     | `mujoco` |
+| `monty_cad.10simobj_surf_agent`                  | `ex.monty.cad.server`      | `monty_cad.feature_walk`           | `cad`    |
 
 The CAD row is the one this session added: `ExMontyCadServer.Experiment` in the
 sibling checkout `ex.monty.cad.server`, `aa78601`. It was missing rather than
@@ -4244,7 +4276,7 @@ misbuilt — the host offered `monty_cad.feature_walk` and no experiment to use 
 geometry kernel and a document reader are a world or an input, the package is the
 contract, the last is the FFI.
 
-### 54.2 What was verified, and what it took
+### 55.2 What was verified, and what it took
 
 `ex_monty_cad.server` could not start in `dev` at all: its repository was
 configured only inside the `prod` block of `config/runtime.exs`, so SQLite started
@@ -4273,8 +4305,8 @@ polls every few seconds, so an immediate question answers "two".
 
 The connect is one-off. It does not survive a node restart; `MONTY_SEEDS` naming
 `cad_server@127.0.0.1` is the permanent form, and that is a decision about
-`process-compose.yaml`, which starts *this* repository's processes — the host is a
-sibling checkout, so it was documented rather than added (54.5).
+`process-compose.yaml`, which starts _this_ repository's processes — the host is a
+sibling checkout, so it was documented rather than added (55.5).
 
 Also fixed on the way, in `aa78601`: `test/ex_monty_cad_server/policy/feature_walk_test.exs`
 asserted a **cluster-wide** `lookup/2` for an `:owner_only` policy, and
@@ -4283,12 +4315,12 @@ the same name — so the case passed or failed on whether that peer was up. It a
 `lookup/3` on this node now, which is what `Cluster`'s own docstring says such a
 caller must ask.
 
-### 54.3 What has not been done: the comparison itself
+### 55.3 What has not been done: the comparison itself
 
 **No four runs exist.** Everything above is preparation and the proof that a run of
-each *can* start. The next job is the numbers:
+each _can_ start. The next job is the numbers:
 
-1. Bring the CAD host in permanently (54.2) and open each variation with the same
+1. Bring the CAD host in permanently (55.2) and open each variation with the same
    budget: `--episodes 1`, the same `--steps`, the CAD row with `--world cad`.
    Unverified and worth checking first: whether `mix monty.run`'s `--episodes` and
    `--steps` apply to a **plugin** definition the way they apply to a config —
@@ -4307,7 +4339,7 @@ each *can* start. The next job is the numbers:
    written for a part. If the comparison needs the same ten objects on both sides,
    that gap is upstream of the policies and no amount of policy swapping fixes it.
 
-### 54.4 Rules that bit this session
+### 55.4 Rules that bit this session
 
 - **`lib/` under a run.** Saving `Jobs.Reaper` while `b368615f-…` was stepping
   killed that run on the module purge (§53.3). `scripts/run_in_flight.sh` is the
@@ -4317,12 +4349,12 @@ each *can* start. The next job is the numbers:
   `docs/plugins.md` has the general hole (placement is a claim, not a check).
 - **`ex.monty.cad.server`'s suite wants a Postgres on 5432** (CI provides a
   service; locally `docker run --rm -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres
-  postgres:17`, as its README says). The postgres started for this work was
+postgres:17`, as its README says). The postgres started for this work was
   removed afterwards.
 - **Its version is still 0.2.0** and it now offers more than 0.2.0 did. A new
   offer is a feature: minor bump when it is released.
 
-### 54.5 Choices left to a human
+### 55.5 Choices left to a human
 
 - Whether the CAD host becomes a process of `process-compose.yaml` (it is a
   sibling checkout, and that file starts this repository's own processes), or stays
@@ -4333,4 +4365,4 @@ each *can* start. The next job is the numbers:
   sensors `base_10simobj_surf_agent` expects.
 - Whether `RunStream` gets the sweep of §53.3, and whether a plugin definition may
   name a world (today it cannot, which is why the CAD row's world is a property of
-  *how it is opened* and has to be documented rather than declared).
+  _how it is opened_ and has to be documented rather than declared).
