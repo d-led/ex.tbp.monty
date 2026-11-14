@@ -634,17 +634,9 @@ defmodule FlyversePlugin.Policy do
     }
   end
 
-  # The reach of the eye when it chooses what to walk at, in metres. Not the walk's
-  # own metre: an object the fly is still approaching is a metre and a half away
-  # at the start of an episode, and a reach of one excluded it — a run that had
-  # found all ten objects lost the knife outright, because nothing within a metre
-  # of it varied. Three metres holds every object in this scene and still excludes
-  # the wall across the room.
-  @aim_reach 3.0
-
-  # Where in the view the depth varies most *within reach*, as a fraction of the
-  # picture's width from the middle: negative is left. `:none` when nothing in
-  # reach varies — nothing to turn towards — or when there is no view to read.
+  # Where in the view the depth varies most, as a fraction of the picture's width
+  # from the middle: negative is left. `:none` when the view is uniform — nothing
+  # in it is worth turning towards — or when there is no view to read.
   defp structure(observations, agent_id) do
     case Percept.image(observations, agent_id, @view_finder) do
       {:ok, {_sensor, rows}} -> most_varied(rows)
@@ -654,41 +646,23 @@ defmodule FlyversePlugin.Policy do
 
   # `Percept.image/3` has already refused an empty picture, so there is a picture
   # here and the width is the narrowest row.
-  #
-  # Within reach first, the whole view second. The reach keeps the wall out — its
-  # column varies from the floor to eight hundred metres and beats any object's
-  # silhouette — but a fly that can find nothing in reach must still go somewhere,
-  # and discarding the far structure outright lost the knife: a sweep that had
-  # found all ten objects timed out on it, because nothing within reach of a two
-  # centimetre blade varies.
   defp most_varied(rows) do
     width = rows |> Enum.map(&length/1) |> Enum.min()
 
-    if width < 2 do
-      :none
-    else
-      case widest(wide_columns(rows, width, @aim_reach), width) do
-        :none -> widest(wide_columns(rows, width, :any), width)
-        fraction -> fraction
-      end
-    end
+    if width < 2, do: :none, else: widest(wide_columns(rows, width), width)
   end
 
-  # A column's variation, over the depths the eye can reach or over all of them.
-  defp wide_columns(rows, width, reach) do
+  defp wide_columns(rows, width) do
     for column <- 0..(width - 1) do
       rows
       |> Enum.map(&Enum.at(&1, column))
-      |> Enum.filter(&reached?(&1, reach))
+      |> Enum.filter(&(is_number(&1) and &1 > 0.0))
       |> case do
         [] -> 0.0
         depths -> Enum.max(depths) - Enum.min(depths)
       end
     end
   end
-
-  defp reached?(depth, :any), do: is_number(depth) and depth > 0.0
-  defp reached?(depth, reach), do: is_number(depth) and depth > 0.0 and depth <= reach
 
   defp widest(columns, width) do
     most = Enum.max(columns, fn -> 0.0 end)
