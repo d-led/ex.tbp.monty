@@ -348,6 +348,15 @@ scene, not a config, knows where the object is.
    other a tolerance on position that follows the spacing — and they agree about
    which part is the harder one to orient.
 
+   Neither column predicts the rate, and `plate-huge` is the case that says so:
+   it has _fewer_ discriminating nodes than the plate — 153 of 1602 against 246
+   of 1557 — and concluded three times in four in the two-part test, where the
+   plate concluded four times in ten on its own. The share is a gate on whether
+   a pose can ever be named; how often an exploration reaches the part of the
+   memory that names it is a separate question, and the two comparisons are not
+   like for like — different library, different seed set. Reading the share as a
+   success rate would be the same mistake the rotation count invited.
+
    `scripts/probe_part_symmetry.py` is the test, over a memory the runs wrote:
 
        scripts/probe_part_symmetry.py /tmp/cad-experiment/blend
