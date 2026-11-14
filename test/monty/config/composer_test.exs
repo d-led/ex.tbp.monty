@@ -72,6 +72,13 @@ defmodule Monty.Config.ComposerTest do
   end
 
   describe "every snapshot Monty ships" do
+    # 63 compositions, 3.0 s on this machine at a load average of 12. The default
+    # 60 s was generous until the machine was not ours to be generous on: at a load
+    # average of 134 (macOS background processes, not our gates) this case expired
+    # with the machine being slow while the code underneath was fine, and a red
+    # gate under no change is the most expensive colour there is. 180 s bounds a
+    # hang; it is not a budget for how long the work should take.
+    @tag timeout: 180_000
     test "composes to the same tree" do
       # `{:ok, count}` is the whole claim: every snapshot composed to the tree
       # Monty recorded for it. The floor only proves the walk read the directory —
