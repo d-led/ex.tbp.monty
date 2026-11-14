@@ -424,8 +424,13 @@ defmodule FlyversePlugin.Policy do
 
   # And off the object the same frozen patch is the same answer, because a plane
   # that has not changed under the sensor for twenty steps is not being searched:
-  # the fly walks a straight line over it for as long as the episode lasts.
-  defp bout(%{still: still}, false) when still >= @stall_steps, do: :look
+  # the fly walks a straight line over it for as long as the episode lasts. The
+  # count grows with the number of legs already swept, so a search that keeps
+  # finding nothing widens instead of retracing a fan of equal legs: a metre, a
+  # metre, a metre, then two, then three.
+  defp bout(%{still: still, strays: strays}, false)
+       when still >= @stall_steps + @stall_steps * div(strays, 3),
+       do: :look
 
   defp bout(_simulation, false), do: :cruise
 
