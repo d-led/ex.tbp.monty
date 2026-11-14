@@ -394,12 +394,18 @@ scene, not a config, knows where the object is.
    So the next question is not "which part is this" but "which parts have a
    pose worth naming". The plate does and the blends do not, and the library a
    recognition run is aimed at therefore has to hold parts with a boss, a hole,
-   an off-centre feature — the things that break the symmetry. That is a
-   statement about the parts, and it is the one that `docs/cad.md`'s item 4
-   has to be built on. The plate's six failing seeds are the other half: same
-   part, same start, half the explorations find it inside the config's budget,
-   so either the exploration is too slow for these parts or the evidence needs
-   more steps than the borrowed config allows.
+   an off-centre feature — the things that break the symmetry. The feature also
+   has to be curved enough to count, and the threshold says how much: for a
+   cylinder the two principal curvatures are `1 / R` and nought, so a radius of
+   a hundred millimetres is exactly 10 m⁻¹, and a rounder feature than that
+   reports no orientation at all — a CAD part is worth a pose only while its
+   curved features are smaller than ten centimetres across, which is a second
+   reason a library of scaled parts is not a library of one shape at several
+   sizes. That is a statement about the parts, and it is the one
+   `docs/cad.md`'s item 4 has to be built on. The plate's six failing seeds are
+   the other half: same part, same start, half the explorations find it inside
+   the config's budget, so either the exploration is too slow for these parts or
+   the evidence needs more steps than the borrowed config allows.
 
    One measurement kept because the similar-pair question will need it: the two
    blends are not near-duplicates. `blend_r5` is 40 × 30 × 20 mm and
