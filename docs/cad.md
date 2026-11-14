@@ -220,11 +220,12 @@ scene, not a config, knows where the object is.
 
    Seed 0 does not fail to narrow — it narrows first and then **reopens**: 4 → 36
    at step 213, 36 → 70 at 275, 70 → 177 at 287, and 51 at the limit. Every
-   widening of ten or more is a _processed_ step, which is what makes the two
-   findings one finding: the delta filter lets 37 of 497 steps through, those are
-   the only steps on which the set moves at all, and on this seed most of them
-   add alternatives rather than remove them. Seed 1's four surviving poses simply
-   never get reopened.
+   widening of ten or more is a _processed_ step, which ties this to the filter
+   finding: the delta filter lets 37 of 497 steps through, and the large moves in
+   the set happen on those. Small ones happen anyway — 3 → 4 between steps 168
+   and 209, on steps the filter did not pass — so the honest statement is that a
+   new observation is what can reopen the search, not that nothing else ever
+   nudges it. Seed 1's four surviving poses simply never get reopened.
 
    The 500 is not this experiment's choice, and worth saying so before anyone
    looks for room in it: every recognition termination in the port sets
