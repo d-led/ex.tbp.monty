@@ -2633,8 +2633,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   # A world that is not Monty's simulator is a warning, not a badge of honour:
-  # the experiment's own numbers come from MuJoCo, and a stand-in is not it.
-  defp world_badge(%{world: :mujoco}), do: "badge-ghost"
+  # the experiment's own numbers come from MuJoCo, and a stand-in is not it. Both
+  # MuJoCo worlds are the experiment's — they differ in which program steps the
+  # scene, not in what the scene is.
+  defp world_badge(%{world: world}) when world in [:mujoco, :ex_mujoco], do: "badge-ghost"
   defp world_badge(_setup), do: "badge-warning"
 
   # What a plugin's experiment is, said where the badge is: a definition that node
@@ -2651,6 +2653,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       "`environment` names #{engine_of(setup)}, and the scene, the agents, their " <>
       "cameras and their images are built here from that config. No Python has to " <>
       "be installed."
+  end
+
+  defp world_note(%{world: :ex_mujoco} = setup) do
+    "MuJoCo, compiled and stepped by `ex_mujoco` — the same scene as above, from the " <>
+      "same config (#{engine_of(setup)}), with no interpreter involved. The images are " <>
+      "drawn by MuJoCo's own renderer through this node's OpenGL context, so a node " <>
+      "without one says so instead of running."
   end
 
   defp world_note(_setup) do

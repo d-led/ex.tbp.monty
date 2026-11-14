@@ -188,6 +188,12 @@ defmodule ExTbpMonty.MixProject do
       # reaches Python without an external interpreter to install or keep in step:
       # an embedded runtime the application manages itself.
       {:pythonx, "~> 0.4.11"},
+      # The same MuJoCo world without the interpreter: `ex_mujoco` is a C++ NIF
+      # over MuJoCo's own C API, and it renders the sensor images itself, so a run
+      # can step the experiment's scene with no Python involved at all
+      # (`Monty.Simulators.ExMujoco.World`). A git dependency until 0.2.2 — the
+      # first version that links and answers on Windows — is approved on Hex.
+      {:ex_mujoco, github: "d-led/ex.mujoco", tag: "v0.2.2"},
       {:oban, "~> 2.20"},
       {:req, "~> 0.5"},
       # "24.8 GiB free" is what an operator reads, not 26_636_431_360: one

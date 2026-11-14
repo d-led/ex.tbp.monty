@@ -95,6 +95,7 @@ defmodule ExTbpMonty.Application do
         # is closed.
         _ = Monty.Studio.Jobs.Reaper.recover()
         Monty.Studio.Jobs.Reaper.sweep()
+        load_the_compiled_world()
         warm_catalogue()
         prefetch()
         {:ok, pid}
@@ -102,6 +103,27 @@ defmodule ExTbpMonty.Application do
       error ->
         error
     end
+  end
+
+  # Two MuJoCo libraries can live in one VM, and which one the NIF's calls reach is
+  # decided by which was loaded first: the NIF is built `-undefined dynamic_lookup`
+  # in a flat namespace, so a `mj_*` symbol binds to the first definition in the
+  # process — and the Python world imports a MuJoCo of its own when a run first
+  # steps it.
+  #
+  # So `ex_mujoco`'s is loaded here, before any world can be stepped, which is what
+  # lets a node step both worlds without them shadowing each other. `ex_mujoco`
+  # checks that the library it reaches is the version its bindings were generated
+  # from and refuses the model otherwise, so getting this wrong is a refused run
+  # with a sentence, never two physics answering as one.
+  defp load_the_compiled_world do
+    # Asking the library its version is what loads it: the NIF's own load hook
+    # runs when its module is first used. A machine where that fails keeps its
+    # node — the world says which part is missing when somebody asks for it.
+    _version = ExMujoco.version()
+    :ok
+  rescue
+    _not_here -> :ok
   end
 
   # The experiments list reads 210 YAML files the first time it is asked for

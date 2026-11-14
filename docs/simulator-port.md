@@ -51,6 +51,7 @@ The world is the experiment's, not the deployment's.
 | the experiment's config names                                         | what a run steps                                                                                                                              |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | MuJoCo — `environment.env_init_func` is `MuJoCoSimulator`             | MuJoCo, in the interpreter this application carries; every node has it                                                                        |
+| MuJoCo, and `--world ex_mujoco`                                        | the same scene, compiled and stepped by `ex_mujoco` — no interpreter, and OpenGL needed for the images                                        |
 | a world a plugin brings                                               | that world, by the plugin's own name; the node that steps it declares the capability (`world:<name>`, `ExTbpMonty.Cluster.Placement.needs/1`) |
 | a world nobody here carries (`HabitatEnvironment`, an unported class) | nothing: refused with that class named, in the words a page shows (`Monty.Studio.Setup`'s `uncarried_world/1`)                                |
 | nothing at all                                                        | MuJoCo (`Monty.Studio.Setup.configured_world/0`)                                                                                              |
@@ -81,6 +82,56 @@ resolved today (`Monty.Studio.Setup.world/4`'s `:cad` clause — the package is
 asked for by name, and a node that does not have it says so rather than failing
 inside a world). Registering a world generically is the next step; until then a
 non-MuJoCo world that is not the stand-in is refused, and refused by name.
+
+### Two ways to step the same MuJoCo scene
+
+Monty's world is MuJoCo's, and this application carries two bindings of it. They
+build the same scene from the same numbers and answer the same two payloads, so a
+run cannot tell which one stepped it:
+
+| | `:mujoco` | `:ex_mujoco` |
+| --- | --- | --- |
+| the scene | `priv/monty_py/world.py`, through MuJoCo's **spec API** | `Monty.Simulators.ExMujoco.Scene`, as **MJCF text** |
+| the engine | the interpreter in `config/pythonx.exs` | `ex_mujoco`, a C++ NIF over MuJoCo's C API |
+| the images | MuJoCo's Python renderer | the same renderer, through this package's own OpenGL context |
+| needs | nothing | an OpenGL context (CGL on macOS, EGL on Linux) |
+
+`Monty.Simulators.ExMujoco.Agent` answers the action vocabulary and
+`…Simulator` renders and reads back, both written against the same action maps
+(`ActionJSONEncoder`) the Python world parses — an action cannot mean two things
+in two places.
+
+**The two MuJoCo libraries must not shadow each other.** The NIF is built
+`-undefined dynamic_lookup` in a flat namespace, so an `mj_*` symbol binds to the
+first definition in the process, and the Python world imports a MuJoCo of its own
+when a run first steps it. `ExTbpMonty.Application` therefore loads `ex_mujoco`'s
+library at boot, before any world can be stepped; `ex_mujoco` checks that the
+library it reaches is the version its bindings were generated from and refuses the
+model otherwise, so getting this wrong is a refused run with a sentence rather
+than two physics answering as one.
+
+On a cluster, a node that may step the compiled world declares `world:ex_mujoco`
+in `MONTY_CAPABILITIES` — the same tag vocabulary as any other world, because an
+OpenGL context is a property of the machine and not of the engine. No node
+declaring it does not hold a run hostage: a tag nobody declares leaves the run on
+the node that asked for it (`ExTbpMonty.Cluster.Placement`).
+
+The two worlds do **not** pin the same MuJoCo *version*: `ex_mujoco` pins its own
+(`mujoco.version` in the package), while the embedded interpreter takes whatever
+`uv` resolves for the `mujoco` line in `config/pythonx.exs`. A version difference
+is a shading difference — the images' colours move by a few percent while the
+depth and the geometry stay identical — so the two worlds agree on an episode's
+conclusions far more closely than on its pictures.
+
+**What each costs.** `scripts/bench_worlds.exs` steps both with the same actions,
+interleaved, and reports the pair: a step is the world's share plus the model's
+matching, and the world is what differs. Forty steps of `base_10simobj_surf_agent`
+on an 8-core laptop that was also running the studio: `:mujoco` 9.2 ms and 305
+700 reductions a step, `:ex_mujoco` 5.1 ms and 201 000 — the compiled world takes
+0.54–0.58 of the wall and two thirds of the reductions. `scripts/probe_world_parity.exs`
+is the same pair compared instead of timed: both worlds are stepped through the
+same actions and their depth, images, semantic ids and poses are compared at
+every step.
 
 ## The world the runtime develops against
 

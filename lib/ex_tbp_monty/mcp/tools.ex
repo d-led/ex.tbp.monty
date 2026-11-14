@@ -429,8 +429,10 @@ defmodule ExTbpMonty.Mcp.Tools do
         "Queues a run of an experiment and answers with the run's id and a link to it. The " <>
           "run happens in the studio's queue at its own pace, and the page shows the sensors, " <>
           "the log and the summary as they arrive. `world` chooses which world it steps: " <>
-          "`synthetic` is this port's stand-in scene, `monty` is Monty's own simulator out of " <>
-          "process — absent, the deployment's default applies, and the run records which one " <>
+          "`synthetic` is this port's stand-in scene, `monty`/`mujoco` is Monty's own simulator in the " <>
+          "interpreter this application carries, `ex_mujoco` is the same scene stepped by the " <>
+          "compiled binding instead — absent, the deployment's default applies, and the run " <>
+          "records which one " <>
           "it was given. A setup Monty would refuse is refused here instead of queued.",
       "inputSchema" => %{
         "type" => "object",
@@ -455,10 +457,12 @@ defmodule ExTbpMonty.Mcp.Tools do
             "enum" => Experiments.worlds(),
             "description" =>
               "`synthetic` steps this port's scene, which is Elixir and needs no " <>
-                "interpreter; `monty` and `mujoco` step Monty's own simulator through a " <>
-                "Python peer, and need MONTY_PYTHON; `cad` steps a CAD part through " <>
-                "ex_monty_cad, which the node must carry, and reads the part named by " <>
-                "MONTY_CAD_PART. Default: the deployment's."
+                "interpreter; `monty` and `mujoco` step Monty's own simulator in the " <>
+                "interpreter this application carries; `ex_mujoco` steps the same scene " <>
+                "through the compiled binding, which needs an OpenGL context for the " <>
+                "images; `cad` steps a CAD part through ex_monty_cad, which the node must " <>
+                "carry, and reads the part named by MONTY_CAD_PART. Default: the " <>
+                "deployment's."
           }
         },
         "required" => ["name"]

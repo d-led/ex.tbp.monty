@@ -652,6 +652,11 @@ defmodule Monty.Studio.Setup do
   @spec world_name(t(), atom()) :: String.t()
   def world_name(_setup, :synthetic), do: "stand-in scene (Elixir, one sphere)"
 
+  # Two MuJoCo worlds, named for what differs: which program steps the scene. Both
+  # are MuJoCo; one is driven through the interpreter this application carries and
+  # the other through the C++ binding, `ex_mujoco`.
+  def world_name(_setup, :ex_mujoco), do: "MuJoCo (compiled in, via ex_mujoco)"
+
   # A CAD part is named by the deployment (`MONTY_CAD_PART`), so the words say
   # which part rather than which engine. A page asks this before anything is
   # built, so a node with no part named says that instead of raising.
@@ -735,6 +740,16 @@ defmodule Monty.Studio.Setup do
     end
   end
 
+  # The same scene, the same agents and the same images, compiled by `ex_mujoco`
+  # instead of driven by the Python this application carries. Both are MuJoCo's
+  # world, so a config whose environment is not MuJoCo is refused here too.
+  def world(%__MODULE__{} = setup, :ex_mujoco, episode, opts) do
+    case engine(setup) do
+      :mujoco -> ex_mujoco_world(setup, episode, opts)
+      _not_mujoco -> raise ArgumentError, uncarried_world(setup)
+    end
+  end
+
   def world(%__MODULE__{} = setup, :synthetic, _episode, _opts) do
     Monty.Simulators.Synthetic.Environment.new(
       sensor_ids(setup),
@@ -809,7 +824,7 @@ defmodule Monty.Studio.Setup do
   """
   @spec worlds() :: [atom()]
   def worlds do
-    [:mujoco, :synthetic] ++ if cad_step?(), do: [:cad], else: []
+    [:mujoco, :ex_mujoco, :synthetic] ++ if cad_step?(), do: [:cad], else: []
   end
 
   # Carried and named: a scene module with no part is an option a reader would
@@ -951,6 +966,18 @@ defmodule Monty.Studio.Setup do
   # per-sensor camera), and the object this episode is about.
   defp mujoco_world(%__MODULE__{} = setup, episode, opts) do
     Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator.new(
+      data_path: data_path(setup),
+      agents: [agent_spec(setup)],
+      objects: object_specs(setup, episode, opts),
+      sensors: sensor_ids(setup)
+    )
+  end
+
+  # The same numbers as `mujoco_world/3`: one spec, two ways of stepping it. What
+  # differs is behind the world's own surface — a C++ NIF and MuJoCo's C renderer,
+  # rather than a Python interpreter and MuJoCo's Python bindings.
+  defp ex_mujoco_world(%__MODULE__{} = setup, episode, opts) do
+    Monty.Simulators.ExMujoco.World.new(
       data_path: data_path(setup),
       agents: [agent_spec(setup)],
       objects: object_specs(setup, episode, opts),
@@ -2579,6 +2606,10 @@ defmodule Monty.Studio.Setup do
 
   defp world_finding(%__MODULE__{world: :mujoco} = setup), do: mujoco_findings(setup)
 
+  defp world_finding(%__MODULE__{world: :ex_mujoco} = setup) do
+    mujoco_findings(setup) ++ rendering_findings()
+  end
+
   # A world this build does not carry — an operator can configure one — is said
   # plainly rather than crashing the page: the experiment's numbers come from its
   # own simulator, and this is not it.
@@ -2593,6 +2624,28 @@ defmodule Monty.Studio.Setup do
         "monty_config"
       )
     ]
+  end
+
+  # `ex_mujoco` renders the sensor images itself, and a machine whose OpenGL it
+  # cannot open has no images to give a sensor module. Refused here rather than at
+  # the run's first step: this is a fact about the node, and the other MuJoCo world
+  # is one selector away.
+  defp rendering_findings do
+    if Monty.Simulators.ExMujoco.World.available?() do
+      []
+    else
+      [
+        Finding.new(
+          :error,
+          :world_cannot_render,
+          "This node cannot draw the images a MuJoCo run reads: " <>
+            Monty.Simulators.ExMujoco.World.unavailable_reason() <>
+            ". Step MuJoCo in the interpreter this application carries, which needs no OpenGL " <>
+            "here, or run this on a node that has one.",
+          "monty_config"
+        )
+      ]
+    end
   end
 
   defp mujoco_findings(%__MODULE__{} = setup) do

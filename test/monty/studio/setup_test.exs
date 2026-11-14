@@ -612,6 +612,11 @@ defmodule Monty.Studio.SetupTest do
 
       assert Setup.world_name(setup_for("tutorial/first_experiment"), :mujoco) ==
                "MuJoCo (in this application)"
+
+      # The same MuJoCo scene, and the name says what differs: which program
+      # steps it.
+      assert Setup.world_name(setup_for("tutorial/first_experiment"), :ex_mujoco) ==
+               "MuJoCo (compiled in, via ex_mujoco)"
     end
 
     test "and refuses an engine this build does not carry, instead of stepping another" do
@@ -644,7 +649,33 @@ defmodule Monty.Studio.SetupTest do
     test "offers only the worlds this node can step" do
       # This suite carries no `ex_monty_cad`, so a part is not one of them: a
       # selector that offered it would be offering a world the node refuses.
-      assert Setup.worlds() == [:mujoco, :synthetic]
+      assert Setup.worlds() == [:mujoco, :ex_mujoco, :synthetic]
+    end
+
+    test "a compiled MuJoCo world refuses a config whose environment is not MuJoCo" do
+      setup = setup_for("tutorial/first_experiment", world_simulator: :ex_mujoco)
+
+      uncarried = %{
+        setup
+        | environment: %{setup.environment | module: %{class: "HabitatEnvironment"}}
+      }
+
+      assert_raise ArgumentError, ~r/does not carry/, fn ->
+        Setup.world(uncarried, :ex_mujoco)
+      end
+    end
+
+    test "the compiled MuJoCo world is built from the same numbers as the ported one" do
+      setup = setup_for("base_10simobj_surf_agent")
+
+      ported = Setup.world(setup, :mujoco)
+      compiled = Setup.world(setup, :ex_mujoco)
+
+      # One spec, two ways of stepping it: what a scene is built from must not
+      # depend on which program compiles it.
+      assert %{spec: spec} = ported
+      assert %{spec: same} = compiled
+      assert same == spec
     end
 
     # A CAD part is stepped by another application's scene (`MontyCad.Scene`),

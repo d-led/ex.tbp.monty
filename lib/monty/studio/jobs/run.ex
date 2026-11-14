@@ -1852,6 +1852,10 @@ defmodule Monty.Studio.Jobs.Run do
   # `Monty.Studio.Setup` reads as "nothing chosen" — never a silent stand-in: a
   # run recorded as MuJoCo must not step a sphere.
   defp world_of(%{"world" => "mujoco"}), do: :mujoco
+  # The same MuJoCo scene, stepped by the compiled binding. A record that names
+  # it is a run somebody asked for, so the worker steps it — and a node without
+  # an OpenGL context refuses it at open time rather than at the first image.
+  defp world_of(%{"world" => "ex_mujoco"}), do: :ex_mujoco
   defp world_of(%{"world" => "synthetic"}), do: :synthetic
   # A part is the one world this node may not carry. It is still the world the
   # record names, so the run refuses it — `Setup.world/4` says which application
