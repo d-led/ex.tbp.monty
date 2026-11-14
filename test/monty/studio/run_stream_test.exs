@@ -129,6 +129,28 @@ defmodule Monty.Studio.RunStreamTest do
       assert RunStream.read_from(run_id, -1) == {[], []}
       assert RunStream.count(run_id) == 0
     end
+
+    # A page repairing a transcript wants the lines and the beliefs, not the
+    # pictures and the sensor numbers beside them: a moment is eleven kilobytes
+    # a step, and the page threw every one of them away.
+    test "are the same steps without the moments beside them", %{run_id: run_id} do
+      for step <- 1..4, do: RunStream.publish(run_id, report(step: step))
+      settled(run_id)
+
+      {tail, _moments} = RunStream.read_from(run_id, 1)
+      {whole, _moments} = RunStream.read_from(run_id, -1)
+
+      assert RunStream.entries_from(run_id, 1) == tail
+      assert RunStream.entries_from(run_id, -1) == whole
+    end
+
+    test "are none past the end, and none for a run this node never stepped", %{run_id: run_id} do
+      RunStream.publish(run_id, report(step: 1))
+      settled(run_id)
+
+      assert RunStream.entries_from(run_id, 0) == []
+      assert RunStream.entries_from(Ecto.UUID.generate(), -1) == []
+    end
   end
 
   # Everything the test process has handed over, so far, has landed: a call

@@ -3518,3 +3518,121 @@ idle: that a real start has no `Invalid challenge reply` in it and how long a no
 now takes to appear. Those four processes have the cookie from the VM's first
 moment (measured on a renamed copy, `logs-*.log` printing `local-dev-secret`), but
 the noise going away is a consequence, not a measurement.
+
+## 48. 2026-11-14: a page catching up reads the tail, not the run
+
+The reported symptom was a run page whose chart would not answer — zoom, follow,
+anything — while an experiment stepped, and a page that reconnected about once a
+minute. Both come from the same place, and it is not the chart.
+
+### 48.1 What the numbers said
+
+Measured, not guessed (`Chart.new/2` and `RunStream` at 13 000 steps, ten objects):
+
+| what                              | cost                                        |
+| --------------------------------- | ------------------------------------------- |
+| `Chart.new` whole run             | 53 ms; 4.7 ms zoomed to 200 steps           |
+| one chart's SVG                   | 448 kB whole run, 26 kB zoomed              |
+| `RunStream.read_from(id, -1)`     | **561–1099 ms, 145 MB of moments copied**   |
+| the same read, tail of 20 steps   | 0.2–0.7 ms                                  |
+| `RunStream` ETS, one such run     | **521 MB** (11 kB a step)                   |
+| page poll / chart cadence         | 500 ms / 250 ms                             |
+| socket closes in `logs/node1.log` | 191, **every one `{:shutdown, :closed}`**   |
+| `Studio.open` on a reconnect      | 12–26 ms — not the problem                  |
+
+The drawing is cheap. What was not cheap: `ExperimentLive.read_missing/2` answered
+a page that was more than `@behind_steps` behind with `RunStream.read_from(id, -1)`
+— the whole stream — then filtered it, and **threw the moments away** (`{entries,
+_moments}`). After every reconnect the page is behind, so the recoveries repeated
+the most expensive read in the system, copying 145 MB into the page's own heap, on
+a node that was already holding 521 MB of that table. Every click queued behind
+that read; the client's 30 s heartbeat went unanswered against the server's 60 s
+idle timeout; the socket closed; and the reconnect armed the same read again.
+
+### 48.2 What changed
+
+- **`RunStream.entries_from/2`** — the entries `read_from/2` would answer, and
+  nothing else. The projection is the point: `:ets.select` copies the columns the
+  match spec names, and the tail seek uses `:ets.lookup_element/3` rather than
+  `:ets.lookup/2`, so a moment is never copied to be discarded.
+- **`read_missing/2` asks from the step after the one it drew** — `entries_from(id,
+  steps_seen - 1)` — which is the same answer as the whole-stream read, taken from
+  the tail. Its empty branch keeps its anti-loop meaning, and now only moves
+  `steps_seen` forward (`max`): a stream that has forgotten steps must not make a
+  page believe it has drawn them.
+
+The same question cost 561–1099 ms and 145 MB; it now costs **0.03 ms** for the
+tail (19 entries) and 17.8 ms for the whole run's entries.
+
+### 48.3 What a reader keeps
+
+Following is unchanged, and is now covered twice: the existing case ("catches up
+from the run's stream when no announcement ever arrives") still repairs a page
+that heard nothing from nought, and a new one — "keeps following when a batch of
+steps never arrives" — has the page draw four announced steps, lose the next nine,
+and answers that its transcript holds every line in order and its chart still has
+a line. The second is the case the tail read serves; the first is the case it
+falls back from (`from = -1`).
+
+### 48.4 What is still expensive, in the order I would take it
+
+1. **The chart's payload.** 448 kB a drawing, four times a second, 434 000 SVG
+   segments a second for the browser to rasterise. The cheap half is fewer samples
+   a column and a slower cadence while following; the real fix is to push points
+   and let the hook extend the polyline, redrawing in full only on a zoom.
+2. **11 kB a step kept per run.** 521 MB for one 13 000-step run is what the
+   `system_memory_high_watermark` alarms (153 of them) are about. A moment is
+   needed for the last step's picture and for the archive; the rest of the run
+   needs its entry.
+3. **The socket budget.** 60 s idle against a 30 s heartbeat leaves no room for a
+   single lost beat, and the client has no long-poll fallback by design.
+
+### 48.5 What the browser said, which is where the report actually came from
+
+Measured in the running page, following a live run (2 200 → 4 700 steps):
+
+- the chart is **86–205 polylines**, ~9 000–10 000 vertices, **118–121 kB** of points;
+  the four inline frames are 11 kB together, so the pictures were never the cost;
+- at four drawings a second the page ran at **7.5 fps**, with **64 % of its main
+  thread in ~100 ms tasks** — and a click on a zoom control was answered **more
+  than ten seconds later**, the button sitting in `phx-click-loading` until it was.
+  That is the "long wait": not a slow drawing, but a saturated event loop;
+- a 3.3 s profile of that page: `debug` **550 ms**, morphdom (`write`, `indexTree`,
+  `morphAttrs`, `createFragmentFromTemplate`) **~570 ms**, the rest paint.
+
+`window.liveSocket.isDebugEnabled()` answered **true**: the tab was in LiveView
+debug mode, and formatting the log of every message was a sixth of the main
+thread. Anyone reading a page that feels slow should check that first — it is one
+console call (`liveSocket.disableDebug()`) and it costs nothing.
+
+`@chart_interval` is **1 000 ms** now, from 250. The floor is only for pictures the
+*run* asks for: a zoom, a tick or full screen still draws at once.
+
+What is left of the browser cost, named by the profile: morphdom **rebuilds** the
+chart's and the transcript's DOM on a patch rather than patching it — the chart's
+series and the transcript's lines are `:for` lists with no stable identity, so a
+new segment or a prepended line is a new fragment. The fix is the one in 48.4 as
+well: let the hook own the polylines and push points, and give the transcript's
+rows something stable to be matched by.
+
+### 48.6 The new case was flaky, and the file already said how not to be
+
+"Keeps following when a batch of steps never arrives" passed alone, six times in a
+row, and failed in the full suite (`3221/3222`). Two habits made it flaky, and both
+are answered in this file's own `perform_run/1`:
+
+- **Announcing and then asserting immediately races the cast chain.** `publish/3`
+  is a cast to `RunStream`, which casts to `Pictures`, which broadcasts: three
+  processes before a page hears anything. `:sys.get_state(view.pid)` only says the
+  *page* has emptied its mailbox. The barrier is `RunStream.count/1` (a call
+  answers after the casts before it) and `Pictures.settle/0` (a call that answers
+  after the announcements have gone out) — `perform_run/1` uses exactly those two.
+- **Asserting on the state a socket happened to open in is a race**, because a page
+  joins a run that was already going on its own first poll. Sending
+  `:studio_poll` first makes "the page is following" a fact the test establishes
+  rather than one it hopes for.
+
+Fixed both; then six runs with random seeds, then the full gate. The second habit
+was introduced by the first fix: making the page certainly-following turned a
+sometimes-failing assertion into a usually-failing one, because the announcements
+were still racing. A flake that moves is not a flake that is fixed.

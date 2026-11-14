@@ -155,6 +155,33 @@ defmodule Monty.Studio.RunStream do
   end
 
   @doc """
+  The steps of `run_id` taken after the first `from`, without their moments.
+
+  What a page catching up needs: a step's entry is its line, its beliefs and its
+  number, and the moment beside it is the pictures and the numbers the sensors
+  saw — eleven kilobytes a step that a reader of the transcript has no use for.
+  `ExperimentLive` asks this question after every reconnect and throws the
+  moments away, so asking with `read_from/2` copied a hundred and forty-five
+  megabytes to discard it: 561 ms for thirteen thousand steps, against 0.2 ms
+  for the tail of the same run.
+
+  The answer is the entries `read_from/2` would give, and nothing else — same
+  positions, same order, same empty list past the end.
+  """
+  @spec entries_from(binary(), integer()) :: [map()]
+  def entries_from(run_id, from) do
+    cond do
+      not table?(@table) -> []
+      # Everything, in one traversal: the projection is what keeps the moments
+      # out of the copy, not a filter applied afterwards.
+      from < 0 -> entries_between(run_id, -1)
+      # The tail, by seeking: a partly bound key cannot be seeked through by
+      # `:ets.select`, the same reason `read_from/2` uses `collect/4` here.
+      true -> collect_entries(run_id, {run_id, from}, [])
+    end
+  end
+
+  @doc """
   How many steps of `run_id` are held here.
 
   A `call`, and an instant one — the count is this process's own — because a
@@ -187,6 +214,24 @@ defmodule Monty.Studio.RunStream do
       {{{run_id, :"$1"}, :"$2", :"$3"}, [{:>, :"$1", from}], [{{:"$2", :"$3"}}]}
     ])
     |> Enum.unzip()
+  end
+
+  # The same traversal, projected to the entries: `:ets.select` copies what the
+  # match spec names and nothing else, which is what makes this read cheap.
+  defp entries_between(run_id, from) do
+    :ets.select(@table, [{{{run_id, :"$1"}, :"$2", :_}, [{:>, :"$1", from}], [:"$2"]}])
+  end
+
+  # The steps after `key`, an entry at a time: `:ets.lookup_element/3` answers the
+  # one field asked for, where `:ets.lookup/2` would copy the moment beside it.
+  defp collect_entries(run_id, key, entries) do
+    case :ets.next(@table, key) do
+      {^run_id, _position} = next ->
+        collect_entries(run_id, next, [:ets.lookup_element(@table, next, 2) | entries])
+
+      _end_of_the_run ->
+        Enum.reverse(entries)
+    end
   end
 
   defp table?(name), do: :ets.whereis(name) != :undefined

@@ -931,6 +931,72 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       end
     end
 
+    # The same repair, on a page that was following: it has drawn the first four
+    # steps from their announcements, then a batch is lost. What it asks for is
+    # the tail of the stream from the last step it drew — and the test is that the
+    # transcript it ends with is whole and in order, not that it asked cheaply.
+    test "keeps following when a batch of steps never arrives", %{conn: conn} do
+      {:ok, record} =
+        RunHistory.start(%{
+          experiment: "base_config_10distinctobj_dist_agent",
+          source: "monty",
+          steps: 20,
+          config: %{},
+          inputs: %{"seed" => 42, "world" => "synthetic"}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+
+      # The page joins a run that was already going on its own poll — the same
+      # message it sends itself every `studio_poll_ms`, asked here so that the
+      # page is certainly subscribed before a step is announced. Asserting on the
+      # state a socket happened to open in was a race: sometimes the mount's own
+      # join had not happened yet and the first steps were announced to nobody.
+      send(view.pid, :studio_poll)
+      _ = :sys.get_state(view.pid)
+
+      assert view |> element("#run-progress") |> render() =~ "episode 1 · step 0 / 20"
+
+      # Four steps the page hears — and hears *before* the assertion: a call
+      # answers after the casts before it, and `Pictures.settle/0` after the
+      # announcements have gone out. Waiting on the page's own read is what makes
+      # this test say what the run did rather than who won a race.
+      for step <- 0..3 do
+        Monty.Studio.RunStream.publish(record.id, stream_report(step))
+      end
+
+      _ = Monty.Studio.RunStream.count(record.id)
+      :ok = Monty.Studio.RunStream.Pictures.settle()
+      _ = :sys.get_state(view.pid)
+
+      assert view |> element("#run-progress") |> render() =~ "episode 1 · step 4 / 20"
+
+      # Nine more, announced to a topic nobody listens on: a message lost in
+      # flight, which is what a reconnect leaves behind. The stream holds them
+      # before the poll reads it, because the poll's first question is a call.
+      for step <- 4..12 do
+        Monty.Studio.RunStream.publish(record.id, stream_report(step),
+          announce: "no page listens here"
+        )
+      end
+
+      _ = Monty.Studio.RunStream.count(record.id)
+      send(view.pid, :studio_poll)
+      _ = :sys.get_state(view.pid)
+
+      assert view |> element("#run-progress") |> render() =~ "episode 1 · step 13 / 20"
+
+      texts = view |> rendered_lines() |> Enum.map(& &1.text)
+
+      for step <- 0..12 do
+        assert Enum.any?(texts, &(&1 =~ "step #{step} ·")), "step #{step} is missing"
+      end
+
+      # And the chart kept its line: the repaired steps are drawn, not only
+      # counted.
+      assert view |> chart_segments("learning_module_0") > 0
+    end
+
     # A run's transcript is written by the run's own writer, which the job hands
     # it to and does not wait for. A page that read the row the instant a run
     # finished could therefore find counters saying what the run took and a log

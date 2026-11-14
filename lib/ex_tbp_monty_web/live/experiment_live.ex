@@ -53,15 +53,27 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   @log_limit 300
 
   # How often the picture may be redrawn. `Chart.new/2` reads the run's whole
-  # history — measured at 14 ms of a 500-step run and 22 ms of a 7 000-step one,
-  # windowed or not — and a step can arrive faster than that. A page that rebuilt
-  # the chart for every step spends the run drawing and never catches up with its
-  # own mailbox: the heap grows with the backlog, the socket misses its heartbeat,
-  # and the reader sees "lost connection to the server" while the run is fine.
+  # history — 14 ms of a 500-step run and 22 ms of a 7 000-step one with ten
+  # objects, and 2 475 ms of a 2 200-step one with two hundred and five — and a
+  # step can arrive faster than any of those. A page that rebuilt the chart for
+  # every step spends the run drawing and never catches up with its own mailbox:
+  # the heap grows with the backlog, the socket misses its heartbeat, and the
+  # reader sees "lost connection to the server" while the run is fine.
+  #
+  # Measured on a live page following a run (2 200 steps, 205 objects): four
+  # drawings a second left the browser at 7.5 fps, 64 % of its main thread spent
+  # in ~100 ms tasks, and a click on a zoom control waited ten seconds for its
+  # reply behind them. The browser is the end of every click and every heartbeat,
+  # so drawing too often is paid in unanswered controls and dropped sockets — not
+  # in a chart that updates faster than anyone can read it.
+  #
+  # A reader's own action does not wait for this: a zoom, a tick or a chart made
+  # full screen draws at once (`request_drawing/1`), because it is the picture
+  # they asked for. This is the floor for a picture the *run* asks for.
   #
   # A test that delivers steps faster than a person can watch sets it to nought:
   # there is no socket to keep alive, and every step's picture is worth asserting.
-  @chart_interval 250
+  @chart_interval 1_000
   @impl true
   def mount(params, _session, socket) do
     # Runs of this experiment arrive as messages, the same way a run's steps do:
@@ -1999,15 +2011,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   defp read_missing(socket, record) do
-    {entries, _moments} = RunStream.read_from(record.id, -1)
+    # From the step after the last one this page drew — the same answer the whole
+    # stream gave, taken from the tail of it. Asking for everything cost 561 ms
+    # and a hundred and forty-five megabytes of moments at thirteen thousand
+    # steps, and every one of those moments was thrown away
+    # (`RunStream.entries_from/2`).
+    entries = RunStream.entries_from(record.id, steps_seen(socket) - 1)
 
     case Enum.filter(entries, &after_shown?(&1, socket)) do
       [] ->
-        # Nothing here to give: the steps were taken by another node, or this
-        # stream has already let them go. Asking again every half second would
-        # be the page reading the whole stream to be told the same thing; the
-        # record answers when the run stops (`catch_up/2`).
-        assign(socket, steps_seen: RunStream.count(record.id))
+        # Nothing here to give: the steps were taken by another node, this
+        # stream has already let them go, or every one of them is already drawn.
+        # Asking again every half second would be the page reading the stream to
+        # be told the same thing; the record answers when the run stops
+        # (`catch_up/2`). The count only moves forward — a stream that has
+        # forgotten steps must not make the page believe it has seen them.
+        assign(socket, steps_seen: max(RunStream.count(record.id), steps_seen(socket)))
 
       fresh ->
         # The same handler a broadcast goes to, so a repaired step is a step the
