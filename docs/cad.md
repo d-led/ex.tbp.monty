@@ -292,16 +292,44 @@ scene, not a config, knows where the object is.
    itself the signal — a plate seed fails with four, and one settles with one
    (below). What matters is whether the surviving hypotheses _agree_. The blend
    is not unrecognised: it is recognised as a shape whose orientation this
-   percept cannot name. But not for want of curved surface — its memory is 136
-   of 947 nodes pose-defined, 14 %, the plate's rate to within a point, so the
-   rounded edges are there to be seen. What is not established is why seeing
-   them is not enough. The block's own symmetry is the candidate: half turns
-   about each of its three axes map it onto itself, and a half turn is far
-   outside the 20° the pose rule allows. That is a candidate and not a finding:
-   it is left standing with the plate's seed rate, as one of the two questions
-   this section ends on, rather than written as a cause.
+   percept cannot name. Not for want of curved surface — its memory is 136 of
+   947 nodes pose-defined, 14 %, the plate's rate to within a point — but
+   because the orientation is genuinely not unique, which the memory can be
+   asked. Turn it by a half turn about each of the block's three principal axes
+   and ask every node whether the turned point has a partner agreeing with it on
+   position (within two spacings), on normal (within 15°) and on log curvature
+   (within the matcher's 1.0):
 
-   `scripts/probe_cad_poses.exs` is that answer, on demand:
+   | part       | nodes that keep a partner, over the three half turns |
+   | ---------- | ---------------------------------------------------- |
+   | blend      | 99.7 %, 99.5 %, 99.6 %                               |
+   | plate      | 74.2 %, 72.1 %, 76.0 %                               |
+   | plate-huge | 84.8 %, 81.1 %, 82.6 %                               |
+
+   The block maps onto itself, node for node. Its four orientations are one
+   picture to the matcher, and a half turn is 180° where `unique_pose?/4` asks
+   for 20° — so no number of steps can conclude it, and the nought of ten is the
+   rule working rather than the exploration failing. The plate is the opposite
+   case by a quarter: its hole and its boss have no partner under any half turn,
+   and those nodes are what tells its four orientations apart. What the seed
+   table is then spending is how often an exploration sees enough of that
+   quarter inside the step budget.
+
+   `plate-huge` is in the table because it keeps a partner more often than the
+   plate — 85 % against 74 % — which is the scale effect seen from the other
+   side: at five times the size, fewer of its nodes carry the features that
+   break the symmetry, the same shortage the pose-defined column measured. The
+   two measurements are independent — one is a threshold on curvature, the
+   other a tolerance on position that follows the spacing — and they agree about
+   which part is the harder one to orient.
+
+   `scripts/probe_part_symmetry.py` is the test, over a memory the runs wrote:
+
+       scripts/probe_part_symmetry.py /tmp/cad-experiment/blend
+       scripts/probe_part_symmetry.py /tmp/cad-experiment/plate+plate-huge
+
+   `scripts/probe_cad_poses.exs` asks the same question of a run rather than of
+   a memory, on demand:
 
        CAD_LIBRARY=/tmp/cad-experiment/blend \
        MONTY_CAD_PART=…/blend_r5.step mix run scripts/probe_cad_poses.exs
@@ -369,10 +397,13 @@ scene, not a config, knows where the object is.
    the same blend problem seen from the other side, and the reason a run's
    direction of travel matters as much as its library.
 
-   Two things this leaves standing. A right answer is still seed-dependent —
-   the plate is recognised in 4 of 10 seeds on its own — and a symmetric part
-   still never concludes. Both are questions about evidence and exploration,
-   and neither is about which part was named. The lesson that belongs in
+   One thing this leaves standing, and one it has answered. A right answer is
+   still seed-dependent — the plate is recognised in 4 of 10 seeds on its own —
+   and that is a question about evidence and exploration, not about which part
+   was named. A symmetric part never concluding is no longer a question: the
+   measurement above says its orientations are one picture to the matcher, node
+   for node, so a rule that needs one pose cannot name one, and no exploration
+   will help. The lesson that belongs in
    `ex.monty.cad` is narrower and is written down here because it was learned
    the hard way: `Training`'s `:spacing` is an absolute number of millimetres,
    which is right for one part and wrong for a library, and a library builder
@@ -392,9 +423,12 @@ scene, not a config, knows where the object is.
    rows), so nothing reads `[false]` as true.
 
    So the next question is not "which part is this" but "which parts have a
-   pose worth naming". The plate does and the blends do not, and the library a
-   recognition run is aimed at therefore has to hold parts with a boss, a hole,
-   an off-centre feature — the things that break the symmetry. The feature also
+   pose worth naming". That question now has a measurement of its own: the share
+   of a memory's nodes with no partner under any half turn — a quarter of the
+   plate's, almost none of the blend's. The plate does and the blends do not,
+   and the library a recognition run is aimed at therefore has to hold parts
+   with a boss, a hole, an off-centre feature — the things that break the
+   symmetry. The feature also
    has to be curved enough to count, and the threshold says how much: for a
    cylinder the two principal curvatures are `1 / R` and nought, so a radius of
    a hundred millimetres is exactly 10 m⁻¹, and a rounder feature than that
