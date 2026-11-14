@@ -6,6 +6,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
   alias Monty.Prerequisites
   alias Monty.Studio
+  alias Monty.Studio.Jobs.Stops
   alias Monty.Studio.RunHistory
   alias Monty.Test.Tmp
 
@@ -483,6 +484,46 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # still working on an experiment that has been stopped.
       assert [run] = RunHistory.list_for("base_config_10distinctobj_dist_agent")
       assert RunHistory.get(run.id).status == "failed"
+    end
+
+    # What a press of Stop says, and when it says it. Cancelling asks a worker to
+    # end at its next step, and a step is as long as it is: the press is answered
+    # first — you were heard — and the asking happens after that answer. Two
+    # lines, in that order, is the promise. One line that already says how it
+    # ended is a press that waited on the worker to reach a step boundary.
+    test "Stop answers the press before it asks a worker to end", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      view |> element("#run") |> render_click()
+      view |> element("#stop") |> render_click()
+
+      texts = view |> rendered_lines() |> Enum.map(& &1.text)
+
+      heard = Enum.find_index(texts, &(&1 =~ "stop asked for"))
+      ended = Enum.find_index(texts, &(&1 =~ ~r/stop(ped|ping):/))
+
+      assert is_integer(heard), "no line said the press was heard"
+      assert is_integer(ended), "no line said how the run ended"
+      assert heard < ended
+    end
+
+    # The ask outlives the press: a run being stepped ends when it reaches its
+    # next boundary, and until then the page has to say something truthful about
+    # the press it heard. What it says is the ask, which the workers read — so it
+    # is true of a stop asked from another tab, another page or another node, and
+    # it is still true after a reconnect. The button is disabled meanwhile: a
+    # second press would only ask the same thing again.
+    test "a run already asked to stop reads as stopping, and cannot be asked twice", %{conn: conn} do
+      record = running_run()
+
+      :ok = Stops.ask(record.id)
+      on_exit(fn -> Stops.clear(record.id) end)
+
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      assert has_element?(view, "#stop[disabled]", "Stopping…")
     end
 
     test "each step is streamed into the log as it happens", %{conn: conn} do
