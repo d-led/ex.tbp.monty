@@ -1,10 +1,12 @@
 # Status
 
-> **Superseded — read [`handover.md`](handover.md) instead.** This page is the
-> 2026-11-03 hand-over and is kept for its measurements, not for its state. Its
-> "Green right now" is the commit of that day; for what is green and what is
-> open today, `handover.md`'s newest section is the answer. Entries in the table
-> below that have been settled since are struck through in place.
+> **Superseded — the hand-over is in MemPalace now** (wing `ex.tbp.monty`, room
+> `handover`; `docs/handover.md` is the index and the canonical drawer is named
+> there). This page is the 2026-11-03 hand-over and is kept for its measurements,
+> not for its state. Its "Green right now" is the commit of that day; for what is
+> green and what is open today, the hand-over's newest section is the answer.
+> Entries in the table below that have been settled since are struck through in
+> place.
 
 Where the port stands, what to measure next, and what is open. Written
 2026-11-03, at the end of a day in which the machine sat at a load average of 60

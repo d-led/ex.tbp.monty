@@ -46,7 +46,8 @@ Monty.Studio.RunStream.steps_from/2 is undefined (module … is not available)`,
   public entry point and say so in the comment. A hand-written behaviour test
   states intent; it is not evidence of parity, and it must not be counted as
   such. A case that cannot be translated is listed, never dropped silently.
-  `docs/handover.md` §12 has the method, the traps and the count.
+  The method, the traps and the count are the hand-over's §12, in MemPalace
+  (wing `ex.tbp.monty`, room `handover`; `docs/handover.md` is the index).
 
 Run `scripts/quality.sh` (what CI runs) before considering work done;
 `mix dialyzer` is the separate types job. Format with `scripts/reformat.sh` —
