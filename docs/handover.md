@@ -3482,6 +3482,16 @@ is a test's own timeout, the other is how a cluster node is started.
 1. **The run list across per-node databases** — unchanged, and still "coordinate
    first": `cluster_nodes.ex`, `cluster_peer_runs.ex` and `settings_live.ex` are
    where another pair of hands is likely to be.
+
+   **Sharpened 2026-11-14, by the catch-up below: the two options are not equal.**
+   A _merged view_ would let `/runs` list a peer's runs, and that is all it would
+   do — a divided run cannot work on per-node tables at all. A peer's
+   `claim_part/3` finds no row to take (its own database has none), and the owner's
+   `claimed_parts/1` has nothing to read. So "one runs table" — `DATABASE_URL`,
+   which `ExTbpMonty.Database` already supports in development too — is the option
+   that makes division work; a merged view is a display convenience on a stack where
+   division is impossible.
+
 2. **A part's live steps do not reach a page opened later.** The shape, settled
    here and deliberately _not_ started: a part's step is broadcast by
    `RunStream.Pictures` on `announce || stream_id`, which is **the run's own
@@ -3529,16 +3539,16 @@ minute. Both come from the same place, and it is not the chart.
 
 Measured, not guessed (`Chart.new/2` and `RunStream` at 13 000 steps, ten objects):
 
-| what                              | cost                                        |
-| --------------------------------- | ------------------------------------------- |
-| `Chart.new` whole run             | 53 ms; 4.7 ms zoomed to 200 steps           |
-| one chart's SVG                   | 448 kB whole run, 26 kB zoomed              |
-| `RunStream.read_from(id, -1)`     | **561–1099 ms, 145 MB of moments copied**   |
-| the same read, tail of 20 steps   | 0.2–0.7 ms                                  |
-| `RunStream` ETS, one such run     | **521 MB** (11 kB a step)                   |
-| page poll / chart cadence         | 500 ms / 250 ms                             |
-| socket closes in `logs/node1.log` | 191, **every one `{:shutdown, :closed}`**   |
-| `Studio.open` on a reconnect      | 12–26 ms — not the problem                  |
+| what                              | cost                                      |
+| --------------------------------- | ----------------------------------------- |
+| `Chart.new` whole run             | 53 ms; 4.7 ms zoomed to 200 steps         |
+| one chart's SVG                   | 448 kB whole run, 26 kB zoomed            |
+| `RunStream.read_from(id, -1)`     | **561–1099 ms, 145 MB of moments copied** |
+| the same read, tail of 20 steps   | 0.2–0.7 ms                                |
+| `RunStream` ETS, one such run     | **521 MB** (11 kB a step)                 |
+| page poll / chart cadence         | 500 ms / 250 ms                           |
+| socket closes in `logs/node1.log` | 191, **every one `{:shutdown, :closed}`** |
+| `Studio.open` on a reconnect      | 12–26 ms — not the problem                |
 
 The drawing is cheap. What was not cheap: `ExperimentLive.read_missing/2` answered
 a page that was more than `@behind_steps` behind with `RunStream.read_from(id, -1)`
@@ -3556,7 +3566,7 @@ idle timeout; the socket closed; and the reconnect armed the same read again.
   match spec names, and the tail seek uses `:ets.lookup_element/3` rather than
   `:ets.lookup/2`, so a moment is never copied to be discarded.
 - **`read_missing/2` asks from the step after the one it drew** — `entries_from(id,
-  steps_seen - 1)` — which is the same answer as the whole-stream read, taken from
+steps_seen - 1)` — which is the same answer as the whole-stream read, taken from
   the tail. Its empty branch keeps its anti-loop meaning, and now only moves
   `steps_seen` forward (`max`): a stream that has forgotten steps must not make a
   page believe it has drawn them.
@@ -3606,7 +3616,7 @@ thread. Anyone reading a page that feels slow should check that first — it is 
 console call (`liveSocket.disableDebug()`) and it costs nothing.
 
 `@chart_interval` is **1 000 ms** now, from 250. The floor is only for pictures the
-*run* asks for: a zoom, a tick or full screen still draws at once.
+_run_ asks for: a zoom, a tick or full screen still draws at once.
 
 What is left of the browser cost, named by the profile: morphdom **rebuilds** the
 chart's and the transcript's DOM on a patch rather than patching it — the chart's
@@ -3624,7 +3634,7 @@ are answered in this file's own `perform_run/1`:
 - **Announcing and then asserting immediately races the cast chain.** `publish/3`
   is a cast to `RunStream`, which casts to `Pictures`, which broadcasts: three
   processes before a page hears anything. `:sys.get_state(view.pid)` only says the
-  *page* has emptied its mailbox. The barrier is `RunStream.count/1` (a call
+  _page_ has emptied its mailbox. The barrier is `RunStream.count/1` (a call
   answers after the casts before it) and `Pictures.settle/0` (a call that answers
   after the announcements have gone out) — `perform_run/1` uses exactly those two.
 - **Asserting on the state a socket happened to open in is a race**, because a page
@@ -3636,3 +3646,142 @@ Fixed both; then six runs with random seeds, then the full gate. The second habi
 was introduced by the first fix: making the page certainly-following turned a
 sometimes-failing assertion into a usually-failing one, because the announcements
 were still racing. A flake that moves is not a flake that is fixed.
+
+## 49. 2026-11-14: the chart was nine hundred elements for ten lines
+
+Follows §48, which cut how often the chart is _drawn_. This is what a drawing
+_was_: the picture itself.
+
+### 49.1 What was wrong with the picture
+
+Measured in the live page, not guessed: the chart held **988 `<polyline>`
+elements for 10 objects** — a line breaks wherever a step went unreported or an
+episode ends, and a run of forty-five episodes breaks each line about a hundred
+times. Every patch then rebuilt those nine hundred nodes, and the profile of that
+page said so: morphdom's `write`, `indexTree`, `morphAttrs` and
+`createFragmentFromTemplate` were **~570 ms of 3.3 s**, on top of `debug` (550 ms,
+because the tab had `liveSocket.enableDebug()` on).
+
+Also measured: `ChartZoom.updated/0` read the plot's box with
+`getBoundingClientRect` in the middle of every patch — a **forced layout after a
+mutation**, 258 ms of a four-second profile.
+
+### 49.2 What changed
+
+- **One SVG path an object.** `Chart.new/2` answers `path` (`M` where the line
+  breaks, `L` between samples) instead of a list of `points` strings. Same picture:
+  10 elements, and the page went from **2 294 nodes to 1 035**.
+- **The hover reads the path**, once per redraw and only while the pointer is over
+  the chart (`readSamples/0`), then finds the nearest sample by the same binary
+  search as before. Verified live: the tooltip answers with ranked objects at
+  three positions across the plot.
+- **The box is measured in a frame**, not during the patch, and only once a frame;
+  an element that has left the document is skipped. `getBoundingClientRect` left
+  the profile.
+
+The tests kept their question — _how was the line broken?_ — and now ask it of the
+picture: `runs_of/1` splits a path on `M`, and the page's `chart_segments/2` does
+the same on the rendered `d`. Chart 39, page and component 122, all green.
+
+### 49.3 What is still expensive
+
+LiveView's **full-page patch per step** — morphdom walking ~1 000 nodes and the
+browser repainting is still ~30 % of the main thread while a run steps at two or
+three steps a second. That is inherent to assigning per step; the next lever is
+batching the transcript's lines (a stream, or an assign that changes less often),
+which is a design change to the page rather than a constant.
+
+The same disease was in `Monty.Studio.Replay.Chart`, whose own test said it
+plainly ("a ten-object run cut at every episode is sixty polylines; sixty
+elements"). `8fae91f` is the same fix there: a line is one `<path>` whose
+stretches are `M`s, so the cut survives and the element count does not. The
+replay page of a four-episode run was checked live at ten paths, no polylines,
+four cuts a line, picture unchanged.
+
+### 49.4 Two things the live work showed that are not this page's
+
+- **A run of `flyverse_plugin.10simobj_surf_agent` died at 14:25:58** with
+  `GenServer Monty.Simulators.Mujoco.Host terminating · ** (stop) exited in:
+GenServer.call(Pythonx.Janitor, :ping, 5000) · ** (EXIT) time out` — the Python
+  bridge did not answer a **five-second** ping, so the world process died and took
+  29 082 steps with it. Another run in the same hour died with `tcp recv (idle):
+closed`, which is the plugin host going away. A five-second ping turning a busy
+  machine into a dead run is worth its own look.
+- **A colocated hook is not live until the JS is rebuilt.** The server half of the
+  chart change was live at once and the hook was not, so the hover answered
+  nothing until `mix esbuild ex_tbp_monty` and a page reload — worth knowing
+  before concluding a hook is broken.
+
+## 50. 2026-11-14: the disconnects were ghost heaps, and the run a save killed
+
+### 50.1 What the page was actually doing
+
+While §49 was being measured, the live page sat at `liveSocket.isConnected()` =
+false, frozen at step 560, with **no DOM mutation in 20 s**, while the run log
+kept writing. The obvious reading — a socket that keeps dropping — was wrong in
+the way that matters. `logs/node2.log` had the machine crossing
+`:system_memory_high_watermark` every few minutes (set 14:57, cleared 14:59, set
+15:00, cleared 15:09, set 15:10), and under that watermark the VM suspends
+processes to force a GC: sockets starve, and the page disconnects while the run
+is fine.
+
+The endpoint's own comment documents the other half: a hidden tab throttles its
+30-second heartbeat past the 60-second idle timeout, the server closes, and
+LiveView refuses to reconnect while the page is hidden — which is why the frozen
+page was the one nobody was looking at. What changed for that half is the cost of
+coming back: the tail read (§48, 0.03 ms) rather than re-reading 145 MB.
+
+### 50.2 Where the memory was
+
+A read-only probe from a fourth node — `elixir --name probeN@127.0.0.1 --cookie …`,
+because `process-compose.yaml` starts the nodes long-named and `--sname` then
+finds nothing — on a run of 12 448 steps:
+
+| process              | heap                    | mailbox       | after one `:erlang.garbage_collect/1` |
+| -------------------- | ----------------------- | ------------- | ------------------------------------- |
+| `RunWriter`          | 331 MB                  | 0, `:waiting` | **0 MB** (2 KB live)                  |
+| `RunStream.Pictures` | 58 MB                   | 0             | 11 MB                                 |
+| `RunStream` (ETS)    | 84 MB over 12 448 steps | —             | 84 MB (live)                          |
+
+Node total went 840 MB → 434 MB. So it was not a backlog, it was a heap: a BEAM
+process keeps the heap it grew to for the largest term it handled, and nothing in
+the runtime shrinks an idle process. `RunWriter` was holding 331 MB to keep 2 KB.
+
+`397e428` makes the three hibernate when idle (`hibernate_after`, five seconds);
+hibernation compacts to live data, and the ETS table `RunStream` owns is
+unaffected. The delay is compiled from `:studio_idle_hibernate_after` so the
+suite can use 20 ms: the test asserts the outcome — a megabyte batch must not
+leave a heap behind — and fails when the delay is set to ten minutes, so it tests
+the behaviour and not the option. It takes effect at node start, never on a
+running node.
+
+### 50.3 The run a save killed
+
+`9750c01e` (`flyverse_plugin.10simobj_surf_agent`) died at 15:27:43, one step
+into episode 45:
+
+    the run died: function Monty.Studio.RunStream.steps_from/2 is undefined
+    (module Monty.Studio.RunStream is not available)
+
+`module … is not available` is a purge. Saving `run_stream.ex` recompiled it in
+the dev server, and the worker was inside the old version. Forty-four episodes
+and 16 457 step lines survived in `eval_stats.csv` and `run.log`; the run could
+not resume — it is undivided, and `Jobs.Reaper.resume/1` continues only a divided
+run.
+
+The rule now exists twice: `AGENTS.md` forbids editing `lib/` while a run is in
+flight, and `scripts/run_in_flight.sh` answers it with an exit status — 0 quiet,
+1 a run that wrote within five minutes, because a step of a big world can take
+that long and a wrong "quiet" costs a run. Its first version said "busy" on a
+quiet tree: `ls -t … | head -1` is SIGPIPE under `pipefail` (exit 141), so it
+finds the newest log with a loop.
+
+### 50.4 What a step costs, measured
+
+From the same live table, the largest row was **6 KB entry + 2 KB moment**. The
+entry's `beliefs` are 5 KB of the 6, and 4 KB of that is `graphs` — per object a
+list of `hypotheses` with `max_evidence`, `top_evidence` and
+`within_x_percent`. The next saving is therefore not the moments (a quarter) but
+the hypothesis lists kept for every step of every object; trimming those changes
+what an entry _is_, and `CatchUp`, `Parts`, the writer and the archive all read
+it.
