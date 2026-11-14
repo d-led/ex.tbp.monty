@@ -315,6 +315,14 @@ scene, not a config, knows where the object is.
    table is then spending is how often an exploration sees enough of that
    quarter inside the step budget.
 
+   The probe's twenty-seven rotations and these four placements are two
+   different statements and both are true: twenty-seven is how many hypotheses
+   the search still holds at step 500, and four is how many positions of this
+   solid no evidence can tell apart. What the symmetry test adds is which of the
+   two the twenty-seven are arguing about — the three nodes in 947 with no
+   partner are not enough to separate the four, and no further sampling of the
+   same surface will produce what the surface does not have.
+
    `plate-huge` is in the table because it keeps a partner more often than the
    plate — 85 % against 74 % — which is the scale effect seen from the other
    side: at five times the size, fewer of its nodes carry the features that
