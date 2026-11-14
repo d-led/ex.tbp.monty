@@ -209,10 +209,13 @@ their tolerances, and no gait can add discrimination a tolerance discards.
 | `principal_curvatures_log` | 1, 1        | 1.0, 1.0          | how tightly it turns — in log space, so 1.0 is a factor of e |
 
 A channel's evidence is one at no difference, nought at the tolerance, and linear
-in between. So a curvature logged half a unit apart — two radii differing by a
-factor of 1.65 — still earns **half** the credit of an exact match. The ten
-objects are similar by construction: cups of several sizes, boxes of several
-colours. Two cups of one colour differ in curvature alone, and curvature is the
+in between. That rule is the two feature channels'; `pose_vectors` is in the same
+weight map but not in the same arithmetic — the pose evidence compares it as an
+angle, and the feature calculator skips it for exactly that reason. So a curvature
+logged half a unit apart — two radii differing by a factor of 1.65 — still earns
+**half** the credit of an exact match. The ten objects are similar by
+construction: four cups of several sizes, three boxes, a knife, a fork and a
+spoon. Two cups of one colour differ in curvature alone, and curvature is the
 only channel in which size exists at all.
 
 Which is why the heading carries the patch's edge. On a flat top every object's
@@ -220,6 +223,14 @@ curvature is nought, so that channel says nothing and only colour speaks; on the
 rim and the side wall the curvature is real and size-dependent. The fly cannot
 make the tolerance narrower — but it chooses which square centimetre to show, and
 the squares that carry size are the ones near a boundary.
+
+It also cannot look at a side wall at all. The patch sensor sits at the agent's
+own position with no rotation of its own and the scene points the agent at the
+object, so the patch looks straight down; `yaw` is a turn about the vertical axis
+and leaves it looking down. Only `OrientVertical`'s `pitch` would raise the view,
+and pitching on every second step is one of the measured losses above. The rim is
+therefore the only boundary the fly can ever reach, which is the whole reason a
+term exists for it.
 
 ## What worked, and what it was worth
 
