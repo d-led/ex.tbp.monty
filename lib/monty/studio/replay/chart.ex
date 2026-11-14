@@ -59,7 +59,7 @@ defmodule Monty.Studio.Replay.Chart do
     :zero,
     lines: [],
     bands: [],
-    polylines: [],
+    paths: [],
     hover: [],
     ticks: [],
     width: @width,
@@ -88,7 +88,7 @@ defmodule Monty.Studio.Replay.Chart do
           label: String.t(),
           colour: String.t(),
           points: [{float(), float()}],
-          polylines: [String.t()]
+          stretches: [String.t()]
         }
 
   @typedoc """
@@ -111,7 +111,7 @@ defmodule Monty.Studio.Replay.Chart do
           height: pos_integer(),
           lines: [line()],
           bands: [band()],
-          polylines: [%{colour: String.t(), id: String.t(), points: String.t()}],
+          paths: [%{colour: String.t(), id: String.t(), path: String.t()}],
           min: number(),
           max: number(),
           from: number(),
@@ -174,7 +174,7 @@ defmodule Monty.Studio.Replay.Chart do
     %__MODULE__{
       lines: lines,
       bands: bands(visible, {from, to}),
-      polylines: polylines_of(lines),
+      paths: paths_of(lines),
       min: min,
       max: max,
       # Evidence always belongs to a range that contains zero — every episode
@@ -270,26 +270,19 @@ defmodule Monty.Studio.Replay.Chart do
   defp format(value, decimals),
     do: :erlang.float_to_binary(Float.round(value, decimals), decimals: decimals)
 
-  # Every line's stretches, flat: a template draws one `<polyline>` per stretch,
-  # and how many stretches a line has is the chart's business, not the page's.
-  # Each carries an id of its own — a line cut at every episode of a ten-object
-  # run is sixty polylines, and sixty elements with ten ids is an error the
-  # browser reports on every render.
-  defp polylines_of(lines) do
-    lines
-    |> Enum.with_index()
-    |> Enum.flat_map(fn {line, line_index} ->
-      line.polylines
-      |> Enum.with_index()
-      |> Enum.map(fn {points, stretch} ->
-        %{
-          colour: line.colour,
-          id: "replay-line-#{line_index}-#{stretch}",
-          points: points
-        }
-      end)
-    end)
+  # One `<path>` a line, each with an id of its own. A line cut at every episode
+  # of a ten-object run is sixty stretches, and drawing each stretch as its own
+  # element put six hundred nodes on the page for ten lines of ink — every patch
+  # rebuilding them, and sixty elements under ten ids is an error the browser
+  # reports on every render. The stretches are `M`s inside the path instead: the
+  # pen lifts where the line was cut, so the picture is the same picture.
+  defp paths_of(lines) do
+    for {line, index} <- Enum.with_index(lines), path = path_of(line), path != "" do
+      %{colour: line.colour, id: "replay-line-#{index}", path: path}
+    end
   end
+
+  defp path_of(line), do: line.stretches |> Enum.map(&("M " <> &1)) |> Enum.join(" ")
 
   # One band per episode the window can see, from the series that carries
   # episodes: consecutive steps of an episode are one stretch, and a band runs to
@@ -361,7 +354,7 @@ defmodule Monty.Studio.Replay.Chart do
       label: series.label,
       colour: Studio.Chart.colour(series.id, colour),
       points: points,
-      polylines: polylines(series.points, points, {from, to})
+      stretches: stretch_points(series.points, points, {from, to})
     }
 
     samples =
@@ -402,17 +395,17 @@ defmodule Monty.Studio.Replay.Chart do
   defp playhead(nil, _from, _to), do: nil
   defp playhead(step, from, to), do: x(step, from, to)
 
-  # One polyline per stretch the line was actually drawn on. Evidence restarts at
-  # zero when an episode begins, and a theory the module culled is simply gone —
-  # a line drawn across either gap is a fall or a run of zeros nobody measured.
-  # A record that never kept episodes, and a theory that lived throughout, still
-  # draw as one line.
-  defp polylines(drawn_from, points, {from, to}) do
+  # One stretch's points per unbroken run the line was actually drawn on.
+  # Evidence restarts at zero when an episode begins, and a theory the module
+  # culled is simply gone — a line drawn across either gap is a fall or a run of
+  # zeros nobody measured. A record that never kept episodes, and a theory that
+  # lived throughout, still draw as one line.
+  defp stretch_points(drawn_from, points, {from, to}) do
     drawn_from
     |> Enum.zip_with(points, fn point, xy -> {point[:episode], point.step, xy} end)
     |> stretches()
     |> Enum.map(fn run ->
-      run |> to_the_edge(from, to) |> thin() |> Enum.map(&elem(&1, 2)) |> polyline()
+      run |> to_the_edge(from, to) |> thin() |> Enum.map(&elem(&1, 2)) |> point_string()
     end)
     |> Enum.reject(&(&1 == ""))
   end
@@ -470,8 +463,7 @@ defmodule Monty.Studio.Replay.Chart do
     |> Enum.map(&Enum.reverse/1)
   end
 
-  defp polyline([]), do: ""
-
+  defp point_string([]), do: ""
   # Two decimals, not whole numbers: the chart is 320 units wide for a run of
   # hundreds of steps, so a rounded ordinate is a cliff where the data has a
   # slope.
@@ -483,7 +475,7 @@ defmodule Monty.Studio.Replay.Chart do
   # — 64 % of the page's 3.1 MB of coordinates as line that is not there. Only
   # points that share a height with the point on both sides are dropped, so a
   # slope of a hundredth of a unit still keeps every step it climbs by.
-  defp polyline(points) do
+  defp point_string(points) do
     points
     |> Enum.map(fn {x, y} -> {round_to(x), round_to(y)} end)
     |> flat_stretches_to_their_ends()

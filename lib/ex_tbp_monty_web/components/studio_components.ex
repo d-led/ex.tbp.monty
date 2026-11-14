@@ -732,12 +732,12 @@ defmodule ExTbpMontyWeb.StudioComponents do
             under the hand: the translation is in the chart's own units, and the
             viewport clips it, so nothing slides out over the axis. --%>
                   <g id="replay-chart-lines">
-                    <polyline
-                      :for={polyline <- @chart.polylines}
-                      id={polyline.id}
-                      points={polyline.points}
+                    <path
+                      :for={path <- @chart.paths}
+                      id={path.id}
+                      d={path.path}
                       fill="none"
-                      stroke={polyline.colour}
+                      stroke={path.colour}
                       stroke-width="1.5"
                       stroke-linejoin="round"
                       vector-effect="non-scaling-stroke"

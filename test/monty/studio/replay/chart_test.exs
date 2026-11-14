@@ -11,7 +11,7 @@ defmodule Monty.Studio.Replay.ChartTest do
 
   defp series(values, label), do: %{id: label, label: label, points: points(values)}
 
-  # The y of one "x,y" point of a polyline.
+  # The y of one "x,y" point of a drawn stretch.
   defp ordinate(point) do
     {value, _rest} = point |> String.split(",") |> List.last() |> Float.parse()
     value
@@ -19,7 +19,7 @@ defmodule Monty.Studio.Replay.ChartTest do
 
   # The one line a chart draws, as the points it is written with.
   defp drawn_points(chart) do
-    [%{polylines: [line]}] = chart.lines
+    [%{stretches: [line]}] = chart.lines
 
     line
     |> String.split(" ")
@@ -32,6 +32,15 @@ defmodule Monty.Studio.Replay.ChartTest do
   defp float_of(number) do
     {value, _rest} = Float.parse(number)
     value
+  end
+
+  # How many unbroken runs a drawn line was written as: the pen lifts at every
+  # `M`, which is where the line was cut.
+  defp runs_of(path) do
+    path
+    |> String.split("M ")
+    |> Enum.reject(&(&1 == ""))
+    |> length()
   end
 
   describe "the line the values are measured from" do
@@ -220,7 +229,7 @@ defmodule Monty.Studio.Replay.ChartTest do
       # screenshot.
       chart = Chart.new(points([0, 0.04, 0.08, 48]), window: {0, 3}, playhead: 0)
 
-      assert [%{polylines: [line]}] = chart.lines
+      assert [%{stretches: [line]}] = chart.lines
       ys = line |> String.split(" ") |> Enum.map(&ordinate/1)
 
       # The three steps that creep, and nothing collapsed onto one of them.
@@ -231,9 +240,10 @@ defmodule Monty.Studio.Replay.ChartTest do
       assert Enum.any?(creeping, &(&1 != trunc(&1))), "heights are not whole units"
     end
 
-    test "every drawn stretch is an element of its own" do
-      # A ten-object run cut at every episode is sixty polylines; sixty elements
-      # with ten ids is an error the browser reports on every render.
+    test "every line is one element, however often it was cut" do
+      # A ten-object run cut at every episode is sixty stretches a line. Drawn as
+      # an element each, that was six hundred nodes on the page for ten lines of
+      # ink — which is what made the replay page slow to patch.
       chart =
         Chart.many(
           [
@@ -257,10 +267,14 @@ defmodule Monty.Studio.Replay.ChartTest do
           window: {0, 1}
         )
 
-      ids = Enum.map(chart.polylines, & &1.id)
+      ids = Enum.map(chart.paths, & &1.id)
 
-      assert length(ids) == 4
-      assert length(Enum.uniq(ids)) == 4
+      assert length(ids) == 2
+      assert length(Enum.uniq(ids)) == 2
+
+      # The cut is not lost with the elements: each line is still drawn as its two
+      # episodes' stretches.
+      assert Enum.map(chart.paths, &runs_of(&1.path)) == [2, 2]
     end
 
     test "puts the playhead where the step is" do
@@ -276,8 +290,8 @@ defmodule Monty.Studio.Replay.ChartTest do
     test "an empty window is a chart, not a crash" do
       chart = Chart.new([], window: {})
 
-      assert [%{polylines: [], points: []}] = chart.lines
-      assert chart.polylines == []
+      assert [%{stretches: [], points: []}] = chart.lines
+      assert chart.paths == []
       assert chart.hover == []
     end
 
@@ -292,9 +306,10 @@ defmodule Monty.Studio.Replay.ChartTest do
           %{step: 3, value: 3.0, episode: 1}
         ])
 
-      assert [%{polylines: [first, second]}] = chart.lines
+      assert [%{stretches: [first, second]}] = chart.lines
       assert first != "" and second != ""
-      assert length(chart.polylines) == 2
+      assert [%{path: path}] = chart.paths
+      assert runs_of(path) == 2
     end
 
     test "a flat series is drawn across the middle" do
@@ -359,7 +374,6 @@ defmodule Monty.Studio.Replay.ChartTest do
 
     test "every drawn point knows which line it is on, so a hover can say so" do
       samples = two_objects().hover
-      chart = two_objects()
 
       assert Enum.map(samples, & &1.line) == ["mug", "mug", "mug", "bowl", "bowl", "bowl"]
 
@@ -386,7 +400,7 @@ defmodule Monty.Studio.Replay.ChartTest do
       # a function of the series and the window, and redrawing it per pixel of
       # drag is what made a slider in flight feel unlike a slider.
       assert moved.lines == chart.lines
-      assert moved.polylines == chart.polylines
+      assert moved.paths == chart.paths
       assert moved.hover == chart.hover
       assert moved.bands == chart.bands
       assert moved.ticks == chart.ticks
