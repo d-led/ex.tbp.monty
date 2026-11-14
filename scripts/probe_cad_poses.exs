@@ -13,7 +13,24 @@
 
 alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
 alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+alias Monty.Geometry.SurfacePoseVectors
 alias Monty.Studio.Run
+
+# The two comparisons `feature_change_filter` makes on a surface that has not gone
+# away: the normal's turn (`pose_vectors: [π/4, …]`) and the patch's travel
+# (`distance: 0.01`).
+angle_between = fn left, right ->
+  dot = left |> Enum.zip(right) |> Enum.map(fn {a, b} -> a * b end) |> Enum.sum()
+  :math.acos(Monty.Math.clip(dot, -1.0, 1.0)) * 180 / :math.pi()
+end
+
+distance = fn left, right ->
+  left
+  |> Enum.zip(right)
+  |> Enum.map(fn {a, b} -> (a - b) * (a - b) end)
+  |> Enum.sum()
+  |> :math.sqrt()
+end
 
 # The geometry lives in the sibling builds: this application carries the
 # framework, not CAD, and a probe is a script rather than a dependency
@@ -128,19 +145,49 @@ poses_of = fn
     %{}
 end
 
+# What the sensor last had, from the filter's own memory: the percept that reached
+# (or failed to reach) the module. A widening step is worth reading with it — an
+# observation that adds alternatives because the patch left the part is a
+# different event from one that adds them while still on it, and a surface normal
+# that has turned past the config's 45° releases the great majority of them.
+sensor_of = fn
+  %{last_percept: nil} ->
+    %{}
+
+  %{last_percept: percept} ->
+    morphology = percept.morphological_features || %{}
+
+    %{
+      on_object: morphology["on_object"],
+      normal:
+        case morphology["pose_vectors"] do
+          nil -> nil
+          pose_vectors -> SurfacePoseVectors.surface_normal(pose_vectors)
+        end,
+      location: percept.location
+    }
+end
+
 read = fn run ->
   try do
     belief = run |> Run.beliefs() |> Map.values() |> List.first()
 
-    poses =
-      run
-      |> Run.statistics(fn
-        %EvidenceGraphLM{} = module -> poses_of.(module)
-        _not_an_evidence_module -> %{}
-      end)
-      |> then(fn state -> Map.new(state.learning_modules, &{&1.id, &1.state}) end)
+    # `Run.statistics/2` hands the sensor modules over as the coordinator started
+    # them — before step 1 — so the filter's memory read from it is empty however
+    # long the run has been going. `detailed/2` asks each module for its own state
+    # (`Monty.Runtime.Step.live_sensor_module/2`), which is where the percept the
+    # patch last sent is.
+    %{learning_modules: learning, sensor_modules: sensors} =
+      Monty.Runtime.Model.detailed(run.model_id, &%{poses: poses_of.(&1)})
 
-    %{belief: belief, poses: poses}
+    poses = Map.new(learning, &{&1.id, &1.state.poses})
+
+    sensor =
+      sensors
+      |> Enum.find(&Map.has_key?(&1.state, :filter_memory))
+      |> then(&(&1 && sensor_of.(&1.state.filter_memory)))
+
+    %{belief: belief, poses: poses, sensor: sensor || %{}}
   rescue
     _modules_stopped_with_the_episode -> nil
   end
@@ -151,7 +198,7 @@ end
 # survived — because `check_for_symmetry/4` only counts a step where more than
 # 90 % of the possible hypotheses were possible the step before.
 observe = fn
-  %{poses: poses}, step, previous when map_size(poses) > 0 ->
+  %{poses: poses} = state, step, previous when map_size(poses) > 0 ->
     # `poses` is keyed by module, then by graph id — and a module with no
     # hypotheses yet reports `%{}` (`poses_of` says why), which is not a step the
     # counter can say anything about.
@@ -179,6 +226,7 @@ observe = fn
           symmetry: symmetry,
           required: required,
           processed: pose.processed,
+          sensor: state.sensor,
           overlap: overlap
         }
 
@@ -189,6 +237,7 @@ observe = fn
   _no_state_yet, _step, _previous ->
     nil
 end
+
 step_until_done = fn step_until_done, run, step, limit, last, trace ->
   case Run.decision(run) do
     %{is_done: true} = decision ->
@@ -220,7 +269,8 @@ belief = last && last.belief
 # one line buries the four numbers that matter.
 without_ids = fn poses ->
   Map.new(poses, fn {module_id, by_graph} ->
-    {module_id, Map.new(by_graph, fn {graph_id, pose} -> {graph_id, Map.delete(pose, :possible_ids)} end)}
+    {module_id,
+     Map.new(by_graph, fn {graph_id, pose} -> {graph_id, Map.delete(pose, :possible_ids)} end)}
   end)
 end
 
@@ -251,10 +301,10 @@ if observed != [] do
   median = overlaps |> Enum.sort() |> then(&Enum.at(&1, div(length(&1), 2)))
 
   IO.puts("""
-symmetry     reached #{highest} of the #{required} it needs; climbed #{climbed} step(s), reset #{reset} time(s)
-overlap      median #{Float.round(median, 3)}, #{passing} of #{length(overlaps)} steps above the 0.9 the counter needs
-processed    #{Enum.count(observed, & &1.processed)} of #{length(observed)} steps counted as new observation
-""")
+  symmetry     reached #{highest} of the #{required} it needs; climbed #{climbed} step(s), reset #{reset} time(s)
+  overlap      median #{Float.round(median, 3)}, #{passing} of #{length(overlaps)} steps above the 0.9 the counter needs
+  processed    #{Enum.count(observed, & &1.processed)} of #{length(observed)} steps counted as new observation
+  """)
 
   sampled = observed |> Enum.take_every(max(div(length(observed), 12), 1)) |> Enum.take(12)
 
@@ -275,10 +325,25 @@ processed    #{Enum.count(observed, & &1.processed)} of #{length(observed)} step
   if jumps != [] do
     IO.puts("\n  widening (a possible set that grew by ten or more):")
 
+    # The comparisons `changed?/3` makes between the percept it last sent and this
+    # one: the normal's turn (`pose_vectors: [π/4, …]`) and the patch's travel
+    # (`distance: 0.01`). Nought for both means the step was released by the
+    # `n_steps: 20` cadence instead — an unchanged patch read again.
+    comparisons =
+      observed
+      |> Enum.filter(& &1.sensor[:normal])
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Map.new(fn [before, now] ->
+        {now.step,
+         {Float.round(angle_between.(before.sensor.normal, now.sensor.normal), 1),
+          Float.round(distance.(before.sensor.location, now.sensor.location), 3)}}
+      end)
+
     for [before, now] <- Enum.take(jumps, 10) do
       IO.puts(
         "  step #{String.pad_leading(to_string(now.step), 3)}  #{before.possible} -> #{now.possible}" <>
-          "  processed #{now.processed}  overlap #{Float.round(now.overlap, 2)}"
+          "  processed #{now.processed}  on_object #{inspect(now.sensor[:on_object])}" <>
+          "  turned/moved #{inspect(Map.get(comparisons, now.step))}"
       )
     end
   end

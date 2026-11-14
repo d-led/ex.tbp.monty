@@ -227,6 +227,36 @@ scene, not a config, knows where the object is.
    new observation is what can reopen the search, not that nothing else ever
    nudges it. Seed 1's four surviving poses simply never get reopened.
 
+   Which observation it is can be read rather than argued, because the filter
+   keeps the percept it last sent (`filter_memory.last_percept`): the probe now
+   records, at every step a percept is released, how far the patch's surface
+   normal has turned since the previous release and how far the patch has
+   travelled. Seed 0's nine widenings:
+
+   | step | possible   | normal turned | patch moved |
+   | ---- | ---------- | ------------- | ----------- |
+   | 16   | 8 → 63     | 75.1°         | 7 mm        |
+   | 22   | 55 → 91    | 90.0°         | 5 mm        |
+   | 213  | 4 → 36     | 180.0°        | 25 mm       |
+   | 275  | 36 → 70    | 0.0°          | 30 mm       |
+   | 287  | 70 → 177   | 0.0°          | 12 mm       |
+   | 436  | 15 → 570   | 0.0°          | 12 mm       |
+   | 444  | 117 → 168  | 90.0°         | 3 mm        |
+   | 488  | 24 → 41    | 77.1°         | 1 mm        |
+   | 492  | 41 → 51    | 77.1°         | 4 mm        |
+
+   Six of the nine are the patch arriving on a surface it was not on: the normal
+   it reports turns by at least 75° from the one the filter last sent, well past
+   the `pose_vectors: [π/4, 2π, 2π]` threshold that releases a percept. The other
+   three do not turn at all and have travelled 12 mm or more since the last
+   release, past the `distance: 0.01` threshold. So a reopening is one of the
+   config's two change tests firing on a real change — the patch is on another
+   face, on the far side of the part, or a centimetre along it — and not a step
+   where the patch left the object: every one of the nine reports `on_object`
+   1.0. Which hypothesis loses first when that happens is not measured here; what
+   is measured is that no widening of ten or more occurs without one of those two
+   tests firing first, and none of them without the patch still being on the part.
+
    The 500 is not this experiment's choice, and worth saying so before anyone
    looks for room in it: every recognition termination in the port sets
    `max_eval_steps: 500`, and Monty's own are the same number. A failure that
@@ -456,7 +486,11 @@ scene, not a config, knows where the object is.
    It steps under the config's own recognition policy and prints the terminal
    state, the objects still possible, and the distinct rotations left per
    object — which is the difference between "not recognised" and "recognised,
-   and this many ways round".
+   and this many ways round". Read step by step it adds what the symmetry
+   counter and the delta filter were doing at each one, and lists the steps
+   where the possible set grew by ten or more with the turn and the travel that
+   released the percept behind them — the two measurements the tables above
+   are made of.
 
    **A library of two named the wrong one — until the memory was sampled for a
    library.** `plate-big` and `plate-huge` are the plate at 1.5× and at 5×,
