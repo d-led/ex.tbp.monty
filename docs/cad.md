@@ -138,7 +138,18 @@ scene, not a config, knows where the object is.
    work and it is worth saying why, because it looks like it should: the script
    appends the sibling builds from this checkout, while `ex.monty.cad.server` is
    built against whichever release Hex holds (0.6.1 today) — two builds of one
-   module set in one node. The designed path is two nodes in one cluster.
+   module set in one node. The designed path is two nodes in one cluster —
+   `docs/cluster.md` has both on one machine.
+
+   One thing the provider node has to say out loud, because placement decides
+   from tags and not from what a node can actually step: a run recorded with
+   `world: "cad"` needs `world:cad` (`Placement.needs/1` builds that tag from the
+   record's own world, exempting only the stand-in scene), and a node's tags are
+   `monty` plus whatever `MONTY_CAPABILITIES` adds. So the node that opens parts
+   declares `MONTY_CAPABILITIES=world:cad`. Without it nothing is misplaced —
+   placement's third answer performs the run where it was asked for, because a
+   tag nobody declared must not hold a run hostage — and a node with neither the
+   package nor a named part then fails it.
 
    The comparison is already set up and it needs nothing built: every run above
    was steered by `/monty/motor_system_config: surface_curvature_informed_goal1`,
