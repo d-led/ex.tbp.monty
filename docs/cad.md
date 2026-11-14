@@ -496,15 +496,32 @@ scene, not a config, knows where the object is.
    with the patch off the object.
 
    With no filter, `process_features_in_lm` *is* the sensor's own test, so those
-   97 are what it refuses: not the object and not the patch's position, but a
-   percept whose curvature fit has no definite pose to give. It is the same fact
-   the memory was measured to hold from the other end — 233 of the plate's 1557
-   nodes are pose-defined, 15 %, and 107 of `plate-huge`'s 1602, 7 % — so the
-   world and the memory agree that this part is mostly surface with no pose to
-   name. That is a fact about the part and the sensor's features, not about the
-   filter's thresholds, and it is where the next change belongs: a part whose
-   surfaces are mostly curved is the cheapest way to give the pose rule something
-   to name.
+   97 are what it refuses: not the object, and not the patch's position. What
+   the observable cannot say is *which* half of `valid_signals?` refused, and it
+   is worth being exact about that rather than reading the 97 as the whole story.
+   An invalid curvature fit reports both curvatures as nought — the kernel's
+   `NO_CURVATURES` is nine zeroes — and so reports `pose_fully_defined` false as
+   well, which means the 97 are consistent with a refused fit; but an invalid
+   *normal* over a valid fit is consistent with them too, and no field in the
+   message separates the two. The 11 with a definite
+   pose narrow it a little: their curvatures came out, so what refused them was
+   the normal.
+
+   What the step-level measurement does establish is that neither refusal is a
+   loss of the object, and that it agrees with the memory measured from the other
+   end — 233 of the plate's 1557 nodes are pose-defined, 15 %, and 107 of
+   `plate-huge`'s 1602, 7 % — so the world and the memory agree that this part is
+   mostly surface with no pose to name. That is a fact about the part and the
+   sensor's features, not about the filter's thresholds, and it is where the next
+   change belongs: a part whose surfaces are mostly curved is the cheapest way to
+   give the pose rule something to name.
+
+   That part does not exist yet, and it cannot be derived from the ones that do.
+   The three checked-in fixtures are `golden_simple_through_hole`, `blend_r5` and
+   `blend_r5_enlarged`, and the derived `plate-big` and `plate-huge` are the plate
+   at another scale, which is still a plate. `ex.cadmpeg` reads, converts and
+   writes documents but builds no primitive, so a cylinder or a part with a
+   curved boss has to be authored outside this checkout before this can be tried.
 
    `plate-huge` is in the table because it keeps a partner more often than the
    plate — 85 % against 74 % — which is the scale effect seen from the other
