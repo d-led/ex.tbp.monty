@@ -170,6 +170,12 @@ defmodule FlyversePlugin.Policy do
   # search.
   @stall_steps 20
 
+  # How long a look around lasts: six steps of the search circle, which is half a
+  # turn — and the circle's own lateral step is what carries the patch off the
+  # surface it was reading, because turning on the spot over a table stays over
+  # the table.
+  @look_steps 6
+
   # The stride of a bout, and it is one centimetre because the framework says so
   # rather than because it looks right: the patch sensor this config gives the
   # agent (`camera_surf_delta`) sends a new percept when the patch has moved
@@ -319,6 +325,7 @@ defmodule FlyversePlugin.Policy do
     case next do
       :explore -> steer(policy, observations, percept, state)
       :depart -> {:ok, departing(policy, advanced), policy, state}
+      :look -> {:ok, looking(policy), policy, state}
       :cruise -> {:ok, touch(policy, observations), policy, state}
     end
   end
@@ -343,8 +350,14 @@ defmodule FlyversePlugin.Policy do
   # lands on anything.
   #
   # A patch that has stopped changing outranks both: whatever the percept says,
-  # a view that has shown the same thing for twenty steps is not the object.
-  defp bout(%{still: still}, true) when still >= @stall_steps, do: :cruise
+  # a view that has shown the same thing for twenty steps is not the object. The
+  # answer is to look around — the search circle, which turns and moves sideways
+  # — and then to walk again, because a fly that only ever turns is a fly that
+  # reads one square centimetre for ever, and a fly that only ever walks over the
+  # table is one that reads nothing at all.
+  defp bout(%{look_steps: taken}, true) when taken > 0 and taken < @look_steps, do: :look
+
+  defp bout(%{still: still}, true) when still >= @stall_steps, do: :look
 
   defp bout(_simulation, false), do: :cruise
 
@@ -359,11 +372,23 @@ defmodule FlyversePlugin.Policy do
   # bout, not the continuation of the old one. Being off the object is not a
   # behaviour it counts, because there is nothing there to time.
   defp advance(simulation, :cruise),
-    do: %{simulation | bout: :cruise, bout_steps: 0, still: 0}
+    do: %{simulation | bout: :cruise, bout_steps: 0, still: 0, look_steps: 0}
+
+  defp advance(simulation, :look) do
+    looked = if simulation.bout == :look, do: simulation.look_steps + 1, else: 1
+    %{simulation | bout: :look, bout_steps: 0, still: 0, look_steps: looked}
+  end
 
   defp advance(simulation, next) do
     taken = if(next == simulation.bout, do: simulation.bout_steps + 1, else: 1)
-    %{simulation | bout: next, bout_steps: taken, departures: departures(simulation, next)}
+
+    %{
+      simulation
+      | bout: next,
+        bout_steps: taken,
+        look_steps: 0,
+        departures: departures(simulation, next)
+    }
   end
 
   # One side per departure, counted once — when the departure begins.
@@ -452,6 +477,16 @@ defmodule FlyversePlugin.Policy do
         centring: centring,
         searching: gap >= @visible
       }
+    }
+  end
+
+  # Lost, and looking: the search circle, in a result the plugin contract
+  # accepts, saying that this step was a look rather than a decision.
+  defp looking(policy) do
+    %MotorPolicyResult{
+      actions: [search(policy)],
+      motor_only_step: false,
+      telemetry: %{looking: true}
     }
   end
 
@@ -557,6 +592,7 @@ defmodule FlyversePlugin.Policy do
              spikes: 0,
              nearness: {0.0, 0.0},
              still: 0,
+             look_steps: 0,
              bout: :cruise,
              bout_steps: 0,
              departures: 0
@@ -644,6 +680,7 @@ defmodule FlyversePlugin.Policy do
            steps: 0,
            nearness: {0.0, 0.0},
            still: 0,
+           look_steps: 0,
            bout: :cruise,
            bout_steps: 0,
            departures: 0,
