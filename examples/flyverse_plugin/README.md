@@ -196,6 +196,31 @@ and fifty-millimetre hop are five times the distance Monty will match across, an
 the departure is the same. `silence_if_motor_only` in the framework is where this
 happens: the percept keeps its shape and stops passing on.
 
+### What the module can tell apart
+
+This is the arithmetic behind every steering choice above, and it is Monty's, not
+this policy's — `evidence_1lm_nn5_dod0025` names the channels and
+their tolerances, and no gait can add discrimination a tolerance discards.
+
+| channel                    | weight      | tolerance         | what it says                                                 |
+| -------------------------- | ----------- | ----------------- | ------------------------------------------------------------ |
+| `hsv`                      | 2, 0.5, 0.5 | 0.1, 0.2, 0.2     | colour; hue wraps the short way round                        |
+| `pose_vectors`             | 1, 1, 1     | 20° (the default) | where the surface turns, matched as an angle                 |
+| `principal_curvatures_log` | 1, 1        | 1.0, 1.0          | how tightly it turns — in log space, so 1.0 is a factor of e |
+
+A channel's evidence is one at no difference, nought at the tolerance, and linear
+in between. So a curvature logged half a unit apart — two radii differing by a
+factor of 1.65 — still earns **half** the credit of an exact match. The ten
+objects are similar by construction: cups of several sizes, boxes of several
+colours. Two cups of one colour differ in curvature alone, and curvature is the
+only channel in which size exists at all.
+
+Which is why the heading carries the patch's edge. On a flat top every object's
+curvature is nought, so that channel says nothing and only colour speaks; on the
+rim and the side wall the curvature is real and size-dependent. The fly cannot
+make the tolerance narrower — but it chooses which square centimetre to show, and
+the squares that carry size are the ones near a boundary.
+
 ## What worked, and what it was worth
 
 Measured on `flyverse_plugin.10simobj_surf_agent`, whole runs, comparing total
@@ -239,10 +264,28 @@ full-budget count first, then the completions, then the mean.
 One rule above is in the list on the strength of a different measurement from the
 rest: the edge in the heading is worth **1 129 steps and one completion** on the
 same 59 episodes — 55 of 59 matched and 29 082 steps against the build without
-it at 54 of 59 and 32 211. That is the size of a win these levers give now, and it
-came from the frames rather than from a theory: the patch straddles the rim at one
-step and lies flat on the top at the next, and the four hundred steps an episode
-spends choosing between two candidate objects happen in the flat ones.
+it at 54 of 59 and 32 211. It came from the frames rather than from a theory: the
+patch straddles the rim at one step and lies flat on the top at the next, and the
+four hundred steps an episode spends choosing between two candidate objects happen
+in the flat ones.
+
+That number deserves the same suspicion the sideways departure got, and the
+sweep said so. On the first 23 episodes of a full run the two builds are level —
+**6 143 steps against 6 039**, both 23 of 23 matched, no ceiling in either — while
+single episodes differ by up to 625 either way: mug 68, 249, 95 steps in the
+build without the rim against 130, 485, 583 in the build with it, and the knife
+the other way round at 674 and 944 against 337 and 105. Subtract the one ceiling
+episode the rim recovered — five thousand steps — from that 59-episode gap and
+the rest of the slice favours the baseline by about 1 900.
+
+So the honest reason the rim stays is not that it saves steps. It is that a lost
+object costs a whole five-thousand-step episode and finishing one costs a few
+hundred, so recovering one loss is worth more than the ~1 900 steps it spends
+elsewhere — and at 23 episodes the two builds are inside the noise that this
+experiment's per-episode spread sets. A build that trades a little mean for one
+fewer loss is the trade this task wants; a build that trades a little mean for
+nothing is the sideways departure again, and only the full sweep can tell them
+apart.
 
 What the measurements also settled, and what bounds this policy: **a slow episode
 is the module narrowing, not the fly failing.** `e_cups` ran 440 steps with two
