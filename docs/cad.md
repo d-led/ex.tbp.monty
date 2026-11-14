@@ -195,6 +195,36 @@ scene, not a config, knows where the object is.
    (`MONTY_CAD_PART`), the runner carries the CAD builds because it steps the
    world, and neither is in the same VM — which is the shortcut below.
 
+   **Under the walk the patch stops being an observation at all.** The same
+   runner, part and seed, with `probe_cad_poses.exs` in place of the verdict
+   script, so the module's own state is read every step:
+
+   | policy                        | steps that were new observations | counter | possible at the limit |
+   | ----------------------------- | -------------------------------- | ------- | --------------------- |
+   | the config's curvature policy | 37 of 497                        | 1 of 5  | 51                    |
+   | `monty_cad.feature_walk`      | **1 of 497**                     | 0 of 5  | **0**                 |
+
+   Of the 496 steps that were not new observations, 496 carried a percept with no
+   definite pose and none had the patch off the part — the same gate as before,
+   met almost every time. The module's possible set is nought at every sample
+   from the fourth step to the limit, which is why the overlap column has nothing
+   to measure.
+
+   Two things follow, and the second is a question rather than a result. The first
+   is that walking to a part's features does not by itself give a planar part
+   poses: the policy keeps the patch at a fixed standoff facing the surface, and a
+   flat face stays flat under that. The suggestion in the symmetry section — "a
+   walk that turns the patch by enough to be counted" — is not borne out by the
+   walk this port has, so the world is the lever, not the policy.
+
+   The second is that an empty possible set is not starvation. A counter that
+   cannot climb because nothing was observed leaves the set where it was; here the
+   set is emptied and never refilled, so the episode cannot conclude for a reason
+   that is upstream of the symmetry rule. Whether the matching refused a percept
+   it should not have been asked to match, or the walk's own frame puts the patch
+   where the part is not, is the next question, and it is worth answering before
+   the walk is compared with anything.
+
 3. **A library the CAD world can be recognised against — a part with a pose
    recognises, a symmetric one does not conclude.** The experiment is now a
    script:
