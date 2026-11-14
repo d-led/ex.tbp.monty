@@ -267,19 +267,37 @@ scene, not a config, knows where the object is.
    action every step" — was retracted for that reason, not corrected: no
    measurement yet says what the twelfth action is.
 
-   What survives is the earlier one, and it is a live reading rather than a stored
-   entry: `Model.detailed/2` asks the sensor module for its own state, and the
-   patch's pose was `[0.0, 0.0, 0.063]` at the thirty-fifth step and again at the
-   fortieth. So the patch is where `start_pose/2` put it after thirty-five steps of
-   a policy that is issuing `MoveForward`s, and the correction that would have
-   moved it either is not applied or is undone.
+   Read correctly — `List.last` for the newest action, `Model.detailed/2` for the
+   live pose — the walk works, and it walks *into the part*:
 
-   The next measurement is small and now unambiguous: read `List.last` of
-   `action_sequence` at two steps and compare the two actions with the two poses.
-   If the action changes as the pose does not, the world is not applying it; if the
-   action is identical, the policy is deciding from a state that never moves;
-   `MotorSystem.call/6` does keep the selector it gets back, so a policy rebuilt
-   per step would have to come from somewhere else.
+       step  1  z 0.063  MoveForward{ distance: 0.053 }
+       step  2  z 0.010  MoveTangentially{ distance: 0.004 }
+       step  3  z 0.010  MoveTangentially{ distance: 0.004 }
+       step  4  z 0.010  MoveForward{ distance: 0.010 }
+       step  5  z 0.000  MoveTangentially{ distance: 0.004 }
+       step  6  z 0.000  MoveTangentially{ distance: 0.003 }
+       step  7  z 0.000  (no actions)
+       step  8  z 0.000  MoveTangentially{ distance: 0.004 }
+
+   So the corrections are applied, the tangential steps are taken at four
+   millimetres, and the patch ends at `z = 0.0`. `start_pose/2` places the sensor
+   fifty millimetres above the part's highest point — which is why the episode
+   starts at 0.063 — so `z = 0.0` is *below* that highest point, inside the part,
+   and the policy's own state says it wants a `standoff` of five millimetres.
+
+   That is the mechanism the whole section was missing. A patch inside the part
+   sees degenerate geometry, which is exactly the 496 of 496 pose-free percepts and
+   1 new observation in 497 recorded above: the walk starves the module not because
+   walking is the wrong idea but because its height correction overshoots to a
+   point where nothing can be sensed. And the earlier "the patch never moves" was
+   the same mistake in another costume — the two readings at steps 35 and 40 both
+   showing 0.063 are the patch *coming back*, not staying.
+
+   The next step belongs to `monty_cad.feature_walk`: its `call/6` corrects the
+   height by the ray's own distance, and the state it keeps says it should be
+   keeping a standoff. One step-7 with no actions is the other thing to look at
+   there, since a policy that decides nothing for a step is either the rescue
+   swallowing an error or a target it has arrived at.
 
    Until it is answered the walk is not a comparison for the curvature policy at
    all, and the numbers in the table above measure a stationary patch rather than a
