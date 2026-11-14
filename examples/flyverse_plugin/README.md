@@ -116,13 +116,13 @@ counter reads the **patch's** mean depth and not the wide view's, because the
 wide view changes whenever the fly turns while the patch — the thing the learning
 module sees — can be identical for two hundred steps.
 
-| behaviour     | when                                                          | what it does                                                                                    |
-| ------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `:cruise`     | nothing under the patch, and the patch is changing            | walk at whatever the view finder sees: aim at its most varied column and step the gap; a leg of the search circle when it sees nothing within a metre |
-| `:explore`    | something under the patch that is not clipped, bout under 60  | the network steers (above)                                                                       |
-| `:depart`     | 60 steps into a bout, or a second stall in the same one        | about-face (180°, alternating side) and a 50 mm hop, until the patch is off it or four steps are |
-| `:look`       | the patch has shown the same depth for 20 steps                | an aimed look when there is something under it; a quarter turn and a 50 mm leg when there is not |
-| `:struggling` | the body has moved under a millimetre for 12 steps             | a 90° swing, on a 40-step period                                                                 |
+| behaviour     | when                                                         | what it does                                                                                                                                          |
+| ------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:cruise`     | nothing under the patch, and the patch is changing           | walk at whatever the view finder sees: aim at its most varied column and step the gap; a leg of the search circle when it sees nothing within a metre |
+| `:explore`    | something under the patch that is not clipped, bout under 60 | the network steers (above)                                                                                                                            |
+| `:depart`     | 60 steps into a bout, or a second stall in the same one      | about-face (180°, alternating side) and a 50 mm hop, until the patch is off it or four steps are                                                      |
+| `:look`       | the patch has shown the same depth for 20 steps              | an aimed look when there is something under it; a quarter turn and a 50 mm leg when there is not                                                      |
+| `:struggling` | the body has moved under a millimetre for 12 steps           | a 90° swing, on a 40-step period                                                                                                                      |
 
 `_touch_object`'s own numbers are kept where they were right: below a tenth of
 the patch covered, one step across the gap the view finder can see, aimed at the
@@ -169,19 +169,21 @@ Measured on `flyverse_plugin.10simobj_surf_agent`, whole runs, comparing total
 Monty steps first (a run's cost is its steps, not its episode count), then
 completions, then mean steps per completed episode.
 
-| kept                                     | why it is there                                              |
-| ---------------------------------------- | ------------------------------------------------------------ |
-| walk and turn in one action              | a yawing fly reads one patch for ever                        |
-| a 10 mm stride, 4 mm floor               | 4 mm is under the patch's own 10 mm delta threshold          |
-| the standoff instead of a constant       | stops the patch ending up inside the mug                     |
-| the patch's nearness as the stall signal | the wide view changes when the fly turns; the patch does not |
-| aim at the most varied column            | the mean of a table edge and a mug is neither                |
-| sweep instead of aim when lost           | a lost fly that aims is a lost fly                           |
-| depart every 60 steps                    | the only thing that ends a two-thousand-step bout            |
-| a periodic sine wander                   | breaks the symmetric-view deadlock                           |
-| idle detection, measured on the body     | the four original stalls, all of them                        |
-| the clip read as "nothing there"         | a clipped pixel is not a distant one                         |
-| motor-only steps while lost              | the module is not asked to explain a hop                     |
+| kept                                            | why it is there                                              |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| walk and turn in one action                     | a yawing fly reads one patch for ever                        |
+| a 10 mm stride, 4 mm floor                      | 4 mm is under the patch's own 10 mm delta threshold          |
+| the standoff instead of a constant              | stops the patch ending up inside the mug                     |
+| the patch's nearness as the stall signal        | the wide view changes when the fly turns; the patch does not |
+| aim at the most varied column                   | the mean of a table edge and a mug is neither                |
+| sweep instead of aim when lost                  | a lost fly that aims is a lost fly                           |
+| depart every 60 steps                           | the only thing that ends a two-thousand-step bout            |
+| a periodic sine wander                          | breaks the symmetric-view deadlock                           |
+| idle detection, measured on the body            | the four original stalls, all of them                        |
+| the clip read as "nothing there"                | a clipped pixel is not a distant one                         |
+| the standoff held from the nearest patch pixel  | a clipped half inflates a mean, and a mean asks to press in  |
+| a vertical orienting step between steering ones | the patch otherwise reads a ramp, half of it clipped         |
+| motor-only steps while lost                     | the module is not asked to explain a hop                     |
 
 | not kept                                               | what it did         |
 | ------------------------------------------------------ | ------------------- |
@@ -228,16 +230,18 @@ its first 41 episodes, mean 279 an episode, with no ceiling episode at all.
 
 ## Two things no steering can change
 
-- **The spoon and the fork tines cannot be seen.** The patch sits at the agent's
-  own height, z = 0.1 m above a table at z = 0, and the transform clips any depth
-  under 50 mm. Anything lying on the table lower than about 50 mm is therefore
-  invisible to it — the mug, at seven centimetres, is readable; the spoon, at one
-  and a half centimetres, is not, in any pose. No amount of steering helps, and the
-  tests say so rather than the tuning.
+- **The patch reaches five centimetres, and the agent rides ten above the table.**
+  `clip_value: 0.05` is a _reach_, not a near limit: every depth past it becomes
+  the clip's own value, so the patch cannot see the table it floats over, and
+  anything standing less than about five centimetres tall is out of reach from
+  where the agent starts. The mug, at seven centimetres, is readable; the spoon,
+  at one and a half, is eight and a half centimetres below the sensor and is not.
+  Monty's surf policy would descend onto it, and this one only turns and walks.
 - **The eval ceiling is 500 steps, the train ceiling 1000, the total 5000.** The
-  baseline's own 7 abandoned episodes sit under those numbers, and the two levers a
-  policy has — get there sooner, or stop where you are — are what the rest of this
-  file is about.
+  baseline's own 7 abandoned episodes sit under those numbers, and they were six
+  spoons and a cracker box — one unreadable object is 45% of a run's cost. The two
+  levers a policy has — get there sooner, or stop where you are — are what the rest
+  of this file is about.
 
 With the dataset's pack the same code asks a real connectome, and what it does
 there is a question this example does not answer.
