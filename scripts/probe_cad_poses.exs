@@ -97,9 +97,22 @@ poses_of = fn
         %{
           graph_id => %{
             possible: length(possible),
+            possible_ids: Enum.sort(possible),
             rotations:
               possible |> Enum.map(&Hypotheses.pose(hypotheses, &1)) |> Enum.uniq() |> length(),
-            max_turn: turns |> Enum.max(fn -> 0.0 end) |> Float.round(1)
+            max_turn: turns |> Enum.max(fn -> 0.0 end) |> Float.round(1),
+            # The counter that would let a symmetric part conclude anyway, and what
+            # it is counting towards (`check_for_symmetry/4`).
+            symmetry: module.symmetry_evidence,
+            required: module.required_symmetry_evidence,
+            # The gate on that counter: a step only counts as evidence of symmetry
+            # when the buffer says this step's observation reached the module
+            # (`add_lm_processing_to_buffer_stats/2`, which is false for a
+            # location-only step).
+            processed:
+              Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer.get_last_obs_processed(
+                module.buffer
+              )
           }
         }
     end
@@ -126,22 +139,83 @@ read = fn run ->
   end
 end
 
-step_until_done = fn step_until_done, run, step, limit, last ->
+# One row per step, for the symmetry question: how many hypotheses the module
+# holds, what its symmetry counter says, and how much of the previous step's set
+# survived — because `check_for_symmetry/4` only counts a step where more than
+# 90 % of the possible hypotheses were possible the step before.
+observe = fn
+  %{poses: poses}, step, previous when map_size(poses) > 0 ->
+    # `poses` is keyed by module, then by graph id — and a module with no
+    # hypotheses yet reports `%{}` (`poses_of` says why), which is not a step the
+    # counter can say anything about.
+    by_graph = poses |> Map.values() |> List.first()
+    pose = by_graph |> Map.values() |> List.first()
+
+    case pose do
+      %{possible_ids: ids, symmetry: symmetry, required: required, possible: possible} = pose ->
+        before = previous && previous.possible_ids
+
+        overlap =
+          case {before, ids} do
+            {[_ | _] = before, [_ | _] = now} ->
+              MapSet.size(MapSet.intersection(MapSet.new(before), MapSet.new(now))) /
+                length(now)
+
+            _none_yet ->
+              0.0
+          end
+
+        %{
+          step: step,
+          possible: possible,
+          possible_ids: ids,
+          symmetry: symmetry,
+          required: required,
+          processed: pose.processed,
+          overlap: overlap
+        }
+
+      _no_hypotheses_yet ->
+        nil
+    end
+
+  _no_state_yet, _step, _previous ->
+    nil
+end
+step_until_done = fn step_until_done, run, step, limit, last, trace ->
   case Run.decision(run) do
     %{is_done: true} = decision ->
-      {run, decision, last}
+      {run, decision, last, Enum.reverse(trace)}
 
     _keep_going when step >= limit ->
-      {run, %{is_done: false, timed_out?: false}, last}
+      {run, %{is_done: false, timed_out?: false}, last, Enum.reverse(trace)}
 
     _keep_going ->
       {:ok, _info, _observations, run} = Run.step(run)
-      step_until_done.(step_until_done, run, step + 1, limit, read.(run) || last)
+      state = read.(run)
+      # A step with nothing to observe keeps the previous row rather than
+      # replacing it with nothing: every overlap is measured against the last
+      # step that had hypotheses.
+      trace =
+        case observe.(state, step + 1, List.first(trace)) do
+          nil -> trace
+          row -> [row | trace]
+        end
+
+      step_until_done.(step_until_done, run, step + 1, limit, state || last, trace)
   end
 end
 
-{run, decision, last} = step_until_done.(step_until_done, run, 0, steps, nil)
+{run, decision, last, trace} = step_until_done.(step_until_done, run, 0, steps, nil, [])
 belief = last && last.belief
+
+# The ids are what the counter needs and what a reader does not: 120 of them in
+# one line buries the four numbers that matter.
+without_ids = fn poses ->
+  Map.new(poses, fn {module_id, by_graph} ->
+    {module_id, Map.new(by_graph, fn {graph_id, pose} -> {graph_id, Map.delete(pose, :possible_ids)} end)}
+  end)
+end
 
 IO.puts("""
 steps        #{run.step} of #{steps}
@@ -149,7 +223,39 @@ ended        #{if decision.is_done, do: "by the recognition policy", else: "at t
 terminal     #{inspect(Map.get(belief || %{}, :terminal_state))}
 detected     #{inspect(Map.get(belief || %{}, :detected_object))}
 possible     #{inspect(Map.get(belief || %{}, :possible_matches))}
-poses        #{inspect(last && last.poses)}
+poses        #{inspect(last && without_ids.(last.poses))}
 """)
+
+# The symmetry counter, which is the other way a part can conclude: the same
+# alternatives surviving step after step, `required_symmetry_evidence` times.
+# A counter that never climbs and one that climbs and resets are different
+# failures, and only the second is the >90 % rule being strict.
+observed = trace |> Enum.reject(&is_nil/1)
+
+if observed != [] do
+  pairs = observed |> Enum.chunk_every(2, 1, :discard)
+  climbed = Enum.count(pairs, fn [a, b] -> b.symmetry == a.symmetry + 1 end)
+  reset = Enum.count(pairs, fn [a, b] -> b.symmetry == 0 and a.symmetry > 0 end)
+  highest = observed |> Enum.map(& &1.symmetry) |> Enum.max(fn -> 0 end)
+  required = observed |> Enum.map(& &1.required) |> Enum.max(fn -> 0 end)
+  overlaps = observed |> Enum.drop(1) |> Enum.map(& &1.overlap)
+  passing = Enum.count(overlaps, &(&1 > 0.9))
+  median = overlaps |> Enum.sort() |> then(&Enum.at(&1, div(length(&1), 2)))
+
+  IO.puts("""
+symmetry     reached #{highest} of the #{required} it needs; climbed #{climbed} step(s), reset #{reset} time(s)
+overlap      median #{Float.round(median, 3)}, #{passing} of #{length(overlaps)} steps above the 0.9 the counter needs
+processed    #{Enum.count(observed, & &1.processed)} of #{length(observed)} steps counted as new observation
+""")
+
+  sampled = observed |> Enum.take_every(max(div(length(observed), 12), 1)) |> Enum.take(12)
+
+  for row <- sampled do
+    IO.puts(
+      "  step #{String.pad_leading(to_string(row.step), 3)}  possible #{String.pad_leading(to_string(row.possible), 2)}" <>
+        "  overlap #{Float.round(row.overlap, 2)}  processed #{row.processed}  symmetry #{row.symmetry}"
+    )
+  end
+end
 
 Run.stop_model(run)

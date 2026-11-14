@@ -325,11 +325,10 @@ scene, not a config, knows where the object is.
 
    The block maps onto itself, node for node. Its four orientations are one
    picture to the matcher, and a half turn is 180° where `unique_pose?/4` asks
-   for 20° — so no number of steps can conclude it, and the nought of ten is the
-   rule working rather than the exploration failing. The plate is the opposite
-   case by 246 nodes of its 1557: its hole and its boss keep no twin under any
-   half turn, and those are what tells its four orientations apart. What the seed
-   table is then spending is how often an exploration sees enough of that
+   for 20°, so the pose rule cannot settle it. The plate is the opposite case by
+   246 nodes of its 1557: its hole and its boss keep no twin under any half turn,
+   and those are what tells its four orientations apart. What the seed table is
+   then spending is how often an exploration sees enough of that
    246 inside the step budget.
 
    The probe's twenty-seven rotations and these four placements are two
@@ -339,6 +338,44 @@ scene, not a config, knows where the object is.
    two the twenty-seven are arguing about — one node in 947 is not enough to
    separate the four, and no further sampling of the same surface will produce
    what the surface does not have.
+
+   **The symmetry rule is the way out, and in this world it never fires.**
+   `unique_pose?/4` failing is not the last word: `check_for_symmetry/4` accepts
+   a pose after `required_symmetry_evidence` (5) consecutive steps in which more
+   than 90 % of the possible hypotheses were possible the step before. The probe
+   now prints that counter, and what it is gated on, per step:
+
+   | part  | steps above 0.9 overlap | steps counted as a new observation | counter reached |
+   | ----- | ----------------------- | ---------------------------------- | --------------- |
+   | blend | 64 of 76                | **2 of 77**                        | 0 of 5          |
+   | plate | 63 of 76                | **7 of 77**                        | 0 of 5          |
+
+   The overlap rule is satisfied on four steps in five. The second column is why
+   that makes no difference: `check_for_symmetry/4` only counts a step where the
+   buffer says the observation reached the module, and in a CAD run it almost
+   never did. The chain is four links, each one ours to read:
+
+   1. `FeatureChangeFilter` sets `process_features_in_lm: false` when a patch has
+      not changed enough to be worth learning
+      (`feature_change_filter.ex`, `significant?`), which makes the percept a
+      location-only message.
+   2. `Monty.Runtime.location_only_step?/1` is true when every sensor percept is
+      like that.
+   3. `record_processing/2` then writes `lm_processed_steps` false, and
+      `get_last_obs_processed/1` reports false with it.
+   4. `get_unique_pose_if_available/2` hands that flag to `check_for_symmetry/4`
+      as `increment_evidence?`, so the counter is not even asked to move — the
+      docstring there says why: a step that saw nothing new cannot be evidence
+      of symmetry.
+
+   So the blend's nought of ten is neither the pose rule working nor the
+   exploration failing: the hatch that exists for a symmetric part is starved,
+   because a patch on a symmetric part is exactly the patch that looks like the
+   last one. That is not yet a defect — the rule is doing what its comment says —
+   but it is the mechanism, and it makes the next experiment a question of the
+   world rather than of the part: a sensor whose filter lets changed patches
+   through more often, or a walk that changes the patch every step, is what the
+   symmetry path needs to be given a chance.
 
    `plate-huge` is in the table because it keeps a partner more often than the
    plate — 85 % against 74 % — which is the scale effect seen from the other
@@ -431,13 +468,15 @@ scene, not a config, knows where the object is.
    the same blend problem seen from the other side, and the reason a run's
    direction of travel matters as much as its library.
 
-   One thing this leaves standing, and one it has answered. A right answer is
-   still seed-dependent — the plate is recognised in 4 of 10 seeds on its own —
-   and that is a question about evidence and exploration, not about which part
-   was named. A symmetric part never concluding is no longer a question: the
-   measurement above says its orientations are one picture to the matcher, node
-   for node, so a rule that needs one pose cannot name one, and no exploration
-   will help. The lesson that belongs in
+   Two questions are left, and they are now different questions. A right answer
+   is still seed-dependent — the plate is recognised in 4 of 10 seeds on its own
+   — and that is about evidence and exploration, not about which part was named.
+   A symmetric part still never concludes, but no longer because "there is no
+   answer": its orientations are one picture to the matcher, so the pose rule
+   cannot pick one, and the symmetry rule that exists for exactly this case is
+   starved by the sensor's own filter — two steps in seventy-seven counted as a
+   new observation. The next thing to change there is the world, not the part.
+   The lesson that belongs in
    `ex.monty.cad` is narrower and is written down here because it was learned
    the hard way: `Training`'s `:spacing` is an absolute number of millimetres,
    which is right for one part and wrong for a library, and a library builder
