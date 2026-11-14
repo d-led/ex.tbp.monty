@@ -65,7 +65,12 @@ def half_turn(axis):
 
 
 def twins(positions, normals, curvatures, axis):
-    """The share of nodes that keep a partner under this half turn."""
+    """Which nodes keep a partner under this half turn.
+
+    Answered as a mask, because one axis is not the question: a node that keeps a
+    partner under the first half turn may have none under the second, and only a
+    node that keeps none under *any* of them can tell the placements apart.
+    """
     centre = positions.mean(axis=0)
     turned = (positions - centre) @ half_turn(axis).T + centre
     turned_normals = normals @ half_turn(axis).T
@@ -82,8 +87,7 @@ def twins(positions, normals, curvatures, axis):
         axis=1
     )
 
-    keep = same_normal & same_curvature & (drift <= DRIFT_IN_SPACINGS * spacing)
-    return keep.mean(), spacing
+    return same_normal & same_curvature & (drift <= DRIFT_IN_SPACINGS * spacing), spacing
 
 
 def describe(path, wanted=None):
@@ -103,9 +107,12 @@ def describe(path, wanted=None):
         _, axes = np.linalg.eigh(centred.T @ centred)
 
         shares = []
+        twinned = np.zeros(len(positions), dtype=bool)
         for index in range(3):
-            share, spacing = twins(positions, normals, curvatures, axes[:, index])
-            shares.append(100.0 * share)
+            keeps, spacing = twins(positions, normals, curvatures, axes[:, index])
+            # A node is not discriminating if *any* half turn gives it a partner.
+            twinned |= keeps
+            shares.append(100.0 * keeps.mean())
 
         extent = float(np.max(np.ptp(positions, axis=0)))
         print(
@@ -113,8 +120,14 @@ def describe(path, wanted=None):
             f"{extent * 1000:.0f} mm across"
         )
         print(
-            "   keeps a partner under the three half turns: "
+            "   keeps a partner under each half turn: "
             + ", ".join(f"{share:.1f} %" for share in shares)
+        )
+        discriminating = int((~twinned).sum())
+        plural = "" if discriminating == 1 else "s"
+        print(
+            f"   keeps none under any: {discriminating} node{plural} "
+            f"({100.0 * (~twinned).mean():.1f} %) — the ones that can tell the others apart"
         )
 
 

@@ -311,28 +311,34 @@ scene, not a config, knows where the object is.
    position (within two spacings), on normal (within 15°) and on log curvature
    (within the matcher's 1.0):
 
-   | part       | nodes that keep a partner, over the three half turns |
-   | ---------- | ---------------------------------------------------- |
-   | blend      | 99.7 %, 99.5 %, 99.6 %                               |
-   | plate      | 74.2 %, 72.1 %, 76.0 %                               |
-   | plate-huge | 84.8 %, 81.1 %, 82.6 %                               |
+   | part       | keeps a partner, per half turn | keeps none under any |
+   | ---------- | ------------------------------ | -------------------- |
+   | blend      | 99.7 %, 99.5 %, 99.6 %         | 1 of 947 (0.1 %)     |
+   | plate      | 74.2 %, 72.1 %, 76.0 %         | 246 of 1557 (16 %)   |
+   | plate-huge | 84.8 %, 81.1 %, 82.6 %         | 153 of 1602 (10 %)   |
+
+   The two columns ask different questions and the second is the one that
+   decides. A node keeping a partner under one half turn says nothing about the
+   next; a node keeping none under _any_ of the three is evidence that separates
+   all four placements, which is what a conclusion needs. The block has one such
+   node in 947.
 
    The block maps onto itself, node for node. Its four orientations are one
    picture to the matcher, and a half turn is 180° where `unique_pose?/4` asks
    for 20° — so no number of steps can conclude it, and the nought of ten is the
    rule working rather than the exploration failing. The plate is the opposite
-   case by a quarter: its hole and its boss have no partner under any half turn,
-   and those nodes are what tells its four orientations apart. What the seed
+   case by 246 nodes of its 1557: its hole and its boss keep no twin under any
+   half turn, and those are what tells its four orientations apart. What the seed
    table is then spending is how often an exploration sees enough of that
-   quarter inside the step budget.
+   246 inside the step budget.
 
    The probe's twenty-seven rotations and these four placements are two
    different statements and both are true: twenty-seven is how many hypotheses
    the search still holds at step 500, and four is how many positions of this
    solid no evidence can tell apart. What the symmetry test adds is which of the
-   two the twenty-seven are arguing about — the three nodes in 947 with no
-   partner are not enough to separate the four, and no further sampling of the
-   same surface will produce what the surface does not have.
+   two the twenty-seven are arguing about — one node in 947 is not enough to
+   separate the four, and no further sampling of the same surface will produce
+   what the surface does not have.
 
    `plate-huge` is in the table because it keeps a partner more often than the
    plate — 85 % against 74 % — which is the scale effect seen from the other
@@ -443,8 +449,8 @@ scene, not a config, knows where the object is.
 
    So the next question is not "which part is this" but "which parts have a
    pose worth naming". That question now has a measurement of its own: the share
-   of a memory's nodes with no partner under any half turn — a quarter of the
-   plate's, almost none of the blend's. The plate does and the blends do not,
+   of a memory's nodes with no partner under any half turn — 16 % of the plate's,
+   one node of the blend's. The plate does and the blends do not,
    and the library a recognition run is aimed at therefore has to hold parts
    with a boss, a hole, an off-centre feature — the things that break the
    symmetry. The feature also
