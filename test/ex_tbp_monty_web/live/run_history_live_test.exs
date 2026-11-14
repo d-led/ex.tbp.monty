@@ -2218,6 +2218,12 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       view |> element("#confirm-bulk-delete-button") |> render_click()
 
+      # The deletion is a task (`delete_every/2`: a filter's worth of runs is tens
+      # of megabytes of pictures), so the page is only telling the truth once the
+      # task has answered. Reading the rows straight after the click is reading
+      # them before the delete has begun.
+      assert render_async(view) =~ "Deleted 2 runs."
+
       assert RunHistory.get(first.id) == nil
       assert RunHistory.get(second.id) == nil
       assert RunHistory.get(run.id) != nil

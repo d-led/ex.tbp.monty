@@ -42,12 +42,19 @@ defmodule ExTbpMontyWeb.ExperimentDividedRunTest do
 
       # Three steps, from two streams this node holds, in the run's order — the
       # run's own stream is empty, so a page that read only that drew nothing.
-      assert lines(view) == ["log-1", "log-2", "log-3"]
+      # They are counted and compared for uniqueness rather than matched against
+      # `log-1 …`: a line's id is `System.unique_integer/1` (`ExperimentLive.line/4`),
+      # a counter of the whole VM, so the first line of a fresh page is `log-1` only
+      # in a VM that has drawn no line before — which is what made this case pass
+      # alone and fail in a suite.
+      drawn = lines(view)
+      assert length(drawn) == 3
+      assert length(Enum.uniq(drawn)) == 3
 
       # And a second poll asks again from where it stopped and draws nothing
       # twice: the cursors are the whole reason this is affordable.
       send(view.pid, :studio_poll)
-      assert lines(view) == ["log-1", "log-2", "log-3"]
+      assert lines(view) == drawn
     end
   end
 
