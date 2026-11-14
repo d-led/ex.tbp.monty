@@ -650,14 +650,6 @@ defmodule FlyversePlugin.Policy do
     %{search(policy) | rotation_degrees: towards(structure(observations, policy.agent_id))}
   end
 
-  # The stride of a search leg, and it is shorter than the smallest thing in the
-  # scene on purpose. A hop of five centimetres over a knife two centimetres wide
-  # can step clean over it: the patch sees a centimetre-wide square, so a leg of
-  # half a decimetre skips four fifths of the ground it crosses. Two centimetres is
-  # the width of the thinnest object here, which makes a leg a place to look rather
-  # than a place to jump.
-  @sweep_stride 0.02
-
   # A leg of the sweep: a quarter turn and one stride, and no sideways travel —
   # the circle's tangent is for orbiting something, and there is nothing here to
   # orbit.
@@ -666,7 +658,7 @@ defmodule FlyversePlugin.Policy do
       agent_id: policy.agent_id,
       rotation_degrees: quarter(strays),
       left_distance: 0.0,
-      forward_distance: @sweep_stride
+      forward_distance: @touch_stride
     }
   end
 
