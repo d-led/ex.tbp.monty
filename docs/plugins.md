@@ -148,6 +148,16 @@ scene. The studio only offers the `cad` world on a node that carries
 `ex_monty_cad` and has `MONTY_CAD_PART` naming a part (`Monty.Studio.Setup.worlds/0`),
 so a page cannot ask for the pair half of which the node would refuse.
 
+**What is not in the table, and why.** `ex_mujoco` is a physics engine, so it can
+be a world and not a decision — the `mujoco` world today is Python MuJoCo, and an
+Elixir one would be a fourth _world_ (`Monty.Studio.Setup.world/4` is where a world
+is added) rather than a fourth variation. `ex_quiddity` is the geometry under
+`monty_cad.feature_walk`: what makes that row possible, and no decision of its own
+to offer. `ex_cadmpeg` reads, converts and writes documents and builds no primitive
+(`docs/cad.md` has the measurement), so it authors a part rather than stepping or
+deciding one. `ex_monty_plugin` is the contract all three hosts answer and `fine`
+is the FFI under `ex_mujoco`: neither is a thing a run can swap.
+
 A comparison is what the runs are, not what this page says they are: every record
 keeps `defined_by` (plugin, version, node) and `motor_policy` (policy, version,
 node), which is what makes two rows comparable after the fact. `docs/cad.md` keeps
