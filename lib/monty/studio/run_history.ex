@@ -704,7 +704,11 @@ defmodule Monty.Studio.RunHistory do
     # The run's inputs carry its plan when it has parts (`Monty.Studio.Partition`),
     # which is what a page drawing one card per part reads: which parts there are,
     # their phases, their episodes and the stream each one's steps live in.
-    :inputs
+    :inputs,
+    # What the run was told to do, which a page draws once — and which a page that
+    # opens on a run it has a stream of would otherwise have to read the whole log
+    # to get (`head/1`), decoding a hundred megabytes to keep four.
+    :config
   ]
 
   @doc "Runs of one experiment, newest first."

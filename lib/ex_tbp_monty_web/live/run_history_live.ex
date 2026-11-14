@@ -672,11 +672,24 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         run = with_steps(run)
 
         socket
+        |> stamp_catch_up(run)
         |> put_run(run)
         |> append_log(run)
         |> assign_replay(run, :follow)
     end
   end
+
+  # A whole row was read when the log came back longer than the one the page
+  # holds: that is the moment `@catch_up_ms` measures from, so a run another node
+  # steps is caught up on in steps rather than in a decode per poll.
+  defp stamp_catch_up(socket, run) do
+    if length(run.log) > shown_log_length(socket.assigns[:run]),
+      do: assign(socket, caught_up_at_ms: System.monotonic_time(:millisecond)),
+      else: socket
+  end
+
+  defp shown_log_length(nil), do: 0
+  defp shown_log_length(%{log: log}), do: length(log)
 
   # What a page reads between steps. A run this node is stepping has its steps in
   # memory, and the copy of them that carries an episode and what a module
@@ -686,27 +699,52 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # the counters and the page keeps the steps it has.
   #
   # A run with no stream here — one that has settled, or one another node steps —
-  # is read whole from its row, which is then the only account of it.
-  defp read_run(%{assigns: %{run: %RunHistory.Run{id: id} = shown}}, id) do
-    if streamed?(id) do
-      case RunHistory.progress(id) do
-        nil -> nil
-        fresh -> keep_steps(fresh, shown)
-      end
-    else
-      RunHistory.head(id)
+  # must be read from its row, because that row is then the only account of it.
+  # Not on every poll, though: `head/1` decodes the whole log, which is a hundred
+  # megabytes by thirty thousand steps, and a page asking for that twice a second
+  # grew the BEAM to twenty gigabytes.
+  #
+  # So the pace is set by what a decode *costs*, not by the clock alone: a log
+  # short enough to be cheap is caught up on every poll, and a long one is caught
+  # up on at most every `@grown_catch_up_ms`. A page watching another node's long
+  # run therefore lags by seconds and stays alive, which is the trade this page
+  # has to make until steps are read a slice at a time rather than as one
+  # document.
+  @grown_catch_up_ms 10_000
+  @cheap_log 2_000
+
+  defp read_run(%{assigns: %{run: %RunHistory.Run{id: id} = shown}} = socket, id) do
+    case RunHistory.progress(id) do
+      nil ->
+        nil
+
+      fresh ->
+        if streamed?(id) or not catch_up_due?(socket, fresh, shown),
+          do: keep_steps(fresh, shown),
+          else: RunHistory.head(id)
     end
   end
 
-  # A run opened for the first time: the row is read whole because the fields a
-  # page shows once — the configuration, the seed, when it started — are in it,
-  # and the steps are not taken from it when the stream has them, because the
-  # stream's copy is the one that carries an episode and a module's beliefs.
+  # A run opened for the first time: the fields a page shows once — the
+  # configuration, the seed, when it started — come with the counters, so a page
+  # that has a stream of this run reads no log at all. A run with no stream is
+  # read whole, because then its row is the only account of it.
   defp read_run(_socket, id) do
-    case RunHistory.head(id) do
+    case RunHistory.progress(id) do
       nil -> nil
-      row -> if streamed?(id), do: %{row | log: [], timeline: []}, else: row
+      row -> if streamed?(id), do: row, else: RunHistory.head(id)
     end
+  end
+
+  # Whether this poll should pay for the transcript: the run has taken steps the
+  # page does not have, and either the page's log is short enough that reading it
+  # again is cheap, or the last time it paid was long enough ago.
+  defp catch_up_due?(socket, fresh, shown) do
+    grown? = Map.get(fresh, :steps_done, 0) > length(shown.log)
+    cheap? = length(shown.log) < @cheap_log
+    last = Map.get(socket.assigns, :caught_up_at_ms, 0)
+
+    grown? and (cheap? or System.monotonic_time(:millisecond) - last >= @grown_catch_up_ms)
   end
 
   # The steps a page shows are the ones it was handed, and a poll is not a reason
