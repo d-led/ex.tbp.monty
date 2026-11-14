@@ -87,13 +87,29 @@ the same three square centimetres of table until the episode died.
 
 | field              | value                                                                      |
 | ------------------ | -------------------------------------------------------------------------- |
-| `rotation_degrees` | 5°·tanh(wish/2) + 10°·centring, capped at 30°                              |
+| `rotation_degrees` | 5°·tanh(wish/2) + 10°·centring + 10°·rim, capped at 30°                    |
 | `forward_distance` | the standoff kept: `clamp(depth - 25 mm, 4 mm, 10 mm)`, negative if nearer |
 | `left_distance`    | 10 mm towards the side the wish prefers, but only at the surface           |
 
 The **centring** term is Monty's, not the network's: ten degrees towards the
 side the patch is off-centre by, so a fly learning a surface keeps it in the
 middle of the picture while the wish decides which way to explore it.
+
+The **rim** term is the one the wide view cannot supply. The clip makes the
+patch's two halves a switch — a half reading one over the clip's ceiling has
+surface under it — so one half at the ceiling and the other not is an _edge_, and
+the half with surface says which way it runs. Ten degrees towards it, which is a
+bias and not a decision: the network still chooses which way along the boundary,
+and this only decides to stay on it.
+
+It is worth a term because the outline is the only part of a top-down percept
+that differs between two objects. The middle of a mug's top and the middle of a
+can's top are the same flat square; the curvature where the top turns down is
+not. The temptation is to lean harder — twenty-five degrees, on the theory that
+a bias the network can outvote decides nothing — and that was measured and
+reverted: it took the very first episode of the sweep from 130 steps to 285. A
+fly that commits to the boundary stops covering the top, and the top is most of
+what a mug's model is made of.
 
 The forward distance keeps a **25 mm standoff** rather than being a constant,
 because both ends of that are measured mistakes. At the surface a step of nought
@@ -109,20 +125,37 @@ A **loom** — something in view suddenly filling half again as much of it —
 outranks all of that and turns the forward step into a retreat, bounded by one
 step's stride so it costs a step's retreat rather than a flight.
 
-### The five behaviours
+### The six behaviours
 
 Which of these the step is, is decided before the network is asked. The stall
 counter reads the **patch's** mean depth and not the wide view's, because the
 wide view changes whenever the fly turns while the patch — the thing the learning
 module sees — can be identical for two hundred steps.
 
-| behaviour     | when                                                         | what it does                                                                                                                                          |
-| ------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:cruise`     | nothing under the patch, and the patch is changing           | walk at whatever the view finder sees: aim at its most varied column and step the gap; a leg of the search circle when it sees nothing within a metre |
-| `:explore`    | something under the patch that is not clipped, bout under 60 | the network steers (above)                                                                                                                            |
-| `:depart`     | 60 steps into a bout, or a second stall in the same one      | about-face (180°, alternating side) and a 50 mm hop, until the patch is off it or four steps are                                                      |
-| `:look`       | the patch has shown the same depth for 20 steps              | an aimed look when there is something under it; a quarter turn and a 50 mm leg when there is not                                                      |
-| `:struggling` | the body has moved under a millimetre for 12 steps           | a 90° swing, on a 40-step period                                                                                                                      |
+| behaviour     | when                                                                       | what it does                                                                                                                                          |
+| ------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:cruise`     | nothing under the patch, and the patch is changing                         | walk at whatever the view finder sees: aim at its most varied column and step the gap; a leg of the search circle when it sees nothing within a metre |
+| `:explore`    | something under the patch that is not clipped, bout under 60               | the network steers (above)                                                                                                                            |
+| `:depart`     | 60 steps into a bout, or a second stall in the same one                    | about-face (180°, alternating side) and a 50 mm hop, until the patch is off it or four steps are                                                      |
+| `:look`       | the patch has shown the same depth for 20 steps                            | an aimed look when there is something under it; a quarter turn and a 50 mm leg when there is not                                                      |
+| `:struggling` | the body has moved under a millimetre for 12 steps                         | a 90° swing, on a 40-step period                                                                                                                      |
+| `:dive`       | two swept legs found no surface at all, and the patch is still at its clip | six steps of one centimetre down, then six back up — the only vertical motion this fly has                                                            |
+
+A **dive** is the answer to the one thing a top-down patch cannot see. The fly
+rides a decimetre up and the patch reaches five, so anything lying flatter than
+the difference is never in a percept: the spoon, at one and a half centimetres,
+is 8.5 below the sensor in every pose, and in a baseline run six of the seven
+abandoned episodes were spoons — 45% of all the steps the run spent.
+
+Two swept legs without ever finding surface is the fly's own evidence that the
+_direction_ is not the problem, and the answer is vertical. It is a dive and not
+a descent: the altitude the tall objects are visible from is the one thing the
+fly cannot get back any other way, so it lets go of it for twelve steps and takes
+it back. Both halves of the dive are shown to the learning module exactly while
+there is something under the patch, which is the point — at four centimetres the
+table is in reach and the spoon with it. The count is the sweep's own legs and
+not the steps of a look, because a look is the answer to a stall and resets the
+stall counter deliberately.
 
 `_touch_object`'s own numbers are kept where they were right: below a tenth of
 the patch covered, one step across the gap the view finder can see, aimed at the
@@ -169,31 +202,33 @@ Measured on `flyverse_plugin.10simobj_surf_agent`, whole runs, comparing total
 Monty steps first (a run's cost is its steps, not its episode count), then
 completions, then mean steps per completed episode.
 
-| kept                                            | why it is there                                              |
-| ----------------------------------------------- | ------------------------------------------------------------ |
-| walk and turn in one action                     | a yawing fly reads one patch for ever                        |
-| a 10 mm stride, 4 mm floor                      | 4 mm is under the patch's own 10 mm delta threshold          |
-| the standoff instead of a constant              | stops the patch ending up inside the mug                     |
-| the patch's nearness as the stall signal        | the wide view changes when the fly turns; the patch does not |
-| aim at the most varied column                   | the mean of a table edge and a mug is neither                |
-| sweep instead of aim when lost                  | a lost fly that aims is a lost fly                           |
-| depart every 60 steps                           | the only thing that ends a two-thousand-step bout            |
-| a periodic sine wander                          | breaks the symmetric-view deadlock                           |
-| idle detection, measured on the body            | the four original stalls, all of them                        |
-| the clip read as "nothing there"                | a clipped pixel is not a distant one                         |
-| the standoff held from the nearest patch pixel  | a clipped half inflates a mean, and a mean asks to press in  |
-| a vertical orienting step between steering ones | the patch otherwise reads a ramp, half of it clipped         |
-| motor-only steps while lost                     | the module is not asked to explain a hop                     |
+| kept                                           | why it is there                                                                     |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| walk and turn in one action                    | a yawing fly reads one patch for ever                                               |
+| a 10 mm stride, 4 mm floor                     | 4 mm is under the patch's own 10 mm delta threshold                                 |
+| the standoff instead of a constant             | stops the patch ending up inside the mug                                            |
+| the patch's nearness as the stall signal       | the wide view changes when the fly turns; the patch does not                        |
+| aim at the most varied column                  | the mean of a table edge and a mug is neither                                       |
+| sweep instead of aim when lost                 | a lost fly that aims is a lost fly                                                  |
+| depart every 60 steps                          | the only thing that ends a two-thousand-step bout                                   |
+| a periodic sine wander                         | breaks the symmetric-view deadlock                                                  |
+| idle detection, measured on the body           | the four original stalls, all of them                                               |
+| the clip read as "nothing there"               | a clipped pixel is not a distant one                                                |
+| the standoff held from the nearest patch pixel | a clipped half inflates a mean, and a mean asks to press in                         |
+| the patch's own edge in the heading, at 10°    | the outline is the only part of a top-down percept that differs between two objects |
+| motor-only steps while lost                    | the module is not asked to explain a hop                                            |
 
-| not kept                                               | what it did         |
-| ------------------------------------------------------ | ------------------- |
-| four aim refinements (spread, weight, contrast, ratio) | flat, within noise  |
-| a 20 mm search leg                                     | overshot the object |
-| distance filters on the depth image                    | no change           |
-| widening the search circle                             | worse, reverted     |
-| walking home to where the object was last seen         | worse, reverted     |
-| a sideways departure                                   | see below           |
-| descending under `OrientVertical` to read the spoon    | see below           |
+| not kept                                                         | what it did                                                                                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| four aim refinements (spread, weight, contrast, ratio)           | flat, within noise                                                                                                             |
+| a 20 mm search leg                                               | overshot the object                                                                                                            |
+| distance filters on the depth image                              | no change                                                                                                                      |
+| widening the search circle                                       | worse, reverted                                                                                                                |
+| walking home to where the object was last seen                   | worse, reverted                                                                                                                |
+| a sideways departure                                             | see below                                                                                                                      |
+| turning the sensor to face the surface (Monty's vertical orient) | knife `match/403` → `time_out/5000`, fork unfinished; every second step spent on attitude is a step not spent covering surface |
+| the rim at 25° instead of 10°                                    | mug 130 → 285 on the first episode, same seed                                                                                  |
+| a full descent under `OrientVertical` to read the spoon          | not attempted: it replaces the touch opening that makes the knife work, and leaves the fly unable to tell ground from wall     |
 
 The **sideways departure** is the one worth keeping as a lesson. At thirty
 episodes it looked like a twenty-seven per cent win. At a hundred and
@@ -201,13 +236,21 @@ thirty-seven it was nothing: 122 of 137 with it against 124 of 137 without,
 mean 100 against 99. Thirty episodes cannot resolve a mean. Read the
 full-budget count first, then the completions, then the mean.
 
-One rule above is in the list on the strength of the argument rather than of a
-measured win: hiding from the learning module the steps that have nothing under
-the patch. It is Monty's own rule and the framework already implements it, so it
-is in — but the run that would price it is the one in flight, and until it lands
-the honest statement is that it cannot make the numbers worse in the way the
-earlier four aim refinements did, because it changes what the module is asked
-rather than what the fly does.
+One rule above is in the list on the strength of a different measurement from the
+rest: the edge in the heading is worth **1 129 steps and one completion** on the
+same 59 episodes — 55 of 59 matched and 29 082 steps against the build without
+it at 54 of 59 and 32 211. That is the size of a win these levers give now, and it
+came from the frames rather than from a theory: the patch straddles the rim at one
+step and lies flat on the top at the next, and the four hundred steps an episode
+spends choosing between two candidate objects happen in the flat ones.
+
+What the measurements also settled, and what bounds this policy: **a slow episode
+is the module narrowing, not the fly failing.** `e_cups` ran 440 steps with two
+candidates still possible while its evidence climbed a steady nine tenths of a
+point per step, and the view that finally decided it was a flat one. And the
+500-step eval ceiling counts only _informative_ steps — the engine refunds a step
+that reached no module — so hiding more steps from the module cannot stretch it,
+and the episodes that died at exactly 500 were genuinely still converging.
 
 ## What a run costs
 
@@ -236,12 +279,18 @@ its first 41 episodes, mean 279 an episode, with no ceiling episode at all.
   anything standing less than about five centimetres tall is out of reach from
   where the agent starts. The mug, at seven centimetres, is readable; the spoon,
   at one and a half, is eight and a half centimetres below the sensor and is not.
-  Monty's surf policy would descend onto it, and this one only turns and walks.
+  `OrientHorizontal` cannot change altitude — it moves along local X and Z, and
+  Monty's `yaw` turns about Y, so Y is up — which leaves `OrientVertical`'s
+  `down_distance` as the only vertical motion in the action set. That is what the
+  dive spends twelve steps on, and it is why a full descent is not the answer: the
+  fly would have to give up the height the tall objects are visible from.
 - **The eval ceiling is 500 steps, the train ceiling 1000, the total 5000.** The
   baseline's own 7 abandoned episodes sit under those numbers, and they were six
   spoons and a cracker box — one unreadable object is 45% of a run's cost. The two
   levers a policy has — get there sooner, or stop where you are — are what the rest
-  of this file is about.
+  of this file is about. Note that the ceiling counts **informative** steps only:
+  the engine refunds a step that reached no module, so a step the motor system
+  marks motor-only costs the episode nothing.
 
 With the dataset's pack the same code asks a real connectome, and what it does
 there is a question this example does not answer.
