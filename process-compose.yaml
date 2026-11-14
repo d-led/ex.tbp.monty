@@ -100,14 +100,14 @@ version: "0.5"
 #
 # ## Where the output goes
 #
-# Every process writes its own file under `logs/`, which is ignored by git, so a
+# Every process has its own file under `logs/`, which is ignored by git, so a
 # traceback in one node is a file to read rather than a pane to scroll:
 #
 #   tail -f logs/node1.log                              # one process
 #   tail -f logs/node1.log logs/flyverse_plugin.log      # several, by name
-#   process-compose process logs node1 --follow          # the TUI's own answer
+#   process-compose process logs node1 --follow          # the supervisor's buffer
 #
-# Three things about these files, all checked rather than assumed:
+# Four things about these files, all checked rather than assumed:
 #
 #   * a per-process `log_location` **replaces** the shared file instead of
 #     copying into it — with one set for every process, a top-level
@@ -117,7 +117,16 @@ version: "0.5"
 #     but `mix deps.get`;
 #   * a file is truncated when its process starts again, so a log after a
 #     restart is that run and not the run before it (verified: two starts, one
-#     line each).
+#     line each);
+#   * **the file is not always written** (2026-11-14): after the cluster was
+#     stopped and started, all four files were 0 bytes at 14:50–14:53 while
+#     `process-compose process logs` held 30, 26, 10 and 9 lines of that very
+#     start, boot lines included. So `tail -f logs/node1.log` can be a blank
+#     pane that reads as a quiet node: when a process "says nothing", ask the
+#     supervisor before believing it. The cause is not established — a detached
+#     second supervisor does not survive this shell, so it could not be
+#     reproduced in isolation — so treat the file as a convenience and the
+#     buffer as the record.
 log_level: debug
 
 # The one place the cluster's password is written (see the header).
