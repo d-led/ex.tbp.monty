@@ -191,9 +191,10 @@ defmodule ExTbpMonty.MixProject do
       # The same MuJoCo world without the interpreter: `ex_mujoco` is a C++ NIF
       # over MuJoCo's own C API, and it renders the sensor images itself, so a run
       # can step the experiment's scene with no Python involved at all
-      # (`Monty.Simulators.ExMujoco.World`). A git dependency until 0.2.2 — the
-      # first version that links and answers on Windows — is approved on Hex.
-      {:ex_mujoco, github: "d-led/ex.mujoco", tag: "v0.2.2"},
+      # (`Monty.Simulators.ExMujoco.World`). 0.2.2 is the first version that also
+      # links and answers on Windows; 0.2.0 and 0.2.1 were git tags here until it
+      # was published.
+      {:ex_mujoco, "~> 0.2.2"},
       {:oban, "~> 2.20"},
       {:req, "~> 0.5"},
       # "24.8 GiB free" is what an operator reads, not 26_636_431_360: one
