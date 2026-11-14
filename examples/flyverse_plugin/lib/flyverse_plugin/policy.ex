@@ -693,7 +693,21 @@ defmodule FlyversePlugin.Policy do
 
   defp gap(nearest, _no_reading), do: nearest
 
-  defp approach(gap), do: min(gap - @desired_object_distance, @touch_stride)
+  # The step towards what the view finder shows, and it always travels: the
+  # shortfall against the standoff, no more than a stride forwards, and never
+  # less than a crawl.
+  #
+  # A step of nought is a fly pivoting on the spot, and the wide view *always*
+  # holds the ground at the standoff — its nearest pixel is the floor under the
+  # sensor, not the object in front of it. So the shortfall is nought on every
+  # step of an approach, and the fly stood still while its evidence sat frozen at
+  # 201.1 (152 hypotheses, 3 possible) for 4700 steps: the patch was handed the
+  # same frame every time, because the fly never moved to look at another.
+  defp approach(gap) do
+    shortfall = min(gap - @desired_object_distance, @touch_stride)
+
+    if shortfall >= 0.0 and shortfall < @distance, do: @distance, else: shortfall
+  end
 
   # The nearest thing the wide view can see, in metres, or `:infinity` when the
   # horizon holds nothing. `FlyversePlugin.Percept` already answers what a

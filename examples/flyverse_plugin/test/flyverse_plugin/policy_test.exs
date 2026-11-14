@@ -552,6 +552,21 @@ defmodule FlyversePlugin.PolicyTest do
       assert_in_delta distance, 0.035, 1.0e-9, "the gap, minus the standoff"
     end
 
+    # The wide view always holds the ground at the standoff — its nearest pixel is
+    # the floor under the sensor — so a step computed from that pixel is nought on
+    # every step of an approach. A fly that steps nought is a fly whose patch is
+    # handed the same frame for the rest of the episode: one run's evidence sat at
+    # 201.1 with 152 hypotheses for 4700 steps that way. So the cruise step always
+    # travels, by a crawl at least.
+    test "still travels when the nearest thing in view is at the standoff", %{state: state} do
+      {:ok, policy, state} = Policy.new([], state)
+
+      {result, _policy, _state} = step(policy, state, scene(0.025, 0.05), away())
+
+      assert [%OrientHorizontal{forward_distance: distance}] = result.actions
+      assert_in_delta distance, 0.004, 1.0e-9, "a crawl, and never a pivot on the spot"
+    end
+
     # A sensor nearer than the standoff has no gap left to close, and a step of
     # nought is a fly that never moves again: frames from step 480 to step 1331
     # of one run were identical to the byte. So the step backs off to the
