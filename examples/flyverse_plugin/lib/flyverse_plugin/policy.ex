@@ -55,6 +55,7 @@ defmodule FlyversePlugin.Policy do
   alias Monty.Frameworks.Actions.OrientHorizontal
   alias Monty.Frameworks.Environments.PositioningProcedures
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
+  alias Monty.Frameworks.Models.MotorSystemState.AgentState
 
   @enforce_keys [:sim]
   defstruct [:sim, :agent_id, :sensor_id, :turn_degrees, :distance]
@@ -121,14 +122,38 @@ defmodule FlyversePlugin.Policy do
   # often enough that the weaker side still gets walked.
   @right_gain 0.8
 
-  # The wander: a small rate added to one side and taken from the other, turning
-  # over every `@wander_steps`. A fly with nothing in view is not aimed at
-  # anything, and a network perfectly balanced between two halves would walk a
-  # straight line for ever — which in a room is one wall and then nothing. The
-  # animal wanders, and this is the cheapest honest version of it: a square wave
-  # rather than noise, because a run has to be repeatable.
+  # The wander: a small rate added to one side and taken from the other when the
+  # view has nothing to say. A fly with nothing in view is not aimed at anything,
+  # and a network perfectly balanced between two halves would walk a straight line
+  # for ever — which in a room is one wall and then nothing. The animal wanders,
+  # and this is the cheapest honest version of it: a sine of one period per eighty
+  # steps, because a run has to be repeatable. It was a square wave — twenty hertz
+  # one way for forty steps, then twenty the other — which asks for a full bend in
+  # the step it flips and none at all in the middle; a descending drive that waxes
+  # and wanes is what the animal actually has, and the peak is the same twenty
+  # hertz so only the shape of the nudge changes.
   @wander_hz 20.0
-  @wander_steps 40
+  @wander_period 80.0
+
+  # A fly that is not moving, and the nudge that moves it.
+  #
+  # Two runs here show a fly issuing actions and staying exactly where it is:
+  # frames byte-identical for hundreds of steps, the wide view unchanged, the
+  # patch reading one value. The stall machinery cannot help, because it answers
+  # "this picture has not changed" with a turn — and a turn is precisely what the
+  # fly was doing when it did not move. What a stuck animal does is struggle: push,
+  # swing, push, with a rhythm. So a fly whose own pose has not changed for twelve
+  # steps is nudged by a swing of the body, one period per forty steps and ninety
+  # degrees at the peak, until it is moving again.
+  #
+  # The pose is the motor system's report (`AgentState`), which every policy is
+  # handed. A world that reports no agents leaves this inert: with nothing to
+  # compare, there is no evidence of standing still, and a policy must not invent
+  # one.
+  @idle_epsilon 0.001
+  @idle_steps 12
+  @nudge_degrees 90.0
+  @nudge_period 40.0
 
   # flyverse's `MOTOR_TAU_S`: the low-pass its own body applies to a motor
   # read-out before the body acts on it.
@@ -347,20 +372,84 @@ defmodule FlyversePlugin.Policy do
   fly that is learning a surface keeps it in the middle of the picture.
   """
   @impl FlyversePlugin.Plugin
-  def call(%__MODULE__{} = policy, {_ctx, observations, _motor_state, percept, _goal}, state) do
+  def call(%__MODULE__{} = policy, {_ctx, observations, motor_state, percept, _goal}, state) do
     simulation = Map.fetch!(state.simulations, policy.sim)
-    next = bout(simulation, on_object?(percept) and sees_something?(observations, policy))
-    advanced = advance(simulation, next)
+    saw = sees_something?(observations, policy)
+    stalked = stalked(simulation, position(motor_state, policy.agent_id))
+    next = bout(stalked, on_object?(percept) and saw)
+    advanced = advance(stalked, next)
     watched = watch(advanced, patch_nearness(observations, policy))
     state = put(state, policy.sim, watched)
 
-    case next do
-      :explore -> steer(policy, observations, percept, state)
-      :depart -> {:ok, departing(policy, watched), policy, state}
-      :look -> {:ok, looking(policy, simulation, observations), policy, state}
-      :cruise -> {:ok, touch(policy, observations), policy, state}
+    if idle?(watched) do
+      {:ok, struggling(policy, watched), policy, state}
+    else
+      case next do
+        :explore -> steer(policy, observations, percept, state)
+        :depart -> {:ok, departing(policy, watched), policy, state}
+        :look -> {:ok, looking(policy, simulation, observations), policy, state}
+        :cruise -> {:ok, touch(policy, observations), policy, state}
+      end
     end
   end
+
+  # Standing still is measured, not assumed: where the body was on the last step
+  # against where it is now. A fly that has moved less than a millimetre for
+  # `@idle_steps` steps is idle whatever it believes it is doing — pressing
+  # against a surface, wedged in a corner, or asking for a step the world will not
+  # take.
+  defp stalked(simulation, position) when is_list(position) do
+    case simulation.position do
+      nil ->
+        %{simulation | position: position, idle: 0}
+
+      previous ->
+        if apart(position, previous),
+          do: %{simulation | position: position, idle: 0},
+          else: %{simulation | position: position, idle: simulation.idle + 1}
+    end
+  end
+
+  defp stalked(simulation, _no_report), do: simulation
+
+  defp apart([x, y, z], [other_x, other_y, other_z]) do
+    :math.sqrt(:math.pow(x - other_x, 2) + :math.pow(y - other_y, 2) + :math.pow(z - other_z, 2)) >
+      @idle_epsilon
+  end
+
+  defp idle?(simulation), do: simulation.idle >= @idle_steps
+
+  # The struggle: a swing of the whole body, `@nudge_degrees` at the peak, on a
+  # period of `@nudge_period` steps, and a stride forward with every swing. It is
+  # periodic on purpose — a constant push in one direction is a fly leaning on a
+  # wall, and the rhythm is what an animal does until something gives.
+  defp struggling(policy, simulation) do
+    %MotorPolicyResult{
+      actions: [
+        %OrientHorizontal{
+          agent_id: policy.agent_id,
+          rotation_degrees:
+            @nudge_degrees *
+              :math.sin(2 * :math.pi() * (simulation.idle - @idle_steps) / @nudge_period),
+          left_distance: 0.0,
+          forward_distance: @touch_stride
+        }
+      ],
+      motor_only_step: false,
+      telemetry: %{struggling: true, idle: simulation.idle}
+    }
+  end
+
+  # Where the body is, from the proprioceptive state the motor system hands every
+  # policy.
+  defp position(motor_state, agent_id) when is_map(motor_state) do
+    case Map.get(motor_state, agent_id) do
+      %AgentState{position: [_x, _y, _z] = position} -> position
+      _absent -> nil
+    end
+  end
+
+  defp position(_motor_state, _agent_id), do: nil
 
   # What the patch answered, watched on every step whatever the behaviour is.
   #
@@ -826,6 +915,7 @@ defmodule FlyversePlugin.Policy do
            simulation
            | wish: 0.0,
              spikes: 0,
+             steps: 0,
              nearness: {0.0, 0.0},
              patch_nearness: nil,
              still: 0,
@@ -834,13 +924,23 @@ defmodule FlyversePlugin.Policy do
              strays: 0,
              bout: :cruise,
              bout_steps: 0,
-             departures: 0
+             departures: 0,
+             position: nil,
+             idle: 0
          })}
 
       {:error, {code, sentence}} ->
         {:error, "#{code}: #{sentence}"}
     end
   end
+
+  # The count of steps already taken is the wander's clock, so it is part of what
+  # an episode starts over: left running, the lean a fly begins with would be the
+  # one the *previous* episode ended on, and how long that was is not a fact about
+  # this one. It went unnoticed while the wander was a square wave, where only the
+  # parity of the count mattered and an episode usually ended on an even number of
+  # steps; a sine has no such luck, and a run whose episodes differ only in order
+  # would differ in their opening lean.
 
   @doc """
   What the network did, for a run that wants to be read afterwards.
@@ -863,6 +963,7 @@ defmodule FlyversePlugin.Policy do
       look_steps: simulation.look_steps,
       looks: simulation.looks,
       departures: simulation.departures,
+      idle: simulation.idle,
       still: simulation.still,
       last_counts: [simulation.last.left, simulation.last.right]
     }
@@ -928,6 +1029,8 @@ defmodule FlyversePlugin.Policy do
            bout: :cruise,
            bout_steps: 0,
            departures: 0,
+           position: nil,
+           idle: 0,
            last: %{left: 0, right: 0, spikes: 0, rates: [0.0, 0.0]}
          }}
 
@@ -1156,12 +1259,9 @@ defmodule FlyversePlugin.Policy do
   # the ceiling is a change in one place.
   defp band(hz), do: hz |> max(0.0) |> min(@max_hz)
 
-  # Which way the fly leans when nothing in the view does: one way for a while,
-  # then the other. Deterministic on purpose — the same pack and the same scene
-  # must step the same way twice.
-  defp wander(steps) do
-    if rem(div(steps, @wander_steps), 2) == 0, do: @wander_hz, else: -@wander_hz
-  end
+  # Which way the fly leans when nothing in the view does: one period of a sine
+  # over `@wander_period` steps of the episode.
+  defp wander(steps), do: @wander_hz * :math.sin(2 * :math.pi() * steps / @wander_period)
 
   defp rad(degrees), do: degrees * :math.pi() / 180.0
 

@@ -6,6 +6,8 @@ defmodule FlyversePlugin.PolicyTest do
   alias FlyversePlugin.{Demonstrator, Pack, Policy}
 
   alias Monty.Frameworks.Actions.OrientHorizontal
+  alias Monty.Frameworks.Models.MotorSystemState.AgentState
+  alias Monty.Geometry.Rotation
 
   setup do
     directory =
@@ -321,22 +323,71 @@ defmodule FlyversePlugin.PolicyTest do
   test "a blank plane under the patch is swept, a quarter turn at a time", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    blank = %{
-      "agent_id_0" => %{
-        "view_finder" => %{"depth" => [[0.2, 0.2]]},
-        "patch" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}
-      }
-    }
-
     {result, _policy, _state} =
       Enum.reduce(1..22, {nil, policy, state}, fn _step, {_result, policy, state} ->
-        step(policy, state, blank, touching(0.05))
+        step(policy, state, blank(), touching(0.05))
       end)
 
     assert [%OrientHorizontal{} = swept] = result.actions
     assert_in_delta abs(swept.rotation_degrees), 90.0, 1.0e-9, "a quarter turn"
     assert swept.left_distance == 0.0, "no orbit: there is nothing here to go round"
     assert swept.forward_distance > 0.0, "and a stride"
+  end
+
+  # A fly can be stuck in the way that no turn fixes: the actions come, the body
+  # does not move. The stall machinery cannot answer that, because it answers
+  # "this picture has not changed" with a turn — and a turn is what the fly was
+  # already doing when it did not move. So the policy measures the body instead:
+  # the same pose for twelve steps is idle, and an idle fly struggles, swinging a
+  # quarter period at a time.
+  test "a fly that has not moved is nudged, and the swing turns over", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+    stuck = pose([0.0, 1.5, 0.1])
+
+    {one_way, policy, state} = still_steps(policy, state, stuck, 23)
+    {other_way, _policy, _state} = still_steps(policy, state, stuck, 20)
+
+    assert [%OrientHorizontal{} = swung] = one_way.actions
+    assert_in_delta swung.rotation_degrees, 90.0, 1.0e-6, "the peak of the swing"
+    assert swung.forward_distance > 0.0, "and a stride with every swing"
+
+    assert [%OrientHorizontal{} = back] = other_way.actions
+    assert_in_delta back.rotation_degrees, -90.0, 1.0e-6, "half a period later, the other way"
+  end
+
+  # And a fly that is walking is never swung: the nudge is for standing still, not
+  # a gait of its own. It walks over new ground here — a patch that changes every
+  # step — because a fly that walks over the same square centimetre for twenty
+  # steps is a stall, and a stall is the sweep's business, not the nudge's.
+  test "a fly that is moving is never nudged", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    turns =
+      Enum.map_reduce(1..40, {policy, state}, fn step, {policy, state} ->
+        walking = pose([0.0, 1.5, 0.1 + step * 0.01])
+        ground = scene(0.2, 0.02 + step * 0.001)
+
+        {result, policy, state} = step(policy, state, ground, away(), walking)
+        {result.actions, {policy, state}}
+      end)
+      |> elem(0)
+      |> List.flatten()
+      |> Enum.map(& &1.rotation_degrees)
+
+    assert Enum.all?(turns, &(abs(&1) <= 30.0)),
+           "a walking fly turns within its gait, never by the nudge's quarter turn: #{inspect(turns)}"
+  end
+
+  # A world that reports no agents cannot be called idle: with no two poses to
+  # compare there is no evidence of standing still, and a policy that invented one
+  # would swing a fly that is walking perfectly well.
+  test "a fly whose world reports no pose is never called idle", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {result, _policy, _state} = still_steps(policy, state, nil, 40)
+
+    assert [%OrientHorizontal{} = stepped] = result.actions
+    assert abs(stepped.rotation_degrees) <= 30.0
   end
 
   # A look is a step of the bout it interrupts, not the start of a new one: sixty
@@ -690,10 +741,23 @@ defmodule FlyversePlugin.PolicyTest do
   end
 
   defp step(policy, state, observations, percept) do
+    step(policy, state, observations, percept, nil)
+  end
+
+  # The same step with the motor system's own report of where the body is.
+  defp step(policy, state, observations, percept, motor_state) do
     {:ok, result, policy, state} =
-      Policy.call(policy, {nil, observations, nil, percept, nil}, state)
+      Policy.call(policy, {nil, observations, motor_state, percept, nil}, state)
 
     {result, policy, state}
+  end
+
+  # Steps of a fly that is not moving: the same blank patch and the same pose, over
+  # and over.
+  defp still_steps(policy, state, motor_state, steps) do
+    Enum.reduce(1..steps, {nil, policy, state}, fn _step, {_result, policy, state} ->
+      step(policy, state, blank(), away(), motor_state)
+    end)
   end
 
   # Steps of a bout on the surface: the patch sits at the standoff on something,
@@ -742,6 +806,17 @@ defmodule FlyversePlugin.PolicyTest do
     }
   end
 
+  # A patch with nothing within its five-centimetre clip — the tabletop the agent
+  # rides a decimetre above — and a wide view that holds nothing worth walking at.
+  defp blank do
+    %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[0.2, 0.2]]},
+        "patch" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}
+      }
+    }
+  end
+
   defp away,
     do: %Monty.Cmp.Message{
       sender_id: "patch",
@@ -766,6 +841,19 @@ defmodule FlyversePlugin.PolicyTest do
       sender_id: "patch",
       sender_type: :sm,
       morphological_features: %{"object_coverage" => coverage}
+    }
+  end
+
+  # Where the body is: the proprioceptive state Monty hands every policy. The idle
+  # counter reads it, so a test that means "this fly has not moved" has to say
+  # where it is — step after step, at the same place.
+  defp pose([_x, _y, _z] = position) do
+    %{
+      "agent_id_0" => %AgentState{
+        sensors: %{},
+        position: position,
+        rotation: Rotation.identity()
+      }
     }
   end
 
