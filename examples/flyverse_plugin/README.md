@@ -272,6 +272,15 @@ thirty-seven it was nothing: 122 of 137 with it against 124 of 137 without,
 mean 100 against 99. Thirty episodes cannot resolve a mean. Read the
 full-budget count first, then the completions, then the mean.
 
+What makes that so is not noise but divergence. Episode 21 of both builds is the
+same object in the same rotation under the same seed, and it took **95 steps in
+one and 583 in the other**; episode 22 is 83 against 708, episode 23 is 944
+against 105 in the other direction. A ten-degree difference in the heading is
+enough to send the fly down a different side of the object, and the object is
+covered in a different order. So a per-episode comparison between two builds says
+nothing at all, and the only signal is the sum over a hundred and forty — which
+is why the experiment below is run whole rather than sampled.
+
 One rule above is in the list on the strength of a different measurement from the
 rest: the edge in the heading is worth **1 129 steps and one completion** on the
 same 59 episodes — 55 of 59 matched and 29 082 steps against the build without
