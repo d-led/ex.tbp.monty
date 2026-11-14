@@ -5,7 +5,7 @@ defmodule FlyversePlugin.PolicyTest do
 
   alias FlyversePlugin.{Demonstrator, Pack, Policy}
 
-  alias Monty.Frameworks.Actions.OrientHorizontal
+  alias Monty.Frameworks.Actions.{OrientHorizontal, OrientVertical}
   alias Monty.Frameworks.Models.MotorSystemState.AgentState
   alias Monty.Geometry.Rotation
 
@@ -127,6 +127,71 @@ defmodule FlyversePlugin.PolicyTest do
   # The standoff is held, not a constant step: a sensor at 20 mm with 25 mm
   # wanted backs away by the 5 mm it is too close, and one further off than the
   # standoff crawls at the four millimetres a step has always been.
+  # Monty's surface policy turns the sensor to face the surface between its other
+  # steps — `MoveForward -> OrientHorizontal -> OrientVertical -> MoveTangentially`
+  # — and this policy steered without ever doing it, which leaves the patch at the
+  # attitude it arrived with: on anything but a level top, a ramp whose near edge is
+  # a centimetre away and whose far edge is clipped white. A run's frames show it on
+  # every step of a bout, which is why the step exists.
+  #
+  # The angle is Monty's own: `-atan(lean / z)` of the surface normal in the agent's
+  # frame, the vertical lean for a vertical orienting, and the distances are the
+  # pair that goes with it — `depth tan θ` down, `depth (1 - cos θ)/cos θ` forward.
+  test "a patch lying at a tilt turns the sensor to face the surface", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    leaning = [0.0, :math.sin(:math.pi() / 6), :math.cos(:math.pi() / 6)]
+
+    {first, policy, state} =
+      step(policy, state, at(0.025), tilted(leaning), pose([0.0, 0.0, 0.1]))
+
+    {second, _policy, _state} =
+      step(policy, state, at(0.025), tilted(leaning), pose([0.0, 0.0, 0.1]))
+
+    assert [%OrientHorizontal{}] = first.actions, "the first step of a bout is the network's"
+    assert [%OrientVertical{} = levelled] = second.actions
+
+    assert_in_delta levelled.rotation_degrees,
+                    -30.0,
+                    1.0e-9,
+                    "turned against the lean, to face what it is on"
+
+    assert_in_delta levelled.down_distance, 0.025 * :math.tan(-:math.pi() / 6), 1.0e-9
+
+    assert_in_delta levelled.forward_distance,
+                    0.025 * (1.0 - :math.cos(:math.pi() / 6)) / :math.cos(:math.pi() / 6),
+                    1.0e-9
+  end
+
+  test "a patch already square to the surface keeps steering", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    square = [0.0, 0.0, 1.0]
+
+    {_first, policy, state} =
+      step(policy, state, at(0.025), tilted(square), pose([0.0, 0.0, 0.1]))
+
+    {second, _policy, _state} =
+      step(policy, state, at(0.025), tilted(square), pose([0.0, 0.0, 0.1]))
+
+    assert [%OrientHorizontal{}] = second.actions,
+           "there is nothing to level, so the step is the network's"
+  end
+
+  test "a tilt too small to be worth a step still steers", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    nearly = [0.0, :math.sin(:math.pi() / 90), :math.cos(:math.pi() / 90)]
+
+    {_first, policy, state} =
+      step(policy, state, at(0.025), tilted(nearly), pose([0.0, 0.0, 0.1]))
+
+    {second, _policy, _state} =
+      step(policy, state, at(0.025), tilted(nearly), pose([0.0, 0.0, 0.1]))
+
+    assert [%OrientHorizontal{}] = second.actions, "two degrees is not worth a step's steering"
+  end
+
   test "a patch at the standoff crawls, and one nearer it backs away", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
@@ -872,6 +937,21 @@ defmodule FlyversePlugin.PolicyTest do
       "agent_id_0" => %{
         "view_finder" => %{"depth" => view},
         "patch" => %{"depth" => [[depth, depth], [depth, depth]]}
+      }
+    }
+  end
+
+  # A percept that also knows which way the surface under it faces, which is what
+  # Monty's vertical orienting reads its angle from.
+  defp tilted(normal) do
+    %Monty.Cmp.Message{
+      sender_id: "patch",
+      sender_type: :sm,
+      morphological_features: %{
+        "mean_depth" => List.duplicate(0.025, 16),
+        "object_coverage" => 0.5,
+        "pose_vectors" =>
+          Monty.Geometry.SurfacePoseVectors.new(normal, [1.0, 0.0, 0.0], [0.0, 0.0, 1.0])
       }
     }
   end
