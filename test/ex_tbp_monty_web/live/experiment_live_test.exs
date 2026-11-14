@@ -79,8 +79,13 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # And only what this node can step: the suite carries no `ex_monty_cad`, so
       # a part is not offered here — the page asks the setup what this node has
       # rather than keeping a list of its own.
-      assert Monty.Studio.Setup.worlds() == [:mujoco, :synthetic]
+      refute :cad in Monty.Studio.Setup.worlds()
       refute select =~ "CAD part"
+
+      # Both MuJoCo worlds are offered, named for what differs — which program
+      # steps the scene — because the scene itself is the experiment's.
+      assert select =~ "MuJoCo (in this application)"
+      assert select =~ "MuJoCo (compiled in, via ex_mujoco)"
     end
 
     # Poka-yoke: MuJoCo reads a downloaded object set and memory. Queuing a run

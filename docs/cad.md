@@ -131,7 +131,7 @@ scene, not a config, knows where the object is.
    `--world cad` (the task), the experiment page's selector, the queued run's
    `Jobs.Run.world_of/1`, the MCP tool and `mix monty.readiness`. The list of
    worlds a node can step is now one answer — `Monty.Studio.Setup.worlds/0`,
-   `[:mujoco, :synthetic]` plus `:cad` only when this node carries
+   `[:mujoco, :ex_mujoco, :synthetic]` plus `:cad` only when this node carries
    `ex_monty_cad` **and** `MONTY_CAD_PART` names a part — so a page cannot offer
    a world the node would refuse, and a record that names `cad` is asked for
    rather than quietly replaced by the worker's own default.

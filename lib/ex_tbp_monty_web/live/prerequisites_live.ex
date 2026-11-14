@@ -303,9 +303,11 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
           <div class="space-y-1">
             <h2 class="font-semibold">The world</h2>
             <p class="text-sm text-base-content/70">
-              A run steps one of two worlds: the <strong>built-in scene</strong>, part of
-              this application, or <strong>Monty's simulator</strong>, which steps in the
-              interpreter above.
+              A run steps one of three worlds: the <strong>built-in scene</strong>, part of
+              this application, <strong>Monty's simulator</strong>, which steps in the
+              interpreter above, or the <strong>same scene compiled in</strong>, stepped by
+              the <code class="font-mono text-xs">ex_mujoco</code> binding with no interpreter
+              in the process at all.
             </p>
             <p id="world-python" class="font-mono text-xs break-all text-base-content/60">
               {version_label(@python)} — this application's own interpreter

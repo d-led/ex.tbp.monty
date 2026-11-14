@@ -645,7 +645,7 @@ defmodule Monty.Studio.Setup do
   def world_name(%__MODULE__{world: world} = setup), do: world_name(setup, world)
 
   @doc """
-  One of the two worlds, named in the context of this setup — which is what the
+  One of the worlds, named in the context of this setup — which is what the
   selector offers, because a config whose environment is not MuJoCo cannot be
   given MuJoCo's scene and has to say so.
   """
