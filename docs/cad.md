@@ -399,7 +399,7 @@ scene, not a config, knows where the object is.
    cylinder the two principal curvatures are `1 / R` and nought, so a radius of
    a hundred millimetres is exactly 10 m⁻¹, and a rounder feature than that
    reports no orientation at all — a CAD part is worth a pose only while its
-   curved features are smaller than ten centimetres across, which is a second
+   curved features have a radius under ten centimetres, which is a second
    reason a library of scaled parts is not a library of one shape at several
    sizes. That is a statement about the parts, and it is the one
    `docs/cad.md`'s item 4 has to be built on. The plate's six failing seeds are
