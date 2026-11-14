@@ -20,21 +20,15 @@ defmodule Monty.Studio.Parts do
   module of a whole run.
   """
 
-  alias ExTbpMonty.Cluster.Nodes
-
   alias Monty.Studio.{
     Belief,
     Chart,
+    PeerStream,
     Replay,
     RunHistory,
     RunStream,
     Setup
   }
-
-  # How long a page waits for the node that holds a part before drawing what the
-  # record has: half a second shorter than the page's own poll, so a silent peer
-  # cannot make a poll take a second.
-  @remote_timeout 500
 
   @typedoc "One point of evidence: the run's own episode, the step, and what was believed."
   @type point :: {non_neg_integer(), non_neg_integer(), map()}
@@ -104,7 +98,7 @@ defmodule Monty.Studio.Parts do
         %{}
 
       parts ->
-        read = Keyword.get(options, :read, &read_on/3)
+        read = Keyword.get(options, :read, &PeerStream.entries/3)
         held_by_peers = held_by_peers(record)
 
         Map.new(parts, fn part ->
@@ -155,14 +149,11 @@ defmodule Monty.Studio.Parts do
 
   # A part a peer is stepping, by the number the division gave it: the record's
   # plan says which parts there are and where their steps are written, and the
-  # row says which node has one — the only place a node is written down at all.
+  # claim row says which node has one — the only place a node is written down.
   defp held_by_peers(record) do
-    me = ExTbpMonty.Node.safe_name(node())
-
     record.id
-    |> RunHistory.claimed_parts()
-    |> Enum.reject(&(&1.node in [nil, me]))
-    |> Map.new(&{&1.part, &1.node})
+    |> PeerStream.claimed()
+    |> Map.new(fn {part, %{node: holder}} -> {part, holder} end)
   end
 
   defp held_up_to_date(nil, record, part, holder, read) do
@@ -211,29 +202,6 @@ defmodule Monty.Studio.Parts do
     taken = held.taken + length(entries)
 
     %{held | taken: taken, steps: taken, points: Enum.reverse(points_of(entries), held.points)}
-  end
-
-  # The default: ask the node that holds the part, if this cluster has it alive.
-  # A node that is gone or silent is not a page's problem — the record answers,
-  # which is what a page showed before any of this existed.
-  defp read_on(holder, stream, from) do
-    case node_holding(holder) do
-      nil -> []
-      node -> entries_on(node, stream, from)
-    end
-  end
-
-  defp node_holding(holder) do
-    Enum.find_value(Nodes.snapshot(), fn entry ->
-      entry.alive and entry.name == holder and entry.node
-    end)
-  end
-
-  defp entries_on(node, stream, from) do
-    case :rpc.call(node, RunStream, :entries_from, [stream, from], @remote_timeout) do
-      entries when is_list(entries) -> entries
-      _no_answer -> []
-    end
   end
 
   # The live steps, and only the ones this page has not seen: a page that read the

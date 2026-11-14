@@ -27,6 +27,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   alias Monty.Studio.{
     Belief,
     Catalog,
+    CatchUp,
     Chart,
     Duration,
     Failure,
@@ -2000,33 +2001,50 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # run's history to learn that nothing was lost.
   @behind_steps 8
 
-  # The stream's own count is the measure, not the row's: while a run steps the
+  # The streams' own counts are the measure, not the row's: while a run steps the
   # row is written at boundaries, so its `steps_done` stands still for a whole
   # episode and a page that had lost its place would wait for a boundary to be
   # noticed — which is a page that looks frozen for the length of an episode.
+  #
+  # A divided run writes a stream per part and no stream of its own, and a part may
+  # be on another node, so "how far behind is this page" is `CatchUp.held/1`: this
+  # node's streams plus what the claim rows say of the parts a peer has. A run of
+  # one part answers exactly what it answered before.
+  # A page that has drawn nothing asks once whatever the count: a page opened two
+  # steps into a run is not "behind", and waiting for the ninth step to notice the
+  # first two is how a page shows a run that started before it was opened as a run
+  # that has not started. The latch is `catch_up_once`, not `caught_up`, which
+  # belongs to the settled run's own read.
   defp repair(socket, record) do
-    if RunStream.count(record.id) - steps_seen(socket) > @behind_steps,
-      do: read_missing(socket, record),
-      else: socket
+    first? = not Map.get(socket.assigns, :catch_up_once, false)
+
+    if first? or CatchUp.held(record) - steps_seen(socket) > @behind_steps do
+      socket
+      |> read_missing(record)
+      |> assign(catch_up_once: true)
+    else
+      socket
+    end
   end
 
+  # The steps this page has not drawn, from every stream the run is writing:
+  # `CatchUp` reads the run's own stream from where this page stopped, and each
+  # part's — here when this node has it, and from the node that holds it when it is
+  # a peer's. Asking for everything cost 561 ms and 145 MB of moments at thirteen
+  # thousand steps; the cursors are what make each read a tail.
   defp read_missing(socket, record) do
-    # From the step after the last one this page drew — the same answer the whole
-    # stream gave, taken from the tail of it. Asking for everything cost 561 ms
-    # and a hundred and forty-five megabytes of moments at thirteen thousand
-    # steps, and every one of those moments was thrown away
-    # (`RunStream.entries_from/2`).
-    entries = RunStream.entries_from(record.id, steps_seen(socket) - 1)
+    cursors = Map.put(cursors(socket), record.id, steps_seen(socket))
+    {entries, cursors} = CatchUp.entries(record, cursors)
 
     case Enum.filter(entries, &after_shown?(&1, socket)) do
       [] ->
-        # Nothing here to give: the steps were taken by another node, this
-        # stream has already let them go, or every one of them is already drawn.
-        # Asking again every half second would be the page reading the stream to
-        # be told the same thing; the record answers when the run stops
-        # (`catch_up/2`). The count only moves forward — a stream that has
-        # forgotten steps must not make the page believe it has seen them.
-        assign(socket, steps_seen: max(RunStream.count(record.id), steps_seen(socket)))
+        # Nothing here to give: the steps were taken by another node, every stream
+        # has let them go, or every one of them is already drawn. The cursor only
+        # moves forward — a stream that has forgotten steps must not make the page
+        # believe it has seen them.
+        socket
+        |> assign(catch_up_cursors: cursors)
+        |> assign(steps_seen: max(CatchUp.held(record), steps_seen(socket)))
 
       fresh ->
         # The same handler a broadcast goes to, so a repaired step is a step the
@@ -2036,9 +2054,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         # The badge counts inside an episode, so the episode a repaired batch
         # belongs to goes with it: a page that heard nothing of episode fifty
         # would otherwise number its steps against the episode it opened on.
-        assign(socket, episode: List.last(fresh)["episode"])
+        socket
+        |> assign(episode: List.last(fresh)["episode"])
+        |> assign(catch_up_cursors: cursors)
     end
   end
+
+  defp cursors(socket), do: Map.get(socket.assigns, :catch_up_cursors, %{})
 
   # The steps newer than the last one this page has drawn. A run numbers its
   # steps from nought inside every episode, so it is the pair that orders them.
