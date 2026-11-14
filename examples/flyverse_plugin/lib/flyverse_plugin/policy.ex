@@ -643,29 +643,20 @@ defmodule FlyversePlugin.Policy do
     }
   end
 
-  defp look(policy, %{bout: :cruise} = simulation, observations) do
-    turn =
-      case structure(observations, policy.agent_id) do
-        :none -> quarter(simulation.strays)
-        fraction -> towards(fraction)
-      end
-
-    leg(policy, turn)
-  end
+  defp look(policy, %{bout: :cruise} = simulation, _observations),
+    do: sweep(policy, simulation.strays)
 
   defp look(policy, _simulation, observations) do
     %{search(policy) | rotation_degrees: towards(structure(observations, policy.agent_id))}
   end
 
-  # A leg of the search: a turn and one stride, and no sideways travel — the
-  # circle's tangent is for orbiting something, and there is nothing here to
-  # orbit. The turn is a quarter when there is nothing in reach to head for and the
-  # aim of the widest column when there is: the sweep is what a fly does when it
-  # has lost everything, and an object eight-tenths of a metre away is not lost.
-  defp leg(policy, turn) do
+  # A leg of the sweep: a quarter turn and one stride, and no sideways travel —
+  # the circle's tangent is for orbiting something, and there is nothing here to
+  # orbit.
+  defp sweep(policy, strays) do
     %OrientHorizontal{
       agent_id: policy.agent_id,
-      rotation_degrees: turn,
+      rotation_degrees: quarter(strays),
       left_distance: 0.0,
       forward_distance: @touch_stride
     }
@@ -687,30 +678,17 @@ defmodule FlyversePlugin.Policy do
 
   # `Percept.image/3` has already refused an empty picture, so there is a picture
   # here and the width is the narrowest row.
-  #
-  # Only what the eye can reach is counted. A wall across the room varies from the
-  # floor beneath it to eight hundred metres and beats any object's silhouette
-  # outright, so an unfiltered answer aims the fly at walls — which it did, for a
-  # thousand steps at a stretch. Within reach a wall's column holds the floor and
-  # nothing else, and the object's edge is what varies; with nothing in reach at
-  # all the caller sweeps, which is a search and not an aim.
   defp most_varied(rows) do
     width = rows |> Enum.map(&length/1) |> Enum.min()
 
     if width < 2, do: :none, else: widest(wide_columns(rows, width), width)
   end
 
-  # A column's variation, over the depths the eye can reach. Three metres is a
-  # preference and not a law: the object a fly is still approaching is a metre and
-  # a half away at the start of an episode, and a wall across the room is at eight
-  # hundred.
-  @aim_reach 3.0
-
   defp wide_columns(rows, width) do
     for column <- 0..(width - 1) do
       rows
       |> Enum.map(&Enum.at(&1, column))
-      |> Enum.filter(&(is_number(&1) and &1 > 0.0 and &1 <= @aim_reach))
+      |> Enum.filter(&(is_number(&1) and &1 > 0.0))
       |> case do
         [] -> 0.0
         depths -> Enum.max(depths) - Enum.min(depths)
