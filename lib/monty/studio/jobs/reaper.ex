@@ -270,6 +270,23 @@ defmodule Monty.Studio.Jobs.Reaper do
     # one level down that this module exists to stop telling.
     _ = RunHistory.settle_parts(record.id)
 
+    # What memory still has goes into the record before it is closed: the steps
+    # of a run under way live in `RunStream` until a boundary writes them, and a
+    # worker that closes its own run writes them first. This path has no worker
+    # left to do it, and `finish/3` writes the row it is given without asking the
+    # stream for anything — so every step of an abandoned run used to stay in the
+    # table for the life of the node, at eleven kilobytes a step (§52 of the
+    # hand-over: one node held twenty gigabytes of them).
+    record =
+      case RunHistory.keep_streamed(record) do
+        {:ok, kept} ->
+          kept
+
+        {:error, lost} ->
+          Logger.warning("studio run #{record.id} kept its steps in memory: #{inspect(lost)}")
+          record
+      end
+
     _ = RunHistory.finish(record, Map.merge(record.summary || %{}, recorded), "failed")
     _ = cancel_job(record.id)
     _ = announce(record.id, recorded["reason"])

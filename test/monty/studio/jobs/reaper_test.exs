@@ -15,7 +15,7 @@ defmodule Monty.Studio.Jobs.ReaperTest do
   import Ecto.Query
 
   alias ExTbpMonty.Repo
-  alias Monty.Studio.{Artifacts, Claim, Jobs, RunHistory}
+  alias Monty.Studio.{Artifacts, Claim, Jobs, RunHistory, RunStream}
   alias Monty.Studio.Jobs.Reaper
   alias Monty.Test.Tmp
 
@@ -90,6 +90,37 @@ defmodule Monty.Studio.Jobs.ReaperTest do
       )
 
     record
+  end
+
+  # Steps handed to the stream the way a worker hands them over: a step does not
+  # write the row, so these are in memory and nowhere else until a boundary or a
+  # close writes them. `count/1` is a call behind the casts, which is the only
+  # barrier a case needs.
+  defp publish_steps(run_id, steps) do
+    for step <- steps, do: RunStream.publish(run_id, report(step))
+
+    assert RunStream.count(run_id) == length(steps)
+    :ok
+  end
+
+  defp report(step) do
+    %{
+      info: %{
+        step: step,
+        percept_ids: [:patch],
+        inputs: %{learning_module_0: 1},
+        votes: %{sent: 1, used: 1},
+        goals: 0,
+        actions: [:turn_left],
+        duration_us: 140
+      },
+      at: Monty.Studio.RunLog.now().instant,
+      episode: 0,
+      beliefs: %{},
+      observations: %{},
+      sensor_ids: [],
+      centre: nil
+    }
   end
 
   describe "a run being stepped somewhere this node cannot see" do
@@ -374,6 +405,42 @@ defmodule Monty.Studio.Jobs.ReaperTest do
       assert Reaper.sweep() == 1
       assert RunHistory.get(record.id).status == "failed"
       assert Repo.get!(Oban.Job, job.id).state == "cancelled"
+    end
+  end
+
+  describe "a run abandoned with its steps still in memory" do
+    # The steps of a run under way live in `RunStream` and reach the row at a
+    # boundary. A worker that closes its own run writes them first
+    # (`RunHistory.keep_streamed/1`); a run this module abandons has no worker
+    # left to do it, and `finish/3` writes the row it is given without asking the
+    # stream for anything — so the steps stayed in the table for the life of the
+    # node, at about eleven kilobytes a step (§52 of the hand-over: one node held
+    # twenty gigabytes of them).
+    test "keeps them in its record, and lets the table go" do
+      record = start_run()
+      _quiet = quiet_since(record, 61)
+      :ok = publish_steps(record.id, [0, 1, 2])
+
+      assert Reaper.sweep() == 1
+
+      settled = RunHistory.get(record.id)
+      assert settled.status == "failed"
+      assert Enum.map(settled.log, & &1["step"]) == [0, 1, 2]
+      assert RunStream.steps(record.id) == {[], []}
+    end
+
+    test "leaves a run it did not abandon alone, steps and all" do
+      record = start_run()
+      :ok = publish_steps(record.id, [0, 1])
+
+      {:ok, _owner} =
+        Registry.register(Monty.Runtime.Registry, {:studio_run, record.id}, :running)
+
+      assert Reaper.sweep() == 0
+      assert RunHistory.get(record.id).status == "running"
+
+      {log, _timeline} = RunStream.steps(record.id)
+      assert length(log) == 2
     end
   end
 

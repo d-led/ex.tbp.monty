@@ -4107,17 +4107,32 @@ second, so _rss climbing while beam stays flat_ says "outside the BEAM, and no
 `:erlang.garbage_collect/1` will return it"; rss tracking beam says a process or
 a table, and the same line names the table.
 
-**The fix is not applied.** A run went in flight (`39c356bd-…`) while this was
-being written, and `lib/` is not editable under a run — see `AGENTS.md`. It is
-one change, in `Jobs.Reaper.abandon/1`: close the way `Jobs.settle/2` closes,
-`RunHistory.keep_streamed/1` then `finish/3`, so the steps the reaper's run took
-reach its row before the table lets go of them. A case for it belongs in
-`test/monty/studio/jobs/reaper_test.exs`: abandon a run that published steps,
-then ask `RunStream.steps/1` for them and assert the table is empty and the row
-has them.
+**Applied**, in `Jobs.Reaper.abandon/1`: it closes the way `Jobs.settle/2` closes
+— `RunHistory.keep_streamed/1` first, `finish/3` after — so the steps an
+abandoned run took reach its row before the table lets go of them. Both paths
+measured on a run of two steps, in `MIX_ENV=test`:
+
+```
+old path:  row log=0 steps in the table=2      # what abandon/1 did
+new path:  row log=2 steps in the table=0      # what it does
+```
+
+`test/monty/studio/jobs/reaper_test.exs` holds it — "a run abandoned with its
+steps still in memory keeps them in its record, and lets the table go" — and
+beside it the half that must not change: a run the reaper decides to leave alone
+keeps its steps in the stream.
+
+**And the rule paid for itself again.** The save happened while a run was
+stepping (`b368615f-…`), because the change was asked for at that moment; the
+dev server recompiled when the next request touched the module, the worker died
+on the purge, and the reaper closed the record at 21:11:11 with the sentence
+above. Nothing was lost that mattered and the run was a probe — but it is the
+second time, and the cost of waiting is a probe rerun, not a run.
 
 Worth deciding with it: a sweep. `clear/1` is a memory of what the node still
 _wants_, and every path that closes a run has to remember to ask — which is how
 one came to not ask. A periodic `:ets.select` for streams whose run is no longer
 in flight (`RunHistory.in_flight?/1`) would make forgetting harmless instead of
-expensive.
+expensive. Not started: the fix above is the leak's cause, and a sweep on top of a
+known cause is a second mechanism to keep true before the first one has been seen
+to work.

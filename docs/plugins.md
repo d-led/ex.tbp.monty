@@ -108,6 +108,52 @@ the local pair: `example_plugin.10simobj_surf_agent_one_episode`, one episode in
 MuJoCo, 94 steps, `outcome: learning_module_0=match` — the plugin's surface policy
 walked the sensor over the object until the learning module recognised it.
 
+## The variations of one experiment
+
+One config, four decision-makers, so that the policies can be compared on the
+same objects rather than on each other's summaries:
+
+| Experiment                                       | Defined by                 | Motor system                       | World    |
+| ------------------------------------------------ | -------------------------- | ---------------------------------- | -------- |
+| `base_10simobj_surf_agent`                       | the config (the control)   | `surface_curvature_informed_goal1` | `mujoco` |
+| `example_plugin.10simobj_surf_agent_one_episode` | `examples/example_plugin`  | `example_plugin.surface_stepper`   | `mujoco` |
+| `flyverse_plugin.10simobj_surf_agent`            | `examples/flyverse_plugin` | `flyverse_plugin.lif_steering`     | `mujoco` |
+| `monty_cad.10simobj_surf_agent`                  | `ex.monty.cad.server`      | `monty_cad.feature_walk`           | `cad`    |
+
+Three rules make that a comparison rather than four runs that happen to share a
+name:
+
+- **the same base.** Each definition names `base_10simobj_surf_agent` rather than a
+  copy of it: a definition cannot ship a YAML into another application's config
+  tree, so copying the experiment means naming it, and the numbers a run must not
+  inherit silently are the ones the definition writes.
+- **the same seed, written down.** Every definition says `seed: 42`, which is the
+  base config's own. A definition that said one number and ran under another would
+  be a record that disagrees with itself, and two rows would differ for a reason
+  nobody wrote down.
+- **no `episodes` key.** A definition cannot ask for fewer episodes — the studio
+  performs one episode of the config it describes — so a number here that nothing
+  read would be a promise the record could not keep.
+
+What each varies is the motor system and nothing else: this is the one kind the
+contract routes, because it is called once per step and the value that travels is
+its name. A learning module is advertised rather than routed, so a definition that
+named one is refused by name (`Monty.Studio.PluginExperiment`).
+
+The CAD row also chooses its **world**, because a definition cannot: a world is a
+core noun, picked when the run is opened. It has to be `cad` — the walk converts
+the sensor's pose into the part's millimetres and walks the faces it finds there,
+so on `mujoco` it would issue real actions about an object that is not in the
+scene. The studio only offers the `cad` world on a node that carries
+`ex_monty_cad` and has `MONTY_CAD_PART` naming a part (`Monty.Studio.Setup.worlds/0`),
+so a page cannot ask for the pair half of which the node would refuse.
+
+A comparison is what the runs are, not what this page says they are: every record
+keeps `defined_by` (plugin, version, node) and `motor_policy` (policy, version,
+node), which is what makes two rows comparable after the fact. `docs/cad.md` keeps
+the one comparison that has been measured — the geometry policy against the
+config's curvature policy on a plate — including the reading that did not hold.
+
 ## The loop rules
 
 A cluster of callers can amplify a single fact into traffic that never settles.
