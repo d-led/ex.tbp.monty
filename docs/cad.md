@@ -234,37 +234,26 @@ scene, not a config, knows where the object is.
    answers, and issues an action — and the patch is in the same place at the
    thirty-fifth step as at the fortieth.
 
-   Read deeper, the state the policy is handed does not agree with the sensor it
-   steers. At the thirty-fifth step the proprioceptive state's own account of the
-   patch sensor is `[0.0, 0.0, 0.0]`, while the sensor module's pose — what the
-   world rendered from — is `[0.0, 0.0, 0.063]`, the standoff `start_pose/2` chose.
-   The two come from different places and only one of them is right:
+   **A reading that looked like a defect and is not.** At the thirty-fifth step the
+   proprioceptive state's account of the patch sensor is `[0.0, 0.0, 0.0]`, while
+   the sensor module's pose — what the world rendered from — is `[0.0, 0.0, 0.063]`.
+   Two numbers for one sensor, and the first reading of them was wrong: the sensor's
+   entry is *relative to the agent* by design, as
+   `Environment.proprioceptive_state/1`'s own comment says ("the agent's pose is
+   absolute, each sensor's is relative to it"), and `Kinematics.sensor_poses/1` is
+   the relative map where `Kinematics.sensor_world_poses/1` composes. The state
+   also carries the agent's absolute pose — `[0.0, 0.0, 0.063]`, measured — and
+   `AgentState.sensor_pose/2` composes the two, which is the helper the walk calls.
+   So the walk is handed where the patch is, correctly.
 
-   `Setup.world(:cad, …)` builds the world's sensors as
-   `%{position: [0.0, 0.0, 0.0], rotation: agent.rotation}` for every sensor where
-   the stand-in world passes the config's `setup.scene.sensors`. But the zeros are
-   not the defect either, because the world already has two readings of where a
-   sensor is:
-
-   * `Kinematics.sensor_poses/1` is the map as given — **relative to the agent**,
-     which is what `SetAgentPose` relies on: "sensor poses are stored relative to
-     the agent here, so placing the agent carries its cameras with it";
-   * `Kinematics.sensor_world_poses/1` composes the two.
-
-   `Environment.observations/2` renders through `sensor_world_poses/1`, which is
-   why the patch sees the part from 63 mm. `Environment.proprioceptive_state/1`
-   reports `sensor_poses/1` under `SensorState.position` — the relative map, named
-   as if it were a position. So the state handed to a policy says the sensor is at
-   the origin of its agent while the sensor is 63 mm above the part.
-
-   That is a defect in `ex_tbp_monty_core` and it is one call in one function:
-   `proprioceptive_state/1` should answer the world poses, because that is what the
-   field means and what MuJoCo's world reports. It went unnoticed because every
-   policy in the study reads the `percept` instead of its own position, and the walk
-   — the first policy that ray-casts from where it is — was the first to notice. The
-   fix belongs with a release of `ex_tbp_monty_core`, and the check that comes with
-   it is a case that builds a world with an agent away from the origin and asserts
-   that the state and the render agree.
+   What the same measurement did establish is that the walk's action goes nowhere.
+   The newest decision at the thirty-fifth step is a `MoveForward{ distance: 0.053 }`
+   chosen in a state whose agent is at `[0.0, 0.0, 0.063]`, and the sensor is still
+   at `[0.0, 0.0, 0.063]` when the next decision is taken — so the action was
+   issued, from the right pose, and the world did not move. That is the next
+   question and it is about the run rather than the policy: whether the world is
+   rebuilt or reset between steps for this world, or whether the actions never reach
+   it, is one read of `Monty.Studio.Run.step/2`.
 
    Until it is answered the walk is not a comparison for the curvature policy at
    all, and the numbers in the table above measure a stationary patch rather than a
