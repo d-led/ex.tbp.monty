@@ -4019,7 +4019,9 @@ the list are `failed`, and four of them had five figures of steps.
 That is being fixed in another hand while this was written (`Reaper.abandon/1`
 keeps what the stream holds into the record before it closes it, and says so in a
 warning when it cannot), which is the right place: the leak is not a step being
-held, it is a closing that forgets to ask.
+held, it is a closing that forgets to ask. **It landed as `19da31d`** — that
+section became §53 when two of us numbered a section 52 in the same hour, and
+§53.3 has the measurement and the test.
 
 ### 52.3 What remains to look at, and what would settle it
 
@@ -4043,7 +4045,7 @@ held, it is a closing that forgets to ask.
   answered this question. That is the change worth making next: on the set, log
   the three biggest processes by memory, once a minute at most.
 
-## 52. 2026-11-14: twenty gigabytes, and one path that never lets go
+## 53. 2026-11-14: twenty gigabytes, and one path that never lets go
 
 The machine had to be killed: `beam.smp` took 20 GB, which the machine does not
 have. The only evidence left was in `logs/node2.log` — **86**
@@ -4051,7 +4053,7 @@ have. The only evidence left was in `logs/node2.log` — **86**
 cleared at 20:20, set again at 20:22, cleared at 20:45 when the node was killed.
 Twenty-three minutes above the watermark, climbing.
 
-### 52.1 What the node was doing
+### 53.1 What the node was doing
 
 `priv/studio_runs/f7c051d1-…` — `flyverse_plugin.10simobj_surf_agent`, planned at
 140 episodes of up to 5 000 steps, reached episode 68 at 20:44 after **31 950
@@ -4063,7 +4065,7 @@ steps**, with 31 950 frame folders (542 MB on disk) and a 6.6 MB log. Then:
 20:45:29 its job #64 was cancelled: it was left executing
 ```
 
-### 52.2 One unbounded table, and five paths of which one forgets
+### 53.2 One unbounded table, and five paths of which one forgets
 
 `Monty.Studio.RunStream` holds a running run's steps in **one** ETS table
 (`@table __MODULE__`, `:ordered_set`), keyed `{stream_id, position}`, at the
@@ -4089,7 +4091,7 @@ This is the same shape as §50: the memory was known, the fix was aimed at the
 process heaps (`hibernate_after` compacts a heap; it said so at the time that the
 table is unaffected), and the table was left as the one thing nobody swept.
 
-### 52.3 What was done, and what a run in flight forbade
+### 53.3 What was done, and what a run in flight forbade
 
 `scripts/memory_watch.exs` samples while a node is up, because after the kill
 there was nothing to ask:
@@ -4136,3 +4138,199 @@ in flight (`RunHistory.in_flight?/1`) would make forgetting harmless instead of
 expensive. Not started: the fix above is the leak's cause, and a sweep on top of a
 known cause is a second mechanism to keep true before the first one has been seen
 to work.
+
+## 54. 2026-11-14: the open list, aggregated
+
+There were four by the evening — §47.3, §51.3, §52.3 and §53.3 — and two of them
+were the same question asked from different ends. This is the one list. Nothing
+here claims somebody is on it; each line says what it needs and who can give it.
+
+### 54.1 Settled, so nobody does them twice
+
+| what                                                      | where it ended                                            |
+| --------------------------------------------------------- | --------------------------------------------------------- |
+| `ComposerTest`'s 60 s timeout                             | `357ad42` — 180 s bound and the measurement, §47.1        |
+| `process-compose --cookie`, and `Invalid challenge reply` | measured on a real restart, §47.4; `4b3366d`              |
+| a late page catching up with a peer's part                | `b413727` + `4d61c48`, measured on a real division, §51.2 |
+| deleting a divided run leaving one folder per part        | `5dac758`, two cases that failed first, §51.4             |
+| two tests that only a suite could catch                   | `66c46e0`, §51.5                                          |
+| an abandoned run's steps staying in the table             | `19da31d`, measured both ways, §53.3                      |
+| sampling a node's memory while it is held                 | `scripts/memory_watch.exs`, `2bf124e`, §53.3              |
+
+### 54.2 Waiting on the user
+
+1. **`route/4` in `ex_monty_plugin`** — it publishes, so it wants the nod
+   (`docs/plugins.md` has what the check would say there).
+2. **The examples' coverage thresholds** — `example_plugin` 84.78 % and
+   `flyverse_plugin` 74.37 % against the 90 % every other project here keeps.
+3. **The run list across per-node databases** — a merged view, or one
+   `DATABASE_URL`. Worth restating what §51.1 settled: this is **not** a
+   precondition for division any more, only for the _queue_ spreading. Another
+   hand's area (`cluster_nodes.ex`, `cluster_peer_runs.ex`, `settings_live.ex`).
+
+### 54.3 Decided, not started
+
+1. **A sweep of `RunStream`** (§53.3). Every closing path has to remember to
+   `clear/1` and one did not; a periodic select over `RunHistory.in_flight?/1`
+   would make forgetting harmless. It waits because the cause's fix has not been
+   seen in the wild yet, not because it is expensive.
+2. **A divided run's transcript does not say which part took a step** (§51.3).
+   The entry keeps `part`, the card and the frame key use it, `RunLog.line/1`
+   does not print it — so a reader of a division sees `step 38` and then
+   `step 0`. Left alone while §50.4 has what an entry _is_ in hand.
+
+### 54.4 Questions with no owner
+
+1. **What holds memory outside the BEAM's account.** §52.1 has the one sample
+   that says it exists — RSS 1.3 GB against `:erlang.memory/0`'s 0.9 GB, the
+   difference being the embedded CPython and MuJoCo. `scripts/memory_watch.exs`
+   prints both numbers side by side; nobody has yet watched a run long enough to
+   catch the gap growing.
+2. **`collect/2`'s error branch has no test** (§47.3 item 5). It has been _run_,
+   by a peer that could not start; a test wants a seam nothing reaches today.
+
+### 54.5 What I did not manage, and why
+
+- **The 20 GB in a single run.** Four runs measured, none reproduced it, because
+  the table is per node and not per run — §52 now says so, and §53 says it
+  properly. My first version of §52 was headed "measured and not reproduced",
+  which was true and the wrong question; `44d97c8` corrects it.
+- **No `lib/` edit after 21:14.** `scripts/run_in_flight.sh` reported a run
+  writing nearly every time I looked, and three runs died to a save today — the
+  last one recorded in §53.3. Everything I landed after that is the record and a
+  probe.
+- **The transcript's attribution.** Deliberately not done (§51.3), not forgotten.
+- **Dialyzer has not been run on the tree since `1a74c44`.** It is not in
+  `scripts/quality.sh` (CI runs it as its own job) and three other hands' commits
+  have landed since; the last `MIX_ENV=test mix dialyzer` on this checkout was
+  clean, and that is not the same as clean now.
+
+### 54.6 One hazard nobody has written down: the gate compiles in dev
+
+`scripts/quality.sh:88` runs `mix lint` with no `MIX_ENV`, and the alias's first
+step is `compile --warnings-as-errors` (`mix.exs:263`) — so **running the gate is
+a dev compile**. On a tree where `lib/` has changed since the last dev compile,
+a gate run while a run is stepping purges modules under the worker exactly as a
+save does (§50.3). `MIX_ENV=test mix lint` lints without touching `_build/dev`;
+the script does not, and the gate is what CI runs, so the trap is on the machine
+of whoever runs it mid-run.
+
+## 54. 2026-11-14: the four variations of one experiment, and what is left
+
+The ask was to "prepare the same experiment variation with all our libraries so
+that we compare them against each other", the flyverse one being the pattern. This
+section is the state of that, so that whoever picks it up does not have to rediscover
+which half is real.
+
+### 54.1 What exists
+
+One base config, four rows, one rule for each row: the base is
+`base_10simobj_surf_agent`, the seed is written down as `42`, and no definition
+names an `episodes` key (the studio performs one episode of the config it
+describes, so a number nothing read would be a promise the record could not keep).
+
+| Experiment | Defined by | Motor system | World |
+| --- | --- | --- | --- |
+| `base_10simobj_surf_agent` | the config (the control) | `surface_curvature_informed_goal1` | `mujoco` |
+| `example_plugin.10simobj_surf_agent_one_episode` | `examples/example_plugin` | `example_plugin.surface_stepper` | `mujoco` |
+| `flyverse_plugin.10simobj_surf_agent` | `examples/flyverse_plugin` | `flyverse_plugin.lif_steering` | `mujoco` |
+| `monty_cad.10simobj_surf_agent` | `ex.monty.cad.server` | `monty_cad.feature_walk` | `cad` |
+
+The CAD row is the one this session added: `ExMontyCadServer.Experiment` in the
+sibling checkout `ex.monty.cad.server`, `aa78601`. It was missing rather than
+misbuilt — the host offered `monty_cad.feature_walk` and no experiment to use it.
+`docs/plugins.md` holds the table above plus why `ex_mujoco`, `ex_quiddity`,
+`ex_cadmpeg`, `ex_monty_plugin` and `fine` are not rows: a physics engine and a
+geometry kernel and a document reader are a world or an input, the package is the
+contract, the last is the FFI.
+
+### 54.2 What was verified, and what it took
+
+`ex_monty_cad.server` could not start in `dev` at all: its repository was
+configured only inside the `prod` block of `config/runtime.exs`, so SQLite started
+with no `:database` and every connection failed with "You must provide a
+:database". Fixed in `3b4c968`, with `test` exempted because `config/test.exs` names
+its own repo and the sandbox pool.
+
+With that, on the running pair (node1/node2, `local-dev-secret`):
+
+```sh
+# the host, from its own checkout
+PORT=4100 MONTY_CAD_PART=$PWD/test/fixtures/golden_simple_through_hole.step \
+  MONTY_CAPABILITIES=world:cad \
+  elixir --name cad_server@127.0.0.1 --cookie local-dev-secret -S mix phx.server
+
+# joining a stack that is already up, from any VM with the same cookie
+:rpc.call(:"node1@127.0.0.1", Node, :connect, [:"cad_server@127.0.0.1"])
+```
+
+Five seconds later node1's `Monty.Studio.Catalog.plugin_experiments/0` listed all
+three variations, and `Monty.Studio.PluginExperiment.open/2` answered with the
+definition on `cad_server@127.0.0.1` v0.2.0 and a live `monty_cad.feature_walk`
+v0.6.1 policy (`standoff: 5.0, step: 4.0, target: nil, visited: []`). The delay is
+real: `Node.connect/1` replicates `:pg` on connect, and the studio's peer snapshot
+polls every few seconds, so an immediate question answers "two".
+
+The connect is one-off. It does not survive a node restart; `MONTY_SEEDS` naming
+`cad_server@127.0.0.1` is the permanent form, and that is a decision about
+`process-compose.yaml`, which starts *this* repository's processes — the host is a
+sibling checkout, so it was documented rather than added (54.5).
+
+Also fixed on the way, in `aa78601`: `test/ex_monty_cad_server/policy/feature_walk_test.exs`
+asserted a **cluster-wide** `lookup/2` for an `:owner_only` policy, and
+`cluster_across_nodes_test` starts a peer that runs the same application and offers
+the same name — so the case passed or failed on whether that peer was up. It asks
+`lookup/3` on this node now, which is what `Cluster`'s own docstring says such a
+caller must ask.
+
+### 54.3 What has not been done: the comparison itself
+
+**No four runs exist.** Everything above is preparation and the proof that a run of
+each *can* start. The next job is the numbers:
+
+1. Bring the CAD host in permanently (54.2) and open each variation with the same
+   budget: `--episodes 1`, the same `--steps`, the CAD row with `--world cad`.
+   Unverified and worth checking first: whether `mix monty.run`'s `--episodes` and
+   `--steps` apply to a **plugin** definition the way they apply to a config —
+   `Monty.Studio.open/2` passes `:world_simulator` and `:pretrained_dir` through
+   `PluginExperiment.open/2`, and `with_seed/2` in the task applies the seed, but
+   the episode and step overrides were not traced for that path.
+2. Read each record's `outcome`, steps taken and `terminal` reason, and the
+   `motor_policy` / `defined_by` halves that make two rows comparable.
+3. `docs/cad.md` is where a measured comparison already lives, with its traps
+   written down: under the feature walk the patch stops being a new observation
+   (1 of 497 steps against the curvature policy's 37), a planar part gets no
+   definite pose from walking its features, and an empty possible set is not
+   starvation. Three readings were retracted there; a new comparison should not
+   repeat them.
+4. `docs/cad.md` also says the CAD world is a borrowed config: no config was
+   written for a part. If the comparison needs the same ten objects on both sides,
+   that gap is upstream of the policies and no amount of policy swapping fixes it.
+
+### 54.4 Rules that bit this session
+
+- **`lib/` under a run.** Saving `Jobs.Reaper` while `b368615f-…` was stepping
+  killed that run on the module purge (§53.3). `scripts/run_in_flight.sh` is the
+  check; `MIX_ENV=test` is another build and another VM, so tests are safe.
+- **A cluster-wide name is answered by whoever is up.** `lookup/2` for an
+  `:owner_only` policy is the wrong question when a peer offers the same name —
+  `docs/plugins.md` has the general hole (placement is a claim, not a check).
+- **`ex.monty.cad.server`'s suite wants a Postgres on 5432** (CI provides a
+  service; locally `docker run --rm -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres
+  postgres:17`, as its README says). The postgres started for this work was
+  removed afterwards.
+- **Its version is still 0.2.0** and it now offers more than 0.2.0 did. A new
+  offer is a feature: minor bump when it is released.
+
+### 54.5 Choices left to a human
+
+- Whether the CAD host becomes a process of `process-compose.yaml` (it is a
+  sibling checkout, and that file starts this repository's own processes), or stays
+  a documented `MONTY_SEEDS` addition.
+- Whether `ex_mujoco` becomes a fourth **world** — `Monty.Studio.Setup.world/4` is
+  where a world is added, and it is the only way that library can participate in a
+  comparison. Not started, and not small: a scene module over `ExMujoco` with the
+  sensors `base_10simobj_surf_agent` expects.
+- Whether `RunStream` gets the sweep of §53.3, and whether a plugin definition may
+  name a world (today it cannot, which is why the CAD row's world is a property of
+  *how it is opened* and has to be documented rather than declared).
