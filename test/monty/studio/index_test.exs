@@ -34,6 +34,42 @@ defmodule Monty.Studio.IndexTest do
                index.entries
     end
 
+    # A plugin's definition names the config it steps, and that config is here: the
+    # row is that config's row, so a reader can tell one plugin experiment from
+    # another instead of reading four columns of "unknown" — and the facets filter
+    # it, because the row now has values to match.
+    test "is the row of the config its definition names" do
+      index =
+        Index.build(
+          [
+            experiment("base_one", "habitat_ycb_dist_agent", "evidence_1lm", "1lm_1sm"),
+            plugin("theirs", "node2_127.0.0.1") |> Map.put(:base, "base_one")
+          ],
+          %{"base_one" => %{ready: "yes", world: "habitat"}}
+        )
+
+      assert [%{name: "base_one"} = local, %{name: "theirs"} = theirs] = index.entries
+
+      assert {theirs.ready, theirs.world, theirs.agent, theirs.modules, theirs.learning_module} ==
+               {local.ready, local.world, local.agent, local.modules, local.learning_module}
+
+      # Still the plugin's row: it says who brings it, and which config it steps.
+      assert theirs.host == "node2_127.0.0.1"
+      assert theirs.base == "base_one"
+
+      assert Enum.any?(
+               Index.filter(index, %{"world" => "habitat"}).entries,
+               &(&1.name == "theirs")
+             )
+    end
+
+    test "keeps saying unknown when the config it names is not one this node has" do
+      index = Index.build([plugin("theirs", "node2_127.0.0.1") |> Map.put(:base, "gone")])
+
+      assert [entry] = index.entries
+      assert {entry.ready, entry.world} == {"unknown", "unknown"}
+    end
+
     # What a config would have said is not knowable here: the plugin defines it, so
     # the row says unknown rather than guessing "scratch" or "0 lm".
     test "says unknown about everything it would have to read a config for" do

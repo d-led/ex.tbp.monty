@@ -25,7 +25,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   use ExTbpMontyWeb, :live_view
 
   alias ExTbpMonty.Cluster.Nodes
-  alias Monty.Studio.{Catalog, Drafts, Index, Readiness}
+  alias Monty.Studio.{Catalog, Drafts, Index, PluginExperiment, Readiness}
 
   @page_size 30
   @default_size "some"
@@ -33,6 +33,14 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket), do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Nodes.topic())
+
+    plugins = Catalog.plugin_experiments()
+
+    # Which config a plugin experiment steps is a question only its host can
+    # answer, and only the socket's mount asks it: the static render is thrown
+    # away, and a peer should not be asked for a page nobody is connected to. A
+    # row whose base is not known yet says "unknown", which is what it means.
+    bases = if connected?(socket), do: PluginExperiment.bases(plugins), else: %{}
 
     # The rows are streamed by `handle_params/3`, which runs before the first
     # render and is where the filters arrive. Streaming here as well would put a
@@ -42,7 +50,8 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
     {:ok,
      socket
      |> assign(
-       index: Index.build(Catalog.experiments() ++ Catalog.plugin_experiments(), labels()),
+       index: index(plugins, bases),
+       bases: bases,
        templates: Catalog.templates(),
        drafts: Drafts.names(),
        filters: %{},
@@ -73,11 +82,12 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   # hold, not a request.
   @impl true
   def handle_info({:cluster_nodes, _entries}, socket) do
+    plugins = Catalog.plugin_experiments()
+    bases = bases(plugins, socket.assigns.bases)
+
     {:noreply,
      socket
-     |> assign(
-       index: Index.build(Catalog.experiments() ++ Catalog.plugin_experiments(), labels())
-     )
+     |> assign(bases: bases, index: index(plugins, bases))
      |> narrow()}
   end
 
@@ -123,6 +133,25 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   # the one process that composes it: the answer is cached, but the composing is
   # not, and every page open on a node that has just started used to do its own.
   defp labels, do: Monty.Studio.Readiness.Cache.survey() |> Readiness.labels()
+
+  # The index a page shows. A plugin's experiment is listed by the node that
+  # brings it (`Catalog.plugin_experiments/0`), and what it *is* comes from the
+  # config its definition names: `Index` copies that config's row, so a plugin
+  # experiment shows the same world, agent and learning module as the config it
+  # steps instead of four columns of "unknown".
+  defp index(plugins, bases) do
+    rows = Enum.map(plugins, &Map.put(&1, :base, Map.get(bases, &1.name)))
+    Index.build(Catalog.experiments() ++ rows, labels())
+  end
+
+  # A host is asked about an experiment this page has not seen before, and once:
+  # the cluster poll arrives every three seconds, and asking again on each poll
+  # would be a `GenServer.call` per poll — the cost the plugin library refuses to
+  # pay in its own advertisement (`MontyPlugin.Registry.offered/0`).
+  defp bases(plugins, known) do
+    fresh = Enum.reject(plugins, &Map.has_key?(known, &1.name))
+    Map.merge(known, PluginExperiment.bases(fresh))
+  end
 
   # The parameters `Index` takes, built from what the LiveView holds.
   defp params_of(%{filters: filters, query: query}) do

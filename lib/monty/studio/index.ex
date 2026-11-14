@@ -25,6 +25,7 @@ defmodule Monty.Studio.Index do
   @type entry :: %{
           name: String.t(),
           host: String.t() | nil,
+          base: String.t() | nil,
           agent: String.t(),
           modules: non_neg_integer() | String.t(),
           learning_module: String.t(),
@@ -74,7 +75,11 @@ defmodule Monty.Studio.Index do
   """
   @spec build([map()], %{optional(String.t()) => map()}) :: t()
   def build(experiments, labels \\ %{}) do
-    entries = experiments |> Enum.map(&entry(&1, labels)) |> Enum.sort_by(& &1.name)
+    entries =
+      experiments
+      |> Enum.map(&entry(&1, labels))
+      |> inherit()
+      |> Enum.sort_by(& &1.name)
 
     %__MODULE__{entries: entries, facets: facets(entries)}
   end
@@ -124,6 +129,7 @@ defmodule Monty.Studio.Index do
     %{
       name: experiment.name,
       host: host,
+      base: Map.get(experiment, :base),
       ready: "unknown",
       world: "unknown",
       agent: "unknown",
@@ -143,6 +149,7 @@ defmodule Monty.Studio.Index do
     %{
       name: experiment.name,
       host: nil,
+      base: nil,
       ready: Map.get(label, :ready, "unknown"),
       world: Map.get(label, :world, "unknown"),
       agent: agent(groups["environment"]),
@@ -155,6 +162,46 @@ defmodule Monty.Studio.Index do
   end
 
   defp with_search(entry), do: Map.put(entry, :search, searchable(entry))
+
+  # A plugin's row, filled in from the config its definition names.
+  #
+  # A plugin experiment is not a config: it is a definition saying "step this one
+  # with my motor system". So everything a config would have said about the row is
+  # the base's — the world it was written for, its environment's agent, its
+  # learning module and how many of them — and the row keeps `host`, so it still
+  # says which node brings it and names the config in its title.
+  #
+  # A definition that names no base, or a host that did not answer, keeps the
+  # "unknown" it was built with: a row that was not told says so rather than
+  # guessing. Only a base this catalogue can read is copied, which also means the
+  # copy is only ever a name that exists here.
+  defp inherit(entries) do
+    by_name = Map.new(entries, &{&1.name, &1})
+
+    Enum.map(entries, fn
+      %{host: host, base: base} = entry when is_binary(host) and is_binary(base) ->
+        case Map.get(by_name, base) do
+          nil ->
+            entry
+
+          local ->
+            %{
+              entry
+              | ready: local.ready,
+                world: local.world,
+                agent: local.agent,
+                modules: local.modules,
+                learning_module: local.learning_module,
+                model: local.model,
+                groups: local.groups
+            }
+            |> with_search()
+        end
+
+      entry ->
+        entry
+    end)
+  end
 
   defp agent(environment) when is_binary(environment) do
     case Regex.run(~r/_(dist|surf|noop)_agent/, environment) do

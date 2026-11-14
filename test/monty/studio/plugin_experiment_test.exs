@@ -140,6 +140,30 @@ defmodule Monty.Studio.PluginExperimentTest do
     assert opened.setup.name == @experiment
   end
 
+  describe "the config a plugin experiment steps" do
+    # A catalogue row needs to say what an experiment is, and for a plugin's that is
+    # the config its definition names — which the catalogue can read for itself.
+    test "is the one its definition names", %{hosts: hosts} do
+      offer_experiment(%{"base" => "base_10simobj_surf_agent", "learning_modules" => []})
+
+      assert PluginExperiment.bases([%{name: @experiment}], hosts: hosts) ==
+               %{@experiment => "base_10simobj_surf_agent"}
+    end
+
+    # A definition asking for a learning module is refused by `open/2`, so its row
+    # is left saying "unknown" rather than "runs here" about a run that cannot
+    # start here.
+    test "is not read for a definition this cluster could not start", %{hosts: hosts} do
+      offer_experiment(%{"base" => "base_10simobj_surf_agent", "learning_modules" => ["lm.one"]})
+
+      assert PluginExperiment.bases([%{name: @experiment}], hosts: hosts) == %{}
+    end
+
+    test "is left out for an experiment no host offers", %{hosts: hosts} do
+      assert PluginExperiment.bases([%{name: "nobody.offers_this"}], hosts: hosts) == %{}
+    end
+  end
+
   defp host, do: %{node: node(), name: "this host", address: to_string(node())}
 
   defp offer_experiment(definition) do

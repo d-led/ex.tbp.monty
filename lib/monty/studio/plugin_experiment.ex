@@ -34,6 +34,12 @@ defmodule Monty.Studio.PluginExperiment do
   @read_definition :run
   @timeout 5_000
 
+  # How long a catalogue may wait on a host for one experiment's base. Shorter
+  # than `@timeout`, because a page of a hundred and thirty-four rows must not
+  # hang on a peer: a host that does not answer in a second leaves its experiments
+  # saying "unknown", which is what a row says when it has not been told.
+  @catalogue_timeout 1_000
+
   @doc """
   Opens the experiment `name` offers, or says why it cannot be started.
 
@@ -55,6 +61,38 @@ defmodule Monty.Studio.PluginExperiment do
     end
   end
 
+  @doc """
+  The config each plugin experiment asks to step, by experiment name.
+
+  A plugin's experiment is a definition, and the definition names the config it
+  steps (`"base"`) — a config this catalogue can read. That name is what a
+  catalogue row needs: the world the config was written for, its agent, its
+  learning module and how many of them, and the readiness the config itself has.
+  A page can therefore show what a plugin experiment *is* without the plugin
+  describing itself in the cluster poll, which it must not do: the poller asks
+  every three seconds (`MontyPlugin.Registry.offered/0`).
+
+  Only experiments that answer are in the map, and only ones this cluster could
+  actually start: a definition that names a learning module is refused by
+  `open/2`, so its row is left to say "unknown" along with a host that did not
+  answer in `#{@catalogue_timeout}` ms. Nothing here raises — a catalogue is not a
+  place to find out that a peer went away.
+
+  `:hosts` is `open/2`'s option: the nodes to ask, defaulting to the cluster.
+  """
+  @spec bases([%{name: String.t()}], keyword()) :: %{optional(String.t()) => String.t()}
+  def bases(experiments, opts \\ []) do
+    hosts = Keyword.get_lazy(opts, :hosts, &hosts/0)
+
+    for %{name: name} <- experiments,
+        {:ok, provider} <- [provider(name, hosts)],
+        {:ok, %{"base" => base} = definition} <- [definition(name, provider, @catalogue_timeout)],
+        is_binary(base),
+        :ok <- [servable(name, definition)],
+        into: %{},
+        do: {name, base}
+  end
+
   # The peers whose tags say they host plugins — the same question
   # `Monty.Studio.RemotePolicy` asks, and the same answer: a studio node has no
   # registry to answer from, so it is not one of them.
@@ -74,8 +112,8 @@ defmodule Monty.Studio.PluginExperiment do
 
   # Asked once, because that is what a definition is: a definition that changed
   # between two reads would be a run that is not the one the record names.
-  defp definition(name, %RemotePolicy{pid: pid}) do
-    case GenServer.call(pid, @read_definition, @timeout) do
+  defp definition(name, %RemotePolicy{pid: pid}, timeout \\ @timeout) do
+    case GenServer.call(pid, @read_definition, timeout) do
       {:ok, %{} = definition} -> {:ok, definition}
       {:error, why} -> {:error, "the experiment #{inspect(name)} cannot be read: #{why}"}
       other -> {:error, "the experiment #{inspect(name)} answered #{Failure.reply(other)}"}
