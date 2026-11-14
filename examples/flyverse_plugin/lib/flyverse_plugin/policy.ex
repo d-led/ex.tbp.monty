@@ -156,6 +156,19 @@ defmodule FlyversePlugin.Policy do
   @bout_steps 60
   @depart_steps 4
 
+  # The stride of a bout, and it is one centimetre because the framework says so
+  # rather than because it looks right: the patch sensor this config gives the
+  # agent (`camera_surf_delta`) sends a new percept when the patch has moved
+  # `distance: 0.01`, and the learning module matches locations at
+  # `max_match_distance: 0.01`. Four millimetres — Monty's own surf-agent crawl —
+  # is therefore less than half a reading, so most of what the module was handed
+  # was the place it had just been. That is what a flat stretch in a run's
+  # evidence curve is: twenty steps of the same surface. A centimetre is the
+  # first stride that hands the module something it has not seen, and it keeps
+  # the patch at the standoff: over a centimetre a 4 cm radius curves by about a
+  # millimetre, which the crawl step absorbs.
+  @explore_stride 0.010
+
   # The departure's turn is a body saccade — the fast, high-angle yaw the animal
   # uses to change sides — and it is an about-face: 180 degrees, into open space,
   # away from what it was crawling over. Whatever the surface's shape, turning
@@ -684,10 +697,10 @@ defmodule FlyversePlugin.Policy do
     }
   end
 
-  # How far one step slides sideways: the crawl step when the patch is at the
+  # How far one step slides sideways: the bout's stride when the patch is at the
   # surface, nought while there is still room to walk at it.
-  defp slide(policy, depth),
-    do: if(depth < @desired_object_distance, do: policy.distance, else: 0.0)
+  defp slide(_policy, depth),
+    do: if(depth < @desired_object_distance, do: @explore_stride, else: 0.0)
 
   # And how far it travels along its facing, which is the standoff kept rather
   # than a constant. A step of nought at the surface is a step the slide then

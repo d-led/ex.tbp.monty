@@ -86,7 +86,7 @@ defmodule FlyversePlugin.PolicyTest do
       step(policy, state, observations([[0.02, 0.02, 100.0, 100.0]]), touching(0.01))
 
     assert [%OrientHorizontal{} = slid] = result.actions
-    assert_in_delta slid.left_distance, 0.004, 1.0e-9, "the step goes across it, leftwards"
+    assert_in_delta slid.left_distance, 0.01, 1.0e-9, "the bout's centimetre across it, leftwards"
     assert_in_delta slid.forward_distance, -0.015, 1.0e-9, "and back to the standoff"
     assert slid.rotation_degrees < 0.0, "the turn is the way it was already leaning"
   end
@@ -257,7 +257,7 @@ defmodule FlyversePlugin.PolicyTest do
     {landed, _policy, _state} = step(policy, state, observations(mug()), touching(0.01))
 
     assert [%OrientHorizontal{} = walked] = landed.actions
-    assert_in_delta walked.left_distance, 0.004, 1.0e-9, "a slide on the surface, not a departure"
+    assert_in_delta walked.left_distance, 0.01, 1.0e-9, "a bout's slide, not a departure"
     refute walked.rotation_degrees == 180.0
   end
 
