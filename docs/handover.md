@@ -3483,17 +3483,22 @@ is a test's own timeout, the other is how a cluster node is started.
    first": `cluster_nodes.ex`, `cluster_peer_runs.ex` and `settings_live.ex` are
    where another pair of hands is likely to be.
 
-   **Sharpened 2026-11-14, by the catch-up below: the two options are not equal.**
-   A _merged view_ would let `/runs` list a peer's runs, and that is all it would
-   do — a divided run cannot work on per-node tables at all. A peer's
-   `claim_part/3` finds no row to take (its own database has none), and the owner's
-   `claimed_parts/1` has nothing to read. So "one runs table" — `DATABASE_URL`,
-   which `ExTbpMonty.Database` already supports in development too — is the option
-   that makes division work; a merged view is a display convenience on a stack where
-   division is impossible.
+   **Sharpened 2026-11-14, then corrected the same day.** The first version of this
+   paragraph said a divided run "cannot work on per-node tables at all", so one runs
+   table was the only option that made division work. That was wrong, and §51 has the
+   measurement behind the correction: the claim is written by the node that **owns**
+   the run (`Jobs.Run.attempt/5` → `RunHistory.claim_part/3`) and a peer needs no row
+   at all, so division works with a database per node — a real two-node division ran
+   on this checkout's two SQLite nodes. What one table is still needed for is the
+   **job queue**: with a file per node, a peer neither sees the job nor can take it, so
+   spreading the queue needs `DATABASE_URL` or a merged view over the nodes' own
+   tables (whose `node` column already says whose run it is). A merged view is a
+   display convenience either way; it is not a precondition for division.
 
-2. **A part's live steps do not reach a page opened later.** The shape, settled
-   here and deliberately _not_ started: a part's step is broadcast by
+2. **A part's live steps do not reach a page opened later — closed 2026-11-14**
+   (`b413727` for the cards, `4d61c48` for the transcript). Kept below as written,
+   because the plan it was settled from is what the two commits answered. The shape,
+   settled here and deliberately _not_ started: a part's step is broadcast by
    `RunStream.Pictures` on `announce || stream_id`, which is **the run's own
    topic**, and PubSub is the cluster-wide adapter — so a page that was already
    open does receive a peer's part. What is missing is the catch-up: `seed/2` reads
@@ -3556,12 +3561,11 @@ is a test's own timeout, the other is how a cluster node is started.
    is not eight behind. Mutation-checked: with the part streams removed, the new page
    case answers `[]` against `["log-1", "log-2", "log-3"]`.
 
-   **Where it can fire at all**: the claim is the only place a part's node is
-   written, and a node writes claims in _its own_ runs table. With a database per
-   node a peer cannot even claim a part, so this catch-up has anything to read only
-   where the parts table is shared — the one-Postgres stack §43.2 used and item 1
-   below is about. On this checkout's two SQLite nodes it is inert, by the same
-   fact that makes a division across them impossible today.
+   **Where it can fire at all, checked by running it** (§51). The claim is the only
+   place a part's node is written, and the node that writes it is the run's own — so
+   the per-node table holds the claim where the page looks for it. A real division
+   across this checkout's two SQLite nodes put part 2 on `node2_127.0.0.1` and its
+   steps reached a page on node1.
 
 3. **`route/4` in `ex_monty_plugin`** — still wants the user's nod; it publishes.
 4. **The examples' coverage thresholds** (`example_plugin` 84.78 %,
@@ -3859,3 +3863,107 @@ list of `hypotheses` with `max_evidence`, `top_evidence` and
 the hypothesis lists kept for every step of every object; trimming those changes
 what an entry _is_, and `CatchUp`, `Parts`, the writer and the archive all read
 it.
+
+## 51. 2026-11-14: a real division on two per-node nodes, and two of §47's readings retracted
+
+### 51.1 What §47 got wrong, and why it mattered
+
+§47.3 said a divided run "cannot work on per-node tables at all", that a peer's
+`claim_part/3` finds no row, and that the catch-up therefore "has anything to
+read only where the parts table is shared". Both sentences are mine, from this
+afternoon, and both are wrong — and the document they contradicted said so all
+along: `docs/cluster.md` has "the owner writes it when it makes the assignment,
+because a peer has no row to write".
+
+The code says it plainly. `Jobs.Run.attempt/5` is the run's own node's loop: it
+claims (`RunHistory.claim_part/3`, which writes that node's row) and only then
+hands the work over, `run_part_there/4` calling `perform_part/4` on the peer with
+the record travelling in the call. The peer needs nothing from a database —
+`run_alone/2` skips `attach_log/3` for a part precisely because "the row it would
+be attached to is the run's". So the claim is exactly where a page looks for it:
+in the owner's table, on the owner.
+
+I had reasoned from the phrase "per-node tables" to "the peer cannot claim",
+without following the call. The cost was not the paragraph: item 1 in §47.3 was
+being treated as the precondition for the whole catch-up, so the feature looked
+unverifiable until a database decision was made.
+
+### 51.2 The real run
+
+Two development nodes from `process-compose.yaml`, one SQLite file each, same
+build. `base_config_10distinctobj_dist_agent` pressed on node1's page as forty
+episodes, `in parallel` two, the world moved to the stand-in scene so the check
+could not be about MuJoCo:
+
+    run started: base_config_10distinctobj_dist_agent, 2 part(s) of one
+      experiment, 2 at a time, up to 6000 steps an episode
+    part 2 of 2 is performed by node2_127.0.0.1
+    part 1 of 2 finished: 720 step(s)
+    part 2 of 2 finished: 759 step(s)
+    run finished: 1479 steps, 148387623 µs in the model and 31930129 µs in the world
+
+A minute fifty-four, and the two parts add up to the run's own total. The page —
+on the node that owns the run — named the peer's part while it ran ("part 2:
+running on node2_127.0.0.1"), which is `claimed_parts/1` read across a division
+that a per-node table supposedly could not hold.
+
+Then the half the catch-up exists for: the page was opened **six seconds in**,
+with 103 steps already taken, and it drew them — `step 38` of part 1 followed by
+`step 0` of part 2 among them — and a full reload of the finished run showed part
+2's steps again: the window's last 300 lines are its episodes 31 to 39, its last
+nine, with **no duplicated id** in the list. The rest of the evidence is the two
+cards, `720 step(s) · 20 episode(s)` and `759 step(s) · 20 episode(s)`, each with
+its own evidence chart, and `2 of 2 parts done` in the header.
+
+The probe's run was deleted afterwards (`monty_delete_runs` with `confirm`), and
+its two part folders with it — see §51.4.
+
+### 51.3 What the transcript still cannot say
+
+Both parts' lines are in one list and neither says which part took the step: the
+entry keeps `part` (`RunStream.drawn/1`), the card and the frame key use it, and
+the line `RunLog.line/1` prints does not. So a reader of a divided run's
+transcript sees `step 38` and then `step 0` with nothing to explain the jump
+except that the run was divided. Not changed here — the line is what a row and
+the archive carry, and it is one of the things §50.4 is already paying for — but
+it is the next thing a reader of a division will ask for.
+
+### 51.4 Deleting a divided run left its parts' folders behind
+
+Found by the clean-up, not by the run. A part writes into a folder named by its
+**stream**, not by the run (`Jobs.Run.part_record/3` replaces the record's id
+with `part.stream`), so `Artifacts.forget(run.id)` removed the run's own
+directory and left one behind per part: 3.3 MB each for the stand-in scene's two
+hundred steps, and a real division's pictures are larger.
+
+Both delete paths now take them: `RunHistory.delete/1` from the record in hand,
+`delete_ids/2` from the row's `inputs`, read before the row goes — that column
+only, because the record's pictures are what `delete_all` exists to avoid
+fetching. Two cases state it in `test/monty/studio/run_history_test.exs`
+("takes the folders its parts wrote with it", "and theirs, for every run in a
+batch"), and both failed before the change with the folders still on disk.
+
+### 51.5 The gate found two tests that were wrong, and both said so only in a suite
+
+`./scripts/quality.sh` came back red at `cover` twice, with a different test each
+time: `3234/3235` on the first run and `RunHistoryLiveTest`'s "picking rows
+deletes just the rows picked" on a second. Neither was caused by §51.4 — both had
+been living on a false assumption:
+
+- **The bulk delete is a task.** `delete_every/2` deletes inside
+  `start_async(:delete, …)`, because a filter's worth of runs is thousands of
+  rows and tens of megabytes of pictures and a page that did it inline froze. The
+  case clicked "Delete" and read the rows back before the task had answered. It
+  now waits with `render_async/1` and asserts the page's own `Deleted 2 runs.`
+  first, which is what a reader sees.
+- **A line's id is a counter of the whole VM.** `ExperimentLive.line/4` numbers a
+  log line with `System.unique_integer([:monotonic, :positive])`, so the first line
+  of a fresh page is `log-1` only in a VM that has drawn no line before. My
+  `ExperimentDividedRunTest` asserted `["log-1", "log-2", "log-3"]`, passed alone,
+  and failed in the suite. It now asserts what the catch-up is for — three lines,
+  each drawn once, and a second poll adding none — rather than the page's
+  numbering.
+
+Both are worth keeping in mind as a class: a test that names an id a page
+generates, or reads a row a task is about to delete, is a test of the machine's
+timing rather than of the behaviour.

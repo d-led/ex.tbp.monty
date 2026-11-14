@@ -443,6 +443,26 @@ is a compare-and-set in the one table both nodes can see. A Horde ring on top
 would give a stable preference order — which `Partition.hosts/3` already provides,
 as a list — without deciding ownership.
 
+### What a division already reaches
+
+A part's live steps are the performing node's memory — and a page on the owner
+reaches them. A part's steps and pictures are written where the run's files go,
+which a division requires to be shared, but a part's steps are kept in the
+performing node's `RunStream`, and a page reads its own node's. A page that is
+already open follows a peer's part through PubSub, which is the cluster-wide
+adapter; a page opened later catches up over `:rpc` — `Monty.Studio.CatchUp` asks
+`Monty.Studio.PeerStream` which parts a peer holds, reads each with
+`RunStream.entries_from/2` from the step the page stopped at, and merges what
+comes back. That is the transcript. A peer's **pictures** are still its own: a
+late page gets them when the part ends and its file is read, and a part's card
+shows its transcript until then.
+
+Measured with a real division on two development nodes, one SQLite file each
+(the owner writes the claim, and a peer needs no row — see below): forty episodes
+in two parts, part 2 performed by `node2_127.0.0.1` with 759 steps against
+node1's 720, and a page opened on node1 six seconds in drew the steps taken
+before it opened, part 1's and part 2's, with no line twice.
+
 ### What is still not spread
 
 - **A run's job lives in that node's database.** With a file per node, a second
@@ -462,14 +482,6 @@ node2@127.0.0.1`, and still on its first attempt — a snooze is not a failed
   try), and the record ended `finished` with `node = node2_127.0.0.1`. Asked the
   same thing with the tagged node stopped, the first node performed the run
   itself: the run was not held hostage by a tag nothing alive offered.
-
-- **A part's live steps are the performing node's memory.** Its steps and pictures
-  are written where the run's files go — which a division requires to be shared —
-  but a page on the owner reads a part's _live_ steps from `RunStream`, which is
-  the memory of this node. A page opened on the owner while a peer steps a part
-  therefore sees the transcript only once the part ends and its file is read.
-  PubSub here is the cluster-wide adapter, so the events themselves already cross;
-  what would need an `:rpc` is the catch-up read for a page opened later.
 
 - **A peer on another build is refused, not tolerated.** Handing a part over is
   calling into the peer's own code with this build's record and reading this
