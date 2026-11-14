@@ -91,17 +91,22 @@ defmodule Monty.Studio.Chart do
   `evidence` is `[{x, evidence}]` where `x` counts from the run's first step and
   does not restart with an episode: the samples the line is drawn from, which is
   every step when the plot is wide enough for them and a couple per column when
-  it is not (`decimate/2`). `points` is `"x,y x,y …"` for an SVG
-  `polyline`, one entry per contiguous run of steps: a graph that was reported on
-  steps 1, 2 and 4 has two segments, the gap between 2 and 4 is visible, and an
-  episode boundary is always a break — a line that continued from one episode's
-  last evidence to the next one's zero would be a fall nobody measured.
+  it is not (`decimate/2`). `path` is one SVG `d` for the whole line — `M` starts
+  a contiguous run of steps, `L` continues it — because a graph reported on steps
+  1, 2 and 4 has two runs, the gap between 2 and 4 is visible, and an episode
+  boundary is always a break: a line that continued from one episode's last
+  evidence to the next one's zero would be a fall nobody measured.
+
+  One path rather than a polyline a run: a chart of forty-five episodes and ten
+  objects broke its lines into nine hundred elements, and a page patching them
+  rebuilt all nine hundred once a second — visible in a profile as `write` and
+  `morphAttrs`, and as a page that answers a click seconds late.
   """
   @type series :: %{
           graph_id: String.t(),
           colour: String.t(),
           evidence: [{non_neg_integer(), float()}],
-          points: [String.t()],
+          path: String.t(),
           last: {number(), number()}
         }
 
@@ -247,10 +252,11 @@ defmodule Monty.Studio.Chart do
             segments
             |> Enum.concat()
             |> Enum.map(fn {_episode, x, evidence} -> {x, evidence} end),
-          points:
-            Enum.map(segments, fn segment ->
-              Enum.map_join(segment, " ", &points_string(&1, chart))
-            end),
+          path:
+            segments
+            |> Enum.map(&path_of(&1, chart))
+            |> Enum.reject(&(&1 == ""))
+            |> Enum.join(" "),
           last: point(last_sample(segments) |> last_point(chart), chart)
         }
       end)
@@ -569,6 +575,18 @@ defmodule Monty.Studio.Chart do
   defp y_floor(nil), do: 0.0
 
   defp y_floor(worst), do: min(Float.floor(worst), 0.0)
+
+  defp path_of(segment, chart) do
+    case segment do
+      [] ->
+        ""
+
+      [first | rest] ->
+        "M " <>
+          points_string(first, chart) <>
+          Enum.map_join(rest, "", &(" L " <> points_string(&1, chart)))
+    end
+  end
 
   defp points_string({_episode, x, evidence}, chart) do
     {px, py} = point({x, evidence}, chart)

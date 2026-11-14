@@ -666,7 +666,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       # the answer marked on it — the module's numbers, not a summary of the log.
       assert has_element?(view, "#evidence-chart")
       assert has_element?(view, "#chart-learning_module_0 svg")
-      assert has_element?(view, "#chart-learning_module_0 polyline")
+      assert has_element?(view, "#chart-learning_module_0 path[data-graph]")
 
       chart = view |> element("#chart-learning_module_0") |> render()
       assert chart =~ "is the answer so far"
@@ -1360,15 +1360,15 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
       # One line for the object, with a point for each step the module held it:
       # the two steps the record has, and no more.
-      assert has_element?(view, "#chart-learning_module_0 polyline")
+      assert has_element?(view, "#chart-learning_module_0 path[data-graph]")
 
       [_, drawn] =
         view
         |> element("#chart-learning_module_0")
         |> render()
-        |> then(&Regex.run(~r/points="([^"]*)"/, &1))
+        |> then(&Regex.run(~r/ d="([^"]*)"/, &1))
 
-      assert length(String.split(drawn, ~r/\s+/, trim: true)) == 2
+      assert length(String.split(drawn, " L ")) == 2
     end
 
     test "opening a long run draws the window of its log, not the whole transcript", %{
@@ -1740,12 +1740,20 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
   # How many segments the module's chart draws, and how long each is. A line
   # with a gap in it is more than one segment: `Chart` breaks a series where the
   # steps are not contiguous rather than drawing a line nobody measured.
+  # How many samples each run of a line is drawn from: a series is one SVG path,
+  # `M x,y L x,y …`, and every `M` after the first starts a run where the line
+  # breaks. The tests below ask about runs, not about elements — the picture is
+  # one element a line however many runs it has.
   defp chart_segments(view, module_id \\ "learning_module_0") do
     html = view |> element("#chart-lines-#{module_id}") |> render()
 
-    ~r/points="([^"]*)"/
+    ~r/ d="([^"]*)"/
     |> Regex.scan(html)
-    |> Enum.map(fn [_, points] -> points |> String.split() |> length() end)
+    |> Enum.flat_map(fn [_, path] ->
+      path
+      |> String.split("M ", trim: true)
+      |> Enum.map(&length(String.split(&1, " L ")))
+    end)
   end
 
   # The config is composed in a task, so a test that changes the world reads the

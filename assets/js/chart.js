@@ -82,7 +82,21 @@ export const ChartZoom = {
   // The plot is drawn for too many steps to redraw on every pointer move, so a
   // step that changes the data must not forget where the window was asked to be.
   updated() {
-    this.measure();
+    // Measured after this patch has been laid out, not during it. Reading the box
+    // straight after a mutation makes the browser lay the page out again on the
+    // spot, and a chart patched several times a second paid for that layout in
+    // every patch — `getBoundingClientRect` was 258 ms of a four-second profile of
+    // a live page. A frame is the soonest the new box can be read, and one
+    // measurement a frame is all a resize can ask for.
+    if (this.measurePending) return;
+
+    this.measurePending = true;
+
+    requestAnimationFrame(() => {
+      this.measurePending = false;
+      if (!this.el.isConnected) return;
+      this.measure();
+    });
   },
 
   // An element that holds the plot, and the plot itself. The run page's hook

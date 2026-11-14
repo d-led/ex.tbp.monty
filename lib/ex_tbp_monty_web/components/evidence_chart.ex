@@ -270,16 +270,19 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         the hand. The frame around them — bands, grid, axis labels — stays put:
         it is what a reader is reading against. --%>
           <g id={"chart-lines-#{@module_id}"}>
-            <g :for={series <- @chart.series}>
-              <polyline
-                :for={points <- series.points}
-                points={points}
-                fill="none"
-                stroke={series.colour}
-                stroke-width="1.5"
-                data-graph={series.graph_id}
-              />
-            </g>
+            <%!-- One path an object, not one polyline a run. A run of forty-five
+            episodes breaks each line ninety times, and nine hundred elements a
+            patch is nine hundred nodes for the browser to rebuild once a second
+            — measured as `write` and `morphAttrs` in a profile of a page that
+            answered a click ten seconds late. A break is an `M`. --%>
+            <path
+              :for={series <- @chart.series}
+              d={series.path}
+              fill="none"
+              stroke={series.colour}
+              stroke-width="1.5"
+              data-graph={series.graph_id}
+            />
             <circle
               :if={@chart.mlh}
               cx={@chart.mlh.x}
@@ -344,9 +347,10 @@ defmodule ExTbpMontyWeb.EvidenceChart do
 
     <script :type={Phoenix.LiveView.ColocatedHook} name=".EvidenceChart">
       // A line says which objects were climbing; only a hover says by how much
-      // at which step. The numbers are already in the picture — every polyline
-      // carries its own points and its object's name — so the crosshair reads
-      // them out of the SVG instead of asking the server for a second copy.
+      // at which step. The numbers are already in the picture — every path
+      // carries its own coordinates and its object's name — so the crosshair
+      // reads them out of the SVG instead of asking the server for a second
+      // copy.
       //
       // The gestures are not here. Zooming, panning and double-click-to-reset
       // are `ChartZoom` in `assets/js/chart.js`, shared with the run page's
@@ -389,10 +393,38 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         updated() {
           ChartZoom.updated.call(this)
 
+          // The picture is new, so what was read off the last one is stale. A
+          // hover reads the paths again — and a page nobody is hovering pays
+          // nothing for the redraw.
+          this.samplesCache = undefined
+
           if (this.tooltip === null) return
           if (this.pointer === null) return this.hide()
 
           this.hover(this.pointer)
+        },
+
+        // The coordinates a hover reads, taken from the picture once: a path is
+        // `M x,y L x,y …`, so its numbers are the samples in order. Read on the
+        // first hover after a redraw rather than on the redraw itself.
+        hoverSamples() {
+          if (this.samplesCache === undefined) this.samplesCache = this.readSamples()
+          return this.samplesCache
+        },
+
+        readSamples() {
+          return [...this.el.querySelectorAll("path[data-graph]")].map((line) => {
+            const numbers = (line.getAttribute("d") || "").match(/-?\d+(?:\.\d+)?/g) || []
+            const xs = new Float64Array(numbers.length / 2)
+            const ys = new Float64Array(numbers.length / 2)
+
+            for (let index = 0; index < xs.length; index++) {
+              xs[index] = Number(numbers[index * 2])
+              ys[index] = Number(numbers[index * 2 + 1])
+            }
+
+            return { graph: line.dataset.graph, colour: line.getAttribute("stroke"), xs, ys }
+          })
         },
 
         // Named apart from `ChartZoom.geometry/0`: spreading the shared hook
@@ -441,36 +473,40 @@ defmodule ExTbpMontyWeb.EvidenceChart do
 
           const rows = []
 
-          for (const line of this.el.querySelectorAll("polyline[data-graph]")) {
-            const point = nearestPoint(line.points, snap)
-            if (!point || Math.abs(point.x - snap) > 0.01) continue
+          for (const line of this.hoverSamples()) {
+            const index = nearestIndex(line.xs, snap)
+            if (index === null || Math.abs(line.xs[index] - snap) > 0.01) continue
 
             rows.push({
-              graph: line.dataset.graph,
-              colour: line.getAttribute("stroke"),
-              x: point.x,
-              evidence: ((chart.height - chart.bottom - point.y) /
-                (chart.height - chart.top - chart.bottom)) * chart.yMax,
+              graph: line.graph,
+              colour: line.colour,
+              x: line.xs[index],
+              evidence:
+                ((chart.height - chart.bottom - line.ys[index]) /
+                  (chart.height - chart.top - chart.bottom)) *
+                chart.yMax,
             })
           }
 
           return rows.sort((a, b) => b.evidence - a.evidence)
         },
 
-        // The x of the reported step closest to `x`, taken across the polylines:
+        // The x of the reported step closest to `x`, taken across the paths:
         // a line breaks where a step went unreported, so no single one of them
-        // spans the axis. Each polyline's points are in step order, which is what
-        // lets the nearest be a search rather than a walk — walking cost
+        // spans the axis. Each path's coordinates are in step order, which is
+        // what lets the nearest be a search rather than a walk — walking cost
         // `lines × steps` point reads on every pointer move and on every patch,
         // eleven thousand steps deep, and a chart that reads that much on a hover
         // is a chart that stops moving rather than one that answers.
         nearestStep(x) {
           let best = null
 
-          for (const line of this.el.querySelectorAll("polyline[data-graph]")) {
-            const point = nearestPoint(line.points, x)
-            if (!point) continue
-            if (best === null || Math.abs(point.x - x) < Math.abs(best - x)) best = point.x
+          for (const line of this.hoverSamples()) {
+            const index = nearestIndex(line.xs, x)
+            if (index === null) continue
+
+            const pointX = line.xs[index]
+            if (best === null || Math.abs(pointX - x) < Math.abs(best - x)) best = pointX
           }
 
           return best
@@ -544,30 +580,26 @@ defmodule ExTbpMontyWeb.EvidenceChart do
         },
       }
 
-      // The point in a polyline whose x is nearest `x`, in the SVG's own
-      // units, so nothing has to guess what the browser scaled it to.
+      // The index whose x is nearest `x`, in the SVG's own units, so nothing
+      // has to guess what the browser scaled it to.
       //
-      // A binary search, because a polyline's points are in step order: a run of
-      // thousands of steps was read point by point for a hover that answers one
-      // place. Indexed rather than iterated: `SVGPointList` is not an iterable in
-      // every browser this page is read in.
-      function nearestPoint(points, x) {
+      // A binary search, because a path is drawn in step order and its x's
+      // ascend: a run of thousands of steps was read point by point for a hover
+      // that answers one place.
+      function nearestIndex(xs, x) {
         let low = 0
-        let high = points.numberOfItems - 1
+        let high = xs.length - 1
 
         if (high < 0) return null
 
         while (low < high) {
           const middle = (low + high) >> 1
-          if (points.getItem(middle).x < x) low = middle + 1
+          if (xs[middle] < x) low = middle + 1
           else high = middle
         }
 
-        const after = points.getItem(low)
-        if (low === 0) return after
-
-        const before = points.getItem(low - 1)
-        return x - before.x <= after.x - x ? before : after
+        if (low === 0) return 0
+        return x - xs[low - 1] <= xs[low] - x ? low - 1 : low
       }
 
       function escape(text) {

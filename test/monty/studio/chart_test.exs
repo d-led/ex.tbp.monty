@@ -12,6 +12,16 @@ defmodule Monty.Studio.ChartTest do
 
   alias Monty.Studio.Chart
 
+  # The runs one series is drawn as, by how many samples each holds. A series is
+  # one SVG path — `M x,y L x,y …` — and every `M` starts a run where the line
+  # breaks, so this is the same question "how was the line broken?" a list of
+  # segments used to answer, asked of the picture the browser is given.
+  defp runs_of(%{path: path}) do
+    path
+    |> String.split("M ", trim: true)
+    |> Enum.map(&length(String.split(&1, " L ")))
+  end
+
   defp belief(graphs, mlh \\ nil) do
     %{
       possible_matches: Map.keys(graphs),
@@ -174,9 +184,10 @@ defmodule Monty.Studio.ChartTest do
           {0, 3, belief(%{"mug" => 2.5})}
         ])
 
-      assert [%{graph_id: "mug", evidence: [{0, 0.5}, {1, 1.5}, {2, 2.5}]}] = chart.series
-      assert [one_segment] = chart.series |> hd() |> Map.fetch!(:points)
-      assert one_segment |> String.split(" ") |> length() == 3
+      assert [%{graph_id: "mug", evidence: [{0, 0.5}, {1, 1.5}, {2, 2.5}]} = series] =
+               chart.series
+
+      assert runs_of(series) == [3]
     end
 
     test "breaks where a step did not report it, instead of drawing through" do
@@ -190,9 +201,9 @@ defmodule Monty.Studio.ChartTest do
 
       mug = Enum.find(chart.series, &(&1.graph_id == "mug"))
 
-      assert [first, second] = mug.points
-      assert first |> String.split(" ") |> length() == 2
-      assert second |> String.split(" ") |> length() == 1
+      # Two runs of two points and one: a step nobody reported breaks the line,
+      # and the break is a `M` in the path (see `runs_of/1`).
+      assert runs_of(mug) == [2, 1]
     end
 
     # The defect this pins: a line drawn through an episode boundary reads as one
@@ -212,7 +223,7 @@ defmodule Monty.Studio.ChartTest do
       mug = Enum.find(chart.series, &(&1.graph_id == "mug"))
 
       # Two episodes, two lines: each one climbs inside its own band.
-      assert length(mug.points) == 2
+      assert length(runs_of(mug)) == 2
     end
 
     # A run longer than the plot is wide is drawn from a couple of samples per
@@ -230,7 +241,7 @@ defmodule Monty.Studio.ChartTest do
 
       mug = steps |> Chart.new() |> Map.fetch!(:series) |> Enum.find(&(&1.graph_id == "mug"))
 
-      assert length(mug.points) == 2
+      assert length(runs_of(mug)) == 2
     end
 
     test "is carried as a couple of samples per column, not as every step it drew" do
@@ -274,9 +285,9 @@ defmodule Monty.Studio.ChartTest do
 
     property "breaks the line exactly where a step was not reported" do
       check all(steps <- steps_of_one_object()) do
-        [%{points: segments}] = steps |> Chart.new() |> Map.fetch!(:series)
+        [series] = steps |> Chart.new() |> Map.fetch!(:series)
 
-        assert length(segments) == length(runs(reported(steps)))
+        assert length(runs_of(series)) == length(runs(reported(steps)))
       end
     end
 
@@ -372,9 +383,8 @@ defmodule Monty.Studio.ChartTest do
           {1, 0, belief(%{"mug" => 0.5})}
         ])
 
-      assert [%{points: [first, second]}] = chart.series
-      assert first |> String.split(" ") |> length() == 2
-      assert second |> String.split(" ") |> length() == 1
+      assert [series] = chart.series
+      assert runs_of(series) == [2, 1]
     end
 
     test "labels an episode only when the next one leaves room for it" do
