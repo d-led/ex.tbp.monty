@@ -280,9 +280,16 @@ defmodule FlyversePlugin.Policy do
   # middle of a mug's top and the middle of a can's top are the same flat square;
   # the curvature where the top turns down is not, and it is the only part of the
   # surface a patch that cannot descend will ever read that differs between two
-  # objects. The term is small next to the network's bend so the two do not fight:
-  # the network decides which way along the rim, this decides to stay on it.
-  @rim_degrees 10.0
+  # objects.
+  #
+  # Twenty-five degrees rather than the ten it started at, because ten was a nudge
+  # and the frames say the boundary is where the evidence is: in a run's slowest
+  # episode the patch was straddling the edge at one step and flat on the top at
+  # the next, and the episode spent four hundred steps between two candidate
+  # objects. A nudge that the network's bend can outvote does not commit to the
+  # one motion that keeps showing new surface. Still under `@max_turn_degrees`, so
+  # the rim and the network still add up rather than replacing each other.
+  @rim_degrees 25.0
 
   # The last resort for what a top-down patch cannot see at all. The fly rides ten
   # centimetres above the table and the patch reaches five, so anything lying

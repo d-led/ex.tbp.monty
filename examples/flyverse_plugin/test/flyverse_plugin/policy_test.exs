@@ -147,26 +147,68 @@ defmodule FlyversePlugin.PolicyTest do
 
     assert [%OrientHorizontal{} = walked] = result.actions
 
-    assert_in_delta walked.rotation_degrees,
-                    10.0,
-                    1.0,
-                    "right, because the object is under the right half"
+    assert walked.rotation_degrees > 5.0,
+           "right, and hard enough that the network's bend cannot outvote it"
   end
 
-  test "the same edge on the other side turns the other way", %{state: state} do
+  test "the edge adds its own pull on top of the network's", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    straddling = %{
+    wholly_on_the_object = %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[2.0, 2.0]]},
+        "patch" => %{"depth" => [[0.02, 0.02], [0.02, 0.02]]}
+      }
+    }
+
+    object_under_the_right_half = %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[2.0, 2.0]]},
+        "patch" => %{"depth" => [[0.05, 0.02], [0.05, 0.02]]}
+      }
+    }
+
+    {plain, policy, state} = step(policy, state, wholly_on_the_object, touching(0.02))
+
+    {:ok, policy, state} = Policy.reset(policy, state)
+
+    {pulled, _policy, _state} = step(policy, state, object_under_the_right_half, touching(0.02))
+
+    assert [%OrientHorizontal{rotation_degrees: without_edge}] = plain.actions
+    assert [%OrientHorizontal{rotation_degrees: with_edge}] = pulled.actions
+
+    assert with_edge - without_edge > 5.0,
+           "towards the surface, on top of whatever the network asked for"
+  end
+
+  test "the same edge on the other side pulls the other way, by the same amount", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    object_on_the_left = %{
       "agent_id_0" => %{
         "view_finder" => %{"depth" => [[2.0, 2.0]]},
         "patch" => %{"depth" => [[0.02, 0.05], [0.02, 0.05]]}
       }
     }
 
-    {result, _policy, _state} = step(policy, state, straddling, touching(0.02))
+    object_on_the_right = %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[2.0, 2.0]]},
+        "patch" => %{"depth" => [[0.05, 0.02], [0.05, 0.02]]}
+      }
+    }
 
-    assert [%OrientHorizontal{} = walked] = result.actions
-    assert_in_delta walked.rotation_degrees, -10.0, 1.0, "left, and by the same amount"
+    {left, policy, state} = step(policy, state, object_on_the_left, touching(0.02))
+
+    {:ok, policy, state} = Policy.reset(policy, state)
+
+    {right, _policy, _state} = step(policy, state, object_on_the_right, touching(0.02))
+
+    assert [%OrientHorizontal{rotation_degrees: leftwards}] = left.actions
+    assert [%OrientHorizontal{rotation_degrees: rightwards}] = right.actions
+
+    assert leftwards < 0.0, "towards the half that still has surface"
+    assert_in_delta leftwards, -rightwards, 1.0e-9, "and the two sides are the same pull"
   end
 
   test "a patch wholly on the object has no edge to follow", %{state: state} do
@@ -270,9 +312,13 @@ defmodule FlyversePlugin.PolicyTest do
   test "the same imbalance bends it further to the left than to the right", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    {left, policy, state} = step(policy, state, [[0.02, 0.02, 100.0, 100.0]])
+    {left, policy, state} =
+      step(policy, state, at(0.02, [[0.02, 0.02, 100.0, 100.0]]), touching(0.02))
+
     {:ok, policy, state} = Policy.reset(policy, state)
-    {right, _policy, _state} = step(policy, state, [[100.0, 100.0, 0.02, 0.02]])
+
+    {right, _policy, _state} =
+      step(policy, state, at(0.02, [[100.0, 100.0, 0.02, 0.02]]), touching(0.02))
 
     assert [%OrientHorizontal{rotation_degrees: leftwards}] = left.actions
     assert [%OrientHorizontal{rotation_degrees: rightwards}] = right.actions
