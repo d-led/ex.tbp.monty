@@ -358,6 +358,35 @@ defmodule FlyversePlugin.PolicyTest do
     assert_in_delta distance, 0.01, 1.0e-9
   end
 
+  # And the structure it turns towards is within reach: a wall across the room
+  # varies from the floor beneath it to eight hundred metres, which beats an
+  # object's silhouette outright. Unfiltered, one run walked at walls for a
+  # thousand steps and came across a knife on the table only by luck.
+  test "a look aims at what varies within reach, not at the wall beyond it", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    table = %{
+      "agent_id_0" => %{
+        # Third column: the wall, nine metres. Fourth: an edge five centimetres off.
+        "view_finder" => %{"depth" => [[0.1, 0.1, 0.1, 0.1], [0.1, 0.1, 9.0, 0.05]]},
+        "patch" => %{"depth" => [[0.03, 0.03], [0.03, 0.03]]}
+      }
+    }
+
+    {_first, policy, state} = step(policy, state, table, touching(0.03))
+
+    state =
+      Enum.reduce(1..20, state, fn _step, state ->
+        {_result, _policy, state} = step(policy, state, table, touching(0.03))
+        state
+      end)
+
+    {result, _policy, _state} = step(policy, state, table, touching(0.03))
+
+    assert [%OrientHorizontal{rotation_degrees: degrees}] = result.actions
+    assert_in_delta degrees, 30.0, 1.0e-9, "the near edge, at half the turn budget"
+  end
+
   # The animal does not crawl over the first thing it touches for ever: it walks a
   # bout, leaves, and lands again somewhere else. Sixty steps is the bout, and
   # what ends it is an about-face — 180 degrees, which the centring reflex cannot

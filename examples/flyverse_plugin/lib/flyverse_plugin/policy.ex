@@ -634,9 +634,9 @@ defmodule FlyversePlugin.Policy do
     }
   end
 
-  # Where in the view the depth varies most, as a fraction of the picture's width
-  # from the middle: negative is left. `:none` when the view is uniform — nothing
-  # in it is worth turning towards — or when there is no view to read.
+  # Where in the view the depth varies most *within reach*, as a fraction of the
+  # picture's width from the middle: negative is left. `:none` when nothing in
+  # reach varies — nothing to turn towards — or when there is no view to read.
   defp structure(observations, agent_id) do
     case Percept.image(observations, agent_id, @view_finder) do
       {:ok, {_sensor, rows}} -> most_varied(rows)
@@ -652,11 +652,17 @@ defmodule FlyversePlugin.Policy do
     if width < 2, do: :none, else: widest(wide_columns(rows, width), width)
   end
 
+  # A column's variation is counted over its *near* depths only. A wall across the
+  # room varies from the floor beneath it to eight hundred metres, which beats any
+  # object's silhouette outright — so an unfiltered answer aims the fly at walls,
+  # and one run took a thousand steps of walking at them to come across a knife
+  # lying on the table. Within reach the wall's column holds the floor and nothing
+  # else, and the object's edge is what varies.
   defp wide_columns(rows, width) do
     for column <- 0..(width - 1) do
       rows
       |> Enum.map(&Enum.at(&1, column))
-      |> Enum.filter(&(is_number(&1) and &1 > 0.0))
+      |> Enum.filter(&(is_number(&1) and &1 > 0.0 and &1 <= @visible))
       |> case do
         [] -> 0.0
         depths -> Enum.max(depths) - Enum.min(depths)
