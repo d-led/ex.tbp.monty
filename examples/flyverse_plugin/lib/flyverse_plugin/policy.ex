@@ -325,7 +325,7 @@ defmodule FlyversePlugin.Policy do
     case next do
       :explore -> steer(policy, observations, percept, state)
       :depart -> {:ok, departing(policy, advanced), policy, state}
-      :look -> {:ok, looking(policy), policy, state}
+      :look -> {:ok, looking(policy, observations), policy, state}
       :cruise -> {:ok, touch(policy, observations), policy, state}
     end
   end
@@ -480,15 +480,67 @@ defmodule FlyversePlugin.Policy do
     }
   end
 
-  # Lost, and looking: the search circle, in a result the plugin contract
-  # accepts, saying that this step was a look rather than a decision.
-  defp looking(policy) do
+  # Lost, and looking. The step keeps the search circle's size and travel, but
+  # turns towards the *most structured* column of the view finder rather than a
+  # fixed thirty degrees — because the reason to look is a surface with nothing
+  # on it, and the one target a policy with no semantics still has is where the
+  # depth stops being flat. On a table that is the silhouette of whatever is
+  # standing on it.
+  defp looking(policy, observations) do
     %MotorPolicyResult{
-      actions: [search(policy)],
+      actions: [
+        %{search(policy) | rotation_degrees: towards(structure(observations, policy.agent_id))}
+      ],
       motor_only_step: false,
       telemetry: %{looking: true}
     }
   end
+
+  # Where in the view the depth varies most, as a fraction of the picture's width
+  # from the middle: negative is left. `:none` when the view is uniform — nothing
+  # in it is worth turning towards — or when there is no view to read.
+  defp structure(observations, agent_id) do
+    case Percept.image(observations, agent_id, @view_finder) do
+      {:ok, {_sensor, rows}} -> most_varied(rows)
+      {:error, _sentence} -> :none
+    end
+  end
+
+  # `Percept.image/3` has already refused an empty picture, so there is a picture
+  # here and the width is the narrowest row.
+  defp most_varied(rows) do
+    width = rows |> Enum.map(&length/1) |> Enum.min()
+
+    if width < 2, do: :none, else: widest(wide_columns(rows, width), width)
+  end
+
+  defp wide_columns(rows, width) do
+    for column <- 0..(width - 1) do
+      rows
+      |> Enum.map(&Enum.at(&1, column))
+      |> Enum.filter(&(is_number(&1) and &1 > 0.0))
+      |> case do
+        [] -> 0.0
+        depths -> Enum.max(depths) - Enum.min(depths)
+      end
+    end
+  end
+
+  defp widest(columns, width) do
+    most = Enum.max(columns, fn -> 0.0 end)
+
+    if most <= 0.0,
+      do: :none,
+      else: (Enum.find_index(columns, &(&1 == most)) || 0) / (width - 1) - 0.5
+  end
+
+  # A fraction of the picture becomes a turn in the same frame as every other
+  # rotation here: negative is left. The fraction is of the *turn budget*, not of
+  # a field of view this policy is not told — a policy that guessed an angle from
+  # an unknown lens would be inventing a number, so it spends the budget it has.
+  defp towards(:none), do: @search_degrees
+
+  defp towards(fraction) when is_float(fraction), do: fraction * 2 * @max_turn_degrees
 
   # The departure. A turn is taken whole — the centring reflex would pull the fly
   # back onto what it is looking at, and this step is the one that must not — and

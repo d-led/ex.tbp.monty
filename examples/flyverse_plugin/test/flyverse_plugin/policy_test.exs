@@ -246,6 +246,34 @@ defmodule FlyversePlugin.PolicyTest do
     assert searching.rotation_degrees == 30.0, "round the search circle, looking for the object"
   end
 
+  # And the look aims at where the view is *not* flat: the one target a policy
+  # without semantics has. A table is uniform; an object standing on it is an
+  # edge.
+  test "a look turns towards the most structured part of the view", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    table = %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[0.5, 0.5, 0.2, 0.5]]},
+        "patch" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}
+      }
+    }
+
+    {_first, policy, state} = step(policy, state, table, touching(0.05))
+
+    state =
+      Enum.reduce(1..20, state, fn _step, state ->
+        {_result, _policy, state} = step(policy, state, table, touching(0.05))
+        state
+      end)
+
+    {result, _policy, _state} = step(policy, state, table, touching(0.05))
+
+    assert [%OrientHorizontal{rotation_degrees: degrees}] = result.actions
+    assert degrees > 0.0, "the near thing is on the right of the picture: turn right"
+    assert abs(degrees) <= 30.0
+  end
+
   # The animal does not crawl over the first thing it touches for ever: it walks a
   # bout, leaves, and lands again somewhere else. Sixty steps is the bout, and
   # what ends it is an about-face — 180 degrees, which the centring reflex cannot
