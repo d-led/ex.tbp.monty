@@ -316,6 +316,38 @@ Three things carry a part across nodes, and each had to be true first:
   readable by whoever can read the run's files. The peer opens the experiment
   itself (`opened_for/1`) and writes nothing to the run's row.
 
+### A networked run is a run
+
+A run asked for on one node is no longer that node's work. All three shapes are
+ordinary now, and none of them needs a second page:
+
+- **Performed elsewhere.** A node that cannot offer what the run needs — a world
+  it does not have, a tag it does not carry — hands the job back and a peer's queue
+  takes it (`Placement`, "Where a run goes" above). The record says `queued` while
+  it waits, which is the truth.
+- **Divided.** Four episodes at a parallelism of two are two parts, dealt round
+  robin to the nodes that can be given one, each claimed in its row before its
+  first step.
+- **Survived.** A node that dies mid-part leaves a claim that lapses, a row that
+  says which part ended, and a run that the next worker continues from there
+  rather than from zero — the boot recovery (`Monty.Studio.Jobs.Reaper.recover/0`)
+  re-queues it, and a part still in a _peer's_ hands is left to that peer instead
+  of being taken twice.
+
+What the record says while all this happens was made honest in the same pass:
+`RunHistory.take/1` writes _which_ node has the run — the column a Stop is routed
+by (`Cluster.Owner`) — and `mark_running/1` is written by the worker at the first
+step, not when it picks the job up. Opening an experiment (composing the config,
+starting the world, loading a pretrained library) is minutes on a big one, and a
+row that said `running` through it was claiming work it had not begun.
+
+Verified where: the division, the peer's claim, the stop that travels and the
+resume are `test/monty/studio/jobs/run_test.exs`'s two-node cases (with
+`cluster_of_two/1` and `claim_part/3` standing in for the second VM), the reaper's
+boot recovery is `reaper_test.exs`, and the record's words are
+`run_history_test.exs`. On a real cluster the division itself was measured as
+described above, on `probe` and `node2`.
+
 ### Who owns a part, and what happens when a node dies
 
 A part is an owner, not a work item. It has a row, a claim, a lease and a
