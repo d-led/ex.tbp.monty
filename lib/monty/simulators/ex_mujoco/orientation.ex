@@ -111,4 +111,15 @@ defmodule Monty.Simulators.ExMujoco.Orientation do
 
     :math.atan2(row_2_1, row_2_2)
   end
+
+  @doc """
+  The y angle, in radians, of the same decomposition — how far the body has
+  turned about the vertical.
+
+  Read from the quaternion rather than from the matrix, because for a turn this
+  is exact and needs no convention about which way the matrix is written: a turn
+  has no x or z part, so what is left is `2 · atan2(y, w)`.
+  """
+  @spec euler_y(t()) :: float()
+  def euler_y({w, _x, y, _z}), do: 2.0 * :math.atan2(y, w)
 end

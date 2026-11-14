@@ -165,6 +165,52 @@ defmodule Monty.Simulators.ExMujoco.WorldTest do
 
       assert observations[@agent] == %{}
     end
+
+    # A sensor that asks for no semantic ids gets two passes rather than three:
+    # asking for a picture of ids costs a third render, so it is the scene's
+    # choice and not a default.
+    test "a sensor that asks for no semantic ids is answered without them" do
+      {observations, _state, _world} =
+        World.step(world(%{"agents" => [agent_with_sensor(%{"semantic" => false})]}), [])
+
+      assert %{"depth" => _depth, "rgba" => _rgba} = observations[@agent]["patch"]
+      refute Map.has_key?(observations[@agent]["patch"], "semantic")
+    end
+
+    # A sensor that names no resolution is Monty's own: 64 by 64.
+    test "a sensor that asks for no resolution is drawn at the protocol's own" do
+      agent =
+        agent_with_sensor(%{
+          "height" => nil,
+          "width" => nil,
+          "semantic" => false
+        })
+
+      {observations, _state, _world} = World.step(world(%{"agents" => [agent]}), [])
+
+      assert length(observations[@agent]["patch"]["depth"]) == 64
+    end
+  end
+
+  # The scene's one agent, with the sensor's configuration replaced.
+  defp agent_with_sensor(sensor) do
+    %{
+      "agent_id" => @agent,
+      "class" => "SurfaceAgent",
+      "position" => [0.0, 0.0, 0.5],
+      "rotation" => [1.0, 0.0, 0.0, 0.0],
+      "sensor_configs" => %{
+        "patch" =>
+          Map.merge(
+            %{
+              "zoom" => 1.0,
+              "position" => [0.0, 0.0, 0.0],
+              "rotation" => [1.0, 0.0, 0.0, 0.0]
+            },
+            sensor
+          )
+      }
+    }
   end
 
   describe "an episode" do
