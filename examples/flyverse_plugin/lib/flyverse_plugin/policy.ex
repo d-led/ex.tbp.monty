@@ -266,6 +266,24 @@ defmodule FlyversePlugin.Policy do
   @visible 1.0
   @desired_object_distance 0.025
 
+  # How hard the patch's own edge pulls the heading.
+  #
+  # The wide view and the patch answer different questions, and the patch's is the
+  # one about the *object*. Its two halves sit three millimetres either side of
+  # where the sensor is, and the clip makes them a switch: a half reading `0.05`
+  # has nothing within reach, a half reading less than that has surface under it.
+  # So one half at the ceiling and the other not is an edge, and which half is
+  # which says which way the edge runs. Turning that way while walking traces the
+  # outline of the thing instead of crossing its middle.
+  #
+  # It is worth the term because the outline is what distinguishes objects. The
+  # middle of a mug's top and the middle of a can's top are the same flat square;
+  # the curvature where the top turns down is not, and it is the only part of the
+  # surface a patch that cannot descend will ever read that differs between two
+  # objects. The term is small next to the network's bend so the two do not fight:
+  # the network decides which way along the rim, this decides to stay on it.
+  @rim_degrees 10.0
+
   # The circle a search steps round, as a multiple of the standoff — ten
   # centimetres in front of the agent, as Monty's comment says — and how far
   # round it one step goes.
@@ -1134,13 +1152,32 @@ defmodule FlyversePlugin.Policy do
   # is the side its readouts preferred. That is Monty's own
   # `MoveTangentially`-between-touches cycle, made one action instead of four.
   defp action(%__MODULE__{} = policy, wish, reach, loom, observations) do
+    correction = centring(observations, policy.agent_id) + rim(policy, observations)
+
     %OrientHorizontal{
       agent_id: policy.agent_id,
-      rotation_degrees: turn(policy, wish, centring(observations, policy.agent_id)),
+      rotation_degrees: turn(policy, wish, correction),
       left_distance: side(wish) * slide(policy, reach),
       forward_distance: crawl(policy, reach, loom)
     }
   end
+
+  # Which way the edge of what the patch is on runs, in degrees: towards the half
+  # that still has surface under it, because that is the half the object is on.
+  # Both halves on the object or both off it is no edge at all — the middle of a
+  # face and the void beside it are each uniform, and neither says which way to
+  # turn.
+  defp rim(policy, observations) do
+    case patch_nearness(observations, policy) do
+      {left, right} ->
+        @rim_degrees * (surface?(right) - surface?(left))
+
+      _no_patch ->
+        0.0
+    end
+  end
+
+  defp surface?(nearness), do: if(nearness > @clip_nearness, do: 1.0, else: 0.0)
 
   # How far one step slides sideways: the bout's stride when the patch is at the
   # surface, nought while there is still room to walk at it.
@@ -1234,12 +1271,12 @@ defmodule FlyversePlugin.Policy do
   # right and negative is left, because the world yaws by the negative of it.
   #
   # A wish to the left is therefore a negative angle here, and nothing invents a
-  # turn the network did not decide: a wish of nought turns by the centring
-  # correction alone. The correction is already in this frame — negative is
-  # towards the side the view finder sees something on — so the two add, and the
-  # sum is held to a full bend so neither term can spin the fly past its gait.
-  defp turn(policy, wish, centring) do
-    rotation = centring - bend(policy, wish)
+  # turn the network did not decide: a wish of nought turns by the correction
+  # alone. The correction is already in this frame — negative is towards the side
+  # the view finder sees something on — so the two add, and the sum is held to a
+  # full bend so neither term can spin the fly past its gait.
+  defp turn(policy, wish, correction) do
+    rotation = correction - bend(policy, wish)
     rotation |> max(-@max_turn_degrees) |> min(@max_turn_degrees)
   end
 

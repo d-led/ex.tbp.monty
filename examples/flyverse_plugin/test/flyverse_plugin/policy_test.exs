@@ -127,6 +127,57 @@ defmodule FlyversePlugin.PolicyTest do
   # The standoff is held, not a constant step: a sensor at 20 mm with 25 mm
   # wanted backs away by the 5 mm it is too close, and one further off than the
   # standoff crawls at the four millimetres a step has always been.
+  # The outline is what tells two objects apart. The middle of a mug's top and the
+  # middle of a can's top are the same flat square; the curvature where the top
+  # turns down is not — and a patch that cannot descend will never read anything
+  # else that differs. So the patch's own halves pull the heading: the clip makes
+  # each half a switch, surface under it or nothing within reach, and the half that
+  # still has surface is the half the object is on.
+  test "a patch straddling an edge turns towards the object it is on", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    straddling = %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[2.0, 2.0]]},
+        "patch" => %{"depth" => [[0.05, 0.02], [0.05, 0.02]]}
+      }
+    }
+
+    {result, _policy, _state} = step(policy, state, straddling, touching(0.02))
+
+    assert [%OrientHorizontal{} = walked] = result.actions
+
+    assert_in_delta walked.rotation_degrees,
+                    10.0,
+                    1.0,
+                    "right, because the object is under the right half"
+  end
+
+  test "the same edge on the other side turns the other way", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    straddling = %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[2.0, 2.0]]},
+        "patch" => %{"depth" => [[0.02, 0.05], [0.02, 0.05]]}
+      }
+    }
+
+    {result, _policy, _state} = step(policy, state, straddling, touching(0.02))
+
+    assert [%OrientHorizontal{} = walked] = result.actions
+    assert_in_delta walked.rotation_degrees, -10.0, 1.0, "left, and by the same amount"
+  end
+
+  test "a patch wholly on the object has no edge to follow", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {result, _policy, _state} = step(policy, state, at(0.02), touching(0.02))
+
+    assert [%OrientHorizontal{} = walked] = result.actions
+    assert walked.rotation_degrees == 0.0, "both halves on it is no side to prefer"
+  end
+
   test "a patch at the standoff crawls, and one nearer it backs away", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
@@ -832,13 +883,15 @@ defmodule FlyversePlugin.PolicyTest do
   defp scene(view_depth, patch_depth) do
     # Two columns, so the two halves the drive reads are the two halves this
     # scene means: a one-column image is a picture with nothing on the right of
-    # it, and the centring reflex would turn away from it every step.
+    # it, and the centring reflex would turn away from it every step. The patch
+    # is two columns for the same reason — its halves are what says which way the
+    # edge of an object runs.
     view = if is_list(view_depth), do: view_depth, else: [[view_depth, view_depth]]
 
     %{
       "agent_id_0" => %{
         "view_finder" => %{"depth" => view},
-        "patch" => %{"depth" => [[patch_depth]]}
+        "patch" => %{"depth" => [[patch_depth, patch_depth]]}
       }
     }
   end
