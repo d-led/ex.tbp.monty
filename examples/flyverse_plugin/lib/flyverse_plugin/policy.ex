@@ -381,17 +381,37 @@ defmodule FlyversePlugin.Policy do
     watched = watch(advanced, patch_nearness(observations, policy))
     state = put(state, policy.sim, watched)
 
-    if idle?(watched) do
-      {:ok, struggling(policy, watched), policy, state}
-    else
-      case next do
-        :explore -> steer(policy, observations, percept, state)
-        :depart -> {:ok, departing(policy, watched), policy, state}
-        :look -> {:ok, looking(policy, simulation, observations), policy, state}
-        :cruise -> {:ok, touch(policy, observations), policy, state}
+    {:ok, result, policy, state} =
+      if idle?(watched) do
+        {:ok, struggling(policy, watched), policy, state}
+      else
+        case next do
+          :explore -> steer(policy, observations, percept, state)
+          :depart -> {:ok, departing(policy, watched), policy, state}
+          :look -> {:ok, looking(policy, simulation, observations), policy, state}
+          :cruise -> {:ok, touch(policy, observations), policy, state}
+        end
       end
-    end
+
+    {:ok, %{result | motor_only_step: motor_only?(saw)}, policy, state}
   end
+
+  # Which steps the learning module is shown, and it is the patch's answer rather
+  # than the behaviour's name.
+  #
+  # Monty's own surface policy hides three of its four steps from the module —
+  # every `OrientHorizontal` and every `MoveTangentially`, feeding only the
+  # vertical orient — because a step that is not reading the object teaches the
+  # module nothing, and its *displacement* is what the module would have to
+  # explain. Monty matches locations at `max_match_distance: 0.01`, and this
+  # policy's two corrective steps are five times that: the departure is an
+  # about-face and a five-centimetre hop, and a leg of the sweep is a quarter turn
+  # and five more.
+  #
+  # So a step is a sensor step exactly when there is something under the patch to
+  # read. On the object that is every step; lost, it is none of them, and the
+  # search stays motor-only until the fly finds something again.
+  defp motor_only?(saw), do: not saw
 
   # Standing still is measured, not assumed: where the body was on the last step
   # against where it is now. A fly that has moved less than a millimetre for
@@ -435,7 +455,6 @@ defmodule FlyversePlugin.Policy do
           forward_distance: @touch_stride
         }
       ],
-      motor_only_step: false,
       telemetry: %{struggling: true, idle: simulation.idle}
     }
   end
@@ -699,12 +718,6 @@ defmodule FlyversePlugin.Policy do
 
     %MotorPolicyResult{
       actions: [action],
-      # Monty hides one corrective step from the learning module because nothing
-      # on an out-of-view object is learnable. A search is not one step: it lasts
-      # until something comes into view, and the step it does is the first step
-      # with anything on it. So the module is fed every step — `nothing yet`
-      # until the patch is on the object, and evidence when it is.
-      motor_only_step: false,
       telemetry: %{
         depth_at_center: depth,
         nearest: nearest,
@@ -727,7 +740,6 @@ defmodule FlyversePlugin.Policy do
   defp looking(policy, simulation, observations) do
     %MotorPolicyResult{
       actions: [look(policy, simulation, observations)],
-      motor_only_step: false,
       telemetry: %{looking: true}
     }
   end
@@ -827,7 +839,6 @@ defmodule FlyversePlugin.Policy do
   defp departing(policy, simulation) do
     %MotorPolicyResult{
       actions: [leave(policy, simulation.departures)],
-      motor_only_step: false,
       telemetry: %{leaving: true, turn_degrees: saccade(simulation.departures)}
     }
   end

@@ -597,8 +597,9 @@ defmodule FlyversePlugin.PolicyTest do
       assert [%OrientHorizontal{agent_id: "agent_id_0"} = hopped] = result.actions
       assert_in_delta hopped.forward_distance, 0.05, 1.0e-9, "the stride"
 
-      refute result.motor_only_step,
-             "a search is fed too: the step it finds the object is the one with a view"
+      assert result.motor_only_step,
+             "and the module is not shown it: a five-centimetre hop is five times the " <>
+               "distance it can associate a feature across"
     end
 
     # Monty's `MoveForward` walks straight because Monty's world centres the
@@ -716,7 +717,7 @@ defmodule FlyversePlugin.PolicyTest do
                       0.1 * (1.0 - :math.cos(radians(30.0))) / :math.cos(radians(30.0)),
                       1.0e-9
 
-      refute result.motor_only_step
+      assert result.motor_only_step, "and the module is not shown a step off the object"
     end
 
     # A tenth of the patch on the object is the line Monty draws, and past it the
@@ -730,7 +731,9 @@ defmodule FlyversePlugin.PolicyTest do
       assert walked.rotation_degrees == 0.0, "the search would be thirty degrees"
       assert Map.has_key?(result.telemetry, :wish), "the pair of readouts decided the turn"
       assert_in_delta walked.forward_distance, 0.01, 1.0e-9, "a bout's stride, not a hop"
-      refute result.motor_only_step
+
+      refute result.motor_only_step,
+             "and the module is shown it: there is a surface under the patch"
     end
 
     defp radians(degrees), do: degrees * :math.pi() / 180.0
