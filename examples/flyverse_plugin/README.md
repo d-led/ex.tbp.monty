@@ -290,10 +290,15 @@ apart.
 What the measurements also settled, and what bounds this policy: **a slow episode
 is the module narrowing, not the fly failing.** `e_cups` ran 440 steps with two
 candidates still possible while its evidence climbed a steady nine tenths of a
-point per step, and the view that finally decided it was a flat one. And the
-500-step eval ceiling counts only _informative_ steps — the engine refunds a step
-that reached no module — so hiding more steps from the module cannot stretch it,
-and the episodes that died at exactly 500 were genuinely still converging.
+point per step, and the view that finally decided it was a flat one. The frames
+agree: a mug episode that ran 583 steps showed **541 distinct patch images**, the
+only repeat being the blank one, which came back 31 times. The fly was not
+walking the same ground — it was walking ground the module could not use — which
+is also why a coverage map, the next thing that looked worth building, is not.
+And the 500-step eval ceiling counts only _informative_ steps — the engine refunds
+a step that reached no module — so hiding more steps from the module cannot
+stretch it, and the episodes that died at exactly 500 were genuinely still
+converging.
 
 ## What a run costs
 
