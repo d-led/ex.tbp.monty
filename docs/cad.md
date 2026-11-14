@@ -246,14 +246,24 @@ scene, not a config, knows where the object is.
    `AgentState.sensor_pose/2` composes the two, which is the helper the walk calls.
    So the walk is handed where the patch is, correctly.
 
-   What the same measurement did establish is that the walk's action goes nowhere.
-   The newest decision at the thirty-fifth step is a `MoveForward{ distance: 0.053 }`
-   chosen in a state whose agent is at `[0.0, 0.0, 0.063]`, and the sensor is still
-   at `[0.0, 0.0, 0.063]` when the next decision is taken — so the action was
-   issued, from the right pose, and the world did not move. That is the next
-   question and it is about the run rather than the policy: whether the world is
-   rebuilt or reset between steps for this world, or whether the actions never reach
-   it, is one read of `Monty.Studio.Run.step/2`.
+   What the same measurement did establish is that the walk's action does not show
+   up. The newest decision at the thirty-fifth step is a
+   `MoveForward{ distance: 0.053 }` chosen in a state whose agent is at
+   `[0.0, 0.0, 0.063]`, and the patch's rendered pose is `[0.0, 0.0, 0.063]` at the
+   thirty-fifth step and at the fortieth.
+
+   The run loop is not where that is lost, and it is worth saying so because it is
+   the first place to look: `Run.step/2` hands `run.pending_actions` to
+   `Interface.step/2` before it asks the model for new ones, and that is
+   `step_world/3` and so the world's own `step/2` — the actions are applied, one
+   step behind, as Monty applies them.
+
+   What the sample could not tell apart is a patch that never moves from one that
+   moves every step and comes back: two readings five steps apart are consistent
+   with both, and one of the two is an oscillation — `MoveForward` translates along
+   the sensor's own −z, so a correction that overshoots is undone by the next
+   correction. The measurement that settles it is a reading at every step rather
+   than at every fifth, which is a change to the probe rather than to any of this.
 
    Until it is answered the walk is not a comparison for the curvature policy at
    all, and the numbers in the table above measure a stationary patch rather than a
