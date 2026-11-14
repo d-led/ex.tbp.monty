@@ -3968,6 +3968,61 @@ Both are worth keeping in mind as a class: a test that names an id a page
 generates, or reads a row a task is about to delete, is a test of the machine's
 timing rather than of the behaviour.
 
+## 52. 2026-11-14: the 20 GB, measured and not reproduced
+
+The report: a run of `flyverse_plugin.10simobj_surf_agent` had to be killed
+because "the beam ate 20gb ram which I don't have". The machine is 16 GB with
+11 GB of swap, so that is a process that outgrew the physical memory it was on.
+
+### 52.1 What was measured
+
+Four runs of the same experiment on node1, in-process memory read over `:rpc`
+from a fourth node (the §50 method), with RSS beside it because MuJoCo and the
+embedded CPython allocate outside everything `:erlang.memory/0` counts:
+
+| run                  | episodes | steps | RSS                   | `:erlang.memory` total | ETS             |
+| -------------------- | -------- | ----- | --------------------- | ---------------------- | --------------- |
+| one episode (MCP)    | 1        | 1 290 | 100 … 1 287, swinging | 492 … 922              | 12.4            |
+| six episodes         | 6        | 1 245 | 410 → 556 → **329**   | ~330 … 450             | 13.5 → 17       |
+| forty, stopped at 15 | 15       | 3 866 | 113 … 563             | 260 … 452              | 13.5 → **31.6** |
+| forty, stopped at 16 | 16       | 4 223 | ~290                  | ~330                   | —               |
+
+Read across: **`RunStream` is the only thing that grows with the steps**, 10 kB a
+step (31.6 MB and 4 455 objects at 3 100 steps). The dead run took 37 298 steps in
+68 episodes in 41 minutes, so the same arithmetic gives ~380 MB of stream at its
+end — a twentieth of a gigabyte, not twenty. Everything else was flat: binaries
+6–20 MB, code 28 MB, processes 120–440 MB, and RSS fell back to ~300 MB at the
+end of every run, which is the world being closed (`start_episode/5` closes the
+previous one, `stop_episode/3` closes its own).
+
+**So nothing in the studio as it stands reproduces it**, and the one bounded
+growth is too small by two orders of magnitude. What the numbers do say is that
+whatever reached 20 GB was not the VM's own heap: RSS stood at 1.3 GB while
+`:erlang.memory/0` said 0.9 GB once, and the gap between them is the embedded
+CPython and MuJoCo, which nothing in this application accounts for.
+
+### 52.2 What is left to look at, and what would settle it
+
+- `Monty.Simulators.Mujoco.Host` is a single GenServer holding one Python
+  namespace per world and `world.close()` runs on every episode and at the end of
+  a run — so the paths audited close their worlds. A run that _died_ mid-episode
+  (the §50 purge, or a kill) takes its world with it in the process, not in the
+  Host: the Host's `worlds` map is the one place a dead run could leave a
+  namespace behind, and nothing reads it back.
+- The machine was already 10.3 GB into swap when this was measured, hours after
+  the kill: macOS keeps swapped pages, so the residue outlived the process. A
+  `ps -eo rss,command | sort -rn | head` at the moment of the next one names the
+  process in one line; without it the question is "which of five VMs".
+- Next time it is worth knowing, in the first minute: `:erlang.memory()` on the
+  node, and `ps -o rss=` for the same pid. RSS far above the VM's own account is
+  native (CPython/MuJoCo); RSS close to it is a process in there and the top-ten
+  list finds it.
+- The `:system_memory_high_watermark` alarm already fires (node2 logged 86 of
+  them this evening, one pair every few minutes from 19:51). What the VM does not
+  log is _what_ holds the memory when it fires — the one line that would have
+  answered this question. That is the change worth making next: on the set, log
+  the three biggest processes by memory, once a minute at most.
+
 ## 52. 2026-11-14: twenty gigabytes, and one path that never lets go
 
 The machine had to be killed: `beam.smp` took 20 GB, which the machine does not
