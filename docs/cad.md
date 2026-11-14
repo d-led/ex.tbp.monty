@@ -139,16 +139,16 @@ scene, not a config, knows where the object is.
    appends the sibling builds from this checkout, while `ex.monty.cad.server` is
    built against whichever release Hex holds (0.6.1 today) — two builds of one
    module set in one node. The designed path is two nodes in one cluster.
-   The control variant — a shell around the ported
-   `SurfacePolicyCurvatureInformed`, `:anywhere`, `needs: [:monty]` — is still
-   worth having, and it is a control for a reason worth saying out loud: that is
-   the policy this experiment already steers by — the config takes
-   `/monty/motor_system_config: surface_curvature_informed_goal1` — so a
-   provider around it walks the part with the same patch-only policy every run
-   above was steered by, reached through the seam instead of through the config.
-   A difference against `FeatureWalk` is then the geometry's, not the policy's.
-   (Monty's own 140-episode figure is its YCB benchmark, ten objects at fourteen
-   rotations; it is not a CAD run and is not evidence about one.)
+
+   The comparison is already set up and it needs nothing built: every run above
+   was steered by `/monty/motor_system_config: surface_curvature_informed_goal1`,
+   which is the ported `SurfacePolicyCurvatureInformed` reading only the patch.
+   That is the control. What `FeatureWalk` adds is the geometry, so a difference
+   between the two is the geometry's and not the policy's. A provider shell
+   around the curvature policy would re-prove what `remote_policy_test.exs`
+   already steps through two episodes with a stand-in — that the seam carries a
+   policy, and carries two at once without one advancing the other — and would
+   walk the part no differently from the config it wraps.
 
 3. **A library the CAD world can be recognised against — a part with a pose
    recognises, a symmetric one does not conclude.** The experiment is now a
