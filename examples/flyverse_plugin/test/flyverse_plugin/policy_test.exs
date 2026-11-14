@@ -5,7 +5,7 @@ defmodule FlyversePlugin.PolicyTest do
 
   alias FlyversePlugin.{Demonstrator, Pack, Policy}
 
-  alias Monty.Frameworks.Actions.OrientHorizontal
+  alias Monty.Frameworks.Actions.{OrientHorizontal, OrientVertical}
   alias Monty.Frameworks.Models.MotorSystemState.AgentState
   alias Monty.Geometry.Rotation
 
@@ -178,6 +178,55 @@ defmodule FlyversePlugin.PolicyTest do
     assert walked.rotation_degrees == 0.0, "both halves on it is no side to prefer"
   end
 
+  # What a top-down patch cannot see at all costs a whole episode: the spoon lies
+  # one and a half centimetres up while the patch reaches five from a decimetre, so
+  # six baseline episodes reached the step ceiling without ever reading it, and one
+  # never took a percept of it at all.
+  #
+  # Two swept legs without surface is the fly's own evidence that the *height* is
+  # wrong rather than the direction, and the answer is twelve steps of vertical
+  # probe: six down, six back. It is the only motion this policy has that can put a
+  # table into reach, and giving the altitude back matters because the tall objects
+  # are visible from it.
+  test "a fly that has swept twice without finding surface dives, then climbs back",
+       %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {dive, policy, state} = until_vertical(policy, state, 150)
+
+    assert [%OrientVertical{} = down] = dive.actions
+    assert_in_delta down.down_distance, 0.01, 1.0e-9, "a centimetre at a time"
+    assert down.forward_distance == 0.0, "a dive is a height, not a walk"
+    assert dive.motor_only_step, "and the module is not shown a step with nothing under it"
+
+    # Down for six, then the same six back up.
+    {_results, {policy, state}} =
+      Enum.map_reduce(1..5, {policy, state}, fn _step, {policy, state} ->
+        {result, policy, state} = step(policy, state, blank(), away())
+        {result, {policy, state}}
+      end)
+
+    {climbing, _policy, _state} = step(policy, state, blank(), away())
+
+    assert [%OrientVertical{} = up] = climbing.actions
+
+    assert_in_delta up.down_distance,
+                    -0.01,
+                    1.0e-9,
+                    "back up, because the height the tall objects need is not given away"
+  end
+
+  # One frozen patch is the ordinary case — a fly crossing a table sees its clip on
+  # every step — so the first stall is still a look, not a probe.
+  test "a fly that has only just stalled looks around rather than diving", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {result, _policy, _state} = still_steps(policy, state, pose([0.0, 0.0, 0.1]), 25)
+
+    assert [%OrientHorizontal{}] = result.actions, "a swept leg, not a dive"
+  end
+
+  # A patch at the standoff crawls, and one nearer it backs away
   test "a patch at the standoff crawls, and one nearer it backs away", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
@@ -838,6 +887,19 @@ defmodule FlyversePlugin.PolicyTest do
       Policy.call(policy, {nil, observations, motor_state, percept, nil}, state)
 
     {result, policy, state}
+  end
+
+  # Steps of a fly whose patch reads its clip, with nothing ever changing under it,
+  # until the step turns out to be vertical. Returns the pair and the state it
+  # happened in, so the steps of the dive that follow are the same fly's.
+  defp until_vertical(policy, state, within) do
+    Enum.reduce_while(1..within, {nil, policy, state}, fn _step, {_result, policy, state} ->
+      {result, policy, state} = step(policy, state, blank(), away())
+
+      if match?([%OrientVertical{}], result.actions),
+        do: {:halt, {result, policy, state}},
+        else: {:cont, {result, policy, state}}
+    end)
   end
 
   # Steps of a fly that is not moving: the same blank patch and the same pose, over

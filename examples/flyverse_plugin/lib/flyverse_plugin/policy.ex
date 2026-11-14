@@ -52,7 +52,7 @@ defmodule FlyversePlugin.Policy do
   alias FlyversePlugin.{Native, Networks, Percept}
 
   alias Monty.Cmp.Message
-  alias Monty.Frameworks.Actions.OrientHorizontal
+  alias Monty.Frameworks.Actions.{OrientHorizontal, OrientVertical}
   alias Monty.Frameworks.Environments.PositioningProcedures
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
   alias Monty.Frameworks.Models.MotorSystemState.AgentState
@@ -284,6 +284,23 @@ defmodule FlyversePlugin.Policy do
   # the network decides which way along the rim, this decides to stay on it.
   @rim_degrees 10.0
 
+  # The last resort for what a top-down patch cannot see at all. The fly rides ten
+  # centimetres above the table and the patch reaches five, so anything lying
+  # flatter than the difference is never in a percept — the spoon, at one and a
+  # half centimetres, is 8.5 below the sensor in every pose. A baseline run spent
+  # six of its seven abandoned episodes on it, 45% of all its steps.
+  #
+  # So when the patch has read its clip for a whole stall and the wide view still
+  # has something near, the answer is vertical: six steps of a centimetre down,
+  # then six back up. A sweep and not a descent, because the altitude the fly
+  # cannot afford to lose is the one the tall objects are visible from — it lets
+  # go of it for twelve steps and takes it back. Both halves are shown to the
+  # learning module exactly while there is something under the patch, which is the
+  # point: at four centimetres the table is within reach, the spoon with it, and
+  # what the module reads there it has never read before.
+  @dive_steps 6
+  @dive_stride 0.01
+
   # The circle a search steps round, as a multiple of the standoff — ten
   # centimetres in front of the agent, as Monty's comment says — and how far
   # round it one step goes.
@@ -406,6 +423,7 @@ defmodule FlyversePlugin.Policy do
         case next do
           :explore -> steer(policy, observations, state)
           :depart -> {:ok, departing(policy, watched), policy, state}
+          :dive -> {:ok, diving(policy, simulation), policy, state}
           :look -> {:ok, looking(policy, simulation, observations), policy, state}
           :cruise -> {:ok, touch(policy, observations), policy, state}
         end
@@ -545,6 +563,22 @@ defmodule FlyversePlugin.Policy do
   # that will not leave on its own, so the second stall is the departure.
   defp bout(%{look_steps: taken}, true) when taken > 0 and taken < @look_steps, do: :look
 
+  # A dive runs to its end whatever the patch says, because what it is spending is
+  # altitude and the fly cannot get that back any other way. What it gains is
+  # twelve steps at a height nothing else in this policy can reach.
+  defp bout(%{bout: :dive, dive: dive}, _on_object) when dive < @dive_steps * 2, do: :dive
+
+  # Two swept legs without ever finding surface is what says the *altitude* is the
+  # problem rather than the direction. One frozen patch is the ordinary case — a
+  # fly crossing a table sees its clip on every step — and that one is looked
+  # around, not dived from, or every crossing would cost a vertical probe.
+  #
+  # The count is the sweep's own legs and not the steps of a look, because a look
+  # is the answer to a stall and resets the stall counter: `still` can never reach
+  # two legs' worth while the fly keeps looking.
+  defp bout(%{still: still, strays: strays}, false) when still >= @stall_steps and strays >= 2,
+    do: :dive
+
   defp bout(%{still: still, looks: looked}, true) when still >= @stall_steps,
     do: if(looked >= @looks_per_bout, do: :depart, else: :look)
 
@@ -579,6 +613,16 @@ defmodule FlyversePlugin.Policy do
         looks: if(looking_on, do: simulation.looks, else: simulation.looks + 1),
         strays: strays(simulation, looking_on)
     }
+  end
+
+  defp advance(simulation, :dive) do
+    dive = simulation.dive + 1
+
+    if dive >= @dive_steps * 2 do
+      %{simulation | dive: 0, bout: :cruise, bout_steps: 0, look_steps: 0, strays: 0}
+    else
+      %{simulation | dive: dive, bout: :dive, bout_steps: 0, look_steps: 0}
+    end
   end
 
   defp advance(simulation, next) do
@@ -854,6 +898,24 @@ defmodule FlyversePlugin.Policy do
   # A departure is a step the network did not decide, so it says so in the
   # telemetry rather than in the wish: a reader of a run can then tell a fly that
   # left from a fly that was steered off.
+  # A dive is one vertical step with no turn and no forward travel: what it is
+  # looking for is a height, and turning while it looks only spends the steps.
+  defp diving(policy, simulation) do
+    going_down = simulation.dive < @dive_steps
+
+    %MotorPolicyResult{
+      actions: [
+        %OrientVertical{
+          agent_id: policy.agent_id,
+          rotation_degrees: 0.0,
+          down_distance: if(going_down, do: @dive_stride, else: -@dive_stride),
+          forward_distance: 0.0
+        }
+      ],
+      telemetry: %{diving: simulation.dive}
+    }
+  end
+
   defp departing(policy, simulation) do
     %MotorPolicyResult{
       actions: [leave(policy, simulation.departures)],
@@ -955,7 +1017,8 @@ defmodule FlyversePlugin.Policy do
              bout_steps: 0,
              departures: 0,
              position: nil,
-             idle: 0
+             idle: 0,
+             dive: 0
          })}
 
       {:error, {code, sentence}} ->
@@ -1060,6 +1123,7 @@ defmodule FlyversePlugin.Policy do
            departures: 0,
            position: nil,
            idle: 0,
+           dive: 0,
            last: %{left: 0, right: 0, spikes: 0, rates: [0.0, 0.0]}
          }}
 
