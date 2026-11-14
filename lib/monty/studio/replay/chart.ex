@@ -282,7 +282,7 @@ defmodule Monty.Studio.Replay.Chart do
     end
   end
 
-  defp path_of(line), do: line.stretches |> Enum.map(&("M " <> &1)) |> Enum.join(" ")
+  defp path_of(line), do: Enum.map_join(line.stretches, " ", &("M " <> &1))
 
   # One band per episode the window can see, from the series that carries
   # episodes: consecutive steps of an episode are one stretch, and a band runs to
