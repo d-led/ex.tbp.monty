@@ -567,6 +567,24 @@ defmodule FlyversePlugin.PolicyTest do
       assert_in_delta distance, 0.004, 1.0e-9, "a crawl, and never a pivot on the spot"
     end
 
+    # A lost fly walks at the structure of the view, not at the floor: the nearest
+    # pixel of a room is the ground under the sensor, a hand's width away and
+    # directly below, so aiming at it aims at the fly's own feet. One run crossed
+    # the room for 4700 steps that way with the patch's image byte-identical at
+    # every step while the wide view changed under it.
+    test "walks at the column where the view is not flat", %{state: state} do
+      {:ok, policy, state} = Policy.new([], state)
+
+      # A floor at a decimetre, and one column of it that is a wall a metre away.
+      floor = [[0.1, 0.1, 0.1, 0.1], [0.1, 0.1, 0.9, 0.1]]
+
+      {result, _policy, _state} = step(policy, state, scene(floor, 0.05), touching(0.05))
+
+      assert [%OrientHorizontal{} = walked] = result.actions
+      assert walked.rotation_degrees > 0.0, "the far column is right of the middle"
+      assert walked.forward_distance > 0.0, "and the step still travels"
+    end
+
     # A sensor nearer than the standoff has no gap left to close, and a step of
     # nought is a fly that never moves again: frames from step 480 to step 1331
     # of one run were identical to the byte. So the step backs off to the

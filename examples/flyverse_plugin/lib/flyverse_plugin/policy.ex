@@ -527,6 +527,23 @@ defmodule FlyversePlugin.Policy do
     end
   end
 
+  # Which way a step towards the object turns. The column of the wide view where
+  # the depth varies most is where the silhouettes are — a floor is uniform and
+  # what stands on it is an edge — so that is the target while there is one.
+  #
+  # Not the centring reflex, which aims at the *nearest* thing in view: over a
+  # floor the nearest pixel is the ground under the sensor, a hand's width away
+  # and directly below, so the reflex aims at a fly's own feet and the step is a
+  # straight line to whatever happens to be in front. A run of this policy walked
+  # 4700 steps that way with the patch's image byte-identical step after step
+  # while the wide view changed: it was crossing the room, reading nothing.
+  defp aim(observations, agent_id) do
+    case structure(observations, agent_id) do
+      :none -> centring(observations, agent_id)
+      fraction -> towards(fraction)
+    end
+  end
+
   # Monty's `_touch_object`, with the one thing a fly must add to it: Monty's
   # `MoveForward` walks straight because Monty's world puts the object in the
   # middle of the view finder for it. A fly that has drifted has to turn towards
@@ -545,13 +562,13 @@ defmodule FlyversePlugin.Policy do
     depth = PositioningProcedures.depth_at_center(observations, policy.agent_id, @view_finder)
     nearest = nearest_in_view(observations, policy.agent_id)
     gap = gap(nearest, depth)
-    centring = centring(observations, policy.agent_id)
+    turn = aim(observations, policy.agent_id)
 
     action =
       if gap < @visible do
         %OrientHorizontal{
           agent_id: policy.agent_id,
-          rotation_degrees: centring,
+          rotation_degrees: turn,
           left_distance: 0.0,
           forward_distance: approach(gap)
         }
@@ -570,7 +587,7 @@ defmodule FlyversePlugin.Policy do
       telemetry: %{
         depth_at_center: depth,
         nearest: nearest,
-        centring: centring,
+        centring: turn,
         searching: gap >= @visible
       }
     }
