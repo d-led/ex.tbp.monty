@@ -279,6 +279,24 @@ jobs:
       # that touches the accelerators failing. See the script.
       - run: scripts/build-nifs.sh
 
+      # The compiled MuJoCo world renders its sensors, and a runner with no
+      # OpenGL skips every case that does — which is how three of its functions
+      # came to read as uncovered in the CRAP gate, and how a renderer that only
+      # works on a laptop would have stayed unnoticed. Mesa's surfaceless EGL is
+      # the same stack MuJoCo's own CI uses for offscreen rendering: no display,
+      # no GPU, software rasterisation.
+      - name: Install an offscreen OpenGL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libglx-mesa0 libgl1-mesa-dri
+
+      # Said out loud rather than inferred from a skip count: a runner whose EGL
+      # does not come up is a runner that silently stops covering the world.
+      - name: Whether this runner renders
+        run: |
+          env MIX_ENV=test mix run --no-start -e 'IO.inspect({ExMujoco.Renderer.available?(), ExMujoco.Renderer.unavailable_reason()}, label: "renderer")'
+
       # Run history is stored, so the suite needs its table.
       - name: Prepare the database
         run: mix ecto.create --quiet && mix ecto.migrate
