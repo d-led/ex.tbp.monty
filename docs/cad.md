@@ -24,7 +24,7 @@ record, and it is the thing to read when the two disagree.
 - **Three readings in this document were retracted**, and the retractions are
   kept where they belong rather than deleted: a claimed defect in
   `ex_tbp_monty_core` (the port is consistent about relative sensor poses), an
-  action sequence read from the wrong end (`List.first` is the *oldest*), and a
+  action sequence read from the wrong end (`List.first` is the _oldest_), and a
   patch that "never moves" (two samples were a return). Read `List.last`, read
   live module state with `Model.detailed/2`, and check a comment before calling
   something a defect.
@@ -208,7 +208,7 @@ scene, not a config, knows where the object is.
        possible     ["plate"]
 
    The provider announced itself once, `cad policy: offering motor_policy
-   monty_cad.feature_walk 0.6.1 (owner_only)`, and then decided 500 times:
+monty_cad.feature_walk 0.6.1 (owner_only)`, and then decided 500 times:
    `RemotePolicy.call/6` is a `GenServer.call` to the provider's pid every step,
    so a run that reaches its limit has had every action decided by the other
    node. The run's own verdict is uninteresting and that is the point — the walk
@@ -263,7 +263,7 @@ scene, not a config, knows where the object is.
    proprioceptive state's account of the patch sensor is `[0.0, 0.0, 0.0]`, while
    the sensor module's pose — what the world rendered from — is `[0.0, 0.0, 0.063]`.
    Two numbers for one sensor, and the first reading of them was wrong: the sensor's
-   entry is *relative to the agent* by design, as
+   entry is _relative to the agent_ by design, as
    `Environment.proprioceptive_state/1`'s own comment says ("the agent's pose is
    absolute, each sensor's is relative to it"), and `Kinematics.sensor_poses/1` is
    the relative map where `Kinematics.sensor_world_poses/1` composes. The state
@@ -286,14 +286,14 @@ scene, not a config, knows where the object is.
    A trace of every step was taken and read wrongly, and the mistake is worth
    recording because it is a trap rather than a typo. `MotorSystem.call/6` builds
    its record with `action_sequence: action_sequence ++ [{actions, state}]` — an
-   **append** — so `List.first/1` is the *oldest* decision and `List.last/1` the
+   **append** — so `List.first/1` is the _oldest_ decision and `List.last/1` the
    newest. Reading `List.first` after each of twelve steps therefore printed the
    first step's action twelve times, and the entry that came of it — "the same
    action every step" — was retracted for that reason, not corrected: no
    measurement yet says what the twelfth action is.
 
    Read correctly — `List.last` for the newest action, `Model.detailed/2` for the
-   live pose — the walk works, and it walks *into the part*:
+   live pose — the walk works, and it walks _into the part_:
 
        step  1  z 0.063  MoveForward{ distance: 0.053 }
        step  2  z 0.010  MoveTangentially{ distance: 0.004 }
@@ -308,7 +308,7 @@ scene, not a config, knows where the object is.
    millimetres, and the patch ends at `z = 0.0`. `start_pose/2` places the sensor
    fifty millimetres above the part's highest point, which is why the episode
    starts at 0.063 and means the highest point is at 0.013: `z = 0.0` is thirteen
-   millimetres *below* it, at the part's own base, while the policy's state says it
+   millimetres _below_ it, at the part's own base, while the policy's state says it
    keeps a standoff of five millimetres.
 
    That is the mechanism the whole section was missing. A patch driven to the base
@@ -317,7 +317,7 @@ scene, not a config, knows where the object is.
    starves the module not because walking is the wrong idea but because its height
    correction overshoots the standoff it is trying to keep. And the earlier "the patch never moves" was
    the same mistake in another costume — the two readings at steps 35 and 40 both
-   showing 0.063 are the patch *coming back*, not staying.
+   showing 0.063 are the patch _coming back_, not staying.
 
    The next step belongs to `monty_cad.feature_walk`: its `call/6` corrects the
    height by the ray's own distance, and the state it keeps says it should be
@@ -401,17 +401,17 @@ scene, not a config, knows where the object is.
    normal has turned since the previous release and how far the patch has
    travelled. Seed 0's nine widenings:
 
-   | step | possible   | normal turned | patch moved |
-   | ---- | ---------- | ------------- | ----------- |
-   | 16   | 8 → 63     | 75.1°         | 7 mm        |
-   | 22   | 55 → 91    | 90.0°         | 5 mm        |
-   | 213  | 4 → 36     | 180.0°        | 25 mm       |
-   | 275  | 36 → 70    | 0.0°          | 30 mm       |
-   | 287  | 70 → 177   | 0.0°          | 12 mm       |
-   | 436  | 15 → 570   | 0.0°          | 12 mm       |
-   | 444  | 117 → 168  | 90.0°         | 3 mm        |
-   | 488  | 24 → 41    | 77.1°         | 1 mm        |
-   | 492  | 41 → 51    | 77.1°         | 4 mm        |
+   | step | possible  | normal turned | patch moved |
+   | ---- | --------- | ------------- | ----------- |
+   | 16   | 8 → 63    | 75.1°         | 7 mm        |
+   | 22   | 55 → 91   | 90.0°         | 5 mm        |
+   | 213  | 4 → 36    | 180.0°        | 25 mm       |
+   | 275  | 36 → 70   | 0.0°          | 30 mm       |
+   | 287  | 70 → 177  | 0.0°          | 12 mm       |
+   | 436  | 15 → 570  | 0.0°          | 12 mm       |
+   | 444  | 117 → 168 | 90.0°         | 3 mm        |
+   | 488  | 24 → 41   | 77.1°         | 1 mm        |
+   | 492  | 41 → 51   | 77.1°         | 4 mm        |
 
    Six of the nine are the patch arriving on a surface it was not on: the normal
    it reports turns by at least 75° from the one the filter last sent, well past
@@ -663,14 +663,14 @@ scene, not a config, knows where the object is.
    observations, 97 of them without a definite pose and 11 with one, again none
    with the patch off the object.
 
-   With no filter, `process_features_in_lm` *is* the sensor's own test, so those
+   With no filter, `process_features_in_lm` _is_ the sensor's own test, so those
    97 are what it refuses: not the object, and not the patch's position. What
-   the observable cannot say is *which* half of `valid_signals?` refused, and it
+   the observable cannot say is _which_ half of `valid_signals?` refused, and it
    is worth being exact about that rather than reading the 97 as the whole story.
    An invalid curvature fit reports both curvatures as nought — the kernel's
    `NO_CURVATURES` is nine zeroes — and so reports `pose_fully_defined` false as
    well, which means the 97 are consistent with a refused fit; but an invalid
-   *normal* over a valid fit is consistent with them too, and no field in the
+   _normal_ over a valid fit is consistent with them too, and no field in the
    message separates the two. The 11 with a definite
    pose narrow it a little: their curvatures came out, so what refused them was
    the normal.
@@ -864,12 +864,12 @@ scene, not a config, knows where the object is.
    looking for one.
    `Monty.Experiment.Environment.OneObjectPerEpisodeInterface` decides the
    sequence already — the list, its deduplication, the semantic ids, which object
-   comes next — and asks the *scene* for the other half by calling
+   comes next — and asks the _scene_ for the other half by calling
    `add_object/2` on it. That call is duck-typed (`scene.__struct__.add_object/2`
    rather than a declared callback), so a scene that cannot do it fails at the
    call rather than at a boundary. `MontyCad.Scene` has no such function, and for
    a B-rep part the operation it names is not the one to add: a part is not an
-   object put into a scene, it *is* the scene, and what changes between episodes
+   object put into a scene, it _is_ the scene, and what changes between episodes
    is which part the scene is.
 
    So the piece to design is a scene that holds several parts and answers the one
