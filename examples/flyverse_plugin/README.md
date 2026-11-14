@@ -270,22 +270,23 @@ four hundred steps an episode spends choosing between two candidate objects happ
 in the flat ones.
 
 That number deserves the same suspicion the sideways departure got, and the
-sweep said so. On the first 23 episodes of a full run the two builds are level —
-**6 143 steps against 6 039**, both 23 of 23 matched, no ceiling in either — while
-single episodes differ by up to 625 either way: mug 68, 249, 95 steps in the
-build without the rim against 130, 485, 583 in the build with it, and the knife
-the other way round at 674 and 944 against 337 and 105. Subtract the one ceiling
-episode the rim recovered — five thousand steps — from that 59-episode gap and
-the rest of the slice favours the baseline by about 1 900.
+sweep is answering it. The difference between the two builds is almost entirely
+_which episodes lose the object and spend the whole five-thousand-step budget_:
 
-So the honest reason the rim stays is not that it saves steps. It is that a lost
-object costs a whole five-thousand-step episode and finishing one costs a few
-hundred, so recovering one loss is worth more than the ~1 900 steps it spends
-elsewhere — and at 23 episodes the two builds are inside the noise that this
-experiment's per-episode spread sets. A build that trades a little mean for one
-fewer loss is the trade this task wants; a build that trades a little mean for
-nothing is the sideways departure again, and only the full sweep can tell them
-apart.
+| slice             | with the rim                  | without                        |
+| ----------------- | ----------------------------- | ------------------------------ |
+| first 23 episodes | 6 143 steps, 23/23, none lost | 6 039, 23/23, none             |
+| first 31 episodes | 8 014 steps, 31/31, none lost | 14 063, 29 of 31, **one lost** |
+
+On the stretch where neither build lost anything the two are level, and single
+episodes differ by up to 625 either way: mug 68, 249 and 95 steps without the rim
+against 130, 485 and 583 with it, and the knife the other way at 674 and 944
+against 337 and 105. So the rim is **not** a saving on an episode that finishes.
+It is one fewer loss — and because a loss costs five thousand steps while a
+finish costs a few hundred, the trade pays even where the mean gets worse.
+Subtract the one ceiling episode inside the 59-episode gap and the rest of that
+slice favours the baseline by about 1 900, which is the same statement read from
+the other side.
 
 What the measurements also settled, and what bounds this policy: **a slow episode
 is the module narrowing, not the fly failing.** `e_cups` ran 440 steps with two
