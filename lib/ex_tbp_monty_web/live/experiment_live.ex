@@ -304,6 +304,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> assign(
       beliefs: %{},
       charts: %{},
+      # The object the newest step's strongest evidence belonged to, and how
+      # strong — the row above the charts. `nil` until a step believes anything.
+      strongest: nil,
       episode_objects: %{},
       centre: nil,
       chart_extent: {0, 0},
@@ -771,6 +774,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               </span>
             </div>
           </div>
+
+          <%!-- What it believes right now, as a row of its own above the
+          pictures: the object a reader is watching for, in the size an answer
+          gets rather than as a caption under a chart. --%>
+          <ExTbpMontyWeb.StudioComponents.strongest_evidence
+            :if={@strongest}
+            id="evidence-strongest"
+            best={@strongest}
+          />
+
           <div
             id="charts"
             phx-hook=".EscapeCollapse"
@@ -1635,7 +1648,51 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         Map.update(histories, to_string(module_id), [point], &[point | &1])
       end)
 
-    assign(socket, beliefs: histories) |> redraw_when_due()
+    socket
+    |> assign(beliefs: histories)
+    |> assign(:strongest, strongest_of(beliefs))
+    |> redraw_when_due()
+  end
+
+  # The object the strongest evidence at that step belonged to, and how strong —
+  # the same question the run page's replay asks of a recorded step, asked here of
+  # the step that has just arrived. A live step carries beliefs as
+  # `Monty.Studio.Belief` structs and a record carries them as stored maps, so
+  # both shapes are read here. `nil` when nothing was believed.
+  defp strongest_of(beliefs) do
+    beliefs
+    |> Enum.flat_map(fn {_module, belief} -> evidences(belief) end)
+    |> Enum.max_by(&elem(&1, 1), fn -> nil end)
+    |> case do
+      nil -> nil
+      {object, value} -> %{object: object, value: value}
+    end
+  end
+
+  # A live step carries a belief as the map `Belief.of/1` builds — the graphs
+  # under an atom key — and a record carries it as the document it was stored in,
+  # whose keys are strings. `Belief.from_stored/1` is what turns the second into
+  # the first, and it is the same function the histories themselves go through.
+  defp evidences(%{graphs: graphs}), do: strength_of(graphs)
+  defp evidences(stored) when is_map(stored), do: stored |> Belief.from_stored() |> evidences()
+
+  defp strength_of(graphs) do
+    for {object, graph} <- graphs,
+        value = Map.get(graph, :max_evidence),
+        is_number(value),
+        do: {object, value}
+  end
+
+  # A page opened on a run that is already going: the record's newest step that
+  # believed anything is where its live steps will pick up.
+  defp strongest_in(record) do
+    record.log
+    |> Enum.reverse()
+    |> Enum.find(&(Map.get(&1, "beliefs") not in [nil, %{}]))
+    |> case do
+      nil -> nil
+      entry -> strongest_of(entry["beliefs"])
+    end
   end
 
   # A step is recorded whatever happens to the picture — that is a cheap append —
@@ -2145,6 +2202,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         socket
         |> assign(:beliefs_seeded, true)
         |> assign_drawing(histories_of(socket, recorded))
+        |> assign(:strongest, strongest_in(record))
     end
   end
 

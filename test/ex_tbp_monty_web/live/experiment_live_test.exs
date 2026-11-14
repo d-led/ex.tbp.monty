@@ -1088,6 +1088,29 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       refute Enum.any?(segments, &(&1 == 1))
     end
 
+    # The row above the charts is the answer the page exists to give, and a
+    # reader watching a run should not have to read it out of a legend.
+    test "says which object the newest step believed in most", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=5&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+      run_id = current_run_id(view)
+
+      send(view.pid, {:studio, run_id, {:episode, %{episode: 1, object: "mug"}}})
+
+      send(
+        view.pid,
+        {:studio, run_id,
+         {:step, step_event(episode: 1, step: 0, beliefs: %{"learning_module_0" => belief(0)})}}
+      )
+
+      await_chart(view)
+
+      assert view |> element("#evidence-strongest") |> render() =~ "mug"
+    end
+
     test "steps of two episodes are drawn as two runs, never as one", %{conn: conn} do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=5&episodes=1")

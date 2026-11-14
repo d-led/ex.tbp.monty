@@ -334,6 +334,36 @@ defmodule ExTbpMontyWeb.StudioComponents do
   end
 
   @doc """
+  The object the strongest evidence belonged to, as a row of its own.
+
+  Above the pictures rather than inside one of them: which object is winning is
+  the thing an eye goes to first, and it used to be a line of eleven-point type
+  at the end of a toolbar — the smallest words on the page carrying the answer
+  the page exists to give. The step's own controls keep a compact copy beside the
+  step number, because a reader stepping through a run is watching this change.
+  """
+  attr :best, :map, required: true, doc: "`%{object: name, value: number}`"
+  attr :id, :string, required: true
+  attr :words, :string, default: "strongest evidence"
+
+  def strongest_evidence(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-field bg-base-200/60 px-3 py-1.5"
+    >
+      <span class="text-[11px] font-medium uppercase tracking-wide text-base-content/55">
+        {@words}
+      </span>
+      <span class="font-mono text-xl leading-none font-semibold text-base-content">
+        {@best.object}
+      </span>
+      <span class="text-sm text-base-content/60">{format_value(@best.value)}</span>
+    </div>
+    """
+  end
+
+  @doc """
   A finished run, step by step: the slider, the frames at that step, and a chart.
 
   Replaying is reading, not running: the frames come from the observations the
@@ -382,7 +412,14 @@ defmodule ExTbpMontyWeb.StudioComponents do
         <span :if={@moment && @moment.entry} class="text-xs text-base-content/60">
           {duration(@moment.entry["duration_us"])}
         </span>
-        <span class="ms-auto text-[11px] text-base-content/50">
+        <%!-- Beside the step it is about: stepping through a run is watching one
+        object climb, and "which one" should not need a second row. The row above
+        the plot says the same thing where a reader who is not stepping looks. --%>
+        <span :if={@best} id="replay-best-step" class="ms-auto text-sm text-base-content/70">
+          strongest evidence
+          <span class="font-mono font-semibold text-base-content">{@best.object}</span>
+        </span>
+        <span class={["text-[11px] text-base-content/50", if(@best == nil, do: "ms-auto")]}>
           {@recorded} recorded step(s)
         </span>
       </header>
@@ -564,11 +601,11 @@ defmodule ExTbpMontyWeb.StudioComponents do
               class="font-mono tabular-nums text-base-content"
             />
           </span>
-          <span :if={@best} id="replay-best" class="ms-auto text-[11px] text-base-content/60">
-            strongest evidence
-            <span class="font-mono text-base-content">{@best.object} {format_value(@best.value)}</span>
-          </span>
         </div>
+
+        <%!-- What the run settled on, as a row of its own, above the plot: the
+        first thing an eye goes to, in the size an answer gets. --%>
+        <.strongest_evidence :if={@best} id="replay-best" best={@best} />
 
         <%!-- Hovering a line says which object is under the pointer, which step
         it is, and what it was worth. The samples come from the server, so the

@@ -1898,6 +1898,11 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       # And one number says what the episode came to.
       assert view |> element("#replay-best") |> render() =~ "bowl"
+
+      # Beside the step it is about as well: a reader stepping through a run is
+      # watching one object climb, and asking which one should not need another
+      # row.
+      assert view |> element("#replay-best-step") |> render() =~ "bowl"
     end
 
     test "a hover over those lines names the object it is on", %{conn: conn} do
