@@ -232,18 +232,28 @@ scene, not a config, knows where the object is.
    and the motor system's recorded action sequence for the first step is a single
    `MoveForward{agent_id: "agent_id_0", distance: 0.053}`. So the policy is asked,
    answers, and issues an action — and the patch is in the same place at the
-   thirty-fifth step as at the fortieth. The part of the question about the walk's
-   frame is answered: the sensor is where `start_pose/2` put it, over the part, and
-   stays there. What is not answered is why the action does not move it. Two
-   candidates, and the next measurement is one line either way:
+   thirty-fifth step as at the fortieth.
 
-   1. the standoff correction pushes the patch towards the surface on every step
-      and the walk's own `MoveForward` oscillates with it, taking no net step —
-      `walked` counting steps taken rather than distance moved would hide that;
-   2. the action reaches the motor system but not the sensor the policy reads, so
-      the policy corrects the same error every step.
+   Read deeper, the state the policy is handed does not agree with the sensor it
+   steers. At the thirty-fifth step the proprioceptive state's own account of the
+   patch sensor is `[0.0, 0.0, 0.0]`, while the sensor module's pose — what the
+   world rendered from — is `[0.0, 0.0, 0.063]`, the standoff `start_pose/2` chose.
+   The two come from different places and only one of them is right:
 
-   Until that is answered the walk is not a comparison for the curvature policy at
+   * `Setup.world(:cad, …)` builds the world's sensors as
+     `%{position: [0.0, 0.0, 0.0], rotation: agent.rotation}` for every sensor,
+     where the stand-in world passes the config's `setup.scene.sensors`;
+   * `Environment.proprioceptive_state/1` reports `Kinematics.sensor_poses/1`,
+     which is `world.sensors` unchanged — no composition with the agent pose.
+
+   That is enough to explain the observation: a policy that steers by its own
+   position is told it is at the origin and corrects the same error every step,
+   while the config's curvature policy, which reads the percept, never looks. Which
+   of the two is the defect — the zeros in the world's sensor map, or a render path
+   that reaches a different placement than the state does — is one read away, and it
+   is in this checkout rather than in `ex_monty_cad`.
+
+   Until it is answered the walk is not a comparison for the curvature policy at
    all, and the numbers in the table above measure a stationary patch rather than a
    walk.
 
