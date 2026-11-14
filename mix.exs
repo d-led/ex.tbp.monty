@@ -135,6 +135,14 @@ defmodule ExTbpMonty.MixProject do
       # SQLite in a file otherwise. Both drivers are compiled into the release,
       # so which one is used is decided when the instance starts.
       {:ecto_sqlite3, "~> 0.26"},
+      # The dashboard's database page, per database. It lists a repository only
+      # when that database's extras module is loaded — otherwise it says no Ecto
+      # repository is running, on a node that has queried one all morning
+      # (`Phoenix.LiveDashboard.EctoStatsPage:extra_available?/2`). Both are pure
+      # Elixir and both take `table_rex` 4, so one build can carry the pair and a
+      # deployment's own database decides which of them answers.
+      {:ecto_psql_extras, "~> 0.8.8"},
+      {:ecto_sqlite3_extras, "~> 1.2"},
       # Clustering is an addition, not a requirement: `ExTbpMonty.Cluster` starts
       # these only when the environment asks for a cluster (`MONTY_CLUSTER`, or a
       # seed list), and a node that was not asked never touches either.

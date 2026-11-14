@@ -55,6 +55,17 @@ defmodule ExTbpMontyWeb.DashboardTest do
 
       assert body =~ ~s(<body phx-r="1"><a id="dashboard-way-back")
     end
+
+    # The page lists a repository only when that database's extras module is
+    # loaded (`Phoenix.LiveDashboard.EctoStatsPage`), which is what makes the pair
+    # of extras packages a dependency and not a nicety: without them the page says
+    # no repository is running — on a node that has been querying one all day.
+    test "the database page names this application's repository", %{conn: conn} do
+      page = conn |> get("/dev/dashboard/ecto_stats") |> html_response(200)
+
+      assert page =~ "ExTbpMonty.Repo.Postgres"
+      refute page =~ "No Ecto repository was found running"
+    end
   end
 
   defp sidebar_entries(view) do
