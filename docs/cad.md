@@ -647,7 +647,9 @@ scene, not a config, knows where the object is.
    reports no orientation at all — a CAD part is worth a pose only while its
    curved features have a radius under ten centimetres, which is a second
    reason a library of scaled parts is not a library of one shape at several
-   sizes. That is a statement about the parts, and it is the one
+   sizes. That is a statement about the parts, and the probe's split of a plate
+   episode says the same from the other side — 82 of the 105 steps that were not
+   new observations carried a percept with no definite pose — and it is the one
    `docs/cad.md`'s item 4 has to be built on. The plate's six failing seeds are
    the other half: same part, same start, half the explorations find it inside
    the config's budget, so either the exploration is too slow for these parts or
