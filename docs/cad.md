@@ -225,7 +225,9 @@ scene, not a config, knows where the object is.
    their difference is nought and the rule says, correctly, that the face has no
    orientation. A depth camera never reports nought: its noise makes almost every
    node anisotropic, and that is how a real memory comes to be 85 % pose-defined.
-   Our memory is the honest one, and the honest one has less to match on.
+   Our memory is the honest one, and the honest one has less to match on. (The
+   earlier paragraph about `pose_fully_defined` is about its _shape_ in the file,
+   which is right; this is about how often it is true.)
 
    So a part made mostly of flat faces can only be oriented by the geometry that
    is not flat — the boss and the through hole here — and whether a run finds
@@ -252,13 +254,15 @@ scene, not a config, knows where the object is.
    `EvidenceGraphLM.check_terminal_condition/1` asks
    `get_unique_pose_if_available/2`, which answers a pose only when
    `unique_pose?/4` holds or a symmetry has been counted. The blend keeps one
-   object and twenty-seven distinct rotations at step 500; the plate keeps
-   forty-two and still concludes, because its hypotheses agree on the pose in
-   the way that rule asks about. A rounded block's faces say the same thing to
-   this sensor — flat, one colour, log curvature near zero — so the rotations
-   that carry one face onto another never separate. The blend is not
-   unrecognised; it is recognised as a shape whose orientation this percept
-   cannot name.
+   object and twenty-seven distinct rotations at step 500, and the count is not
+   itself the signal — a plate seed fails with four, and one settles with one
+   (below). What matters is whether the surviving hypotheses _agree_, and on a
+   rounded block they do not: its faces say the same thing to this sensor —
+   flat, one colour, log curvature near zero — so the rotations that carry one
+   face onto another never separate. The blend is not unrecognised; it is
+   recognised as a shape whose orientation this percept cannot name, which is the
+   same wall the plate's failing seeds hit, reached by a part that has nothing
+   but flat faces to be oriented by.
 
    `scripts/probe_cad_poses.exs` is that answer, on demand:
 
