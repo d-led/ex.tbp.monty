@@ -654,29 +654,41 @@ defmodule FlyversePlugin.Policy do
 
   # `Percept.image/3` has already refused an empty picture, so there is a picture
   # here and the width is the narrowest row.
+  #
+  # Within reach first, the whole view second. The reach keeps the wall out — its
+  # column varies from the floor to eight hundred metres and beats any object's
+  # silhouette — but a fly that can find nothing in reach must still go somewhere,
+  # and discarding the far structure outright lost the knife: a sweep that had
+  # found all ten objects timed out on it, because nothing within reach of a two
+  # centimetre blade varies.
   defp most_varied(rows) do
     width = rows |> Enum.map(&length/1) |> Enum.min()
 
-    if width < 2, do: :none, else: widest(wide_columns(rows, width), width)
+    if width < 2 do
+      :none
+    else
+      case widest(wide_columns(rows, width, @aim_reach), width) do
+        :none -> widest(wide_columns(rows, width, :any), width)
+        fraction -> fraction
+      end
+    end
   end
 
-  # A column's variation is counted over the depths the eye can reach. A wall
-  # across the room varies from the floor beneath it to eight hundred metres,
-  # which beats any object's silhouette outright — so an unfiltered answer aims the
-  # fly at walls, and one run took a thousand steps of walking at them to come
-  # across a knife lying on the table. Within reach the wall's column holds the
-  # floor and nothing else, and the object's edge is what varies.
-  defp wide_columns(rows, width) do
+  # A column's variation, over the depths the eye can reach or over all of them.
+  defp wide_columns(rows, width, reach) do
     for column <- 0..(width - 1) do
       rows
       |> Enum.map(&Enum.at(&1, column))
-      |> Enum.filter(&(is_number(&1) and &1 > 0.0 and &1 <= @aim_reach))
+      |> Enum.filter(&reached?(&1, reach))
       |> case do
         [] -> 0.0
         depths -> Enum.max(depths) - Enum.min(depths)
       end
     end
   end
+
+  defp reached?(depth, :any), do: is_number(depth) and depth > 0.0
+  defp reached?(depth, reach), do: is_number(depth) and depth > 0.0 and depth <= reach
 
   defp widest(columns, width) do
     most = Enum.max(columns, fn -> 0.0 end)
