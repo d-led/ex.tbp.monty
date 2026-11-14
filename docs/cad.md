@@ -433,12 +433,15 @@ scene, not a config, knows where the object is.
    sensor moved `0.01` m or the surface turned `π/4`, and the config's policy
    steps about four millimetres across a face that turns nought — neither. What
    is left is `n_steps: 20`, which sends the patch anyway after twenty quiet
-   steps, so processed steps arrive roughly twenty apart. The counter needs
-   `required_symmetry_evidence` of them **consecutively** — 5 here, which is
-   Monty's default, though its own YCB configs ask for 20 — and no cadence that
-   waits for twenty can supply five in a row. The two settings cannot both be
-   satisfied on a surface that does not change, which is why the plate shows the
-   same 7 of 77 as the blend's 2 of 77.
+   steps, so a processed step is one where something moved: 37 of 497 in seed 0,
+   one in thirteen, and not in a rhythm — the nine widenings alone came 4, 6, 8,
+   12, 44, 62, 149 and 191 steps apart. The counter needs
+   `required_symmetry_evidence` of them **consecutively**, each with more than
+   90 % of the step before still possible — 5 here, which is Monty's default,
+   though its own YCB configs ask for 20 — and seed 0 climbed to 1 three times
+   and was reset three times. A cadence that supplies single steps does not
+   supply five in a row, which is why the plate shows the same 7 of 77 as the
+   blend's 2 of 77.
 
    That is not yet a defect — the rule is doing what its comment says, and the
    filter is doing what its config says — but it is the mechanism, and it makes
@@ -452,8 +455,37 @@ scene, not a config, knows where the object is.
    module (`displacement_1lm` for `evidence_1lm_nn5_dod0025`) and the termination
    (30/30/60 steps for 1000/500/5000). Pointed at the blend it ended at step 16
    with nothing detected and no hypotheses, so nothing about its counter is
-   comparable. The comparison needs a config of this study's own; that is item 3
-   of the plan, and it is now the item with a reason.
+   comparable.
+
+   **Removing the filter is enough for two seeds in three.** The comparison needs
+   one key and no new config: `CAD_NO_DELTA` deletes `delta_thresholds` from the
+   patch and leaves every other key as Monty wrote it, which is what a sensor
+   with no filter is given (`PassthroughPerceptFilter`). Same part, same memory,
+   same seed, same policy, same 5 required — and nothing else changed:
+
+   | seed | with the filter, 500 steps       | without it                                    |
+   | ---- | -------------------------------- | --------------------------------------------- |
+   | 0    | 51 possible, 4 rotations, 1 of 5 | `:match` at 153, counter 5 of 5, 267 possible |
+   | 4    | 58 rotations                     | `:match` at 183, counter 5 of 5, 81 possible  |
+   | 2    | 8 rotations                      | no conclusion at 200, counter 0 of 5, 563     |
+
+   So the filter is a cause and not the only one. With it, none of the three
+   concludes inside the budget; without it, two do, by the hatch that the chain
+   above says is starved. The conclusion is a symmetry one in both cases — 267
+   and 81 hypotheses still possible, nine and six distinct rotations — which is
+   what that hatch is for: the part is recognised and the rotations it could be
+   in are named. Seed 2 is the exception, with the fewest new observations of the
+   three and a counter that never moved once.
+
+   Removing the filter does not make every step an observation either: 42 of 150
+   steps on seed 0, 18 of 197 on seed 2, 30 of 180 on seed 4. What is left is the
+   sensor's own gate — `process_features_in_lm: on_object? and valid_signals?` in
+   `observation_processor.ex` — and the two gates are a conjunction, not
+   alternatives: `FeatureChangeFilter.call/3` passes a percept the processor has
+   already refused straight through, so a filter can demote a step but never
+   promote one. On a CAD part that second gate refuses between seven and nine
+   steps in ten, and why is a question for the next probe rather than a claim
+   here.
 
    `plate-huge` is in the table because it keeps a partner more often than the
    plate — 85 % against 74 % — which is the scale effect seen from the other
@@ -491,6 +523,10 @@ scene, not a config, knows where the object is.
    where the possible set grew by ten or more with the turn and the travel that
    released the percept behind them — the two measurements the tables above
    are made of.
+
+   `CAD_SEED` runs a seed other than the config's 42, `CAD_EXPERIMENT` names a
+   different config to probe, and `CAD_NO_DELTA` removes the patch's
+   `delta_thresholds` and nothing else.
 
    **A library of two named the wrong one — until the memory was sampled for a
    library.** `plate-big` and `plate-huge` are the plate at 1.5× and at 5×,
@@ -556,8 +592,10 @@ scene, not a config, knows where the object is.
    A symmetric part still never concludes, but no longer because "there is no
    answer": its orientations are one picture to the matcher, so the pose rule
    cannot pick one, and the symmetry rule that exists for exactly this case is
-   starved by the sensor's own filter — two steps in seventy-seven counted as a
-   new observation. The next thing to change there is the world, not the part.
+   starved by two gates in series — the sensor's delta filter, and behind it the
+   observation processor's own validity test: two steps in seventy-seven counted
+   as a new observation, and 42 of 150 at best once the filter is removed. The
+   next thing to change there is the world, not the part.
    The lesson that belongs in
    `ex.monty.cad` is narrower and is written down here because it was learned
    the hard way: `Training`'s `:spacing` is an absolute number of millimetres,

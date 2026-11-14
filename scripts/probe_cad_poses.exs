@@ -54,10 +54,13 @@ Application.put_env(:ex_tbp_monty, :monty_libraries_dir, library)
 
 # The config decides more than the policy: `camera_surf_delta` filters a patch
 # that has not changed enough into a location-only message, and a location-only
-# step is excluded from the symmetry count. Naming a config whose sensor does no
-# delta filtering (`test/policy/base_surf`, whose `sensor_module` is
-# `camera_surf`) is how that is compared rather than argued.
-experiment = System.get_env("CAD_EXPERIMENT") || "base_config_10distinctobj_surf_agent"
+# step is excluded from the symmetry count. `CAD_NO_DELTA` removes that filter and
+# nothing else — a sensor without `delta_thresholds` is given `PassthroughPerceptFilter`,
+# so deleting the key is the one-key comparison. Naming a config whose sensor does
+# no delta filtering is not, because `camera_surf` differs in more than that: it
+# also asks for four more curvature features and saves raw observations.
+experiment =
+  System.get_env("CAD_EXPERIMENT") || "base_config_10distinctobj_surf_agent"
 
 {:ok, opened} =
   Monty.Studio.open(experiment, world_simulator: :cad)
@@ -69,6 +72,18 @@ seed = System.get_env("CAD_SEED")
 
 setup =
   if seed in [nil, ""], do: opened.setup, else: %{opened.setup | seed: String.to_integer(seed)}
+
+# `sensors` are descriptors, not modules: the module is built from `config` when
+# the run starts, and the ported sensor is given `delta_thresholds` from the same
+# place, so both have to lose it.
+without_delta = fn sensor ->
+  %{sensor | config: Map.delete(sensor.config, "delta_thresholds"), delta_thresholds: nil}
+end
+
+setup =
+  if System.get_env("CAD_NO_DELTA") in [nil, ""],
+    do: setup,
+    else: %{setup | sensors: Enum.map(setup.sensors, without_delta)}
 
 {:ok, run} = Run.start(setup, steps: steps, mode: :eval, episode: 0, epoch: 0)
 
@@ -151,6 +166,12 @@ end
 # different event from one that adds them while still on it, and a surface normal
 # that has turned past the config's 45° releases the great majority of them.
 sensor_of = fn
+  # A passthrough filter keeps no memory at all (`PassthroughPerceptFilter.reset/1`
+  # is nil), so a run with `CAD_NO_DELTA` has nothing to say about the last
+  # percept — which is the same fact as every percept being sent.
+  nil ->
+    %{}
+
   %{last_percept: nil} ->
     %{}
 
@@ -169,28 +190,28 @@ sensor_of = fn
 end
 
 read = fn run ->
-  try do
-    belief = run |> Run.beliefs() |> Map.values() |> List.first()
+  belief = run |> Run.beliefs() |> Map.values() |> List.first()
 
-    # `Run.statistics/2` hands the sensor modules over as the coordinator started
-    # them — before step 1 — so the filter's memory read from it is empty however
-    # long the run has been going. `detailed/2` asks each module for its own state
-    # (`Monty.Runtime.Step.live_sensor_module/2`), which is where the percept the
-    # patch last sent is.
-    %{learning_modules: learning, sensor_modules: sensors} =
-      Monty.Runtime.Model.detailed(run.model_id, &%{poses: poses_of.(&1)})
+  # `Run.statistics/2` hands the sensor modules over as the coordinator started
+  # them — before step 1 — so the filter's memory read from it is empty however
+  # long the run has been going. `detailed/2` asks each module for its own state
+  # (`Monty.Runtime.Step.live_sensor_module/2`), which is where the percept the
+  # patch last sent is.
+  #
+  # Nothing here is rescued: the closure used to swallow its own exceptions and
+  # the probe then reported a tidy episode in which nothing had been observed,
+  # which is the one failure a probe must not have.
+  %{learning_modules: learning, sensor_modules: sensors} =
+    Monty.Runtime.Model.detailed(run.model_id, &%{poses: poses_of.(&1)})
 
-    poses = Map.new(learning, &{&1.id, &1.state.poses})
+  poses = Map.new(learning, &{&1.id, &1.state.poses})
 
-    sensor =
-      sensors
-      |> Enum.find(&Map.has_key?(&1.state, :filter_memory))
-      |> then(&(&1 && sensor_of.(&1.state.filter_memory)))
+  sensor =
+    sensors
+    |> Enum.find(&Map.has_key?(&1.state, :filter_memory))
+    |> then(&(&1 && sensor_of.(&1.state.filter_memory)))
 
-    %{belief: belief, poses: poses, sensor: sensor || %{}}
-  rescue
-    _modules_stopped_with_the_episode -> nil
-  end
+  %{belief: belief, poses: poses, sensor: sensor || %{}}
 end
 
 # One row per step, for the symmetry question: how many hypotheses the module
