@@ -312,7 +312,13 @@ defmodule FlyversePlugin.PolicyTest do
   # twenty steps is not being searched, and one run walked a straight line across
   # a tabletop for 5000 steps reading one flat value at every step because nothing
   # off the object ever counted the steps.
-  test "a blank plane under the patch is looked around after twenty steps of it", %{state: state} do
+  #
+  # The step is a leg of a sweep and not the search circle: a circle is for
+  # orbiting something, and a lost fly that aims at the most structured column of a
+  # room aims at a wall — the episode that took four percepts in five thousand
+  # steps did exactly that. A quarter turn and a stride, alternating sides, fans
+  # out over the ground.
+  test "a blank plane under the patch is swept, a quarter turn at a time", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
     blank = %{
@@ -327,9 +333,10 @@ defmodule FlyversePlugin.PolicyTest do
         step(policy, state, blank, touching(0.05))
       end)
 
-    assert [%OrientHorizontal{} = circled] = result.actions
-    assert circled.left_distance > 0.0, "round the search circle, not another hop"
-    assert circled.rotation_degrees > 0.0
+    assert [%OrientHorizontal{} = swept] = result.actions
+    assert_in_delta abs(swept.rotation_degrees), 90.0, 1.0e-9, "a quarter turn"
+    assert swept.left_distance == 0.0, "no orbit: there is nothing here to go round"
+    assert swept.forward_distance > 0.0, "and a stride"
   end
 
   # A look is a step of the bout it interrupts, not the start of a new one: sixty

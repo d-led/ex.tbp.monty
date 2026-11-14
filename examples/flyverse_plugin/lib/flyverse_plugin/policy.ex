@@ -357,7 +357,7 @@ defmodule FlyversePlugin.Policy do
     case next do
       :explore -> steer(policy, observations, percept, state)
       :depart -> {:ok, departing(policy, watched), policy, state}
-      :look -> {:ok, looking(policy, observations), policy, state}
+      :look -> {:ok, looking(policy, simulation, observations), policy, state}
       :cruise -> {:ok, touch(policy, observations), policy, state}
     end
   end
@@ -450,7 +450,8 @@ defmodule FlyversePlugin.Policy do
       | bout: :look,
         bout_steps: bout_steps(simulation, :look),
         look_steps: if(looking_on, do: simulation.look_steps + 1, else: 1),
-        looks: if(looking_on, do: simulation.looks, else: simulation.looks + 1)
+        looks: if(looking_on, do: simulation.looks, else: simulation.looks + 1),
+        strays: strays(simulation, looking_on)
     }
   end
 
@@ -464,6 +465,12 @@ defmodule FlyversePlugin.Policy do
         departures: departures(simulation, next)
     }
   end
+
+  # A look taken with nothing under the patch is a leg of the search, and the sweep
+  # alternates its quarter turn on how many of them there have been.
+  defp strays(_simulation, true), do: 0
+  defp strays(%{bout: :cruise} = simulation, false), do: simulation.strays + 1
+  defp strays(simulation, false), do: simulation.strays
 
   # Walking and looking are one bout, so each continues the other's clock. It is
   # the whole of the fix for the loop described at `@looks_per_bout`: while a look
@@ -618,21 +625,46 @@ defmodule FlyversePlugin.Policy do
     }
   end
 
-  # Lost, and looking. The step keeps the search circle's size and travel, but
-  # turns towards the *most structured* column of the view finder rather than a
-  # fixed thirty degrees — because the reason to look is a surface with nothing
-  # on it, and the one target a policy with no semantics still has is where the
-  # depth stops being flat. On a table that is the silhouette of whatever is
-  # standing on it.
-  defp looking(policy, observations) do
+  # Lost, and looking. Which look it is depends on what it was doing, and the
+  # difference is the whole of a search: with something under the patch the look
+  # is aimed, at the most structured column of the view finder, because on a table
+  # that is the silhouette of whatever stands on it. With nothing under the patch
+  # there is nothing to aim at that is worth reaching — the most structured column
+  # of a room is a wall, and a fly that walks at a wall stays at it: one episode
+  # took four percepts in five thousand steps, with the hypotheses growing from
+  # 1776 to 7104. So a lost fly sweeps instead: a quarter turn and a stride, and
+  # the quarter alternates sides so successive legs fan out over the ground rather
+  # than spiralling back across it.
+  defp looking(policy, simulation, observations) do
     %MotorPolicyResult{
-      actions: [
-        %{search(policy) | rotation_degrees: towards(structure(observations, policy.agent_id))}
-      ],
+      actions: [look(policy, simulation, observations)],
       motor_only_step: false,
       telemetry: %{looking: true}
     }
   end
+
+  defp look(policy, %{bout: :cruise} = simulation, _observations),
+    do: sweep(policy, simulation.strays)
+
+  defp look(policy, _simulation, observations) do
+    %{search(policy) | rotation_degrees: towards(structure(observations, policy.agent_id))}
+  end
+
+  # A leg of the sweep: a quarter turn and one stride, and no sideways travel —
+  # the circle's tangent is for orbiting something, and there is nothing here to
+  # orbit.
+  defp sweep(policy, strays) do
+    %OrientHorizontal{
+      agent_id: policy.agent_id,
+      rotation_degrees: quarter(strays),
+      left_distance: 0.0,
+      forward_distance: @touch_stride
+    }
+  end
+
+  defp quarter(strays) when rem(strays, 2) == 0, do: @depart_degrees / 2
+
+  defp quarter(_strays), do: -@depart_degrees / 2
 
   # Where in the view the depth varies most, as a fraction of the picture's width
   # from the middle: negative is left. `:none` when the view is uniform — nothing
@@ -799,6 +831,7 @@ defmodule FlyversePlugin.Policy do
              still: 0,
              look_steps: 0,
              looks: 0,
+             strays: 0,
              bout: :cruise,
              bout_steps: 0,
              departures: 0
@@ -891,6 +924,7 @@ defmodule FlyversePlugin.Policy do
            still: 0,
            look_steps: 0,
            looks: 0,
+           strays: 0,
            bout: :cruise,
            bout_steps: 0,
            departures: 0,
