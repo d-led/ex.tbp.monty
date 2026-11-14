@@ -320,7 +320,29 @@ an episode that cannot finish either finish or leave, never to make a finished
 one finish faster. For scale, the build before the last one spent 11,468 steps on
 its first 41 episodes, mean 279 an episode, with no ceiling episode at all.
 
-## Two things no steering can change
+## The limits, and where each comes from
+
+The gait is bounded on every side, and none of the bounds is this plugin's. A
+steering change that has not moved one of these is a change that cannot move the
+result — which is the test every item in the table above passed or failed.
+
+| the bound                     | value                           | what sets it                                |
+| ----------------------------- | ------------------------------- | ------------------------------------------- |
+| the step the module can match | 10 mm                           | `max_match_distance: 0.01`                  |
+| the standoff                  | 25 mm                           | `gsg.desired_object_distance`               |
+| the budget                    | 500 informative of 5,000 in all | `any1_objectrecognition_t1000_e500_tot5000` |
+| the depth a patch can read    | 50 mm                           | `clip_value: 0.05`                          |
+| the altitude                  | fixed, but for twelve steps     | only `OrientVertical` moves it              |
+| the tolerance on size         | a factor of e                   | `principal_curvatures_log: [1, 1]`          |
+
+The **stride** is the row worth reading twice. Ten millimetres is not a
+comfortable pace, it is the longest step the module can still match: a longer one
+leaves no stored node within reach of the next view, every hypothesis scores −1,
+and the step discriminates nothing. Four millimetres is the shortest that clears
+the patch's own delta threshold, and the jump from the bottom of that range to
+the top was the largest single win of the whole exercise — at four millimetres the
+module got under half a reading per step and the mug took **811 steps**; at ten it
+took **65**.
 
 - **The patch reaches five centimetres, and the agent rides ten above the table.**
   `clip_value: 0.05` is a _reach_, not a near limit: every depth past it becomes
