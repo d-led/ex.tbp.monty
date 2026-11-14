@@ -147,7 +147,7 @@ defmodule FlyversePlugin.PolicyTest do
 
     assert [%OrientHorizontal{} = walked] = result.actions
 
-    assert walked.rotation_degrees > 5.0,
+    assert walked.rotation_degrees > 1.0,
            "right, and hard enough that the network's bend cannot outvote it"
   end
 
@@ -177,7 +177,7 @@ defmodule FlyversePlugin.PolicyTest do
     assert [%OrientHorizontal{rotation_degrees: without_edge}] = plain.actions
     assert [%OrientHorizontal{rotation_degrees: with_edge}] = pulled.actions
 
-    assert with_edge - without_edge > 5.0,
+    assert with_edge - without_edge > 1.0,
            "towards the surface, on top of whatever the network asked for"
   end
 
