@@ -58,15 +58,15 @@ defmodule FlyversePlugin.PolicyTest do
   test "a fly with nothing in view leans one way, then the other", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    {first, policy, state} = step(policy, state, [[2.0, 2.0, 2.0, 2.0]])
+    {first, policy, state} = step(policy, state, scene(2.0, 0.02), touching(0.025))
 
     state =
       Enum.reduce(1..40, state, fn _step, state ->
-        {_result, _policy, state} = step(policy, state, [[2.0, 2.0, 2.0, 2.0]])
+        {_result, _policy, state} = step(policy, state, scene(2.0, 0.02), touching(0.025))
         state
       end)
 
-    {turned, _policy, _state} = step(policy, state, [[2.0, 2.0, 2.0, 2.0]])
+    {turned, _policy, _state} = step(policy, state, scene(2.0, 0.02), touching(0.025))
 
     assert [%OrientHorizontal{rotation_degrees: first_way}] = first.actions
     assert [%OrientHorizontal{rotation_degrees: other_way}] = turned.actions
@@ -163,14 +163,11 @@ defmodule FlyversePlugin.PolicyTest do
 
     # The patch is at the standoff throughout, so the standoff rule alone would
     # crawl at every one of these steps.
-    {_first, policy, state} =
-      step(policy, state, observations([[0.2, 0.2, 100.0, 100.0]]), touching(0.025))
+    {_first, policy, state} = step(policy, state, scene(0.2, 0.02), touching(0.025))
 
-    {closer, policy, state} =
-      step(policy, state, observations([[0.15, 0.15, 100.0, 100.0]]), touching(0.025))
+    {closer, policy, state} = step(policy, state, scene(0.15, 0.02), touching(0.025))
 
-    {closest, _policy, _state} =
-      step(policy, state, observations([[0.07, 0.07, 100.0, 100.0]]), touching(0.025))
+    {closest, _policy, _state} = step(policy, state, scene(0.07, 0.02), touching(0.025))
 
     assert [%OrientHorizontal{forward_distance: 0.004}] = closer.actions,
            "a third nearer is an approach, not a loom"
@@ -218,32 +215,47 @@ defmodule FlyversePlugin.PolicyTest do
 
   # A patch that has shown the same thing for twenty steps is not being shown the
   # object, whatever the percept says — the case a bout timer cannot catch, and
-  # the one that cost seventeen hundred steps: the patch hanging half a decimetre
-  # above the table, every image one flat grey, every nearness 20.0, the evidence
-  # frozen at 124.395. Twenty steps is `n_steps` in the sensor module's own
-  # thresholds, so this is the framework's answer and not a taste.
+  # the one that cost seventeen hundred steps: the patch hanging above the table,
+  # every image one flat grey, every nearness the same, the evidence frozen at
+  # 124.395. Twenty steps is `n_steps` in the sensor module's own thresholds, so
+  # this is the framework's answer and not a taste.
   test "a patch that stops changing sends the fly looking again", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
     table = %{
       "agent_id_0" => %{
         "view_finder" => %{"depth" => [[0.0, 0.0]]},
-        "patch" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}
+        "patch" => %{"depth" => [[0.03, 0.03], [0.03, 0.03]]}
       }
     }
 
-    {_first, policy, state} = step(policy, state, table, touching(0.05))
+    {_first, policy, state} = step(policy, state, table, touching(0.03))
 
     state =
       Enum.reduce(1..20, state, fn _step, state ->
-        {_result, _policy, state} = step(policy, state, table, touching(0.05))
+        {_result, _policy, state} = step(policy, state, table, touching(0.03))
         state
       end)
 
-    {result, _policy, _state} = step(policy, state, table, touching(0.05))
+    {result, _policy, _state} = step(policy, state, table, touching(0.03))
 
     assert [%OrientHorizontal{} = searching] = result.actions
     assert searching.rotation_degrees == 30.0, "round the search circle, looking for the object"
+  end
+
+  # And a patch at its own ceiling has seen nothing at all: the clip is the
+  # sensor's answer above five centimetres, and the agent rides a decimetre above
+  # the table and cannot descend, so over the table every reading is the ceiling.
+  # Nothing says "flat"; it says "nothing". What the fly does then is Monty's own
+  # opening — walk at what the wide view shows.
+  test "a patch reading its own clip walks at what the view finder shows", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {result, _policy, _state} = step(policy, state, scene(0.2, 0.05), touching(0.05))
+
+    assert [%OrientHorizontal{} = hopped] = result.actions
+    assert hopped.forward_distance > 0.0, "towards the object the wide view can see"
+    assert hopped.left_distance == 0.0, "a hop, not a slide along nothing"
   end
 
   # And the look aims at where the view is *not* flat: the one target a policy
@@ -255,19 +267,19 @@ defmodule FlyversePlugin.PolicyTest do
     table = %{
       "agent_id_0" => %{
         "view_finder" => %{"depth" => [[0.5, 0.5, 0.2, 0.5]]},
-        "patch" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}
+        "patch" => %{"depth" => [[0.03, 0.03], [0.03, 0.03]]}
       }
     }
 
-    {_first, policy, state} = step(policy, state, table, touching(0.05))
+    {_first, policy, state} = step(policy, state, table, touching(0.03))
 
     state =
       Enum.reduce(1..20, state, fn _step, state ->
-        {_result, _policy, state} = step(policy, state, table, touching(0.05))
+        {_result, _policy, state} = step(policy, state, table, touching(0.03))
         state
       end)
 
-    {result, _policy, _state} = step(policy, state, table, touching(0.05))
+    {result, _policy, _state} = step(policy, state, table, touching(0.03))
 
     assert [%OrientHorizontal{rotation_degrees: degrees}] = result.actions
     assert degrees > 0.0, "the near thing is on the right of the picture: turn right"
@@ -315,7 +327,7 @@ defmodule FlyversePlugin.PolicyTest do
   test "a patch with room to walk is stepped at the bout's stride", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    {result, _policy, _state} = step(policy, state, scene(0.5, 0.05), touching(0.05))
+    {result, _policy, _state} = step(policy, state, scene(0.5, 0.045), touching(0.045))
 
     assert [%OrientHorizontal{forward_distance: distance}] = result.actions
     assert_in_delta distance, 0.01, 1.0e-9
@@ -596,7 +608,7 @@ defmodule FlyversePlugin.PolicyTest do
     test "hands back to the network once the patch is on the object", %{state: state} do
       {:ok, policy, state} = Policy.new([], state)
 
-      {result, _policy, _state} = step(policy, state, scene(0.2, 0.05), on_object(0.5))
+      {result, _policy, _state} = step(policy, state, scene(0.2, 0.02), on_object(0.5))
 
       assert [%OrientHorizontal{} = walked] = result.actions
       assert walked.rotation_degrees == 0.0, "the search would be thirty degrees"
@@ -634,17 +646,19 @@ defmodule FlyversePlugin.PolicyTest do
 
   # A patch on a plain surface it cannot tell from the object, with a view finder
   # that holds nothing: the same reading, step after step. This is what the stall
-  # counter is for.
+  # counter is for. Three centimetres is inside the clip, so the patch is on
+  # something — it is the reading that never changes, not the reading that says
+  # nothing.
   defp table_steps(policy, state, steps) do
     table = %{
       "agent_id_0" => %{
         "view_finder" => %{"depth" => [[0.0, 0.0]]},
-        "patch" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}
+        "patch" => %{"depth" => [[0.03, 0.03], [0.03, 0.03]]}
       }
     }
 
     Enum.reduce(1..steps, {nil, policy, state}, fn _step, {_result, policy, state} ->
-      step(policy, state, table, touching(0.05))
+      step(policy, state, table, touching(0.03))
     end)
   end
 

@@ -261,6 +261,21 @@ defmodule FlyversePlugin.Policy do
   @view_finder "view_finder"
   @patch "patch"
 
+  # The patch's depth is clipped at five centimetres by this config's transform
+  # (`depth_clip_sensors: [0]`, `clip_value: 0.05`, and sensor nought is the
+  # patch), so a patch reading `0.05` is a patch with **nothing within five
+  # centimetres of it**: the value is the ceiling, not a measurement. In inverse
+  # metres that ceiling is twenty.
+  #
+  # It matters because the agent rides a decimetre above the table and cannot
+  # descend — `OrientHorizontal` turns and steps, and nothing in it lowers the
+  # sensor. So over the table every reading is the clip, and a policy that walked
+  # a bout on it would be walking ground it cannot see: the reading says nothing,
+  # it does not say "flat". A fly whose patch is at the ceiling has not reached
+  # anything, and what it does then is Monty's own opening — walk at what the wide
+  # view shows.
+  @clip_nearness 20.0
+
   @doc "The name a cluster registers it under."
   @spec name() :: String.t()
   def name, do: "flyverse_plugin.lif_steering"
@@ -352,10 +367,14 @@ defmodule FlyversePlugin.Policy do
   # this way: the patch had left the knife, the view finder still showed it as a
   # bar, and the evidence sat at 124.395 for seventeen hundred steps while every
   # frame the patch took was one blank colour.
+  #
+  # "Nothing" includes the clip. A patch at its own ceiling has seen no surface at
+  # all, and a fly that is a hand's width above the table sees exactly that at
+  # every step — the case a run spent five thousand steps on.
   defp sees_something?(observations, policy) do
     case patch_nearness(observations, policy) do
       nil -> false
-      nearness -> nearness != {0.0, 0.0}
+      {left, right} -> max(left, right) > @clip_nearness
     end
   end
 
