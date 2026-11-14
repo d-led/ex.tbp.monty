@@ -634,6 +634,14 @@ defmodule FlyversePlugin.Policy do
     }
   end
 
+  # The reach of the eye when it chooses what to walk at, in metres. Not the walk's
+  # own metre: an object the fly is still approaching is a metre and a half away
+  # at the start of an episode, and a reach of one excluded it — a run that had
+  # found all ten objects lost the knife outright, because nothing within a metre
+  # of it varied. Three metres holds every object in this scene and still excludes
+  # the wall across the room.
+  @aim_reach 3.0
+
   # Where in the view the depth varies most *within reach*, as a fraction of the
   # picture's width from the middle: negative is left. `:none` when nothing in
   # reach varies — nothing to turn towards — or when there is no view to read.
@@ -652,17 +660,17 @@ defmodule FlyversePlugin.Policy do
     if width < 2, do: :none, else: widest(wide_columns(rows, width), width)
   end
 
-  # A column's variation is counted over its *near* depths only. A wall across the
-  # room varies from the floor beneath it to eight hundred metres, which beats any
-  # object's silhouette outright — so an unfiltered answer aims the fly at walls,
-  # and one run took a thousand steps of walking at them to come across a knife
-  # lying on the table. Within reach the wall's column holds the floor and nothing
-  # else, and the object's edge is what varies.
+  # A column's variation is counted over the depths the eye can reach. A wall
+  # across the room varies from the floor beneath it to eight hundred metres,
+  # which beats any object's silhouette outright — so an unfiltered answer aims the
+  # fly at walls, and one run took a thousand steps of walking at them to come
+  # across a knife lying on the table. Within reach the wall's column holds the
+  # floor and nothing else, and the object's edge is what varies.
   defp wide_columns(rows, width) do
     for column <- 0..(width - 1) do
       rows
       |> Enum.map(&Enum.at(&1, column))
-      |> Enum.filter(&(is_number(&1) and &1 > 0.0 and &1 <= @visible))
+      |> Enum.filter(&(is_number(&1) and &1 > 0.0 and &1 <= @aim_reach))
       |> case do
         [] -> 0.0
         depths -> Enum.max(depths) - Enum.min(depths)
