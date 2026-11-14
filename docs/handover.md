@@ -3505,6 +3505,64 @@ is a test's own timeout, the other is how a cluster node is started.
    plus a decision about what a late page shows for pictures it never had inline.
    It is a feature with a two-node check like §43.2, not a line, and it was not
    started while another hand held the tree.
+
+   **Ground checked 2026-11-14, before writing any of it**, and two things the
+   paragraph above takes for granted are not true yet:
+
+   - **The node is not in the plan.** `RunLog.part_inputs/1` writes `index`, `of`,
+     `phase`, `stream` and `phases` — no node — so `Parts` cannot tell from the
+     record whose part it is; `studio_run_parts.node` is the only place that is
+     written, and nothing in `Parts` reads that table today. So the catch-up starts
+     with a row read per refresh (or a node kept in `Parts.held`, which is already
+     the map a page carries between polls), not with an `:rpc`.
+   - **`entries_from/2`, not `read_from/2`.** A peer's moments are 11 kB of pictures
+     a step (§48: 145 MB for 13 000 steps) that a late page cannot show anyway, and
+     `RunStream.entries_from/2` already answers exactly the entries. That is also
+     the "decision about pictures": a late page shows the peer's **transcript**, and
+     a peer's part keeps giving its pictures the way it does now — with its file,
+     when it ends.
+
+   **Landed (`b413727`).** `Parts.refresh/3` takes `:read`, whose default asks
+   `Cluster.Nodes` for the live node whose folder name the claim wrote, and reads
+   that node's `RunStream.entries_from/2` from the step this page stopped at; what
+   comes back is merged as points, with the card's steps following. Four cases in
+   `test/monty/studio/parts_test.exs` state it: the steps taken before the page
+   opened, the second poll asking only for what is missing, a silent peer leaving
+   the card on the record, and a part in this node's own hands never being asked of
+   anybody. The one piece no test covers was checked on the real cluster:
+   `Cluster.Nodes.snapshot/0` on node1 answers all four folder names as live node
+   atoms. **Checked between two real VMs (2026-11-14), short of a real division**:
+   a record written on node1 with a two-part plan, its part 0 claimed by
+   `node2_127.0.0.1`, its two steps published into node2's own `RunStream`; then
+   node1's `Parts.refresh/2` — the **default** `:read`, no seam — answered
+   `taken=2 steps=2 points=2 frames=0` with the evidence 2.5 and 6.25. So the
+   `:rpc`, the lookup by folder name and the merge all work across two VMs. The
+   claim was written by hand because a per-node SQLite cannot hold a peer's claim;
+   a **real** divided run still needs the one-table stack that item 1 is about. The
+   probe's run row was settled and deleted, and node2's stream and artefacts were
+   cleared, so the dev database and both folders are as they were found.
+
+   **The transcript followed (`4d61c48`).** A divided run writes one stream per part
+   and none of its own, so the page's single `entries_from(record.id, …)` answered
+   nothing while such a run stepped: a page opened two steps in showed a run that had
+   not started. `Monty.Studio.CatchUp` now reads every stream the run is writing —
+   the run's own, each part's here, and each peer's from the node holding it — with
+   one cursor per stream, so a poll reads a tail and a stream that has not moved is
+   not read at all; `Monty.Studio.PeerStream` is the one answer to "which parts are
+   a peer's, and what does it hold", and `Parts` asks it instead of carrying its own
+   copy. Two details: `CatchUp.held/1` is "how far behind" for a divided run (this
+   node's streams plus the claim rows' steps, so a silent peer costs a query), and
+   the **first** poll reads whatever the count, because a page opened three steps in
+   is not eight behind. Mutation-checked: with the part streams removed, the new page
+   case answers `[]` against `["log-1", "log-2", "log-3"]`.
+
+   **Where it can fire at all**: the claim is the only place a part's node is
+   written, and a node writes claims in _its own_ runs table. With a database per
+   node a peer cannot even claim a part, so this catch-up has anything to read only
+   where the parts table is shared — the one-Postgres stack §43.2 used and item 1
+   below is about. On this checkout's two SQLite nodes it is inert, by the same
+   fact that makes a division across them impossible today.
+
 3. **`route/4` in `ex_monty_plugin`** — still wants the user's nod; it publishes.
 4. **The examples' coverage thresholds** (`example_plugin` 84.78 %,
    `flyverse_plugin` 74.37 % against 90 %) — the user's call.
@@ -3528,6 +3586,22 @@ idle: that a real start has no `Invalid challenge reply` in it and how long a no
 now takes to appear. Those four processes have the cookie from the VM's first
 moment (measured on a renamed copy, `logs-*.log` printing `local-dev-secret`), but
 the noise going away is a consequence, not a measurement.
+
+**Verified on a real start** (2026-11-14, the user stopped the cluster and started
+it again): **zero `Invalid challenge reply`** in all four processes — 30, 26, 10 and
+9 lines captured, boot lines included — and both VMs, started at `14:50:57`, were
+serving at `14:51:03.27` (`Running ExTbpMontyWeb.Endpoint with Bandit 1.14.1 at
+127.0.0.1:4001` and `…:4002`): **6.3 s from VM start to listening**, each having
+briefly waited on the other's Mix build lock. So the readiness probe's
+`initial_delay_seconds: 120` is patient by a factor of twenty on a warm tree; it
+stays because a cold one compiles both nodes in turns.
+
+One trap found in that start: `logs/node1.log` and its three neighbours were **0
+bytes** at 14:50–14:53 while `process-compose process logs` held that same output —
+the `tail -f logs/node1.log` the compose file used to recommend is a blank pane that
+reads as a quiet node. Its header no longer promises the file; the buffer is the
+record. Cause not established: a detached second supervisor does not survive this
+shell, so it could not be reproduced in isolation.
 
 ## 48. 2026-11-14: a page catching up reads the tail, not the run
 
