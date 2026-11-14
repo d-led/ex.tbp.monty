@@ -258,12 +258,23 @@ scene, not a config, knows where the object is.
    `step_world/3` and so the world's own `step/2` — the actions are applied, one
    step behind, as Monty applies them.
 
-   What the sample could not tell apart is a patch that never moves from one that
-   moves every step and comes back: two readings five steps apart are consistent
-   with both, and one of the two is an oscillation — `MoveForward` translates along
-   the sensor's own −z, so a correction that overshoots is undone by the next
-   correction. The measurement that settles it is a reading at every step rather
-   than at every fifth, which is a change to the probe rather than to any of this.
+   Read at every step instead of every fifth, the answer is neither of the two
+   candidates: **the action is the same action every step.** Twelve steps of
+   `monty_cad.feature_walk` print
+
+       step  1  [MoveForward{distance: 0.053}]
+       step  2  [MoveForward{distance: 0.053}]
+       …
+       step 12  [MoveForward{distance: 0.053}]
+
+   A policy that saw the world change would correct by less on its second step, so
+   the identical correction says the decision is taken from the same state every
+   time. Two things could make that so, and they are told apart by one more
+   measurement rather than by argument: either the world does not apply the action —
+   `Run.step/2` hands it to `Interface.step/2` and so to the world's own step, but
+   whether the world that comes back is the one the next decision is taken from is
+   the question — or the policy is rebuilt per step, so each step is the first
+   decision of a fresh walk, which would also be identical every time.
 
    Until it is answered the walk is not a comparison for the curvature policy at
    all, and the numbers in the table above measure a stationary patch rather than a
