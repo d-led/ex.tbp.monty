@@ -683,6 +683,35 @@ defmodule Monty.Studio.RunHistoryTest do
     end
   end
 
+  # A run divided into `count` parts, each of which has written a line of its own.
+  # The plan is the shape `RunLog.part_inputs/1` writes into the record — `stream`
+  # is the id a part's folder is named by — and the folders are what a delete has
+  # to reach.
+  defp divided_into(count) do
+    parts =
+      for index <- 0..(count - 1) do
+        %{
+          "index" => index,
+          "of" => count,
+          "phase" => "eval",
+          "stream" => Ecto.UUID.generate(),
+          "phases" => %{"eval" => [index]}
+        }
+      end
+
+    {:ok, run} =
+      RunHistory.start(%{@attributes | inputs: Map.put(@attributes.inputs, "parts", parts)})
+
+    folders =
+      for %{"stream" => stream, "index" => index} <- parts do
+        :ok = Artifacts.start(stream)
+        :ok = Artifacts.append(stream, "part #{index + 1} of #{count} started")
+        Artifacts.dir(stream)
+      end
+
+    {run, folders}
+  end
+
   defp step(number) do
     %{
       step: number,
@@ -854,6 +883,36 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.get(dist.id) == nil
       assert RunHistory.get(surf.id) != nil
       assert RunHistory.get(tutorial.id) != nil
+    end
+  end
+
+  # A part does not write into the run's folder: `part_record/3` gives it its
+  # stream's id, so the log it appends to, the statistics it keeps and the steps
+  # it stored are under `Artifacts.dir(stream)`. Deleting the run's own directory
+  # therefore left one folder behind per part — 3.3 MB each for a stand-in world's
+  # two hundred steps, measured on a real two-node division.
+  describe "deleting a divided run" do
+    setup do
+      Tmp.env_dir("studio-delete", :studio_artifacts_dir)
+      :ok
+    end
+
+    test "takes the folders its parts wrote with it" do
+      {run, folders} = divided_into(2)
+      assert Enum.all?(folders, &File.exists?/1)
+
+      assert {:ok, _deleted} = RunHistory.delete(run)
+
+      refute Enum.any?(folders, &File.exists?/1)
+    end
+
+    test "and theirs, for every run in a batch" do
+      {first, first_folders} = divided_into(2)
+      {second, second_folders} = divided_into(3)
+
+      assert RunHistory.delete_ids([first.id, second.id]) == 2
+
+      refute Enum.any?(first_folders ++ second_folders, &File.exists?/1)
     end
   end
 

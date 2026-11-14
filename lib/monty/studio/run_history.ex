@@ -1277,6 +1277,12 @@ defmodule Monty.Studio.RunHistory do
     ids
     |> Enum.chunk_every(@delete_chunk)
     |> Enum.reduce(0, fn chunk, deleted ->
+      # What names a part's folder is the plan in the row's `inputs`, so the plan
+      # is read before the row goes. Only that column: the whole record is what
+      # this statement exists to avoid reading, because its pictures are
+      # megabytes and the plan is a few hundred bytes.
+      plans = Repo.all(from ran in Run, where: ran.id in ^chunk, select: ran.inputs)
+
       {count, _rows} = Repo.delete_all(from(run in Run, where: run.id in ^chunk))
 
       # Their divisions too, for the reason `delete/1` gives: no foreign key, so
@@ -1285,6 +1291,7 @@ defmodule Monty.Studio.RunHistory do
       _ = Repo.delete_all(from(part in Part, where: part.run_id in ^chunk))
 
       Enum.each(chunk, &Monty.Studio.Artifacts.forget/1)
+      Enum.each(plans, &forget_parts/1)
 
       deleted = deleted + count
       if on_progress, do: on_progress.(%{deleted: deleted, total: total})
@@ -1302,8 +1309,24 @@ defmodule Monty.Studio.RunHistory do
     _ = Repo.delete_all(from(part in Part, where: part.run_id == ^run.id))
     deleted = Repo.delete(run)
     Monty.Studio.Artifacts.forget(run.id)
+    forget_parts(run.inputs)
     deleted
   end
+
+  # The folders a divided run's parts wrote.
+  #
+  # A part is given its stream's id (`Jobs.Run.part_record/3`), so its log, its
+  # statistics and the steps it kept are under `Artifacts.dir(stream)` — one
+  # folder per part beside the run's own. Deleting only the run's directory left
+  # them there for ever: 3.3 MB per part for a stand-in world's two hundred
+  # steps, and a real division's pictures are larger.
+  defp forget_parts(%{"parts" => parts}) when is_list(parts) do
+    for %{"stream" => stream} <- parts, match?({:ok, _}, Ecto.UUID.cast(stream)) do
+      Monty.Studio.Artifacts.forget(stream)
+    end
+  end
+
+  defp forget_parts(_run_of_the_whole_experiment), do: []
 
   @doc "How many runs are recorded."
   @spec count() :: non_neg_integer()
