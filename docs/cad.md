@@ -281,15 +281,16 @@ scene, not a config, knows where the object is.
 
    So the corrections are applied, the tangential steps are taken at four
    millimetres, and the patch ends at `z = 0.0`. `start_pose/2` places the sensor
-   fifty millimetres above the part's highest point — which is why the episode
-   starts at 0.063 — so `z = 0.0` is *below* that highest point, inside the part,
-   and the policy's own state says it wants a `standoff` of five millimetres.
+   fifty millimetres above the part's highest point, which is why the episode
+   starts at 0.063 and means the highest point is at 0.013: `z = 0.0` is thirteen
+   millimetres *below* it, at the part's own base, while the policy's state says it
+   keeps a standoff of five millimetres.
 
-   That is the mechanism the whole section was missing. A patch inside the part
-   sees degenerate geometry, which is exactly the 496 of 496 pose-free percepts and
-   1 new observation in 497 recorded above: the walk starves the module not because
-   walking is the wrong idea but because its height correction overshoots to a
-   point where nothing can be sensed. And the earlier "the patch never moves" was
+   That is the mechanism the whole section was missing. A patch driven to the base
+   of the part is a patch whose surface cannot be characterised — the 496 of 496
+   pose-free percepts and the 1 new observation in 497 recorded above — so the walk
+   starves the module not because walking is the wrong idea but because its height
+   correction overshoots the standoff it is trying to keep. And the earlier "the patch never moves" was
    the same mistake in another costume — the two readings at steps 35 and 40 both
    showing 0.063 are the patch *coming back*, not staying.
 
