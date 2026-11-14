@@ -1,10 +1,14 @@
 # Status
 
 > **Superseded — the hand-over is in MemPalace now** (wing `ex.tbp.monty`, room
-> `handover`; `docs/handover.md` is the index and the canonical drawer is named
-> there). This page is the 2026-11-03 hand-over and is kept for its measurements,
-> not for its state. Its "Green right now" is the commit of that day; for what is
-> green and what is open today, the hand-over's newest section is the answer.
+> `handover`; the canonical drawer is
+> `drawer_ex.tbp.monty_handover_8fbec177134c01cb3b6901fc`, every section of the old
+> file is a drawer of its own, and
+> `drawer_ex.tbp.monty_handover_9f6b7e3aca7c1d6f8fcf6097` says how the move was
+> made and what must not be deleted). This page is the 2026-11-03 hand-over and
+> is kept for its measurements, not for its state. Its "Green right now" is the
+> commit of that day; for what is green and what is open today, the canonical
+> drawer is the answer.
 > Entries in the table below that have been settled since are struck through in
 > place.
 

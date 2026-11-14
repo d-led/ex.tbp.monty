@@ -47,7 +47,9 @@ Monty.Studio.RunStream.steps_from/2 is undefined (module … is not available)`,
   states intent; it is not evidence of parity, and it must not be counted as
   such. A case that cannot be translated is listed, never dropped silently.
   The method, the traps and the count are the hand-over's §12, in MemPalace
-  (wing `ex.tbp.monty`, room `handover`; `docs/handover.md` is the index).
+  (wing `ex.tbp.monty`, room `handover`: the canonical drawer is
+  `drawer_ex.tbp.monty_handover_8fbec177134c01cb3b6901fc`, and every section is a
+  drawer of its own — search `hand-over §12`).
 
 Run `scripts/quality.sh` (what CI runs) before considering work done;
 `mix dialyzer` is the separate types job. Format with `scripts/reformat.sh` —
