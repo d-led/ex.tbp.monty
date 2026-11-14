@@ -148,6 +148,23 @@ scene. The studio only offers the `cad` world on a node that carries
 `ex_monty_cad` and has `MONTY_CAD_PART` naming a part (`Monty.Studio.Setup.worlds/0`),
 so a page cannot ask for the pair half of which the node would refuse.
 
+Its host is a sibling checkout, not a process of this repository's
+`process-compose.yaml`, so the row appears when that node joins the cluster:
+
+```sh
+# in ex.monty.cad.server, on the same cookie as the studio stack
+PORT=4100 MONTY_CAD_PART=/path/to/part.step MONTY_CAPABILITIES=world:cad \
+  elixir --name cad_server@127.0.0.1 --cookie local-dev-secret -S mix phx.server
+```
+
+and the studio nodes name it in `MONTY_SEEDS` — or, on a stack already running,
+one `Node.connect(:"cad_server@127.0.0.1")` is enough, because `:pg` replicates the
+group on connect. Checked on a live pair: node1 listed
+`monty_cad.10simobj_surf_agent` beside the two hosts' variations five seconds
+later, and `PluginExperiment.open/2` answered with the definition on
+`cad_server@127.0.0.1` v0.2.0 and a live `monty_cad.feature_walk` v0.6.1 policy —
+base `base_10simobj_surf_agent`, seed 42.
+
 **What is not in the table, and why.** `ex_mujoco` is a physics engine, so it can
 be a world and not a decision — the `mujoco` world today is Python MuJoCo, and an
 Elixir one would be a fourth _world_ (`Monty.Studio.Setup.world/4` is where a world
