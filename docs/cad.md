@@ -483,9 +483,28 @@ scene, not a config, knows where the object is.
    `observation_processor.ex` — and the two gates are a conjunction, not
    alternatives: `FeatureChangeFilter.call/3` passes a percept the processor has
    already refused straight through, so a filter can demote a step but never
-   promote one. On a CAD part that second gate refuses between seven and nine
-   steps in ten, and why is a question for the next probe rather than a claim
-   here.
+   promote one.
+
+   **What that gate refuses is the part.** The buffer keeps what the module was
+   handed, so the steps that were not new observations can be split, and on the
+   ordinary config over seed 0's first 120 steps they split like this: of 105
+   such steps, **none** had the patch off the object, 82 carried a percept with
+   no definite pose (`pose_fully_defined` false, the two principal curvatures
+   equal to within `pc1_is_pc2_threshold`'s 10 m⁻¹) and 23 carried one the filter
+   withheld. With the filter removed it is starker: 108 steps were not new
+   observations, 97 of them without a definite pose and 11 with one, again none
+   with the patch off the object.
+
+   With no filter, `process_features_in_lm` *is* the sensor's own test, so those
+   97 are what it refuses: not the object and not the patch's position, but a
+   percept whose curvature fit has no definite pose to give. It is the same fact
+   the memory was measured to hold from the other end — 233 of the plate's 1557
+   nodes are pose-defined, 15 %, and 107 of `plate-huge`'s 1602, 7 % — so the
+   world and the memory agree that this part is mostly surface with no pose to
+   name. That is a fact about the part and the sensor's features, not about the
+   filter's thresholds, and it is where the next change belongs: a part whose
+   surfaces are mostly curved is the cheapest way to give the pose rule something
+   to name.
 
    `plate-huge` is in the table because it keeps a partner more often than the
    plate — 85 % against 74 % — which is the scale effect seen from the other

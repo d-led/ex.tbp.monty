@@ -11,6 +11,7 @@
 # the answer is not "unrecognised" but "recognised, and this is how many ways
 # round it could be". This prints which of the two happened.
 
+alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
 alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
 alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
 alias Monty.Geometry.SurfacePoseVectors
@@ -189,6 +190,29 @@ sensor_of = fn
     }
 end
 
+# What the module was last handed, from its own buffer. A step that is not a new
+# observation is one the delta filter withheld or one the sensor could not make a
+# valid normal and curvature for (`process_features_in_lm: on_object? and
+# valid_signals?`), and `on_object` and `pose_fully_defined` on the percept are
+# what tells the two apart.
+handed_of = fn module ->
+  module.buffer
+  |> FeatureAtLocationBuffer.get_all_input_percepts()
+  |> List.last()
+  |> case do
+    nil ->
+      %{}
+
+    percept ->
+      morphology = percept.morphological_features || %{}
+
+      %{
+        on_object: morphology["on_object"],
+        pose_fully_defined: morphology["pose_fully_defined"]
+      }
+  end
+end
+
 read = fn run ->
   belief = run |> Run.beliefs() |> Map.values() |> List.first()
 
@@ -202,16 +226,24 @@ read = fn run ->
   # the probe then reported a tidy episode in which nothing had been observed,
   # which is the one failure a probe must not have.
   %{learning_modules: learning, sensor_modules: sensors} =
-    Monty.Runtime.Model.detailed(run.model_id, &%{poses: poses_of.(&1)})
+    Monty.Runtime.Model.detailed(run.model_id, fn
+      %EvidenceGraphLM{} = module -> %{poses: poses_of.(module), handed: handed_of.(module)}
+      _other -> %{}
+    end)
 
   poses = Map.new(learning, &{&1.id, &1.state.poses})
+
+  handed =
+    learning
+    |> List.first()
+    |> then(&(&1 && &1.state.handed))
 
   sensor =
     sensors
     |> Enum.find(&Map.has_key?(&1.state, :filter_memory))
     |> then(&(&1 && sensor_of.(&1.state.filter_memory)))
 
-  %{belief: belief, poses: poses, sensor: sensor || %{}}
+  %{belief: belief, poses: poses, sensor: sensor || %{}, handed: handed || %{}}
 end
 
 # One row per step, for the symmetry question: how many hypotheses the module
@@ -248,6 +280,7 @@ observe = fn
           required: required,
           processed: pose.processed,
           sensor: state.sensor,
+          handed: state.handed,
           overlap: overlap
         }
 
@@ -326,6 +359,27 @@ if observed != [] do
   overlap      median #{Float.round(median, 3)}, #{passing} of #{length(overlaps)} steps above the 0.9 the counter needs
   processed    #{Enum.count(observed, & &1.processed)} of #{length(observed)} steps counted as new observation
   """)
+
+  # Why a step was not a new observation, which is a question of two gates: the
+  # delta filter withholding a percept the sensor had made, or the sensor's own
+  # `on_object? and valid_signals?` refusing it before any filter is asked.
+  withheld = Enum.reject(observed, & &1.processed)
+  off_part = Enum.count(withheld, &(&1.handed[:on_object] == 0.0))
+  undefined_pose = Enum.count(withheld, &(&1.handed[:pose_fully_defined] == false))
+
+  both =
+    Enum.count(
+      withheld,
+      &(&1.handed[:on_object] == 0.0 and &1.handed[:pose_fully_defined] == false)
+    )
+
+  if withheld != [] do
+    IO.puts(
+      "  withheld     #{length(withheld)} were not new observations: #{off_part} off the part," <>
+        " #{undefined_pose} without a definite pose, #{both} both," <>
+        " #{length(withheld) - off_part - undefined_pose + both} neither"
+    )
+  end
 
   sampled = observed |> Enum.take_every(max(div(length(observed), 12), 1)) |> Enum.take(12)
 
