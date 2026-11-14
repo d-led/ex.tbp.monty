@@ -6,6 +6,8 @@ defmodule FlyversePlugin.PolicyTest do
   alias FlyversePlugin.{Demonstrator, Pack, Policy}
 
   alias Monty.Frameworks.Actions.OrientHorizontal
+  alias Monty.Frameworks.Models.MotorSystemState.AgentState
+  alias Monty.Geometry.Rotation
 
   setup do
     directory =
@@ -321,22 +323,94 @@ defmodule FlyversePlugin.PolicyTest do
   test "a blank plane under the patch is swept, a quarter turn at a time", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    blank = %{
-      "agent_id_0" => %{
-        "view_finder" => %{"depth" => [[0.2, 0.2]]},
-        "patch" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}
-      }
-    }
-
     {result, _policy, _state} =
       Enum.reduce(1..22, {nil, policy, state}, fn _step, {_result, policy, state} ->
-        step(policy, state, blank, touching(0.05))
+        step(policy, state, blank(), touching(0.05))
       end)
 
     assert [%OrientHorizontal{} = swept] = result.actions
     assert_in_delta abs(swept.rotation_degrees), 90.0, 1.0e-9, "a quarter turn"
     assert swept.left_distance == 0.0, "no orbit: there is nothing here to go round"
     assert swept.forward_distance > 0.0, "and a stride"
+  end
+
+  # A fly that has walked off the object knows one place in the room: the one it
+  # was standing on while the patch still had something under it. Walking back to
+  # it is cheaper than any search of the room — two episodes of one sweep spent
+  # their whole five-thousand-step budget wandering, having left the object at step
+  # 27 — and the place is the motor system's own report, so nothing here is
+  # remembered about the object at all.
+  test "a fly that has left the object walks back to where it last had it", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    # It stood on the object here, at the origin of the room, facing along -z.
+    {_on, policy, state} =
+      step(policy, state, observations(mug()), touching(0.025), pose([0.0, 1.5, 0.1], 0.0))
+
+    # Then it walked off: six centimetres to the right of that place, turned thirty
+    # degrees, and nothing under the patch.
+    {:ok, body} = Rotation.from_axis_angle([0.0, 1.0, 0.0], radians(30.0))
+
+    {home, _policy, _state} =
+      step(policy, state, blank(), away(), at([0.06, 1.5, 0.1], body))
+
+    assert [%OrientHorizontal{} = walked] = home.actions
+    assert walked.forward_distance == 0.05, "a stride towards the place"
+
+    assert [x, y, z] = facing(body, walked.rotation_degrees)
+
+    assert_in_delta x,
+                    -1.0,
+                    1.0e-9,
+                    "and it faces the place it stood on: minus x, from the right of it"
+
+    assert_in_delta y, 0.0, 1.0e-9
+    assert_in_delta z, 0.0, 1.0e-9
+  end
+
+  # And the last step home stops on the place rather than crossing it: a fixed
+  # stride shorter than the way back would orbit the place, which is the shape of
+  # never arriving.
+  test "the last step home is only as long as the way back", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {_on, policy, state} =
+      step(policy, state, observations(mug()), touching(0.025), pose([0.0, 1.5, 0.1], 0.0))
+
+    {home, _policy, _state} =
+      step(policy, state, blank(), away(), pose([0.03, 1.5, 0.1], 0.0))
+
+    assert [%OrientHorizontal{forward_distance: distance}] = home.actions
+    assert_in_delta distance, 0.03, 1.0e-9
+  end
+
+  # And a place the fly has walked back to and found nothing at is a place worth
+  # forgetting: walking back and forth onto the same empty square is a search that
+  # has stopped searching, so the sweep takes over from there.
+  test "a place walked back to and found empty is forgotten", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {_on, policy, state} =
+      step(policy, state, observations(mug()), touching(0.025), pose([0.0, 1.5, 0.1], 0.0))
+
+    {_back, policy, state} =
+      step(policy, state, blank(), away(), pose([0.0, 1.5, 0.1], 0.0))
+
+    assert %{landmark: nil} = Policy.state_dict(policy, state)
+
+    # Twenty-one more blank steps: the twentieth identical reading is the stall,
+    # and the step after it is the look that answers one.
+    {result, _policy, _state} =
+      Enum.reduce(1..21, {nil, policy, state}, fn _step, {_result, policy, state} ->
+        step(policy, state, blank(), away(), pose([0.0, 1.5, 0.1], 0.0))
+      end)
+
+    assert [%OrientHorizontal{} = swept] = result.actions
+
+    assert_in_delta abs(swept.rotation_degrees),
+                    90.0,
+                    1.0e-9,
+                    "a leg of the sweep, not a walk back"
   end
 
   # A look is a step of the bout it interrupts, not the start of a new one: sixty
@@ -690,8 +764,14 @@ defmodule FlyversePlugin.PolicyTest do
   end
 
   defp step(policy, state, observations, percept) do
+    step(policy, state, observations, percept, nil)
+  end
+
+  # The same step with the motor system's own report of where the body is, which
+  # is what a lost fly walks home by.
+  defp step(policy, state, observations, percept, motor_state) do
     {:ok, result, policy, state} =
-      Policy.call(policy, {nil, observations, nil, percept, nil}, state)
+      Policy.call(policy, {nil, observations, motor_state, percept, nil}, state)
 
     {result, policy, state}
   end
@@ -748,6 +828,39 @@ defmodule FlyversePlugin.PolicyTest do
       sender_type: :sm,
       morphological_features: %{"object_coverage" => 0.0}
     }
+
+  # A patch with nothing within its five-centimetre clip — the tabletop the agent
+  # rides a decimetre above — and a wide view that holds nothing worth walking at.
+  defp blank do
+    %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[0.2, 0.2]]},
+        "patch" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}
+      }
+    }
+  end
+
+  # Where the body is, and which way it faces: the proprioceptive state Monty hands
+  # every policy, with nothing in its sensors because this policy reads the
+  # observations instead.
+  defp pose(position, yaw_degrees) when is_number(yaw_degrees) do
+    {:ok, rotation} = Rotation.from_axis_angle([0.0, 1.0, 0.0], radians(yaw_degrees))
+    at(position, rotation)
+  end
+
+  defp at(position, rotation) do
+    %{"agent_id_0" => %AgentState{sensors: %{}, position: position, rotation: rotation}}
+  end
+
+  # What the world does with a step's yaw: a turn about the body's own up axis by
+  # the *negative* of `rotation_degrees`, then whatever the body faces after it
+  # (`world.py`'s `actuate_orient_horizontal`). "Forward" is the body's own -z.
+  defp facing(rotation, rotation_degrees) do
+    {:ok, turn} = Rotation.from_axis_angle([0.0, 1.0, 0.0], radians(-rotation_degrees))
+    Rotation.apply(Rotation.multiply(rotation, turn), [0.0, 0.0, -1.0])
+  end
+
+  defp radians(degrees), do: degrees * :math.pi() / 180.0
 
   # A percept that says how far the patch is standing off what it is on.
   defp touching(depth) do

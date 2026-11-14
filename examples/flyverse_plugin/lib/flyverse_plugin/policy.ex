@@ -55,6 +55,8 @@ defmodule FlyversePlugin.Policy do
   alias Monty.Frameworks.Actions.OrientHorizontal
   alias Monty.Frameworks.Environments.PositioningProcedures
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
+  alias Monty.Frameworks.Models.MotorSystemState.AgentState
+  alias Monty.Geometry.Rotation
 
   @enforce_keys [:sim]
   defstruct [:sim, :agent_id, :sensor_id, :turn_degrees, :distance]
@@ -247,6 +249,12 @@ defmodule FlyversePlugin.Policy do
   @search_circle_factor 4.0
   @search_degrees 30.0
 
+  # How near the place a fly remembers counts as standing on it. A fly walks home
+  # in strides of `@touch_stride`, and the last of them is only as long as what is
+  # left, so it lands on the place rather than past it; half a crawl is close
+  # enough to call it arrived.
+  @landmark_reached 0.005
+
   # The most one touch step may cover: two standoffs, five centimetres. Monty
   # walks the whole gap in one \u2014 it knows where the object is, because its
   # world has one \u2014 and a scene with a table and a room around it does not:
@@ -347,18 +355,24 @@ defmodule FlyversePlugin.Policy do
   fly that is learning a surface keeps it in the middle of the picture.
   """
   @impl FlyversePlugin.Plugin
-  def call(%__MODULE__{} = policy, {_ctx, observations, _motor_state, percept, _goal}, state) do
+  def call(
+        %__MODULE__{} = policy,
+        {_ctx, observations, motor_state, percept, _goal},
+        state
+      ) do
     simulation = Map.fetch!(state.simulations, policy.sim)
-    next = bout(simulation, on_object?(percept) and sees_something?(observations, policy))
-    advanced = advance(simulation, next)
+    saw = sees_something?(observations, policy)
+    landmarked = notice(simulation, pose(motor_state, policy.agent_id), saw)
+    next = bout(landmarked, on_object?(percept) and saw)
+    advanced = advance(landmarked, next)
     watched = watch(advanced, patch_nearness(observations, policy))
     state = put(state, policy.sim, watched)
 
     case next do
       :explore -> steer(policy, observations, percept, state)
       :depart -> {:ok, departing(policy, watched), policy, state}
-      :look -> {:ok, looking(policy, simulation, observations), policy, state}
-      :cruise -> {:ok, touch(policy, observations), policy, state}
+      :look -> {:ok, looking(policy, landmarked, observations, motor_state), policy, state}
+      :cruise -> {:ok, cruising(policy, observations, landmarked, motor_state), policy, state}
     end
   end
 
@@ -401,6 +415,101 @@ defmodule FlyversePlugin.Policy do
       {left, right} -> max(left, right) > @clip_nearness
     end
   end
+
+  # Where the fly stood when the patch last had something under it: the one place
+  # in the room this policy is sure of, because it was there. Everything else it
+  # knows is an image, and an image of a room is not a place to walk back to.
+  #
+  # The place is the motor system's own report of the agent — Monty hands every
+  # policy the proprioceptive state, so a fly knows where it is the way every
+  # other policy does — and it is what a lost fly walks home to. That is the
+  # failure it is for: two episodes of one sweep spent the whole five-thousand-step
+  # budget with the patch reading its clip at every step, having left the object at
+  # step 27, and no search of the room is as cheap as the walk back.
+  defp notice(simulation, nil, _saw), do: simulation
+
+  defp notice(simulation, position, true), do: %{simulation | landmark: position}
+
+  # Standing on the remembered place with the patch still empty means the place was
+  # not the object, or is not any more. Forgetting it lets the sweep take over
+  # instead of walking back and forth onto the same empty square.
+  defp notice(simulation, position, false) do
+    with [_ | _] = landmark <- simulation.landmark,
+         true <- distance(position, landmark) <= @landmark_reached do
+      %{simulation | landmark: nil}
+    else
+      _ -> simulation
+    end
+  end
+
+  # The step home: aim at the remembered place, then walk as far towards it as one
+  # stride goes. The world yaws and *then* moves along the body's own z
+  # (`actuate_orient_horizontal`), so a turn and a distance in one action land the
+  # fly on the bearing it just took rather than on the one it had before.
+  #
+  # The distance is what is left or a stride of it, so the last step stops on the
+  # place instead of crossing it — a step of a fixed stride would orbit a place
+  # nearer than the stride, which is the shape of never arriving.
+  defp home(policy, simulation, motor_state) do
+    with [_ | _] = landmark <- simulation.landmark,
+         %AgentState{position: position, rotation: rotation} <-
+           agent(motor_state, policy.agent_id) do
+      to = difference(landmark, position)
+
+      {:ok,
+       %OrientHorizontal{
+         agent_id: policy.agent_id,
+         rotation_degrees: bearing(rotation, to),
+         left_distance: 0.0,
+         forward_distance: min(magnitude(to), @touch_stride)
+       }}
+    else
+      _ -> :none
+    end
+  end
+
+  # Where the agent is, from the proprioceptive state the motor system hands every
+  # policy. A world that reports no agents leaves the fly without a place to
+  # remember, which is the case `:none` is for — the search then runs as it did.
+  defp agent(motor_state, agent_id) when is_map(motor_state) do
+    case Map.get(motor_state, agent_id) do
+      %AgentState{} = agent -> agent
+      _absent -> nil
+    end
+  end
+
+  defp agent(_motor_state, _agent_id), do: nil
+
+  defp pose(motor_state, agent_id) do
+    case agent(motor_state, agent_id) do
+      %AgentState{position: position} -> position
+      nil -> nil
+    end
+  end
+
+  # The turn that points the body at a place, in `rotation_degrees`' own frame.
+  #
+  # `OrientHorizontal` yaws by the *negative* of `rotation_degrees` about the body's
+  # own up axis, so a turn of `r` leaves the fly facing `cos r` of the way it faced
+  # plus `sin r` along its own x axis. The angle that points that facing at a place
+  # is therefore `atan2(along x, along forward)`, and both directions are the body's
+  # own, read off its rotation rather than guessed at.
+  defp bearing(rotation, [_x, _y, _z] = to) do
+    forward = Rotation.apply(rotation, [0.0, 0.0, -1.0])
+    right = Rotation.apply(rotation, [1.0, 0.0, 0.0])
+
+    :math.atan2(dot(right, to), dot(forward, to)) * 180.0 / :math.pi()
+  end
+
+  defp difference([x, y, z], [other_x, other_y, other_z]),
+    do: [x - other_x, y - other_y, z - other_z]
+
+  defp distance(position, other), do: position |> difference(other) |> magnitude()
+
+  defp magnitude(vector), do: vector |> dot(vector) |> :math.sqrt()
+
+  defp dot([x, y, z], [other_x, other_y, other_z]),
+    do: x * other_x + y * other_y + z * other_z
 
   # Which of the animal's three behaviours this step is in. A bout is a walk on
   # the surface; it ends on the timer, and the departure lasts until the patch is
@@ -635,19 +744,45 @@ defmodule FlyversePlugin.Policy do
   # 1776 to 7104. So a lost fly sweeps instead: a quarter turn and a stride, and
   # the quarter alternates sides so successive legs fan out over the ground rather
   # than spiralling back across it.
-  defp looking(policy, simulation, observations) do
+  defp looking(policy, simulation, observations, motor_state) do
     %MotorPolicyResult{
-      actions: [look(policy, simulation, observations)],
+      actions: [look(policy, simulation, observations, motor_state)],
       motor_only_step: false,
       telemetry: %{looking: true}
     }
   end
 
-  defp look(policy, %{bout: :cruise} = simulation, _observations),
-    do: sweep(policy, simulation.strays)
+  defp look(policy, %{bout: :cruise} = simulation, _observations, motor_state),
+    do: stray(policy, simulation, motor_state)
 
-  defp look(policy, _simulation, observations) do
+  defp look(policy, _simulation, observations, _motor_state) do
     %{search(policy) | rotation_degrees: towards(structure(observations, policy.agent_id))}
+  end
+
+  # A look with nothing under the patch: a step home when the fly remembers a place
+  # the object was, and a leg of the sweep when it does not. Being lost is the one
+  # case a fly can do better than sweeping, because it has been somewhere.
+  defp stray(policy, simulation, motor_state) do
+    case home(policy, simulation, motor_state) do
+      {:ok, action} -> action
+      :none -> sweep(policy, simulation.strays)
+    end
+  end
+
+  # Off the object. A fly that remembers a place walks back to it; one that does
+  # not does what the wide view says, which is Monty's own opening.
+  defp cruising(policy, observations, simulation, motor_state) do
+    case home(policy, simulation, motor_state) do
+      {:ok, action} ->
+        %MotorPolicyResult{
+          actions: [action],
+          motor_only_step: false,
+          telemetry: %{homing: true}
+        }
+
+      :none ->
+        touch(policy, observations)
+    end
   end
 
   # A leg of the sweep: a quarter turn and one stride, and no sideways travel —
@@ -834,7 +969,8 @@ defmodule FlyversePlugin.Policy do
              strays: 0,
              bout: :cruise,
              bout_steps: 0,
-             departures: 0
+             departures: 0,
+             landmark: nil
          })}
 
       {:error, {code, sentence}} ->
@@ -864,6 +1000,7 @@ defmodule FlyversePlugin.Policy do
       looks: simulation.looks,
       departures: simulation.departures,
       still: simulation.still,
+      landmark: simulation.landmark,
       last_counts: [simulation.last.left, simulation.last.right]
     }
   end
@@ -928,6 +1065,7 @@ defmodule FlyversePlugin.Policy do
            bout: :cruise,
            bout_steps: 0,
            departures: 0,
+           landmark: nil,
            last: %{left: 0, right: 0, spikes: 0, rates: [0.0, 0.0]}
          }}
 
