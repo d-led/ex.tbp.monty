@@ -226,9 +226,12 @@ defmodule Monty.Studio.Jobs.Run do
       with {:ok, record} <- fetch(run_id),
            :here <- my_turn(record),
            {:ok, opened} <- opened_for(record) do
-        # The record says `queued` until here, because asking for a run is not
-        # running it: this is the moment a worker has it in hand.
-        {:ok, record} = RunHistory.mark_running(record)
+        # The record still says `queued`: asking for a run is not running it, and
+        # opening the experiment — composing its config, starting the world,
+        # loading a pretrained library — is work this run has not begun. The node
+        # is written now so a Stop can be routed to the process that has it, and
+        # `mark_running/1` follows at the first step.
+        {:ok, record} = RunHistory.take(record)
         run_experiment(record, opened)
       else
         # A peer offers what this run needs and this node does not: the job goes
@@ -333,6 +336,20 @@ defmodule Monty.Studio.Jobs.Run do
         "#{phases_line(plan)}, #{episodes} episode(s) in all, " <>
         "up to #{record.steps} steps each"
     )
+
+    # The world is open and the first step is about to be taken: this is the
+    # moment the record may say `running`, and not one instant before.
+    #
+    # Only a run that owns a row may say it. A part carries its stream's id rather
+    # than a run id (`part_record/3`) — its row is the run's, and the run's row
+    # belongs to the node that planned the division, which may not be this one.
+    record =
+      if part?(record) do
+        record
+      else
+        {:ok, begun} = RunHistory.mark_running(record)
+        begun
+      end
 
     broadcast(run_id, {:started, record.steps})
 
@@ -486,6 +503,9 @@ defmodule Monty.Studio.Jobs.Run do
 
     say_kept(run_id, kept, ended)
 
+    # The division is planned and its parts are about to be taken: the record may
+    # say `running` from here (see `run_alone/2`).
+    {:ok, record} = RunHistory.mark_running(record)
     broadcast(run_id, {:started, record.steps})
 
     # What the attempt before this one had added up, if it had written it down

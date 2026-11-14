@@ -45,6 +45,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   }
 
   alias Monty.Studio.Jobs.Reaper
+  alias Monty.Studio.Jobs.Stops
 
   # A log is a thing a person reads back, not a database: the last few thousand
   # lines are enough to scroll through a run and bounded enough that a runaway
@@ -455,10 +456,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             :if={in_flight(assigns) != []}
             id="stop"
             phx-click="stop"
+            disabled={stopping?(assigns)}
             class="btn btn-outline btn-sm"
             title="Stop it at its next step"
           >
-            <.icon name="hero-stop-mini" class="size-4" /> {stop_label(assigns)}
+            <.icon name="hero-stop-mini" class="size-4" /> {if stopping?(assigns),
+              do: "Stopping…",
+              else: stop_label(assigns)}
           </button>
           <%!-- What a run does, as two numbers on the page. The step budget is a
           ceiling, not a target — the experiment's own recognition policy ends
@@ -1107,10 +1111,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # going to happen to it; one that is executing is asked to end at its next step,
   # so it still writes down the steps it took.
   def handle_event("stop", _params, socket) do
-    outcomes = socket.assigns |> in_flight() |> Enum.map(&cancel/1)
-    {text, level} = stopped(outcomes)
+    # The answer is not the stopping: cancelling asks each worker to end at its
+    # next step, and a run whose step is a minute long makes that ask a minute
+    # long. So the click is answered here — the button says it was heard — and the
+    # asks happen in the message that follows, once this reply has reached the
+    # browser. Nothing a person pressed should wait on a worker to reach a step
+    # boundary.
+    targets = in_flight(socket.assigns)
+    send(self(), {:stop_in_flight, targets})
 
-    {:noreply, socket |> push(nil, text, level) |> refresh_runs()}
+    {:noreply, push(socket, nil, stopping(targets), :info)}
   end
 
   def handle_event("filter", %{"filter" => text}, socket) do
@@ -1238,6 +1248,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # This page follows the run it can see: one this node has a row for. A peer's
   # run has its files, its worker and its page on that node, and following it here
   # would be a page drawing a run whose steps this node never receives.
+  # The asks go out here rather than in the click's own clause, so the reply that
+  # says "stopping" reaches the browser before a worker is waited on. A stop is
+  # cheap to ask for and slow to answer, and the person pressed a button, not a
+  # peer's step boundary.
+  def handle_info({:stop_in_flight, targets}, socket) do
+    {text, level} = targets |> Enum.map(&cancel/1) |> stopped()
+
+    {:noreply, socket |> push(nil, text, level) |> refresh_runs()}
+  end
+
   def handle_info({:recorded, run}, %{assigns: %{opened: %{name: name}}} = socket)
       when run.experiment == name do
     if RunHistory.exists?(run.id) do
@@ -2442,6 +2462,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
+  # What the click says the instant it is heard, before a single ask has gone
+  # out: a person who pressed Stop is owed an answer before the workers are.
+  defp stopping([]), do: "nothing was going"
+
+  defp stopping([_one]), do: "stop asked for: it ends after its next step"
+
+  defp stopping(several),
+    do: "stop asked for #{length(several)} runs: each ends after its next step"
+
   defp stopped([]), do: {"nothing was going", :warning}
 
   defp stopped(outcomes) do
@@ -2596,6 +2625,20 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       1 -> "Stop"
       several -> "Stop #{several} runs"
     end
+  end
+
+  # A run that has been asked to stop is still stepping until its next boundary,
+  # and the ask is a fact the worker keeps (`Monty.Studio.Jobs.Stops`) rather than
+  # a page's memory of a click — so the button says what was asked for, survives a
+  # reconnect, and does not invite a second press that would ask the same thing.
+  #
+  # The ask of a run a peer is performing lives in that peer's table, which this
+  # node cannot read without asking it; such a run keeps saying "Stop", and a
+  # second press costs one more ask.
+  defp stopping?(assigns) do
+    assigns
+    |> in_flight()
+    |> Enum.any?(fn {run, _job} -> Stops.asked?(run.id) end)
   end
 
   defp config_runnable?(assigns) do

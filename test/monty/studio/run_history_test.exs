@@ -327,6 +327,32 @@ defmodule Monty.Studio.RunHistoryTest do
       assert {:ok, ^began} = RunHistory.mark_running(began)
     end
 
+    # Having a run and running it are two moments, and the gap between them is
+    # not short: the worker opens the experiment first — composes the config,
+    # starts the world, loads a pretrained library — and a record that said
+    # `running` through that claimed work it had not begun. A reader watched a
+    # page say "running" for a minute with nothing running.
+    test "names the node that has it before it says running" do
+      in_a_cluster(fn ->
+        {:ok, queued} = RunHistory.start(@attributes)
+
+        {:ok, taken} = in_a_node("node2_127.0.0.1", fn -> RunHistory.take(queued) end)
+
+        # The row a Stop is routed by (`Cluster.Owner`) says where the run is…
+        assert taken.node == "node2_127.0.0.1"
+        # …and the word a reader sees still says it has not begun.
+        assert taken.status == "queued"
+        assert taken.started_at == nil
+        assert RunHistory.get(queued.id).status == "queued"
+
+        {:ok, began} = in_a_node("node2_127.0.0.1", fn -> RunHistory.mark_running(taken) end)
+
+        assert began.status == "running"
+        assert %DateTime{} = began.started_at
+        assert began.node == "node2_127.0.0.1"
+      end)
+    end
+
     test "is one episode, and says which" do
       assert {:ok, run} = RunHistory.start(@attributes)
       assert run.episode == 0

@@ -458,8 +458,30 @@ defmodule Monty.Studio.RunHistory do
     |> Ecto.Changeset.change(
       status: "running",
       node: Monty.Paths.data_dir_name(),
-      started_at: DateTime.utc_now()
+      started_at: run.started_at || DateTime.utc_now()
     )
+    |> Repo.update()
+  end
+
+  @doc """
+  Records that this node has the run in hand, without calling it running.
+
+  Having a run and running it are two moments, and the gap between them is not
+  short: a worker opens the experiment first — composes the config, starts the
+  world, loads a pretrained library — and only then takes a step. A record that
+  said `running` from the first of those was claiming work it had not begun, and
+  a reader who watched a page for a minute saw "running" with nothing running,
+  which is exactly the kind of quiet lie `Monty.Studio.Failure` exists to keep out
+  of a record.
+
+  So the row's `node` — which is what routes a Stop to the process that has the
+  run (`ExTbpMonty.Cluster.Owner`) — is written here, and `mark_running/1` is what
+  the worker calls when the experiment actually starts stepping.
+  """
+  @spec take(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
+  def take(%Run{} = run) do
+    run
+    |> Ecto.Changeset.change(node: Monty.Paths.data_dir_name())
     |> Repo.update()
   end
 
