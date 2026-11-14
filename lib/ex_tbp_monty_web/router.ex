@@ -95,19 +95,28 @@ defmodule ExTbpMontyWeb.Router do
   #   pipe_through :api
   # end
 
-  # Enable LiveDashboard in development
+  # The dashboard, where this instance is one reader's: development, and the
+  # desktop window — a sidecar on loopback with a single client
+  # (`docs/desktop.md`). A deployment leaves `dev_routes` off, because the
+  # dashboard lists every process, every query and every byte of memory this node
+  # holds, and it has no authentication of its own: putting it behind a login
+  # would mean `Plug.BasicAuth` and SSL with it.
   if Application.compile_env(:ex_tbp_monty, :dev_routes) do
-    # If you want to use the LiveDashboard in production, you should put
-    # it behind authentication and allow only admins to access it.
-    # If your application does not have an admins-only section yet,
-    # you can use Plug.BasicAuth to set up some basic authentication
-    # as long as you are also using SSL (which you should anyway).
     import Phoenix.LiveDashboard.Router
 
-    scope "/dev" do
-      pipe_through :browser
+    # The two things the dashboard cannot say for itself: whose window this is,
+    # and how to leave the screen. The second one is not a nicety — the desktop
+    # build has no address bar to type the studio's address into.
+    pipeline :dashboard do
+      plug ExTbpMontyWeb.DashboardWayBack, back: "/", label: "Monty on the BEAM"
+    end
 
-      live_dashboard "/dashboard", metrics: ExTbpMontyWeb.Telemetry
+    scope "/dev" do
+      pipe_through [:browser, :dashboard]
+
+      live_dashboard "/dashboard",
+        metrics: ExTbpMontyWeb.Telemetry,
+        home_app: {"Monty on the BEAM", :ex_tbp_monty}
     end
   end
 end

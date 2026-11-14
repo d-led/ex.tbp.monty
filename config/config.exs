@@ -44,9 +44,23 @@ config :ex_tbp_monty, ExTbpMonty.Repo.Postgres,
   # make the write O(episode) and this number irrelevant.
   timeout: 30_000,
   queue_target: 1_000,
-  queue_interval: 10_000
+  queue_interval: 10_000,
+  # The name this repo's queries are published under. Ecto's default is the repo
+  # module's own path — `[:ex_tbp_monty, :repo, :postgres]` here and
+  # `[:ex_tbp_monty, :repo, :sqlite]` there — while `ExTbpMontyWeb.Telemetry`
+  # listens on `[:ex_tbp_monty, :repo, :query]`, so the dashboard's five database
+  # metrics read a dash for every query this instance ever ran. One prefix for
+  # both repos is what Ecto's documentation recommends when there are several,
+  # and `:repo` in an event's metadata still says which database answered.
+  telemetry_prefix: [:ex_tbp_monty, :repo]
 
-config :ex_tbp_monty, ExTbpMonty.Repo.SQLite, priv: "priv/repo", log: false
+# The same prefix for the other repo, for the same reason: which of the two an
+# instance runs is decided at boot, and the dashboard's numbers should not depend
+# on that.
+config :ex_tbp_monty, ExTbpMonty.Repo.SQLite,
+  priv: "priv/repo",
+  log: false,
+  telemetry_prefix: [:ex_tbp_monty, :repo]
 
 # Where this software lives: the footer links to it with the octocat. A fork
 # that does not want the upstream link drops the key, and the link goes with it.

@@ -252,6 +252,13 @@ defmodule ExTbpMontyWeb.Layouts do
     """
   end
 
+  # The dashboard is mounted by the router in the builds that have it
+  # (`config :ex_tbp_monty, :dev_routes`), and this column is the only way to it.
+  # An entry that leads to a route this build does not have is worse than the
+  # entry's absence, so the sidebar asks the same compile-time question the router
+  # asked.
+  @dashboard? Application.compile_env(:ex_tbp_monty, :dev_routes, false)
+
   @doc """
   The way around the application, as a column beside the content.
 
@@ -264,6 +271,8 @@ defmodule ExTbpMontyWeb.Layouts do
   preference and the drawer's focus handling.
   """
   def sidebar(assigns) do
+    assigns = assign(assigns, :dashboard?, @dashboard?)
+
     ~H"""
     <aside
       id="app-sidebar"
@@ -334,13 +343,27 @@ defmodule ExTbpMontyWeb.Layouts do
             icon="hero-code-bracket-mini"
           />
           <%!-- What this instance does while it runs, and what it cannot be
-          asked to change without a restart. Last, because it is where a reader
-          goes once, not where they work. --%>
+          asked to change without a restart: where a reader goes once, not where
+          they work. --%>
           <.sidebar_link
             id="nav-settings"
             navigate={~p"/settings"}
             label="Settings"
             icon="hero-adjustments-horizontal-mini"
+          />
+          <%!-- The dashboard is the only page in this column that a dependency
+          draws, and the only one a document navigation reaches: it is its own
+          `live_session`, and the router mounts it where this instance is one
+          reader's (`config :ex_tbp_monty, :dev_routes`). Last, and not a place to
+          work: it says how this node is doing — memory, processes, the queries
+          the pages have run — which is the question a reader has when something
+          is wrong. --%>
+          <.sidebar_link
+            :if={@dashboard?}
+            id="nav-dashboard"
+            href={~p"/dev/dashboard"}
+            label="Dashboard"
+            icon="hero-presentation-chart-line-mini"
           />
         </nav>
       </div>
@@ -348,7 +371,8 @@ defmodule ExTbpMontyWeb.Layouts do
     """
   end
 
-  attr :navigate, :string, required: true
+  attr :navigate, :string, default: nil
+  attr :href, :string, default: nil
   attr :label, :string, required: true
   attr :icon, :string, required: true
   attr :id, :string, default: nil
@@ -358,6 +382,7 @@ defmodule ExTbpMontyWeb.Layouts do
     <.link
       id={@id}
       navigate={@navigate}
+      href={@href}
       data-nav
       title={@label}
       class="flex items-center gap-2.5 rounded-field px-2 py-2 text-sm text-base-content/75 transition hover:bg-base-200 hover:text-base-content data-[active]:bg-primary/10 data-[active]:font-semibold data-[active]:text-base-content data-[active]:shadow-[inset_2px_0_0_var(--color-primary)]"

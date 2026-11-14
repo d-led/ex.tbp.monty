@@ -20,6 +20,11 @@ config :ex_tbp_monty, chart_interval: 0
 # here; the assertion is still the behaviour — the process gives its heap back.
 config :ex_tbp_monty, studio_idle_hibernate_after: 20
 
+# The dashboard's route is mounted here as well, so that the sidebar's entry to it
+# and the way back off it are asserted rather than assumed: a route no test visits
+# is a route that breaks quietly.
+config :ex_tbp_monty, dev_routes: true
+
 # The suite runs on the Postgres of the CI service, partitioned by
 # `MIX_TEST_PARTITION`. `ExTbpMonty.Database.repo_module/0` follows
 # `DATABASE_URL` when nothing names a repo, which in a test would be a file.

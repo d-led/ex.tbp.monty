@@ -17,6 +17,13 @@ import Config
 # before `runtime.exs` has run, which is why it is named here at all.
 config :ex_tbp_monty, ecto_repos: [ExTbpMonty.Repo.SQLite]
 
+# The dashboard is mounted in the window, which a deployment does not get (see
+# the router). It is the one page of this application that a dependency draws,
+# and a window has no address bar to reach it by or to leave it with — so it is a
+# place in the sidebar, and it carries its own way back
+# (`ExTbpMontyWeb.DashboardWayBack`).
+config :ex_tbp_monty, dev_routes: true
+
 config :logger, level: :info
 
 # The sidecar has no console, and OTP's console handler writes to the `user`
