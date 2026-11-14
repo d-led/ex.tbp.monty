@@ -3998,12 +3998,12 @@ no `handle_info`, no `:timeout`, nothing that ages a row out.
 
 Every path that closes a run clears it — except the reaper:
 
-| path                                   | clears? |
-| -------------------------------------- | ------- |
-| `Jobs.Run.close/8` (normal end)        | yes — `store_all/1` then `RunStream.clear/1` |
-| a part falling out of the pool         | yes — `run.ex:534` |
-| `Jobs.settle/2` (stop, cancel)         | yes — `RunHistory.keep_streamed/1` |
-| **`Jobs.Reaper.abandon/1`**            | **no** — it calls `RunHistory.finish/3`, which writes the row and does not touch the table |
+| path                            | clears?                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------ |
+| `Jobs.Run.close/8` (normal end) | yes — `store_all/1` then `RunStream.clear/1`                                               |
+| a part falling out of the pool  | yes — `run.ex:534`                                                                         |
+| `Jobs.settle/2` (stop, cancel)  | yes — `RunHistory.keep_streamed/1`                                                         |
+| **`Jobs.Reaper.abandon/1`**     | **no** — it calls `RunHistory.finish/3`, which writes the row and does not touch the table |
 
 So every abandoned run leaves its steps in the table for the life of the node.
 A page that reconnects re-reads them; nothing ever removes them. The run above
@@ -4028,7 +4028,7 @@ elixir --sname memory_watch scripts/memory_watch.exs node1 5 10
 Two numbers on purpose: `rss` is what the OS says every beam on the machine
 holds — the number the machine runs out of — and `beam` is what the BEAM says it
 holds. A NIF's own heap (CPython under Pythonx, a MuJoCo model) is not in the
-second, so *rss climbing while beam stays flat* says "outside the BEAM, and no
+second, so _rss climbing while beam stays flat_ says "outside the BEAM, and no
 `:erlang.garbage_collect/1` will return it"; rss tracking beam says a process or
 a table, and the same line names the table.
 
@@ -4042,7 +4042,7 @@ then ask `RunStream.steps/1` for them and assert the table is empty and the row
 has them.
 
 Worth deciding with it: a sweep. `clear/1` is a memory of what the node still
-*wants*, and every path that closes a run has to remember to ask — which is how
+_wants_, and every path that closes a run has to remember to ask — which is how
 one came to not ask. A periodic `:ets.select` for streams whose run is no longer
 in flight (`RunHistory.in_flight?/1`) would make forgetting harmless instead of
 expensive.
