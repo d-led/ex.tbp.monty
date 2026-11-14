@@ -3424,3 +3424,97 @@ on `example flyverse_plugin` at `mix format --check-formatted`, before a test ra
 `scripts/reformat.sh` now walks `examples/*/` too, in both modes (rewrite and
 `--check`), skipping an example whose `deps/` nobody has fetched; verified by
 re-breaking the file on purpose and watching the check exit 1.
+
+## 47. 2026-11-14: the gate's own bound, and a cookie before the first handshake
+
+Two of the three open items of the 2026-11-14 hand-over (`06087316560f`), taken
+while other hands worked elsewhere in the tree. Neither touches a command path: one
+is a test's own timeout, the other is how a cluster node is started.
+
+### 47.1 What landed
+
+- **`ComposerTest`'s snapshot case names its own bound.** 63 compositions cost
+  **3.0 s** (`--trace`, load average 12); the default 60 s expired at a load average
+  of 134 with the code fine underneath, and a red gate under no change is the most
+  expensive colour there is. `@tag timeout: 180_000`, with the measurement and the
+  trade in the comment: a bound two orders of magnitude above the cost stops
+  bounding a _slow_ machine and only bounds a hang, which is what a timeout is for.
+- **The cluster's cookie is a VM flag, not a line reached at runtime.** Every
+  command in `process-compose.yaml` passes `--cookie {{.MONTY_CLUSTER_SECRET}}`,
+  and the secret is written **once**, under `vars`, where it used to be written out
+  four times; each process's `environment` reads the same place. `config/runtime.exs`
+  keeps `Node.set_cookie/1` as the answer for a start that passed no flag (a
+  hand-typed `mix phx.server --sname node1`), and its comment now says that instead
+  of claiming to be the only moment a cookie can be set.
+
+### 47.2 The traps
+
+- **`process-compose` hands a command to a shell.** `printf 'first'; printf
+'second'` runs both and `$(printf hello)` runs, so `$VAR` expands — on macOS and
+  Linux, and nowhere this file claims to work. `{{.VAR}}` from a top-level `vars:`
+  block is process-compose's own substitution and works in `command` **and** in
+  `environment` (both measured on v1.124.0), so that is what the file uses. Checked
+  on the real file by copying it and swapping only `-S mix …` for
+  `-e 'IO.puts(Node.get_cookie())'`: all four processes printed `local-dev-secret`.
+- **A cookie probe on an unnamed node answers `nocookie` whatever the flag said.**
+  `Node.get_cookie/0` on `:nonode@nohost` has no cookie to report, and the first
+  version of this check concluded the flag was ignored. A **named** node is the only
+  probe that means anything: `elixir --name probe@127.0.0.1 --cookie local-dev-secret
+-e …` answers `local-dev-secret`.
+- **"The file renders it" needs a copy, not a start.** The live stack owns
+  `node1|node2|example_plugin|flyverse_plugin@127.0.0.1`; a starting copy fails with
+  "the name … seems to be in use by another Erlang node", which is the right
+  refusal and not a test of anything. Prefix the copy's VM names.
+- **`scripts/reformat.sh` dirties `docs/cad.md`.** prettier rewrites its `*emphasis*`
+  as `_emphasis_` and unindents one blockquote. Markdown is not gated (`mix format`
+  is), so the file was committed un-prettified and the next reformat looks like an
+  edit by the agent running it. Reverted rather than swept into a commit: a file
+  another hand wrote is not mine to stage, and staging it while they are in it can
+  commit their half-written paragraph.
+- **Which items are mine to take is part of the work.** Of the open list, item 1
+  wanted the human to choose an option and item 3 held two that wanted a nod or
+  another pair of hands' area. The question was asked; the user was away and said
+  "work autonomously and make good decisions", so the two with no owner were chosen
+  and the rest are left named below.
+
+### 47.3 What is still open, and what each one actually needs
+
+1. **The run list across per-node databases** — unchanged, and still "coordinate
+   first": `cluster_nodes.ex`, `cluster_peer_runs.ex` and `settings_live.ex` are
+   where another pair of hands is likely to be.
+2. **A part's live steps do not reach a page opened later.** The shape, settled
+   here and deliberately _not_ started: a part's step is broadcast by
+   `RunStream.Pictures` on `announce || stream_id`, which is **the run's own
+   topic**, and PubSub is the cluster-wide adapter — so a page that was already
+   open does receive a peer's part. What is missing is the catch-up: `seed/2` reads
+   `RunHistory.head/1` and `Parts.held_up_to_date/3` reads this node's `RunStream`,
+   so the steps taken before the page opened are read back only when the part ends
+   and `Artifacts.read_part/3` sees its file. Doing it means an `:rpc` per live part
+   to the node its row names (`studio_run_parts.node`) for `RunStream.read_from/2`,
+   fed through `handle_steps/2` (`steps_drawn` already makes a replay idempotent),
+   plus a decision about what a late page shows for pictures it never had inline.
+   It is a feature with a two-node check like §43.2, not a line, and it was not
+   started while another hand held the tree.
+3. **`route/4` in `ex_monty_plugin`** — still wants the user's nod; it publishes.
+4. **The examples' coverage thresholds** (`example_plugin` 84.78 %,
+   `flyverse_plugin` 74.37 % against 90 %) — the user's call.
+5. **`collect/2`'s error branch still has no test.** It has been _run_ (§43.2, by a
+   peer that could not start). A test wants an injected failure, and the only local
+   seam is `run_part_here/5`'s `{:error, part, reason, steps}`, reachable by making
+   `run_alone/2` fail for one part of a run whose own open succeeded — which nothing
+   does today. Left alone rather than given a test-only seam for one log line.
+
+### 47.4 The gate
+
+`./scripts/quality.sh` green on this tree: lint 5719 mods/funs with no issues,
+workflows, release 0.1.3, **cover 3219 passed** (67 properties, 3152 tests), and
+complexity worst 29.85 against the threshold of 20 — `quality: ok`, exit 0. Run
+beside another agent's `mix test` and over their uncommitted
+`examples/flyverse_plugin/lib/flyverse_plugin/policy.ex`, so the number is a number
+for that tree, not only for these five files.
+
+What is **not** verified here, and is the first thing to check when the cluster is
+idle: that a real start has no `Invalid challenge reply` in it and how long a node
+now takes to appear. Those four processes have the cookie from the VM's first
+moment (measured on a renamed copy, `logs-*.log` printing `local-dev-secret`), but
+the noise going away is a consequence, not a measurement.
