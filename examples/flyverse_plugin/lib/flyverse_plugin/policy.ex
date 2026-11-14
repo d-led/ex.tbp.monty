@@ -176,6 +176,21 @@ defmodule FlyversePlugin.Policy do
   # the table.
   @look_steps 6
 
+  # How many looks one bout is worth before the surface is written off. One: a
+  # second look at the same unchanging thing is not a second opinion — the fly
+  # has already turned towards the most structured part of the view and walked a
+  # circle round it, and the view answered the same thing. What it has not done
+  # is leave, so leaving is the second answer.
+  #
+  # The ladder matters because the two timers fought each other without it: every
+  # look put the bout's clock back to nought, so the sixty steps that cause a
+  # departure could never arrive, and the stall put it back in the same loop. A
+  # fly in that loop looks every twenty steps for as long as the episode lasts,
+  # and the evidence curve is the flat line it produced — 124.395 from step 400
+  # to step 2600 of a run. So a look now *continues* the bout rather than
+  # restarting it, and a second stall ends the bout outright.
+  @looks_per_bout 1
+
   # The stride of a bout, and it is one centimetre because the framework says so
   # rather than because it looks right: the patch sensor this config gives the
   # agent (`camera_surf_delta`) sends a new percept when the patch has moved
@@ -244,6 +259,7 @@ defmodule FlyversePlugin.Policy do
   # forward on every step, so the only way to stand still is to have no depth to
   # judge the step by. The touch opening is the fallback when that happens.
   @view_finder "view_finder"
+  @patch "patch"
 
   @doc "The name a cluster registers it under."
   @spec name() :: String.t()
@@ -337,9 +353,9 @@ defmodule FlyversePlugin.Policy do
   # bar, and the evidence sat at 124.395 for seventeen hundred steps while every
   # frame the patch took was one blank colour.
   defp sees_something?(observations, policy) do
-    case Percept.image(observations, policy.agent_id, policy.sensor_id) do
-      {:ok, {_sensor, rows}} -> Percept.nearness(rows) != {0.0, 0.0}
-      {:error, _sentence} -> false
+    case patch_nearness(observations, policy) do
+      nil -> false
+      nearness -> nearness != {0.0, 0.0}
     end
   end
 
@@ -355,9 +371,13 @@ defmodule FlyversePlugin.Policy do
   # — and then to walk again, because a fly that only ever turns is a fly that
   # reads one square centimetre for ever, and a fly that only ever walks over the
   # table is one that reads nothing at all.
+  #
+  # Looking once is looking; looking twice at the same unchanged thing is a fly
+  # that will not leave on its own, so the second stall is the departure.
   defp bout(%{look_steps: taken}, true) when taken > 0 and taken < @look_steps, do: :look
 
-  defp bout(%{still: still}, true) when still >= @stall_steps, do: :look
+  defp bout(%{still: still, looks: looked}, true) when still >= @stall_steps,
+    do: if(looked >= @looks_per_bout, do: :depart, else: :look)
 
   defp bout(_simulation, false), do: :cruise
 
@@ -372,24 +392,51 @@ defmodule FlyversePlugin.Policy do
   # bout, not the continuation of the old one. Being off the object is not a
   # behaviour it counts, because there is nothing there to time.
   defp advance(simulation, :cruise),
-    do: %{simulation | bout: :cruise, bout_steps: 0, still: 0, look_steps: 0}
+    do: %{simulation | bout: :cruise, bout_steps: 0, still: 0, look_steps: 0, looks: 0}
 
   defp advance(simulation, :look) do
-    looked = if simulation.bout == :look, do: simulation.look_steps + 1, else: 1
-    %{simulation | bout: :look, bout_steps: 0, still: 0, look_steps: looked}
-  end
-
-  defp advance(simulation, next) do
-    taken = if(next == simulation.bout, do: simulation.bout_steps + 1, else: 1)
+    looking_on = simulation.bout == :look
 
     %{
       simulation
+      | bout: :look,
+        bout_steps: bout_steps(simulation, :look),
+        still: 0,
+        look_steps: if(looking_on, do: simulation.look_steps + 1, else: 1),
+        looks: if(looking_on, do: simulation.looks, else: simulation.looks + 1)
+    }
+  end
+
+  defp advance(simulation, next) do
+    %{
+      simulation
       | bout: next,
-        bout_steps: taken,
+        bout_steps: bout_steps(simulation, next),
         look_steps: 0,
+        looks: looks(simulation, next),
         departures: departures(simulation, next)
     }
   end
+
+  # Walking and looking are one bout, so each continues the other's clock. It is
+  # the whole of the fix for the loop described at `@looks_per_bout`: while a look
+  # started the clock again, the departure the clock exists to cause was
+  # unreachable, and a stalled fly looked for ever.
+  @surface [:explore, :look]
+
+  defp bout_steps(%{bout: bout, bout_steps: taken}, next)
+       when bout in @surface and next in @surface,
+       do: taken + 1
+
+  defp bout_steps(%{bout: bout, bout_steps: taken}, next) when bout == next, do: taken + 1
+
+  defp bout_steps(_simulation, _next), do: 1
+
+  # The count of looks belongs to the bout, so walking on keeps it — that is how a
+  # second stall is recognised as the same surface — and leaving ends it.
+  defp looks(%{bout: :depart} = simulation, :depart), do: simulation.looks
+  defp looks(_simulation, :depart), do: 0
+  defp looks(simulation, :explore), do: simulation.looks
 
   # One side per departure, counted once — when the departure begins.
   defp departures(%{bout: :depart} = simulation, :depart), do: simulation.departures
@@ -404,6 +451,7 @@ defmodule FlyversePlugin.Policy do
          {:ok, window} <- step(simulation, rows) do
       wish = smoothed(simulation, window.left - window.right)
       result = result(policy, wish, window, percept, observations)
+      patch = patch_nearness(observations, policy)
 
       simulation = %{
         simulation
@@ -411,11 +459,40 @@ defmodule FlyversePlugin.Policy do
           spikes: window.spikes,
           last: window,
           nearness: window.nearness,
-          still: window.still,
+          patch_nearness: patch || simulation.patch_nearness,
+          still: still(simulation.patch_nearness, patch, simulation.still),
           steps: simulation.steps + 1
       }
 
       {:ok, result, policy, put(state, policy.sim, simulation)}
+    end
+  end
+
+  # The two questions this policy asks of a view are not the same question, and
+  # they are not asked of the same sensor. "How near is the world on the left, and
+  # on the right" is the drive, asked of the wide view, because a fly steers by
+  # what looms in the room. "Is the thing I am reading still the same thing" is
+  # asked of the patch, because the patch is what the learning module learns from:
+  # a wide view whose walls have not moved is not progress, and a patch that has
+  # stopped changing is not the object.
+  #
+  # Asking the wide view both questions cost a run its episode. With the patch
+  # reading one flat grey at its five-centimetre clip — `depth_clip_sensors: [0]`
+  # in this config's transform, and sensor nought is the patch — the view finder's
+  # nearness still changed as the fly walked, so the stall never fired, and the fly
+  # crossed the table for seventeen hundred steps with the evidence frozen at
+  # 124.395. A config that gives an agent no patch has one view, and both
+  # questions are asked of it.
+  defp patch_nearness(observations, policy) do
+    case Percept.image(observations, policy.agent_id, policy.sensor_id || @patch) do
+      {:ok, {_sensor, rows}} ->
+        Percept.nearness(rows)
+
+      {:error, _no_patch} ->
+        case Percept.image(observations, policy.agent_id, nil) do
+          {:ok, {_sensor, rows}} -> Percept.nearness(rows)
+          {:error, _nothing} -> nil
+        end
     end
   end
 
@@ -643,8 +720,10 @@ defmodule FlyversePlugin.Policy do
            | wish: 0.0,
              spikes: 0,
              nearness: {0.0, 0.0},
+             patch_nearness: nil,
              still: 0,
              look_steps: 0,
+             looks: 0,
              bout: :cruise,
              bout_steps: 0,
              departures: 0
@@ -673,6 +752,8 @@ defmodule FlyversePlugin.Policy do
       spikes: simulation.spikes,
       bout: simulation.bout,
       bout_steps: simulation.bout_steps,
+      look_steps: simulation.look_steps,
+      looks: simulation.looks,
       departures: simulation.departures,
       still: simulation.still,
       last_counts: [simulation.last.left, simulation.last.right]
@@ -731,8 +812,10 @@ defmodule FlyversePlugin.Policy do
            spikes: 0,
            steps: 0,
            nearness: {0.0, 0.0},
+           patch_nearness: nil,
            still: 0,
            look_steps: 0,
+           looks: 0,
            bout: :cruise,
            bout_steps: 0,
            departures: 0,
@@ -763,7 +846,6 @@ defmodule FlyversePlugin.Policy do
            spikes: spikes,
            rates: rates,
            nearness: nearness,
-           still: still(simulation.nearness, nearness, simulation.still),
            loom: loom(simulation.nearness, nearness)
          }}
 
@@ -859,12 +941,22 @@ defmodule FlyversePlugin.Policy do
     -min(loom * policy.distance, @touch_stride)
   end
 
+  # With room to walk, the step is the bout's stride and not Monty's four
+  # millimetres, because four millimetres is under the patch's own one-centimetre
+  # delta threshold: the patch then reads the same place again and again, and a
+  # view that never changes is precisely what the stall counter sees. Watching a
+  # run, that is a fly that walks with a frozen picture — an unbroken grey patch
+  # for two hundred steps at 4 mm each. Where there is not a stride of room left,
+  # the step closes the gap to the standoff and no more.
   defp crawl(%__MODULE__{} = policy, depth, _loom) when depth >= @desired_object_distance,
-    do: policy.distance
+    do: stride(policy, depth - @desired_object_distance)
 
   defp crawl(_policy, depth, _loom), do: depth - @desired_object_distance
 
-  # How many steps running the patch has shown the same nearness.
+  defp stride(policy, room), do: room |> min(@explore_stride) |> max(policy.distance)
+
+  # How many steps running the patch has shown the same nearness. The image this
+  # is read from is the patch's and not the wide view's — see `patch_nearness/2`.
   defp still(previous, nearness, taken) when previous == nearness, do: taken + 1
 
   defp still(_previous, _nearness, _taken), do: 0

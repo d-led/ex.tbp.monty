@@ -37,7 +37,7 @@ defmodule FlyversePlugin.PolicyTest do
     assert [%OrientHorizontal{} = walked] = result.actions
     assert walked.agent_id == "agent_id_0"
     assert walked.rotation_degrees < 0.0, "left, because the left half is nearer"
-    assert walked.forward_distance == 0.004, "and it walks while it turns"
+    assert walked.forward_distance == 0.01, "and it walks while it turns, by the bout's stride"
   end
 
   test "a nearer right side turns it right while it walks", %{state: state} do
@@ -47,7 +47,7 @@ defmodule FlyversePlugin.PolicyTest do
 
     assert [%OrientHorizontal{} = walked] = result.actions
     assert walked.rotation_degrees > 0.0, "right, because the right half is nearer"
-    assert walked.forward_distance == 0.004
+    assert walked.forward_distance == 0.01
   end
 
   # A fly with nothing in view is not aimed at anything, and a network balanced
@@ -274,6 +274,53 @@ defmodule FlyversePlugin.PolicyTest do
     assert abs(degrees) <= 30.0
   end
 
+  # Looking once is looking. Looking twice at the same unchanged thing is a fly
+  # that will not leave on its own — and the two timers used to make that for
+  # ever: a look put the bout's clock back to nought, so the sixty steps that
+  # cause a departure could never arrive, and the stall put the clock back again
+  # as soon as walking resumed. A fly in that loop looks every twenty steps for as
+  # long as the episode lasts; one run's evidence curve was a flat line at 124.395
+  # from step 400 to step 2600 because of it.
+  test "a second stall on the same surface leaves instead of looking twice", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {first, policy, state} = table_steps(policy, state, 22)
+    assert [%OrientHorizontal{rotation_degrees: 30.0}] = first.actions, "the first look"
+
+    # The look itself, and the twenty stalled steps it bought nothing from.
+    {second, _policy, _state} = table_steps(policy, state, 6 + 20)
+
+    assert [%OrientHorizontal{} = left] = second.actions
+    assert abs(left.rotation_degrees) == 180.0, "an about-face, not a third look"
+    assert left.forward_distance < 0.0, "and off the surface, not along it"
+  end
+
+  # A look is a step of the bout it interrupts, not the start of a new one: sixty
+  # steps of surface is sixty steps, looked at or not.
+  test "a look does not restart the bout's clock", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {_looking, policy, state} = table_steps(policy, state, 22)
+    {leaving, _policy, _state} = walk(policy, state, 39)
+
+    assert [%OrientHorizontal{forward_distance: hop}] = leaving.actions
+    assert hop < 0.0, "the bout ends on its own clock: at step 61, not at step 81"
+  end
+
+  # And the step over open ground is the bout's stride, not four millimetres.
+  # Four millimetres is under the patch's own one-centimetre delta threshold, so
+  # the patch reads the same place again and again and the view never changes —
+  # which is what makes the stall counter fire and the fly look at nothing. Where
+  # less than a stride of room is left, the step is the room.
+  test "a patch with room to walk is stepped at the bout's stride", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    {result, _policy, _state} = step(policy, state, scene(0.5, 0.05), touching(0.05))
+
+    assert [%OrientHorizontal{forward_distance: distance}] = result.actions
+    assert_in_delta distance, 0.01, 1.0e-9
+  end
+
   # The animal does not crawl over the first thing it touches for ever: it walks a
   # bout, leaves, and lands again somewhere else. Sixty steps is the bout, and
   # what ends it is an about-face — 180 degrees, which the centring reflex cannot
@@ -353,7 +400,7 @@ defmodule FlyversePlugin.PolicyTest do
       step(policy, state, observations([[0.02, 0.02, 100.0, 100.0]]), touching(0.4))
 
     assert [%OrientHorizontal{} = walked] = result.actions
-    assert walked.forward_distance == 0.004
+    assert walked.forward_distance == 0.01, "a stride of open view, and no slide across it"
     assert walked.left_distance == 0.0
   end
 
@@ -545,14 +592,16 @@ defmodule FlyversePlugin.PolicyTest do
     end
 
     # A tenth of the patch on the object is the line Monty draws, and past it the
-    # network is the policy again.
+    # network is the policy again: the turn is the readouts' and not the search's.
     test "hands back to the network once the patch is on the object", %{state: state} do
       {:ok, policy, state} = Policy.new([], state)
 
       {result, _policy, _state} = step(policy, state, scene(0.2, 0.05), on_object(0.5))
 
-      assert [%OrientHorizontal{forward_distance: four_millimetres}] = result.actions
-      assert_in_delta four_millimetres, 0.004, 1.0e-9
+      assert [%OrientHorizontal{} = walked] = result.actions
+      assert walked.rotation_degrees == 0.0, "the search would be thirty degrees"
+      assert Map.has_key?(result.telemetry, :wish), "the pair of readouts decided the turn"
+      assert_in_delta walked.forward_distance, 0.01, 1.0e-9, "a bout's stride, not a hop"
       refute result.motor_only_step
     end
 
@@ -582,6 +631,22 @@ defmodule FlyversePlugin.PolicyTest do
   end
 
   defp mug, do: [[0.02, 0.02, 100.0, 100.0]]
+
+  # A patch on a plain surface it cannot tell from the object, with a view finder
+  # that holds nothing: the same reading, step after step. This is what the stall
+  # counter is for.
+  defp table_steps(policy, state, steps) do
+    table = %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[0.0, 0.0]]},
+        "patch" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}
+      }
+    }
+
+    Enum.reduce(1..steps, {nil, policy, state}, fn _step, {_result, policy, state} ->
+      step(policy, state, table, touching(0.05))
+    end)
+  end
 
   # A perspective on the world: what the wide view sees and what the patch is on.
   defp scene(view_depth, patch_depth) do
