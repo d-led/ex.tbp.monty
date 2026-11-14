@@ -15,6 +15,10 @@ defmodule Monty.Studio.PartsTest do
 
   @experiment "base_config_10distinctobj_dist_agent"
 
+  # A node that is not this one, as a part's row spells it: the folder name a
+  # claim is written with (`ExTbpMonty.Node.safe_name/1`).
+  @peer "node2_127.0.0.1"
+
   setup do
     _root = Monty.Test.Tmp.env_dir("studio-parts", :studio_artifacts_dir)
     {:ok, opened} = Monty.Studio.open(@experiment)
@@ -131,6 +135,83 @@ defmodule Monty.Studio.PartsTest do
     end
   end
 
+  # A page opened while a peer steps a part: that part's steps are in the peer's
+  # memory, and this node's stream knows nothing about them. Before this, such a
+  # page stood still until the part ended and its file was written.
+  describe "a part a peer is stepping" do
+    test "reads the steps it took before the page opened from the node that has it", %{
+      setup: setup
+    } do
+      {record, parts} = run([[0], [1]])
+      in_a_peers_hands(record, parts, 0)
+
+      held =
+        Parts.refresh(record, %{},
+          read: fn node, stream, from ->
+            assert node == @peer
+            assert stream == hd(parts)["stream"]
+            assert from == -1, "a page that has read nothing asks from nought"
+            [entry(0, 0, 1.0), entry(0, 1, 4.0)]
+          end
+        )
+
+      assert [card | _second] = Parts.cards(held, setup)
+      assert card.steps == 2
+      assert card.best == %{object: "mug", evidence: 4.0}
+    end
+
+    test "asks for what it has not read yet, not the whole part again", %{setup: setup} do
+      {record, parts} = run([[0], [1]])
+      in_a_peers_hands(record, parts, 0)
+
+      answer = fn node, _stream, from ->
+        send(self(), {:asked, node, from})
+        if from < 0, do: [entry(0, 0, 1.0)], else: [entry(0, 1, 2.0)]
+      end
+
+      held = Parts.refresh(record, %{}, read: answer)
+      assert_received {:asked, @peer, -1}
+
+      held = Parts.refresh(record, held, read: answer)
+      assert_received {:asked, @peer, 0}
+
+      assert [card | _second] = Parts.cards(held, setup)
+      assert card.steps == 2
+    end
+
+    test "a peer that does not answer leaves the card on the record's transcript", %{
+      setup: setup
+    } do
+      {record, parts} = run([[0], [1]])
+      in_a_peers_hands(record, parts, 0)
+
+      {:ok, _written} =
+        RunHistory.checkpoint_steps(record, [entry(0, 0, 2.5)], [], timeline: :skip)
+
+      held = Parts.refresh(record, %{}, read: fn _node, _stream, _from -> [] end)
+
+      assert [card | _second] = Parts.cards(held, setup)
+      assert card.best == %{object: "mug", evidence: 2.5}
+    end
+
+    test "a part this node is stepping is read here, not asked of anybody", %{setup: setup} do
+      {record, parts} = run([[0], [1]])
+      in_a_peers_hands(record, parts, 0, ExTbpMonty.Node.safe_name(node()))
+
+      Monty.Studio.RunStream.publish(hd(parts)["stream"], step(0, 3.0))
+
+      held =
+        Parts.refresh(record, %{},
+          read: fn _node, _stream, _from ->
+            flunk("a part in this node's own hands was asked of a peer")
+          end
+        )
+
+      assert [card | _second] = Parts.cards(held, setup)
+      assert card.best == %{object: "mug", evidence: 3.0}
+    end
+  end
+
   # One run asked for two or more parts, as the page records it: the plan is in
   # the record's inputs, and each part's steps are the stream the plan names.
   defp run(episodes_per_part) do
@@ -157,6 +238,19 @@ defmodule Monty.Studio.PartsTest do
       })
 
     {record, parts}
+  end
+
+  # A part in a node's hands, as a divided run's row says it: planned by the
+  # worker, then claimed by the node that steps it.
+  defp in_a_peers_hands(record, parts, index, node \\ @peer) do
+    :ok =
+      RunHistory.plan_parts(
+        record.id,
+        Enum.map(parts, &%{index: &1["index"], of: &1["of"]})
+      )
+
+    {:ok, _claim} = RunHistory.claim_part(record.id, index, node)
+    :ok
   end
 
   # What a step's transcript entry is: the episode of the run, the step, the part

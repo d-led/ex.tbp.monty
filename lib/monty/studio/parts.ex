@@ -20,6 +20,8 @@ defmodule Monty.Studio.Parts do
   module of a whole run.
   """
 
+  alias ExTbpMonty.Cluster.Nodes
+
   alias Monty.Studio.{
     Belief,
     Chart,
@@ -28,6 +30,11 @@ defmodule Monty.Studio.Parts do
     RunStream,
     Setup
   }
+
+  # How long a page waits for the node that holds a part before drawing what the
+  # record has: half a second shorter than the page's own poll, so a silent peer
+  # cannot make a poll take a second.
+  @remote_timeout 500
 
   @typedoc "One point of evidence: the run's own episode, the step, and what was believed."
   @type point :: {non_neg_integer(), non_neg_integer(), map()}
@@ -72,13 +79,23 @@ defmodule Monty.Studio.Parts do
   nothing to say twice, so it has no cards. A run's plan lives in its record's
   inputs, written when the run started (`Monty.Studio.RunLog.attributes/6`), so a
   page draws every part's card before the first of them has taken a step.
-  """
-  @spec refresh(RunHistory.Run.t() | map() | nil, %{optional(binary()) => held()}) :: %{
-          optional(binary()) => held()
-        }
-  def refresh(nil, _previous), do: %{}
 
-  def refresh(record, previous) do
+  A part another node is stepping has its steps in *that* node's memory, and this
+  one's stream says nothing about it — so the part is asked of the node that holds
+  it (`:read`), once per poll, from the step this page stopped at. Without that, a
+  page opened while a peer worked read a part's transcript only when the part
+  ended and its file was written. `:read` is a function so a test can answer for a
+  peer; the default asks the cluster.
+  """
+  @spec refresh(RunHistory.Run.t() | map() | nil, %{optional(binary()) => held()}, keyword()) ::
+          %{
+            optional(binary()) => held()
+          }
+  def refresh(record, previous, options \\ [])
+
+  def refresh(nil, _previous, _options), do: %{}
+
+  def refresh(record, previous, options) do
     case parts_of(record) do
       [_one] ->
         %{}
@@ -87,8 +104,14 @@ defmodule Monty.Studio.Parts do
         %{}
 
       parts ->
+        read = Keyword.get(options, :read, &read_on/3)
+        held_by_peers = held_by_peers(record)
+
         Map.new(parts, fn part ->
-          {part["stream"], held_up_to_date(Map.get(previous, part["stream"]), record, part)}
+          held = Map.get(previous, part["stream"])
+          holder = Map.get(held_by_peers, part["index"])
+
+          {part["stream"], held_up_to_date(held, record, part, holder, read)}
         end)
     end
   end
@@ -130,7 +153,19 @@ defmodule Monty.Studio.Parts do
 
   def parts_of(_run_of_the_whole_experiment), do: []
 
-  defp held_up_to_date(nil, record, part) do
+  # A part a peer is stepping, by the number the division gave it: the record's
+  # plan says which parts there are and where their steps are written, and the
+  # row says which node has one — the only place a node is written down at all.
+  defp held_by_peers(record) do
+    me = ExTbpMonty.Node.safe_name(node())
+
+    record.id
+    |> RunHistory.claimed_parts()
+    |> Enum.reject(&(&1.node in [nil, me]))
+    |> Map.new(&{&1.part, &1.node})
+  end
+
+  defp held_up_to_date(nil, record, part, holder, read) do
     held_up_to_date(
       %{
         id: part["stream"],
@@ -143,16 +178,61 @@ defmodule Monty.Studio.Parts do
         frames: []
       },
       record,
-      part
+      part,
+      holder,
+      read
     )
   end
 
-  defp held_up_to_date(held, record, part) do
+  defp held_up_to_date(held, record, part, holder, read) do
     held = %{held | record: record, part: part}
 
     case RunStream.count(held.id) do
-      0 -> from_record(held)
+      0 -> without_a_stream_here(held, holder, read)
       steps -> from_stream(held, steps)
+    end
+  end
+
+  # Nothing in this node's memory for the part: it is a peer's, or its transcript
+  # is all there is. A peer answers its steps — and only its steps, because a
+  # late page shows the transcript it missed and a part's pictures come with the
+  # part's file when it ends. Positions are dense from nought in a part's own
+  # stream, so the count is where the read started plus what came back.
+  defp without_a_stream_here(held, nil, _read), do: from_record(held)
+
+  defp without_a_stream_here(held, holder, read) do
+    case read.(holder, held.id, held.taken - 1) do
+      [_ | _] = entries -> from_peer(held, entries)
+      _nothing_from_that_node -> from_record(held)
+    end
+  end
+
+  defp from_peer(held, entries) do
+    taken = held.taken + length(entries)
+
+    %{held | taken: taken, steps: taken, points: Enum.reverse(points_of(entries), held.points)}
+  end
+
+  # The default: ask the node that holds the part, if this cluster has it alive.
+  # A node that is gone or silent is not a page's problem — the record answers,
+  # which is what a page showed before any of this existed.
+  defp read_on(holder, stream, from) do
+    case node_holding(holder) do
+      nil -> []
+      node -> entries_on(node, stream, from)
+    end
+  end
+
+  defp node_holding(holder) do
+    Enum.find_value(Nodes.snapshot(), fn entry ->
+      entry.alive and entry.name == holder and entry.node
+    end)
+  end
+
+  defp entries_on(node, stream, from) do
+    case :rpc.call(node, RunStream, :entries_from, [stream, from], @remote_timeout) do
+      entries when is_list(entries) -> entries
+      _no_answer -> []
     end
   end
 
