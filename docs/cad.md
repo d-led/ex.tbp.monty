@@ -220,10 +220,32 @@ scene, not a config, knows where the object is.
    The second is that an empty possible set is not starvation. A counter that
    cannot climb because nothing was observed leaves the set where it was; here the
    set is emptied and never refilled, so the episode cannot conclude for a reason
-   that is upstream of the symmetry rule. Whether the matching refused a percept
-   it should not have been asked to match, or the walk's own frame puts the patch
-   where the part is not, is the next question, and it is worth answering before
-   the walk is compared with anything.
+   that is upstream of the symmetry rule.
+
+   **The walk is not walking.** Asked of the run itself, forty steps with the
+   patch's pose read from the sensor module and the policy's own `state_dict/1`
+   read from the provider:
+
+       step  35  patch [0.0, 0.0, 0.063]  walked 0  target nil  visited []
+       step  40  patch [0.0, 0.0, 0.063]  walked 0  target nil  visited []
+
+   and the motor system's recorded action sequence for the first step is a single
+   `MoveForward{agent_id: "agent_id_0", distance: 0.053}`. So the policy is asked,
+   answers, and issues an action — and the patch is in the same place at the
+   thirty-fifth step as at the fortieth. The part of the question about the walk's
+   frame is answered: the sensor is where `start_pose/2` put it, over the part, and
+   stays there. What is not answered is why the action does not move it. Two
+   candidates, and the next measurement is one line either way:
+
+   1. the standoff correction pushes the patch towards the surface on every step
+      and the walk's own `MoveForward` oscillates with it, taking no net step —
+      `walked` counting steps taken rather than distance moved would hide that;
+   2. the action reaches the motor system but not the sensor the policy reads, so
+      the policy corrects the same error every step.
+
+   Until that is answered the walk is not a comparison for the curvature policy at
+   all, and the numbers in the table above measure a stationary patch rather than a
+   walk.
 
 3. **A library the CAD world can be recognised against — a part with a pose
    recognises, a symmetric one does not conclude.** The experiment is now a
