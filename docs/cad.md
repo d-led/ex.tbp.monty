@@ -223,7 +223,7 @@ scene, not a config, knows where the object is.
    ends with a single rotation and nothing to disagree with.
 
    Why the memory is so short of orientation, and it is ours to state plainly:
-   `pose_fully_defined` is true on **233 of the plate's 1557 nodes (14 %)**,
+   `pose_fully_defined` is true on **233 of the plate's 1557 nodes (15 %)**,
    while Monty's own pretrained graphs carry it on **13 416 of 15 679 (85 %)**.
    Both numbers come from the same rule: the two principal curvatures must
    differ by more than `pc1_is_pc2_threshold`, which is 10 m⁻¹ — a curvature
@@ -234,6 +234,34 @@ scene, not a config, knows where the object is.
    Our memory is the honest one, and the honest one has less to match on. (The
    earlier paragraph about `pose_fully_defined` is about its _shape_ in the file,
    which is right; this is about how often it is true.)
+
+   Counted per part, over the memories the runs above wrote, the share is the
+   part's and not CAD's:
+
+   | part       | nodes | pose-defined |
+   | ---------- | ----- | ------------ |
+   | plate      | 1557  | 233 (15 %)   |
+   | blend      | 947   | 136 (14 %)   |
+   | plate-big  | 1581  | 186 (12 %)   |
+   | plate-huge | 1602  | 107 (7 %)    |
+
+   Those counts are the rule and nothing else: for each part the number of nodes
+   whose two principal curvatures differ by at least the threshold is _exactly_
+   the number the flag is true on — 233, 136, 186, 107 — so the flag can be
+   recomputed from the file rather than taken on trust.
+
+   The scaled twins are where the rule stops being about shape. Sampling each
+   part at its own spacing gives them the plate's node count but not its share
+   of orientable surface, and the reason is arithmetic uniform scaling makes
+   unavoidable: the typical curvature difference among the curved nodes is
+   131 m⁻¹ on the plate, 85 at 1.5× and 25 at 5× — divided by the scale, as
+   `1 / radius` must be, to within a few per cent — so a part five times the
+   size sits five times closer to a threshold that did not move. `plate-huge`
+   holds seventeen nodes between nought and the threshold, several at
+   9.7–9.9 m⁻¹; the plate holds eight, and none above 8.3.
+   `pc1_is_pc2_threshold` is an absolute curvature, so _which_ parts can be
+   oriented at all depends on their size — equal node counts are not equal
+   memories.
 
    So a part made mostly of flat faces can only be oriented by the geometry that
    is not flat — the boss and the through hole here — and whether a run finds
@@ -262,13 +290,16 @@ scene, not a config, knows where the object is.
    `unique_pose?/4` holds or a symmetry has been counted. The blend keeps one
    object and twenty-seven distinct rotations at step 500, and the count is not
    itself the signal — a plate seed fails with four, and one settles with one
-   (below). What matters is whether the surviving hypotheses _agree_, and on a
-   rounded block they do not: its faces say the same thing to this sensor —
-   flat, one colour, log curvature near zero — so the rotations that carry one
-   face onto another never separate. The blend is not unrecognised; it is
-   recognised as a shape whose orientation this percept cannot name, which is the
-   same wall the plate's failing seeds hit, reached by a part that has nothing
-   but flat faces to be oriented by.
+   (below). What matters is whether the surviving hypotheses _agree_. The blend
+   is not unrecognised: it is recognised as a shape whose orientation this
+   percept cannot name. But not for want of curved surface — its memory is 136
+   of 947 nodes pose-defined, 14 %, the plate's rate to within a point, so the
+   rounded edges are there to be seen. What is not established is why seeing
+   them is not enough. The block's own symmetry is the candidate: half turns
+   about each of its three axes map it onto itself, and a half turn is far
+   outside the 20° the pose rule allows. That is a candidate and not a finding:
+   it is left standing with the plate's seed rate, as one of the two questions
+   this section ends on, rather than written as a cause.
 
    `scripts/probe_cad_poses.exs` is that answer, on demand:
 
