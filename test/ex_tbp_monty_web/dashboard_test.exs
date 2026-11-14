@@ -37,6 +37,24 @@ defmodule ExTbpMontyWeb.DashboardTest do
                "/"
              ]
     end
+
+    # Development is where a reader meets the dashboard, and it is where Phoenix
+    # annotates every tag it renders: the page's body tag is `<body phx-r="1">`
+    # and not `<body>`. A link added only to an unannotated page is a link nobody
+    # sees, which is how this one first went missing.
+    test "puts the link inside the body tag even when Phoenix annotated it", %{conn: conn} do
+      plug = ExTbpMontyWeb.DashboardWayBack.init(back: "/", label: "Monty on the BEAM")
+
+      body =
+        conn
+        |> put_resp_content_type("text/html")
+        |> resp(200, ~s(<html><body phx-r="1"><main>the dashboard</main></body></html>))
+        |> ExTbpMontyWeb.DashboardWayBack.call(plug)
+        |> send_resp()
+        |> Map.fetch!(:resp_body)
+
+      assert body =~ ~s(<body phx-r="1"><a id="dashboard-way-back")
+    end
   end
 
   defp sidebar_entries(view) do

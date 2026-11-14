@@ -14,10 +14,10 @@ defmodule ExTbpMontyWeb.DashboardWayBack do
   dashboard's stylesheet is the dashboard's — a class of ours would mean shipping
   a rule into a page whose assets this application does not own.
 
-  It goes in after `<body>`, which is outside the element LiveView patches, so a
-  patch between dashboard pages cannot take it away. A document navigation and
-  not a live one: the studio is another `live_session` on another socket, and a
-  patch across that boundary is a page load anyway.
+  It goes in after the opening `<body>` tag, which is outside the element LiveView
+  patches, so a patch between dashboard pages cannot take it away. A document
+  navigation and not a live one: the studio is another `live_session` on another
+  socket, and a patch across that boundary is a page load anyway.
   """
 
   @behaviour Plug
@@ -49,6 +49,13 @@ defmodule ExTbpMontyWeb.DashboardWayBack do
   @impl true
   def init(opts), do: Map.new(opts)
 
+  # `<body>` is not what a development page says. Phoenix annotates every tag it
+  # renders there (`<body phx-r="1">`, which is what makes a page's markup
+  # traceable back to the template that drew it), so the opening tag is matched
+  # with whatever attributes it carries — and a page whose body tag cannot be
+  # found comes back untouched rather than mangled.
+  @body_tag ~r/<body[^>]*>/
+
   @impl true
   def call(conn, opts), do: register_before_send(conn, &put_way_back(&1, opts))
 
@@ -57,9 +64,12 @@ defmodule ExTbpMontyWeb.DashboardWayBack do
       # The body a LiveView rendered arrives as iodata, so it is a list until it
       # is asked to be a page.
       body =
-        conn.resp_body
-        |> IO.iodata_to_binary()
-        |> String.replace("<body>", "<body>" <> bar(opts), global: false)
+        Regex.replace(
+          @body_tag,
+          IO.iodata_to_binary(conn.resp_body),
+          fn tag -> tag <> bar(opts) end,
+          global: false
+        )
 
       %{conn | resp_body: body}
     else
