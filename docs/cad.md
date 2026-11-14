@@ -161,6 +161,17 @@ scene, not a config, knows where the object is.
    policy, and carries two at once without one advancing the other — and would
    walk the part no differently from the config it wraps.
 
+   Three of the four things the wiring needs are in place, and were checked here
+   rather than at a cluster: `MontyCad.Policy.FeatureWalk.describe/0` answers
+   `name: "monty_cad.feature_walk"`, `kind: :motor_policy`, `placement:
+   :owner_only`, `needs: [:quiddity, :monty]` — the name `MONTY_REMOTE_POLICY`
+   takes and the kind `RemotePolicy.find/2` looks for; the server starts the
+   policy process at boot, so the offer is not conditional on a request having
+   been made; and `RemotePolicy.among/3` refuses an offering whose `needs` the
+   host cannot prove against `MontyPlugin.Capabilities`, which is why
+   `ex_monty_plugin 0.1.2` is a floor in the server's `mix.exs`. The fourth is a
+   cluster, and it is the only one left.
+
 3. **A library the CAD world can be recognised against — a part with a pose
    recognises, a symmetric one does not conclude.** The experiment is now a
    script:
