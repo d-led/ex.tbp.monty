@@ -111,7 +111,7 @@ scene, not a config, knows where the object is.
    a world the node would refuse, and a record that names `cad` is asked for
    rather than quietly replaced by the worker's own default.
 
-2. **The feature walk — built and tested, not yet reachable from a run.**
+2. **The feature walk — reachable from a run, on another node.**
    `MontyCad.Policy.FeatureWalk` (`ade1dd3`, `ex.monty.cad`) walks a part to the
    features its recognition names. Each step it ray-casts from the sensor onto
    the exact surface, corrects the patch's standoff with a `MoveForward`, and
@@ -124,11 +124,11 @@ scene, not a config, knows where the object is.
    Held to the part by tests: the fixture is walked to both features, and no
    sideways step is taken from a wrong standoff.
 
-   What is left is the wiring, and now it has a name rather than a shape: a run
-   picks a policy up from **`MONTY_REMOTE_POLICY`**, which `RemotePolicy.configured/0`
-   reads and `RemotePolicy.find/1` resolves over `:pg` (`MontyPlugin.Registry`),
-   checking `:quiddity` and `:monty` against what the host proves it carries and
-   refusing `:owner_only` on a node that cannot serve it. So one node runs
+   The wiring has a name rather than a shape: a run picks a policy up from
+   **`MONTY_REMOTE_POLICY`**, which `RemotePolicy.configured/0` reads and
+   `RemotePolicy.find/1` resolves over `:pg` (`MontyPlugin.Registry`), checking
+   `:quiddity` and `:monty` against what the host proves it carries and refusing
+   `:owner_only` on a node that cannot serve it. So one node runs
    `ex.monty.cad.server` with `MONTY_CAD_PART` set — the provider opens the part
    itself, and `:owner_only` is exactly the claim that the B-rep handle is a
    resource of that node's memory — and the node that runs the experiment is
@@ -161,16 +161,39 @@ scene, not a config, knows where the object is.
    policy, and carries two at once without one advancing the other — and would
    walk the part no differently from the config it wraps.
 
-   Three of the four things the wiring needs are in place, and were checked here
-   rather than at a cluster: `MontyCad.Policy.FeatureWalk.describe/0` answers
-   `name: "monty_cad.feature_walk"`, `kind: :motor_policy`, `placement:
-   :owner_only`, `needs: [:quiddity, :monty]` — the name `MONTY_REMOTE_POLICY`
-   takes and the kind `RemotePolicy.find/2` looks for; the server starts the
-   policy process at boot, so the offer is not conditional on a request having
-   been made; and `RemotePolicy.among/3` refuses an offering whose `needs` the
-   host cannot prove against `MontyPlugin.Capabilities`, which is why
-   `ex_monty_plugin 0.1.2` is a floor in the server's `mix.exs`. The fourth is a
-   cluster, and it is the only one left.
+   **Two nodes, and the decision crossed one of them.** The provider was
+   `ex.monty.cad.server` on `cad@127.0.0.1` with `MONTY_CAD_PART` naming the
+   plate, and the runner was this application on `runner@127.0.0.1` with
+   `MONTY_REMOTE_POLICY=monty_cad.feature_walk`, `MONTY_SEEDS=cad@127.0.0.1` and
+   the sibling CAD builds on its path — which is `scripts/probe_remote_policy.exs`:
+
+       MONTY_REMOTE_POLICY=monty_cad.feature_walk MONTY_SEEDS=cad@127.0.0.1 \
+       CAD_SEED=0 MONTY_CAD_PART=…/golden_simple_through_hole.step \
+       CAD_LIBRARY=/tmp/cad-experiment/plate \
+       elixir --name runner@127.0.0.1 -S mix run scripts/probe_remote_policy.exs 500
+
+   which printed
+
+       peers        [:"cad@127.0.0.1"]
+       policy       monty_cad.feature_walk@0.6.1 on cad@127.0.0.1
+       seed         0
+       steps        500 of 500
+       ended        at the probe's limit
+       terminal     nil
+       possible     ["plate"]
+
+   The provider announced itself once, `cad policy: offering motor_policy
+   monty_cad.feature_walk 0.6.1 (owner_only)`, and then decided 500 times:
+   `RemotePolicy.call/6` is a `GenServer.call` to the provider's pid every step,
+   so a run that reaches its limit has had every action decided by the other
+   node. The run's own verdict is uninteresting and that is the point — the walk
+   takes seed 0 to 500 steps with the plate still possible and no conclusion,
+   the same verdict the curvature policy reaches on that seed, so what the seam
+   changes is who decides, not what this part does.
+
+   What the run needed, beyond the two nodes: the provider holds the part
+   (`MONTY_CAD_PART`), the runner carries the CAD builds because it steps the
+   world, and neither is in the same VM — which is the shortcut below.
 
 3. **A library the CAD world can be recognised against — a part with a pose
    recognises, a symmetric one does not conclude.** The experiment is now a
