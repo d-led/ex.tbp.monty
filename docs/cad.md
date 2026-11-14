@@ -4,6 +4,31 @@ A part can be the world an episode steps: `--world cad`, with `MONTY_CAD_PART`
 naming the STEP file. This page says what that is, how to see it, and what is
 next.
 
+## Where this stands (2026-11-14 evening)
+
+The long form of the hand-over lives in mempalace (wing `ex.tbp.monty`, rooms
+`handover` and `next-work`, "hand-off 2, 2026-11-14 evening"); this page is the
+record, and it is the thing to read when the two disagree.
+
+- **The two-node seam works.** A run on `runner@127.0.0.1` was steered for 500
+  steps by `monty_cad.feature_walk@0.6.1` on `cad@127.0.0.1`, and
+  `RemotePolicy.call/6` is a cross-node call per step. `scripts/probe_remote_policy.exs`
+  is the reproduction; item 2 of the list below is done.
+- **The walk is what is left, and it is in `ex.monty.cad`.** It walks — a 53 mm
+  standoff correction, then four-millimetre tangential steps — and it drives the
+  patch to the part's base (`z` 0.063 → 0.000) while its own state says it keeps a
+  five-millimetre standoff. That is why one step in 497 is a new observation.
+  Start with the ray's distance convention.
+- **A curved part would give the pose rule something to name, and cannot be made
+  here**: the kernel builds no primitive and scaling a plate gives a plate.
+- **Three readings in this document were retracted**, and the retractions are
+  kept where they belong rather than deleted: a claimed defect in
+  `ex_tbp_monty_core` (the port is consistent about relative sensor poses), an
+  action sequence read from the wrong end (`List.first` is the *oldest*), and a
+  patch that "never moves" (two samples were a return). Read `List.last`, read
+  live module state with `Model.detailed/2`, and check a comment before calling
+  something a defect.
+
 ## What it is
 
 `MontyCad.Scene` (`ex.monty.cad`) is a **scene**, not a world. The port's world
