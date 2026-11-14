@@ -725,3 +725,24 @@ scene, not a config, knows where the object is.
 4. **A part per episode.** A CAD world steps one part; the object-per-episode
    interfaces walk a list. That is where "ten similar parts" becomes an
    experiment rather than a demonstration.
+
+   What is missing is not a knob, and it is worth saying before somebody goes
+   looking for one.
+   `Monty.Experiment.Environment.OneObjectPerEpisodeInterface` decides the
+   sequence already — the list, its deduplication, the semantic ids, which object
+   comes next — and asks the *scene* for the other half by calling
+   `add_object/2` on it. That call is duck-typed (`scene.__struct__.add_object/2`
+   rather than a declared callback), so a scene that cannot do it fails at the
+   call rather than at a boundary. `MontyCad.Scene` has no such function, and for
+   a B-rep part the operation it names is not the one to add: a part is not an
+   object put into a scene, it *is* the scene, and what changes between episodes
+   is which part the scene is.
+
+   So the piece to design is a scene that holds several parts and answers the one
+   an episode is about. The seam is small, because `primary_target/1` and
+   `semantic_id_to_label/1` already read `scene.label` and `render/3` reads only
+   `scene.part` — a struct with the parts by name and a current one is the whole
+   of it on this side. The studio's half is the other end: `MONTY_CAD_PART` names
+   one file, so a list needs a variable that can hold one and an episode index
+   that picks from it. That crosses a release of `ex_monty_cad`, which is why this
+   is the last item and not the next one.
