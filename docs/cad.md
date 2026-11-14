@@ -141,8 +141,14 @@ scene, not a config, knows where the object is.
    module set in one node. The designed path is two nodes in one cluster.
    The control variant — a shell around the ported
    `SurfacePolicyCurvatureInformed`, `:anywhere`, `needs: [:monty]` — is still
-   worth having, because it is what the finished 140-episode run already steered
-   by.
+   worth having, and it is a control for a reason worth saying out loud: that is
+   the policy this experiment already steers by — the config takes
+   `/monty/motor_system_config: surface_curvature_informed_goal1` — so a
+   provider around it walks the part with the same patch-only policy every run
+   above was steered by, reached through the seam instead of through the config.
+   A difference against `FeatureWalk` is then the geometry's, not the policy's.
+   (Monty's own 140-episode figure is its YCB benchmark, ten objects at fourteen
+   rotations; it is not a CAD run and is not evidence about one.)
 
 3. **A library the CAD world can be recognised against — a part with a pose
    recognises, a symmetric one does not conclude.** The experiment is now a
