@@ -52,19 +52,21 @@ defmodule FlyversePlugin.PolicyTest do
 
   # A fly with nothing in view is not aimed at anything, and a network balanced
   # between two halves would walk one straight line for ever. The wander leans it
-  # one way for a while and then the other, so the fly sweeps.
+  # one way for a while and then the other, so the fly sweeps. The patch here is
+  # distant but *read*, which is what keeps the step a steer: a patch with no
+  # readings at all is the search, and that is a different test.
   test "a fly with nothing in view leans one way, then the other", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
-    {first, policy, state} = step(policy, state, [[0.0, 0.0, 0.0, 0.0]])
+    {first, policy, state} = step(policy, state, [[2.0, 2.0, 2.0, 2.0]])
 
     state =
       Enum.reduce(1..40, state, fn _step, state ->
-        {_result, _policy, state} = step(policy, state, [[0.0, 0.0, 0.0, 0.0]])
+        {_result, _policy, state} = step(policy, state, [[2.0, 2.0, 2.0, 2.0]])
         state
       end)
 
-    {turned, _policy, _state} = step(policy, state, [[0.0, 0.0, 0.0, 0.0]])
+    {turned, _policy, _state} = step(policy, state, [[2.0, 2.0, 2.0, 2.0]])
 
     assert [%OrientHorizontal{rotation_degrees: first_way}] = first.actions
     assert [%OrientHorizontal{rotation_degrees: other_way}] = turned.actions
@@ -192,6 +194,28 @@ defmodule FlyversePlugin.PolicyTest do
     assert result.telemetry.right_hz <= 220.0
   end
 
+  # A patch that sees nothing is not on the object, whatever the percept says: a
+  # blank patch and an absent one are the same blindness, and both want the
+  # search rather than a steer. A run of this policy walked on into empty space
+  # this way — the patch had left the knife, the view finder still showed it as a
+  # bar, and the evidence sat at 124.395 for seventeen hundred steps while every
+  # frame the patch took was one blank colour.
+  test "a patch that sees nothing searches instead of steering", %{state: state} do
+    {:ok, policy, state} = Policy.new([], state)
+
+    blank = %{
+      "agent_id_0" => %{
+        "view_finder" => %{"depth" => [[0.2, 0.2]]},
+        "patch" => %{"depth" => [[0.0, 0.0]]}
+      }
+    }
+
+    {result, _policy, _state} = step(policy, state, blank, touching(0.025))
+
+    assert [%OrientHorizontal{forward_distance: forward}] = result.actions
+    assert forward > 0.0, "it goes towards what the view finder can see"
+  end
+
   # The animal does not crawl over the first thing it touches for ever: it walks a
   # bout, leaves, and lands again somewhere else. Sixty steps is the bout, and
   # what ends it is an about-face — 180 degrees, which the centring reflex cannot
@@ -275,16 +299,19 @@ defmodule FlyversePlugin.PolicyTest do
     assert walked.left_distance == 0.0
   end
 
-  # An empty view still walks: the tonic drive is what makes the network say
-  # "no preference" as a measurement rather than as silence.
-  test "a view with nothing in reach walks, and barely bends", %{state: state} do
+  # An empty patch is not a reason to keep walking. The fly has lost the object,
+  # so what it does is search — the circle Monty's surface policy draws — rather
+  # than steer on a wish that has nothing to be about. (The tonic floor, which is
+  # what makes the network say "no preference" rather than nothing at all, is
+  # asserted where it is observable: the drives in the telemetry.)
+  test "a patch with nothing in it searches rather than walking on", %{state: state} do
     {:ok, policy, state} = Policy.new([], state)
 
     {result, _policy, _state} = step(policy, state, [[0.0, 0.0, 0.0, 0.0]])
 
-    assert [%OrientHorizontal{} = walked] = result.actions
-    assert walked.forward_distance == 0.004
-    assert abs(walked.rotation_degrees) <= 5.0, "at most a base turn's worth"
+    assert [%OrientHorizontal{} = searched] = result.actions
+    assert searched.rotation_degrees == 30.0, "a step round the search circle"
+    assert searched.left_distance > 0.0
   end
 
   test "the telemetry is the spikes the decision was made of", %{state: state} do

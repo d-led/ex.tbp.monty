@@ -298,7 +298,7 @@ defmodule FlyversePlugin.Policy do
   @impl FlyversePlugin.Plugin
   def call(%__MODULE__{} = policy, {_ctx, observations, _motor_state, percept, _goal}, state) do
     simulation = Map.fetch!(state.simulations, policy.sim)
-    next = bout(simulation, on_object?(percept))
+    next = bout(simulation, on_object?(percept) and sees_something?(observations, policy))
     advanced = advance(simulation, next)
     state = put(state, policy.sim, advanced)
 
@@ -306,6 +306,19 @@ defmodule FlyversePlugin.Policy do
       :explore -> steer(policy, observations, percept, state)
       :depart -> {:ok, departing(policy, advanced), policy, state}
       :cruise -> {:ok, touch(policy, observations), policy, state}
+    end
+  end
+
+  # A patch that sees nothing is not on the object, whatever the percept says. A
+  # blank patch and an absent one are the same blindness, and both want the
+  # search rather than a steer — a run of this policy walked on into empty space
+  # this way: the patch had left the knife, the view finder still showed it as a
+  # bar, and the evidence sat at 124.395 for seventeen hundred steps while every
+  # frame the patch took was one blank colour.
+  defp sees_something?(observations, policy) do
+    case Percept.image(observations, policy.agent_id, policy.sensor_id) do
+      {:ok, {_sensor, rows}} -> Percept.nearness(rows) != {0.0, 0.0}
+      {:error, _sentence} -> false
     end
   end
 
@@ -389,7 +402,7 @@ defmodule FlyversePlugin.Policy do
   defp touch(policy, observations) do
     depth = PositioningProcedures.depth_at_center(observations, policy.agent_id, @view_finder)
     nearest = nearest_in_view(observations, policy.agent_id)
-    gap = if nearest == :infinity, do: depth, else: min(depth, nearest)
+    gap = gap(nearest, depth)
     centring = centring(observations, policy.agent_id)
 
     action =
@@ -464,6 +477,18 @@ defmodule FlyversePlugin.Policy do
   # that cannot travel forward travels back — as far as the standoff and no
   # further, because a gap is never negative — which puts the object at the
   # standoff again, where the patch can read it and the network can steer.
+  # The gap to close, from the two things the view finder reports: the centre
+  # pixel's depth and the nearest thing anywhere in the picture. A depth of nought
+  # is not a surface at no distance — it is a reading the world did not give, and
+  # both sensors report it when they see nothing at all — so it is not a
+  # measurement and does not narrow anything. A run of this policy backed away
+  # from a gap of nought for an entire episode this way.
+  defp gap(nearest, depth) when is_number(depth) and depth > 0.0 do
+    if nearest == :infinity, do: depth, else: min(depth, nearest)
+  end
+
+  defp gap(nearest, _no_reading), do: nearest
+
   defp approach(gap), do: min(gap - @desired_object_distance, @touch_stride)
 
   # The nearest thing the wide view can see, in metres, or `:infinity` when the
