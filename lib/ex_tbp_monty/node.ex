@@ -100,12 +100,22 @@ defmodule ExTbpMonty.Node do
   told apart from another one on the same machine, which is exactly the case
   where sharing a folder is right.
 
+  `MONTY_NODE_FOLDER` names it instead when it is set, and the desktop window is
+  the one start that keeps the shared folder without being told: its node name
+  carries an instance id that changes every launch, and a run recorded by
+  yesterday's launch has to be on this page today.
+
   `config/runtime.exs` asks this once, at boot, and hands the answer to
   `Monty.Paths`.
   """
   @spec data_dir_name() :: String.t() | nil
   def data_dir_name do
-    if ExTbpMonty.Cluster.enabled?() and distributed?(), do: safe_name(name())
+    cond do
+      folder = System.get_env("MONTY_NODE_FOLDER") -> safe_name(folder)
+      System.get_env("EX_TBP_MONTY_WINDOW") == "1" -> nil
+      ExTbpMonty.Cluster.enabled?() and distributed?() -> safe_name(name())
+      true -> nil
+    end
   end
 
   @doc """

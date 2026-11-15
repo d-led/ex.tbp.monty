@@ -406,15 +406,18 @@ fn start_sidecar(app: &AppHandle, shared: &SharedState) -> Result<(Child, String
         // `cargo run` each begin somewhere else, and only the release's folder
         // is where its launcher expects to be.
         .current_dir(path.parent().unwrap_or_else(|| Path::new(".")))
-        // The application has no peers, so distribution buys it nothing and
-        // costs it everything: a release node name is fixed, and a second
-        // launch makes this one die with "the name ... seems to be in use by
-        // another Erlang node".
-        .env("RELEASE_DISTRIBUTION", "none")
+        // The window's own sidecar: `rel/env.sh.eex` names it
+        // `monty-studio-<instance id>` and starts the tree that joins a cluster.
+        // The name carries a per-launch instance id, which is why the release is
+        // no longer told `RELEASE_DISTRIBUTION=none` here: that line existed
+        // because a release node name was fixed, and a second launch died with
+        // "the name ... seems to be in use by another Erlang node". A person who
+        // wants that single node back sets `MONTY_STUDIO_CLUSTER=0`, which is
+        // inherited like every other variable of this process.
+        .env("EX_TBP_MONTY_WINDOW", "1")
         // The pipe is the whole of "my window is alive": the release reads it
         // and stops when it closes, which is the case `RunEvent::Exit` below
         // cannot cover - a window that was force-quit or crashed.
-        .env("EX_TBP_MONTY_WINDOW", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         // Drained by a thread from the first moment. An inherited stderr is a

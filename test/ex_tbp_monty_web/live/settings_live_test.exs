@@ -223,4 +223,46 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
       assert view |> element("#capability-gpu") |> render() =~ "gpu@127.0.0.1"
     end
   end
+
+  # The one control on the page that changes the cluster while it runs: gossip
+  # finds the peers on one machine or one link, and a scaled worker on another
+  # network is dialled by name.
+  describe "the connect dialog" do
+    test "asks a node without a name what would give it one", %{conn: conn} do
+      # This VM has no name, and a node that was never named cannot dial
+      # anybody: the answer is about *this* node, not about the one typed.
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      html =
+        view
+        |> element("#cluster-connect-form")
+        |> render_submit(%{"connect" => %{"nodes" => "monty-studio-1a2b3c@10.0.0.7"}})
+
+      assert html =~ "cluster-connect-result-monty-studio-1a2b3c_10.0.0.7"
+      assert html =~ "was not started with a name"
+    end
+
+    test "says what is wrong with something that is not a node name", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      html =
+        view
+        |> element("#cluster-connect-form")
+        |> render_submit(%{"connect" => %{"nodes" => "not a node"}})
+
+      assert html =~ "cluster-connect-error"
+      assert html =~ "is not a node name"
+    end
+
+    test "says so when nothing was typed", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      html =
+        view
+        |> element("#cluster-connect-form")
+        |> render_submit(%{"connect" => %{"nodes" => " "}})
+
+      assert html =~ "name a node to connect to"
+    end
+  end
 end

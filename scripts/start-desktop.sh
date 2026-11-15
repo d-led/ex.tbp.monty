@@ -270,12 +270,15 @@ if [ -n "$missing" ]; then
   exit 1
 fi
 
-# No peers to cluster with. A distributed release has a fixed node name, so a
-# second launch fails with "the name ... is in use by another Erlang node" and
-# dies before it says where it listens — which the window reports as "the
-# sidecar stopped before it said where it listens". Everything below runs this
-# release, so it is set before the first of them.
-export RELEASE_DISTRIBUTION=none
+# The window's own sidecar: `rel/env.sh.eex` names it `monty-studio-<instance
+# id>` and starts the tree that joins a cluster, which is what lets the sample
+# plugin nodes shipped beside this window find it. Two launches no longer
+# collide, because the instance id is per launch — that is the whole reason the
+# release used to be told `RELEASE_DISTRIBUTION=none`.
+#
+# `MONTY_STUDIO_CLUSTER=0` is how a person asks for that old single node: it is
+# handed through to the release, whose env file then starts it undistributed.
+export EX_TBP_MONTY_WINDOW=1
 
 if [[ "$mode" == where ]]; then
   run "reading where the data is" print_where

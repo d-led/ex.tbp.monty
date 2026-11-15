@@ -28,7 +28,13 @@ entry="$release/bin/server"
   exit 1
 }
 
-export RELEASE_DISTRIBUTION=none
+# Started the way the window starts it, and that is the point of this check: the
+# sidecar is a *named* node now, `monty-studio-<instance id>`, and the name is what
+# the sample plugins shipped beside the application dial. A release that names
+# itself after the release (`sname` and nothing else) starts and answers, and then
+# no plugin finds it — the failure `run-desktop.sh` would report as "the window is
+# up and there is nothing to connect to".
+export EX_TBP_MONTY_WINDOW=1
 export MONTY_DESKTOP_PORT="$port"
 
 log="$(mktemp "${TMPDIR:-/tmp}/boot-check.XXXXXX")"
@@ -91,9 +97,9 @@ trap cleanup EXIT
 
 answered=
 for _ in $(seq 1 120); do
-  if curl -fsS -o /dev/null "http://127.0.0.1:$port/health" 2>/dev/null; then
+  if health="$(curl -fsS "http://127.0.0.1:$port/health" 2>/dev/null)"; then
     answered=1
-    echo "the release answered /health on $port"
+    echo "the release answered /health on $port: $health"
     break
   fi
 
@@ -111,6 +117,22 @@ if [ -z "$answered" ]; then
   tail -20 "$log" >&2
   exit 1
 fi
+
+# Named, and named the way a plugin finds it: `monty-studio-<instance id>`. The
+# instance id is generated per launch and nobody here knows it, so the prefix is
+# what is asserted — a node that answered `nightly` or `nonode@nohost` is a node
+# whose name the launcher did not set, which is the regression this catches.
+case "$health" in
+  *'"node":"monty-studio-'*)
+    echo "and it is a node the sample plugins can find by name"
+    ;;
+  *)
+    echo "the release answered /health without a monty-studio node name:" >&2
+    echo "  $health" >&2
+    echo "  rel/env.sh.eex names the window; see docs/desktop.md" >&2
+    exit 1
+    ;;
+esac
 
 # Then the page that reads the disk, because a release can be alive and still
 # have nothing to say about the disk it writes to: it did, on Windows, while

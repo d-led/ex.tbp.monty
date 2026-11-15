@@ -57,6 +57,43 @@ without any change to the picture.
 never names a `Desktop.*` module and nothing dev or prod ships contains this
 code.
 
+## The node name, and the cluster
+
+The window's sidecar is a **named node**, `monty-studio-<instance id>`, and it
+starts the tree that joins a cluster. Two reasons, and the second is the point:
+the window is what the sample plugin nodes are meant to connect to, and a node
+that gossip can find has to have a name that is not the release's own — several
+copies of it run on one machine.
+
+The instance id is generated per launch, in `rel/env.sh.eex` (six hex characters
+from the kernel; the pid where there is no `/dev/urandom`). Per launch is
+deliberate: two VMs cannot share a node name, and a fixed name is what made a
+second copy die at boot with _the name … seems to be in use by another Erlang
+node_. What that used to be answered with — `RELEASE_DISTRIBUTION=none` — is now
+the opt-out:
+
+- `MONTY_STUDIO_CLUSTER=0` starts one node, undistributed, with no cluster
+  children. Everything else about the window is unchanged.
+- `MONTY_STUDIO_INSTANCE_ID=worker-1` names it `monty-studio-worker-1`, which is
+  what a worker that must be dialled by the same name tomorrow needs.
+- `NODE_NAME`/`RELEASE_NODE` (with `RELEASE_DISTRIBUTION=name`) still wins over
+  both: a worker reached from another machine says so, because a short name
+  listens on the loopback and a long one on every interface.
+
+Peers are found by **gossip** (libcluster's, UDP multicast), so nothing has to be
+configured for two nodes on one machine or one link. A node gossip cannot reach —
+a scaled worker on another network — is dialled from **Settings → Cluster →
+Connect to a node**: the page takes `name@host`, calls `Node.connect/1` and says
+per name whether it connected, whether it is this node, or whether nobody
+answered (with the three reasons that look identical: not running, host
+unreachable, cookie differs). A dialled node is _not_ remembered; a peer list that
+survives a restart is `MONTY_SEEDS`.
+
+The data folder does **not** follow the name. The window is the one start that
+keeps the folder a node that runs alone uses, because an instance id is per
+launch and a run recorded by yesterday's launch has to be on this page;
+`MONTY_NODE_FOLDER` names a folder if a worker wants its own.
+
 ## The port
 
 The app answers on **42_800**, the same number every launch, because the MCP
@@ -99,8 +136,11 @@ data on another.
 
 **(c) The window — their `src-tauri/src/main.rs`.** Tauri is a window and a
 process supervisor and nothing else: it starts the release as a sidecar with
-`RELEASE_DISTRIBUTION=none`, reads the address the release prints on stdout,
-points a webview at it, and kills the child on `RunEvent::Exit`.
+`monty-studio-<instance id>`, reads the address the release prints on stdout,
+points a webview at it, and kills the child on `RunEvent::Exit`. It sets no
+distribution variables: the release's own `rel/env.sh.eex` decides those, because
+the Windows and macOS launchers and the headless `--in-browser` start have to
+agree on the rule.
 
 **(d) Two things a repository must not contain.** A constant `SECRET_KEY_BASE`
 is a secret in a repository; the desktop application generates one per launch

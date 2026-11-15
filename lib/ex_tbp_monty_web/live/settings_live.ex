@@ -15,14 +15,17 @@ defmodule ExTbpMontyWeb.SettingsLive do
 
   use ExTbpMontyWeb, :live_view
 
+  require Logger
+
   alias ExTbpMonty.Cluster.Capabilities
+  alias ExTbpMonty.Cluster.Connect
   alias Monty.Paths
   alias Monty.Studio.Artifacts
   alias Monty.Studio.{Settings, System}
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign_page(socket, :info)}
+    {:ok, socket |> assign_page(:info) |> assign_connect()}
   end
 
   @impl true
@@ -42,6 +45,34 @@ defmodule ExTbpMontyWeb.SettingsLive do
          |> put_flash(:error, message)
          |> assign_page(:error)}
     end
+  end
+
+  # A node somebody typed. Gossip is what finds the peers on one machine or one
+  # link and nothing else, so a **scaled worker** — a machine brought up for a run,
+  # a peer across a network where multicast does not reach — is dialled here.
+  @impl true
+  def handle_event("connect", %{"connect" => %{"nodes" => typed}}, socket) do
+    case Connect.parse(typed) do
+      {:ok, names} ->
+        {:noreply,
+         socket |> assign(connect_error: nil) |> assign(connect_results: Connect.dial(names))}
+
+      {:error, sentence} ->
+        {:noreply, socket |> assign(connect_error: sentence) |> assign(connect_results: [])}
+    end
+  end
+
+  # A page never dies on an event it did not expect: a component's hook, a form
+  # from a tab that was open before the page changed. That is a line in the log,
+  # not a dead page — the run page learned this by taking its LiveView down on
+  # every remount.
+  def handle_event(event, params, socket) do
+    Logger.warning(
+      "the settings page got an event it does not handle: #{inspect(event)} " <>
+        "#{inspect(params)}"
+    )
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -131,6 +162,57 @@ defmodule ExTbpMontyWeb.SettingsLive do
           <p id="cluster-artifacts" class="text-xs text-base-content/60">
             run files: {@cluster.artifacts}
           </p>
+
+          <%!--
+            The one control on this page that changes the cluster while it runs.
+            Everything else above it is a boot value, which is why it is shown and
+            not offered; a dialled peer is the exception — distribution connects,
+            and `Node.connect/1` is what a peer that gossip cannot reach is reached
+            with. It is not remembered: a peer list that survives a restart is
+            `MONTY_SEEDS`, and a text box that quietly became configuration is the
+            kind of setting nobody finds again.
+          --%>
+          <div class="space-y-1 pt-1">
+            <p class="text-xs font-semibold text-base-content/90">Connect to a node</p>
+            <.form
+              for={@connect}
+              id="cluster-connect-form"
+              phx-submit="connect"
+              class="flex flex-wrap items-end gap-2"
+            >
+              <.input
+                field={@connect[:nodes]}
+                type="text"
+                label="Node address"
+                placeholder="monty-studio-1a2b3c@10.0.0.7"
+                class="input input-sm w-80 font-mono"
+              />
+              <button type="submit" id="cluster-connect" class="btn btn-sm">Connect</button>
+            </.form>
+
+            <p :if={@connect_error} id="cluster-connect-error" class="text-xs text-error">
+              {@connect_error}
+            </p>
+
+            <ul
+              :if={@connect_results != []}
+              id="cluster-connect-results"
+              class="space-y-0.5 text-xs"
+            >
+              <li
+                :for={result <- @connect_results}
+                id={"cluster-connect-result-" <> ExTbpMonty.Node.safe_name(result.name)}
+                class={[
+                  "flex flex-wrap gap-x-2",
+                  result.outcome == :connected && "text-success",
+                  result.outcome in [:unreachable, :no_name] && "text-warning"
+                ]}
+              >
+                <span class="font-mono">{result.name}</span>
+                <span class="text-base-content/70">{result.note}</span>
+              </li>
+            </ul>
+          </div>
         </section>
       </section>
     </Layouts.app>
@@ -142,6 +224,16 @@ defmodule ExTbpMontyWeb.SettingsLive do
       page_title: "Settings",
       form: to_form(Settings.form_values(), as: :settings),
       cluster: cluster()
+    )
+  end
+
+  # The dialog's own state, which a save must not clear: it is not a setting, and
+  # the answers it last gave are what a reader is looking at.
+  defp assign_connect(socket) do
+    assign(socket,
+      connect: to_form(%{"nodes" => ""}, as: :connect),
+      connect_results: [],
+      connect_error: nil
     )
   end
 

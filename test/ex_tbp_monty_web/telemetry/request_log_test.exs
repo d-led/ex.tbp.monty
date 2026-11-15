@@ -35,7 +35,8 @@ defmodule ExTbpMontyWeb.Telemetry.RequestLogTest do
     conn = get(conn, ~p"/health")
 
     assert conn.status == 200
-    assert Jason.decode!(conn.resp_body) == %{"status" => "ok"}
+    # The node is in the answer too, and this test is about the probe's status.
+    assert %{"status" => "ok"} = Jason.decode!(conn.resp_body)
   end
 
   test "attaching twice is not an error, so a restart does not double the log" do

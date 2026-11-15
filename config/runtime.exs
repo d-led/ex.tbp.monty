@@ -135,9 +135,26 @@ end
 #
 # The name is `ExTbpMonty.Node.safe_name/1` — the node's own name with everything a
 # path cannot hold replaced — and `:nonode@nohost` never gets one.
+#
+# `MONTY_NODE_FOLDER` names it instead when it is set, and the desktop window is
+# the one start that keeps the shared folder without being told: its node name
+# carries an instance id that changes every launch, and a run recorded by
+# yesterday's launch has to be on this page today. A name is used as the folder,
+# made safe for a path the same way.
 data_dir_name =
-  if cluster_on? and node() != :nonode@nohost,
-    do: ExTbpMonty.Node.safe_name(node())
+  cond do
+    folder = System.get_env("MONTY_NODE_FOLDER") ->
+      ExTbpMonty.Node.safe_name(folder)
+
+    System.get_env("EX_TBP_MONTY_WINDOW") == "1" ->
+      nil
+
+    cluster_on? and node() != :nonode@nohost ->
+      ExTbpMonty.Node.safe_name(node())
+
+    true ->
+      nil
+  end
 
 # Written *now* as well as configured below, and the difference is not cosmetic: a
 # `config/2` in this file is applied after the whole file has been evaluated, and

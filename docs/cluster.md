@@ -78,6 +78,9 @@ always had. `Monty.Paths.node_root/0` is the only thing that knows the rule.
 | `MONTY_CAPABILITIES`       | what this node can do, comma-separated (see [capability tags](#capability-tags))                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `MONTY_DB`                 | `sqlite` gives a development node a file instead of the Postgres a developer's machine has. A release asks `DATABASE_URL` instead                                                                                                                                                                                                                                                                                                                                                |
 | `NODE_NAME`                | a release's node name, the alias of `RELEASE_NODE`; in development the name is the VM's (`--name`/`--sname`)                                                                                                                                                                                                                                                                                                                                                                     |
+| `MONTY_STUDIO_CLUSTER`     | the desktop window's off switch: `0` starts one undistributed node with no cluster children. Unset, the window is a named node that joins a cluster                                                                                                                                                                                                                                                                                                                              |
+| `MONTY_STUDIO_INSTANCE_ID` | the instance id in that name, `monty-studio-<id>`. Unset, six random hex characters per launch — per launch because two VMs cannot share a node name                                                                                                                                                                                                                                                                                                                             |
+| `MONTY_NODE_FOLDER`        | where this node's data goes (`nodes/<this>`). The desktop window is the one start that keeps the shared folder without being told — its own name changes every launch, and yesterday's runs have to be on today's page                                                                                                                                                                                                                                                           |
 | `MONTY_STUDIO_CONCURRENCY` | how many runs one node performs at once — Oban's `queues: [studio: n]`, two when it is not set. A laptop sharing its cores with two MuJoCo worlds is slower per run than one world at a time, and a node with a GPU is not, so it is the deployment's number. In a cluster the queue is one queue: two nodes at two each is four runs at once, and a node told to take one leaves the other for its peer. Anything that is not a whole number of at least one is refused at boot |
 | `MONTY_ARTIFACTS_DIR`      | where a run's files go (`Monty.Studio.Artifacts`: the log, the pictures, the statistics, the memory it learned). Default: this node's own folder. Point every node at one directory before asking a run's parts to work on more than one node                                                                                                                                                                                                                                    |
 
@@ -88,6 +91,24 @@ the settings page says where a node's secret came from — and never what it is,
 because a settings screen is not a place to print a password. A node given none
 falls back to its user's `~/.erlang.cookie`, which is right for several nodes on
 one machine and wrong for several machines.
+
+## The desktop's name
+
+The window's sidecar is a named node, `monty-studio-<instance id>`, and it starts
+the tree that joins a cluster by default — the sample plugin nodes are meant to
+find it, and gossip needs a name that two launches on one machine do not share.
+The instance id is generated per launch in `rel/env.sh.eex`;
+`MONTY_STUDIO_INSTANCE_ID` overrides it, `NODE_NAME`/`RELEASE_NODE` overrides the
+whole name, and `MONTY_STUDIO_CLUSTER=0` is the way back to one undistributed
+node. Its data stays in the folder a single node uses — a name that changes per
+launch must not take the runs with it — unless `MONTY_NODE_FOLDER` names one.
+
+Peers gossip, so two nodes on one machine find each other with nothing set. What
+gossip cannot reach — a scaled worker behind another network — is dialled from
+**Settings → Cluster → Connect to a node**, which takes `name@host` and reports
+per name whether it connected, whether it is this node, or whether nobody
+answered. It is not remembered: a peer list that survives a restart is
+`MONTY_SEEDS`.
 
 ## What the pages say
 
