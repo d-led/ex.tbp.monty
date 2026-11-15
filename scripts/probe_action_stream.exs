@@ -99,6 +99,22 @@ defmodule ActionStream do
     {actions, motor} =
       MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
 
+    {actions, motor} =
+      MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
+
+    IO.puts(
+      "  percept: pose=#{inspect(percept.morphological_features["pose_fully_defined"])} " <>
+        "pc=#{inspect(percept.non_morphological_features["principal_curvatures"])} " <>
+        "pc_log=#{inspect(percept.non_morphological_features["principal_curvatures_log"])} " <>
+        "pose_vectors=#{inspect(percept.morphological_features["pose_vectors"])}"
+    )
+
+    IO.puts(
+      "  heading: angle=#{inspect(motor.policy_selector.policy.tangential_angle)} " <>
+        "vec=#{inspect(motor.policy_selector.policy.tangential_vec)} " <>
+        "rotation=#{inspect(state.proprioceptive_state[@agent].rotation)}"
+    )
+
     {observations, proprioceptive_state, world} =
       state.world.__struct__.step(state.world, Enum.map(recorded["actions"], &action/1))
 

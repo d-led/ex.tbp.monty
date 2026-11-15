@@ -149,6 +149,29 @@ defmodule Monty.Frameworks.Utils.SensorProcessingTest do
                  [0.0, 0.0, 1.0]
                )
     end
+
+    # numpy's answer, from Monty's own interpreter
+    # (`tbp.monty.frameworks.utils.sensor_processing.principal_curvatures` on
+    # these 25 points with `weighted=False`): `dir1 = [1, 0, 0]` and
+    # `dir2 = [0, -1, 0]` for a bowl that is steeper along y. The *pair* is what
+    # the answer is; a pair and its negation describe the same surface, and which
+    # one comes out is numpy's choice — but it is not a free one, because a surface
+    # policy steers by `dir1`: a port whose `dir1` points the other way walks round
+    # an object in the opposite direction and reads a different number of percepts
+    # on the way (`scripts/probe_action_stream.exs`, §2.23 in
+    # `docs/monty-differences.md`).
+    test "and the pair carries numpy's sign, which is the one a policy steers by" do
+      points = for y <- xs(), x <- xs(), do: [x, y, 0.5 * (x * x + 2.0 * y * y), 1.0]
+
+      assert {_first, _second, direction_1, direction_2, true} =
+               SensorProcessing.principal_curvatures(points, 12, [0.0, 0.0, -1.0],
+                 weighted: false
+               )
+
+      assert_in_delta Enum.at(direction_1, 0), 1.0, 1.0e-9
+      assert_in_delta Enum.at(direction_1, 1), 0.0, 1.0e-9
+      assert_in_delta Enum.at(direction_2, 1), -1.0, 1.0e-9
+    end
   end
 
   describe "the neighbourhood a fit uses" do
@@ -192,6 +215,9 @@ defmodule Monty.Frameworks.Utils.SensorProcessingTest do
   # -- fixtures --------------------------------------------------------------
 
   defp plane, do: Patch.grid(41, 0.01)
+
+  # The five offsets a side of the bowl in the sign test, in metres.
+  defp xs, do: Enum.map(0..4, fn index -> -0.01 + index * 0.005 end)
 
   defp sphere do
     radius = 0.05

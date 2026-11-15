@@ -405,11 +405,34 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
   @spec principal_curvatures([[float()]], non_neg_integer(), [float()], keyword()) ::
           {float(), float(), [float()], [float()], boolean()}
   def principal_curvatures(point_cloud, center_id, normal, options \\ []) do
-    case native_curvatures(point_cloud, center_id, normal, options) do
-      {:ok, curvatures} -> curvatures
-      :read_the_reference -> reference_curvatures(point_cloud, center_id, normal, options)
-    end
+    curvatures =
+      case native_curvatures(point_cloud, center_id, normal, options) do
+        {:ok, curvatures} -> curvatures
+        :read_the_reference -> reference_curvatures(point_cloud, center_id, normal, options)
+      end
+
+    numpy_eigenvector_sign(curvatures)
   end
+
+  # The sign numpy's `eig` answers with, which is the sign Monty's directions
+  # carry — and the kernel's is the opposite one.
+  #
+  # `np.linalg.eig` hands Monty a pair of eigenvectors, and a pair and its
+  # negation describe the same surface: only the sign of the product
+  # `(dir1, dir2, normal)` is fixed, and Monty fixes it himself by flipping
+  # `dir2` when the triple is left-handed. The *remaining* sign is numpy's, and
+  # a port has to have it too, because a surface policy steers by `dir1`: two
+  # ports with opposite signs walk round an object in opposite directions, read a
+  # different number of percepts and pay different amounts for the same episode
+  # (`scripts/probe_action_stream.exs`, and Monty's own recording settles it —
+  # see `test/monty/frameworks/utils/principal_direction_sign_test.exs`).
+  defp numpy_eigenvector_sign({k1, k2, dir1, dir2, true}) do
+    {k1, k2, negate(dir1), negate(dir2), true}
+  end
+
+  defp numpy_eigenvector_sign(curvatures), do: curvatures
+
+  defp negate([x, y, z]), do: [-x, -y, -z]
 
   # The same fit, one native call for the whole patch.
   #

@@ -1536,10 +1536,30 @@ forward move, and its distance is arithmetic on the view finder's middle depth a
 the sensor's own offset. His recording says `0.036434554755687715`, ours says
 `0.0364345532655716` — a difference of 1.5 nanometres, because the pose behind
 that depth was composed along a slightly different float path. No threshold in the
-policy or the filter can see that; what is not yet measured is the whole action
-stream, step for step, because that needs an episode harness rather than a probe
-(the studio's `Run` path did not return within six minutes against the Python
-world, which is worth a look of its own).
+policy or the filter can see that.
+
+**And the stream is his, from the first step to the seventh.**
+`scripts/probe_action_stream.exs` asks the experiment's motor system and surface
+policy what they would do at every step of his episode while the world is moved by
+_his_ actions. Steps 1–3 and 5–7 are his acts to the last digit — the forward
+distance, both orientations, and each of their translations. The first
+`move_tangentially` used to be his direction **negated**, which sent the agent
+round the object the other way: a different surface, different feature changes, and
+about four times the reads for the same movement.
+
+The cause was the sign of a pair of principal directions, and it is worth knowing
+why that is not cosmetic. A pair and its negation describe the same surface, so
+only the sign of `(dir1, dir2, normal)` is fixed — Monty fixes it himself by
+flipping `dir2` when the triple is left-handed, and numpy's `eig` decides the
+remaining one. A surface policy steers by `dir1`, so the port that has numpy's
+`eig` sign walks his way and the port with the opposite one walks backwards.
+`SensorProcessing.principal_curvatures/4` now answers with numpy's sign — pinned
+by `test/monty/frameworks/utils/sensor_processing_test.exs`, which holds it to the
+numbers Monty's own interpreter gives for a bowl.
+
+What is left is the heading _after_ a curvature-guided step: from step 8 the
+tangential directions differ again, so the momentum blend that mixes a fresh draw
+with the previous heading is where the next difference lives.
 
 ---
 
