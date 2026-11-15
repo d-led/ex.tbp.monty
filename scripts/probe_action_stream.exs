@@ -99,8 +99,26 @@ defmodule ActionStream do
     {actions, motor} =
       MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
 
+    policy = motor.policy_selector.policy
+
+    IO.puts(
+      "  policy: pref=#{inspect(policy.min_dir_pref)} pc=#{inspect(policy.using_pc_guide)} " <>
+        "ignoring=#{inspect(policy.ignoring_pc_counter)} following_pc=#{inspect(policy.following_pc_counter)} " <>
+        "prev_angle=#{inspect(policy.prev_angle)} angle=#{inspect(policy.tangential_angle)} " <>
+        "new_heading=#{inspect(policy.setting_new_heading)}"
+    )
+
     {actions, motor} =
       MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
+
+    policy = motor.policy_selector.policy
+
+    IO.puts(
+      "  policy: pref=#{inspect(policy.min_dir_pref)} pc=#{inspect(policy.using_pc_guide)} " <>
+        "ignoring=#{inspect(policy.ignoring_pc_counter)} following_pc=#{inspect(policy.following_pc_counter)} " <>
+        "prev_angle=#{inspect(policy.prev_angle)} angle=#{inspect(policy.tangential_angle)} " <>
+        "new_heading=#{inspect(policy.setting_new_heading)}"
+    )
 
     IO.puts(
       "  percept: pose=#{inspect(percept.morphological_features["pose_fully_defined"])} " <>

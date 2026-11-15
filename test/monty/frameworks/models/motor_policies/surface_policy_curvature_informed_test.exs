@@ -222,11 +222,17 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformedTe
 
       percept = percept(direction_1: [0.0, 1.0, 0.0], direction_2: [1.0, 0.0, 0.0])
 
-      {direction, policy} = tangential_direction(policy, percept: percept)
+      {_direction, policy} = tangential_direction(policy, percept: percept)
 
-      # Down instead of up — and it is still following the curvature, because the
-      # direction was right and only its sign was wrong.
-      assert points_towards?(direction, [0.0, -1.0, 0.0])
+      # The flip is registered — the heading is turned round, half a turn against
+      # the one it had — and then momentum is applied to it, because that is what
+      # Monty answers with: the direction of a curvature-guided step is the
+      # *averaged* heading, half way between where it was and where the curvature
+      # points (`pc_alpha`). A port that answers before the average walks a
+      # different path from the first step after a curvature-guided one, and
+      # `scripts/probe_action_stream.exs` measures exactly that.
+      assert_in_delta abs(policy.prev_angle), :math.pi(), 1.0e-9
+      assert policy.tangential_angle != policy.prev_angle
       refute policy.setting_new_heading
       assert policy.using_pc_guide
       assert policy.following_pc_counter == 1

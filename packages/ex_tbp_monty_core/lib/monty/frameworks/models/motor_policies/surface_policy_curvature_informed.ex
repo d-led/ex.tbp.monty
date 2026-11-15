@@ -296,21 +296,24 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
       |> check_for_flipped_pc()
 
     policy = avoid_revisiting_locations(policy, ctx, state)
-    direction = world_direction(policy, state)
 
     if policy.setting_new_heading do
       # A bad heading while following curvature: break out of it, and make sure
       # enough plain steps happen before curvature is followed again.
-      {direction, %{reset_pc_buffers(policy) | following_heading_counter: 0}}
+      {world_direction(policy, state), %{reset_pc_buffers(policy) | following_heading_counter: 0}}
     else
       # A heading that is good enough to carry on with, smoothed so that the path
-      # does not jump where the estimate of the curvature shifts slightly.
+      # does not jump where the estimate of the curvature shifts slightly. The
+      # move is the smoothed heading, not the raw one — Monty answers with
+      # `self.tangential_vec` *after* the average, and a port that answers before
+      # it walks a different path from the first step after a curvature-guided
+      # one (`scripts/probe_action_stream.exs`).
       policy =
         if policy.prev_angle == nil,
           do: %{policy | prev_angle: policy.tangential_angle},
           else: pc_moving_average(policy)
 
-      {direction,
+      {world_direction(policy, state),
        %{
          policy
          | following_pc_counter: policy.following_pc_counter + 1,
