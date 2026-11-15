@@ -29,7 +29,9 @@ defmodule Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger
         graph_id_to_target: %{"mug_graph" => MapSet.new(["mug"])},
         target_to_graph_id: %{"mug" => MapSet.new(["mug_graph"])},
         primary_target: "mug",
-        primary_target_rotation_quat: [0.0, 0.0, 0.0, 1.0],
+        # A detected rotation is scipy's `xyzw`; the pose the object was placed
+        # with travels scalar-first, Monty's `Rotation.as_quat`.
+        primary_target_rotation_quat: [1.0, 0.0, 0.0, 0.0],
         terminal_state: "match",
         detected_object: "mug_graph",
         possible_matches: ["mug_graph"],

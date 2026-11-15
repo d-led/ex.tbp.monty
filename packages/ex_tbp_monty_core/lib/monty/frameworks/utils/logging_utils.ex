@@ -300,8 +300,9 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
       "time" => total_time(lm.buffer.stats["time"])
     }
 
-    Map.merge(
-      base,
+    Map.merge(base, evidence_stats(lm))
+    |> Map.merge(goal_stats(lm))
+    |> Map.merge(
       unsupervised_stats(
         performance.possible_matches,
         lm.primary_target,
@@ -309,6 +310,43 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
         lm.target_to_graph_id
       )
     )
+  end
+
+  # Monty's `add_evidence_lm_episode_stats`: the hypothesis the module believed
+  # most, as the evidence and the pose a reader compares episodes by. Its
+  # rotation is inverted the same way a detected pose's is, so the two columns
+  # mean the same thing. Only an evidence module has such a hypothesis; a
+  # displacement or feature module's row is the one it already had.
+  defp evidence_stats(%EvidenceGraphLM{} = lm) do
+    mlh = EvidenceGraphLM.most_likely_hypothesis(lm)
+
+    %{
+      "most_likely_object" => mlh.graph_id,
+      "most_likely_location" => mlh.location,
+      "most_likely_rotation" => mlh.rotation |> Rotation.invert() |> Rotation.to_euler_degrees(3),
+      "highest_evidence" => mlh.evidence,
+      "episode_avg_prediction_error" => mean(lm.buffer.stats["mlh_prediction_error"])
+    }
+  end
+
+  defp evidence_stats(_module_without_evidence), do: %{}
+
+  defp mean([_ | _] = values), do: Enum.sum(values) / length(values)
+  defp mean(_nothing), do: nil
+
+  # Monty's `add_policy_episode_stats`: how many goals the policy set, and how
+  # many it reached. A module with no goal generator attempted none.
+  defp goal_stats(lm) do
+    case lm.buffer.stats["goal_state_achieved"] do
+      attempted when is_list(attempted) ->
+        %{
+          "goal_states_attempted" => length(attempted),
+          "goal_state_achieved" => Enum.count(attempted, &(&1 == true))
+        }
+
+      _no_goals ->
+        %{"goal_states_attempted" => 0, "goal_state_achieved" => 0}
+    end
   end
 
   # A module that was never on an object: Monty's defaults, which say the episode
@@ -349,6 +387,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
           stepwise: conclusion
       }
       |> classify(lm)
+      |> score_timeout(lm)
     else
       @off_object
     end
@@ -402,6 +441,24 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
   end
 
   defp classify(performance, _lm), do: performance
+
+  # Monty's `calculate_performance`: a timeout is not a verdict on the object, so
+  # an episode that ran out of steps while its most likely hypothesis was the
+  # right object is `correct_mlh`, and one while it was the wrong object is
+  # `confused_mlh`. It runs after the timeout has been read as a pose timeout, so
+  # neither word ever reaches a CSV whole.
+  defp score_timeout(performance, %EvidenceGraphLM{} = lm) do
+    if performance.primary in ["time_out", "pose_time_out"] do
+      target = EvidenceGraphLM.most_likely_hypothesis(lm).graph_id
+      targets = Map.get(lm.graph_id_to_target, target, MapSet.new())
+      judge = if lm.primary_target in targets, do: "correct_mlh", else: "confused_mlh"
+      %{performance | primary: judge, stepwise: judge}
+    else
+      performance
+    end
+  end
+
+  defp score_timeout(performance, _module_without_evidence), do: performance
 
   # `rotations_to_quats(symmetric_rotations, invert: true)` when the object has
   # symmetry — the poses are matrices of rotation to apply to the displacement,

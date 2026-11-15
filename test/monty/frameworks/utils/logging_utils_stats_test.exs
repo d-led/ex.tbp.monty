@@ -12,7 +12,10 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
   use ExUnit.Case, async: true
 
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
+  alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Frameworks.Models.GraphMatching.GraphMemory
+  alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM
   alias Monty.Frameworks.Utils.LoggingUtils
   alias Monty.Geometry.Rotation
@@ -31,6 +34,41 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
   defp as_wxyz(rotation), do: rotation |> Rotation.to_quaternion() |> Tuple.to_list()
   defp as_xyzw(rotation), do: Rotation.to_xyzw(rotation)
 
+  # One hypothesis, which is what a recognition is narrowed to: the module
+  # believes it is standing at the object's place, and the statistics say so.
+  defp one_hypothesis(graph_id, evidence) do
+    %{
+      graph_id =>
+        Hypotheses.new(
+          evidence: [evidence],
+          locations: [[0.1, 0.0, 0.0]],
+          poses: [Rotation.to_matrix(Rotation.identity())],
+          possible: [true]
+        )
+    }
+  end
+
+  # A memory that knows `graph_ids`, because the module's best hypothesis is
+  # asked of the memory as well as of the hypothesis spaces — a real module's
+  # two agree, and a fixture where they do not is a module no episode produced.
+  defp memory_with(graph_ids) do
+    graph_ids
+    |> Enum.reduce(GraphMemory.new(features_to_use: %{"patch" => ["hsv"]}), fn id, memory ->
+      model =
+        id
+        |> GraphObjectModel.new()
+        |> GraphObjectModel.build_model(
+          [[0.0, 0.0, 0.0]],
+          %{"hsv" => [[0.0, 0.0, 0.0]]},
+          nil,
+          nil
+        )
+
+      GraphMemory.add_graph_to_memory(memory, %{"patch" => model}, id)
+    end)
+    |> GraphMemory.initialize_feature_arrays()
+  end
+
   # What the episode did to this module: on the object, what it concluded, and
   # which objects the graph it matched was built from.
   defp lm(overrides \\ []) do
@@ -45,6 +83,19 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
         detected_pose: [0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
         possible_matches: ["mug_graph"],
         symmetry_evidence: 2,
+        # An evidence module always holds a memory and a hypothesis space; the
+        # statistics read the best hypothesis of both, so a module without them
+        # is a module no episode produced.
+        graph_memory: memory_with(["mug_graph"]),
+        hypotheses: one_hypothesis("mug_graph", 7.5),
+        current_mlh: %{
+          graph_id: "mug_graph",
+          mlh_id: 0,
+          location: [0.1, 0.0, 0.0],
+          rotation: Rotation.identity(),
+          scale: 1,
+          evidence: 7.5
+        },
         buffer: buffer(%{"detected_rotation_quat" => @identity_xyzw, "time" => [1, 3]})
       }
 
@@ -139,20 +190,73 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
       assert stats["primary_performance"] == "no_label"
     end
 
-    test "a timeout with one hypothesis left is a pose that is not settled" do
+    test "a timeout is judged on the object it was still holding, not on the timeout" do
       stats = LoggingUtils.graph_lm_episode_stats(lm(terminal_state: :time_out))
 
-      assert stats["primary_performance"] == "pose_time_out"
+      # Monty's `calculate_performance`: the episode ran out of steps while its
+      # best hypothesis was the object it was asked about.
+      assert stats["primary_performance"] == "correct_mlh"
       assert stats["result"] == ["mug_graph"]
     end
 
-    test "a timeout with several hypotheses left stays a timeout" do
+    test "a timeout holding another object is confused, however many it still had" do
       stats =
         LoggingUtils.graph_lm_episode_stats(
-          lm(terminal_state: :time_out, possible_matches: ["mug_graph", "bowl_graph"])
+          lm(
+            terminal_state: :time_out,
+            possible_matches: ["mug_graph", "bowl_graph"],
+            current_mlh: %{
+              graph_id: "bowl_graph",
+              mlh_id: 0,
+              location: [0.1, 0.0, 0.0],
+              rotation: Rotation.identity(),
+              scale: 1,
+              evidence: 3.0
+            },
+            hypotheses: one_hypothesis("bowl_graph", 3.0),
+            graph_memory: memory_with(["bowl_graph"])
+          )
         )
 
-      assert stats["primary_performance"] == "time_out"
+      assert stats["primary_performance"] == "confused_mlh"
+    end
+  end
+
+  describe "the hypothesis the module believed most" do
+    test "is written as the evidence and the pose a reader compares episodes by" do
+      stats = LoggingUtils.graph_lm_episode_stats(lm())
+
+      assert stats["most_likely_object"] == "mug_graph"
+      assert stats["highest_evidence"] == 7.5
+      assert stats["most_likely_location"] == [0.1, 0.0, 0.0]
+      assert stats["most_likely_rotation"] == [0.0, 0.0, 0.0]
+    end
+
+    test "a module that saw nothing has no evidence to report, not an invented one" do
+      stats =
+        LoggingUtils.graph_lm_episode_stats(
+          lm(graph_memory: GraphMemory.new(), hypotheses: %{}, current_mlh: nil)
+        )
+
+      assert stats["most_likely_object"] == "new_object0"
+      assert stats["highest_evidence"] == 0
+    end
+
+    test "counts the goals the policy set, and the ones it reached" do
+      stats =
+        LoggingUtils.graph_lm_episode_stats(
+          lm(
+            buffer:
+              buffer(%{
+                "detected_rotation_quat" => @identity_xyzw,
+                "time" => [1, 3],
+                "goal_state_achieved" => [true, false, true]
+              })
+          )
+        )
+
+      assert stats["goal_states_attempted"] == 3
+      assert stats["goal_state_achieved"] == 2
     end
   end
 

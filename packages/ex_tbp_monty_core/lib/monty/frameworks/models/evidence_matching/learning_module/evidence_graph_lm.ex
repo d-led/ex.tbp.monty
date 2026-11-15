@@ -922,10 +922,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     end
   end
 
-  @doc "Every object the memory knows about."
+  @doc """
+  Every object the memory knows about.
+
+  A module built without a memory knows none — the state Monty's own
+  constructor leaves it in, and the one an episode's statistics are read from
+  when an episode ended before anything was loaded.
+  """
   @spec get_all_known_object_ids(t()) :: [graph_id()]
-  def get_all_known_object_ids(%__MODULE__{} = lm),
-    do: GraphMemory.get_memory_ids(lm.graph_memory)
+  def get_all_known_object_ids(%__MODULE__{graph_memory: nil}), do: []
+  def get_all_known_object_ids(%__MODULE__{} = lm), do: GraphMemory.get_memory_ids(lm.graph_memory)
 
   @doc """
   The model stored for `model_id`, or one input channel of it.
@@ -1012,8 +1018,24 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   defp better(current, _candidate), do: current
 
+  # A module nothing was ever seen through has no hypothesis to report and no
+  # current one either — the state a fresh module is built in, and the one an
+  # episode's statistics are read from when the patch never met the object.
+  # Monty's `_get_current_mlh` answers something in that case, and so does this.
+  defp finish_mlh(nil, %__MODULE__{current_mlh: nil}), do: %{empty_mlh() | graph_id: "new_object0"}
   defp finish_mlh(nil, %__MODULE__{} = lm), do: %{current_mlh(lm) | graph_id: "new_object0"}
   defp finish_mlh(mlh, %__MODULE__{}), do: mlh
+
+  @spec empty_mlh() :: mlh()
+  defp empty_mlh,
+    do: %{
+      graph_id: "new_object0",
+      mlh_id: nil,
+      location: [0.0, 0.0, 0.0],
+      rotation: Rotation.identity(),
+      scale: 1,
+      evidence: 0
+    }
 
   @doc "The most likely hypothesis of one object, whether or not it is the best overall."
   @spec get_mlh_for_object(t(), graph_id()) :: mlh()
