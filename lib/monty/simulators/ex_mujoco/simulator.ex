@@ -122,14 +122,23 @@ defmodule Monty.Simulators.ExMujoco.Simulator do
     |> Enum.at(id)
   end
 
+  # One renderer per resolution, because a renderer uploads the model's meshes
+  # and textures into GL objects and a second one would upload them again.
   defp renderers(model, agents) do
     agents
-    |> Map.values()
-    |> Enum.flat_map(fn agent -> Map.values(agent.sensors) end)
-    |> Enum.map(fn config -> {config["height"] || 64, config["width"] || 64} end)
-    |> Enum.uniq()
-    |> Map.new(fn {height, width} -> {{height, width}, Renderer.new(model, width, height)} end)
+    |> resolutions()
+    |> Map.new(fn resolution -> {resolution, renderer(model, resolution)} end)
   end
+
+  defp resolutions(agents) do
+    agents
+    |> Map.values()
+    |> Enum.flat_map(& &1.sensors)
+    |> Enum.map(fn {_sensor_id, config} -> resolution(config) end)
+    |> MapSet.new()
+  end
+
+  defp renderer(model, {height, width}), do: Renderer.new(model, width, height)
 
   defp semantic_ids(model, objects) do
     geom_types = model |> Model.geom_type() |> Tensor.to_list()
@@ -202,50 +211,71 @@ defmodule Monty.Simulators.ExMujoco.Simulator do
   # MuJoCo renders RGB only and Monty's transforms expect RGBA, so the alpha
   # channel is added here: a camera always returns opaque pixels.
   defp looked_at(simulator, agent, sensor_id, config) do
-    passes = [:rgb, :depth] ++ if(config["semantic"], do: [:segmentation], else: [])
-
-    [rgb, depth | semantic] =
+    images =
       Renderer.read(
         renderer(simulator, config),
         simulator.data,
         Scene.camera(agent.id, sensor_id),
-        passes
+        passes(config)
       )
 
-    width = config["width"] || 64
-
-    %{"depth" => rows(depth, width, :depth), "rgba" => rows(rgb, width, :rgba)}
-    |> Map.merge(
-      case semantic do
-        [] ->
-          %{}
-
-        [segmentation] ->
-          %{"semantic" => rows(segmentation, width, {:semantic, simulator.semantic_ids})}
-      end
-    )
+    decode(passes(config), images, resolution(config), simulator.semantic_ids)
   end
 
-  defp renderer(simulator, config) do
-    Map.fetch!(simulator.renderers, {config["height"] || 64, config["width"] || 64})
-  end
+  defp renderer(simulator, config), do: Map.fetch!(simulator.renderers, resolution(config))
 
   ## The pictures, in the shape a model reads
+
+  @doc """
+  The passes a sensor asks for: what the camera saw and how far away it was, and
+  the ids of what it was looking at only when the sensor wants them.
+
+  A third pass is a third render, so it is the scene's choice rather than a
+  default.
+  """
+  @spec passes(map()) :: [ExMujoco.Renderer.pass()]
+  def passes(config), do: [:rgb, :depth] ++ if(config["semantic"], do: [:segmentation], else: [])
+
+  @doc """
+  A sensor's own resolution, or the protocol's when it names none.
+
+  The renderer for a resolution is made once per model, so this is also what
+  picks one.
+  """
+  @spec resolution(map()) :: {pos_integer(), pos_integer()}
+  def resolution(config), do: {config["height"] || 64, config["width"] || 64}
+
+  @doc """
+  What a renderer answered, in the shape a model reads: one pass per name, rows
+  top first, `rgba` with the alpha channel the camera does not send.
+  """
+  @spec decode([ExMujoco.Renderer.pass()], [binary()], {pos_integer(), pos_integer()}, map()) ::
+          map()
+  def decode(passes, images, {_height, width}, semantic_ids) do
+    Enum.zip(passes, images)
+    |> Map.new(fn
+      {:rgb, binary} -> {"rgba", rows(binary, width, :rgba)}
+      {:depth, binary} -> {"depth", rows(binary, width, :depth)}
+      {:segmentation, binary} -> {"semantic", rows(binary, width, {:semantic, semantic_ids})}
+    end)
+  end
 
   # Segmentation answers a geom id per pixel; what a model reads is the semantic
   # id the object was added with. The background is the one id every scene maps —
   # MuJoCo says -1 where Habitat and Monty say 0.
-  defp rows(binary, width, {:semantic, mapping}) do
+  @doc "One pass's bytes, chunked into the rows a model walks."
+  @spec rows(binary(), pos_integer(), :rgba | :depth | {:semantic, map()}) :: [[term()]]
+  def rows(binary, width, {:semantic, mapping}) do
     for(<<id::signed-32-little <- binary>>, do: Map.get(mapping, id, id))
     |> Enum.chunk_every(width)
   end
 
-  defp rows(binary, width, :rgba) do
+  def rows(binary, width, :rgba) do
     for(<<red::8, green::8, blue::8 <- binary>>, do: [red, green, blue, 255])
     |> Enum.chunk_every(width)
   end
 
-  defp rows(binary, width, :depth) do
+  def rows(binary, width, :depth) do
     for(<<value::float-32-little <- binary>>, do: value)
     |> Enum.chunk_every(width)
   end
