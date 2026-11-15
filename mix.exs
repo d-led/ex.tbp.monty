@@ -193,13 +193,11 @@ defmodule ExTbpMonty.MixProject do
       # can step the experiment's scene with no Python involved at all
       # (`Monty.Simulators.ExMujoco.World`). 0.2.2 is the first version that also
       # links and answers on Windows; 0.2.0 and 0.2.1 were git tags here until it
-      # was published.
-      #
-      # The tag, not Hex, until `0.2.4` is approved there: 0.2.3 cannot boot in a
-      # release at all — its `@on_load` hook is in the boot script, `init` runs it
-      # before the kernel is up, and the VM dies in `on_load_function_failed` — so
-      # every desktop bundle and the image died on start with it.
-      {:ex_mujoco, github: "d-led/ex.mujoco", tag: "v0.2.4"},
+      # was published. 0.2.4 is the first that a **release** can boot: 0.2.3's
+      # `@on_load` hook runs from the release's boot script while the kernel is
+      # still starting, and the VM died there before any application started —
+      # every desktop bundle and both images.
+      {:ex_mujoco, "~> 0.2.4"},
       {:oban, "~> 2.20"},
       {:req, "~> 0.5"},
       # "24.8 GiB free" is what an operator reads, not 26_636_431_360: one
