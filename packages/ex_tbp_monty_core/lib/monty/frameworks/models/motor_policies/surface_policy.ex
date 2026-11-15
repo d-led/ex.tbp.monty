@@ -272,6 +272,22 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
   defp motor_only_step?(nil), do: false
   defp motor_only_step?(_action), do: true
 
+  @doc """
+  Whether the first step of an episode reads nothing.
+
+  Monty hands a surface policy its motor system with `motor_only_step` already
+  set to true — `SurfacePolicy.fixme_provide_motor_system`, whose own TODO calls
+  it a hack, "we only do this so that SurfacePolicy and its descendants can set
+  motor_only_step to True". So an episode's first step moves the sensor and reads
+  nothing, and his recording agrees: every episode's first percept is at step 4 or
+  later, never at step 1.
+
+  The policy says it here rather than through a handout, because that is how this
+  port states a policy's wishes to the motor system.
+  """
+  @spec reads_nothing_first?() :: boolean()
+  def reads_nothing_first?, do: true
+
   defp next_action(policy, _ctx, state, percept, %MoveForward{}) do
     {orient_horizontal(policy, state, percept), policy}
   end

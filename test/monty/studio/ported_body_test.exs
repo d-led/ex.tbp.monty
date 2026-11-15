@@ -68,10 +68,13 @@ defmodule Monty.Studio.PortedBodyTest do
 
   test "the patch lands on the object, so the module has something to match" do
     {:ok, opened} = Monty.Studio.open(@experiment, pretrained_dir: pretrained_dir())
-    {:ok, run} = Run.start(opened.setup, steps: 1)
+    # A surface agent reads nothing until it has oriented vertical, and the step
+    # after that reads: Monty's first percept is the episode's fourth step
+    # (`docs/monty-differences.md` §2.23).
+    {:ok, run} = Run.start(opened.setup, steps: 4)
 
     try do
-      {:ok, _info, _observations, run} = Run.step(run)
+      run = Enum.reduce(1..4, run, fn _step, run -> elem(Run.step(run), 3) end)
 
       # A patch that misses the object reports `on_object: 0`, the buffer never
       # counts an observation, and the module builds no hypothesis space at all:

@@ -363,4 +363,15 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyTest do
       assert SurfacePolicy.state_dict(policy()) == %{}
     end
   end
+
+  # Monty hands a surface policy its motor system with `motor_only_step` already
+  # true (`SurfacePolicy.fixme_provide_motor_system`, whose own TODO calls it a
+  # hack), so an episode's first step moves the sensor and reads nothing. His
+  # recording agrees: the first percept of every episode is at step 4 or later,
+  # never at step 1.
+  describe "an episode's first step" do
+    test "reads nothing" do
+      assert SurfacePolicy.reads_nothing_first?()
+    end
+  end
 end

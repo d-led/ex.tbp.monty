@@ -79,6 +79,9 @@ happens on a path Monty itself never takes.
 | [2.18](#218-a-memory-arrives-as-an-export-not-as-a-pickle)                                   | A memory is a torch pickle                                                  | Decision                                                    | An export (JSONL), read once and copied per run                                    |
 | [2.19](#219-back-where-it-started-is-an-angle-not-the-same-floats)                           | "Back where it started" is exact float equality                             | Decision                                                    | An angle, to a thousandth of a degree                                              |
 | [2.20](#220-a-supervised-episodes-answer-is-a-call-and-an-impossible-config-is-refused)      | An episode's answer is written into modules                                 | Decision                                                    | A call per module; impossible configs refused, not crashed                         |
+| [2.21](#221-an-object-orientation-channels-evidence-is-ported-but-not-yet-dispatched)        | An orientation channel's evidence                                           | Ported, not dispatched                                      | Computed and answerable; nothing asks it yet                                       |
+| [2.22](#222-in-parallel-divides-one-runs-work-into-parts)                                    | `run_parallel.py` runs one config per episode                               | Decision                                                    | Parts of one run and one record                                                    |
+| [2.23](#223-how-often-a-surface-agent-reads)                                                 | A surface agent reads on one step in four                                   | Same rule; ours is named where it is read                   | Three gates, and the cheapest run wins by the filter, not the model                |
 
 ## How the links work
 
@@ -844,6 +847,21 @@ and [`motor_system.ex`](../lib/monty/frameworks/models/motor_system.ex).
 **Why it is deliberate.** The same effect on the step, with no shared mutable
 object between policy, selector and motor system.
 
+**The half of the hack that is not a difference — keep it until Monty drops it.**
+`SurfacePolicy.fixme_provide_motor_system` also sets `motor_only_step = True` on
+the motor system, so a surface episode's **first** step moves the sensor and
+reads nothing. That is observable in Monty's own recording: the first percept of
+every episode is at step 4 or later, never at step 1
+(`test/fixtures/monty_base_10simobj_episode.jsonl`, episodes at steps 4, 4, 6,
+4). This port had it wrong — the step's flag was a copy that began `false` and
+was only ever updated by a policy call — so a surface run handed its module a
+percept at step 1 and its first real one at step 3 of a different cycle. Now the
+policy answers `reads_nothing_first?/0` (`SurfacePolicy`, and through it
+`SurfacePolicyCurvatureInformed`, as Monty's subclassing gives it), and
+`MotorSystem.new/1`, `MotorSystem.reset/1` and `State.new/1` ask for it. Monty
+still marks the whole thing TODO; when he removes the line, remove these three
+too.
+
 ## 2.3 The motor system answers with itself
 
 **In one line:** every call answers the next version of itself, because a struct
@@ -1440,6 +1458,67 @@ A part of a training wave keeps its memory in its own directory and does not wri
 the library tree (`Learned.keep(..., library: false)`): the library is what the
 parts learned between them, and a part that wrote it as it finished would overwrite
 the merged memory with its own share.
+
+## 2.23 How often a surface agent reads
+
+**In one line:** three gates decide whether a module sees a percept, and all
+three are the model's, so all three are ported — the cadence they add up to is the
+world's.
+
+**What Monty does.** A surface agent does not look at the object every step:
+
+1. **The step is not motor-only.** `SurfacePolicy` sets `motor_only_step` unless
+   the action it has just chosen was `OrientVertical` — its own comment: "we only
+   want to send data to the learning module after taking the OrientVertical
+   action; the other three actions in the cycle are motor-only to keep the
+   surface agent on the object". The flag is read at the _start_ of a step, so it
+   decides the step after the one that set it, and
+   `fixme_provide_motor_system` starts every episode with it `True` (§2.2).
+2. **The sensor module passes the message.** `CameraSM`'s
+   `FeatureChangeFilter` sets `process_features_in_lm` from the config's
+   `delta_thresholds`, which for this experiment are `on_object: 0`,
+   `n_steps: 20`, `hsv: 0.1, 0.1, 0.1`, `pose_vectors: [π/4, 2π, 2π]`,
+   `principal_curvatures_log: [2, 2]` and `distance: 0.01`; a percept that is not
+   on the object never passes.
+3. **The module treats that as a displacement only.** When no percept carries
+   features, `is_location_only_step` makes `matching_step` call
+   `_displace_hypotheses` and return: the hypotheses move with the agent, no
+   matching runs and no evidence changes.
+
+**Why the numbers are what they are.** A tangential move is 4 mm
+(`ConstantSampler`'s `translation_distance`) and the distance threshold is 10 mm,
+so distance alone can never fire; a read happens when the colour, the surface
+normal or the log curvatures moved more than their threshold, or after twenty
+steps. In Monty's recording of `base_10simobj_surf_agent`
+([`test/fixtures/monty_base_10simobj_episode.jsonl`](../test/fixtures/monty_base_10simobj_episode.jsonl))
+the module is given a percept at episode steps 4, 16, 20, 32, 36, 40, 44, 48 and
+52: twelve steps between the first two, four between the rest, so the agent walks
+three cycles across a flat part with nothing worth matching and reads on every
+cycle once the surface starts to bend.
+
+**Where the port stands.** All three gates are here:
+`SurfacePolicy.reads_nothing_first?/0` with `MotorSystem.new/1` and `reset/1` for
+the opener (§2.2); `FeatureChangeFilter` built from the config's
+`delta_thresholds`, which arrive as numbers because
+[`Monty.Config.Resolvers`](../packages/ex_tbp_monty_core/lib/monty/config/resolvers.ex)
+evaluates the `${np.list_eval:...}` in the YAML; and
+`Monty.Runtime.location_only_step?` inside `EvidenceGraphLM`.
+
+**Where Monty's run is the cheaper one.** A location-only step skips the matching
+work outright, so Monty pays for a match at best once every four steps and once
+every twelve on a flat face. A run of ours that reads on every cycle does four
+times the matching for the same movement; that, and not the model, is what a
+reader sees as "his run is faster". The model itself is exact: replaying Monty's
+own percepts through `EvidenceGraphLM`
+([`test/monty/surf_replay_test.exs`](../test/monty/surf_replay_test.exs))
+reproduces his evidence to `1e-12` and his conclusion exactly. The cadence of a
+live run is not reproducible in the same way, because it is a property of the
+percept: our location agrees with Monty's to `1e-8` and the normal to `1.4e-5`,
+but the hue differs by `3.3e-4` — the size of a slightly different pixel, since
+`ex_mujoco` renders the scene rather than replaying his camera (see §2.15). Colour
+difference across a 4 mm move is what the filter counts, so a reconstructed world
+reads more often than his does, and the world, not the model, is the thing to
+make agree.
 
 ---
 

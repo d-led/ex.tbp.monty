@@ -44,6 +44,21 @@ defmodule Monty.Frameworks.Models.MotorPolicySelectors.SinglePolicySelector do
   end
 
   @doc """
+  Whether the policy this selector holds reads nothing on an episode's first step.
+
+  A selector with one policy can answer for it; one that chooses among policies
+  answers only when the choice is already made. Absent is `false`, which is what a
+  policy that says nothing about its first step means.
+  """
+  @spec reads_nothing_first?(term()) :: boolean()
+  def reads_nothing_first?(%__MODULE__{policy: %module{}}) do
+    Code.ensure_loaded?(module) and function_exported?(module, :reads_nothing_first?, 0) and
+      module.reads_nothing_first?()
+  end
+
+  def reads_nothing_first?(_selector), do: false
+
+  @doc """
   Asks the policy about the most confident goal of this step, and records it.
 
   With no goals the policy is still called, with `nil`: standing still is a

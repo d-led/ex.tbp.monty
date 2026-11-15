@@ -4,6 +4,7 @@ defmodule Monty.Frameworks.Models.MotorSystemTest do
   alias Monty.Cmp.Goal
   alias Monty.Context
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
+  alias Monty.Frameworks.Models.MotorPolicies.SurfacePolicy
   alias Monty.Frameworks.Models.MotorPolicySelectors.SinglePolicySelector
   alias Monty.Frameworks.Models.MotorSystem
 
@@ -100,6 +101,21 @@ defmodule Monty.Frameworks.Models.MotorSystemTest do
         step(motor_system(%MotorPolicyResult{actions: [@look_down], motor_only_step: true}))
 
       refute motor_system |> MotorSystem.reset() |> MotorSystem.motor_only_step()
+    end
+
+    # Monty hands a surface policy its motor system with this flag already true
+    # (`SurfacePolicy.fixme_provide_motor_system`), so a surface run begins — and
+    # begins each episode — by moving the sensor and reading nothing. His
+    # recording agrees: the first percept of every episode is at step 4 or later.
+    # Kept until Monty removes the hack.
+    test "says so at the start of a surface run, and again after every reset" do
+      # The sampler and the gain are not read by this question; a surface policy
+      # is what is being asked about.
+      policy = SurfacePolicy.new(action_sampler: nil, agent_id: "agent_id_0", alpha: 0.5)
+      surface = MotorSystem.new(SinglePolicySelector.new(policy: policy))
+
+      assert MotorSystem.motor_only_step(surface)
+      assert surface |> MotorSystem.reset() |> MotorSystem.motor_only_step()
     end
   end
 

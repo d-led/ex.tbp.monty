@@ -24,9 +24,12 @@ defmodule Monty.Frameworks.Models.MotorSystem do
       actions;
     * Monty's `fixme_provide_motor_system` handout is gone: a policy that wants
       `motor_only_step` set on the step says so in the `MotorPolicyResult` it
-      returns, which this module then carries.
+      returns, which this module then carries — except for the opening flag,
+      which `reads_nothing_first?/1` asks the policy for, because Monty's
+      handout sets it before the first call ever happens.
 
-  Both are recorded in `docs/monty-differences.md` §2.2 and §2.3.
+  Both are recorded in `docs/monty-differences.md` §2.2 and §2.3; §2.2 also
+  says why the opening flag stays until Monty removes his line.
   """
 
   @behaviour Monty.Frameworks.Models.MotorSystem.RuntimeMotorSystem
@@ -60,7 +63,11 @@ defmodule Monty.Frameworks.Models.MotorSystem do
   comment calls a hack; there is nothing to hand over here.
   """
   @spec new(struct()) :: t()
-  def new(policy_selector), do: %__MODULE__{policy_selector: policy_selector}
+  def new(policy_selector),
+    do: %__MODULE__{
+      policy_selector: policy_selector,
+      motor_only_step: reads_nothing_first?(policy_selector)
+    }
 
   @doc """
   The motor system a config describes.
@@ -133,10 +140,23 @@ defmodule Monty.Frameworks.Models.MotorSystem do
     %__MODULE__{
       motor_system
       | policy_selector: selector.__struct__.reset(selector),
-        motor_only_step: false,
+        # A policy that reads nothing on its first step says so, and the step after
+        # a reset is that step: Monty hands a surface policy its motor system with
+        # this flag already set (`Monty.Frameworks.Models.MotorPolicies.SurfacePolicy`).
+        motor_only_step: reads_nothing_first?(selector),
         action_sequence: [],
         telemetry: %SurfacePolicyActionDetailsTelemetry{}
     }
+  end
+
+  # Monty sets this flag in the constructor's handout, not in a policy's result,
+  # so the only way to ask is to ask the policy. It goes when Monty's
+  # `fixme_provide_motor_system` goes — `docs/monty-differences.md` §2.2.
+  defp reads_nothing_first?(selector) do
+    module = selector.__struct__
+
+    Code.ensure_loaded?(module) and function_exported?(module, :reads_nothing_first?, 1) and
+      module.reads_nothing_first?(selector)
   end
 
   @doc """

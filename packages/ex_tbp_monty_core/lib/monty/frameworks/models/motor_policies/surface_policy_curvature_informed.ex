@@ -194,6 +194,11 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
     |> SurfacePolicy.surface_step(ctx, observations, state, percept, goal)
   end
 
+  # Monty's `SurfacePolicyCurvatureInformed` subclasses `SurfacePolicy`, so the
+  # first-step answer is its too: an episode begins by moving the sensor and
+  # reading nothing.
+  defdelegate reads_nothing_first?, to: SurfacePolicy
+
   defp record_location(%__MODULE__{} = policy, %Cmp.Message{} = percept) do
     if match?(%Monty.Frameworks.Actions.OrientVertical{}, policy.last_surface_policy_action) do
       %{

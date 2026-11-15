@@ -36,7 +36,6 @@ defmodule Monty.Runtime.Step do
 
   use GenServer
 
-
   alias Monty.Cmp.Message
   alias Monty.Runtime.{Barrier, LearningModuleServer, Registry, SensorModuleServer}
   alias Monty.Runtime.Step.State
@@ -829,8 +828,13 @@ defmodule Monty.Runtime.Step do
 
   defp reset_motor(%State{motor: nil} = state), do: state
 
-  defp reset_motor(%State{motor: {module, motor_state}} = state),
-    do: %{state | motor_state: module.reset(motor_state)}
+  # The flag comes from the motor system, not from the previous episode's last
+  # step: a policy whose first step reads nothing says so in its own state, and
+  # that is where Monty reads it (`is_motor_only_step`).
+  defp reset_motor(%State{motor: {module, motor_state}} = state) do
+    motor_state = module.reset(motor_state)
+    %{state | motor_state: motor_state, motor_only?: module.motor_only_step(motor_state)}
+  end
 
   defp set_experiment_mode_state(%State{model_id: model_id} = state, mode) do
     Enum.each(state.learning_modules, fn lm ->

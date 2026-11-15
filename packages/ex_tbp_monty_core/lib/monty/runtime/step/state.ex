@@ -120,6 +120,7 @@ defmodule Monty.Runtime.Step.State do
       lm_to_lm_vote: Map.get(options, :lm_to_lm_vote),
       motor: Map.get(options, :motor),
       motor_state: options |> Map.get(:motor) |> motor_state(),
+      motor_only?: options |> Map.get(:motor) |> motor_only?(),
       combine_votes: Map.get(options, :combine_votes, &__MODULE__.combine_votes/2),
       attention: Map.get(options, :attention, &__MODULE__.all_goals/2),
       experiment_mode: Map.get(options, :experiment_mode),
@@ -132,6 +133,13 @@ defmodule Monty.Runtime.Step.State do
       semantic_id_to_label: Map.get(options, :semantic_id_to_label, %{})
     }
   end
+
+  # Monty's `is_motor_only_step` reads the motor system, so the flag a run starts
+  # with is the motor system's too — and a surface policy's is true, which is why
+  # every episode of his recording has its first percept at step 4 rather than at
+  # step 1 (`Monty.Frameworks.Models.MotorPolicies.SurfacePolicy`).
+  defp motor_only?(nil), do: false
+  defp motor_only?({module, motor_state}), do: module.motor_only_step(motor_state)
 
   # Monty's model has no criterion of its own: an experiment always sets one
   # before the first episode. With no experiment, "the module recognised

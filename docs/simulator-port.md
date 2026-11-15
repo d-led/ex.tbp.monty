@@ -51,7 +51,7 @@ The world is the experiment's, not the deployment's.
 | the experiment's config names                                         | what a run steps                                                                                                                              |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | MuJoCo — `environment.env_init_func` is `MuJoCoSimulator`             | MuJoCo, in the interpreter this application carries; every node has it                                                                        |
-| MuJoCo, and `--world ex_mujoco`                                        | the same scene, compiled and stepped by `ex_mujoco` — no interpreter, and OpenGL needed for the images                                        |
+| MuJoCo, and `--world ex_mujoco`                                       | the same scene, compiled and stepped by `ex_mujoco` — no interpreter, and OpenGL needed for the images                                        |
 | a world a plugin brings                                               | that world, by the plugin's own name; the node that steps it declares the capability (`world:<name>`, `ExTbpMonty.Cluster.Placement.needs/1`) |
 | a world nobody here carries (`HabitatEnvironment`, an unported class) | nothing: refused with that class named, in the words a page shows (`Monty.Studio.Setup`'s `uncarried_world/1`)                                |
 | nothing at all                                                        | MuJoCo (`Monty.Studio.Setup.configured_world/0`)                                                                                              |
@@ -89,12 +89,12 @@ Monty's world is MuJoCo's, and this application carries two bindings of it. They
 build the same scene from the same numbers and answer the same two payloads, so a
 run cannot tell which one stepped it:
 
-| | `:mujoco` | `:ex_mujoco` |
-| --- | --- | --- |
-| the scene | `priv/monty_py/world.py`, through MuJoCo's **spec API** | `Monty.Simulators.ExMujoco.Scene`, as **MJCF text** |
-| the engine | the interpreter in `config/pythonx.exs` | `ex_mujoco`, a C++ NIF over MuJoCo's C API |
-| the images | MuJoCo's Python renderer | the same renderer, through this package's own OpenGL context |
-| needs | nothing | an OpenGL context (CGL on macOS, EGL on Linux) |
+|            | `:mujoco`                                               | `:ex_mujoco`                                                 |
+| ---------- | ------------------------------------------------------- | ------------------------------------------------------------ |
+| the scene  | `priv/monty_py/world.py`, through MuJoCo's **spec API** | `Monty.Simulators.ExMujoco.Scene`, as **MJCF text**          |
+| the engine | the interpreter in `config/pythonx.exs`                 | `ex_mujoco`, a C++ NIF over MuJoCo's C API                   |
+| the images | MuJoCo's Python renderer                                | the same renderer, through this package's own OpenGL context |
+| needs      | nothing                                                 | an OpenGL context (CGL on macOS, EGL on Linux)               |
 
 `Monty.Simulators.ExMujoco.Agent` answers the action vocabulary and
 `…Simulator` renders and reads back, both written against the same action maps
@@ -116,7 +116,7 @@ OpenGL context is a property of the machine and not of the engine. No node
 declaring it does not hold a run hostage: a tag nobody declares leaves the run on
 the node that asked for it (`ExTbpMonty.Cluster.Placement`).
 
-The two worlds do **not** pin the same MuJoCo *version*: `ex_mujoco` pins its own
+The two worlds do **not** pin the same MuJoCo _version_: `ex_mujoco` pins its own
 (`mujoco.version` in the package), while the embedded interpreter takes whatever
 `uv` resolves for the `mujoco` line in `config/pythonx.exs`. A version difference
 is a shading difference — the images' colours move by a few percent while the
