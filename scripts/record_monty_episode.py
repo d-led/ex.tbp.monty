@@ -225,26 +225,33 @@ class Recorder:
         self._out.parent.mkdir(parents=True, exist_ok=True)
         self._handle = self._out.open("w")
         self._seen = {}
+        self._steps = 0
 
     def __call__(self, ctx, monty, supervised_lm_ids, step, observations, actions):
+        # The experiment hands the hook its own per-episode counter, which starts
+        # at zero; the recording counts from one, as the replay does. The model
+        # keeps no such counter of its own, so the running total is here.
+        episode_step = int(step) + 1
+        self._steps += 1
+
         # A new episode resets the buffer every module keeps, so the cursor into
         # it has to go too. Without this the episode's first percept is read as
         # "already seen" — it is the one step of a new episode whose count is
         # smaller than the previous episode's, and it is the step a replay needs
         # most.
-        if monty.episode_steps == 1:
+        if episode_step == 1:
             self._seen = {}
 
         # An episode is stopped being written, not stopped: `MONTY_RECORD_STEPS`
         # keeps the first N steps of each episode, which is what a comparison of
         # one increment needs, and leaves the run to finish on its own.
         limit = int(os.environ.get("MONTY_RECORD_STEPS") or 0)
-        if limit and monty.episode_steps > limit:
+        if limit and episode_step > limit:
             return actions
 
         record = {
-            "episode_step": int(monty.episode_steps),
-            "total_step": int(monty.total_steps),
+            "episode_step": episode_step,
+            "total_step": self._steps,
             "step_type": monty.step_type,
             "mode": None if monty.experiment_mode is None else str(monty.experiment_mode),
             "learning_modules": {},
