@@ -106,33 +106,81 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsTest do
     end
   end
 
-  describe "the rotation error of a recognition" do
-    test "is nothing when the pose is the one the object was placed with" do
-      {:ok, mug} = Rotation.from_euler_degrees([0.0, 45.0, 0.0])
+  # Monty's `tests/unit/frameworks/utils/logging_utils_test.py::TestComputePoseError`,
+  # one case for one case. Its `Rotation` can hold several rotations at once,
+  # which is why `test_rotation_object_from_quaternion_list` has no counterpart:
+  # here a `Rotation` is one rotation and a list of them is a plain list, which
+  # `test_min_error_from_list` already exercises. Its `TypeError`/`AttributeError`
+  # pair is `test_invalid_input_type`, a clause that refuses what is not a
+  # rotation.
+  describe "compute_pose_error" do
+    test "test_zero_error_single_rotation" do
+      {:ok, rotation} = Rotation.from_euler_degrees([45.0, 30.0, 60.0])
 
-      assert LoggingUtils.compute_pose_error(mug, mug) == 0.0
+      assert_in_delta LoggingUtils.compute_pose_error(rotation, rotation), 0.0, 1.0e-6
     end
 
-    test "is the angle between the two poses, in radians or degrees" do
-      {:ok, turned} = Rotation.from_euler_degrees([0.0, 90.0, 0.0])
+    test "test_known_small_angle_difference" do
+      {:ok, still} = Rotation.from_axis_angle([0.0, 0.0, 1.0], 0.0)
+      {:ok, ten_degrees} = Rotation.from_axis_angle([0.0, 0.0, 1.0], :math.pi() / 18)
 
-      assert_in_delta LoggingUtils.compute_pose_error(turned, Rotation.identity(), degrees: true),
-                      90.0,
+      assert_in_delta LoggingUtils.compute_pose_error(still, ten_degrees, degrees: true),
+                      10.0,
                       1.0e-6
-
-      assert_in_delta LoggingUtils.compute_pose_error(turned, Rotation.identity()),
-                      :math.pi() / 2,
-                      1.0e-9
     end
 
+    test "test_min_error_from_list" do
+      # The target is twelve degrees, so the closest of nought, ten and twenty is
+      # ten, and the error is two.
+      poses = Enum.map([0.0, 10.0, 20.0], &about_z/1)
+      {:ok, target} = Rotation.from_axis_angle([0.0, 0.0, 1.0], 12.0 / 180 * :math.pi())
+
+      assert_in_delta LoggingUtils.compute_pose_error(poses, target, degrees: true), 2.0, 1.0e-6
+    end
+
+    test "test_180_degree_rotation" do
+      # Monty's `Rotation.from_quat([0, 0, 1, 0])` is a half turn about z: its
+      # quaternions are scalar-first, as this port's are.
+      {:ok, half_turn} = Rotation.from_quaternion({0.0, 0.0, 1.0, 0.0})
+
+      assert_in_delta LoggingUtils.compute_pose_error(half_turn, Rotation.identity()),
+                      :math.pi(),
+                      1.0e-6
+    end
+
+    test "test_pose_error_never_exceeds_pi" do
+      # Ten degrees and two hundred and ten about one axis are a hundred and
+      # sixty apart the short way round, not two hundred.
+      ten = about_z(10.0)
+      two_hundred_ten = about_z(210.0)
+
+      assert_in_delta LoggingUtils.compute_pose_error(ten, two_hundred_ten, degrees: true),
+                      160.0,
+                      1.0e-6
+    end
+
+    test "test_invalid_input_type" do
+      assert_raise FunctionClauseError, fn ->
+        LoggingUtils.compute_pose_error("not a rotation", Rotation.identity())
+      end
+
+      assert_raise FunctionClauseError, fn ->
+        LoggingUtils.compute_pose_error(Rotation.identity(), "not a rotation")
+      end
+    end
+
+    # This port's own: a recognition that chose one of a symmetric object's
+    # equivalent poses is not wrong, which is what Monty's symmetry branch is for.
     test "is the closest of the poses a symmetric object could be in" do
-      {:ok, quarter} = Rotation.from_euler_degrees([0.0, 90.0, 0.0])
       identity = Rotation.identity()
 
-      # A quarter turn is one of a symmetric object's equivalent poses, so a
-      # recognition that chose it is not wrong.
-      assert LoggingUtils.compute_pose_error([quarter, identity], identity) == 0.0
+      assert LoggingUtils.compute_pose_error([about_z(90.0), identity], identity) == 0.0
     end
+  end
+
+  defp about_z(degrees) do
+    {:ok, rotation} = Rotation.from_axis_angle([0.0, 0.0, 1.0], degrees / 180 * :math.pi())
+    rotation
   end
 
   describe "a column a wandb table cannot take" do

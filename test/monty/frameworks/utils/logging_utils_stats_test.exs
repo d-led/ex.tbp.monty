@@ -193,8 +193,8 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
     test "a timeout is judged on the object it was still holding, not on the timeout" do
       stats = LoggingUtils.graph_lm_episode_stats(lm(terminal_state: :time_out))
 
-      # Monty's `calculate_performance`: the episode ran out of steps while its
-      # best hypothesis was the object it was asked about.
+      # Monty's `calculate_performance` (logging_utils.py:816-835): the episode ran
+      # out of steps while its best hypothesis was the object it was asked about.
       assert stats["primary_performance"] == "correct_mlh"
       assert stats["result"] == ["mug_graph"]
     end
@@ -223,6 +223,10 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
   end
 
   describe "the hypothesis the module believed most" do
+    # Monty's `add_evidence_lm_episode_stats` (logging_utils.py:787-803): the
+    # best hypothesis's object, location, rotation and evidence, and the mean
+    # prediction error of the episode. No unit test of its own upstream, so
+    # these state the function's behaviour rather than translating a case.
     test "is written as the evidence and the pose a reader compares episodes by" do
       stats = LoggingUtils.graph_lm_episode_stats(lm())
 
