@@ -144,6 +144,10 @@ linux_bundle() {
   mkdir -p "$folder"
   cp src-tauri/target/release/ex-tbp-monty-desktop "$folder/"
   cp -R src-tauri/target/release/rel "$folder/"
+  # And the two sample plugin nodes, which `bundle.resources` copied out beside
+  # the release: the folder is the window without an installer, so it holds
+  # everything the AppImage does — `scripts/boot-check.sh` asserts it.
+  cp -R src-tauri/target/release/plugins "$folder/"
 
   tar czf "$target" -C "$artifacts/$1" "ex-tbp-monty-$1"
   echo "  $target"
