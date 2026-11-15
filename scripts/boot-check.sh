@@ -39,6 +39,17 @@ export MONTY_DESKTOP_PORT="$port"
 
 log="$(mktemp "${TMPDIR:-/tmp}/boot-check.XXXXXX")"
 
+# The window's other contract, and the reason this file has a fifo: the desktop's
+# own `ExTbpMonty.Desktop.Application` stops the server when its standard input
+# reaches end of file — that is the window going away — and a runner gives a
+# background process a stdin already at EOF. Started that way the release is gone
+# 100 ms after it names itself, silently, and this check reports "it stopped
+# before it answered" about a server whose only fault was that nobody was
+# holding its pipe. So the pipe is held open here and closed in `cleanup`,
+# which is also how this stops the release politely.
+stdin_fifo="$(mktemp -d "${TMPDIR:-/tmp}/boot-check-stdin.XXXXXX")/stdin"
+mkfifo "$stdin_fifo"
+
 # A `.bat` is what Windows has, and `cmd` is what runs it: a path with spaces in
 # it (`…\Monty on the BEAM\…`) is split by `cmd` alone, so the quoting is the
 # same two lines `src-tauri/src/main.rs` uses.
@@ -46,12 +57,16 @@ case "$(uname -s)" in
   MINGW* | MSYS* | CYGWIN*)
     # `cmd` needs a Windows path; this shell holds a POSIX one. `cygpath` is what
     # Git Bash ships for exactly that translation.
-    cmd //c call "$(cygpath -w "$entry")" >"$log" 2>&1 &
+    cmd //c call "$(cygpath -w "$entry")" <"$stdin_fifo" >"$log" 2>&1 &
     ;;
-  *) "$entry" >"$log" 2>&1 & ;;
+  *) "$entry" <"$stdin_fifo" >"$log" 2>&1 & ;;
 esac
 
 pid=$!
+
+# The write end, held by this shell and never written to: the release reading it
+# waits for an end-of-file that does not come until this check is done.
+exec 9>"$stdin_fifo"
 
 # Whether a process with this id is still there, asked the way the platform can
 # answer: `kill -0` only knows about processes this bash started on some
@@ -66,6 +81,10 @@ still_running() {
 }
 
 cleanup() {
+  # Letting go of the pipe is the polite stop: the release reads end-of-file and
+  # shuts itself down, which is the path the window uses.
+  exec 9>&- 2>/dev/null || true
+
   # A process tree on Windows: `cmd` starts the batch file, which starts the VM,
   # and killing the first of the three leaves the other two holding the port.
   case "$(uname -s)" in
@@ -92,6 +111,7 @@ cleanup() {
   fi
 
   rm -f "$log"
+  rm -rf "$(dirname "$stdin_fifo")"
 }
 trap cleanup EXIT
 
