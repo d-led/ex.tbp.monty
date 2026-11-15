@@ -641,20 +641,20 @@ Its stylesheet is inline and written in system colours (`Canvas`, `CanvasText`,
 `LinkText`, `color-scheme: light dark`), because nothing is running to serve
 one, and the spinner honours `prefers-reduced-motion`.
 
-CI proves the incomplete-copy branch on macOS and Linux: `scripts/smoke-window.sh
+CI proves the incomplete-copy branch on all three platforms: `scripts/smoke-window.sh
 --crash PATH` points the window at a release that is not there and requires
 `showing the crash screen: This copy of the app is incomplete` in the window's
 own log, because the page lives inside a webview and nothing outside can read
-it. On Windows that same step is `continue-on-error`, and it was failing for a
-reason that is not the page: the launch before it left WebView2 holding the
-shared user-data folder, so the second window never came into being
-("failed to create webview: WebView2 error" in the window's own log). Each launch
-gets its own `WEBVIEW2_USER_DATA_FOLDER` now, which should be the whole of it —
-a claim CI has to confirm, since the step is not yet trusted to gate a build. The
-other five are unit-tested — the classification, the page, the log link, the
-report's URL and its length, and the title bar, which says the app stopped even
-when the page cannot paint — which is as far as a check can go for a screen only
-a person can see.
+it. On Windows it failed for a reason that was not the page: the launch before it
+left WebView2 holding the shared user-data folder, so the second window never
+came into being ("failed to create webview: WebView2 error" in the window's own
+log). Each launch gets its own `WEBVIEW2_USER_DATA_FOLDER` now, and the step
+passes — it is still `continue-on-error`, because one green run after a fix is
+not yet a track record and a flaky gate teaches people to ignore gates. The other
+five are unit-tested — the classification, the page, the log link, the report's
+URL and its length, and the title bar, which says the app stopped even when the
+page cannot paint — which is as far as a check can go for a screen only a person
+can see.
 
 ## Rust dependencies
 
