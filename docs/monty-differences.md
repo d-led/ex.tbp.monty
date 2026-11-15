@@ -1530,6 +1530,17 @@ double away from `148 / 255`. `SensorProcessing.rgb2hsv/1` now scales the same
 way, which is why the middle pixel's `hsv` agrees with his rather than almost
 agreeing.
 
+**And the action is his.** `scripts/probe_action_parity.exs` asks the body the one
+question that needs no percept: a surface episode opens with `_touch_object`'s
+forward move, and its distance is arithmetic on the view finder's middle depth and
+the sensor's own offset. His recording says `0.036434554755687715`, ours says
+`0.0364345532655716` — a difference of 1.5 nanometres, because the pose behind
+that depth was composed along a slightly different float path. No threshold in the
+policy or the filter can see that; what is not yet measured is the whole action
+stream, step for step, because that needs an episode harness rather than a probe
+(the studio's `Run` path did not return within six minutes against the Python
+world, which is worth a look of its own).
+
 ---
 
 # Checked and found consistent
