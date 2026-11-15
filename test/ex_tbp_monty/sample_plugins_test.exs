@@ -10,21 +10,8 @@ defmodule ExTbpMonty.SamplePluginsTest do
   use ExUnit.Case, async: false
 
   alias ExTbpMonty.SamplePlugins
+  alias Monty.Test.CarriesPlugins
   alias Monty.Test.Tmp
-
-  # A build that carries them, in the only way a page can tell the difference.
-  defmodule Carries do
-    @behaviour ExTbpMonty.SamplePlugins
-
-    @impl true
-    def available?, do: true
-
-    @impl true
-    def start, do: {:ok, ["example_plugin@127.0.0.1"]}
-
-    @impl true
-    def stop, do: :ok
-  end
 
   setup do
     Tmp.without_app_env(:sample_plugins)
@@ -39,7 +26,7 @@ defmodule ExTbpMonty.SamplePluginsTest do
   end
 
   test "a build that carries them is the one asked" do
-    Application.put_env(:ex_tbp_monty, :sample_plugins, Carries)
+    Application.put_env(:ex_tbp_monty, :sample_plugins, CarriesPlugins)
     on_exit(fn -> Application.delete_env(:ex_tbp_monty, :sample_plugins) end)
 
     assert SamplePlugins.available?()

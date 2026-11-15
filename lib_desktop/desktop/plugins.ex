@@ -57,15 +57,13 @@ defmodule ExTbpMonty.Desktop.Plugins do
   than a control that does nothing. `shutdown/0` is what stops the nodes, called
   from the application's own `stop/1`.
   """
-  @spec start_server() :: {:ok, pid()} | {:error, term()}
+  @spec start_server() :: GenServer.on_start()
   def start_server, do: GenServer.start(__MODULE__, [], name: name())
 
   @impl true
   def init(_args), do: {:ok, %{started: [], ports: %{}, saying: %{}}}
 
   @impl true
-  def handle_call(:available?, _from, state), do: {:reply, here?(), state}
-
   def handle_call(:start, _from, state) do
     case join_target() do
       {:error, sentence} ->

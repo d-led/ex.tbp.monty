@@ -5,6 +5,7 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
 
   alias Monty.Studio.Artifacts
   alias Monty.Studio.Settings
+  alias Monty.Test.CarriesPlugins
   alias Monty.Test.Tmp
 
   setup do
@@ -277,7 +278,7 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
     end
 
     test "starts them and says which nodes are up, on a build that carries them", %{conn: conn} do
-      Application.put_env(:ex_tbp_monty, :sample_plugins, ExTbpMonty.SamplePluginsTest.Carries)
+      Application.put_env(:ex_tbp_monty, :sample_plugins, CarriesPlugins)
       on_exit(fn -> Application.delete_env(:ex_tbp_monty, :sample_plugins) end)
 
       {:ok, view, _html} = live(conn, ~p"/settings")
@@ -291,7 +292,7 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
     end
 
     test "stops them again without an answer from the nodes", %{conn: conn} do
-      Application.put_env(:ex_tbp_monty, :sample_plugins, ExTbpMonty.SamplePluginsTest.Carries)
+      Application.put_env(:ex_tbp_monty, :sample_plugins, CarriesPlugins)
       on_exit(fn -> Application.delete_env(:ex_tbp_monty, :sample_plugins) end)
 
       {:ok, view, _html} = live(conn, ~p"/settings")
