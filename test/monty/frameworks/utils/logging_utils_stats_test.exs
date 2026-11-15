@@ -17,12 +17,19 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
   alias Monty.Frameworks.Utils.LoggingUtils
   alias Monty.Geometry.Rotation
 
+  # A detected rotation is scipy's `xyzw`; the pose the object was placed with
+  # travels scalar-first, Monty's `Rotation.as_quat` — the two conventions the
+  # stats have to keep apart.
   @identity_xyzw [0.0, 0.0, 0.0, 1.0]
+  @identity_wxyz [1.0, 0.0, 0.0, 0.0]
 
-  defp quarter_turn_xyzw do
+  defp quarter_turn do
     {:ok, rotation} = Rotation.from_euler_degrees([0.0, 90.0, 0.0])
-    Rotation.to_xyzw(rotation)
+    rotation
   end
+
+  defp as_wxyz(rotation), do: rotation |> Rotation.to_quaternion() |> Tuple.to_list()
+  defp as_xyzw(rotation), do: Rotation.to_xyzw(rotation)
 
   # What the episode did to this module: on the object, what it concluded, and
   # which objects the graph it matched was built from.
@@ -32,7 +39,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
         graph_id_to_target: %{"mug_graph" => MapSet.new(["mug"])},
         target_to_graph_id: %{"mug" => MapSet.new(["mug_graph"])},
         primary_target: "mug",
-        primary_target_rotation_quat: @identity_xyzw,
+        primary_target_rotation_quat: @identity_wxyz,
         terminal_state: :match,
         detected_object: "mug_graph",
         detected_pose: [0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
@@ -68,7 +75,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
     test "is correct, and the pose error is measured against the pose it was placed with" do
       stats =
         lm(
-          primary_target_rotation_quat: quarter_turn_xyzw(),
+          primary_target_rotation_quat: as_wxyz(quarter_turn()),
           buffer: buffer(%{"detected_rotation_quat" => @identity_xyzw, "time" => [1, 3]})
         )
         |> LoggingUtils.graph_lm_episode_stats()
@@ -77,8 +84,20 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
       # The stepwise judgement is about the object it stood on, which nothing
       # recorded here — Monty's own reading, and the case with one is next.
       assert stats["stepwise_performance"] == "confused"
+      # The object was placed a quarter turn from the pose the module reported.
       assert stats["rotation_error"] == 90.0
       assert stats["result"] == "mug_graph"
+    end
+
+    test "the pose it reported as the object's is no rotation error at all" do
+      stats =
+        lm(
+          primary_target_rotation_quat: as_wxyz(quarter_turn()),
+          buffer: buffer(%{"detected_rotation_quat" => as_xyzw(quarter_turn()), "time" => [1, 3]})
+        )
+        |> LoggingUtils.graph_lm_episode_stats()
+
+      assert stats["rotation_error"] == 0.0
     end
 
     test "is confused when the graph it matched was built from another object" do

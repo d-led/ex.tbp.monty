@@ -424,24 +424,36 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
   defp recognition_pose_error(_rotation, %{primary_target_rotation_quat: nil}), do: nil
 
   defp recognition_pose_error(rotations, lm) do
-    case as_poses(rotations) do
-      [] ->
+    case {as_poses(rotations), target_rotation(lm.primary_target_rotation_quat)} do
+      {[], _absent} ->
         nil
 
-      poses ->
+      {_poses, :error} ->
+        nil
+
+      {poses, {:ok, target}} ->
         poses
-        |> then(
-          &compute_pose_error(&1, as_poses(lm.primary_target_rotation_quat) |> List.first(),
-            degrees: true
-          )
-        )
+        |> compute_pose_error(target, degrees: true)
         |> Float.round(4)
     end
   end
 
-  # Monty stores a pose three ways, and a stats read meets all of them: a detected
-  # rotation as an `xyzw` quaternion, a symmetry's poses as 3×3 rotation matrices,
-  # and either of those as a list when a recognition has several equivalent poses.
+  # The target travels as a scalar-first quaternion — Monty's
+  # `Rotation.as_quat/0`, `[w, x, y, z]` — where a stats read meets a detected
+  # rotation as scipy's `xyzw`. Reading one as the other turns every identity
+  # into a half turn about x, which is what every episode's rotation error said.
+  defp target_rotation(quat) when is_list(quat) or is_tuple(quat) do
+    case Rotation.from_quaternion(List.to_tuple(quat)) do
+      {:ok, rotation} -> {:ok, rotation}
+      {:error, _not_a_rotation} -> :error
+    end
+  end
+
+  defp target_rotation(_absent), do: :error
+
+  # A recognition's own poses arrive two ways: a detected rotation as scipy's
+  # `xyzw` quaternion, and a symmetry's poses as 3×3 rotation matrices. Either
+  # may be a list, when a recognition has several equivalent poses.
   defp as_poses([]), do: []
   defp as_poses([first | _rest] = one_pose) when is_number(first), do: [from_xyzw(one_pose)]
   defp as_poses([first | _rest] = poses) when is_list(first), do: Enum.map(poses, &as_rotation/1)
