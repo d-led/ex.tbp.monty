@@ -33,7 +33,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
         target_to_graph_id: %{"mug" => MapSet.new(["mug_graph"])},
         primary_target: "mug",
         primary_target_rotation_quat: @identity_xyzw,
-        terminal_state: "match",
+        terminal_state: :match,
         detected_object: "mug_graph",
         detected_pose: [0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
         possible_matches: ["mug_graph"],
@@ -121,7 +121,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
     end
 
     test "a timeout with one hypothesis left is a pose that is not settled" do
-      stats = LoggingUtils.graph_lm_episode_stats(lm(terminal_state: "time_out"))
+      stats = LoggingUtils.graph_lm_episode_stats(lm(terminal_state: :time_out))
 
       assert stats["primary_performance"] == "pose_time_out"
       assert stats["result"] == ["mug_graph"]
@@ -130,7 +130,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
     test "a timeout with several hypotheses left stays a timeout" do
       stats =
         LoggingUtils.graph_lm_episode_stats(
-          lm(terminal_state: "time_out", possible_matches: ["mug_graph", "bowl_graph"])
+          lm(terminal_state: :time_out, possible_matches: ["mug_graph", "bowl_graph"])
         )
 
       assert stats["primary_performance"] == "time_out"

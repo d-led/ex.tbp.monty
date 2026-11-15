@@ -337,20 +337,32 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
     # Monty's guard: the first step's `on_object` is what says the episode ever
     # reached the object.
     if lm.buffer.on_object != [] and hd(lm.buffer.on_object) != 0 do
+      conclusion = monty_word(lm.terminal_state)
+
       %{
         @off_object
         | possible_matches: lm.possible_matches,
           num_steps: FeatureAtLocationBuffer.get_num_matching_steps(lm.buffer),
           location: FeatureAtLocationBuffer.current_location(lm.buffer) || [0, 0, 0],
           result: lm.detected_object,
-          primary: lm.terminal_state,
-          stepwise: lm.terminal_state
+          primary: conclusion,
+          stepwise: conclusion
       }
       |> classify(lm)
     else
       @off_object
     end
   end
+
+  # The conclusion a learning module holds, in the words the statistics are
+  # scored and written in. Monty's module carries `"match"`; this port's carries
+  # `:match` (`LearningModule.terminal_state/0` says so), and `classify/2` below
+  # is Monty's vocabulary — without this every episode was written as `match` or
+  # `time_out`: `correct`, `confused` and `pose_time_out` never reached a CSV and
+  # `rotation_error` was never measured.
+  defp monty_word(nil), do: nil
+  defp monty_word(state) when is_atom(state), do: Atom.to_string(state)
+  defp monty_word(state), do: state
 
   # No hypothesis left is a no-match however the episode ended.
   defp classify(%{possible_matches: []} = performance, _lm),
