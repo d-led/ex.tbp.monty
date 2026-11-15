@@ -130,11 +130,11 @@ and a run of it is the ported pipeline, not stand-ins.
 Accuracy cannot be compared before the world is real, so this comes before
 benchmarks rather than after.
 
-- **Done, and MuJoCo is what a run steps.** MuJoCo is the default world
-  (`config/config.exs`): Monty's own simulator, copied file for file into
-  `priv/monty_py` and driven in the interpreter the release carries
-  (`Monty.Simulators.Mujoco.{Host,Environment}`), so a step is Monty's own
-  `MuJoCoSimulator`, its agents, cameras and actuations, with no checkout and
+- **Done, and MuJoCo is what a run steps.** MuJoCo is the world a run steps —
+  through the compiled binding (`:ex_mujoco`, the default on a machine that can
+  render with it) or Monty's own simulator in the interpreter this release carries
+  (`:mujoco`, the fallback): either way it is Monty's own `MuJoCoSimulator`, its
+  agents, cameras and actuations, with no checkout and
   nothing from PyPI. Its classes stay `:planned` in the map on purpose: the code
   is copied rather than ported, so there is no Elixir module per class to point
   at. Units and quirks cross unchanged — metres, `wxyz` quaternions decoded into

@@ -60,8 +60,10 @@ not recalled — run it after anything lands that can move one.
   actuations, written here against `mujoco` and mirroring Monty's `MuJoCoSimulator`
   and its agents; `Monty.Simulators.Mujoco.{Host,Environment}` runs it in the
   embedded CPython `pythonx`, one process per world, so a step is atomic across
-  worlds and nothing has to be installed. It is the default world
-  (`Setup.configured_world/0`), and a run records which world it stepped.
+  worlds and nothing has to be installed. It is the world a run steps when this
+  machine cannot render with the compiled binding — the default is `:ex_mujoco`
+  (`Monty.Studio.Setup.default_world/0`) — and a run records which world it
+  stepped.
   ([`mujoco/environment.ex`](../lib/monty/simulators/mujoco/environment.ex),
   [from-monty.md](from-monty.md))
 - **Habitat, as a handle this build cannot step:**

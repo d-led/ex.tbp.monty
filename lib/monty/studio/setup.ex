@@ -301,7 +301,29 @@ defmodule Monty.Studio.Setup do
   #
   # `||`, not a default argument: a key that exists and is nil is "nothing
   # configured", and `Application.get_env/3` would hand that nil on as a world.
-  defp configured_world, do: Application.get_env(:ex_tbp_monty, :world_simulator) || :mujoco
+  defp configured_world,
+    do: Application.get_env(:ex_tbp_monty, :world_simulator) || default_world()
+
+  @doc """
+  The world a run steps when nobody named one.
+
+  The **compiled binding**, `:ex_mujoco`: the same MuJoCo scene as Monty's own
+  simulator, stepped by the NIF rather than the interpreter, measured at 1.7–1.8×
+  faster per world step (`docs/desktop.md`). A node that cannot render with it —
+  an image with no GL context, a machine whose `ex_mujoco` library will not load —
+  answers `:mujoco` instead, because a default a machine cannot step fails every
+  run the moment somebody uses it, which is worse than the slower world.
+
+  One function, three callers: `configured_world/0` here, the studio's MCP
+  description (`ExTbpMonty.Mcp.Tools.Studio`) and the readiness catalogue
+  (`Monty.Studio.Readiness`). A fallback written into each of them is a fallback
+  that disagrees — which is how the MCP tool came to offer four worlds while the
+  run page offered five.
+  """
+  @spec default_world() :: :mujoco | :ex_mujoco
+  def default_world do
+    if Monty.Simulators.ExMujoco.World.available?(), do: :ex_mujoco, else: :mujoco
+  end
 
   # Resolved when the setup is built, not when the first step asks: a node told to
   # use a policy nobody offers is a run that must not start, and a finding found

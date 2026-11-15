@@ -30,13 +30,18 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "the default world" do
-    # A run that says nothing steps Monty's own simulator: this build carries it
-    # (`priv/monty_py`), so there is nothing to install and nothing to configure.
-    # The stand-in is something a run chooses.
-    test "is MuJoCo, so an experiment's own world steps it" do
+    # A run that names no world steps the compiled binding when this machine can
+    # render with it — the same scene as Monty's own simulator, measured at
+    # 1.7–1.8× faster per world step — and Monty's interpreter when it cannot,
+    # because a default a machine cannot step fails every run the moment somebody
+    # uses it.
+    test "is what the node can step: the compiled binding when it can render" do
       Tmp.app_env(:world_simulator, nil)
 
-      assert setup_for("tutorial/first_experiment").world == :mujoco
+      expected = if Monty.Simulators.ExMujoco.World.available?(), do: :ex_mujoco, else: :mujoco
+
+      assert Monty.Studio.Setup.default_world() == expected
+      assert setup_for("tutorial/first_experiment").world == expected
     end
 
     test "is what the run asked for, instead" do

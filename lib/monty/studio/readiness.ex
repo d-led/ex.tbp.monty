@@ -287,13 +287,14 @@ defmodule Monty.Studio.Readiness do
   # levels of `ls` — the release directories and the files in them — so a file
   # exported into a release that already exists moves the key too.
   #
-  # MuJoCo when nobody said otherwise, which is the same default `Monty.Studio.Setup`
-  # reads: a key that changed with whether a deployment's config happened to set
-  # the substitution would make one catalogue look like two.
+  # `Monty.Studio.Setup.default_world/0`'s answer when nobody said otherwise: a
+  # key that changed with whether a deployment's config happened to set the
+  # substitution would make one catalogue look like two, and a second copy of the
+  # fallback here is how the two would drift apart.
   defp world(opts),
     do:
       Keyword.get(opts, :world_simulator) || Application.get_env(:ex_tbp_monty, :world_simulator) ||
-        :mujoco
+        Monty.Studio.Setup.default_world()
 
   defp libraries_stamp do
     dir = Memory.libraries_dir()

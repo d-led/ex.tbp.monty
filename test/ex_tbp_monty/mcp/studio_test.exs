@@ -73,10 +73,13 @@ defmodule ExTbpMonty.Mcp.StudioTest do
       for world <- others, do: assert(note =~ ~s(`world: "#{world}"`))
     end
 
-    test "says MuJoCo when nothing configured a world, which is every deployment" do
+    test "names the world a run would step when nothing configured one" do
       Tmp.app_env(:world_simulator, nil)
 
-      assert Studio.describe().world.mode == "mujoco"
+      # The same answer `Monty.Studio.Setup` gives a run: the compiled binding on
+      # a node that can render with it, Monty's interpreter otherwise.
+      assert Studio.describe().world.mode ==
+               to_string(Monty.Studio.Setup.default_world())
     end
 
     test "lists the prerequisites with whether each is present" do
