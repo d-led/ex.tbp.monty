@@ -775,8 +775,20 @@ names.
   and lands under the folder above. Nothing has been run end to end from a
   _fresh_ folder yet: a first launch downloads ~543 MB and then exports the
   memory, both in the background.
-- **A run in the window** (an experiment to its conclusion) has not been done;
-  it is the same binary as the image, so what remains is patience, not wiring.
+- **A run in the window has been done.** `base_10simobj_surf_agent` was queued
+  through the studio's own `monty_run_experiment` inside a desktop release and ran
+  to its conclusion there: 140 episodes, all concluded (the eval CSV's `result`
+  column says `match` episode after episode), 20 780 steps, 179 s in the model and
+  255 s in the world, and `/runs/<id>` rendering the finished record. It taught
+  two things, and both are recorded here rather than fixed in passing: the MCP
+  tool refused `world: ex_mujoco` while the run page offered it (the tool kept a
+  list of its own; it now takes the words from `Monty.Studio.Setup.worlds/0`),
+  and **the recording is heavy** — that one run wrote 368 MB of
+  `frames/<step>/*.png`, four pictures per step and about 19 800 files, and
+  nothing prunes them except deleting the run. A person who runs a few
+  experiments will notice their disk, which is worth deciding about before the
+  demo: keep the last N steps, keep the pictures only around conclusions, or
+  leave it and say so in the UI.
 - **The plugin control is proven on every platform CI builds.** The boot check
   presses it — start, "3 nodes in this cluster", stop, "One node in this cluster"
   — on macOS arm64, Linux x64 and Windows x64, within seconds of the press and
