@@ -108,6 +108,11 @@ Windows  plugins\ beside the window (and in the installer)
 Linux    the same folder inside the AppImage
 ```
 
+The window looks there and nowhere else — `plugins/` beside its own release — and
+`MONTY_STUDIO_PLUGINS` is the one way to point it at a folder built somewhere
+else, which is how a checkout runs the same code against
+`_build/desktop/plugins`.
+
 **Settings → Cluster** has a button that starts both, so the demo needs no
 terminal: the window spawns the two releases as its own children, hands them its
 node name and its cookie, and stops them again when the window closes. Pressing
