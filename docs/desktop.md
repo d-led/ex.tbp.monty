@@ -760,10 +760,9 @@ names.
   memory, both in the background.
 - **A run in the window** (an experiment to its conclusion) has not been done;
   it is the same binary as the image, so what remains is patience, not wiring.
-- **The plugin control is proven on macOS.** Start, stop, and stopping with the
-  window were run against a desktop release on macOS — three nodes in the cluster
-  within eight seconds, and an empty `epmd` afterwards. Windows runs
-  `example_plugin.bat` through `cmd /c`, because a batch file is not an
-  executable image and `CreateProcess` will not start one, and nothing has
-  pressed the button there yet; `plugins\start-plugins.ps1` is the same launch by
-  hand, which is what the Windows bundle job could be checking first.
+- **The plugin control is proven on every platform CI builds.** The boot check
+  presses it — start, "3 nodes in this cluster", stop, "One node in this cluster"
+  — on macOS arm64, Linux x64 and Windows x64, within seconds of the press and
+  without a window. Windows runs `example_plugin.bat` through `cmd /c`, because a
+  batch file is not an executable image and `CreateProcess` will not start one;
+  `plugins\start-plugins.ps1` is the same launch by hand.
