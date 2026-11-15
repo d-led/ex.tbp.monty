@@ -921,7 +921,12 @@ jobs:
       # file"). Three tests, seconds to run, where the difference lives.
       - name: The window's own tests, on the platform its branches are for
         if: runner.os == 'Windows'
-        shell: bash
+        # `pwsh`, not `bash`: Git Bash puts `C:\Program Files\Git\usr\bin` at the
+        # front of `PATH`, where `link.exe` is coreutils' `link` — so Rust found
+        # that as the linker and `cargo` failed with `/usr/bin/link: missing
+        # operand after '\377\376'`, on a runner whose MSVC toolchain was
+        # installed and on the path. PowerShell prepends nothing.
+        shell: pwsh
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       # Windows has two PowerShells and they are not the same language: 5.1 is
