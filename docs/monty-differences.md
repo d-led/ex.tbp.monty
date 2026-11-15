@@ -1511,14 +1511,24 @@ times the matching for the same movement; that, and not the model, is what a
 reader sees as "his run is faster". The model itself is exact: replaying Monty's
 own percepts through `EvidenceGraphLM`
 ([`test/monty/surf_replay_test.exs`](../test/monty/surf_replay_test.exs))
-reproduces his evidence to `1e-12` and his conclusion exactly. The cadence of a
-live run is not reproducible in the same way, because it is a property of the
-percept: our location agrees with Monty's to `1e-8` and the normal to `1.4e-5`,
-but the hue differs by `3.3e-4` — the size of a slightly different pixel, since
-`ex_mujoco` renders the scene rather than replaying his camera (see §2.15). Colour
-difference across a 4 mm move is what the filter counts, so a reconstructed world
-reads more often than his does, and the world, not the model, is the thing to
-make agree.
+reproduces his evidence to `1e-12` and his conclusion exactly.
+
+**The percept is his too — measured, not assumed.**
+[`scripts/probe_percept_parity.exs`](../scripts/probe_percept_parity.exs) gives
+our world Monty's own first three actions and reads the patch he read at step 4:
+his middle pixel `hsv [0.9966667, 0.6756757, 0.5803922]`, his `min_depth`
+`0.024471`, his `mean_depth` `0.024568`, to the last bit. The two MuJoCo bindings
+also render the same bytes as each other
+([`scripts/probe_world_parity.exs`](../scripts/probe_world_parity.exs)). So a run
+of ours that pays more per movement is paying for **different actions on a
+different trajectory**, not for a different renderer or a different feature
+calculation — and the recording is what makes that measurable step by step.
+
+That comparison also turned up the last bit it took to be exact: skimage's
+`img_as_float` scales a byte by the reciprocal of 255, and `148 * (1/255)` is one
+double away from `148 / 255`. `SensorProcessing.rgb2hsv/1` now scales the same
+way, which is why the middle pixel's `hsv` agrees with his rather than almost
+agreeing.
 
 ---
 

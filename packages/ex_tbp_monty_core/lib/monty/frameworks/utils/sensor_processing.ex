@@ -264,12 +264,16 @@ defmodule Monty.Frameworks.Utils.SensorProcessing do
     [hue(red, green, blue, brightest, delta), saturation(brightest, delta), brightest]
   end
 
-  @uint8_max 255.0
+  # skimage's `img_as_float` scales a byte by the *reciprocal* of 255, and
+  # `x * (1/255)` is not `x / 255` in the last bit: on a byte of 148 the two
+  # answers are adjacent doubles, and a percept compared with Monty's has to
+  # have his (`scripts/probe_percept_parity.exs`).
+  @unit_step 1.0 / 255.0
 
   # skimage's `img_as_float`: integers are byte samples of a camera image.
   defp as_unit([red, green, blue])
        when is_integer(red) and is_integer(green) and is_integer(blue),
-       do: [red / @uint8_max, green / @uint8_max, blue / @uint8_max]
+       do: [red * @unit_step, green * @unit_step, blue * @unit_step]
 
   defp as_unit(pixel), do: pixel
 
