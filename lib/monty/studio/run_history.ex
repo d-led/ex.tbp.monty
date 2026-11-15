@@ -1256,7 +1256,11 @@ defmodule Monty.Studio.RunHistory do
   # How many runs one statement deletes. Small enough that a page hears about a
   # long delete while it is happening, large enough that the round trips are not
   # the cost.
-  @delete_chunk 50
+  # How many runs one statement group takes. It is a *progress* number rather
+  # than a statement-size one: the queries are cheap and deleting a run's
+  # directory is not, so the chunk is what decides how often a page's count
+  # moves while the slow part runs.
+  @delete_chunk 10
 
   @doc """
   Deletes the runs with these ids, and answers how many it deleted.
@@ -1294,11 +1298,16 @@ defmodule Monty.Studio.RunHistory do
       # left behind would be a row about a run nobody can open.
       _ = Repo.delete_all(from(part in Part, where: part.run_id in ^chunk))
 
+      deleted = deleted + count
+
+      # Said before the files go, not after: removing a run's directory is the
+      # slow part of deleting it, and a count that waits for it is a count that
+      # stands still for exactly as long as somebody is watching it.
+      if on_progress, do: on_progress.(%{deleted: deleted, total: total})
+
       Enum.each(chunk, &Monty.Studio.Artifacts.forget/1)
       Enum.each(plans, &forget_parts/1)
 
-      deleted = deleted + count
-      if on_progress, do: on_progress.(%{deleted: deleted, total: total})
       deleted
     end)
   end

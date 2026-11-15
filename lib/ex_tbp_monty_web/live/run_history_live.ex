@@ -209,7 +209,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       per_page: found.per_page,
       total: found.total,
       counts: counts,
-      # What the purge button would remove: every run that is done, in every
+      # What the delete-finished button would remove: every run that is done, in
+      # every
       # filter — the count is about the machine, not about the list on screen.
       done: Map.get(counts, "finished", 0) + Map.get(counts, "stopped", 0),
       page_ids: Enum.map(found.runs, & &1.id),
@@ -1161,13 +1162,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         pills say. --%>
         <button
           :if={@done > 0}
-          id="purge-done"
-          phx-click="ask_purge_done"
+          id="delete-done"
+          phx-click="ask_delete_done"
           disabled={@deleting != nil}
           class="btn btn-ghost btn-xs text-error"
           title="Every finished and stopped run, whatever this page shows"
         >
-          Purge {@done} done
+          Delete {@done} done runs
         </button>
       </div>
 

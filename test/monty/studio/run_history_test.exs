@@ -872,6 +872,26 @@ defmodule Monty.Studio.RunHistoryTest do
       assert_receive {:deleted, %{deleted: 2, total: 2}}
     end
 
+    test "reports as it goes, so a page's count moves while the work happens" do
+      ids =
+        for index <- 1..25 do
+          {:ok, run} = RunHistory.start(%{@attributes | experiment: "many_#{index}"})
+          run.id
+        end
+
+      test_process = self()
+
+      RunHistory.delete_ids(ids,
+        on_progress: fn progress -> send(test_process, {:deleted, progress}) end
+      )
+
+      # The first word is about part of it. A single report at the end is a
+      # progress bar that shows nothing but its own disappearance, which is what
+      # a page does when it waits for the files of every run to go.
+      assert_receive {:deleted, %{deleted: part, total: 25}} when part < 25
+      assert_receive {:deleted, %{deleted: 25, total: 25}}
+    end
+
     test "every run a filter shows, and no others" do
       {:ok, tutorial} = RunHistory.start(@attributes)
       {:ok, dist} = RunHistory.start(%{@attributes | experiment: "base_dist"})

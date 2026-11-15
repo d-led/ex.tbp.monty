@@ -28,7 +28,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive.Selection do
   @doc "The events this module answers, so the page can hand them all over at once."
   @spec events() :: [String.t()]
   def events do
-    ~w(toggle toggle_all clear_selection ask_delete_selected ask_delete_matching ask_purge_done cancel_bulk_delete bulk_delete)
+    ~w(toggle toggle_all clear_selection ask_delete_selected ask_delete_matching ask_delete_done cancel_bulk_delete bulk_delete)
   end
 
   @doc """
@@ -52,7 +52,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive.Selection do
   def handle("ask_delete_matching", _params, %{state: state, text: text, total: total}),
     do: {:assign, confirming_bulk: shown_question(state, text, total)}
 
-  def handle("ask_purge_done", _params, %{done: done}),
+  def handle("ask_delete_done", _params, %{done: done}),
     do: {:assign, confirming_bulk: %{count: done, scope: :done}}
 
   def handle("cancel_bulk_delete", _params, _assigns), do: {:assign, confirming_bulk: nil}

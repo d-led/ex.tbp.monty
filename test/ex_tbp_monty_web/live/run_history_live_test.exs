@@ -2174,7 +2174,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     # about the filter a person happens to be looking at — so this one counts and
     # deletes every run that is done, whatever the pills say, and leaves the one
     # in flight alone.
-    test "purging done runs ignores the filter and keeps what is running", %{conn: conn} do
+    test "deleting done runs ignores the filter and keeps what is running", %{conn: conn} do
       finished = insert_run(%{experiment: "base_a", status: "finished"})
       stopped = insert_run(%{experiment: "base_b", status: "stopped"})
       running = insert_run(%{experiment: "base_c", status: "running"})
@@ -2185,9 +2185,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/runs?#{[state: "failed", q: ""]}")
 
-      assert view |> element("#purge-done") |> render() =~ "Purge #{length(done_before)} done"
+      assert view |> element("#delete-done") |> render() =~
+               "Delete #{length(done_before)} done runs"
 
-      view |> element("#purge-done") |> render_click()
+      view |> element("#delete-done") |> render_click()
 
       assert view |> element("#confirm-bulk-delete") |> render() =~
                "Delete every finished and stopped run?"
