@@ -158,6 +158,23 @@ case "$health" in
     ;;
 esac
 
+# The two sample plugin nodes, which `bundle.resources` puts beside `rel/` in
+# every shape: `Contents/Resources/plugins` inside a `.app`, `plugins/` next to
+# the release in the portable folder and the AppImage. Asserted here because the
+# copy is one line of JSON per platform, and a bundle without them is a demo that
+# cannot be given — silently, since the window itself is complete either way.
+plugins="$(dirname "$(dirname "$release")")/plugins"
+
+for wanted in "start-plugins.sh" "start-plugins.ps1" "example_plugin/bin" "flyverse_plugin/bin"; do
+  if [ ! -e "$plugins/$wanted" ]; then
+    echo "the bundle carries no plugins/$wanted — see docs/desktop.md" >&2
+    ls "$plugins" 2>/dev/null | sed 's/^/  /' >&2
+    exit 1
+  fi
+done
+
+echo "and it carries the two sample plugin nodes ($(du -sh "$plugins" | cut -f1))"
+
 # Then the page that reads the disk, because a release can be alive and still
 # have nothing to say about the disk it writes to: it did, on Windows, while
 # `df` — a program that platform does not have — was how the room was read, and
