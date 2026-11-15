@@ -30,7 +30,7 @@ naming one still builds, `ported/1` counts it, `Monty.ModuleMap.written?/1` is
 the predicate all of those ask, and a partial module's test link still points at
 its test.
 
-## The four there are
+## The three there are
 
 **`FeatureGraphLM`** (`frameworks/models/feature_location_matching/feature_graph_lm.py`)
 — the feature-location model matches and votes, but two things it also does are
@@ -60,12 +60,15 @@ an `isinstance` check on the hypothesis, and this port's hypotheses are one
 shape. `docs/monty-differences.md` §2.21 has the arithmetic and why it is not
 wired.
 
-**`BasicGraphMatchingLogger`** (`frameworks/loggers/graph_matching_loggers/`)
-— every numeric and per-learning-module figure is computed exactly as Monty
-computes it, and the statistics files are the same files. What is missing is
-`wandb.Histogram` values: wandb's own type, built only when a run has more than
-one learning module, carrying distributions this module already keeps as lists.
-The wandb handlers are excluded anyway, so the values would have nowhere to go.
+**`BasicGraphMatchingLogger`** was the fourth, and the claim is withdrawn: the
+six values it was short of (`episode/rotation_error_per_lm`, `steps_per_lm`,
+`steps_per_lm_indv_ts`, `symmetry_evidence_per_lm`, `lm_performances`,
+`avg_prediction_error_dist`) are now written under Monty's own keys, as the lists
+he wraps. Only the wrapper was missing, and `wandb.Histogram` is wandb's type,
+which belongs to the handlers that are excluded — so what a reader of these
+figures needs is the data, and the data is there. The multi-module branch also
+carries Monty's own override of `episode/avg_prediction_error` (the mean of the
+non-`nan` errors) with it.
 
 ## How the list was found, and how to find the next one
 

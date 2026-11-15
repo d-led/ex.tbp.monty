@@ -162,4 +162,53 @@ defmodule Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger
       assert overall["episode/monty_steps"] == 12
     end
   end
+
+  # Monty's `wendb.Histogram` branch: with more than one learning module the run's
+  # figures also carry the per-module distributions, and with one module they do
+  # not — a distribution of one number is not a distribution.
+  describe "a run with more than one module" do
+    test "carries the per-module distributions" do
+      {:ok, logger} =
+        Logger.update_episode_data(Logger.new(), episode_args(), model([lm(), lm()]))
+
+      overall = Logger.formatted_overall_stats(logger, :train, 0)
+
+      assert length(overall["episode/rotation_error_per_lm"]) == 2
+      assert length(overall["episode/steps_per_lm"]) == 2
+      assert length(overall["episode/lm_performances"]) == 2
+      assert length(overall["episode/symmetry_evidence_per_lm"]) == 2
+    end
+
+    test "carries none of them when it has one" do
+      {:ok, logger} = Logger.update_episode_data(Logger.new(), episode_args(), model([lm()]))
+
+      refute Map.has_key?(
+               Logger.formatted_overall_stats(logger, :train, 0),
+               "episode/steps_per_lm"
+             )
+    end
+  end
+
+  # Monty's `maybe_log`: the pool is reported once it passes ten megabytes, and a
+  # pool below that is left exactly as it was — the case that matters, because a
+  # size-based report must not be a report on every call.
+  describe "a pool that grows" do
+    test "is left alone while it is small" do
+      {:ok, logger} = Logger.update_episode_data(Logger.new(), episode_args(), model([lm()]))
+      pool = Logger.data(logger)
+
+      assert {:ok, ^logger} = Logger.maybe_log(logger, episode_args(), nil, model([lm()]))
+      assert Logger.data(logger) == pool
+    end
+
+    test "is reported and emptied once it passes ten megabytes", %{dir: dir} do
+      # ~11 MB of list: 200 000 four-integer tuples are seven words each.
+      grown = Enum.map(1..200_000, fn n -> {n, n, n, n} end)
+      {:ok, logger} = Logger.update_episode_data(Logger.new(), episode_args(), model([lm()]))
+      logger = %{logger | data: Map.put(Logger.data(logger), :grown, grown)}
+
+      assert {:ok, emptied} = Logger.maybe_log(logger, episode_args(), dir, model([lm()]))
+      assert Logger.data(emptied) == Logger.data(Logger.new())
+    end
+  end
 end

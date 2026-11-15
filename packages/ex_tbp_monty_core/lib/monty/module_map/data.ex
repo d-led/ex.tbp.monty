@@ -1242,9 +1242,7 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/loggers/graph_matching_loggers.py",
       classes: [
         %{
-          reason:
-            "`wandb.Histogram` values are not built: they are wandb's own type, they only exist when a run has more than one learning module, and the distributions they carry are the lists this module keeps. Every numeric and per-LM figure is computed as Monty computes it",
-          status: :partial,
+          status: :implemented,
           file:
             "lib/monty/frameworks/loggers/graph_matching_loggers/basic_graph_matching_logger.ex",
           elixir: "Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger",

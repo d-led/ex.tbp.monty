@@ -56,6 +56,10 @@ defmodule Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger
 
   @modes [:train, :eval]
 
+  # Monty reports and empties its pool once it passes ten megabytes. The number is
+  # his, and the unit is bytes of the pool, not of one episode.
+  @reporting_threshold_bytes 10_000_000
+
   defstruct handlers: [], data: nil, overall_train_stats: nil, overall_eval_stats: nil, lms: []
 
   @typedoc "The pool of data one episode fills, and the run's counters beside it."
@@ -88,6 +92,30 @@ defmodule Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger
   @doc "Monty's `flush`: an empty pool for the next episode."
   @spec flush(t()) :: t()
   def flush(%__MODULE__{} = logger), do: %{logger | data: empty_data()}
+
+  @doc """
+  Monty's `maybe_log`: a pool that has grown past ten megabytes is reported, and
+  then emptied.
+
+  Upstream's body calls `self.log(...)`, which neither this class nor its base
+  defines any more — the method is kept "in case we go back to size based
+  logging", so what it means is what its own comment says: report, flush,
+  continue. Nothing calls it unless a caller asks, and a caller that does gets
+  the episode reported exactly once.
+  """
+  @spec maybe_log(t(), map(), Path.t() | nil, State.t()) :: {:ok, t()} | {:error, term()}
+  def maybe_log(%__MODULE__{} = logger, logger_args, output_dir, model) do
+    if pool_bytes(logger.data) > @reporting_threshold_bytes do
+      log_episode(logger, logger_args, output_dir, model)
+    else
+      {:ok, logger}
+    end
+  end
+
+  # What Python's `total_size` answers for a container is the memory its entries
+  # take. `:erts_debug.size/1` is the same question asked of a term, in words, so
+  # the word size turns it back into bytes.
+  defp pool_bytes(data), do: :erts_debug.size(data) * :erlang.system_info(:wordsize)
 
   @doc """
   `post_episode`: write the episode into the pool, report it, and flush.
@@ -360,7 +388,49 @@ defmodule Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger
     overall
     |> Map.merge(per_module_percentages(stats, episodes, modules))
     |> Map.merge(per_module_episode_figures(logger, mode, episode))
+    |> Map.merge(per_module_distributions(stats, modules, episode_errors, individual_ts_steps))
   end
+
+  # Monty wraps these in `wandb.Histogram` and only when a run has more than one
+  # learning module, because a distribution of one number is not a distribution.
+  # The values are the lists this module already keeps; the wrapper is wandb's own
+  # type and its handlers are excluded, so what is ported is the data, under
+  # Monty's keys.
+  defp per_module_distributions(stats, modules, episode_errors, individual_ts_steps)
+       when modules > 1 do
+    distributions = %{
+      "episode/rotation_error_per_lm" => episode_errors,
+      "episode/steps_per_lm" => last_for(stats["episode_lm_steps"], modules),
+      "episode/steps_per_lm_indv_ts" => individual_ts_steps,
+      "episode/symmetry_evidence_per_lm" => last_for(stats["episode_symmetry_evidence"], modules),
+      "episode/lm_performances" =>
+        stats["episode_lm_performances"]
+        |> List.last()
+        |> List.wrap()
+        |> Enum.map(&performance_index/1)
+    }
+
+    # Monty filters the `nan`s out of the last module's errors and, when anything
+    # is left, takes the mean of what is left as the episode's average prediction
+    # error. A run of two modules therefore reports a different number here than
+    # the single-module branch does.
+    prediction_errors =
+      stats["episode_avg_prediction_error"] |> last_for(modules) |> Enum.reject(&is_nil/1)
+
+    if prediction_errors == [] do
+      distributions
+    else
+      distributions
+      |> Map.put("episode/avg_prediction_error_dist", prediction_errors)
+      |> Map.put("episode/avg_prediction_error", mean(prediction_errors))
+    end
+  end
+
+  defp per_module_distributions(_stats, _modules, _episode_errors, _steps), do: %{}
+
+  # Monty's `performance_encoder.transform/1`: an episode's performances as the
+  # numbers its index assigns each word.
+  defp performance_index(option), do: Enum.find_index(@performance_options, &(&1 == option))
 
   # The share of *modules* that did each thing, which is not the share of
   # episodes: a run where one of two modules was correct was a correct episode and
