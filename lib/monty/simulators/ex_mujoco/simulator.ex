@@ -127,7 +127,7 @@ defmodule Monty.Simulators.ExMujoco.Simulator do
   defp renderers(model, agents) do
     agents
     |> resolutions()
-    |> Map.new(fn resolution -> {resolution, renderer(model, resolution)} end)
+    |> Map.new(fn resolution -> {resolution, renderer_for(model, resolution)} end)
   end
 
   defp resolutions(agents) do
@@ -138,7 +138,7 @@ defmodule Monty.Simulators.ExMujoco.Simulator do
     |> MapSet.new()
   end
 
-  defp renderer(model, {height, width}), do: Renderer.new(model, width, height)
+  defp renderer_for(model, {height, width}), do: Renderer.new(model, width, height)
 
   defp semantic_ids(model, objects) do
     geom_types = model |> Model.geom_type() |> Tensor.to_list()

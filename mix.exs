@@ -194,7 +194,7 @@ defmodule ExTbpMonty.MixProject do
       # (`Monty.Simulators.ExMujoco.World`). 0.2.2 is the first version that also
       # links and answers on Windows; 0.2.0 and 0.2.1 were git tags here until it
       # was published.
-      {:ex_mujoco, "~> 0.2.2"},
+      {:ex_mujoco, github: "d-led/ex.mujoco", tag: "v0.2.3"},
       {:oban, "~> 2.20"},
       {:req, "~> 0.5"},
       # "24.8 GiB free" is what an operator reads, not 26_636_431_360: one
