@@ -19,11 +19,16 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 mod crash;
 
 use crash::{Failure, Shared, SharedState, Sink, Trouble};
+
+/// Where the window is allowed to go: the release this window started, once it
+/// has said where it listens. Empty until then, because the waiting page and the
+/// crash screen are served on this application's own scheme and need no origin.
+type AppOrigin = Arc<Mutex<Option<Url>>>;
 
 /// The scheme the window's own pages are served from: a spinner while the
 /// release starts, and the crash screen if it does not - a page that exists
@@ -87,6 +92,7 @@ fn main() {
     keep_the_window_out_of_app_nap();
 
     let shared: SharedState = Arc::new(Mutex::new(Shared::default()));
+    let app_at: AppOrigin = Arc::new(Mutex::new(None));
 
     let built = tauri::Builder::default()
         .manage(Sidecar(Mutex::new(None)))
@@ -114,14 +120,15 @@ fn main() {
             // The window first, and pointed at the waiting page: this used to
             // block until the release had spoken, so a slow boot was a window
             // that did not exist and a failed one was no window at all.
-            let window = splash_window(app)?;
+            let window = splash_window(app, Arc::clone(&app_at))?;
             let handle = app.handle().clone();
             let shared = Arc::clone(&shared);
+            let app_at = Arc::clone(&app_at);
 
             std::thread::spawn(move || match start_sidecar(&handle, &shared) {
                 Ok((child, url)) => {
                     handle.state::<Sidecar>().0.lock().unwrap().replace(child);
-                    navigate(&window, &shared, &url);
+                    navigate(&window, &shared, &url, &app_at);
 
                     // From here on the server is somebody else's process, and a
                     // window pointed at a server that has ended is a blank tab:
@@ -175,12 +182,36 @@ fn main() {
 
 /// The window the app opens with: the waiting page, in the shape this platform
 /// can load.
-fn splash_window(app: &tauri::App) -> Result<WebviewWindow, Box<dyn std::error::Error>> {
+fn splash_window(
+    app: &tauri::App,
+    app_at: AppOrigin,
+) -> Result<WebviewWindow, Box<dyn std::error::Error>> {
     Ok(
         WebviewWindowBuilder::new(app, "main", WebviewUrl::External(splash_url("").parse()?))
             .title("Monty on the BEAM")
             .inner_size(1280.0, 860.0)
             .min_inner_size(900.0, 600.0)
+            // Every page this window is asked to load passes here first. A
+            // refusal is not a dead click: the address is handed to the system's
+            // own browser, which is what a link to the project or to a peer
+            // node's page should have done in the first place.
+            .on_navigation(move |url| {
+                let app = app_at.lock().ok().and_then(|at| at.clone());
+
+                if may_load(url, app.as_ref()) {
+                    return true;
+                }
+
+                log_line(
+                    &log_path(),
+                    &format!(
+                        "opening {url} outside the window: this is not the release it started"
+                    ),
+                );
+                open_outside(url);
+
+                false
+            })
             .build()?,
     )
 }
@@ -203,7 +234,7 @@ fn splash_url(suffix: &str) -> String {
 /// release says where it listens from inside its listener, so this normally
 /// succeeds at once, and the wait is for the microseconds in which it died
 /// between the line and the request.
-fn navigate(window: &WebviewWindow, shared: &SharedState, url: &str) {
+fn navigate(window: &WebviewWindow, shared: &SharedState, url: &str, app_at: &AppOrigin) {
     if answering_within(url, ANSWER_DEADLINE).is_err() {
         announce_failure(
             window,
@@ -216,8 +247,90 @@ fn navigate(window: &WebviewWindow, shared: &SharedState, url: &str) {
         return;
     }
 
-    let _ = window.navigate(url.parse().expect("the release announced a URL"));
+    let announced: Url = url.parse().expect("the release announced a URL");
+
+    // Recorded before the window is pointed at it: the navigation policy asks
+    // whether an address is this release's, and the answer has to exist by the
+    // time the navigation it describes happens.
+    if let Ok(mut at) = app_at.lock() {
+        *at = Some(announced.clone());
+    }
+
+    let _ = window.navigate(announced);
     let _ = window.set_title("Monty on the BEAM");
+}
+
+/// Whether the window may load an address at all.
+///
+/// Two answers are yes: a page this application serves itself — the waiting page
+/// and the crash screen, on the custom scheme below and on the `*.localhost` form
+/// WebView2 needs — and the release this window started, at the address it
+/// announced. Everything else is somebody else's page, and a webview that follows
+/// a link to one replaces the application with it: this window has no address bar
+/// and no back button, so there is no way out of the page it went to. The
+/// footer's own "Source code on GitHub" link is how that was found.
+fn may_load(url: &Url, app_at: Option<&Url>) -> bool {
+    is_a_page_of_ours(url) || app_at.is_some_and(|app| same_origin(url, app))
+}
+
+fn is_a_page_of_ours(url: &Url) -> bool {
+    match (url.scheme(), url.host_str()) {
+        // `splash://localhost/…` on macOS and Linux, and the form WebView2 will
+        // load on Windows.
+        (SPLASH, Some("localhost")) => true,
+        ("http", Some(host)) if host == format!("{SPLASH}.localhost") => true,
+        // Where a webview is before it is anywhere.
+        ("about", _) => true,
+        _ => false,
+    }
+}
+
+/// The same scheme, host and port: a path, a query or a fragment is the same
+/// page's business, and a different port is a different server.
+fn same_origin(url: &Url, origin: &Url) -> bool {
+    url.scheme() == origin.scheme()
+        && url.host_str() == origin.host_str()
+        && url.port_or_known_default() == origin.port_or_known_default()
+}
+
+/// Hands an address to the system's browser.
+///
+/// Only `http` and `https`: a page can ask a webview to navigate to `file:` or
+/// `javascript:`, and handing either of those to a program whose job is to open
+/// whatever it is given would be a way to run something this window was never
+/// asked to run.
+fn open_outside(url: &Url) {
+    if !matches!(url.scheme(), "http" | "https") {
+        return;
+    }
+
+    let opened = if cfg!(target_os = "macos") {
+        Command::new("open").arg(url.as_str()).spawn()
+    } else if cfg!(windows) {
+        Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", url.as_str()])
+            .spawn()
+    } else {
+        Command::new("xdg-open").arg(url.as_str()).spawn()
+    };
+
+    match opened {
+        Ok(mut child) => {
+            // Waited on in a thread of its own: `xdg-open` on some systems waits
+            // for the browser, and a navigation policy that blocks the window is
+            // a window that freezes on a click. The wait also reaps the child —
+            // an application that leaves one per link is an application with a
+            // process table full of them.
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+        }
+
+        Err(error) => log_line(
+            &log_path(),
+            &format!("could not open {url} in the system browser: {error}"),
+        ),
+    }
 }
 
 /// Whether the announced address accepts a connection, within `within`.
@@ -837,6 +950,60 @@ mod tests {
     #[test]
     fn the_wait_for_the_release_is_bounded() {
         assert_eq!(ANNOUNCEMENT_TIMEOUT.as_secs(), 45);
+    }
+
+    /// This window has no address bar and no back button, so a page it goes to is
+    /// a page a person cannot leave: only its own two pages, and the release it
+    /// started, may load here. A link to the project or to a peer's own studio is
+    /// somebody else's page — it opens in the system's browser instead.
+    #[test]
+    fn only_its_own_pages_and_the_release_it_started_may_load_here() {
+        let release: Url = "http://127.0.0.1:42800/".parse().unwrap();
+
+        for ours in [
+            "splash://localhost/",
+            "splash://localhost/log",
+            "http://splash.localhost/",
+            "about:blank",
+        ] {
+            assert!(
+                may_load(&ours.parse().unwrap(), Some(&release)),
+                "{ours} is a page this window serves itself"
+            );
+        }
+
+        for ours in [
+            "http://127.0.0.1:42800/",
+            "http://127.0.0.1:42800/runs/81d9?state=all",
+            "http://127.0.0.1:42800/settings#cluster",
+        ] {
+            assert!(
+                may_load(&ours.parse().unwrap(), Some(&release)),
+                "{ours} is the release this window started"
+            );
+        }
+
+        for somebody_elses in [
+            "https://github.com/d-led/ex.tbp.monty",
+            "http://127.0.0.1:4002/runs",
+            "http://localhost:42800/",
+            "file:///etc/passwd",
+        ] {
+            assert!(
+                !may_load(&somebody_elses.parse().unwrap(), Some(&release)),
+                "{somebody_elses} is not this window's to load"
+            );
+        }
+    }
+
+    /// Before the release has said where it listens there is no origin to allow,
+    /// and the waiting page is the only thing on screen.
+    #[test]
+    fn nothing_but_the_waiting_page_loads_before_the_release_is_known() {
+        let announced: Url = "http://127.0.0.1:42800/".parse().unwrap();
+
+        assert!(may_load(&"splash://localhost/".parse().unwrap(), None));
+        assert!(!may_load(&announced, None));
     }
 
     /// A window that fails has nowhere to print: a release build on Windows has no

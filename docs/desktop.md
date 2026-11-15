@@ -40,6 +40,7 @@ symptom was a migration that never ran and an image that never became healthy.
 | the start itself: the server's tree, announced                              | `lib_desktop/desktop/application.ex`                                                    |
 | what stops it: the window's pipe, and the process that ran it               | `lib_desktop/desktop/parent_watch.ex`                                                   |
 | the window: a process supervisor with a webview                             | `src-tauri/src/main.rs`, `src-tauri/tauri.conf.json`                                    |
+| what the window may load, and what it hands to the system's browser         | `src-tauri/src/main.rs` (`may_load/2`)                                                  |
 | build both halves, open one                                                 | `scripts/start-desktop.sh`                                                              |
 | the tools the build asks for, and installs the ones it can                  | `scripts/start-desktop.sh` (`require`, Hex, rebar, `npm ci`, `cargo install tauri-cli`) |
 | the icons, from the two SVG masters, and the favicon                        | `scripts/make-icons.sh`                                                                 |
@@ -691,16 +692,21 @@ names.
   inside the checkout, and `scripts/smoke-window.sh` opening that copy (heading,
   marks and all), plus the same window with `--crash` pointed at a release that
   is not there.
-- **A splash, and an origin guard.** Two of the four things the sibling
-  project's window (`confluence_phx_mirror`) has are here now — the failure page
-  and the prefilled issue — and two are not: a **splash window** shown at once,
-  so the two seconds a release takes to announce its port are not blank, and a
-  **navigation guard**, so that only the app's own origin may load in the
-  window and anything else goes to the system browser deliberately rather than
-  by accident. This window never navigates anywhere else, which is why it has
-  not needed one yet, and a splash would be its first internal navigation. The
-  window has 17 tests against the sibling's ~20; the two it gained last came
-  from a real bug the window smoke found, a release path one segment short.
+- **A splash, and an origin guard.** Three of the four things the sibling
+  project's window (`confluence_phx_mirror`) has are here now — the failure page,
+  the prefilled issue, and the **navigation guard** — and one is not: a **splash
+  window** shown at once, so the two seconds a release takes to announce its port
+  are not blank. The guard is `may_load/2` in `src-tauri/src/main.rs`: the
+  window may load the two pages it serves itself (`splash://localhost/…`, and the
+  `http://splash.localhost/…` shape WebView2 needs) and the release it started,
+  whose origin it records from the announcement; anything else opens in the
+  system's browser instead, which is what the footer's "Source code on GitHub"
+  link should have done from the beginning — a webview that followed it replaced
+  the application with a page this window has no way back from. Three tests pin
+  it (its own pages, its own release including deep links and query strings, and
+  nothing but the waiting page before the release has said where it listens); the
+  window has 19 against the sibling's ~20. The splash would be the window's first
+  internal navigation; the guard already allows the shape it would take.
 - **Signing and notarisation.** The `.app` is unsigned, so the first launch needs
   right-click → Open (the installer clears the quarantine flag, which is what
   makes that possible at all). `ElixirKit.Release.codesign/1` plus Tauri's
