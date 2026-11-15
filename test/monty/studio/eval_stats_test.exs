@@ -171,6 +171,17 @@ defmodule Monty.Studio.EvalStatsTest do
       assert run.files == [Path.join(folder, "eval_stats.csv")]
       assert EvalStats.episodes(run) == 1
     end
+
+    test "a run given as the files of its parts is one run" do
+      first = file!([episode(1, "correct")])
+      second = file!([episode(2, "confused")])
+
+      run = EvalStats.read([first, second], "divided")
+
+      assert run.name == "divided"
+      assert run.files == [first, second]
+      assert EvalStats.outcomes(run) == %{"recognised" => 1, "confused" => 1}
+    end
   end
 
   describe "two runs" do

@@ -96,21 +96,34 @@ defmodule Monty.Studio.EvalStats do
   @derived [{"pose error (m)", :pose_error}, {"rotation error (deg)", "rotation_error"}]
 
   @doc """
-  Reads a run from a file or from a run's folder.
+  Reads a run from a file, from a run's folder, or from the folders of its parts.
+
+  A divided run keeps each part's record and folder of its own, so a part is
+  named as a path like any other run and several parts are one run here: their
+  episodes are read in the order given, and an episode reported twice is the
+  last one's.
 
   The name is the folder's, shortened to fit a table column, unless the caller
   says what to call it.
   """
-  @spec read(Path.t(), String.t() | nil) :: t()
-  def read(path, name \\ nil) do
-    {files, rows} = rows_of(Path.expand(path))
-    seeded? = rows != [] and Enum.all?(rows, &seeded?/1)
+  @spec read(Path.t() | [Path.t()], String.t() | nil) :: t()
+  def read(paths, name \\ nil)
 
+  def read(path, name) when is_binary(path), do: read([path], name)
+
+  def read([first | _rest] = paths, name) do
+    {files, rows} =
+      Enum.reduce(paths, {[], []}, fn path, {files, rows} ->
+        {its_files, its_rows} = rows_of(Path.expand(path))
+        {files ++ its_files, rows ++ its_rows}
+      end)
+
+    seeded? = rows != [] and Enum.all?(rows, &seeded?/1)
     {by_seed, duplicates} = index(rows, seeded?)
 
     %{
-      name: name || short_name(path),
-      path: Path.expand(path),
+      name: name || short_name(first),
+      path: Path.expand(first),
       files: files,
       rows: rows,
       by_seed: by_seed,
