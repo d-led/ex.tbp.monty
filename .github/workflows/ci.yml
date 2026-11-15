@@ -859,11 +859,18 @@ jobs:
       - name: Cache deps, the desktop build and the window
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
+          # The two sample plugin nodes are releases of their own projects, and
+          # their build is not this one's: without these four paths every run
+          # fetched and compiled them from nothing, twice.
           path: |
             deps
             _build
             src-tauri/target
-          key: ${{ runner.os }}-desktop-${{ hashFiles('mix.lock', 'src-tauri/Cargo.lock', 'packages/ex_tbp_monty_core/native/*/Cargo.lock') }}
+            examples/example_plugin/deps
+            examples/example_plugin/_build
+            examples/flyverse_plugin/deps
+            examples/flyverse_plugin/_build
+          key: ${{ runner.os }}-desktop-${{ hashFiles('mix.lock', 'src-tauri/Cargo.lock', 'packages/ex_tbp_monty_core/native/*/Cargo.lock', 'examples/*/mix.lock') }}
           restore-keys: ${{ runner.os }}-desktop-
 
       - name: Rust toolchain

@@ -212,6 +212,13 @@ defmodule ExTbpMontyWeb.SettingsLive do
                 <span class="text-base-content/70">{result.note}</span>
               </li>
             </ul>
+
+            <p id="cluster-sample-plugins" class="text-xs text-base-content/50">
+              Monty Studio Desktop is shipped with two sample plugin nodes: run
+              <span class="font-mono">start-plugins</span>
+              in its <span class="font-mono">plugins</span>
+              folder and this list names three nodes.
+            </p>
           </div>
         </section>
       </section>

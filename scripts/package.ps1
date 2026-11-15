@@ -129,6 +129,10 @@ try {
 
         Copy-Item 'src-tauri/target/release/ex-tbp-monty-desktop.exe' $target
         Copy-Item -Recurse 'src-tauri/target/release/rel' $target
+        # And the two sample plugin nodes `bundle.resources` copied out beside
+        # it: the portable folder is the window without an installer, so it has
+        # to hold everything the installed one does.
+        Copy-Item -Recurse 'src-tauri/target/release/plugins' $target
 
         Write-Host "  $target"
         return $target

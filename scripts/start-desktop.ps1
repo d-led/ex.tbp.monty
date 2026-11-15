@@ -243,6 +243,13 @@ try {
         mix release --overwrite
     }
 
+    # The two sample plugin nodes the bundle carries. Built here because
+    # `bundle.resources` copies `_build/desktop/plugins` into the window, and
+    # `cargo tauri build` is a later step than this one.
+    Invoke-Step 'building the two sample plugin nodes the bundle carries' {
+        & (Join-Path $PSScriptRoot 'build-plugins.ps1')
+    }
+
     # Asked, rather than assumed: a release missing one kernel is a window that
     # cannot start, and this is the last moment the build can say so with a
     # sentence instead of shipping it. Per crate again, for the reason above.
@@ -255,11 +262,12 @@ try {
   see docs/desktop.md"
     }
 
-    # No peers to cluster with: a distributed release has a fixed node name, so a
-    # second launch fails with "the name ... is in use by another Erlang node"
-    # and dies before it says where it listens - which the window reports as
-    # "the sidecar stopped before it said where it listens".
-    $env:RELEASE_DISTRIBUTION = 'none'
+    # The window's own sidecar: `rel/env.bat.eex` names it `monty-studio-<instance
+    # id>` and starts the tree that joins a cluster, which is what the sample
+    # plugin nodes shipped beside this window dial. Two launches no longer
+    # collide, because the instance id is per launch - that is the whole reason
+    # the release used to be told `RELEASE_DISTRIBUTION=none`.
+    $env:EX_TBP_MONTY_WINDOW = '1'
 
     if ($Where) {
         Invoke-Step 'reading where the data is' {

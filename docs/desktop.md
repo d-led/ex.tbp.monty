@@ -94,6 +94,46 @@ keeps the folder a node that runs alone uses, because an instance id is per
 launch and a run recorded by yesterday's launch has to be on this page;
 `MONTY_NODE_FOLDER` names a folder if a worker wants its own.
 
+## The two sample plugin nodes it carries
+
+The bundle holds **two more nodes**: `examples/example_plugin` (one experiment,
+one learning module, one motor policy) and `examples/flyverse_plugin` (the same
+contract, different answers), built as releases and copied in by
+`bundle.resources` as `plugins/`. They are there so the plugin story can be
+watched rather than read — start them and Settings → Cluster lists three nodes.
+
+```text
+macOS    Monty on the BEAM.app/Contents/Resources/plugins/
+Windows  plugins\ beside the window (and in the installer)
+Linux    the same folder inside the AppImage
+```
+
+Starting them, with the window already running:
+
+```sh
+plugins/start-plugins.sh          # macOS, Linux
+plugins\start-plugins.ps1         # Windows
+```
+
+The script asks the window who it is — `/health` names the node that answered —
+and hands that name to both plugin nodes as the peer to dial, because the name
+carries a per-launch instance id and cannot be written down in advance.
+`--stop` (or `-Stop`) ends them. They are releases and not escripts for the same
+reason the application is: `ex_tbp_monty_core` compiles native kernels, and an
+escript cannot load one. Each is about 19 MB, most of it its own runtime.
+
+Nothing is installed and nothing is remembered, and the **cookie** is the part
+worth knowing: every release carries a `releases/COOKIE` of its own — `mix
+release` writes one per build — so a plugin node started beside the window would
+be refused and could only say "no answer". The launcher gives the two nodes the
+window's cookie (`rel/ex_tbp_monty/releases/COOKIE`, beside `plugins/`), which is
+also what it uses to stop them: a release started with `start` is not a daemon,
+so there is no pid file to trust. A deployment that set `MONTY_CLUSTER_SECRET` on
+the window sets it for the launcher too, and the environment wins over the file.
+
+A window started with `MONTY_STUDIO_CLUSTER=0` has no name, and the script says
+so instead of failing at the handshake.
+
 ## The port
 
 The app answers on **42_800**, the same number every launch, because the MCP

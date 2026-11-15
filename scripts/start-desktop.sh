@@ -248,6 +248,13 @@ done
 run "building the desktop release (a no-change run only reassembles it)" \
   env MIX_ENV=desktop mix release --overwrite
 
+# The two sample plugin nodes the bundle carries, so a person can watch three
+# nodes find each other instead of reading that they can. Built here because
+# `bundle.resources` copies `_build/desktop/plugins` into the window, and
+# `cargo tauri build` is a later step than this one.
+run "building the two sample plugin nodes the bundle carries" \
+  scripts/build-plugins.sh
+
 # `priv` is copied whole, and the memory a run recognises with is not a property
 # of the build: it is exported at run time from the pickles, into the folder the
 # application keeps its own files in (`Monty.Paths.libraries/0`) — the user's,
