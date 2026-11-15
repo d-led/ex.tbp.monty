@@ -39,6 +39,7 @@ defmodule Monty.Studio.Jobs.Run do
     Partition,
     Run,
     RunHistory,
+    RunLimits,
     RunLog,
     RunStream,
     RunWriter,
@@ -221,6 +222,15 @@ defmodule Monty.Studio.Jobs.Run do
     # run" is the question `Monty.Studio.Jobs.Reaper` asks, and a run that is
     # being attempted has an owner even while it is still opening its world.
     register(run_id)
+
+    # A run may not take the machine with it. The heap ceiling is the runtime's
+    # own default for every process started from here on — a learning module
+    # that samples itself into a heap nobody can collect is killed rather than
+    # swapping the box out — and the watcher stops this run when what the
+    # machine holds passes the ceiling in `Monty.Studio.RunLimits`, which is the
+    # only one that can see a NIF's memory.
+    :ok = RunLimits.apply_heap_limit()
+    _watcher = RunLimits.watch(run_id)
 
     try do
       with {:ok, record} <- fetch(run_id),

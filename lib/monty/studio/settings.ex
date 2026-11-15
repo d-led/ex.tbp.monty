@@ -67,6 +67,33 @@ defmodule Monty.Studio.Settings do
         "How quiet a record has to be before the reaper decides nobody is " <>
           "working on it and marks it abandoned. This is the one that ends a run, " <>
           "so it must not be shorter than the staleness above."
+    },
+    %{
+      key: "run_max_heap_mb",
+      label: "One process may grow its heap to",
+      unit: "MB",
+      default: 4_096,
+      range: 64..8_192,
+      help:
+        "The heap and stack of a single process, applied as `+hmax`: a process " <>
+          "that passes it is killed, and the run that owns it stops with a line " <>
+          "saying so. Large binaries are not counted — they live in a shared " <>
+          "heap — so this is the guard for one runaway process, not for the run. " <>
+          "An episode under the detailed logger holds every step it took in one " <>
+          "process and passes a gigabyte, so the default leaves room for it; the " <>
+          "run's own ceiling below is what protects the machine."
+    },
+    %{
+      key: "run_max_memory_mb",
+      label: "A run is stopped when the machine holds",
+      unit: "MB",
+      default: 6_144,
+      range: 256..16_384,
+      help:
+        "What the whole VM may hold before its run is asked to stop. It is read " <>
+          "from the operating system, so it also catches memory the BEAM cannot " <>
+          "see — a NIF's own heap, a GL context, the embedded Python. A run " <>
+          "that passes it ends at a step boundary with a line in the log."
     }
   ]
 

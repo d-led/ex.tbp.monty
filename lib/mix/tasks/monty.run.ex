@@ -75,6 +75,11 @@ defmodule Mix.Tasks.Monty.Run do
     # stepping and never sees a step. So a CLI node steps nothing on the queue.
     Oban.pause_queue(queue: :studio)
 
+    # The ceilings a studio run carries apply here too: a CLI experiment is the
+    # same model with the same modules, and the heap limit is the runtime's own
+    # default for every process started from now on (`Monty.Studio.RunLimits`).
+    :ok = Monty.Studio.RunLimits.apply_heap_limit()
+
     case argv do
       [experiment] -> run_experiment(experiment, opts)
       [] -> Mix.raise("which experiment? mix monty.run <experiment> [--steps N]")

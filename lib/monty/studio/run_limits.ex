@@ -1,0 +1,177 @@
+defmodule Monty.Studio.RunLimits do
+  @moduledoc """
+  What a run may hold before it is stopped, and the one flag that stops a single
+  process running away.
+
+  Two ceilings, both read from `Monty.Studio.Settings` at the moment they are
+  used, so a change takes effect at the next run without a restart:
+
+  * **A process's heap** (`run_max_heap_mb`). Applied with
+    `:erlang.system_flag(:max_heap_size, ...)`, which is what `+hmax` sets: every
+    process started afterwards carries the limit, and one that passes it is
+    killed. This is the guard for a single runaway process — a learning module
+    that samples itself into a heap nobody can collect.
+  * **The whole VM** (`run_max_memory_mb`). A run is stopped when the machine
+    holds more than this. It is read from the operating system rather than from
+    the BEAM, because the memory that took a workstation down is not always the
+    BEAM's: a NIF's own heap (MuJoCo, a GL context, CPython under Pythonx) is
+    invisible to `:erlang.memory/1` and no amount of collection returns it.
+
+  Neither is a wall, and both gaps are worth knowing:
+
+  * `max_heap_size` counts a process's heap and stack. A **large binary** (over
+    64 bytes) lives in a shared off-heap heap, so a process can hold a gigabyte
+    of them without tripping the flag — `:erlang.memory(:binary)` is the number
+    that sees those, and the VM ceiling above is what catches them.
+  * The VM ceiling is a snapshot taken every few seconds, so it stops a run just
+    after it passed the line, not before.
+
+  Together they answer the only question that matters on a 16 GB laptop: can one
+  experiment take the machine down? With a ceiling it cannot — it is stopped, and
+  the run says so.
+  """
+
+  require Logger
+
+  alias Monty.Studio.Settings
+
+  @heap_setting "run_max_heap_mb"
+  @vm_setting "run_max_memory_mb"
+
+  # Six seconds is well under the time a runaway needs to matter and well over
+  # the cost of one `ps`; a sampler that ran per step would be a cost on the
+  # thing it is measuring.
+  @interval_ms 6_000
+
+  @doc "The setting a process's heap ceiling is read from."
+  @spec heap_setting() :: String.t()
+  def heap_setting, do: @heap_setting
+
+  @doc "The setting a run's whole-VM ceiling is read from."
+  @spec vm_setting() :: String.t()
+  def vm_setting, do: @vm_setting
+
+  @doc """
+  The `max_heap_size` flag for a ceiling in megabytes.
+
+  Words, because that is the unit ERTS counts in, and `kill: true` with the
+  error logger on, because a process that passes its ceiling is a defect worth a
+  line in the log rather than a silence.
+  """
+  @spec heap_flag(number()) :: %{
+          size: non_neg_integer(),
+          error_logger: boolean(),
+          kill: boolean()
+        }
+  def heap_flag(megabytes) when is_number(megabytes) and megabytes > 0 do
+    %{
+      size: trunc(megabytes * 1024 * 1024 / :erlang.system_info(:wordsize)),
+      error_logger: true,
+      kill: true
+    }
+  end
+
+  @doc """
+  Applies the heap ceiling to every process started from now on.
+
+  `:erlang.system_flag/2` is the runtime's own default for new processes — the
+  same switch `+hmax` flips at boot — so no process the studio starts after this
+  call can pass it, including the learning and sensor modules a run builds.
+  """
+  @spec apply_heap_limit() :: :ok
+  def apply_heap_limit do
+    flag = Settings.get(@heap_setting) |> heap_flag()
+    # `system_flag/2` answers the flag it replaced — `size: 0` when nothing had
+    # set one — and the answer is not the point.
+    _was = :erlang.system_flag(:max_heap_size, flag)
+    :ok
+  end
+
+  @doc """
+  Watches a run and stops it when the machine holds more than its ceiling.
+
+  The watcher is linked to the process performing the run, so it ends when that
+  process does — a finished, stopped or crashed run leaves no sampler behind.
+  The ceiling is read here, in the caller, and handed over: a run's budget is a
+  decision taken when it starts, and a background sampler has no business
+  reading the database.
+
+  `:held`, `:allowed`, `:stop` and `:interval` are seams for a test: a watcher
+  whose ceiling can only be crossed by a real runaway would have no case that
+  runs in a second, and letting a test hand it a number is the same dependency
+  the run hands it.
+  """
+  @spec watch(binary(), keyword()) :: pid()
+  def watch(run_id, opts \\ []) do
+    held = Keyword.get(opts, :held, &held_bytes/0)
+    allowed = Keyword.get_lazy(opts, :allowed, &allowed_mb/0)
+    stop = Keyword.get(opts, :stop, &stop_run/1)
+    interval = Keyword.get(opts, :interval, @interval_ms)
+
+    spawn_link(fn -> watch_loop(run_id, held, stop, interval, allowed) end)
+  end
+
+  @doc "What this run's VM may hold, in megabytes."
+  @spec allowed_mb() :: pos_integer()
+  def allowed_mb, do: Settings.get(@vm_setting)
+
+  defp watch_loop(run_id, held, stop, interval, allowed) do
+    Process.sleep(interval)
+    # The reading, not the reader: keeping the function is what lets the loop
+    # ask again on the next tick.
+    now = held.()
+
+    if exceeded?(allowed, now) do
+      Logger.error(
+        "run #{run_id} passed its memory ceiling " <>
+          "(#{megabytes(now)} MB held, #{allowed} MB allowed) — asking it to stop"
+      )
+
+      stop.(run_id)
+    else
+      watch_loop(run_id, held, stop, interval, allowed)
+    end
+  end
+
+  @doc """
+  Whether `bytes` held is past a ceiling given in megabytes.
+  """
+  @spec exceeded?(number(), number()) :: boolean()
+  def exceeded?(megabytes, bytes), do: bytes > megabytes * 1024 * 1024
+
+  @doc """
+  What this VM holds, as the operating system counts it.
+
+  The OS is asked rather than the BEAM for a reason: a run that took a machine
+  down held the memory, and the BEAM's own total does not include the heap of a
+  NIF. `ps` is asked last, on a machine that has no `/proc`, and a VMS that will
+  answer neither falls back to the BEAM's own number — a smaller ceiling than the
+  real one is still a ceiling.
+  """
+  @spec held_bytes() :: non_neg_integer()
+  def held_bytes do
+    # `System.pid/0` is this VM's process id, not the OS's idea of a name.
+    case System.cmd("ps", ["-o", "rss=", "-p", System.pid()], stderr_to_stdout: true) do
+      {output, 0} -> kilobytes(output)
+      _will_not_answer -> :erlang.memory(:total)
+    end
+  rescue
+    # A machine with no `ps` at all: the BEAM's own number, which is a floor.
+    _no_ps -> :erlang.memory(:total)
+  end
+
+  defp kilobytes(output) do
+    case Integer.parse(String.trim(output)) do
+      {kilobytes, _rest} -> kilobytes * 1024
+      :error -> :erlang.memory(:total)
+    end
+  end
+
+  @doc "A byte count as whole megabytes, for a sentence."
+  @spec megabytes(number()) :: non_neg_integer()
+  def megabytes(bytes), do: trunc(bytes / 1024 / 1024)
+
+  # The stop is the run's own: it asks the worker at its next step boundary, which
+  # records an ending instead of dying in the middle of a step.
+  defp stop_run(run_id), do: Monty.Studio.Jobs.Run.stop(run_id)
+end
