@@ -14,6 +14,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
+  alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Frameworks.Models.ObjectModel.GridObjectModel
 
   # What `learning_module/evidence_1lm_nn5_dod0025.yaml` composes to, together
@@ -48,6 +49,28 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       },
       overrides
     )
+  end
+
+  # What a library exported from a trained model holds: one graph per object,
+  # stored under the object's id, which is what the index is rebuilt from.
+  defp pretrained(object_ids) do
+    memory = GraphMemory.new(features_to_use: %{"patch" => ["hsv"]})
+
+    object_ids
+    |> Enum.reduce(memory, fn object_id, memory ->
+      model =
+        object_id
+        |> GraphObjectModel.new()
+        |> GraphObjectModel.build_model(
+          [[0.0, 0.0, 0.0]],
+          %{"hsv" => [[0.0, 0.0, 0.0]]},
+          nil,
+          nil
+        )
+
+      GraphMemory.add_graph_to_memory(memory, %{"patch" => model}, object_id)
+    end)
+    |> GraphMemory.initialize_feature_arrays()
   end
 
   describe "an experiment's learning-module config" do
@@ -95,6 +118,28 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert lm.graph_memory.object_model_options[:max_size] == 0.3
       assert lm.graph_memory.object_model_options[:num_voxels_per_dim] == 100
       assert lm.graph_memory.object_model_options[:max_nodes] == 2000
+    end
+
+    test "a pretrained memory says which object each of its graphs was built from" do
+      {:ok, lm} =
+        EvidenceGraphLM.from_config(config(), memory: pretrained(["mug", "spoon"]))
+
+      assert lm.graph_id_to_target == %{
+               "mug" => MapSet.new(["mug"]),
+               "spoon" => MapSet.new(["spoon"])
+             }
+
+      assert lm.target_to_graph_id == %{
+               "mug" => MapSet.new(["mug"]),
+               "spoon" => MapSet.new(["spoon"])
+             }
+    end
+
+    test "a module about to learn starts with no graph built from any object" do
+      {:ok, lm} = EvidenceGraphLM.from_config(config())
+
+      assert lm.graph_id_to_target == %{}
+      assert lm.target_to_graph_id == %{}
     end
 
     test "decides the goal generator, and the schedule it explores on" do

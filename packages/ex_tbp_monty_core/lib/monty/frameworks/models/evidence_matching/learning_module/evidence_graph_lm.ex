@@ -264,23 +264,48 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
           )
         end)
 
-      new(memory,
-        max_match_distance: Map.get(config, "max_match_distance", 0.01),
-        tolerances: Map.get(config, "tolerances", %{}),
-        feature_weights: Map.get(config, "feature_weights", %{}),
-        x_percent_threshold: Map.get(config, "x_percent_threshold", 10),
-        evidence_threshold_config: Map.get(config, "evidence_threshold_config", "all"),
-        learning_module_id: Map.get(config, "learning_module_id", "LM_0"),
-        max_nneighbors:
-          get_in(config, ["hypotheses_updater_args", "max_nneighbors"]) || @default_max_nneighbors,
-        hypotheses_updater: updater,
-        gsg: goal_generator(config),
-        # The experiment's, not the config's: a run that logs detail asks its
-        # modules for it, which is Monty's `lm.has_detailed_logger` set by
-        # `init_monty_data_loggers`.
-        has_detailed_logger: Keyword.get(options, :has_detailed_logger, false)
-      )
+      with {:ok, lm} <-
+             new(memory,
+               max_match_distance: Map.get(config, "max_match_distance", 0.01),
+               tolerances: Map.get(config, "tolerances", %{}),
+               feature_weights: Map.get(config, "feature_weights", %{}),
+               x_percent_threshold: Map.get(config, "x_percent_threshold", 10),
+               evidence_threshold_config: Map.get(config, "evidence_threshold_config", "all"),
+               learning_module_id: Map.get(config, "learning_module_id", "LM_0"),
+               max_nneighbors:
+                 get_in(config, ["hypotheses_updater_args", "max_nneighbors"]) ||
+                   @default_max_nneighbors,
+               hypotheses_updater: updater,
+               gsg: goal_generator(config),
+               # The experiment's, not the config's: a run that logs detail asks
+               # its modules for it, which is Monty's `lm.has_detailed_logger`
+               # set by `init_monty_data_loggers`.
+               has_detailed_logger: Keyword.get(options, :has_detailed_logger, false)
+             ) do
+        # Monty's pretrained state dict carries which object built each graph; a
+        # library here holds the graphs under the object ids they were trained
+        # from, so the index is rebuilt from the memory the module was handed.
+        # Without it an episode's statistics cannot tell a target found from an
+        # object confused for one, and call every recall an unknown object.
+        if Keyword.has_key?(options, :memory),
+          do: {:ok, index_objects_for_graphs(lm)},
+          else: {:ok, lm}
+      end
     end
+  end
+
+  # A graph is built from one object, and is stored under that object's id, so
+  # both directions of the index are the memory's own ids. Monty reaches the
+  # same two maps by training and then saving them in the model; this port's
+  # library keeps the graphs alone.
+  defp index_objects_for_graphs(%__MODULE__{} = lm) do
+    graph_ids = GraphMemory.get_memory_ids(lm.graph_memory)
+
+    %{
+      lm
+      | graph_id_to_target: Map.new(graph_ids, &{&1, MapSet.new([&1])}),
+        target_to_graph_id: Map.new(graph_ids, &{&1, MapSet.new([&1])})
+    }
   end
 
   # Monty's Hydra instantiation builds the learning module's `gsg` entry and
