@@ -15,8 +15,8 @@ defmodule Monty.Frameworks.Utils.LoggingUtilsStatsTest do
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
-  alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Frameworks.Models.NoResetEvidenceMatching.NoResetEvidenceGraphLM
+  alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Frameworks.Utils.LoggingUtils
   alias Monty.Geometry.Rotation
 

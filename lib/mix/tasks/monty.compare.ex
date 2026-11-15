@@ -62,7 +62,6 @@ defmodule Mix.Tasks.Monty.Compare do
 
     runs
     |> EvalStats.report(disagreements: opts[:disagreements] || 20)
-    |> IO.iodata_to_binary()
     |> Mix.shell().info()
 
     if path = opts[:json], do: write_json(path, runs)
@@ -115,20 +114,19 @@ defmodule Mix.Tasks.Monty.Compare do
             "target_found" => EvalStats.targets(run)
           }
         end),
-      "comparisons" =>
-        case runs do
-          [base | rest] ->
-            Enum.map(
-              rest,
-              &%{"base" => base.name, "other" => &1.name, "result" => EvalStats.compare(base, &1)}
-            )
-
-          _one_run ->
-            []
-        end
+      "comparisons" => comparisons(runs)
     }
 
     File.write!(path, Jason.encode!(report, pretty: true))
     Mix.shell().info("\nwrote #{path}")
+  end
+
+  # Every run after the first is compared with the first, which is the order the
+  # report lists them in.
+  defp comparisons([base | rest]) do
+    Enum.map(
+      rest,
+      &%{"base" => base.name, "other" => &1.name, "result" => EvalStats.compare(base, &1)}
+    )
   end
 end

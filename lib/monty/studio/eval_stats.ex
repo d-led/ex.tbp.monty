@@ -198,7 +198,7 @@ defmodule Monty.Studio.EvalStats do
   Each run is profiled — outcomes, exits, targets, and the cost of an episode —
   and every run after the first is compared with the first.
   """
-  @spec report([t()], keyword()) :: iodata()
+  @spec report([t()], keyword()) :: String.t()
   def report(runs, options \\ [])
 
   def report([%{} = run | _rest] = runs, options) do
@@ -210,6 +210,7 @@ defmodule Monty.Studio.EvalStats do
       distributions(runs),
       for(other <- tl(runs), do: comparison(run, other, listed))
     ]
+    |> IO.iodata_to_binary()
   end
 
   @doc "Whether a row names the episode it was reported for."
@@ -247,6 +248,10 @@ defmodule Monty.Studio.EvalStats do
   # file wins when it holds every part's episodes — reading both would count
   # each episode twice — and the parts are read when it does not, which is what
   # a run still in flight has.
+  #
+  # The path is the one an operator typed at a console, not one a request
+  # chose: reading it is what `mix monty.compare` is for.
+  # sobelow_skip ["Traversal.FileModule"]
   defp rows_of(path) do
     if File.dir?(path) do
       merged = Path.join(path, "eval_stats.csv")
@@ -257,10 +262,12 @@ defmodule Monty.Studio.EvalStats do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp rows_of_folder(merged, []) do
     if File.exists?(merged), do: {[merged], rows_of_csv(File.read!(merged))}, else: {[], []}
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp rows_of_folder(merged, parts) do
     part_rows = Enum.flat_map(parts, &rows_of_csv(File.read!(&1)))
 

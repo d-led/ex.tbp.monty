@@ -218,7 +218,7 @@ defmodule Monty.Studio.EvalStatsTest do
       ours = EvalStats.read(file!([episode(1, "correct"), episode(2, "confused")]), "ours")
       monty = EvalStats.read(file!([episode(1, "correct"), episode(2, "correct")]), "monty")
 
-      report = ours |> then(&EvalStats.report([monty, &1])) |> IO.iodata_to_binary()
+      report = EvalStats.report([monty, ours])
 
       assert report =~ "outcome agrees on 1/2"
       assert report =~ ~r/^2\s+-\s+recognised\s+confused/m
