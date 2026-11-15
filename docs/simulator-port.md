@@ -126,12 +126,17 @@ conclusions far more closely than on its pictures.
 **What each costs.** `scripts/bench_worlds.exs` steps both with the same actions,
 interleaved, and reports the pair: a step is the world's share plus the model's
 matching, and the world is what differs. Forty steps of `base_10simobj_surf_agent`
-on an 8-core laptop that was also running the studio: `:mujoco` 9.2 ms and 305
-700 reductions a step, `:ex_mujoco` 5.1 ms and 201 000 — the compiled world takes
-0.54–0.58 of the wall and two thirds of the reductions. `scripts/probe_world_parity.exs`
-is the same pair compared instead of timed: both worlds are stepped through the
-same actions and their depth, images, semantic ids and poses are compared at
-every step.
+on an idle 8-core laptop: `:mujoco` 6.2–7.8 ms and 296 000–302 000 reductions a
+step, `:ex_mujoco` 3.7–4.0 ms and 203 000 — about **0.5–0.6 of the wall and two
+thirds of the reductions**, a ratio that holds on a loaded machine too (9.2 vs
+5.1 ms there; the absolute figures move, the pair does not).
+`scripts/probe_world_parity.exs` is the same pair compared instead of timed: both
+worlds are stepped through the same actions and their depth, images, semantic ids
+and poses are compared at every step. `scripts/compare_runs.exs` compares two
+finished `mix monty.run` logs episode by episode — the conclusion each episode
+reached and what it cost in steps — which is how the two worlds' 140-episode runs
+were read: 133 of 140 the same conclusion, and all seven disagreements a step
+budget reached in one world and not the other.
 
 ## The world the runtime develops against
 
