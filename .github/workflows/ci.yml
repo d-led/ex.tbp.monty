@@ -890,6 +890,13 @@ jobs:
       # or `mix test`, and this one compiles a different `MIX_ENV` first.
       - run: mix deps.get
 
+      # The bundle compiles `ex_mujoco`, whose NIF is C++ built by `nmake`, and a
+      # Windows runner has no MSVC on PATH until something puts it there — the
+      # bundle then fails at "Package the application" with `"nmake" not found in
+      # the path`. The same step `ex.mujoco`'s own CI uses.
+      - if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       # The bundler. `cargo install` because there is no prebuilt binary, and the
       # cache keeps it from being rebuilt on every run — five minutes of Rust for
       # a tool whose output changes when the Tauri version does.
