@@ -150,8 +150,10 @@ case "$health" in
     echo "the release answered /health without a monty-studio node name:" >&2
     echo "  $health" >&2
     echo "  this check exported EX_TBP_MONTY_WINDOW=${EX_TBP_MONTY_WINDOW:-<unset>}" >&2
-    echo "  and the release said:" >&2
-    tail -20 "$log" | sed 's/^/    /' >&2
+    echo "  and the release said, first:" >&2
+    head -12 "$log" | sed 's/^/    /' >&2
+    echo "  and last:" >&2
+    tail -12 "$log" | sed 's/^/    /' >&2
     exit 1
     ;;
 esac
