@@ -265,4 +265,40 @@ defmodule ExTbpMontyWeb.SettingsLiveTest do
       assert html =~ "name a node to connect to"
     end
   end
+
+  # The one control on this page that starts processes, and the only one that is a
+  # *window's*: a server build carries no sample plugin nodes, so the control is
+  # not there to press at all.
+  describe "the sample plugin control" do
+    test "is not on a build that carries none", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      refute has_element?(view, "#cluster-start-plugins")
+    end
+
+    test "starts them and says which nodes are up, on a build that carries them", %{conn: conn} do
+      Application.put_env(:ex_tbp_monty, :sample_plugins, ExTbpMonty.SamplePluginsTest.Carries)
+      on_exit(fn -> Application.delete_env(:ex_tbp_monty, :sample_plugins) end)
+
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      assert has_element?(view, "#cluster-start-plugins")
+
+      html = view |> element("#cluster-start-plugins") |> render_click()
+
+      assert html =~ "cluster-plugins-answer"
+      assert html =~ "started example_plugin@127.0.0.1"
+    end
+
+    test "stops them again without an answer from the nodes", %{conn: conn} do
+      Application.put_env(:ex_tbp_monty, :sample_plugins, ExTbpMonty.SamplePluginsTest.Carries)
+      on_exit(fn -> Application.delete_env(:ex_tbp_monty, :sample_plugins) end)
+
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      html = view |> element("#cluster-stop-plugins") |> render_click()
+
+      assert html =~ "stopped the ones this window started"
+    end
+  end
 end

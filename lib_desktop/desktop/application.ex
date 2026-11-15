@@ -16,6 +16,7 @@ defmodule ExTbpMonty.Desktop.Application do
   use Application
 
   alias ExTbpMonty.Desktop.ParentWatch
+  alias ExTbpMonty.Desktop.Plugins
   alias ExTbpMonty.Desktop.Server
 
   @impl true
@@ -27,6 +28,12 @@ defmodule ExTbpMonty.Desktop.Application do
     Server.configure_endpoint(port)
     exit_with_the_window()
     ParentWatch.start_link()
+
+    # The sample plugin nodes are this window's own: it started them, so it is the
+    # only thing that can stop them. Unlinked, because a control that can take the
+    # window down with it is worse than one that does nothing; `stop/1` below is
+    # the orderly path out and stops them there.
+    {:ok, _plugins} = Plugins.start_server()
 
     case ExTbpMonty.Application.start(type, args) do
       {:ok, pid} ->
@@ -57,6 +64,13 @@ defmodule ExTbpMonty.Desktop.Application do
     end
 
     :ok
+  end
+
+  # The VM is going: take the plugin nodes this window started with it, or they
+  # outlive the window holding ports and a database (`Plugins.shutdown/0`).
+  @impl true
+  def stop(_state) do
+    Plugins.shutdown()
   end
 
   @impl true

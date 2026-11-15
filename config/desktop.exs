@@ -45,3 +45,8 @@ config :logger, :default_handler, config: %{type: :standard_error}
 # "background disconnects". The window has one client on loopback, so a socket
 # that outlives a nap costs a process and nothing else.
 config :ex_tbp_monty, :live_socket_timeout, 600_000
+
+# The two sample plugin nodes the bundle carries, as a page sees them: the window
+# is the only build with processes on this machine to start, so it is the only one
+# that answers. `ExTbpMonty.SamplePlugins` is the seam `lib/` talks to.
+config :ex_tbp_monty, sample_plugins: ExTbpMonty.Desktop.Plugins

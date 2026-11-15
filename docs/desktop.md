@@ -108,28 +108,46 @@ Windows  plugins\ beside the window (and in the installer)
 Linux    the same folder inside the AppImage
 ```
 
-Starting them, with the window already running:
+**Settings → Cluster** has a button that starts both, so the demo needs no
+terminal: the window spawns the two releases as its own children, hands them its
+node name and its cookie, and stops them again when the window closes. Pressing
+it twice is not an error, and a window started with `MONTY_STUDIO_CLUSTER=0` says
+that it has no name to offer rather than starting two nodes that would find
+nobody.
+
+The two launch scripts are for when the window is not in front of you:
 
 ```sh
 plugins/start-plugins.sh          # macOS, Linux
 plugins\start-plugins.ps1         # Windows
 ```
 
-The script asks the window who it is — `/health` names the node that answered —
-and hands that name to both plugin nodes as the peer to dial, because the name
-carries a per-launch instance id and cannot be written down in advance.
-`--stop` (or `-Stop`) ends them. They are releases and not escripts for the same
+They ask the window who it is — `/health` names the node that answered — and hand
+that name to both plugin nodes as the peer to dial, because the name carries a
+per-launch instance id and cannot be written down in advance. `--stop` (or
+`-Stop`) ends them, which is what a window that was killed outright leaves
+behind: killed, it never reaches its own graceful stop, so the two VMs keep
+their ports and their database. They are releases and not escripts for the same
 reason the application is: `ex_tbp_monty_core` compiles native kernels, and an
 escript cannot load one. Each is about 19 MB, most of it its own runtime.
 
 Nothing is installed and nothing is remembered, and the **cookie** is the part
 worth knowing: every release carries a `releases/COOKIE` of its own — `mix
 release` writes one per build — so a plugin node started beside the window would
-be refused and could only say "no answer". The launcher gives the two nodes the
-window's cookie (`rel/ex_tbp_monty/releases/COOKIE`, beside `plugins/`), which is
-also what it uses to stop them: a release started with `start` is not a daemon,
-so there is no pid file to trust. A deployment that set `MONTY_CLUSTER_SECRET` on
-the window sets it for the launcher too, and the environment wins over the file.
+be refused and could only say "no answer". Both routes therefore lend the two
+nodes the window's cookie, and both read it from the node rather than from a
+file, because `MONTY_CLUSTER_SECRET` replaces it at boot. That cookie is also how
+a started node is stopped: a release started with `start` is not a daemon, so
+there is no pid file to trust — the node is asked to stop.
+
+The child is given a release environment of its own, and that is the trap worth
+knowing about: a launcher defaults each `RELEASE_*` only while it is unset or
+empty, so a child that inherits the window's `RELEASE_VSN` looks for
+`releases/<the window's version>/env.sh` inside its own release, and exits on its
+first line. It says so on a pipe the window drains at `:debug`, so the failure
+looks like a control that reported two nodes and a cluster that stayed empty;
+`ExTbpMonty.Desktop.Plugins` therefore passes every inherited `RELEASE_*` empty
+and names any node whose launcher dies with a non-zero status.
 
 A window started with `MONTY_STUDIO_CLUSTER=0` has no name, and the script says
 so instead of failing at the handshake.
@@ -742,3 +760,10 @@ names.
   memory, both in the background.
 - **A run in the window** (an experiment to its conclusion) has not been done;
   it is the same binary as the image, so what remains is patience, not wiring.
+- **The plugin control is proven on macOS.** Start, stop, and stopping with the
+  window were run against a desktop release on macOS — three nodes in the cluster
+  within eight seconds, and an empty `epmd` afterwards. Windows runs
+  `example_plugin.bat` through `cmd /c`, because a batch file is not an
+  executable image and `CreateProcess` will not start one, and nothing has
+  pressed the button there yet; `plugins\start-plugins.ps1` is the same launch by
+  hand, which is what the Windows bundle job could be checking first.

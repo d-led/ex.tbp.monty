@@ -37,6 +37,19 @@ entry="$release/bin/server"
 export EX_TBP_MONTY_WINDOW=1
 export MONTY_DESKTOP_PORT="$port"
 
+# The name is pinned for this check, and the pin is what makes the rest possible:
+# the second VM `rpc` starts runs the same `env.sh`, would generate an instance id
+# of its own, and would then dial a node that is not there. Pinned, the check can
+# assert the exact name — a launcher that ignored the variable still answers
+# `/health`, with a random name, and a launcher that set nothing answers `nohost`.
+export MONTY_STUDIO_INSTANCE_ID=bootcheck
+
+# The release's own launcher, which is the `.bat` on Windows.
+launcher="$release/bin/ex_tbp_monty"
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*) launcher="$launcher.bat" ;;
+esac
+
 log="$(mktemp "${TMPDIR:-/tmp}/boot-check.XXXXXX")"
 
 # The window's other contract, and the reason this file has a fifo: the desktop's
@@ -138,12 +151,13 @@ if [ -z "$answered" ]; then
   exit 1
 fi
 
-# Named, and named the way a plugin finds it: `monty-studio-<instance id>`. The
-# instance id is generated per launch and nobody here knows it, so the prefix is
-# what is asserted — a node that answered `nightly` or `nonode@nohost` is a node
-# whose name the launcher did not set, which is the regression this catches.
+# Named, and named the way a plugin finds it: `monty-studio-<instance id>`, with
+# the host a short name carries. The instance id is pinned above, so the whole
+# name is known here — a node that answered `nightly`, `nohost`, or
+# `monty-studio-<six random hex>` is a node whose name the launcher did not take
+# from the variable the desktop sets.
 case "$health" in
-  *'"node":"monty-studio-'*)
+  *'"node":"monty-studio-bootcheck@'*)
     echo "and it is a node the sample plugins can find by name"
     ;;
   *)
@@ -174,6 +188,61 @@ for wanted in "start-plugins.sh" "start-plugins.ps1" "example_plugin/bin" "flyve
 done
 
 echo "and it carries the two sample plugin nodes ($(du -sh "$plugins" | cut -f1))"
+
+# Then the control in the window, pressed the way a page presses it, because a
+# launcher starting a launcher is the one thing only a bundle can get wrong: a
+# child inherits the sidecar's `RELEASE_*`, reads *this* release's version number,
+# and dies looking for a folder of that name inside its own release. It said so on
+# a pipe the sidecar drains at `:debug`, so what a person saw was a control that
+# reported two nodes and a cluster that stayed empty.
+# `rpc` runs the expression in the sidecar's own VM and does not echo the value
+# back, so what the control answered is not visible here — the page is, and that
+# is what a person looks at anyway. A refusal (`MONTY_STUDIO_CLUSTER=0`, a
+# launcher that is not there) fails the wait below either way.
+press() {
+  "$launcher" rpc "$1" >/dev/null 2>&1 || true
+}
+
+# What the cluster card says, as a person reads it off the page.
+cluster_says() {
+  curl -fsS --max-time 5 "http://127.0.0.1:$port/settings" 2>/dev/null |
+    grep -o "[0-9]* nodes in this cluster\|One node in this cluster" | head -1 || true
+}
+
+# Bounded: two nodes joining is a launch, a boot and a gossip round, which is
+# slower on a loaded runner than anywhere else.
+waiting_for() {
+  for _ in $(seq 1 120); do
+    [ "$(cluster_says)" = "$1" ] && return 0
+    sleep 1
+  done
+
+  return 1
+}
+
+echo "pressing the control that starts the two sample plugin nodes"
+press 'ExTbpMonty.SamplePlugins.start()'
+
+if ! waiting_for "3 nodes in this cluster"; then
+  echo "the window started the two sample plugin nodes and they did not join." >&2
+  echo "  the page still says: $(cluster_says)" >&2
+  echo "  the sidecar said, last:" >&2
+  tail -30 "$log" | sed 's/^/    /' >&2
+  exit 1
+fi
+
+echo "and both joined it: $(cluster_says)"
+
+echo "stopping them again, the way the page's second button does"
+press 'ExTbpMonty.SamplePlugins.stop()'
+
+if ! waiting_for "One node in this cluster"; then
+  echo "the two sample plugin nodes did not leave when they were stopped." >&2
+  echo "  the page still says: $(cluster_says)" >&2
+  exit 1
+fi
+
+echo "and they left again: $(cluster_says)"
 
 # Then the page that reads the disk, because a release can be alive and still
 # have nothing to say about the disk it writes to: it did, on Windows, while

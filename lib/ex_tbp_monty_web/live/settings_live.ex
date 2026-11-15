@@ -19,6 +19,7 @@ defmodule ExTbpMontyWeb.SettingsLive do
 
   alias ExTbpMonty.Cluster.Capabilities
   alias ExTbpMonty.Cluster.Connect
+  alias ExTbpMonty.SamplePlugins
   alias Monty.Paths
   alias Monty.Studio.Artifacts
   alias Monty.Studio.{Settings, System}
@@ -60,6 +61,20 @@ defmodule ExTbpMontyWeb.SettingsLive do
       {:error, sentence} ->
         {:noreply, socket |> assign(connect_error: sentence) |> assign(connect_results: [])}
     end
+  end
+
+  # The two sample plugin nodes the window carries: the only control here that
+  # starts processes, and the only one that is a *window's* rather than a
+  # server's — `ExTbpMonty.SamplePlugins` is the seam, and a build without them
+  # answers "this build carries none".
+  @impl true
+  def handle_event("start_sample_plugins", _params, socket) do
+    {:noreply, assign(socket, plugins_answer: said(SamplePlugins.start()))}
+  end
+
+  def handle_event("stop_sample_plugins", _params, socket) do
+    _ = SamplePlugins.stop()
+    {:noreply, assign(socket, plugins_answer: "stopped the ones this window started")}
   end
 
   # A page never dies on an event it did not expect: a component's hook, a form
@@ -213,12 +228,37 @@ defmodule ExTbpMontyWeb.SettingsLive do
               </li>
             </ul>
 
-            <p id="cluster-sample-plugins" class="text-xs text-base-content/50">
-              Monty Studio Desktop is shipped with two sample plugin nodes: run
-              <span class="font-mono">start-plugins</span>
-              in its <span class="font-mono">plugins</span>
-              folder and this list names three nodes.
-            </p>
+            <div :if={@sample_plugins} id="cluster-sample-plugins" class="space-y-1 pt-1">
+              <p class="text-xs text-base-content/50">
+                This window carries two sample plugin nodes of its own. Start them and this
+                list names three nodes.
+              </p>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  id="cluster-start-plugins"
+                  phx-click="start_sample_plugins"
+                  class="btn btn-xs"
+                >
+                  Start them
+                </button>
+                <button
+                  type="button"
+                  id="cluster-stop-plugins"
+                  phx-click="stop_sample_plugins"
+                  class="btn btn-xs btn-ghost"
+                >
+                  Stop them
+                </button>
+              </div>
+              <p
+                :if={@plugins_answer}
+                id="cluster-plugins-answer"
+                class="text-xs text-base-content/70"
+              >
+                {@plugins_answer}
+              </p>
+            </div>
           </div>
         </section>
       </section>
@@ -240,9 +280,17 @@ defmodule ExTbpMontyWeb.SettingsLive do
     assign(socket,
       connect: to_form(%{"nodes" => ""}, as: :connect),
       connect_results: [],
-      connect_error: nil
+      connect_error: nil,
+      sample_plugins: SamplePlugins.available?(),
+      plugins_answer: nil
     )
   end
+
+  # What a press of the control is told: the nodes that are up, or the one
+  # sentence about why none is.
+  defp said({:ok, []}), do: "nothing started"
+  defp said({:ok, names}), do: "started " <> Enum.join(names, ", ")
+  defp said({:error, sentence}), do: sentence
 
   # What this page says about the cluster that is fixed at boot: whether this node
   # could be one at all, where its cookie came from, and where its own tags came

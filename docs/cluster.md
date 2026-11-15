@@ -108,7 +108,9 @@ gossip cannot reach — a scaled worker behind another network — is dialled fr
 **Settings → Cluster → Connect to a node**, which takes `name@host` and reports
 per name whether it connected, whether it is this node, or whether nobody
 answered. It is not remembered: a peer list that survives a restart is
-`MONTY_SEEDS`.
+`MONTY_SEEDS`. The same page starts the two bundled sample plugin nodes and stops
+them again when the window closes — see [desktop.md](desktop.md) for what they
+are.
 
 ## What the pages say
 
