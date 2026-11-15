@@ -783,12 +783,21 @@ names.
   two things, and both are recorded here rather than fixed in passing: the MCP
   tool refused `world: ex_mujoco` while the run page offered it (the tool kept a
   list of its own; it now takes the words from `Monty.Studio.Setup.worlds/0`),
-  and **the recording is heavy** — that one run wrote 368 MB of
-  `frames/<step>/*.png`, four pictures per step and about 19 800 files, and
-  nothing prunes them except deleting the run. A person who runs a few
-  experiments will notice their disk, which is worth deciding about before the
-  demo: keep the last N steps, keep the pictures only around conclusions, or
-  leave it and say so in the UI.
+  and **the recording is worth a decision** — that run wrote 368 MB of
+  `frames/<step>/*.png`, four pictures per step and about 19 800 files. Two
+  things are settled about it: the pictures are **kept**, because playback is one
+  of the features, and they are **not in RAM** — `RunStream.Pictures` writes a
+  step's pictures and keeps nothing (`init` is `{:ok, %{}}`, the cast returns the
+  same map), the record keeps their names rather than their bytes (13 687 → 701
+  bytes a moment), the process hibernates after five seconds idle, and playback
+  streams one picture per request through `RunFramesController`. What is left is
+  disk, and which lever pays depends on the pictures: on the synthetic world they
+  are 64×64 PNGs of 1–4 KB, so **63 % of the space is the 4 KB-per-file minimum**
+  (one run: 20 MB of bytes, 54 MB on disk) and the lever is fewer files — one PNG
+  per step holding its four pictures, the controller serving a region of it; on
+  the compiled world the pictures are ~19 KB each, so the lever is the encoding
+  (WebP or JPEG for colour, 8-bit depth). Nothing shows a run's size on a page
+  yet, which is the cheapest thing to add either way.
 - **The plugin control is proven on every platform CI builds.** The boot check
   presses it — start, "3 nodes in this cluster", stop, "One node in this cluster"
   — on macOS arm64, Linux x64 and Windows x64, within seconds of the press and
