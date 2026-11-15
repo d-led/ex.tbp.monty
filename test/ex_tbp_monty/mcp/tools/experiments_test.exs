@@ -12,6 +12,7 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
   use ExTbpMonty.DataCase, async: false
 
   alias ExTbpMonty.Mcp.Tools
+  alias ExTbpMonty.Mcp.Tools.Experiments
   alias Monty.Prerequisites
   alias Monty.Studio
   alias Monty.Studio.Drafts
@@ -312,6 +313,23 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       assert report_text =~ run.url
     end
 
+    # `steps_done` is what the episodes took and `steps` is the cap on one of
+    # them, so a `done/limit` form reads as an overshoot: a finished 140-episode
+    # surf-agent run answered "20 780/200 steps" about a limit it never passed.
+    test "says the steps it took, and the cap as a cap" do
+      assert {:ok, %{structured: run}} =
+               Tools.call("monty_run_experiment", %{"name" => @experiment, "steps" => 2}, @ctx)
+
+      assert {:ok, %{text: text}} =
+               Tools.call("monty_run_report", %{"run_id" => run.run_id}, @ctx)
+
+      assert text =~ "step(s) taken, 2 at most per episode"
+      refute text =~ "/2 steps"
+
+      assert {:ok, %{text: listed}} = Tools.call("monty_list_runs", %{}, @ctx)
+      assert listed =~ "at most per episode"
+    end
+
     # A parted run is one record with one transcript, so the report is the only
     # place an assistant learns the experiment was divided — and, once a part may
     # be handed to a peer, which node performed which part.
@@ -400,6 +418,40 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       assert RunHistory.search(state: "all", text: @experiment).runs == []
     end
 
+    test "offers a word for every world this application can step" do
+      offered = Experiments.worlds()
+
+      # The tag the tool carries, and therefore the enum a validating client
+      # reads: `ex_mujoco` is the world this application started carrying when
+      # the compiled binding arrived, and the run page offered it while this tool
+      # refused it with a list of the worlds it did know.
+      assert offered == ["monty", "mujoco", "ex_mujoco", "synthetic", "cad"]
+
+      # And the other direction: a world `Monty.Studio.Setup` can step with no
+      # word here would be the same bug from the other side.
+      for world <- Monty.Studio.Setup.worlds() do
+        assert to_string(world) in offered
+      end
+    end
+
+    test "steps the compiled world when it is asked for by name" do
+      # Whatever else this suite's environment answers, the word itself is not
+      # refused: a run that cannot start here says which file it is missing, not
+      # that the world does not exist.
+      case Tools.call(
+             "monty_run_experiment",
+             %{"name" => @experiment, "steps" => 1, "world" => "ex_mujoco"},
+             @ctx
+           ) do
+        {:ok, %{text: text, structured: run}} ->
+          assert run.world == "ex_mujoco"
+          assert text =~ "stepped by the compiled binding this release carries"
+
+        {:error, message} ->
+          refute message =~ "`world` must be one of"
+      end
+    end
+
     test "refuses a world no port here has" do
       assert {:error, message} =
                Tools.call(
@@ -408,7 +460,10 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                  @ctx
                )
 
-      assert message =~ "`world` must be one of `synthetic`, `monty`, `mujoco`, `cad`"
+      assert message =~
+               "`world` must be one of `monty`, `mujoco`, `ex_mujoco`, `synthetic`, `cad`"
+
+      assert message =~ "not `habitat2`"
     end
 
     test "a run nobody can find is named as missing" do

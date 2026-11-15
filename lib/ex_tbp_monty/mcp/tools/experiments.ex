@@ -184,45 +184,73 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
 
   # `world` is the same choice the run page offers, in the words the page and
   # Monty's configs use: Monty's own simulator answers a different question from
-  # this port's stand-in scene, so the caller says which one it wants. `monty` and
-  # `mujoco` are the two spellings of one world — the page's and the configs' —
-  # and `cad` is a part stepped through `ex_monty_cad`. Habitat is a thing this
-  # application does not carry, so naming it is refused rather than quietly
-  # answered with MuJoCo.
-  @worlds ["synthetic", "monty", "mujoco", "cad"]
+  # this port's stand-in scene, so the caller says which one it wants. A world
+  # this node cannot step is not offered: which ones it can is a question about
+  # the node (`ex_mujoco`'s compiled binding, `ex_monty_cad`'s part), and
+  # `Monty.Studio.Setup.worlds/0` is where that is answered.
+
+  # Every word a caller may say and the world it means, in one table — `monty` is
+  # the spelling Monty's own configs use for the world `mujoco` names, so a
+  # caller who copied it from a config is answered rather than corrected. One
+  # table because a word offered and unmapped, or mapped and not offered, is the
+  # shape this had: a list kept here said the tool accepted four worlds while the
+  # run page offered five, and `ex_mujoco` — the compiled binding this
+  # application started carrying — was refused with a sentence naming the others.
+  @words [
+    {"monty", :mujoco},
+    {"mujoco", :mujoco},
+    {"ex_mujoco", :ex_mujoco},
+    {"synthetic", :synthetic},
+    {"cad", :cad}
+  ]
+
+  @by_word Map.new(@words)
 
   @doc """
   The words `world` accepts, which is also the schema's `enum`.
 
-  One list, two readers: a schema that offered a word the tool refuses is a
-  tool no validating client can call, and this is the only way to notice.
+  The vocabulary, not this node's abilities: a word here that a node cannot step
+  is answered with the sentence saying what would make it work (`cad` without
+  `ex_monty_cad` says so), and a caller is better served by that than by a
+  schema that hides the question. What must not happen is the other direction —
+  a world this application carries with no word for it, which is what `ex_mujoco`
+  was: the run page offered it and this tool refused it with a list of the
+  worlds it did know.
+
+  `monty` is one of the words because it is the spelling Monty's own configs use
+  for the world `mujoco` names, so a caller who copied it from a config is
+  answered rather than corrected.
   """
   @spec worlds() :: [String.t()]
-  def worlds, do: @worlds
+  def worlds, do: Enum.map(@words, &elem(&1, 0))
 
   defp world(args) do
-    case Args.optional(args, "world") do
-      {:ok, nil} ->
-        {:ok, nil}
+    with {:ok, word} <- Args.optional(args, "world") do
+      cond do
+        is_nil(word) ->
+          {:ok, nil}
 
-      {:ok, "synthetic"} ->
-        {:ok, :synthetic}
+        word in worlds() ->
+          {:ok, Map.fetch!(@by_word, word)}
 
-      {:ok, "cad"} ->
-        {:ok, :cad}
-
-      {:ok, world} when world in ["monty", "mujoco"] ->
-        {:ok, :mujoco}
-
-      {:ok, other} ->
-        {:error,
-         "`world` must be one of #{Enum.map_join(@worlds, ", ", &"`#{&1}`")}, not `#{other}`."}
+        true ->
+          {:error,
+           "`world` must be one of #{Enum.map_join(worlds(), ", ", &"`#{&1}`")}, not `#{word}`."}
+      end
     end
   end
 
   defp world_name("mujoco"), do: "Monty's MuJoCo simulator, in this application"
+
+  defp world_name("ex_mujoco"),
+    do: "that same scene, stepped by the compiled binding this release carries"
+
   defp world_name("cad"), do: "a CAD part, stepped through ex_monty_cad"
-  defp world_name(_synthetic), do: "this port's synthetic scene"
+  defp world_name("synthetic"), do: "this port's synthetic scene"
+
+  # A world in the enum with no sentence here is a sentence short, and saying
+  # "the stand-in scene" about it would be a description of another run.
+  defp world_name(other), do: "#{other}, a world this description does not know"
 
   @doc "`monty_run_report`: what a run did, and what it is doing."
   def run_report(args, ctx) do
@@ -348,12 +376,22 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
 
   defp report_text(report, url) do
     """
-    `#{report.experiment}` — #{report.status}, #{report.steps_done}/#{report.steps} steps
+    `#{report.experiment}` — #{report.status}, #{steps_text(report)}
     #{url}
 
     #{summary_text(report.summary)}#{parts_text(report[:parts])}#{log_text(report.log_tail)}
     """
   end
+
+  # A run's steps, said as what they are: `steps_done` is everything its episodes
+  # took, and `steps` is the cap on *one* of them, so the `done/limit` form this
+  # used read as an overshoot. A finished `base_10simobj_surf_agent` answered
+  # "20 780/200 steps": 140 episodes of a surf agent sample several patches per
+  # timestep, and no limit was passed.
+  defp steps_text(%{steps_done: done, steps: cap}) when is_integer(cap),
+    do: "#{done} step(s) taken, #{cap} at most per episode"
+
+  defp steps_text(%{steps_done: done}), do: "#{done} step(s) taken"
 
   # A run of several parts is one record and one transcript, so the report is the
   # only place an assistant learns the experiment was divided, which part is on
@@ -461,7 +499,7 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
     listed =
       Enum.map_join(runs.runs, "\n", fn run ->
         "- `#{run.run_id}` — `#{run.experiment}`, #{run.status}, " <>
-          "#{run.steps_done}/#{run.steps} steps\n  #{base_url}/runs/#{run.run_id}"
+          "#{steps_text(run)}\n  #{base_url}/runs/#{run.run_id}"
       end)
 
     "#{runs.total} run(s) match (#{counts}).\n\n#{listed}"
@@ -501,7 +539,6 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
   defp unknown(ids), do: "No such run: #{Enum.join(ids, ", ")}"
 
   defp describe_run(run) do
-    "- `#{run.run_id}` — `#{run.experiment}`, #{run.status}, " <>
-      "#{run.steps_done}/#{run.steps} steps"
+    "- `#{run.run_id}` — `#{run.experiment}`, #{run.status}, #{steps_text(run)}"
   end
 end
