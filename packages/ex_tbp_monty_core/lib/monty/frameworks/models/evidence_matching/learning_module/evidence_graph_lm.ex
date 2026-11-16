@@ -1356,7 +1356,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         mlh = get_current_mlh(lm)
         hypotheses = Map.fetch!(lm.hypotheses, object_id)
 
-        pose_is_unique = unique_pose?(lm, hypotheses, possible_ids, mlh.rotation)
+        pose_is_unique = check_for_unique_poses?(lm, hypotheses, possible_ids, mlh.rotation)
 
         {lm, symmetry_detected} =
           check_for_symmetry(
@@ -1378,7 +1378,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     end
   end
 
-  defp unique_pose?(%__MODULE__{} = lm, hypotheses, ids, most_likely_rotation) do
+  defp check_for_unique_poses?(%__MODULE__{} = lm, hypotheses, ids, most_likely_rotation) do
     locations = Enum.map(ids, &Hypotheses.location(hypotheses, &1))
     center = centroid(locations)
     distances = Enum.map(locations, &norm(Geometry.subtract(&1, center)))
@@ -1656,17 +1656,40 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
          vote_confidences,
          neighbours
        ) do
-    vote_locations
-    |> Enum.with_index()
-    |> Enum.map(fn {vote_location, index} ->
-      {norm(Geometry.subtract(location, vote_location)), index}
-    end)
-    |> Enum.sort()
-    |> Enum.take(neighbours)
-    |> Enum.filter(fn {distance, _index} -> distance < lm.max_match_distance end)
-    |> Enum.map(fn {_distance, index} -> Enum.at(vote_confidences, index) end)
+    nearest =
+      vote_locations
+      |> Enum.with_index()
+      |> Enum.map(fn {vote_location, index} ->
+        {norm(Geometry.subtract(location, vote_location)), index}
+      end)
+      |> Enum.sort()
+      |> Enum.take(neighbours)
+
+    # `too_far_away = node_distance_weights <= 0` in Monty, and the same votes are
+    # masked here: the weight is zero exactly at `max_match_distance`.
+    weights =
+      get_node_distance_weights(lm, Enum.map(nearest, fn {distance, _index} -> distance end))
+
+    nearest
+    |> Enum.zip(weights)
+    |> Enum.reject(fn {_vote, weight} -> weight <= 0 end)
+    |> Enum.map(fn {{_distance, index}, _weight} -> Enum.at(vote_confidences, index) end)
     |> Enum.max(fn -> nil end)
   end
+
+  # Monty's `_get_node_distance_weights`: how much a vote counts by how far from
+  # the hypothesis it was cast. The vote round reads only its sign, but the
+  # number is Monty's, so it is computed as his.
+  defp get_node_distance_weights(%__MODULE__{max_match_distance: max}, distances)
+       when max > 0 do
+    Enum.map(distances, fn distance -> (max - distance) / max end)
+  end
+
+  # A zero radius divides by zero in Monty too, where numpy answers `-inf` (or
+  # `nan` at the point itself). There is no infinity in the BEAM; `-1` masks the
+  # vote, which is what `-inf` does there.
+  defp get_node_distance_weights(%__MODULE__{}, distances),
+    do: Enum.map(distances, fn _distance -> -1.0 end)
 
   # Bounded evidence averages, unbounded evidence adds: the same rule the
   # displacer uses for an observation, so a vote and a percept of equal
@@ -1735,10 +1758,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         # message carries an orientation and an identity, not a place.
         location: nil,
         morphological_features: %{
-          "pose_vectors" => %OrientationMatrix{
-            value:
-              mlh.rotation |> Rotation.invert() |> Rotation.to_matrix() |> Geometry.transpose()
-          },
+          "pose_vectors" => object_pose_to_features(Rotation.invert(mlh.rotation)),
           "pose_fully_defined" => not enough_symmetry_evidence_accumulated?(lm),
           "on_object" => FeatureAtLocationBuffer.get_currently_on_object(lm.buffer)
         },
@@ -1755,10 +1775,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     {message, lm}
   end
 
+  # Monty's `_object_pose_to_features`: an object's orientation as the matrix a
+  # module above reads. The call site inverts, this function transposes, which is
+  # how Monty splits it. His `None` clause answers the identity matrix for a
+  # module with no pose yet; here an mlh always carries a rotation (`empty_mlh/0`
+  # gives it the identity), so there is no such module to answer for.
+  defp object_pose_to_features(%Rotation{} = pose),
+    do: %OrientationMatrix{value: pose |> Rotation.to_matrix() |> Geometry.transpose()}
+
   # A stable number for an object id, so a module above can match on identity
   # without matching on strings: the first 24 bits of its SHA-256, which stay
-  # exact in a float32 feature.
-  @doc false
+  # exact in a float32 feature.  @doc false
   @spec object_id_to_features(graph_id()) :: non_neg_integer()
   def object_id_to_features(object_id) do
     <<head::binary-size(3), _rest::binary>> = :crypto.hash(:sha256, object_id)

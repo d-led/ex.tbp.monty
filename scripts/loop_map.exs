@@ -45,6 +45,12 @@ defmodule LoopMap do
       "reset" => "the behaviour's callbacks",
       "displace_hypotheses" => "the behaviour's callbacks"
     },
+    "frameworks/models/evidence_matching/learning_module.py" => %{
+      # `_add_votes_to_buffer_stats` holds `pass` and a commented-out body: Monty
+      # decided the vote data would clutter the buffer, so there is nothing to
+      # port and nothing to call.
+      "add_votes_to_buffer_stats" => "nothing: Monty's is `pass`"
+    },
     "frameworks/experiments/monty_experiment.py" => %{
       # What one step is — the interface stepping a world, the model stepping on
       # what came back — is the studio's, and the experiment owns only the loops.
