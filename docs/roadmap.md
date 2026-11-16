@@ -36,6 +36,12 @@ The phases below are what remains. `mix monty.readiness` and
 `mix monty.module_map.verify` print the live counts. Do not quote counts from
 prose.
 
+The classes a step runs through are also checked **function for function**:
+`MIX_ENV=test mix run --no-start scripts/loop_map.exs` prints, per loop class,
+which of Monty's methods have a counterpart here and which do not, with the
+nearest name on the other side. A rename is a defect; a port-only helper is a
+sub-step of a Monty method, or a deviation that has to be written down.
+
 ## Phase 1 — the numeric core, in dependency order
 
 Each module arrives with the Python test that specifies it, translated, and a

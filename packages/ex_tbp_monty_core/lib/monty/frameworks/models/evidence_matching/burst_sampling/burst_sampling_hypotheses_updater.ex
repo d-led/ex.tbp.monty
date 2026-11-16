@@ -189,7 +189,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       {selection, new_per_channel} =
         sample_count(updater, features, graph_id, input_channels, tracker)
 
-      {existing, tracker} = sample_existing(selection, hypotheses, tracker)
+      {existing, tracker} = sample_existing_hypotheses(selection, hypotheses, tracker)
 
       # What each stored node is worth decides two things in this step — where
       # new hypotheses are put, and what each existing one earns — and it is the
@@ -206,7 +206,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
         end)
 
       {new_hypotheses, tracker} =
-        sample_new(updater, features, graph_id, new_per_channel, tracker, node_evidence)
+        sample_new_hypotheses(
+          updater,
+          features,
+          graph_id,
+          new_per_channel,
+          tracker,
+          node_evidence
+        )
 
       {existing, prediction_error} =
         evidence_for(
@@ -267,11 +274,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
   # A well-defined pose has a mirror twin; an undefined one is sampled around
   # the normal; fixed poses are however many the experiment named.
-  defp hyps_per_node(%__MODULE__{initial_possible_poses: nil} = updater, features) do
+  defp num_hyps_per_node(%__MODULE__{initial_possible_poses: nil} = updater, features) do
     if features["pose_fully_defined"], do: 2, else: updater.umbilical_num_poses
   end
 
-  defp hyps_per_node(%__MODULE__{initial_possible_poses: poses}, _features), do: length(poses)
+  defp num_hyps_per_node(%__MODULE__{initial_possible_poses: poses}, _features),
+    do: length(poses)
 
   defp sample_count(updater, features, graph_id, input_channels, tracker) do
     new_per_channel =
@@ -280,7 +288,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
           num_nodes =
             length(GraphMemory.get_locations_in_graph(updater.graph_memory, graph_id, channel))
 
-          per_node = hyps_per_node(updater, Map.fetch!(features, channel))
+          per_node = num_hyps_per_node(updater, Map.fetch!(features, channel))
           wanted = round(num_nodes * min(updater.sampling_multiplier, per_node))
 
           # Whole rotations only: half a set of poses is not a hypothesis set.
@@ -300,7 +308,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     {selection, new_per_channel}
   end
 
-  defp sample_existing(selection, hypotheses, tracker) do
+  defp sample_existing_hypotheses(selection, hypotheses, tracker) do
     case HypothesesSelection.ids_to_retain(selection) do
       [] ->
         {Hypotheses.empty(), EvidenceSlopeTracker.clear_hyp(tracker)}
@@ -311,7 +319,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     end
   end
 
-  defp sample_new(updater, features, graph_id, new_per_channel, tracker, node_evidence) do
+  defp sample_new_hypotheses(updater, features, graph_id, new_per_channel, tracker, node_evidence) do
     sampled =
       new_per_channel
       |> Enum.reject(fn {_channel, count} -> count == 0 end)
@@ -337,7 +345,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   end
 
   defp sample_from_channel(updater, features, count, graph_id, input_channel, node_evidence) do
-    per_node = hyps_per_node(updater, features)
+    per_node = num_hyps_per_node(updater, features)
 
     top_indices = top_indices(node_evidence, div(count, per_node))
 

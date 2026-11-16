@@ -9,6 +9,13 @@ The rules that are specific to it, in priority order:
   collapsed, class dropped when it repeats the file). `lib/monty/module_map/data.ex`
   is the contract; `mix monty.module_map.verify` enforces it. Never rename a
   mapped module to a prettier Elixir name.
+- **Function for function inside the loops.** In the classes a step runs through,
+  a function is Monty's method: same name minus the underscore, same arguments in
+  the same order, same work in the same sequence. `scripts/loop_map.exs` prints
+  the pairing per loop class and names the misses; a rename is a defect, and a
+  port-only helper is either a sub-step of a Monty method or a deviation that has
+  to be written down. The kernel paths are the standing deviations: same numbers,
+  computed in Rust (`docs/monty-differences.md`).
 - **Functional core, actor shell.** Modules under `lib/monty/` are pure, one to
   one with Python. `Monty.Runtime.*` owns processes and routing only; a
   GenServer callback that computes an algorithm is a bug.
