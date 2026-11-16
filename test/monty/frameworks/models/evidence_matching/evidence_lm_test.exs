@@ -160,7 +160,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
       {lm, _evidences} =
         @line_locations |> learned_line() |> a_new_episode() |> step_through(@line_locations)
 
-      before = EvidenceGraphLM.current_mlh(lm)
+      before = EvidenceGraphLM.get_current_mlh(lm)
       last_location = lm.buffer.last_location
       pose = lm.hypotheses |> Map.fetch!(before.graph_id) |> Hypotheses.pose(before.mlh_id)
 
@@ -175,7 +175,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
           lm
         )
 
-      now = EvidenceGraphLM.current_mlh(lm)
+      now = EvidenceGraphLM.get_current_mlh(lm)
 
       assert_close(now.location, add(before.location, pose_rotated(pose, displacement)), 1.0e-9)
 
@@ -235,7 +235,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
         Enum.reduce(percepts, {lm, []}, fn percept, {lm, evidences} ->
           lm = EvidenceGraphLM.add_lm_processing_to_buffer_stats(lm, true)
           {:ok, lm} = EvidenceGraphLM.matching_step([percept], Context.new(0), lm)
-          {lm, evidences ++ [EvidenceGraphLM.current_mlh(lm).evidence]}
+          {lm, evidences ++ [EvidenceGraphLM.get_current_mlh(lm).evidence]}
         end)
 
       assert Enum.at(evidences, 1) > 1.0, "the pose the module started from is still possible"
@@ -273,7 +273,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
             assert EvidenceGraphLM.get_possible_matches(lm) == ["new_object0"],
                    "Should have exactly one possible match."
 
-            {lm, evidences ++ [EvidenceGraphLM.current_mlh(lm).evidence]}
+            {lm, evidences ++ [EvidenceGraphLM.get_current_mlh(lm).evidence]}
           else
             # Monty's model drops a percept that was not passed on, so the step
             # leaves no evidence behind.
@@ -362,7 +362,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
         assert EvidenceGraphLM.get_possible_matches(lm) == ["new_object0"],
                "Should have exactly one possible match."
 
-        mlh = EvidenceGraphLM.current_mlh(lm)
+        mlh = EvidenceGraphLM.get_current_mlh(lm)
         assert mlh.graph_id == "new_object0", "new_object0 should be the mlh at every step."
 
         {lm, [mlh.evidence | evidences]}
@@ -371,7 +371,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
     {lm, Enum.reverse(evidences)}
   end
 
-  defp rotation_of(lm), do: Rotation.to_euler_degrees(EvidenceGraphLM.current_mlh(lm).rotation)
+  defp rotation_of(lm),
+    do: Rotation.to_euler_degrees(EvidenceGraphLM.get_current_mlh(lm).rotation)
 
   # Monty's `fixme_reset_ground_truth(primary_target=self.placeholder_target)`
   # after `reset_stm`: the episode is about an object this run does not score.

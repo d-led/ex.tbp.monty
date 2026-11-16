@@ -156,7 +156,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       lm = learning_module(mug())
 
       assert EvidenceGraphLM.evidence_for_each_graph(lm) == {["patch_off_object"], [0.0]}
-      assert EvidenceGraphLM.current_mlh(lm).graph_id == "no_observations_yet"
+      assert EvidenceGraphLM.get_current_mlh(lm).graph_id == "no_observations_yet"
     end
   end
 
@@ -189,7 +189,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       # The step ran to its end, and the pruned object is still one memory holds.
       assert Map.has_key?(lm.hypotheses, "mug")
-      assert EvidenceGraphLM.current_mlh(lm).graph_id in ["mug", "plate"]
+      assert EvidenceGraphLM.get_current_mlh(lm).graph_id in ["mug", "plate"]
     end
   end
 
@@ -221,7 +221,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         |> step([percept([0.2, 0.0, 0.0], [0.2])])
         |> step([percept([0.2, 0.0, 0.0], [0.2])])
 
-      assert EvidenceGraphLM.current_mlh(lm).location == [0.2, 0.0, 0.0]
+      assert EvidenceGraphLM.get_current_mlh(lm).location == [0.2, 0.0, 0.0]
     end
 
     test "keeps the pose open while the mirror image of the observation survives" do
@@ -279,8 +279,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert after_move.current_mlh.mlh_id == before.current_mlh.mlh_id
       assert after_move.current_mlh.evidence == before.current_mlh.evidence
 
-      assert EvidenceGraphLM.current_mlh(after_move).location !=
-               EvidenceGraphLM.current_mlh(before).location
+      assert EvidenceGraphLM.get_current_mlh(after_move).location !=
+               EvidenceGraphLM.get_current_mlh(before).location
     end
   end
 
@@ -602,7 +602,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert lm.terminal_state == nil
       assert lm.detected_object == nil
       assert FeatureAtLocationBuffer.size(lm.buffer) == 0
-      assert EvidenceGraphLM.current_mlh(lm).graph_id == "no_observations_yet"
+      assert EvidenceGraphLM.get_current_mlh(lm).graph_id == "no_observations_yet"
       assert GraphMemory.get_memory_ids(lm.graph_memory) == ["mug"]
     end
   end

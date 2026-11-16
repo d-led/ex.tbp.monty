@@ -136,7 +136,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   The best hypothesis of a graph, or of everything, as one record.
 
   `mlh_id` indexes into that graph's hypothesis space — `nil` until a space
-  exists, which is why `current_mlh/1` has a location to refresh only when
+  exists, which is why `get_current_mlh/1` has a location to refresh only when
   there is an id to refresh it from.
   """
   @type mlh :: %{
@@ -729,7 +729,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   defp update_evidence(%__MODULE__{} = lm, features, displacement, graph_id) do
     hypotheses = Map.get(lm.hypotheses, graph_id, Hypotheses.empty())
 
-    # The stored evidence, not `current_mlh/1`: that one refreshes the MLH's
+    # The stored evidence, not `get_current_mlh/1`: that one refreshes the MLH's
     # location by indexing its graph's space, and this loop replaces those
     # spaces one object at a time — so an object already behind us has been
     # pruned and the index the MLH was found at may no longer be in it. Monty
@@ -962,8 +962,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   displacement since the MLH was computed — a location-only step moves the
   hypothesis but not its identity, so the stored index still points at it.
   """
-  @spec current_mlh(t()) :: mlh()
-  def current_mlh(%__MODULE__{current_mlh: mlh} = lm) do
+  @spec get_current_mlh(t()) :: mlh()
+  def get_current_mlh(%__MODULE__{current_mlh: mlh} = lm) do
     with id when not is_nil(id) <- mlh.mlh_id,
          %Hypotheses{} = hypotheses <- Map.get(lm.hypotheses, mlh.graph_id) do
       %{mlh | location: Hypotheses.location(hypotheses, id)}
@@ -1023,7 +1023,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # episode's statistics are read from when the patch never met the object.
   # Monty's `_get_current_mlh` answers something in that case, and so does this.
   defp finish_mlh(nil, %__MODULE__{current_mlh: nil}), do: %{empty_mlh() | graph_id: "new_object0"}
-  defp finish_mlh(nil, %__MODULE__{} = lm), do: %{current_mlh(lm) | graph_id: "new_object0"}
+  defp finish_mlh(nil, %__MODULE__{} = lm), do: %{get_current_mlh(lm) | graph_id: "new_object0"}
   defp finish_mlh(mlh, %__MODULE__{}), do: mlh
 
   @spec empty_mlh() :: mlh()
@@ -1115,7 +1115,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   end
 
   defp reconcile_top_two(%__MODULE__{} = lm, top_id, second_id) do
-    current_id = current_mlh(lm).graph_id
+    current_id = get_current_mlh(lm).graph_id
 
     cond do
       top_id == current_id -> {top_id, second_id}
@@ -1324,7 +1324,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   defp detected_object(%__MODULE__{mode: :eval} = lm, terminal_state)
        when terminal_state in [:time_out, :pose_time_out] do
-    mlh = current_mlh(lm)
+    mlh = get_current_mlh(lm)
     if mlh.evidence > lm.object_evidence_threshold, do: mlh.graph_id
   end
 
@@ -1353,7 +1353,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         {mark_possible(lm, object_id, []), nil}
 
       possible_ids ->
-        mlh = current_mlh(lm)
+        mlh = get_current_mlh(lm)
         hypotheses = Map.fetch!(lm.hypotheses, object_id)
 
         pose_is_unique = unique_pose?(lm, hypotheses, possible_ids, mlh.rotation)
@@ -1721,7 +1721,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   @impl true
   @spec get_output(t()) :: {Message.t() | nil, t()}
   def get_output(%__MODULE__{} = lm) do
-    mlh = current_mlh(lm)
+    mlh = get_current_mlh(lm)
 
     confidence =
       case FeatureAtLocationBuffer.size(lm.buffer) do
@@ -1794,7 +1794,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
     stats = %{
       "possible_matches" => lm.possible_matches,
-      "current_mlh" => current_mlh(lm)
+      "current_mlh" => get_current_mlh(lm)
     }
 
     {lm, if(lm.has_detailed_logger, do: detailed.(lm, stats), else: stats)}

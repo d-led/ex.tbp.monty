@@ -70,7 +70,7 @@ defmodule Monty.Studio.Belief do
   def of(%EvidenceGraphLM{} = module) do
     %{
       possible_matches: module.possible_matches,
-      mlh: mlh(EvidenceGraphLM.current_mlh(module)),
+      mlh: mlh(EvidenceGraphLM.get_current_mlh(module)),
       graphs: graphs(module),
       x_percent_threshold: module.x_percent_threshold,
       terminal_state: module.terminal_state,

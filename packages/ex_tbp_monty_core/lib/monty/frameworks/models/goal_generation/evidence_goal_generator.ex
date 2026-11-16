@@ -301,7 +301,7 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator do
   end
 
   defp decide_between_objects(generator, lm, ctx, elapsed, top_id, second_id) do
-    top_mlh = EvidenceGraphLM.current_mlh(lm)
+    top_mlh = EvidenceGraphLM.get_current_mlh(lm)
     base_threshold = EvidenceGraphLM.threshold_possible_matches(lm)
 
     smaller_threshold =
@@ -461,7 +461,7 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator do
 
     with {:ok, channel} <-
            FeatureAtLocationBuffer.get_first_sensory_input_channel(buffer(generator)) do
-      mlh = EvidenceGraphLM.current_mlh(lm)
+      mlh = EvidenceGraphLM.get_current_mlh(lm)
       graph = EvidenceGraphLM.get_graph(lm, mlh.graph_id, channel)
       pose_vectors = lm.graph_memory.object_model.get_values_for_feature(graph, "pose_vectors")
 
