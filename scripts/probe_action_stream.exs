@@ -81,13 +81,25 @@ defmodule ActionStream do
 
     seed = setup.seed || 0
 
-    rows =
+    # The replay stops at an episode boundary: the experiment repositions the
+    # agent between episodes with an action the policy never takes, so a step
+    # past it would ask the policy a question about a body that was moved for it.
+    {steps, boundary?} =
       recorded
+      |> Enum.reduce_while({[], false}, fn recorded_step, {steps, _boundary} ->
+        if positioned?(recorded_step),
+          do: {:halt, {Enum.reverse(steps), true}},
+          else: {:cont, {[recorded_step | steps], false}}
+      end)
+
+    rows =
+      steps
       |> Enum.reduce(state, fn recorded_step, state -> step(recorded_step, state, seed) end)
       |> Map.fetch!(:rows)
       |> Enum.reverse()
 
     report(rows)
+    if boundary?, do: IO.puts("(the replay stopped where the experiment moved the agent)")
   end
 
   # One step, his and ours: his percept through our sensor, our policy's answer,
@@ -194,6 +206,9 @@ defmodule ActionStream do
   defp read do
     Path.expand(@fixture, Path.join(__DIR__, "..")) |> File.stream!() |> Enum.map(&Jason.decode!/1)
   end
+
+  defp positioned?(%{"actions" => actions}),
+    do: Enum.any?(actions, &(&1["action"] == "set_agent_pose"))
 
   defp action(%{"action" => "move_forward"} = recorded),
     do: %MoveForward{agent_id: @agent, distance: recorded["distance"]}

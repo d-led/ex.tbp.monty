@@ -404,7 +404,7 @@ defmodule Monty.Studio.ChartTest do
     # the evidence falls back to zero. The pyview dashboard tints each episode's
     # band with the colour of the object it was about, at 0.08 — copied here, so
     # the picture a reader compares against is the same picture.
-    test "covers the steps of its episode, end to end, and none of the next" do
+    test "meets the next episode's band at the seam, and none of one wears the other" do
       chart =
         Chart.new([
           {0, 0, belief(%{"mug" => 1.0})},
@@ -418,11 +418,10 @@ defmodule Monty.Studio.ChartTest do
                %{episode: 1, x: second_x}
              ] = chart.episode_bands
 
-      # The first episode ends a step before the second begins: the break is the
-      # boundary, and nothing of one episode is drawn in the other's band.
-      unit = (chart.width - chart.margin_left - chart.margin_right) / (chart.x_max - chart.x_min)
-
-      assert_in_delta first_x + first_width + unit, second_x, 0.01
+      # The first band ends exactly where the second begins: a white column
+      # between them read as a gap in the run rather than as a seam between two
+      # episodes, and the seam is what the dashed boundary line draws.
+      assert_in_delta first_x + first_width, second_x, 0.01
       assert first_x == chart.margin_left
     end
 

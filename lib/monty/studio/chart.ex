@@ -364,9 +364,16 @@ defmodule Monty.Studio.Chart do
   # An episode whose object this chart was not told takes a hue of its own, from
   # the episode's number so that a band keeps its colour while the window moves.
   defp bands(spans, from, to, chart, objects) do
-    for %{episode: episode, from: first, to: last} <- spans,
+    # A band runs to where the next episode begins, not to its own last step: the
+    # episodes are laid one step of room apart (see `stack/1`), so stopping at the
+    # last step left a white column between every two bands, which reads as a gap
+    # in the run rather than as a seam between two episodes. The seam itself is
+    # drawn — a dashed vertical line — over the tint.
+    ends = (spans |> Enum.map(& &1.from) |> Enum.drop(1)) ++ [to + 1]
+
+    for {%{episode: episode, from: first, to: _last}, next} <- Enum.zip(spans, ends),
         clipped_first = max(first, from),
-        clipped_last = min(last, to),
+        clipped_last = min(next, to),
         clipped_first < clipped_last do
       x = x_coordinate(clipped_first, chart)
 

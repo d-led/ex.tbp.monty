@@ -224,15 +224,15 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformedTe
 
       {_direction, policy} = tangential_direction(policy, percept: percept)
 
-      # The flip is registered — the heading is turned round, half a turn against
-      # the one it had — and then momentum is applied to it, because that is what
-      # Monty answers with: the direction of a curvature-guided step is the
-      # *averaged* heading, half way between where it was and where the curvature
-      # points (`pc_alpha`). A port that answers before the average walks a
-      # different path from the first step after a curvature-guided one, and
+      # The flip is registered, and then momentum is applied to it, because that
+      # is what Monty answers with: the heading taken is half way between where it
+      # was (0) and where the flipped curvature points (180) — and the angle it
+      # remembers is that taken heading, not the raw one. A port that answers
+      # before the average, or that remembers the raw angle, walks a different path
+      # from the first step after a curvature-guided one, and
       # `scripts/probe_action_stream.exs` measures exactly that.
-      assert_in_delta abs(policy.prev_angle), :math.pi(), 1.0e-9
-      assert policy.tangential_angle != policy.prev_angle
+      assert_in_delta abs(policy.tangential_angle), :math.pi() / 2, 1.0e-9
+      assert policy.tangential_angle == policy.prev_angle
       refute policy.setting_new_heading
       assert policy.using_pc_guide
       assert policy.following_pc_counter == 1
@@ -286,6 +286,31 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformedTe
   # -- what a step looks like -----------------------------------------------
 
   describe "taking a step" do
+    test "averages each curvature direction against the heading it last took" do
+      # Three percepts whose curvature turns a quarter turn and back. With
+      # `pc_alpha` 0.5 each heading is the midpoint between the new direction and
+      # the one taken before it: 0, then 45 degrees, then 22.5 — and the remembered
+      # angle is the one taken, which is what the next average is measured from
+      # (Monty stores `tangential_angle` after the blend).
+      policy = after_orienting_vertically(policy(max_pc_bias_steps: 5))
+
+      along_x = percept(direction_1: [1.0, 0.0, 0.0], direction_2: [0.0, 1.0, 0.0])
+      along_y = percept(direction_1: [0.0, 1.0, 0.0], direction_2: [-1.0, 0.0, 0.0])
+
+      {_, policy} = step(after_orienting_vertically(policy), percept: along_x)
+      assert_in_delta policy.tangential_angle, :math.pi() / 2, 1.0e-9
+
+      {_, policy} = step(after_orienting_vertically(policy), percept: along_y)
+      assert_in_delta policy.tangential_angle, :math.pi() / 4, 1.0e-9
+      assert_in_delta policy.prev_angle, :math.pi() / 4, 1.0e-9
+
+      # The averaged heading is what the third step averages from: from the taken
+      # 45 degrees toward the new 90, half way, is 67.5. Measured from the raw
+      # direction instead it would land on 45 again.
+      {_, policy} = step(after_orienting_vertically(policy), percept: along_x)
+      assert_in_delta policy.tangential_angle, 3 * :math.pi() / 8, 1.0e-9
+    end
+
     test "it remembers the place it is leaving when it has just oriented vertically" do
       {%MotorPolicyResult{actions: [action]}, policy} =
         step(after_orienting_vertically(policy()), percept: percept(location: [0.1, 0.2, 0.3]))

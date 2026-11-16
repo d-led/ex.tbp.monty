@@ -456,9 +456,16 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
     difference = MotorPolicies.theta_change(policy.prev_angle, policy.tangential_angle)
     blended = policy.tangential_angle + policy.pc_alpha * difference
 
-    policy
-    |> update_tangential_reps({:angle, MotorPolicies.enforce_pi_bounds(blended)})
-    |> Map.put(:prev_angle, policy.tangential_angle)
+    # The angle it remembers is the one it *took*: Monty writes
+    # `self.prev_angle = self.tangential_angle` after `update_tangential_reps/1`
+    # has already replaced the angle with the blended one, so the next average is
+    # measured from this step's heading, not from the raw curvature direction. A
+    # port that remembers the raw one lags a step behind on every average, and the
+    # heading drifts — seven degrees by the twelfth step of
+    # `scripts/probe_action_stream.exs`, and a different path across the object.
+    policy = update_tangential_reps(policy, {:angle, MotorPolicies.enforce_pi_bounds(blended)})
+
+    %{policy | prev_angle: policy.tangential_angle}
   end
 
   # -- not walking where it has been ----------------------------------------

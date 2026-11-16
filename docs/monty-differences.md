@@ -1557,9 +1557,21 @@ remaining one. A surface policy steers by `dir1`, so the port that has numpy's
 by `test/monty/frameworks/utils/sensor_processing_test.exs`, which holds it to the
 numbers Monty's own interpreter gives for a bowl.
 
-What is left is the heading _after_ a curvature-guided step: from step 8 the
-tangential directions differ again, so the momentum blend that mixes a fresh draw
-with the previous heading is where the next difference lives.
+What is left was the heading _after_ a curvature-guided step: the momentum blend
+that mixes a fresh curvature direction with the one last taken. Two things were
+wrong there, and both are now his:
+
+- **The blend that a step answers with.** A port that answers with the raw
+  curvature direction walks a different path from the first step after a
+  curvature-guided one.
+- **The angle the blend remembers.** Monty writes
+  `self.prev_angle = self.tangential_angle` _after_ `update_tangential_reps/1`
+  has replaced the angle with the blended one, so each average is measured from
+  the heading taken, not from the raw direction. The port remembered the raw one
+  and lagged a step behind on every average, which is a few degrees of drift that
+  compounds. With both fixed the stream is his for **28 steps** of the first
+  episode, where it parted at 12 before; the next difference is a tangential
+  direction at that step, still being chased with the same probe.
 
 ---
 
