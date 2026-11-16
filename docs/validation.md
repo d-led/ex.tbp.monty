@@ -632,11 +632,22 @@ the library costs **213 MB of heap** and the module adds **nothing measurable** 
 top of it: the module holds the library, it does not copy it.
 
 So the memory a run starts from is a few hundred megabytes, and the six
-gigabytes appear during the step. Step 0 of the first episode is where the run
-dies, after 12.2 s; what is unmeasured is that step — how many hypotheses it
-builds for 77 possible objects, and what each costs. That is the next
-measurement, and it wants the model's process watched step by step rather than
-the module sized once.
+gigabytes appear while the run is being built — not in a step, as this note first
+said. That was measured third. `scripts/measure_step_memory.exs` starts the same
+experiment with a ceiling of its own, 3 GB rather than the studio's 4 GB, and the
+model's process is killed **during `Monty.Studio.Run.start/2`, before step 0**:
+`Total Heap Size: 459 908 514` words, about 3.7 GB. Under the studio's 4 GB
+ceiling the start survives and the first step — which took 12.2 s — is what
+crosses the line.
+
+The library is 213 MB of heap and the module holds it rather than copying it, so
+3.5 GB at start is on the order of eighteen copies of the same library. That is
+what a term costs when it is sent between processes: a message is copied, and this
+library is maps and lists rather than off-heap binaries, so every hand-over of it
+is another 189 MB. The next measurement is a count of those hand-overs — the model
+start, the module start, the update path — and the fix they point at is to hold
+the library once (`Monty.Studio.Memory` already caches it in `:persistent_term`)
+and pass a handle to it rather than the thing.
 
 For contrast, the ten-object experiment does run: `base_config_10distinctobj_dist_agent`
 completes its 140 episodes on both sides (the section above). Its library is an
