@@ -751,6 +751,28 @@ defmodule ExTbpMontyWeb.StudioComponents do
                     data-episode={band.episode}
                     pointer-events="none"
                   />
+                  <%!-- Where one episode ends and the next begins. A tint stopping
+            is not a line, so the seam needs one of its own: evidence restarts at
+            zero there, and that drop is the rhythm a reader follows. The pyview
+            dashboard's own boundary (`buildBoundaryShape`): #6b7280, one unit
+            of ink, dotted, half opaque, drawn below the data — present, never
+            the loudest thing on the plot. Not on the first episode, whose seam
+            would land on the axis's own frame. --%>
+                  <line
+                    :for={band <- @chart.bands}
+                    :if={band.episode > 0}
+                    x1={band.x}
+                    y1="0"
+                    x2={band.x}
+                    y2={@chart.height}
+                    stroke="#6b7280"
+                    stroke-width="1"
+                    stroke-opacity="0.5"
+                    stroke-dasharray="2 4"
+                    class="episode-boundary"
+                    vector-effect="non-scaling-stroke"
+                    pointer-events="none"
+                  />
                   <%!-- Zero: what evidence is measured from. Every episode starts on
             this line and a hypothesis can be penalised under it, so it is drawn
             heavier than a gridline and below the lines. --%>

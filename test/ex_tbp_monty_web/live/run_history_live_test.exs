@@ -354,6 +354,28 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert band =~ ~s(data-episode="0")
       refute band =~ "replay-episode-0"
     end
+
+    test "and rules the seam where one episode ends and the next begins",
+         %{conn: conn, run: run} do
+      for step <- 1..3, do: publish_episode(run.id, 0, step, "mug")
+      for step <- 4..6, do: publish_episode(run.id, 1, step, "mug")
+      _ = :sys.get_state(Monty.Studio.RunStream)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      document = view |> element("#replay-chart") |> render() |> LazyHTML.from_fragment()
+
+      # Two episodes are two bands, and so exactly one seam between them.
+      assert [band, _next] = document |> LazyHTML.query("rect.episode-band") |> Enum.to_list()
+      assert [boundary] = document |> LazyHTML.query("line.episode-boundary") |> Enum.to_list()
+
+      # The rule the bands part runs the height they fill, and it is dashed —
+      # a solid one would read as an axis of its own.
+      assert LazyHTML.attribute(boundary, "y1") == ["0"]
+      assert LazyHTML.attribute(boundary, "y2") == LazyHTML.attribute(band, "height")
+      assert [dashes] = LazyHTML.attribute(boundary, "stroke-dasharray")
+      refute dashes =~ "0"
+    end
   end
 
   describe "a run that is writing an episode back" do

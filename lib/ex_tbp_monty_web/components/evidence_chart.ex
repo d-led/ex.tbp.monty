@@ -182,18 +182,21 @@ defmodule ExTbpMontyWeb.EvidenceChart do
           <%!-- Where one episode ends and the next begins. Every episode starts its
         evidence again at zero, so the chart lays them end to end and marks the
         boundary: without it the drop is a fall nobody measured. The bands meet
-        here, so this line is the seam itself — the pyview dashboard's dashes. --%>
+        here, so this line is the seam itself — the pyview dashboard's dashes at
+        its own numbers (#6b7280, one unit, dotted, half opaque): present enough
+        to find, quiet enough to leave the lines the loudest thing. --%>
           <g :for={start <- @chart.episode_starts}>
             <%= if start.episode > 0 do %>
               <line
                 x1={start.x}
                 x2={start.x}
-                y1="10"
-                y2={@chart.height - 22}
-                stroke="currentColor"
+                y1={@chart.margin_top}
+                y2={@chart.height - @chart.margin_bottom}
+                stroke="#6b7280"
                 stroke-width="1"
-                stroke-dasharray="3 3"
-                class="text-base-content/40"
+                stroke-opacity="0.5"
+                stroke-dasharray="2 4"
+                class="episode-boundary"
               />
             <% end %>
           </g>

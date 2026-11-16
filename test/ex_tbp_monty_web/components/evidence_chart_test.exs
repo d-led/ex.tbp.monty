@@ -139,4 +139,39 @@ defmodule ExTbpMontyWeb.EvidenceChartTest do
     assert html =~ ~s|data-size-event="chart-size"|
     assert html =~ "cursor-crosshair"
   end
+
+  # Every episode starts its evidence again at zero, so the seam between two of
+  # them is the thing a reader follows — and a rule that stops short of the axes
+  # reads as one more gridline. It is drawn the way the pyview dashboard draws
+  # it: a dashed rule the height of the plot.
+  test "rules each episode boundary over the plot's whole height" do
+    chart =
+      Chart.new([
+        {0, 1, belief(%{"new_object0" => 2.0})},
+        {0, 2, belief(%{"new_object0" => -0.6})},
+        {1, 3, belief(%{"new_object0" => -0.4})}
+      ])
+
+    html =
+      render_component(&EvidenceChart.evidence_chart/1, %{
+        module_id: "learning_module_0",
+        chart: chart
+      })
+
+    document = LazyHTML.from_fragment(html)
+
+    assert [boundary] = document |> LazyHTML.query("line.episode-boundary") |> Enum.to_list()
+    assert number(boundary, "y1") == chart.margin_top
+    assert number(boundary, "y2") == chart.height - chart.margin_bottom
+    assert number(boundary, "stroke-width") <= 1
+    assert number(boundary, "stroke-opacity") < 1
+    assert [dashes] = LazyHTML.attribute(boundary, "stroke-dasharray")
+    refute dashes =~ "0"
+  end
+
+  defp number(element, name) do
+    assert [value] = LazyHTML.attribute(element, name)
+    {number, ""} = Float.parse(value)
+    number
+  end
 end
