@@ -1035,14 +1035,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         <ExTbpMontyWeb.StudioComponents.summary :if={@summary} summary={@summary} />
       </section>
 
-      <section :if={@opened.yaml} class="space-y-2">
-        <h2 class="text-lg font-semibold tracking-tight">The config</h2>
+      <%!-- The composed config is a whole file, and the page above it is what a
+      person comes here for: what this experiment is, what it costs and how to
+      run it. So the file sits in a `details` — closed until asked for, the
+      browser's own control, left open across the patches a run sends. --%>
+      <details :if={@opened.yaml} id="experiment-config-box" class="space-y-2">
+        <summary class="cursor-pointer text-lg font-semibold tracking-tight">The config</summary>
         <pre
           id="experiment-config"
           phx-no-curly-interpolation
           class="max-h-96 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-xs"
         ><code><%= @opened.yaml %></code></pre>
-      </section>
+      </details>
     </Layouts.app>
     """
   end

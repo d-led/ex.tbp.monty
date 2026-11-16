@@ -1298,6 +1298,24 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert has_element?(view, "#run-config")
     end
 
+    # The snapshot is Monty's own format, not this page's: what is printed reads
+    # back as the config the record kept, key for key. A display format that
+    # loses one is a display that lies about what the run was asked to do.
+    test "prints its snapshot as YAML that reads back to the record", %{conn: conn, run: run} do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      printed =
+        view
+        |> element("#run-config")
+        |> render()
+        |> then(&Regex.run(~r{<code>(.*)</code>}s, &1))
+        |> List.last()
+        |> String.replace(~r/<[^>]+>/, "")
+
+      assert printed =~ ~r/^experiment:\n {2}config:/m
+      assert YamlElixir.read_from_string!(printed) == run.config
+    end
+
     # What the run was started with, read back from its own record: the same
     # sentences the experiment page promises before a run, so that what was
     # promised and what was done are the same words — and the seed the record

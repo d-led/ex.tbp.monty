@@ -49,6 +49,21 @@ defmodule ExTbpMontyWeb.BuildLiveTest do
   end
 
   describe "changing a component" do
+    # The written file is the output of this page, not its subject: what a
+    # reader builds with is the diagram and the facts. So the file is drawn
+    # closed — the browser's `details`, which keeps whatever state a reader left
+    # it in while the preview patches itself.
+    test "the config is a closed box until a reader opens it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/build")
+
+      box = view |> element("#blueprint-config-box") |> render()
+
+      assert box =~ "<details"
+      refute box =~ ~r/<details[^>]*\sopen/
+      assert box =~ "The config"
+      assert has_element?(view, "#blueprint-config")
+    end
+
     test "a different learning module is shown in the diagram and in the config", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/build")
 

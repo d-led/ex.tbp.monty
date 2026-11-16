@@ -133,14 +133,18 @@ defmodule ExTbpMontyWeb.BuildLive do
         </dl>
       </section>
 
-      <section class="space-y-2">
-        <h2 class="text-lg font-semibold tracking-tight">The config</h2>
+      <%!-- The written config is a whole file, and the diagram and the facts
+      above it are what a reader builds with: the file is what comes out. So it
+      sits in a `details` — closed until asked for, the browser's own control,
+      left as the reader left it while the page patches the preview. --%>
+      <details class="space-y-2" id="blueprint-config-box">
+        <summary class="cursor-pointer text-lg font-semibold tracking-tight">The config</summary>
         <pre
           id="blueprint-config"
           phx-no-curly-interpolation
           class="max-h-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-xs"
         ><code><%= @preview.yaml %></code></pre>
-      </section>
+      </details>
       <%!-- The other direction: a file from elsewhere becomes a draft here. It is
       composed before it is saved, so a file that is not a Hydra config is
       refused instead of becoming a draft nobody can open. --%>
