@@ -108,68 +108,15 @@ defmodule ActionStream do
     {actions, motor} =
       MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
 
-    policy = motor.policy_selector.policy
-    rotation = state.proprioceptive_state[@agent].rotation
-
-    his_heading =
-      case Enum.find(recorded["actions"], &(&1["action"] == "move_tangentially")) do
-        nil -> nil
-        his -> Rotation.apply(Rotation.invert(rotation), his["direction"])
-      end
-
-    IO.puts("  his_heading=#{inspect(his_heading)} ours=#{inspect(policy.tangential_vec)}")
-
-    policy = motor.policy_selector.policy
-
-    IO.puts(
-      "  policy: pref=#{inspect(policy.min_dir_pref)} pc=#{inspect(policy.using_pc_guide)} " <>
-        "ignoring=#{inspect(policy.ignoring_pc_counter)} following_pc=#{inspect(policy.following_pc_counter)} " <>
-        "prev_angle=#{inspect(policy.prev_angle)} angle=#{inspect(policy.tangential_angle)} " <>
-        "new_heading=#{inspect(policy.setting_new_heading)}"
-    )
-
-    {actions, motor} =
-      MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
-
-    policy = motor.policy_selector.policy
-    rotation = state.proprioceptive_state[@agent].rotation
-
-    his_heading =
-      case Enum.find(recorded["actions"], &(&1["action"] == "move_tangentially")) do
-        nil -> nil
-        his -> Rotation.apply(Rotation.invert(rotation), his["direction"])
-      end
-
-    IO.puts("  his_heading=#{inspect(his_heading)} ours=#{inspect(policy.tangential_vec)}")
-
-    policy = motor.policy_selector.policy
-
-    IO.puts(
-      "  policy: pref=#{inspect(policy.min_dir_pref)} pc=#{inspect(policy.using_pc_guide)} " <>
-        "ignoring=#{inspect(policy.ignoring_pc_counter)} following_pc=#{inspect(policy.following_pc_counter)} " <>
-        "prev_angle=#{inspect(policy.prev_angle)} angle=#{inspect(policy.tangential_angle)} " <>
-        "new_heading=#{inspect(policy.setting_new_heading)}"
-    )
-
-    IO.puts(
-      "  percept: pose=#{inspect(percept.morphological_features["pose_fully_defined"])} " <>
-        "pc=#{inspect(percept.non_morphological_features["principal_curvatures"])} " <>
-        "pc_log=#{inspect(percept.non_morphological_features["principal_curvatures_log"])} " <>
-        "pose_vectors=#{inspect(percept.morphological_features["pose_vectors"])}"
-    )
-
-    IO.puts(
-      "  heading: angle=#{inspect(motor.policy_selector.policy.tangential_angle)} " <>
-        "vec=#{inspect(motor.policy_selector.policy.tangential_vec)} " <>
-        "rotation=#{inspect(state.proprioceptive_state[@agent].rotation)}"
-    )
-
+    # The world moves by his action, so the next question is the same one.
     {observations, proprioceptive_state, world} =
       state.world.__struct__.step(state.world, Enum.map(recorded["actions"], &action/1))
 
     %{
       state
-      | rows: [{recorded["episode_step"], Enum.map(recorded["actions"], &describe/1), Enum.map(actions, &describe/1)} | state.rows],
+      | rows:
+          [{recorded["episode_step"], Enum.map(recorded["actions"], &describe/1),
+            Enum.map(actions, &describe/1)} | state.rows],
         motor: motor,
         sensor_module: sensor_module,
         observations: Interface.apply_transforms(state.interface, observations, proprioceptive_state),
