@@ -111,23 +111,23 @@ two action logs part: an episode ends on Monty's step in some of the comparison'
 episodes and walks a different path in the rest. That is a diff of two logs, not a
 design, and `scripts/probe_action_stream.exs` is the instrument that prints it.
 
-Its first reading is a difference of **arithmetic, not of world**. The patch's view
-on the step his episode opens with is a flat five centimetres of table for both of
-us — his own first percepts are empty too, and the object enters his patch at step
-3 — and our world at reset is his to the last bit
+Its first reading is a difference of **load, not of arithmetic**. The patch's view on
+the step his episode opens with is a flat five centimetres of table for both of us
+— his own first percepts are empty too, and the object enters his patch at step 3 —
+and our world at reset is his to the last bit
 ([`probe_percept_parity.exs`](../scripts/probe_percept_parity.exs) reproduces his
 first percept, `min_depth` and all).
 
-The difference is the first action, and it is not in the formula. His recorded
-`move_forward` is 0.036434555; ours answers 0.035576 from the same image. Ours is
-the action of Monty's own `SurfacePolicy._touch_object` —
-`depth_at_center − desired_object_distance − sensor z`, which our own readings are
-0.0914345532655716, 0.025 and 0.03, so
-`0.0914345532655716 − 0.025 − 0.03 = 0.0364345532655716`: **his number, to the last
-digit the record keeps**. So the surface policy is answering with something other
-than its own inputs, and the answer is not even the same between two runs of the
-probe. That is the next thing to read, and `scripts/probe_action_stream.exs` now
-prints the three numbers and the action that came out of them.
+On a quiet machine the opening action is his as well: ours answers
+`move_forward 0.036434553` where he recorded `0.036434555`, which is his own
+formula on our own readings — `0.0914345532655716 − 0.025 − 0.03`. Three
+consecutive runs give the same three numbers to the last digit. **Under load it is
+a different number every time** — 0.035791, 0.036114, 0.036173, 0.035576 were all
+read while the desktop bundle was being assembled and the suite was running — so
+the prologue has something that the machine's load decides, and until that is
+pinned no action-log diff means anything. The same shape appears in the port
+elsewhere: a recording case that reached 27 steps on a quiet machine and 21 under
+a busy suite, with no explanation yet.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the

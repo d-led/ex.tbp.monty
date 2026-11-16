@@ -10,12 +10,13 @@
 # step of his episode, while the world is moved by *his* actions, so both answers
 # answer the same question. The step they part at is the step to read.
 #
-# What it reports first is not a difference: the patch on the opening step is a flat
-# five centimetres of table for both of us — his episode's own first percepts are
-# empty, and the object enters his patch at step 3, with our world at reset being
-# his to the last bit (`probe_percept_parity.exs`). The difference is the action
-# that view produces: 0.035576 against his 0.036434555 from the same depth image,
-# which is the policy's arithmetic rather than anything about the world.
+# What it reports first is the prologue's stability, not a difference of policy: on
+# a quiet machine our opening action is Monty's to the last digit (0.036434553
+# against his 0.036434555, which is his own `depth − desired − sensor z` on our own
+# readings), and the patch's flat five-centimetre view of the table is his too —
+# his episode's first percepts are empty and the object enters his patch at step 3.
+# Under load the same reading comes out different every run, so read the three
+# numbers this prints before trusting any line below them.
 
 defmodule ActionStream do
   @moduledoc false
@@ -174,6 +175,12 @@ defmodule ActionStream do
     {actions, motor} =
       MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
 
+    # Which branch answered, and with what. `touch_object` computes its distance
+    # from the view finder's centre pixel; the surface cycle samples one. The two
+    # are 0.8 mm apart on the opening step, so the branch has to be named rather
+    # than inferred from the movement.
+    describe_policy(motor)
+
     # The world moves by his action, so the next question is the same one.
     {observations, proprioceptive_state, interface} =
       Interface.step(state.interface, Enum.map(recorded["actions"], &action/1))
@@ -189,6 +196,17 @@ defmodule ActionStream do
         proprioceptive_state: proprioceptive_state,
         interface: interface
     }
+  end
+
+  # What the policy was holding when it answered.
+  defp describe_policy(motor) do
+    policy = motor.policy_selector.policy
+
+    IO.puts(
+      "the policy: searching #{inspect(policy.attempting_to_find_object)}, " <>
+        "last action #{inspect(policy.last_surface_policy_action, limit: 3)}, " <>
+        "desired #{inspect(policy.desired_object_distance)}"
+    )
   end
 
   # What our policy had to go on at that step. Two steps can differ for two
