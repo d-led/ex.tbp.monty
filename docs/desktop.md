@@ -317,6 +317,24 @@ ecto.*` reads the repository list before `runtime.exs` has run.)
     the server answer `/health` 200 and then exit about two seconds later.
     `test/desktop/parent_watch_test.exs` covers the same decision.
 
+### What a bundle does not carry
+
+`priv` is assembled whole, and a checkout's `priv` also holds what that
+checkout's own runs wrote: the pretrained memories under `priv/monty/libraries`
+and the recordings — a log, the step statistics, the frames each sensor drew —
+under `priv/studio_runs`. Neither is a property of the build. A release is told
+where its data goes (`Monty.Paths.artifacts/0`), and on the desktop that is the
+user's application-support folder, so `scripts/start-desktop.sh` deletes both
+from the assembled release. A window that shipped them would carry somebody's
+experiments, and at the size recordings reach, carry little else.
+
+The copy still happens before the deletion: `priv/studio_runs` is one directory
+per run and thousands of small files per run, which takes an assembler far
+longer than the rest of the release. Removing the copy means moving the default
+root out of `priv/`, and that waits on the container, whose volumes are
+documented at `/app/priv/studio_runs` ([`container.md`](container.md)) — one
+place that has to change with it.
+
 ### In the pipeline, in this order
 
 The `desktop` job runs these, and the order is half the point:
