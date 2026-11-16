@@ -63,18 +63,15 @@ should move with every commit; when a mapped class is implemented,
    comparisons, weighted per feature) and the two `FeaturesForMatching`
    selectors (**ported**).
 
-   **`BurstSamplingHypothesesUpdater` (ported, 22 of Monty's 24 cases
-   translated)** — the count per burst, the trigger and its duration, the
-   tracker per graph id, the maximum slope the decision reads, the poses a burst
-   proposes. What is open, and what the last four cases wait on:
+   **`BurstSamplingHypothesesUpdater` (ported)** — the count per burst, the
+   trigger and its duration, the tracker per graph id, the maximum slope the
+   decision reads, the poses a burst proposes, and what a new hypothesis starts
+   with: the node's feature match, or nothing when the selector says that
+   channel is not matched on features. Monty's cases for the sampling are
+   translated through `update_evidence/5`, the public entry a burst has, and
+   they are checked against the real selector rather than a mock. What is still
+   open:
 
-   - **`features_for_matching_selector` is not wired into the sampler.** Monty's
-     `DefaultFeaturesForMatchingSelector` turns feature evidence off for a
-     channel with no feature weights, and whenever `feature_evidence_increment
-<= 0`; this port always starts a newly sampled hypothesis with the node's
-     own feature evidence. Port the selector into the updater and translate
-     `test_sample_new_hypotheses_with_feature_matching` /
-     `..._without_feature_matching`.
    - **The threshold refusal** —
      `test_init_fails_when_passed_invalid_evidence_threshold_config` — is
      translated, but not where Monty asserts it: Monty validates in the
@@ -84,7 +81,7 @@ should move with every commit; when a mapped class is implemented,
      the one measured difference left on `test/evidence_lm/evidence_mujoco`: our
      best hypothesis climbs monotonically where Monty's highest leaves the graph
      every other step. Translate the rest of this file's neighbours
-     (`evidence_lm_test.py`, 16 cases) before hunting that difference by hand.
+     (`evidence_lm_test.py`) before hunting that difference by hand.
 
 4. **`graph_memory/`** — `GraphMemory`, `ObjectModel`, `features`/`locations`
    bookkeeping. Fixtures: a small graph saved by Monty, loaded identically.

@@ -45,9 +45,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     {stalled, options} = Keyword.pop(options, :stalled_tracker, false)
     {tracker, options} = Keyword.pop(options, :tracker)
 
+    {scorer_weights, options} =
+      Keyword.pop(options, :scorer_feature_weights, %{"patch" => %{"rgba" => 1.0}})
+
     scorer =
       DefaultFeatureEvidenceScorer.new(graph_memory,
-        feature_weights: %{"patch" => %{"rgba" => 1.0}},
+        feature_weights: scorer_weights,
         tolerances: %{"patch" => %{"rgba" => 0.1}}
       )
 
@@ -159,6 +162,30 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       poses: [@identity, @identity],
       possible: [true, true]
     )
+  end
+
+  # Two fixed poses per node, which is what makes a burst propose whole sets and
+  # what lets it sample without reading the graph's rotations.
+  defp two_poses, do: [inverse_rotation([0, 0, 0]), inverse_rotation([0, 0, 30])]
+
+  # One step of a burst, against `memory/0`, with the observation `features/0`
+  # reads: 0.2 of `rgba` at every node that stored any.
+  defp sample(options) do
+    updater =
+      memory()
+      |> updater_for(Keyword.put(options, :initial_possible_poses, two_poses()))
+      |> Map.put(:sampling_burst_steps, 5)
+
+    {updater, sampled, _telemetry} =
+      BurstSamplingHypothesesUpdater.update_evidence(
+        updater,
+        Hypotheses.empty(),
+        features(),
+        "mug",
+        0.0
+      )
+
+    {updater, sampled}
   end
 
   describe "starting and ending a burst" do
@@ -373,6 +400,47 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
         assert rem(proposed, poses_per_node) == 0
         assert proposed <= nodes * poses_per_node
       end
+    end
+  end
+
+  describe "what a new hypothesis starts with" do
+    # Monty's `test_sample_new_hypotheses_without_feature_matching` and
+    # `..._with_feature_matching`, driven through `update_evidence/5` rather
+    # than the private `_sample_new_hypotheses`: a burst is what asks for new
+    # hypotheses, so a step of one is the entry point a caller has.
+    #
+    # Monty mocks the selector; here the real one is asked, twice — a channel
+    # with no feature weights, and a channel weighted on `rgba` against a graph
+    # whose nodes hold 0.0, 0.1, 0.2 and 0.3 of it while the observation reads
+    # 0.2.
+    test "a channel matched on no features gives a new hypothesis no evidence" do
+      {_updater, sampled} = sample(scorer_feature_weights: %{}, sampling_multiplier: 1.0)
+
+      # Sampling still happens; it is the evidence that is nothing.
+      assert Hypotheses.count(sampled) == 4
+      assert Enum.uniq(Hypotheses.evidence(sampled)) == [0.0]
+    end
+
+    test "a channel matched on features draws from the nodes that match best" do
+      {_updater, sampled} = sample(sampling_multiplier: 1.0)
+
+      assert Hypotheses.count(sampled) == 4
+
+      drawn =
+        sampled
+        |> Hypotheses.locations()
+        |> Enum.map(fn [x | _] -> Float.round(x, 6) end)
+        |> Enum.uniq()
+        |> Enum.sort()
+
+      # Two nodes of the four, and the node the observation does not match at
+      # all is not one of them.
+      refute 0.0 in drawn
+      assert length(drawn) == 2
+      assert Enum.all?(drawn, &(&1 >= 0.1))
+
+      # What each new hypothesis starts with is the node's match, not nothing.
+      assert Enum.any?(Hypotheses.evidence(sampled), &(&1 > 0.0))
     end
   end
 
