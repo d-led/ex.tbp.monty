@@ -355,8 +355,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
   # -- the standard, momentum step ------------------------------------------
 
   defp standard_tang_step(policy, ctx, state) do
-    {draw, rng} = ActionSamplers.uniform(stream(policy, ctx), 0.0, 1.0)
-    policy = %{policy | rng: rng}
+    {draw, policy} = uniform(policy, ctx, 0.0, 1.0)
 
     policy =
       if policy.tangential_angle == nil do
@@ -557,12 +556,11 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
 
   defp random_heading(policy, ctx, search) do
     limits = min(max(0.1 + search.attempts / @max_search_steps, 0.0), 1.0)
-    {draw, rng} = ActionSamplers.uniform(stream(policy, ctx), -limits, limits)
+    {draw, policy} = uniform(policy, ctx, -limits, limits)
     rotation = rotate_about_z(draw * @pi)
 
     policy =
       update_tangential_reps(policy, {:vec, Rotation.apply(rotation, search.original)})
-      |> Map.put(:rng, rng)
       |> Map.put(:setting_new_heading, true)
 
     {policy, %{search | first_attempt: false}}
@@ -610,6 +608,24 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
   end
 
   defp stream(policy, ctx), do: ActionSampler.stream(policy.action_sampler, policy.rng, ctx)
+
+  # Monty's policy draws from the episode's one stream: `ctx.rng.uniform(...)`,
+  # the same stream the sensor's noise draws from, in the same order. When a run
+  # is stepping this policy the context carries that stream as a server, and the
+  # draw has to come from it — a stream of the policy's own answers different
+  # numbers, which diverges at the first draw a heading depends on (the conflict
+  # search; `scripts/probe_action_stream.exs`). A policy driven on its own, as the
+  # policy tests drive it, has no such stream and keeps its own.
+  defp uniform(policy, ctx, low, high) do
+    case ctx.rng do
+      nil ->
+        {draw, rng} = ActionSamplers.uniform(stream(policy, ctx), low, high)
+        {draw, %{policy | rng: rng}}
+
+      episode_stream ->
+        {Monty.Random.Stream.uniform(episode_stream, low, high), policy}
+    end
+  end
 
   # -- what it remembers ----------------------------------------------------
 
