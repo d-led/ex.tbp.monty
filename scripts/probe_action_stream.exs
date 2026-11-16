@@ -10,14 +10,13 @@
 # step of his episode, while the world is moved by *his* actions, so both answers
 # answer the same question. The step they part at is the step to read.
 #
-# What it reports first is that the opening is already Monty's: the patch's flat
-# five-centimetre view of the table is his too (his episode's first percepts are
-# empty and the object enters his patch at step 3), the world at reset is his to the
-# last bit, and the opening action is his to the last digit — 0.036434553 against
-# his recorded 0.036434555. That holds across repeated runs, repeated worlds in one
-# process, a machine with every core busy, and a second MuJoCo world rendering
-# beside it. So read the three numbers it prints as the prologue's own account of
-# itself, and the lines below them as the walk that follows.
+# What it reports: his actions for the first twenty-seven steps of the episode,
+# action for action and digit for digit, and the first difference at step 28 — a
+# `move_tangentially` whose distance is his and whose direction is not, after which
+# every `move_forward` distance is off by a millimetre or less. The prologue is not
+# what to look at: the patch's flat five-centimetre view of the table is his too
+# (his episode's first percepts are empty and the object enters his patch at step
+# 3), and the world at reset is his to the last bit.
 
 defmodule ActionStream do
   @moduledoc false
@@ -140,13 +139,21 @@ defmodule ActionStream do
     # The replay stops at an episode boundary: the experiment repositions the
     # agent between episodes with an action the policy never takes, so a step
     # past it would ask the policy a question about a body that was moved for it.
+    #
+    # Prepended here and reversed once below, at whichever of the two exits the
+    # reduce takes. Reversing inside the halting branch alone left the other exit
+    # handing the replay its steps backwards — which asked step 3's question first
+    # and answered it with step 1's label, and is why the opening action read as
+    # 0.8 mm off Monty's on a probe told to replay more than one step.
     {steps, boundary?} =
       recorded
       |> Enum.reduce_while({[], false}, fn recorded_step, {steps, _boundary} ->
         if positioned?(recorded_step),
-          do: {:halt, {Enum.reverse(steps), true}},
+          do: {:halt, {steps, true}},
           else: {:cont, {[recorded_step | steps], false}}
       end)
+
+    steps = Enum.reverse(steps)
 
     rows =
       steps

@@ -103,42 +103,30 @@ handle that would own it. Habitat-Sim is not carried — a conda package for
 another Python, and on its way out of Monty — so a Habitat config is refused as a
 world this build does not have rather than silently given MuJoCo's scene.
 
-**What is left is the middle of an episode.** The random stream is Monty's
-(`Monty.Random.Numpy` is NumPy's generator, `Monty.Random.Stream` the one stream
-an episode draws from), so an episode's first action is Monty's to the last
-digit, and the percept, given his actions, is his to the last bit. After that the
-two action logs part: an episode ends on Monty's step in some of the comparison's
-episodes and walks a different path in the rest. That is a diff of two logs, not a
-design, and `scripts/probe_action_stream.exs` is the instrument that prints it.
-
-Its first reading is that the opening is **already Monty's**. The patch's view on
-the step his episode opens with is a flat five centimetres of table for both of us
-— his own first percepts are empty too, and the object enters his patch at step 3 —
-our world at reset is his to the last bit
+**What is left is the middle of an episode, and it now has a step number.** The
+random stream is Monty's (`Monty.Random.Numpy` is NumPy's generator,
+`Monty.Random.Stream` the one stream an episode draws from), so an episode's first
+action is Monty's to the last digit, and the percept, given his actions, is his to
+the last bit
 ([`probe_percept_parity.exs`](../scripts/probe_percept_parity.exs) reproduces his
-first percept, `min_depth` and all), and the opening action is his to the last
-digit: `move_forward 0.036434553` against his recorded `0.036434555`, which is
-Monty's own `depth − desired − sensor z` on our own readings,
-`0.0914345532655716 − 0.025 − 0.03`.
+first percept, `min_depth` and all).
 
-That is reproducible under every condition this was tried in: three runs back to
-back, three worlds built in one process, eight CPU hogs, and a second MuJoCo world
-rendering in another process at the same time — the centre pixel and the action
-come out identical each time. But **not** under every length: asked to replay one
-step the probe answers his number, and asked to replay three it answers
-`0.035568021`, with a centre depth 0.87 mm off the one it printed for the same
-state. Nothing in the probe reads the replay length before its first step, so
-either the replay itself or something that outlives a step changes an earlier
-answer.
+`scripts/probe_action_stream.exs` asks the port's own motor system and surface
+policy what they would do at every step of his episode while the world is moved by
+_his_ actions, so both answers answer the same question. Read with the replay in
+the order it was recorded — the probe was appending its steps and reversing them
+at only one of its two exits, so it had been replaying an episode **backwards**
+whenever the recording ran out before a boundary — the log is his for the first
+twenty-seven steps: action for action, and the numbers to the last digit.
 
-So the opening line of that report is evidence and the rest of it is not, until
-the replay is understood. What can be read already is the shape of the divergence
-once the opening agrees: his second action is `orient_horizontal` with a rotation
-of a thousandth of a degree — the systematic search his `_touch_object` runs when
-the view finder's centre is more than a metre from anything — and ours is the same
-`move_forward` again, which is what that procedure answers when the centre is
-within a metre. Our percepts carry `object_coverage 0` and no `min_depth` at every
-step after the first, while his patch sees the object from his step 3.
+The first difference is step 28, a `move_tangentially` whose distance is his
+(0.004) and whose direction is not. Everything after it is a `move_forward` whose
+distance is off by between 1.5e-5 and 1.5e-3, which is what one different
+tangential step does to the body that reads the depth next. So the next thing to
+read is `tangential_direction` where the curvature heading is defined — the
+momentum term, the principal-curvature heading, and the `tangential_angle` the
+stream hands the sampler, since the sampled directions of the first twenty-seven
+steps agree exactly.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
