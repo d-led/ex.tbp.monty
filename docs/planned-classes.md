@@ -37,11 +37,11 @@ Four groups:
 
 ## The few a config does name
 
-| class                        | named by                    | what happens                                                       |
-| ---------------------------- | --------------------------- | ------------------------------------------------------------------ |
-| MuJoCo agents, `SensorConfig` | every MuJoCo environment    | Runs — as Monty's Python in `priv/monty_py/world.py`. On purpose.   |
-| two wandb handlers           | two logging groups          | Skipped by name. A note in the run log, not a refusal.              |
-| `…telemetry.Snapshot`        | the `camera_*` / `3sm_*` groups | Not built. That sensor falls back to the stand-in. Telemetry only. |
+| class                         | named by                        | what happens                                                       |
+| ----------------------------- | ------------------------------- | ------------------------------------------------------------------ |
+| MuJoCo agents, `SensorConfig` | every MuJoCo environment        | Runs — as Monty's Python in `priv/monty_py/world.py`. On purpose.  |
+| two wandb handlers            | two logging groups              | Skipped by name. A note in the run log, not a refusal.             |
+| `…telemetry.Snapshot`         | the `camera_*` / `3sm_*` groups | Not built. That sensor falls back to the stand-in. Telemetry only. |
 
 ## Excluded classes
 

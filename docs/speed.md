@@ -1,611 +1,140 @@
 # Speed
 
-What a step costs, what has been measured, and what is left. Everything here is
-a measurement from this machine, quoted with the experiment it came from — not a
-target. Where a change is named as done, the change itself is in `git log`:
-search the function or phrase that sits beside it.
+Where a step's time goes, what was fixed, and what is still open.
 
-The reference is Monty's own dashboard: `base_config_10distinctobj_dist_agent`,
-10 objects, 14 epochs, **~39 ms a step** (5 122 eval steps in 3:18). One run of
-this port reached 140/140 episodes at 0.61 s a step, so the _episode_ is right
-and the _step_ is what is open.
+**No figures on this page, on purpose.** A wall clock on a busy machine moves by
+several times over one afternoon, and a number written down here would be quoted
+long after the machine that produced it is gone. The commands below print the
+numbers; run them on the box you care about.
+
+## The honest position
+
+Run-times are **mostly comparable to Monty's, and sometimes slower on our side**.
+Measured against Monty's own runner with the same config and seed on the same
+machine, the two agree closely on some configurations and we trail on others.
+
+Three things make us the slower of the two when we are:
+
+- **The world crossing.** Monty's MuJoCo is a function call in its own process.
+  Ours is a port: one crossing a step, carrying the sensor images as bytes, with
+  the encode and the decode on either side of it.
+- **The studio around the step.** A step is recorded, streamed, and drawn on a
+  page. Monty's runner does none of that, and an open page costs us through
+  contention rather than through drawing.
+- **The runner, not the port.** `mix monty.run` builds a world and a model per
+  episode; the studio's job reuses both. Two runs of the same config through
+  different runners are therefore not comparable at all.
+
+What we are not paying for: the algorithm. Steps are Monty's, one for one — the
+adaptations are listed in [`monty-differences.md`](monty-differences.md), and each
+one pays a reduction in work or is a decision about a boundary, never extra
+stepping. On the hot arithmetic we are ahead: the evidence maths and the graph's
+index are native kernels, the hypothesis columns are held as bytes, and the slope
+tracker is a ring rather than a sliding list.
+
+**Quote steps across runners, never a wall clock.** Steps are the port's own
+measure; a wall clock is the machine's.
 
 ## How to measure, and what lies
 
-| what                             | how                                                                                                                                                                         |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| work and garbage per step        | `MIX_ENV=test mix run scripts/probe_step_cost.exs [experiment] [steps]`                                                                                                     |
-| where in a step it is            | `MIX_ENV=test mix run scripts/probe_step_phases.exs [experiment] [steps]` — the world against the model, and reductions per process, a processed step and a plain one apart |
-| who did the work                 | the same script — it prints reductions per process, labelled by callback module                                                                                             |
-| allocation per function          | `MIX_ENV=test mix run scripts/probe_step_profile.exs` (tprof over one `Model.step`)                                                                                         |
-| the whole run, as a user sees it | `mix monty.run <experiment> --episodes 1 --steps 8 --no-record` — the acceptance ladder                                                                                     |
+| what                             | how                                                                                                                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| work and garbage per step        | `MIX_ENV=test mix run scripts/probe_step_cost.exs [experiment] [steps]`                                                                         |
+| where in a step it is            | `MIX_ENV=test mix run scripts/probe_step_phases.exs [experiment] [steps]` — the world against the model, a processed step and a plain one apart |
+| who did the work                 | the same script — reductions per process, labelled by callback module                                                                           |
+| allocation per function          | `MIX_ENV=test mix run scripts/probe_step_profile.exs` (tprof over one `Model.step`)                                                             |
+| the split inside one run's log   | `mix run scripts/probe_run_log.exs priv/studio_runs/<id>` — a step's own `duration_us` against the wall between lines                           |
+| the whole run, as a user sees it | `mix monty.run <experiment> --episodes 1 --steps 8 --no-record` — the acceptance ladder                                                         |
+| Monty's own share of its step    | `cProfile` inside Monty's venv, one epoch                                                                                                       |
 
-- **Wall clock is not usable here.** The same step measured 0.6 s, 1.6 s and
-  3.2 s in one afternoon depending on what else the machine was doing; a
-  12.7 GB-of-13.3 GB swap reading made a 3.2 MB copy take a second. Reductions
+- **Wall clock is not usable here.** The same step has measured several times
+  longer in one afternoon than in another, following whatever else the machine
+  was doing; a machine in swap makes a small copy take a second. Reductions
   (`:erlang.statistics(:reductions)`) and reclaimed words
   (`:erlang.statistics(:garbage_collection)`, MB = words / 125 000) do not move
   with load. Check `sysctl vm.swapusage` before believing any timing.
-- **One run cannot resolve a few percent.** The same probe reads 10.0–10.9 M
-  reductions and 78–90 MB between runs. Quote pairs measured in one run, or do
-  not quote at all.
-- **The two probes drive different steps.** `probe_step_profile.exs` calls
-  `Model.step` with a recording sensor — no MuJoCo, no studio. `probe_step_cost.exs`
-  calls `Studio.Run.step`. Their totals are not comparable.
+- **One run cannot resolve a few percent.** The same probe reads a range of
+  reductions and of megabytes between runs. Quote a pair measured in one run,
+  interleaved against the tree before it, or quote nothing.
+- **The probes drive different steps.** `probe_step_profile.exs` calls
+  `Model.step` with a recording sensor — no MuJoCo, no studio.
+  `probe_step_cost.exs` calls `Studio.Run.step`. Their totals are not comparable.
+- **Tell a slow machine from a slow port** with `probe_run_log.exs`: the step's
+  own `duration_us` against the wall between lines. When both rise together it is
+  CPU starvation, not code.
 - `:tprof` needs `rootset: :all` and OTP 29's `:profile/2` takes a _map_:
   `:tprof.profile(fun, %{type: :call_memory, rootset: :all, report: {:total, {:measurement, :descending}}})`.
   There is no `analyse/2`; without `rootset: :all` the table is one
   `gen:do_call/4` row. `:eprof` prints an empty table for a step whose work
   happens in other processes, and `:fprof` writes hundreds of megabytes.
-
-## Where the benchmark's time goes, measured 2026-11-12
-
-`base_config_10distinctobj_dist_agent`, dev, MuJoCo, 140 episodes of about 36
-steps each. The experiment's own clock, read from the record it writes, and from
-`Monty.Studio.Run.start`/`Run.step` called directly.
-
-**The first thing to know: watching a run nearly triples it.**
-
-| how it was run                         | per episode | a 140-episode run |
-| -------------------------------------- | ----------: | ----------------: |
-| the studio's own runner, no page open  |  **1.67 s** |            ~4 min |
-| the studio's own runner, one page open |  **4.60 s** |           ~11 min |
-| `mix monty.run` (no record, no page)   |       2.7 s |            ~6 min |
-| Monty's own dashboard, same config     |       1.4 s |          **3:18** |
-
-So the per-step work of this port is at parity with Monty's (33 ms a step against
-its 39 ms), and the first reading of the table above put the rest on the page: it
-looked as if a watched run spent about 2.9 s of machine time an episode on drawing
-itself, with the chart rebuilt from the run's whole history at up to 3 Hz and a
-picture encoded and written per sensor per step. **That reading is wrong**, and
-the correction below is why.
-
-**Corrected 2026-11-12, later the same day: the page is not the problem.** The
-rows above are wall-clock, and this box is loaded (load ~6 on 8 cores, most of
-the swap in use), so they do not separate the page from contention. Measured in
-reductions instead: one render of a 120-step, ten-object replay page — a playhead
-move, which is what a page following a live run does — is **4 010 reductions**,
-and a render that rebuilds the chart is 13 695. A step is 425 000. The page also
-does not read the transcript per step: `RunHistory.progress/1` selects one row of
-scalars (`@progress_fields`), and the steps themselves come from the stream. At
-the six or seven renders a second a watched run causes, the page is **under 1 %
-of a step**. What a page _does_ pay for is the first read of a run: `head/1` of a
-5 110-step run is **210 ms** and `get/1` (which also carries the pictures'
-timeline) is **325 ms**, because the row is an 8.4 MB log — once per visit, not
-once per step.
-
-**The whole benchmark, run end to end today** (the studio's own runner, no page
-open, `base_config_10distinctobj_dist_agent`, 10 train + 10 eval objects × 14
-eval epochs = **140 episodes, 5 110 steps**, all concluded):
-
-| what                                      |          time | share |
-| ----------------------------------------- | ------------: | ----: |
-| the run, wall                             | **242–247 s** |  100% |
-| the model steps, as they timed themselves |       114.8 s |   47% |
-| the world, as it timed itself             |        58.7 s |   24% |
-| everything else                           |         ~70 s |   29% |
-
-242 s is **4:04**, against Monty's dashboard's **3:18** for the same shape of run
-— 1.2×, not the 3× that a 30-minute report suggests. "Everything else" is
-**425k reductions a step** in total against about 340k for the step itself: the
-recording (a step's entry, its line, its moment, two PNGs, the frame files, the
-ETS row, the broadcast), the world's crossing (the message in and out of the
-Python process, which `info.world_us` does not count), and the scheduler. The
-pictures are **1.4 ms and 1.0 ms** a step to encode warm, so ~12 s of the run is
-drawing the scene the page shows.
-
-**The same benchmark in four parts, later the same day** (no page open): **198.8 s**, 5 110 steps, 140 episodes, `finished`, and a statistics file
-with **140 rows, `match` × 140** — versus Monty's dashboard's 3:18 for the same
-run. Four parts is what `Monty.Studio.Partition` divides a run into, and the
-parts are what makes up the difference: the same work in one part was 186 s
-without contention and 242–247 s with the box as loaded as it was earlier, so the
-two readings are not a speedup to quote — they are the same run under two
-schedules. What is quoted is the comparison with Monty, which is now at parity.
-
-The parallel path only became usable after a renderer fix: MuJoCo's `Renderer` makes its
-GL context current in `__init__` and never again, and `Renderer.close()` frees GL
-objects of whichever context is _current_, so a part finishing deleted another
-part's framebuffer and the survivor's segmentation pass read the colour image
-(`IndexError: index 399387 is out of bounds for axis 0 with size 2`).
-
-**A step inside `Run.step` is model and world and nothing else**: 21 steps of an
-episode, wall 1 789 ms, of which the model 1 512 ms and the world 244 ms — 1.5 ms
-a step unaccounted. So the studio's per-step work is outside the step, where it
-was deliberately moved, and it is now the largest single item in a run.
-
-**One episode, split by the process that did the work** (per-episode reductions,
-studio runner, 59 steps):
-
-| who                                    | reductions | share |
-| -------------------------------------- | ---------: | ----: |
-| the two sensor modules                 |     21.0 M |   36% |
-| `Monty.Simulators.Mujoco.Host` (world) |     18.2 M |   32% |
-| the learning module                    |     16.8 M |   29% |
-| `Monty.Random.Stream`                  |      0.8 M |    1% |
-
-and on top of that **`Run.start` is 12–16 M reductions — about six steps — per
-episode**. It is not the model: it is the 17 world steps the positioning
-procedures take (`GetGoodView` for the view finder, then for the patch), each of
-which runs the full `DepthTo3DLocations` transform for _both_ sensors.
-
-**A world step is 590–600 k reductions and 10–13 ms**, measured by ablation on a
-live interface (the same step with `DepthTo3DLocations` removed is 350 k / 8 ms).
-So the transform is **240 k of every world half** — 40% of it — and it runs twice
-per step and 34 times per episode for positioning alone.
-
-**Per step, in calls** (`:cprof`, eight steps, whole VM): `Enum` **493 k calls a
-step**, `EvidenceSlopeTracker`+`HypothesesSelection` 197 k, `DepthTo3DLocations`
-94 k (one a pixel), `MatcherNif` 84 k, `Answer` 66 k (the world's decode),
-`Hypotheses` 60 k, `Numpy` 58 k, `SensorProcessing` 37 k,
-`ObservationProcessor` 8.2 k, `OnObjectObservation` 12 k.
-
-**What that means for the next session, in order of size** (revised twice: the
-page was measured and is 1 % of a step, and the run was measured against Monty on
-this machine):
-
-**Where one model step's time goes, profiled** (`probe_step_profile.exs`,
-`:tprof`, one unprofiled step to warm, then one profiled — the probe's own
-supervisor name was stale and is fixed):
-
-| share | calls | function                                                   |
-| ----: | ----: | ---------------------------------------------------------- |
-| 15.9% |  74 k | `MatcherNif.decode_one/1` — the NIF marshalling its input  |
-|  7.7% | 107 k | `Enum.map/2`'s closure                                     |
-|  7.4% |    10 | `KdTreeNif.nearest_many/3`                                 |
-|  6.4% | 137 k | `Enum.reduce/3`'s closure                                  |
-|  5.7% |  77 k | `MatcherNif`'s `decode/1` comprehension                    |
-|  1.6% | 6 432 | `SpatialArithmetics.align_orthonormal_vectors_as_matrix/2` |
-
-So **the matcher's marshalling is the largest single item — 21 % with its
-comprehension** — and it is a boundary, not an algorithm: the Elixir side hands
-the NIF a term per float and Rust decodes 74 000 of them a step. The same table's
-allocation column says the same thing from the other side: `decode_one` is 17.8 %
-of the words a step allocates, and `align_orthonormal_vectors_as_matrix` 23 % —
-which is nine floats' worth of list scaffolding per call, and already written out
-by hand rather than through a generic product.
-
-The Elixir side of that boundary is already the best of the shapes that work
-(`probe_decode.exs`, one 6 432-value column with a NaN in every 97th, re-measured
-today):
-
-| shape                                   | us/column | words/value |
-| --------------------------------------- | --------: | ----------: |
-| one u64 per element, bignum and all     |     757.6 |        11.8 |
-| two u32 halves read out of the u64      |     935.2 |         9.7 |
-| an eight-byte window (**what it does**) |     764.1 |     **7.7** |
-| the float comprehension alone           |     576.5 |         0.0 |
-
-The last row is the one that looks best and cannot be used: matching
-`float-64-little` **stops at the first NaN**, and 6 365 of 6 432 values came back.
-A NaN is exactly what a hypothesis with no value is, so the window and the two
-halves are what a decoder in Elixir costs. The 20 % left is on the Rust side:
-answer the columns as floats (Rust already knows which are NaN), or keep the whole
-comparison inside one call and never bring the column across.
-
-1. **The model step, 22.3 ms of our 47 ms a step** (114 s of the run) — and Monty
-   does the same experiment's _whole_ step, world and transforms included, in
-   29.7 ms. Nothing else we could fix is worth as much; the question to answer
-   next is what Monty's model spends that ours does not, and the profile above is
-   the first half of the answer: ours spends a fifth of it re-decoding its own
-   numbers at the NIF boundary.
-2. **The 140 episode boundaries, 43.4 s (18 %)**: 307 ms each, of which ~200 ms
-   is the positioning's own world steps — 10–17 of them, and each is a crossing
-   into Python at 7–8 ms where Monty's MuJoCo is a function call. The scene
-
-   rebuild is 25–43 ms warm (~6 s over the run), so caching it is not the prize;
-   the crossing is. It also pays on every model step, which is why it is 20 % of
-   the run rather than 18 %.
-
-3. **`Run.start` / positioning** — done, one sensor's cloud instead
-   of two.
-4. **The world's crossing and the transform beside it**: `Host.step` 7–8 ms a
-   step and `DepthTo3DLocations` 240 k reductions of the ~590 k an
-   `Interface.step` costs. One kernel over the cloud, answering flat bytes,
-   would pay for both — but it is items 1 and 2 multiplied, not added.
-5. **The sensor modules' `Enum` plumbing**: `ObservationProcessor` and
-   `OnObjectObservation` walk the 4096-row cloud several times each.
-
-Landed the same session, the page's own drawing: a stretch of the chart is drawn
-at the plot's resolution — four samples to a unit of its 320 — instead of one a
-step. Paired, same script, a 5 000-step line goes **5 000 drawn points and 63 kB
-of polyline to 1 281 and 16 kB**, so every drawing a live page sends is 74 %
-smaller and the browser repaints a quarter of the path; the hover still holds all
-5 000 samples, so what a pointer reads is unchanged.
-
-Landed this session (measured paired on the same observation, same script):
-`ObservationProcessor.process/2` **2.22 ms → 1.36 ms, 217 k → 156 k
-reductions** by answering coverage, the middle pixel and the on-surface depths in
-one walk instead of five, and by not walking the depth image at all when no depth
-feature is wanted. The benchmark's step did not move (its 809 k a step is
-dominated by the paths above), so this is a win for the surface agent and the
-stand-in scene rather than for the distant agent — said plainly rather than
-counted as a step win.
-
-The list's first two, done in the same session:
-
-- **Positioning steps the world with one sensor's cloud** (item 2). The
-  interface's transform computes every sensor's point cloud and a positioning
-  procedure reads only its own; `Positioning.position/7` narrows the transform
-  list to the procedure's sensor for the steps it takes, and hands the full list
-  back on the interface it returns — narrowing past the prologue would leave the
-  model half blind on its first step. Paired, same script, same three episodes:
-  `Run.start` **14 432 k → 12 316 k reductions** on the third (12 906 k →
-  11 366 k on the second, 57 041 k → 54 412 k on the cold first) — about 3 % of
-  an episode. The procedures take exactly the same 11, 14 and 17 world steps:
-  the observation a procedure reads is unchanged, and only the cloud nothing
-  reads is gone, which is what the step counts are there to prove.
-- **The run page builds its hover samples once a chart, not once a render**
-  (item 1). A live page redraws eight times a second while a run is live, and
-  the chart changes only when a step arrives, so `data-samples` — every drawn
-  point, thinned to what a pointer can tell apart — was built again and again in
-  between: measured at **1.6 ms and 56 kB** for a 150-step chart over ten
-  objects and **11.4 ms and 488 kB** at 5 000 steps (best of four, this box). It
-  is now made with the chart and kept with it, re-made only when the chart
-  changes, and a page test drives the series picker and reads the units back to
-  prove a chart that has changed answers with its own.
-
-What is left of the list is the transform's per-pixel Elixir (item 3) and the
-sensor modules' `Enum` plumbing (item 4) — the same patch built twice into
-4096 four-float rows and then walked several times, which wants one kernel over
-the whole cloud rather than a faster walk of it.
-
-## Against Monty on this machine, same config, same seed (2026-11-12)
-
-Monty's own `run.py experiment=base_config_10distinctobj_dist_agent` in the
-user's checkout, `.venv`, `WANDB_MODE=disabled MPLBACKEND=Agg`, timed with
-`/usr/bin/time`; ours through the studio's runner, no page and then with a page
-following the run.
-
-|                          | steps |          wall |  a step |
-| ------------------------ | ----: | ------------: | ------: |
-| Monty, its own runner    | 5 123 |   **152.4 s** | 29.7 ms |
-| ours, no page            | 5 110 | **240–247 s** | 47.0 ms |
-| ours, one page following | 5 110 |     **284 s** | 55.6 ms |
-
-The step counts agree, so the comparison is fair: **1.58× a run**, not the 3× a
-30-minute report suggested (that was this port before the last few sessions). The
-gap is not the model — see the split below.
-
-**Our 47 ms a step**: the model 22.3 ms (114 s, 47 %), the world behind the port
-11.5 ms (59 s, 24 %), the record ~4 ms (~20 s), and **140 episode boundaries at
-307 ms each (43 s, 18 %)**. `Run.step` accounts for model + world to within 1.5 ms
-(21 steps: 1 789 ms = 1 512 + 244 + 1.5), so the record and the boundary are
-outside it.
-
-- **The boundary is positioning, not the scene.** `Interface.pre_episode/1` is
-  260–282 ms of the 307, but rebuilding the _same_ MuJoCo scene is only 25–43 ms
-  (a first-ever object load is 1.4 s; ten of those are ~1.5 s of a run). The rest
-  is 10–17 `GetGoodView` world steps at 7–8 ms a crossing, where Monty's MuJoCo is
-  a function call in its own process.
-- **A crossing carries 129 kB** (two depth, two RGBA, two semantic images, a JSON
-  header then the arrays' bytes) and **the Python half is all of its cost**:
-  `Pythonx.eval("answer = world.step(actions)")` alone — MuJoCo, numpy and the
-  encode — is **7.65 ms best of four**, against 7–8 ms for the whole `Host.step`
-  with the Elixir decode on top. So there is nothing to win on our side of the
-  crossing; only MuJoCo doing less would move it, and Monty pays that too.
-- **Watching costs ~18 %** and it is contention, not drawing: a render is 4 010
-  reductions (a step is 425 000) and the page reads one row of scalars per step.
-  The model steps themselves go 113.9 → 129.6 s when a page is open.
-- **Memory**: a run peaks at ~750 MB RSS (Python, MuJoCo and numpy inside the
-  BEAM) and falls back to ~400 MB between episodes — no leak, but on a box that is
-  already swapping (8.8 of 10 GB) the OS's high-watermark alarm fires during a
-  run.
-
-**Tell a slow machine from a slow port**: compare `duration_us` in the run's log
-(the step's own time) with the wall between lines. Here the same code reported
-25.4 ms and 31.1 ms a step on two runs twenty minutes apart, with the wall rising
-in the same proportion — CPU starvation, not code.
-
-`scripts/probe_run_log.exs priv/studio_runs/<id>` prints that split for any run.
-
-**Where Monty's own time goes** (`cProfile`, one epoch — 10 episodes — 25.7 s of
-profiled Python): its MuJoCo work is _cheap_ — `mjr_readPixels` 2.0 s over 2 024
-renders (**0.99 ms a render**) and `mj_r_render` 0.47 s — against
-`graph_matching.get_features_at_node` **6.9 s cumulative**. 2 024 renders over
-~366 steps is **5.5 a step** and ours is **six** (colour, depth and segmentation
-per sensor, two sensors), so the two simulators do the same work; our whole
-Python step is **5.6–7.7 ms** depending on the box's load. That leaves a few ms
-a world step at most — 20–35 s a run over 7 500 world steps, and inside MuJoCo
-and numpy rather than in Elixir. **It needs its own probe before anyone claims
-it**: the candidates are the thread hop per call, `np.full`+`np.dstack` adding an
-alpha channel every step, `states` built whether read or not, and `_answer`'s
-walk plus `json.dumps` header and `tobytes` copies.
-
-Monty on a quiet machine: **170 s** for the same run — 33.2 ms a step against our
-47.0, so the run is **1.44×**. The largest single item that is ours alone is not
-the world: it is `Model.state/1`, **55.5 MB and 176 ms copied once per episode**
-by `Logging.report/3` to write one row of a CSV — **25 s a run**.
-
-## Is SQLite the desktop's slow-down? Measured 2026-11-12: no, and a bug in the way
-
-The question was whether a run on the desktop — SQLite in a file, 19 minutes for
-the same benchmark — pays for its database where the server instance does not.
-Measured by driving `Monty.Studio.RunHistory` itself, on a row the size a
-140-episode run reaches (5 000 steps: a 0.7 MB transcript, 42 MB of pictures),
-once against the dev Postgres and once against the SQLite file the desktop build
-uses — a 639 MB file, which is what several runs leave behind.
-
-| write                                   |         Postgres |                  SQLite |
-| --------------------------------------- | ---------------: | ----------------------: |
-| a boundary's checkpoint (140 a run)     | 17–49 ms, ~21 ms | **115–496 ms**, ~230 ms |
-| the closing `store/3` (once a run)      |           980 ms |                  705 ms |
-| `alive` — one `updated_at` (every 10 s) |            ~2 ms |                40–53 ms |
-
-**SQLite costs a boundary about ten times what Postgres does, and the pictures
-are why.** Its row is one record across overflow pages, so an update of any
-column rewrites the record whole: an `updated_at` on a 42 MB row costs 40–53 ms
-and the same write on a 0.8 MB row costs 0–4 ms (measured; ~1 ms per MB). The
-same row on Postgres is a `jsonb` value the update does not touch, and a
-boundary there appends with `||`.
-
-**And a bug was paying for the pictures twice.** `checkpoint/2`'s `timeline:
-:skip` means "a boundary leaves the pictures alone" — but it was only honoured on
-the append path. An adapter that rewrites the row was handed the `timeline` it
-already held, so every boundary encoded 42 MB and wrote it back: 230 ms against
-the 45 ms the same write costs without it. Fixed — `timeline: :skip` now reaches
-`rewrite/2` — and the boundary on
-SQLite is now 40–174 ms (a loaded box's spread, typically ~50 ms).
-
-**What that means for a run**: 140 boundaries at 50 ms is **7 s**, the closing
-write 0.5 s, and a heartbeat every ten seconds. Run end to end, one straight after
-the other on this box that same day (load 5–6.7, most of its swap in use, the
-studio's runner through `Monty.Studio.Jobs.Run`, 140 episodes, 5 110 steps):
-
-| database                                   |        wall |   a step |
-| ------------------------------------------ | ----------: | -------: |
-| Postgres (dev)                             | **485.6 s** |  95.0 ms |
-| SQLite, the 639 MB file the desktop leaves | **529.3 s** | 103.6 ms |
-
-**9 % apart, 44 s** — the size the boundary table above predicts and no more.
-(Only the pair is usable: both are about twice the 242 s this doc records for the
-same run on a quiet box, and one run on a loaded machine says nothing on its
-own.)
-
-So the database is a real cost, smaller than the model or the world, and **it does
-not explain the desktop's 19 minutes** — 4–5× our own run. The remaining
-candidates are the ones the machine brings: the world behind `pythonx` there, the
-30 660 PNG files a run writes, and the sidecar's stderr drain.
-
-**The pictures' place was the next win, and it was mostly already done.**
-`Artifacts.put_frame/5` moved a step's PNGs to
-`frames/<step>/<sensor>-<kind>.png` and the row keeps a 40-character URL: a
-moment written today is **701 bytes** against **13 687** for one written before
-that change. Rows from before it still held the bytes — three of them in one
-studio's file held **289 MB** of timeline between them. `mix monty.runs.compact`
-wrote their **115 816 pictures** out and rewrote the timeline to **29 MB**;
-`VACUUM` then took that file from **610 MB to 105 MB**, and the runs still read:
-`get/1` of the 24 329-step one is 1.58 s and `head/1` 517 ms. The pictures are
-65 MB on disk — the bytes moved out of the row rather than away, which is what a
-run of today's code does anyway.
-
-What a desktop needs next is the same split the server instance has: the step's
-own `duration_us` beside the wall between lines (`scripts/probe_run_log.exs`), so
-that "slow machine" and "slow port" are told apart instead of guessed.
-
-## Where a step's work goes (2026-11-03, ten objects, six steps, dev)
-
-9.0 M reductions and 82 MB of garbage a step, split by the process that did it
-(three runs agreed to within 1 %):
-
-| who                                      | reductions/step | share |
-| ---------------------------------------- | --------------: | ----: |
-| `Monty.Runtime.LearningModuleServer`     |           5.2 M |   57% |
-| the two `SensorModuleServer`s            |           1.4 M |   15% |
-| the caller's own process (orchestration) |           1.2 M |   13% |
-| `Monty.Simulators.Mujoco.Host`           |           0.5 M |    5% |
-| `Monty.Random.Stream`                    |           0.1 M |    1% |
-
-Inside a _model_ step, allocation by module: `Enum` **34.2%**, `Monty.Geometry`
-13.1%, `Hypotheses` 9.0%, `:erlang` 9.0%, `:lists` 8.4%, `MatcherNif.decode`
-6.4%, `Stream.Reducers` 5.8%, `EvidenceSlopeTracker` 4.3%, `HypothesesDisplacer`
-3.4%, the learning module itself 1.7%.
-
-Two conclusions follow, and both are arithmetic rather than opinion:
-
-1. **65% of a step is generic plumbing** — `Enum`, `lists`, `erlang` — and about
-   19% is the algorithm. A kernel that makes arithmetic faster has almost
-   nothing left to speed up; the passes themselves are the cost.
-2. **Deleting the learning module entirely would be 2.3×.** The 10–30× therefore
-   cannot come from one more narrow kernel, however well written.
-
-## What a step is made of now, and where the copying is (2026-11-07)
-
-Re-measured on the same config with the same instruments, after the studio
-stopped writing a transcript to Postgres per step: **7.1 M reductions and 188 MB
-of garbage a step**, 339 ms of wall clock on a machine carrying a Python run and
-12 GB of swap (wall clock is quoted only to show it was loaded; the two counts
-are the measurement).
-
-| who                                      | reductions/step | share |
-| ---------------------------------------- | --------------: | ----: |
-| `Monty.Runtime.LearningModuleServer`     |           3.6 M |   51% |
-| the caller's own process (orchestration) |           1.9 M |   26% |
-| the two `SensorModuleServer`s            |           1.3 M |   19% |
-| `Monty.Random.Stream`                    |           0.1 M |    2% |
-| `Monty.Runtime.Step`                     |           0.1 M |    1% |
-
-Allocation, largest first: **`gen_server:loop/5` 71.5%**, `MatcherNif.decode_one`
-3.8%, `Geometry.dot` 2.6% (57 888 calls a step), `EvidenceSlopeTracker.write_slot`
-2.1%, `Enum.map` 2.1%, `Hypotheses.gather` 1.9%, `MatcherNif.decode` 1.9%,
-`Enum.with_index` 1.9%, `Enum.take` 1.3%, `Geometry.transpose` 1.3%.
-
-**`gen_server:loop/5` is where a term crossing a process boundary is copied onto
-the receiver's heap.** The step's replies are `:ok`, so the weight is in what the
-step sends. One step's observations, as they are handed to the sensor modules:
-
-| key                 |                  per sensor | why it is that size                    |
-| ------------------- | --------------------------: | -------------------------------------- |
-| `semantic_3d`       |                      512 kB | one row per pixel, as a list of floats |
-| `sensor_frame_data` |                      512 kB | the same points in the sensor's frame  |
-| `rgba`              |                      257 kB | pixels, as lists of floats             |
-| `depth`             |                      129 kB | pixels, as lists of floats             |
-| `semantic`          |                       65 kB | one id per pixel                       |
-| the whole step      | **2.9 MB** over two sensors |                                        |
-
-A float in a list costs four words on the heap, so each of those arrays is four
-times its payload before it is copied, and it is copied into the process that
-reads it.
-
-**That copy is not worth optimising, measured rather than argued**
-(`scripts/probe_copy_cost.exs`, 2026-11-07): one step's observations cost
-**1 582–1 748 µs to hand to a process as nested lists, and 1 µs as flat
-binaries** — 369 439 words against 325, because a binary over 64 bytes is
-reference-counted and shared rather than copied. Against a step of ~275 ms it is
-**under 1 %**, and even if it happened twice per step a full rewrite of the
-worlds, the transform and the sensor modules to carry binaries would buy about
-1 %. The 71.5 % of _allocated words_ under `gen_server:loop/5` is therefore not
-this payload: tprof's word column counts allocation inside the frame, not the
-size of the terms, and it must not be read as "the messages are the cost".
-
-Two things that are _not_ worth doing, measured rather than assumed:
-
-- **Copying a learning module's state.** It is 55.5 MB on the wire and
-  `Model.state/1` costs 176 ms — but it is called **once per episode**, by
-  `Logging.report/3`, not per step: every per-step call (`:step`, votes, goals,
-  terminal state) answers `:ok` or a number, which is why `Model.status/1` is
-  2 µs. A mutable state behind a NIF would optimise a cost the step does not pay.
-- **Deleting `sensor_frame_data`.** It is 512 kB a sensor a step and nothing this
-  port runs reads it — Monty reads it in `point_cloud_features`, and this port
-  computes normals and curvatures from `semantic_3d` instead. But Monty's
-  `DepthTo3DLocations` produces it, and `depth_to_3d_locations_test.exs` asserts
-  that it does, so removing it is a parity break dressed as an optimisation.
-
-## Where a step's time actually goes, by function (2026-11-07)
-
-`eprof` over one step with every process profiled — the totals are inflated and
-must not be quoted, but the ranking holds, and it is the ranking that decides
-what to write:
-
-| function                                           |  share | calls/step |
-| -------------------------------------------------- | -----: | ---------: |
-| `Enum`'s map internals                             | 10.8 % |    474 097 |
-| `gen_server:decode_msg/4` — a message is copied in | 10.5 % |         17 |
-| `Enum`'s reduce fold                               |  3.6 % |    248 226 |
-| `KdTreeNif.nearest_many/3`                         |  3.3 % |         10 |
-| `Enum.take_list/2`                                 |  3.0 % |    215 328 |
-| `MatcherNif.decode`'s list comprehension           |  2.4 % |    107 996 |
-| `Enum.with_index_list/2`                           |  2.1 % |    137 859 |
-| `Stream.Reducers.zip_list_heads_tails/3`           |  2.1 % |    173 565 |
-| `Enum.filter_list/2`                               |  2.0 % |    109 430 |
-| `Enum.drop_list/2`                                 |  1.9 % |    274 717 |
-| `Stream.Reducers.zip_list/4`                       |  1.7 % |     55 035 |
-| `Hypotheses`'s `gather/3` fun                      |  1.3 % |    125 120 |
-| `MatcherNif.decode_one/1`                          |  1.2 % |    107 154 |
-| `Enum.count/2`, both frames                        |  2.1 % |     69 636 |
-| `lists:reverse/1`                                  |  1.0 % |    113 250 |
-| `Monty.Geometry.dot/2`                             |  1.1 % |     80 886 |
-
-**About 30 % of a step is generic `Enum`/`lists`/`Stream` machinery, and every
-one of those rows is a pass over the hypothesis arrays.** The primitives those
-passes call are cheap — `Geometry.dot/2` is 6 reductions a call and
-`Geometry.transpose/1` is 6, measured by `scripts/probe_hypothesis_cost.exs`, and
-together they are 2 % of a step. What costs is the walking: 474 097 maps, 274 717
-drops and 215 328 takes a step, each building an intermediate list.
-
-So the change worth writing is **one packed pass over the hypothesis set**
-(evidence, locations, poses and possibility, as the binaries `pose_bytes`,
-`location_bytes`, `values_bytes` already carry), replacing the four or five
-separate walks with one. That is a batched kernel, not a faster `dot`.
-
-**Checked before writing it, and it is partly there already.** The columns are
-already binaries (`Hypotheses.evidence_bytes/1`, `locations`, `poses`),
-`take/2` and `rows_at/2` select with `binary_part/3` rather than walking lists,
-and the displacement — the biggest per-hypothesis arithmetic — is
-`MatcherNif.displaced_locations/3` when the kernel is loaded, with a list-based
-`reference_moved/2` kept for parity.
-
-**And a call graph says where the walks are** (`fprof`, one step, the learning
-module's process only: 2 539 575 calls, 4 357 own units). By accumulated time
-inside that process:
-
-| what                                                   |      accumulated | own |                                calls a step |
-| ------------------------------------------------------ | ---------------: | --: | ------------------------------------------: |
-| `Enum.map/2` and its internals                         | **1 958 (45 %)** | 893 |                                  **25 957** |
-| `MatcherNif.decode/1` → `decode_one/1`                 |       440 (10 %) | 441 |                      862 (≈127 values each) |
-| `Enum.slice/3` → `slice_forward` → `slice_list`        |       420 (10 %) |  32 |                                  **16 293** |
-| `Enum.reduce/3` fold                                   |        399 (9 %) | 399 |                                     199 813 |
-| `Enum.take_list/2`                                     |        306 (7 %) | 306 | 161 250 (144 957 of them its own recursion) |
-| `Enum.filter_list/2`                                   |        257 (6 %) | 257 |                                     102 746 |
-| `Enum.with_index_list/2`                               |        257 (6 %) | 257 |                                     128 370 |
-| `Hypotheses.gather/3` fun                              |        128 (3 %) | 128 |                                     128 320 |
-| `EvidenceSlopeTracker`'s `indices_where`, `remove_hyp` |           51, 51 |     |                             102 656, 25 664 |
-
-So it is **not one hot loop**: it is **~26 000 small `Enum.map`s a step**, each
-over a hypothesis list of about a dozen rows, plus 16 293 `Enum.slice`s that walk
-a list to select from it. Collapsing _one_ of them would be lost in the noise;
-what is worth writing is one pass that answers the questions those 26 000 maps
-are asked — and the `slice`s disappear on their own if selection goes through
-`Hypotheses.take/2`'s `binary_part` instead of list slicing, which is already
-written and used elsewhere.
-
-Two numbers keep the earlier suspicions out of the way: the payload copy is
-**10.5 %** (`gen_server:decode_msg` — the 2.9 MB of observations measured at
-1.6 ms above), and the hypothesis primitives are **2 %**.
-
-## What the native kernels have bought
-
-22 M reductions and 212 MB a step before them; 9 M and 85 MB now — from the
-probe, whole VM, 2026-11-04. Seven kernels
-in two Rustler crates (`native/kd_tree_nif`, `native/matcher_nif`): feature
-evidence, neighbour evidence, principal curvatures, displaced locations, window
-slopes, spread of one channel's evidence over the whole set, plus the graph's
-flattened arrays and the k-d index. Each has an Elixir reference that stays
-runnable and a parity test that compares the answers **exactly**, because the
-kernel performs the reference's arithmetic in the reference's order.
-
-The hypothesis set's own columns are the same idea without a kernel: `locations`
-(`n*3` f64) and `poses` (`n*9` f64) are held as bytes and read through
-`Hypotheses.locations/1`, `location/2`, `poses/1`, `pose/2`, so a step no longer
-builds three and nine boxed floats per hypothesis to hand to a kernel.
-
-`EvidenceSlopeTracker` is the same idea applied to a _state_: its windows are a
-ring of `hypotheses * window` f64 with one shared cursor, because every window
-slides by one slot on the same update. Recording a step writes one value per
-hypothesis and moves the cursor, and `window_slopes` reads the ring in order;
-sliding ten-slot lists a step was the single largest thing the module allocated.
-That change alone: **10.8 M → 9.1 M reductions a step** (−16 %), the learning
-module 6.1 M → 5.2 M, ladder unchanged digit for digit.
-`spread_add` closes the same gap one function further down the step: the
-neighbour kernel's answer used to be decoded into boxed floats and then walked
-once per hypothesis per channel to be spread over the whole set, with a map
-lookup per hypothesis. It now stays bytes from the kernel to the column it adds
-to: **9.1 M → 8.9 M a step**. Smaller than the tracker's win, and honestly
-stated as such — the three runs after it (8.83, 8.87, 8.92 M) all sit below the
-three before (9.08, 9.09, 9.14 M), which is what makes it a result rather than
-noise, but only just.
-
-The evidence column itself is the last of the four, and it is the one that
-teaches the lesson. Holding it as bytes was **worse** than holding it as a list
-until every read that needs no per-value work had a kernel of its own: the
-displacer's threshold test, the blend of past and present evidence, and the
-argmax that says where the past was largest. Written in that order the change
-goes **+39 %, not −4 %** — 11.6 M to 16.1 M call-memory words a step, 372 k
-decodes of a column nobody was going to read value by value. With
-`indices_at_least`, `blend_evidence` and `argmax_index` in place and the readers
-decoding one row instead of the column, the same probe reads 11.1 M.
-
-Measured the way the acceptance section asks, interleaved against the tree
-before it — three pairs, alternating, so the machine's load is shared:
-
-| pair | before                    | after                    |
-| ---- | ------------------------- | ------------------------ |
-| 1    | 11.25 M reductions, 87 MB | 9.60 M reductions, 85 MB |
-| 2    | 9.58 M, 87 MB             | 8.91 M, 85 MB            |
-| 3    | 10.21 M, 87 MB            | 9.03 M, 85 MB            |
-
-The megabytes do not move between runs; the reductions move with the load, which
-is why three pairs beat one number. −2.3 % of a step's garbage for a column that
-used to be decoded 108 679 times a step, and −1 % to −12 % of its reductions,
-read as a range rather than a figure.
-
-## The next change: one crossing
-
-A matching burst walks the hypothesis set about **47 times with an index** and
-about **91 times through `Enum.map`**, per hypothesis. Merging any two of those
-converts 6 M reductions into 5.9 M. The change that matters is one call that
-carries a burst's whole non-RNG path — displace → neighbour evidence → spread
-over every hypothesis → blend with the past → slope windows → possible mask →
-argmax — and hands back the columns the module keeps.
+- **Instruments that mislead.** `:tprof.profile(fun, %{rootset: [pid], …})` does
+  not narrow the report to that process. `:eprof` counts a process's _idle_ time
+  into `gen_server:decode_msg/4`, so only compare busy functions within one table.
+  `Process.info(pid, :current_stacktrace)` sampling reports "waiting" for every
+  module held at a barrier: a sample answers "who is not running", never "who is
+  not the cost".
+
+## What a step is made of
+
+Five things, and only two of them are the port's arithmetic:
+
+1. **The model** — the learning module's own work: hypotheses, evidence, the
+   kernels, the votes.
+2. **The world behind the port** — one crossing a step, carrying depths, colour,
+   segmentation, a header and the arrays' bytes. The Python half is all of its
+   cost: MuJoCo, numpy and the encode. There is nothing left to win on our side
+   of the crossing.
+3. **The record** — the step's entry, the moment, the files a step writes and
+   the CSV row.
+4. **The episode boundary** — positioning (`GetGoodView`), which is the
+   experiment's, and a rebuild of the scene, which a runner may or may not do.
+5. **The page** — a step's scalars, a drawing on an interval. What it costs is
+   contention with the step, not the drawing.
+
+The model and the world are inside `Run.step`, so they are the two that can be
+attributed exactly. The rest sit around it.
+
+## What a step was paying for, and what changed
+
+Each of these is a defect that was found by measuring, fixed, and pinned by a
+parity test that compares the new path with the Elixir reference **exactly**:
+
+- **A step copied a module's memory into the module.** `Model.state/1` handed a
+  whole model's state across the boundary once per episode to write one row.
+- **A surface normal walked the patch nine times** — nine passes to compute one
+  vector, now one.
+- **The slope tracker slid lists.** Every window of every hypothesis moved one
+  slot per update, which was the single largest allocation in the module. It is
+  a ring of floats with one shared cursor now.
+- **A burst recomputed what it had already made**: its rotations, its on-object
+  pixels, its alignment and its node block. Each is kept or taken in one pass.
+- **The evidence column decoded per value.** Holding it as bytes was _worse_
+  until every bulk read had a kernel of its own — the lesson of the four column
+  changes: a column earns its encoding only when its readers do.
+- **Half a step was a process spawn**, and a copy that followed. Both are gone.
+- **The step's road to the page is one way.** A step publishes; the writer
+  consumes and may lag. What still sits on the step is the entry, the moment,
+  the files and the CSV row.
+- **The transcript was rewritten whole.** A step appended its row by rewriting
+  every row before it, which made the cost of a step grow with the length of the
+  run. Now the row is left alone and the two arrays are appended.
+
+### What the native kernels cover
+
+Seven kernels in two Rustler crates (`native/kd_tree_nif`, `native/matcher_nif`):
+feature evidence, neighbour evidence, principal curvatures, displaced locations,
+window slopes, spread of one channel's evidence, and the graph's flattened arrays
+with its k-d index. Each keeps a runnable Elixir reference and a parity test,
+because a kernel performs the reference's arithmetic in the reference's order.
+`config :ex_tbp_monty, native_kernels?: false` gives the reference path.
+
+## The open decision: one crossing
+
+A matching burst walks the hypothesis set many times: with an index, through
+`Enum.map`, and once per stage of the evidence maths. The change that matters is
+one call that carries a burst's whole non-RNG path — displace → neighbour
+evidence → spread over every hypothesis → blend with the past → slope windows →
+possible mask → argmax — and hands back the columns the module keeps.
 
 It has to stay separable, because the sampling half draws from the RNG stream and
 must keep doing so in Monty's order: the burst's _shape_ (where new hypotheses
@@ -625,802 +154,50 @@ Two vehicles, both keeping the Elixir reference and its parity tests:
 **This is an open decision.** It is written down here rather than half-made in
 the code.
 
-## Measured 2026-11-09: the cost is spread, not concentrated
-
-`MIX_ENV=test mix run scripts/probe_step_profile.exs` — `tprof`, `rootset: :all`,
-one processed step, 497 ms as the step timed itself.
-
-**Read the allocation column, not the time one.** `tprof`'s `call_time` is entry
-to exit, so a blocking `GenServer.call` carries the callee's whole run: the same
-second appears again under everything the callee called. The proof is in the same
-report — `gen:do_call/4` shows 314 ms there and **9 821 words allocated, 0.04 %**
-here. It measures the wait, not the work. Wall clock is for the step's own figure
-(`duration_us`), on a quiet box.
-
-Self-allocated words, one step — what is actually built:
-
-| function                                                                       | calls   | words     | share      |
-| ------------------------------------------------------------------------------ | ------- | --------- | ---------- |
-| reading a kernel's answer back (`MatcherNif.decode_one/1` + its comprehension) | 164 126 | 1 248 498 | **5.66 %** |
-| `Geometry.dot/2` + `transpose/1` + `mul/2`                                     | 90 160  | 883 648   | **4.00 %** |
-| `EvidenceSlopeTracker.write_slot/5`                                            | 19 306  | 463 224   | 2.10 %     |
-| `Enum.map`'s closure                                                           | 254 588 | 457 154   | 2.07 %     |
-| `Hypotheses.gather/3`'s closure                                                | 64 320  | 424 512   | 1.92 %     |
-| `Enum.with_index_list/2`                                                       | 83 676  | 418 080   | 1.89 %     |
-| `Enum.take_list/2`                                                             | 161 272 | 289 936   | 1.31 %     |
-
-(`gen_server:loop/5`'s 71.5 % is a process's whole life, its children included —
-a root, not a function.)
-
-What this settles:
-
-- **There is no hot spot to kernel.** The largest single item is 5.7 %, and it is
-  _our own_ readback: a kernel answers in a binary and the port boxes each value
-  one at a time. `Geometry` together is 4 %, `transpose/1` costing 22 words for a
-  3x3 — and `batch_rotate_pose_vectors/2`, which this file named as the next
-  kernel, **has no production caller at all**, only its test. Measured, not
-  assumed; that claim was wrong.
-- **The readback is ten decodes of one column.** `decode_one/1` runs 80 420 times
-  a step and the hypothesis count is 6 432: the same evidence column is decoded
-  at about ten callers per step, each wanting a different statistic (max, second
-  argmax, sum, a zip with indices, the logger's copy). Keeping the column as
-  bytes is right for the kernels; the waste is decoding it afresh at each reader.
-- **Everything else is list plumbing** — `map`, `with_index`, `take`, `gather` —
-  a couple of per cent each, and dozens of passes.
-
-So the remaining cost has the shape the section above already names: a step is
-~500 ms of many small passes over the hypothesis set, not one expensive function.
-The change that matters carries a whole phase across once and hands back the
-columns the module keeps.
-
-**Done so far: the slope mask.** `select_hypotheses/2` asked for the
-slope column, paired it with the ages and walked the pairs — a decode of one
-float per hypothesis and three list passes over the set — to decide one bit per
-hypothesis. `MatcherNif.keep_mask/7` decides it inside the kernel, which already
-has the slopes, so the column never becomes Elixir terms: `decode_one` fell from
-80 420 values a step to 67 556 (the two per-graph slope columns), and the
-`zip`/`map`/`removable` passes are gone. The Elixir path stays as the reference
-behind `native_kernels?: false` and two parity tests compare the masks exactly;
-the acceptance ladder is unchanged digit for digit.
-
-**Then the tracker's write.** `EvidenceSlopeTracker.update/3`
-wrote one column into every window with a three-part iolist per hypothesis and a
-flatten over all of them — 24 words a hypothesis, 19 306 calls a step.
-`MatcherNif.write_slot/4` is a copy with a column replaced, the Elixir walk stays
-as the reference, and a parity test compares the window bytes at every step of a
-ten-update wrap. `write_slot` is gone from the profile (463 224 words a step).
-
-The same shape is what the rest needs: `MatcherNif.decode/1` still runs 3 286
-times a step at ~24 values each, and
-`HypothesesSelection.ids_to_retain/1`/`ids_to_remove/1` still walk the mask with
-`with_index`, `filter` and `map` — a kernel that answers the indices directly
-would remove both.
-
-## Measured 2026-11-09: a run gets slower as it learns, and it is not the episodes
-
-The question was whether episodes accumulate. They do not — and the run still
-gets slower. From the record of `7339fa92-…` (140 episodes, 42 401 steps,
-`priv/studio_runs/<id>/run.log` has every step's own `duration_us`):
-
-| quarter of the run | steps  | unprocessed step | processed step | hyps at a processed step | max   |
-| ------------------ | ------ | ---------------- | -------------- | ------------------------ | ----- |
-| 1–35               | 10 147 | 4.32 ms          | 278.6 ms       | 892                      | 8 880 |
-| 36–70              | 8 532  | 4.80 ms          | 373.8 ms       | 1 279                    | 8 887 |
-| 71–105             | 11 698 | 5.01 ms          | 352.1 ms       | 761                      | 8 880 |
-| 106–140            | 10 966 | 5.68 ms          | 382.9 ms       | 984                      | 8 936 |
-
-- **The transient state does reset.** In a fresh three-episode run every episode
-  starts at the same hypothesis count (712) and the per-step mean _falls_
-  (38.0 → 36.7 → 30.9 ms). Nothing accumulates per episode.
-- **Hypotheses are not the cause.** The count at a processed step has no trend
-  across the run and the maximum is flat at ~8 900.
-- **What grows is the shared long-term memory.** Every step reads the graphs, so
-  the _unprocessed_ step slows by the same third as the processed one — a step
-  that does no matching still pays for what the run has learned. Episodes are
-  independent in what they hold, not in what they read; that is the experiment's
-  design, and Monty's.
-- Cost of a step therefore rises with nodes per graph, not with the episode
-  index. **The mechanism is not yet proved** — the next measurement is nodes per
-  graph at the start and the end of a run, and which per-step path is linear in
-  it. Two candidates already visible: `GraphObjectModel.num_nodes/1` is
-  `length(positions)` (O(nodes)) and `GraphMemory.get_graph_node_ids/3` builds
-  `0..n-1` as a list, so any per-step caller of either gets slower as the graph
-  grows.
-
-## The step's road to the page is one way (2026-11-09)
-
-A step's transcript is the experiment's record, not its work. The step takes its
-snapshot and hands it over; nothing a page draws is _made_ on the step, and
-nothing a page has is _asked for_ from the step.
-
-```
-worker (Jobs.Run)                    presenter (RunStream)          reader
-  step/1
-    ── beliefs snapshot ─┐
-    ── world's own obs ──┼── one cast ──→ entry, line, PNGs, ETS, ──→ pub-sub
-    ── centre view ──────┤                 log file (in order)         → page
-    ── report ───────────┘
-```
-
-The rule is one cast and no call back. Three things can only be taken by the
-step and are therefore snapshotted there — the beliefs (a later read is a later
-state), the world's own observation (the world has stepped again by the time a
-presenter runs) and the centre view's geometry. Everything else is derived on
-the far side.
-
-`scripts/probe_step_ledger.exs` puts a number on each term
-(`base_10simobj_surf_agent`, 15 steps):
-
-| term                           | on the step, before | on the step, now |
-| ------------------------------ | ------------------- | ---------------- |
-| beliefs read (snapshot)        | 612 µs              | 531 µs           |
-| the record's entry             | 509 µs              | —                |
-| the log line                   | 117 µs              | —                |
-| centre view                    | 57 µs               | 161 µs           |
-| the cast (what the copy costs) | 541 µs              | 543 µs           |
-
-The presenter now builds the entry and the line from the report in **90 µs**.
-The centre's and the beliefs' figures move by ±100 µs between runs — they are
-allocated right after the cast's copy, so they carry its collection — and on a
-step of 76 ms none of this is a speed win. What the split buys is a boundary
-that cannot grow: the message used to carry the beliefs twice, as the structs a
-page draws and as the string-keyed copy a row keeps, and a step that formatted
-its own text had a second definition of what a step looks like.
-
-## Measured 2026-11-10: a processed step is the learning module, a plain one is the sensor module
-
-The step has been measured as a whole until now. Split in two, with the world run
-outside the timer and only `Model.step` inside it — `MIX_ENV=test mix run
-scripts/probe_step_phases.exs base_10simobj_surf_agent 40`:
-
-- **processed step**: world 14 ms, model 288–1 049 ms of wall, and of that a
-  processor's own time (`:erlang.statistics(:scheduler_wall_time_all)`, µs summed
-  over the schedulers, after `:erlang.system_flag(:scheduler_wall_time, true)`)
-  is the same order as the wall — the step is heavy, not starved.
-- **plain step**: world 23 ms, model 7–15 ms.
-
-The model's own step is therefore almost all of a processed step, and the
-renderer and transforms that the sections above chased are a few per cent of it.
-
-Then per process, in reductions, which do not move with the load:
-
-| step          | learning module | coordinator | patch sensor module |
-| ------------- | --------------- | ----------- | ------------------- |
-| processed (1) | 3 292 083       | 1 005 689   | 665 695             |
-| plain (39)    | 378             | 13 723      | 637 878             |
-
-Two things follow, and both change what to optimise next.
-
-1. **In a processed step the tight loop is the learning module**, at 66 % of the
-   step's reductions. The coordinator is second at 20 %: it is not just a router
-   — the vote round and the motor system cost it a fifth of a processed step,
-   against 2 % of a plain one. The sensor module is 13 %.
-2. **A plain step costs about a sixth of a processed one**, and nearly all of it
-   is the sensor module (637 878 of ~652 000 reductions); the learning module is
-   a rounding error in it. How often a processed step comes is the episode's
-   business — one in 40 in this window, one in six in a window of 60 — so quote
-   per-step means and never a total over a mixed window.
-
-Neither "the learning module" nor "the periphery" is the whole answer: a
-processed step is the learning module and the round around it (fix the
-per-hypothesis loop), and a plain step is the sensor module (fix the per-pixel
-and per-point loops).
-
-### Instruments, and what each cannot show
-
-- `:tprof.profile(fun, %{rootset: [pid], …})` does **not** narrow the report to
-  that process — the caller's own rendering still appears in it. To profile one
-  phase, run the other first and replay its inputs: the observations are a
-  function of the seed, and a second run of the same seed reproduces the same
-  processed steps (checked — processed at 0, 14, 26 and 38 in both passes).
-- `:eprof.profile([pid], fun)` counts correctly but puts a process's **idle**
-  time into `gen_server:decode_msg/4` (80 calls at 7.07 ms each over 14 steps).
-  Only compare busy functions within one such table.
-- `Process.info(pid, :current_stacktrace)` sampling reported 84.5 % "waiting" for
-  the learning module while its step was running, because every barrier leaves
-  each module waiting on the others. A sample answers "who is not running",
-  never "who is not the cost".
-- `probe_step_cost.exs` drives `Studio.Run.step`, so its figure includes the
-  world and the first steps of a fresh graph; it is a whole-step number, not a
-  model number.
-
 ## Acceptance for any speed change
 
-1. `mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8 --no-record`
-   prints the same eight lines, digit for digit: `0.908 (802, 4)`, `2.55 (1604, 5)`,
-   `4.086 (2406, 2)`, `5.675 (3208, 1)`, `7.032 (4010, 1)`, `8.639 (3509, 1)`,
-   `10.15 (2899, 1)`, `11.712 (2342, 1)`.
+1. Save the ladder before the change and print it after:
+   `mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8 --no-record > before.txt`.
+   After a change that only moves work around, the eight lines are identical.
 2. A parity test compares the new path with the reference **exactly** (`==`), not
    approximately, and the reference stays callable behind
    `config :ex_tbp_monty, native_kernels?: false`.
-3. Quote a pair of measurements from one run; never a single wall-clock number.
+3. Quote a pair of measurements from one run, interleaved against the tree
+   before it; never a single wall-clock number.
 4. `scripts/quality.sh` prints `quality: ok`, and formatting is bare
    `mix format` — `mix format <dir>` does not reach files nested below it, and a
-   subset `--export-coverage` poisons the `mix complexity` gate (it then reports
-   ~200 functions "above CRAP 20" that are simply 0% covered).
+   subset `--export-coverage` poisons the `mix complexity` gate with functions
+   that are simply not covered by that run.
 
 ## Tried and rejected
 
-- **`Geometry.mul/2` and `Geometry.apply/2` written out as 3×3 formulas.**
-  13 k and 19 k calls a step, arithmetic identical — and no measurable change
-  (10.81 → 10.88 M reductions, 81 → 78 MB). Reverted: below the noise floor, so
-  the code stays the simple version.
+- **`Geometry.mul/2` and `Geometry.apply/2` written out as 3×3 formulas.** The
+  arithmetic is identical and the change measured below the noise floor on this
+  machine. Reverted: the code stays the simple version.
 - **Nesting binary concatenation to rewrite one column of a ring.** The first cut
   of the slope tracker wrote each row with `<<skipped, value, rest::binary>>`,
   which copies the remaining tail at every row — quadratic in the hypotheses. It
-  cost more than the list shifting it replaced (11.6 M and 5 168 GCs a step
-  against 10.8 M and 500) until the pieces were gathered and joined once with
-  `IO.iodata_to_binary/1`, which is when the win appeared (9.1 M).
+  cost more than the list shifting it replaced until the pieces were gathered and
+  joined once with `IO.iodata_to_binary/1`, which is when the win appeared.
 - **A full sort of the graph to take a few hundred nodes** (`top_indices/2`) is
   still there. A bounded selection returns the same indices and is worth trying
   when it can be measured on its own.
-- **Caching the graph's arrays twice over** — done, and it is where most of the
-  earlier win came from; nothing else in the cache family has measured flat.
+- **A per-episode copy of the model's state**, kept only as long as it is the
+  thing being measured; a training phase would pay it per epoch.
 
-## Half a step was a process spawn (2026-11-06)
+## The budget, as rules
 
-`tprof` on a real step put **50.6 % of the time in `erlang:spawn_opt/4`** (7 calls,
-372 ms) with `call_timeout: :infinity`, while the biggest algorithm entry was
-`Enum.map` at 6.5 %. A reduction count could not see it: `spawn_opt` is a BIF, and
-the step's reductions stayed at ~7.9 M before and after the change that removed it.
-
-**What it was.** `Monty.Runtime.Barrier` starts a process per request so a round's
-deadline can kill it, and `spawn_monitor` copies the request's closure into that
-process — and a sensor request _is_ the payload, closing over the observations
-(394 202 words ≈ 3.2 MB a step). Measured directly: seven spawns carrying 400 000
-words cost **83 ms**, seven carrying nothing cost **32 µs**.
-
-**The change.** A round of _one_ request with no deadline has nothing to kill and
-no concurrency to lose, so it runs where it was called. Rounds of several requests
-keep a process each, deadline or none — they start together, and serialising them
-would trade a constant for a factor of the module count. `missing?/1` decides "no
-answer" for both paths, so failure semantics are one definition, not two.
-
-**Measured.** Acceptance ladder unchanged digit for digit (`0.908 (802, 4)` …
-`11.712 (2342, 1)`); the same steps on the same machine went from 1.1-1.4 s to
-**84-477 ms** (cold step 827 ms). The five-LM config takes the untouched
-multi-request path (4.4 s/step, 31.5 M reductions) — its cost is the
-per-hypothesis pipeline, not the round.
-
-**Next, in the profile's order**: observations as immutable flat binaries (a refc
-binary crosses a process boundary as a pointer — within a node only; across nodes
-everything is copied), then `MatcherNif.decode`/`decode_one` (18 % of allocation),
-then the per-hypothesis plumbing (`gather`, `with_index`, `take` — ~18 % — and a
-batched `Geometry.dot`, 9 %). `nearest_many` is 2 % of the step, so more k-d work
-is not where the time is.
-
-## The profiler's time column is not a measurement (2026-11-06)
-
-`tprof` charges what it costs to be profiled. Mapping 6 432 elements 200 times
-costs **24.6 ms by the clock**; the same loop inside the profiler reports
-**402.7 ms** — sixteen times — of which 288.7 ms is `Enum.map`'s own loop and
-112.6 ms the closure it calls. `scripts/probe_tprof_overhead.exs` is that
-comparison and nothing else.
-
-So the step profile is read for two things only: **call counts**, which are real,
-and **words allocated**, which are real. Its time and per-call columns are a
-distribution weighted by call count, and they exaggerate the most-called
-functions worst: `Enum.map`, 306 050 iterations in a step, was credited 29 % of
-it. The honest currency is reductions, garbage and wall clock — plus a
-microbenchmark of the candidate change, as in `scripts/probe_decode.exs`.
-
-**What the counts say.** With 6 432 hypotheses, one step runs 306 050 `Enum.map`
-iterations, 33 127 `Enum.reduce`, 29 897 `take_list`, 22 856 `with_index_list`,
-17 477 `filter_list` and 10 881 `Geometry.dot` — some sixty passes over the
-hypothesis lists. `Geometry.dot` spends ten words a call and `transpose` 22,
-which is the arithmetic itself, and after `decode` there is no longer a single
-wasteful allocator. The remaining cost is the number of crossings, not the price
-of one.
-
-**What that means for the order of work.** Reading a column's floats as halves
-cost 20 % of the decode and moved a step by 3 %, because decode was 8.7 % of the
-step. Shaving one pass is worth a few percent; removing sixty of them is the
-factor that is missing. That is the conclusion of the round above, arrived at
-from the other side: the work has to cross once, not once per hypothesis.
-
-**Measured, this change.** One 6 432-value column: 941 µs → 753 µs, 11.8 → 7.7
-words per value. A step of `base_config_10distinctobj_dist_agent`: 7.87 M → 7.65
-M reductions, 81 MB → 78 MB of garbage, and the suite green at 2 269 tests
-including the seven that now describe `decode/1` itself.
-
-## The whole experiment runs to its end (2026-11-06)
-
-`mix monty.run base_config_10distinctobj_dist_agent`, left alone: **140 of 140
-eval episodes, every one ending in a recognition** — `learning_module_0: match`,
-the object named at a position and rotation — in 4 789 steps and 3 942 s: 823 ms
-a step on a machine at load 10.6, exit 0.
-
-The steps are the experiment's own. Monty's dashboard runs 140 episodes in 5 122
-eval steps and 3:18, which is ~39 ms a step, so what is left between us is
-per-step cost — 21 times — and not the shape of the run. Earlier attempts were
-stopped by hand around episode 90; this is the first that reached the last one,
-which is what the acceptance asked for.
-
-**The 823 ms was the machine, not the code.** That run was measured at load
-average 10.6-14.7 — another build was using the box throughout. The same
-experiment, on the same code path, ran at load 3.7-5.9 and
-finished in **4 789 steps in 203 s: 42.5 ms a step**, exit 0, **140 of 140
-episodes each ending in a recognition** — against Monty's ~39 ms. The step count
-and the goal total (4 558 928) are identical to the loaded run, so the two runs
-are the same run, one of them slower for reasons outside the program. Reductions
-are the only per-step figure worth comparing across machines (7.65 M → 6.85 M),
-and the acceptance target of ~50 ms a step at ten objects is met on a quiet
-machine — the earlier "21 times" was a loaded-box artefact and is withdrawn.
-
-## A per-episode copy is not free, and a training phase would pay it (2026-11-06)
-
-Measured on `base_config_10distinctobj_dist_agent` (ten objects, pretrained memory,
-`MIX_ENV=test`), while wiring a training phase to carry its memory between
-episodes:
-
-| what                                                      | cost                                                           |
-| --------------------------------------------------------- | -------------------------------------------------------------- |
-| `Run.start/2`, pretrained memory                          | 1.9 s, 35 M reductions (world + positioning, as Monty pays it) |
-| `Run.memories/1` — the memory read back out of the module | **177 ms, 203 k reductions**                                   |
-| a step, after the first                                   | 5.7–6.1 M reductions, 23–84 ms                                 |
-
-177 ms is two to four steps of work for one copy, because `LearningModuleServer.state/1`
-sends the module's whole state across to the caller and the graph memory of a
-ten-object model is tens of megabytes. That is the cost `detailed/2` was written
-to avoid for the page's per-step reads, and the loop had walked into it once per
-episode.
-
-It is now read only where it can have changed: **an evaluation episode writes
-nothing into long-term memory, so it neither writes nor reads the memory back**,
-and the phase keeps the value it started with. `memories` is a value, so passing
-the same one to the next run is also cheaper than re-loading it (`Setup.memories/1`
-→ `Memory.load/2`, about twenty milliseconds a call).
-
-**The erlang-shaped fix, when a training phase is actually offered**: keep one
-model for the phase and reset the episode on it (`Model.reset_episode/1`, which
-Monty calls as `model.reset()`) instead of starting a model per episode. Then the
-memory never crosses a process boundary at all, and the flattened arrays the
-native kernels read (`node_arrays`, `feature_rows`) stay in the process that
-built them. Measured here, a fresh model's first step is _not_ noticeably more
-expensive than a later one (5.1 M reductions / 23 ms against 5.7 M / 81 ms), so
-this is worth doing for the copies rather than for the arrays — it is a tidier
-shape, not a large win on this config.
-
-**Where the scaling win actually is**: a step's cost is per hypothesis, and the
-hypotheses of one graph are independent of another graph's. Barriering modules
-across a step already exists; sharding _a module's_ graphs across schedulers, one
-task per graph, is the thing the BEAM does that a GIL-bound Python cannot. That is
-the work to do before claiming a speed advantage over Monty at seventy-seven
-objects, and it should be measured the same way — reductions and wall clock, run
-paired against the serial version in one session.
-
-### Runs scale across cores, and that is measured (2026-11-06)
-
-`MIX_ENV=test`, `base_config_10distinctobj_dist_agent`, five steps each:
-
-|                                | wall                          |
-| ------------------------------ | ----------------------------- |
-| one run (start, 5 steps, stop) | 2 548 ms                      |
-| two runs, started together     | 2 619 ms — **1 310 ms a run** |
-
-Two runs cost 1.03 times the wall time of one, so throughput nearly doubles with
-the run count: each run is its own set of processes and the schedulers spread
-them. That is what the experiment page's "runs side by side" setting and the
-queue's `studio: 2` already use.
-
-It is worth being precise about what this does and does not say. Monty can run
-two experiments side by side too — as two Python processes — so run-level
-parallelism is not by itself an advantage; what the BEAM adds is that it happens
-_inside one node_, one scheduler pool, one set of immutable binaries shared by
-reference instead of copied, and one queue that knows what is running. The
-advantage that a GIL-bound Python cannot take at all is the next one: sharding a
-single step's per-graph work across schedulers, described above and **still
-unmeasured**.
-
-## The run of 1:42 h, and what it was paying for (2026-11-09)
-
-Setup: the user's own run of `base_10simobj_surf_agent` on this machine,
-`7339fa92…` — 140 episodes, **42 401 steps, 6 130 s of wall clock**. Its own
-step reports account for 2 720 s of that; the rest was paid outside the steps.
-
-The reference is Monty's Python, run on the same machine on the same config
-(`monty-orig/.venv`, `experiment=base_10simobj_surf_agent`, one epoch), read from
-its own `eval_stats.csv`:
-
-|                            | Monty (Python)              | this port              |
-| -------------------------- | --------------------------- | ---------------------- |
-| steps in the sample        | 1 774 (177 an episode)      | 1 072 (107 an episode) |
-| steps the module was given | 260 — **15 % of the steps** | 6 of 40 — **15 %**     |
-| wall                       | **16.8 s — 9.4 ms a step**  | 104 ms a step          |
-| wall per matching step     | **64 ms**                   | ~420 ms                |
-
-The shape agrees — one matching step in seven, the same evidence scale — so the
-gap is cost, not behaviour.
-
-### Where our 6 130 s went
-
-| what                                        | measured                                 |
-| ------------------------------------------- | ---------------------------------------- |
-| the model step, as the run reported it      | 2 720 s (44 %)                           |
-| between two episodes (139 boundaries)       | **869 s (14 %)**, growing 1.8 s → 9 s    |
-| the fixed cost of a step, outside the model | ~33 ms × 42 401 ≈ 1 400 s (23 %)         |
-| the rest of the tail                        | the page's poll and the writes it fought |
-
-The boundary cost grew with the row, which is the signature of a write that
-rewrites what it appends to: `jsonb || jsonb` is one statement, but Postgres
-still writes the whole value. Measured on that row, appending an **empty** array
-took **14.7 s**. The transcript is 122 B a step and the pictures 10.4 kB, and
-both were appended at every boundary.
-
-The page's poll was the other half: `reconcile/1` read the **whole row twice a
-second** (`RunHistory.get/1`) — 252 MB by the end of that run, per request, while
-the run was trying to step.
-
-### What changed, and what it cost before
-
-| change                                                                      | before                                       |
-| --------------------------------------------------------------------------- | -------------------------------------------- |
-| the page polls the row's scalars (`RunHistory.progress/1`)                  | 252 MB twice a second                        |
-| the transcript is the stream's, not the record's (`RunStream.steps_from/2`) | `log ++ [entry]` per step — O(n²) in the run |
-| a boundary writes the transcript; the settle writes the pictures once       | 14.7 s an append by the end of a run         |
-| beliefs are read only when a module was fed                                 | 5.7 ms on 83 % of the steps                  |
-| a step's pictures are encoded once, in the stream                           | two PNGs a sensor encoded twice              |
-
-The boundary is now the same 1.8 s at episode 1 and at episode 10 (measured: 10
-episodes, 1 072 steps, 114 s wall, 68 ms of model a step), and the row is written
-in one statement as the run settles.
-
-### The actor shell is not the gap
-
-One step's observations are **435 189 words — 3.5 MB** of heap (863 kB on the
-wire). One cross-process copy of them is **0.53 ms**, and a processed step makes
-about twenty `gen:do_call`s. So the messages a step pays are ~2–3 ms of 104 ms:
-**about 3 %**. The shell is the studio, the stop button and the replay, and it is
-not what separates us from Python.
-
-### Where the other 97 % is, per step
-
-| phase                                           | a step the module was given | a step it was not |
-| ----------------------------------------------- | --------------------------: | ----------------: |
-| the world (MuJoCo, in the embedded interpreter) |                     10.2 ms |           10.6 ms |
-| the transform chain (depth → 3-D points)        |                      6.4 ms |            6.4 ms |
-| the model step                                  |                      416 ms |             20 ms |
-
-Monty's _whole_ step is 9.4 ms. Two things follow, both arithmetic:
-
-1. **The floor is 37 ms**, of which 17 ms is world and transforms — work Python
-   does with numpy in under a millisecond. The transform chain is six passes of
-   Elixir closures over 4 096 pixels (`DepthTo3DLocations`, 32 768 `count/4`
-   closure calls a step).
-2. **A processed step is 6× Monty's whole step.** The profile of one: 267 834
-   `Enum.map` iterations, 255 648 `take_list`, 99 966 `Geometry.dot`, 188 MB of
-   garbage — ~60 passes over a hypothesis list of a few thousand. Monty does a
-   handful of numpy ops over an (H, ·) array.
-
-So the order for the next session is: the per-hypothesis passes (an order of
-magnitude is available, and it is the one thing that would put us ahead of
-Python), then the transform chain and the sensor patch maths as kernels or Nx,
-then whatever the profile says about the world.
-
-One thing deliberately left: the run's own page (`/runs/:id`) still reads
-`head/1` — the transcript without the pictures — every two seconds while its run
-is in flight, because it appends the lines it has not shown and redraws the
-replay from them. That is 3 MB at 24 329 steps and about a fortieth of what the
-experiment page was reading, but a transcript that a page re-decodes twice a
-second wants a child table (one row a step, or one an episode) rather than one
-`jsonb` array in one row. Nothing reads the pictures that way: `sensors_at/2`
-asks for the step the slider is on.
-
-### The episode boundary is the experiment, not the port (2026-11-09)
-
-The 1.8 s between two episodes is not a write any more. What `Run.start/2` pays
-for an episode, measured one episode at a time:
-
-| piece                                                                                              |          ms |
-| -------------------------------------------------------------------------------------------------- | ----------: |
-| `Setup.world/3` (the scene, as a value)                                                            |           6 |
-| `Run.start/2` — the scene constructed, the agent positioned, the episode's model processes started | 1 206–1 251 |
-| `Run.conclusion/1` — what the modules said, read out of their processes                            |         277 |
-| `Run.next_memories/3` (eval; a training phase reads its graph here)                                |           0 |
-| `Run.stop/1`                                                                                       |           8 |
-
-Monty pays it too, and the same size: its own run of the same config took
-**32.6 s** of process wall for **19.4 s** of episode step time over ten episodes —
-**1 325 ms an episode** outside the steps, for the same reason (a MuJoCo scene is
-built and the agent moved into view).
-
-So the boundary is not where the port loses to Python, and making it asynchronous
-would be a structural change — episode N+1's scene built while N still steps, two
-worlds alive at once — not an offload of I/O. It is worth doing when the model step
-is fast, because then 1.8 s an episode becomes the largest item left: at today's
-numbers it is 250 s of a 4 400 s run (6 %); after a 6× faster learning module it
-would be ~19 %. `Setup.world(setup, episode, opts)` is a function of the episode
-index and the seed, so a prefetched scene is the same scene; what has to be proved
-is that no drawn number moves.
-
-### What a processed step calls (2026-11-09, `cprof`, one step at 8 376 hypotheses)
-
-`cprof` counts calls, which is the one thing tprof's time column cannot be
-trusted for. One step of `base_10simobj_surf_agent` that the module was given:
-
-| module                             |   calls | largest single item                                                |
-| ---------------------------------- | ------: | ------------------------------------------------------------------ |
-| `Monty.Geometry`                   | 266 577 | `dot/2` 99 966, the `mul/2` closures 100 512, `transpose/1` 16 753 |
-| `...Transforms.DepthTo3DLocations` | 140 263 | ten full-image passes of 8 192 (2 × 4 096 pixels)                  |
-| `Monty.Simulators.Mujoco.Answer`   |  66 561 | decoding the world's arrays                                        |
-| `...Utils.SensorProcessing`        |  45 395 | `cloud_bytes` 16 384, `plane_normal` 11 313                        |
-| `...EvidenceMatching.Hypotheses`   |  42 242 | `pose_bytes`/`location_bytes` 8 376 each                           |
-
-About 560 000 calls for a step that takes ~420 ms, i.e. **~0.75 µs a call**: the
-cost is the per-call allocation of small lists (a 3-element dot allocates a
-3-element list; a 3×3 `mul/2` nine of them), not any single arithmetic hot spot.
-That closes the question the 2026-11-02 note left open ("~130 µs per hypothesis
-is unexplained") — it is ~66 calls a hypothesis at Elixir-term prices.
-
-Two consequences, and they are the work:
-
-1. **The learning module wants one call per pass, not one per hypothesis.** The
-   kernel already exists in this shape (`MatcherNif.displaced_locations/3`,
-   `MatcherNif.neighbour_evidence/10`); what is left per hypothesis is pose
-   evidence, feature evidence and the slope bookkeeping. Batching them changes no
-   number — the parity fixtures are the referee (`evidence_*_native_parity_test.exs`).
-2. **The transform chain wants the same treatment** — `DepthTo3DLocations` makes
-   ten passes over the depth image per step, which is 6.4 ms a step and 270 s of a
-   full run, and is a Nx expression rather than ten closures.
-
-Neither is a cache and neither is a one-line change; both are the "one crossing"
-this document has been pointing at since 2026-11-02, now with the call counts that
-say which passes to cross.
-
-## A step copied a module's memory into the module (2026-11-10) — 285 ms → 108 ms
-
-`Monty.Runtime.Step.read_conclusions/1` asks each module what it concluded, and it
-built that request as `fn -> LearningModuleServer.query(server, &lm.module.conclusion(&1)) end`
-— a closure over `lm`, the module's _spec_. A spec carries `:state`, and a module
-reading a pretrained memory keeps tens of megabytes there, so the closure carried
-the memory with it: a `GenServer.call` copies its request into the receiving
-process, so every processed step copied the module's own memory into the module and
-threw it away again.
-
-Measured on one recorded step of `base_config_10distinctobj_dist_agent`
-(`scripts/probe_step_profile.exs`, `tprof` `call_memory`): the top row was
-`gen_server:loop/5` at **75.7 % of the step's allocations**, attributable to no
-Elixir function — that copy. Timed at the phase seam (a temporary `:timer.tc`,
-since removed), `advance/1` was 150–230 ms of a 285 ms step, and inside it
-`read_conclusions/1` was 178–230 ms while the projection it asked for answered in
-**0 ms**.
-
-Closing over the module's _name_ instead: **one step 285 → 108 ms** on the same
-probe, and the acceptance ladder digit for digit (the test-env lines `0.746 (192,
-6)` … `6.338 (1429, 2)`, `goals 15065`). `probe_step_phases.exs` agrees — a
-processed step of `base_10simobj_surf_agent` read 711 ms of model time before the
-fix.
-
-The trap to keep: **a closure sent to another process is copied with its whole
-environment.** The coordinator deliberately holds a module's _wiring_ rather than
-its memory, but `Monty.Runtime.Step.State`'s `module_spec` still carries `:state`,
-so nothing handed to a module may close over a spec.
-
-## A surface normal was nine walks over the patch (2026-11-10) — 641 k → 261 k
-
-`sensor_processing.ex`'s `plane_normal/1` built the scatter matrix `Xᵀ X` one cell
-at a time: nine cells, each its own `Enum.sum(for point <- points, do: …)`, and
-each of those passes reached into a point with `Enum.at(point, row)` and
-`Enum.at(point, column)`. `Enum.at/3` on a list is a slice — it walks the row to
-pick a coordinate out of it — so one surface normal cost two index walks per
-point per cell. A surface agent's neighbourhood is ~1 250 points, which is **22 814
-`Enum.at/3` calls, 45 632 `Enum.take` and 51 930 `Enum.drop` per step**, and they
-are on every step of every run.
-
-All nine sums are now accumulated in one `Enum.reduce` over the points, in the
-points' own order, so each cell adds the same numbers in the same order as its own
-walk did and the answer is unchanged bit for bit. Sensor module reductions on a
-location-only step of `base_10simobj_surf_agent`: **641 240 → 261 321**; the
-acceptance ladder is digit for digit.
-
-Two lessons worth keeping:
-
-- **`Enum.at/2` on a list inside a loop over that list is the expensive shape**, and
-  a `for row <- 0..2, column <- 0..2` around it hides it well. If a pass needs
-  several coordinates of the same point, destructure the point once.
-- **GC is not this port's wall, whatever `:eprof` says.** For the same steps eprof
-  put `erlang:garbage_collect/0` at 73 % of a processed step's time; `:msacc` over
-  six steps says the scheduler spends **1.11 %** of its time in `gc` against 27.9 %
-  in `emu`, and the step's own processes make no collections at all. eprof traces
-  every call, and building a trace message per call inflates the heap until GC
-  dominates the table it prints. Quote `:msacc` or reductions for GC, never eprof.
-
-## What the world really costs, and the crossing that does not have to be spent (2026-11-10)
-
-Every probe in this document runs in `MIX_ENV=test`, and `config/test.exs` sets
-`world_simulator: :synthetic` — this port's stand-in scene, one sphere, ray-cast in
-Elixir. A run in the studio or in production steps `:mujoco` (`config/config.exs`,
-and Monty's own snapshot names `tbp.monty.simulators.mujoco.MuJoCoSimulator` for
-`base_10simobj_surf_agent`). So a "world" figure from a test-env probe is the
-stand-in's, not the run's, and no ray caster is on the path of a real step: MuJoCo
-renders in C and we only talk to it.
-
-Measured with the same probe against the MuJoCo world (`world_simulator: :mujoco`
-forced before `Studio.open/1`), per steady-state step of `base_10simobj_surf_agent`:
-
-| stage         |                            cost | what it is                                                                                                                              |
-| ------------- | ------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Python        |                         7–10 ms | MuJoCo steps the scene and renders each camera                                                                                          |
-| the crossing  |                           ~0 ms | `Pythonx.decode` of one **132 KB** binary; the arrays already cross as bytes (`world.py::_answer`: a JSON header, a newline, the bytes) |
-| answer decode |                          1–4 ms | `Monty.Simulators.Mujoco.Answer` — every array's bytes become boxed floats in nested lists                                              |
-| transforms    | 5–7 ms, **~611 000 reductions** | `MissingToMaxDepth` and `DepthTo3DLocations` walking those lists                                                                        |
-
-So roughly half of the world phase is our own materialisation and walking, not the
-scene. Monty spends none of it: its world hands back numpy arrays that are views
-of MuJoCo's buffers, and `DepthTo3DLocations` is numpy arithmetic over them — no
-number is ever unpacked into a Python float, let alone a boxed one. That is the
-shape of the remaining win here: keep the arrays as the bytes they arrived as until
-a kernel consumes them, and make the transform chain one pass over those bytes.
-The lists survive only where a reader needs a shape (the page's frames), and are
-built there.
-
-Two steps taken, and what each was worth:
-
-- `get_surface_from_depth/3` read the clipped depth image three times — built it as
-  an image, walked it row by row to ask "is nothing nearer than a metre", then
-  flattened it for the histogram — to answer two questions about it. It reads flat
-  once now: **~644 500 → ~611 400 reductions** a step.
-- **The pixel walk.** `transform_observation/5` built four lists a pixel: the
-  sensor frame's point, the world's (a second `Enum.map` over the first), the
-  mask's image and the tagged row that joins them. One walk now answers, for each
-  pixel, where it is and whether it is on the surface: **~611 400 → ~472 900
-  reductions** a step, and three of those four lists are gone. The mask itself is
-  no longer materialised for this path at all; the public
-  `get_surface_from_depth/3` still answers the image, from the same decision.
-
-- **The frame, destructured once.** The walk then applied the camera's 3×3 to a
-  point and added the offset per pixel — `Geometry.apply/2` and `Geometry.add/2`,
-  two more lists a pixel. The frame's three rows and its offset are read once for
-  the image now, and a pixel's row is built at its final width: **~472 900 →
-  ~290 000 reductions** a step, so **~644 500 → ~290 000 (−55 %)** for the chain.
-
-What is left is one small list a pixel — the tagged row itself — and that goes when
-the walk moves behind the NIF boundary and answers `semantic_3d` as the bytes the
-sensor module wants anyway.
-
-## The rotations a burst samples from, kept once
-
-A matching step of the ten-object distant agent, by process, before and after
-this change (`probe_process_split.exs`, model reductions):
-
-| step | learning module, before |     after | view finder |   patch |
-| ---- | ----------------------: | --------: | ----------: | ------: |
-| 2    |               2 032 340 | 1 476 179 |     750 656 | 217 236 |
-| 3    |               2 318 196 | 1 705 736 |     746 574 | 209 529 |
-| 4    |               3 041 859 | 2 225 588 |     672 073 | 214 494 |
-
-`GraphMemory.get_rotation_features_at_nodes/4` is what burst sampling asks for
-the frames of the nodes it draws from, and it answered by walking the graph's
-whole `x` — one `Enum.slice` per node — then building a tuple of every node's
-rows to read a few hundred of them. Ten graphs of a ten-object library, every
-step: `get_rotation_features_at_all_nodes/3` **21 883 µs**, the subset it
-actually reads **9 455 µs**, per step (`probe_graph_reads.exs`, `:timer.tc` on
-the live graphs).
-
-The frames do not change while a graph is being matched: a graph is written at
-most once an episode, and `forget_rows/2,3` already drops everything derived from
-it at that moment. So the rotations are now built where the feature rows are —
-`build_rows_if_missing/3` — and read by node id out of a tuple: the same two
-questions answer in **82 µs** and **105 µs**, and the read is 90–270× cheaper.
-A graph that grows still answers with the new node's frame, which is what
-`graph_memory_test.exs` pins.
-
-## A view's on-object pixels, taken in one walk
-
-The view finder of the distant agent costs 0.67–1.15 M reductions a step, and
-`fprof` on the sensor module alone put **38 %** of it in `Enum.drop_list/2`:
-6 540 calls, each walking to its row and then to its column — that is
-`OnObjectObservation.from/2` reading `location_map[row][column]` and
-`salience_map[row][column]` once per on-object pixel, which is how the same
-reshape reads in numpy (`location_map[on_object_map]`, a gather) but not what a
-list of lists charges for. A thousand on-object pixels in a 64×64 view asked the
-grid for their place twice each, walking the image to answer.
-
-The masks, the locations and the salience are now zipped row by row and taken in
-the same walk that decides which pixels are on the object, so nothing is looked
-up by index: the view finder answers a step in **429 912** reductions where it
-answered 750 656 (step 2), and 441 752 where it answered 746 574 (step 3).
-The reshape itself is unchanged, which the recorded-view parity test
-(`monty_on_object_observation.json`) and the ordering tests pin.
-
-## The alignment a burst is made of, written out
-
-`SpatialArithmetics.align_orthonormal_vectors_as_matrix/2` is `transpose(m1) · m2`,
-and burst sampling asks for it once per node per sensed direction: **6 416
-alignments a matching step** in the ten-object distant agent. Through
-`Geometry.mul/2` each one built a transpose, nine row/column zips and nine sums —
-three dozen small lists to add nine numbers — and `fprof` put 156 744 `Enum.map`
-applications a step in that path.
-
-The nine entries are now written as arithmetic, summed in the order `Geometry.dot/2`
-summed them, so every product is the same float: the ladder stays digit-exact
-(`ev 6.338 (1429, 2)`, `goals 15065`) and the exactness test on a stored frame that
-is only nearly orthonormal still holds. Learning module per step, before and after
-model reductions:
-
-| step |    before |     after |
-| ---- | --------: | --------: |
-| 2    | 1 504 035 |   979 678 |
-| 3    | 1 701 700 | 1 238 544 |
-| 4    | 2 227 304 | 1 749 794 |
-
-The eight-step ladder went from 1 695 300 µs to 1 031 952 µs, and the surf agent's
-first step of an episode from 1.03 M to 0.62 M reductions (plain steps unchanged at
-223–237 k, so nothing degrades as episodes accumulate).
-
-## The node block a burst repeats, copied rather than encoded
-
-`Hypotheses.new/1` was asked for one hypothesis per (pose, node) with the nodes
-repeated pose by pose — `List.duplicate(locations, per_node) |> Enum.concat()`
-and the same for evidence — so a graph's few hundred chosen nodes were encoded
-once for every sensed direction: eight rounds at ten graphs, tens of thousands of
-rows of the same values every step. `Hypotheses.per_pose/1` encodes the node
-block once and copies it (`:binary.copy/2`), and takes the pose count from the
-matrices themselves.
-
-Learning module per step, model reductions: **979 678 → 935 989** (step 2),
-**1 238 544 → 1 187 725** (step 3), **1 749 794 → 1 697 697** (step 4). The
-ladder is still digit-exact (`ev 6.338 (1429, 2)`, `goals 15065`), and the
-burst's own tests — whole pose sets, one per pose on every node — pass unchanged.
-
-## The same walk without a tuple per pixel
-
-The on-object walk above still passed every pixel through `Enum.zip/1` — a tuple
-per pixel, four thousand of them in a 64×64 view, and `Enum.unzip/1` to take them
-apart again. The three grids are walked together now, a row at a time, with the
-two lists built by prepending and reversed once at the end.
-
-The view finder per step: **429 728 → 339 702** reductions (step 2, and stable —
-this process does no other work, so two runs of it agree). The view finder has
-now gone 750 656 → 339 702 (**−55 %**) in three steps of this work, and the
-recorded-view parity test still holds.
-
-A note on measuring: this probe takes `:erlang.process_info(pid, :reductions)`
-deltas around one step, so it also counts whatever else the process answered in
-that window — the learning module's figures vary ±8 % between identical runs,
-while the view finder's do not. The ladder is the determinism check, and it is
-digit-exact: same goals, same hypothesis counts, same evidence, run after run.
-
-## Measured 2026-11-16: the step counts are Monty's — and the runner rebuilds its world per episode
-
-The surface policy remembered the raw curvature angle instead of the heading it
-took, and a 140-episode `base_10simobj_surf_agent` run (`ex_mujoco`,
-`mix monty.run --no-record`) says what that was worth:
-
-| | before | after |
-|---|---|---|
-| steps | 44 414 | **28 693** (−35 %) |
-| outcome | 138 match, 2 exhausted | **139 match, 1 time_out** |
-| model | 312.6 s | 208.6 s |
-| world | 448.7 s | 171.4 s |
-| wall | 985 s (16.4 min) | **748 s (12.5 min)** |
-
-28 693 steps is **fewer than Monty's 36 565** for the same 140 episodes, and the
-per-step cost is now the whole gap: 26 ms against his 14.8 ms.
-
-**Where the 748 s goes** (the log's own timestamps): 380 s in model + world, and
-**268.7 s over 139 gaps, every one of them followed by `step 0`** — the runner
-builds a fresh world and model per episode, at ~1.93 s each. The studio's job
-reuses a world between episodes (its run had 20 s of gaps in total), so the two
-wall clocks are not comparable: the real number for a studio run is nearer
-8 minutes. Compare runners before quoting a wall clock; quote **steps** across
-them.
-
-What the budget says from here (the rules, not options):
-
-1. **The maths first**, and it now holds: fewer steps than Monty for the same
-   episodes, one time-out instead of two exhausted budgets.
+1. **The maths first.** Fewer steps than Monty for the same episodes is the
+   target, and it is met on the configs that have been compared.
 2. **No partitioning to go faster.** Concurrency worth spending effort on is
    inside a step — sensors already run behind a barrier, learning modules are the
    next candidates. A config that is parallel by design (Monty's
    `run_parallel.py`: N workers, own subsets and seeds) is a shape the studio
    should honour; it is a gap, not a lever.
 3. **A queue, not a call.** A step publishes; I/O, PNG encoding and the page
-   consume and may lag. `RunStream` is that shape already (a cast plus an ETS
-   table the writer reads); what still sits on the step is the entry, the moment,
-   the four files a step writes and the CSV row.
-4. **`chumak` is a candidate, not a plan** — moving the page's fan-out off the
-   mailboxes is worth it only if the 5.1 ms that is neither model nor world is
-   measured per piece first.
-5. **Measure the world again on `ex_mujoco`**: 171 s of the run, and the last
-   split (render/decode/transform) predates the compiled world.
+   consume and may lag. `RunStream` is that shape already — a cast plus an ETS
+   table the writer reads.
+4. **Measure before moving anything off the step.** What is neither model nor
+   world has to be split per piece before it is queued or made asynchronous.
+5. **Re-measure the world on the compiled binding** (`ex_mujoco`), because the
+   last split of render, decode and transform predates it.

@@ -100,12 +100,11 @@ defmodule Monty.Studio.RunHistory do
   replay that disagrees with itself.
 
   The steps the row already has are left alone, which is what keeps a step's
-  cost from growing with the run. Writing the whole transcript instead was
-  measured at **14 MB rewritten per step at the end of an 887-step run** — a
-  timeline of 15 kB a step, cumulative, so the bytes written over a run go as
-  $n^2/2$ and the last hundred steps of that run took 5 s each against 157 ms
-  for the first hundred. `docs/speed.md` has the table. What a step costs now is
-  the steps since the last checkpoint, which on this path is one.
+  cost from growing with the run. Writing the whole transcript instead made each
+  step rewrite every step before it — a timeline is cumulative, so the bytes
+  written over a run go as $n^2/2$ and the last steps of a long run cost
+  hundreds of times the first. What a step costs now is the steps since the last
+  checkpoint, which on this path is one.
 
   On Postgres the two columns are appended to in the statement that writes them
   (`jsonb` concatenation), so the row is never re-encoded whole. On SQLite,
