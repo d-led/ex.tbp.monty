@@ -1,163 +1,110 @@
-# What the planned classes are for
+# The planned classes
 
-`mix monty.module_map.verify` counts every class of Monty's tree and says which
-of them this application has written. Two of the four answers need nothing
-explained — a class whose module is here is `implemented`, and a class that is
-here only as far as anything uses it is `partial`
-([`partial-classes.md`](partial-classes.md) argues those). Excluded classes are
-argued in their map entries. The fourth does:
-**70 planned classes in 32 files**, while `mix monty.readiness` says 119 of
-Monty's 203 experiments run here and no production class blocks any of them.
+`mix monty.module_map.verify` counts Monty's classes and says which ones this app
+has written.
 
-This page is the answer, one verdict a file: does this application owe the
-class, will it never have it, or does something upstream decide. It replaces the
-brief (`next-session.md`) that asked the question.
+Two of its answers are obvious:
 
-```
-mix monty.module_map.verify     # implemented / partial / planned / excluded, by class
-mix monty.readiness             # which experiments run, and what stops the rest
-mix monty.module_map.gen        # regenerate after a pull; keeps these decisions
+- `implemented` — the module is here.
+- `partial` — here, as far as anything uses it ([`partial-classes.md`](partial-classes.md)).
+
+Excluded classes carry their reason in the map. This page is about **`planned`**.
+
+## Get the numbers. Don't quote them.
+
+```shell
+mix monty.module_map.verify                                  # the counts
+MIX_ENV=test mix run --no-start scripts/planned_classes.exs  # which, and what they cost
 ```
 
-## The method
+`Monty.ModuleMap.Data.sources/0` names the Monty commit the map was read from.
 
-For each file:
+## Short answer
 
-1. **Who constructs it?** A `_target_` in Monty's `conf/`, or a constructor site
-   in `src/`. Nothing constructs it and nothing here would: it is a candidate for
-   `:excluded`.
-2. **Who would notice its absence here?** `mix monty.readiness --all` names the
-   experiments a class stops. A class no experiment names is not blocking; it may
-   still be owed for parity, which is a different claim.
-3. **Does TBP still mean to keep the mechanism?** `docs/open-ends.md`, the
-   roadmap, and the forum crawl in `ex.tbp.monty.input/posts/`.
+**Most planned classes are named by no config.** No `_target_` under
+`priv/monty/conf/` points at them. They cannot stop a run.
 
-Then one verdict, in one of three shapes:
+Four groups:
 
-| verdict  | where it goes                                                                |
-| -------- | ---------------------------------------------------------------------------- |
-| write it | stays `:planned`; this page names the experiment or claim that needs it      |
-| never    | `status: :excluded` in `lib/monty/module_map/data.ex` with `reason:`         |
-| carry it | stays `:planned` **and** keeps its `stand_in:` — something here runs its job |
+- **Shapes** — Protocols, ABCs, base classes: `Observations`, `Monty`, `MontyBase`,
+  the `Environment` hierarchy. In Elixir they are behaviours, structs or maps.
+- **Records** — dataclasses a config fills in: `ObjectInitParams`, `LoggerArgs`,
+  `Resolution2D`, `TelemetrySchema`. A config is a map here.
+- **Dev tools** — `LivePlotter`, `PolicyPlot`, `JsonFormatter`, `SlicMerge`, Monty's
+  own test doubles. The studio's pages replace them.
+- **2-D and Omniglot** — `Omniglot*`, `SaccadeOnImage*`. Their world is not carried,
+  so `mix monty.readiness` calls them `not_planned`.
 
-`data.ex` is generated. The hand edits it keeps are exactly these decisions:
-an excluded entry with its reason, and each excluded class with its own.
-`/modules?status=planned` reads the same map, so the page is the answer.
+## The few a config does name
 
-## The rule that made the first four moves one decision
+| class                        | named by                    | what happens                                                       |
+| ---------------------------- | --------------------------- | ------------------------------------------------------------------ |
+| MuJoCo agents, `SensorConfig` | every MuJoCo environment    | Runs — as Monty's Python in `priv/monty_py/world.py`. On purpose.   |
+| two wandb handlers           | two logging groups          | Skipped by name. A note in the run log, not a refusal.              |
+| `…telemetry.Snapshot`        | the `camera_*` / `3sm_*` groups | Not built. That sensor falls back to the stand-in. Telemetry only. |
+| `Any`, `MatchCriteria`       | every training config       | **Do not build. The run refuses.**                                  |
 
-Monty's two simulator packages are **bindings to an engine**: classes that
-subclass `habitat_sim`'s controls, wrap its simulator, or build its sensor
-specs. Nothing in them is Monty's own arithmetic, and none of it can be written
-in Elixir — the engine is C++ and Python.
+## The two that stop runs
 
-This application carries exactly one engine, MuJoCo, and carries it as Python in
-`priv/monty_py/world.py` behind `Monty.Simulators.Port`. That is why the MuJoCo
-classes stay planned **and** keep their stand-in while the Habitat ones are
-excluded: the difference is not the kind of code, it is which world this build
-steps.
+Monty renamed `AnyPolicy` to `Any`, and its option `policies` to `strategies`.
+The port still has the old name and option. It has no `MatchCriteria` at all.
 
-## What was decided (77 classes)
+So this termination fails:
 
-| classes | file(s)                             | verdict | the evidence                                                                                                       |
-| ------: | ----------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
-|      11 | `simulators/habitat/actions.py`     | never   | `SceneNodeControl` subclasses driving `magnum` scene nodes                                                         |
-|       4 | `simulators/habitat/actuator.py`    | never   | habitat-sim's actuator API; here an action crosses `Monty.Simulators.Port`                                         |
-|       3 | `simulators/habitat/agents.py`      | never   | habitat-sim agents and scene nodes — the agent belongs to the world                                                |
-|       3 | `simulators/habitat/sensors.py`     | never   | builds `habitat_sim.sensor.CameraSensorSpec`s                                                                      |
-|       1 | `simulators/habitat/simulator.py`   | never   | a wrapper over `habitat_sim.Simulator`                                                                             |
-|       2 | `simulators/habitat/environment.py` | never   | agent configuration nothing here reads (the file's third class is this port's peer handle and stays `implemented`) |
-|       1 | `simulators/tacto/agents.py`        | never   | a habitat-sim agent with tacto fingers                                                                             |
-|       6 | `simulators/tacto/config.py`        | never   | tacto sensor specs for habitat-sim; no config names tacto                                                          |
-|       1 | `simulators/tacto/sensors.py`       | never   | `TactoSensor.get_specs/1` answers `habitat_sim.sensor.CameraSensorSpec`                                            |
-|      28 | `frameworks/actions/actions.py`     | never   | the 14 `*ActionSampler` and 14 `*Actuator` classes are `Protocol`s, one signature each                             |
-|       2 | `frameworks/experiments/hooks.py`   | never   | `StepHook` is a `Protocol`; `NoOpStepHook` is its no-op, and no config names one                                   |
-|      15 | `tbp.teleop/**`                     | never   | matplotlib widgets, panels and draw loops; this app's equivalents are LiveView components and events               |
-
-Totals: **147 planned → 70**, 211 implemented unchanged, 79 excluded. The
-counts that matter did not move — `mix monty.readiness` still answers **119 run /
-0 waiting / 3 cannot / 81 not planned**, because none of the 77 is named by a
-runnable experiment.
-
-### Why the action protocols are excluded, though the actions are written
-
-Monty declares, for each of its fourteen actions, a sampler interface and an
-actuator interface:
-
-```python
-class MoveForwardActionSampler(Protocol):
-    def sample_move_forward(self, agent_id, rng) -> MoveForward: ...
-
-class MoveForwardActuator(Protocol):
-    def actuate_move_forward(self, action: MoveForward) -> None: ...
+```yaml
+recognition_strategy:
+  _target_: …MinEvalMaxTotalSteps
+  wrapped:
+    _target_: …Any
+    strategies: [ …StepLimit …, …MatchCriteria ]
 ```
 
-There is no code in either: they are the shape a simulator's actuator and a
-policy's sampler must have. Here both jobs already have homes —
+`Setup.recognition_strategy/1` answers:
 
-- sampling is `ConstantSampler` / `UniformlyDistributedSampler`, which answer
-  `sample_move_forward/3` and its thirteen siblings (`surface_policy.ex` calls
-  them through the sampler's own module);
-- acting is the world's: an action is a struct (`Monty.Frameworks.Actions.*`)
-  that becomes a map and crosses `Monty.Simulators.Port`.
+    {:error, "no recognition policy named Any"}
 
-This is the same verdict the map already gave `ResettableSensorModule` — "a
-Protocol for isinstance checks; the port's sensor behaviour already requires
-reset/1".
+and `Run.start/2` refuses the episode.
 
-### Why the teleop GUI is excluded, though teleop is not deprecated
+`mix monty.readiness` does not check this. It looks at worlds and module classes.
+So the page offers these runs, and the worker refuses them.
 
-`tbp.teleop` is a matplotlib window: a `StepHook` that draws the figure and
-waits for a click, buttons, a speed slider, a live plotter, and two policy
-adapters that turn a click into an action. It is 3,224 lines across seven
-modules, and none of it is about the maths.
+**Treat "runs here" as an upper bound until this is fixed.**
+`scripts/planned_classes.exs` lists the configs.
 
-This application already draws the same information — the run page's panels,
-the per-module chart, the sensor frames, the centre view — with LiveView
-components over a run record, and its controls are `phx-click` events. So the
-classes are `:excluded` with the counterpart named in each reason, not left
-`planned` for a `lib/teleop/` that will never exist. `Monty.ModuleMap`'s own
-moduledoc already said it: the namespace exists so a teleop developer can find
-the module that _replaces_ what they wrote.
+The fix is small:
 
-An interactive surface is a feature, not this port of these names. If one is
-built, it adds the step seam it needs at that point — a motor policy and a
-LiveView event, written from that requirement.
+- `Any` — the existing `AnyPolicy`, renamed, taking `strategies`.
+- `MatchCriteria` — new. It reads a model's `match_criterion`, whose classes
+  already exist and are implemented.
+- Spec — Monty's own tests, translated case for case.
 
-## What is left: 70 planned in 32 files
+## Excluded classes
 
-Of these, **19 are carried and owe nothing**: MuJoCo's simulator, agents and
-objects (17), each with `stand_in:` naming `priv/monty_py/world.py`, plus the two
-shell classes `Monty` and `MontyBase`, whose job `Monty.Runtime.*` does. They stay
-planned on purpose — the counter reaching zero means the other 51 are written,
-not that these were renamed.
+Already argued in the map. Three groups:
 
-The **51 owed** fall into five groups:
+- **Action Protocols** (`*ActionSampler`, `*Actuator`) — one signature each, no code.
+- **`tbp.teleop`** — a matplotlib window. The studio's pages replace it.
+- **Experiment hooks and abstract bases** — `StepHook`, `NoOpStepHook`, the two
+  `sensor_module.py` bases.
 
-| classes | files                                                                                            | what it is                                                                                             |
-| ------: | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-|      12 | `frameworks/models/abstract_monty_classes.py` (6), `frameworks/environments/environment.py` (6)  | the shapes: two `Dict` typedefs, seven `Protocol`s, three ABCs — the base class is not a config choice |
-|       5 | `frameworks/loggers/wandb_handlers.py`                                                           | real code, owed: the transport landed, the handlers did not                                            |
-|       6 | `frameworks/environments/two_d_data.py`, `experiment/environment.py`                             | Omniglot and Saccade-on-image — the same question the Habitat verdict answered, one layer up           |
-|      11 | `experiment/motor_system.py`, `object_init_samplers.py`, `frameworks/sensors.py`, `telemetry/**` | experiment-side classes a config can name                                                              |
-|      17 | one each, across the tree                                                                        | `RuntimeContext`, `MatchCriteria`, `RecognitionConclusion`, `SlicMerge`, `NumpyGraph`, …               |
+**Habitat and tacto are not in the map at all.** Monty deleted the sources; only
+`__pycache__` is left. A Habitat config is still refused at open time
+(`:world_not_carried`).
 
-The first group is the largest and the one the brief warned about: a Protocol is
-not a thing to write, it is a thing to _be_. Before excluding them, ask what
-would fail if the class vanished — our behaviours (`Monty.Simulators.Environment`,
-`Monty.SensorModules.SensorModule`, `Monty.Observations`) are the counterparts,
-and the map's reason should name the one that carries the shape.
+## Changing a verdict
 
-## Moving a verdict back
+Exclusions are data. `mix monty.module_map.gen` keeps them.
 
-The exclusions are data, and `mix monty.module_map.gen` keeps them — that is the
-point, and also the trap: a decision once recorded is not revisited by a
-regeneration. To reverse one, delete its `reason:` and `status: :excluded` (or
-its entry in `data.ex`), run `mix monty.module_map.verify`, and the class returns
-to `:planned` or `:implemented` on its own. Nothing in the code reads a status to
-decide how to run — `Setup` classifies a config from its own classes — so moving
-a verdict changes the map, the page and the counts, and no behaviour.
+To reverse one:
 
-The evidence behind each one is in the commit that made it, not only here: a
-verdict of "never" is a claim about somebody's code, and the proof belongs beside
-it.
+1. Delete its `reason:` and `status: :excluded` in
+   [`data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex).
+2. Run `mix monty.module_map.verify`.
+
+The class returns to `planned` or `implemented`. No behaviour changes — `Setup`
+reads a config, not the map.
+
+A verdict of "never" is a claim about someone's code. Keep the proof beside it:
+`git log -S'<phrase you remember>'` finds it.
+
+A class on a running path, like `Any`, is not a verdict. It is a defect.

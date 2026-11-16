@@ -403,7 +403,7 @@ scripts/quality.sh --image # builds it, checks the uid it runs as
 
 ## What a run costs
 
-Measured on a warm cache (run `41189216324`, before the suite was split): a push
+Measured on a warm cache (a CI run, before the suite was split): a push
 took **8 m 30 s**, and `mix cover` inside the `test` job was **7 m 49 s** of it.
 `lint` and `types` finished in **25 seconds each** — the deps and `_build`
 caches carry the compile, so they are formatting, credo, sobelow and dialyzer

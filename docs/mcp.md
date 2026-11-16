@@ -88,7 +88,8 @@ is.
 
 ### Asking about this deployment
 
-`monty_studio` takes no arguments and answers with numbers:
+`monty_studio` takes no arguments and answers with numbers — from the deployment it
+is asked on, not from this page:
 
 ```
 210 experiments preconfigured; 33 finished · 5 failed run(s)
@@ -144,6 +145,8 @@ call answers "how many surface-agent experiments start from a pretrained model":
   "arguments": { "agent": "surf", "model": "pretrained" }
 }
 ```
+
+and it answers with that deployment's own numbers, e.g.
 
 ```
 9 of 210 experiments match.

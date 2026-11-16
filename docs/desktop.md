@@ -12,13 +12,15 @@ be a page that had stopped being the same application.
 
 ## Why it is possible now
 
-Until `f0ed29b` the application needed a database server to boot, which a
-desktop app cannot ask of a user. The database is now a file by default — and
-that only became _true_ in `3296e41`, which is worth knowing before trusting it:
-until then `repo_module/0` answered a written-in default of Postgres and
-`runtime.exs` set `:repo` from `repo_module/0`, so the default echoed itself and
-a release with no `DATABASE_URL` started Postgres against a file path. The
-symptom was a migration that never ran and an image that never became healthy.
+The application used to need a database server to boot. A desktop app cannot ask
+that of a user.
+
+The database is now a file by default. Trust that only after one fix:
+`repo_module/0` used to answer a written-in default of Postgres. `runtime.exs` then
+set `:repo` from `repo_module/0`, so the default echoed itself. A release with no
+`DATABASE_URL` started Postgres against a file path.
+
+The symptom: a migration that never ran, and an image that never became healthy.
 
 | piece                                                                                                                                                | where                                                                  |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -498,9 +500,9 @@ Two things had to exist before a Windows build could start its own server:
   three are `#[cfg(windows)]` in `src-tauri/src/main.rs`, so the macOS path is
   the same code it was.
 
-**Built by CI, and not yet started.** A `windows-2022` row builds it, and the run
-at `ae325a1` is the first to upload `ex-tbp-monty-win-x64.zip` (264 MB) — after
-two attempts that failed on defects only Windows has: first `npm` being `npm.cmd`
+**Built by CI, and not yet started.** A `windows-2022` row builds it, and the
+first successful upload of `ex-tbp-monty-win-x64.zip` came after two attempts
+that failed on defects only Windows has: first `npm` being `npm.cmd`
 (Elixir's `System.cmd` cannot start one; it failed with `:eacces`), then the
 stylesheet being built before anything compiled the application, so the colocated
 CSS it imports did not exist yet. The second was reproduced without Windows at
@@ -692,8 +694,8 @@ names.
   as the account's runner entitlement. It was not: the sibling project
   (`confluence_phx_mirror`) builds the same platform from `macos-latest` on the
   same account. `macos-14` resolves to a configuration this account does not
-  have, `macos-latest` to the one it does, and the job now asks for the second
-  (`6bd0bfe`). The by-hand checks below were what covered the gap while the leg
+  `macos-latest` to the one it does, and the job now asks for the second. The
+  by-hand checks below were what covered the gap while the leg
   was cancelled: `scripts/package.sh osx-arm64`, the zip unpacked into a folder
   inside the checkout, and `scripts/smoke-window.sh` opening that copy (heading,
   marks and all), plus the same window with `--crash` pointed at a release that
@@ -724,8 +726,8 @@ names.
   Windows x64 (an NSIS setup and the same portable folder, zipped). The macOS
   app has been built and opened from a checkout by a person; the Linux AppImage
   has been started (see below); the Windows one is built and uploaded, and
-  nobody has started it. `docs/status.md`'s own rule applies — nothing is
-  claimed beyond what was run. Linux needs `libwebkit2gtk-4.1-dev`,
+  nobody has started it. The rule holds — nothing is claimed beyond what was
+  run. Linux needs `libwebkit2gtk-4.1-dev`,
   `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev` and `patchelf`
   on the runner, which the job installs — and no FUSE, because the AppImage
   tools are run with `APPIMAGE_EXTRACT_AND_RUN`.

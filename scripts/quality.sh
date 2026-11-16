@@ -142,8 +142,8 @@ if [[ $tests -eq 1 ]]; then
   # ExCoveralls exports to `cover/default.coverdata`, the same name a bare
   # `mix test --cover` on one file uses, so a subset run leaves an export behind
   # that says every module it never loaded is uncovered — and the next ranking
-  # reads it and reports a hundred functions above the threshold that are not
-  # (`docs/status.md` #5). This step replaces the file it is about to rank.
+  # reads it and reports a hundred functions above the threshold that are not.
+  # This step replaces the file it is about to rank.
   rm -f cover/*.coverdata
   if mix cover >"$report" 2>&1; then
     record cover 0 "$(grep -E '^Result:' "$report" | tail -1)"

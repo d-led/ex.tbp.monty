@@ -99,58 +99,34 @@ same one on beats re-loading it from a library every episode.
 
 ## 3. What is still missing
 
-The rule is the one `7cba014` established: **a gap is refused with a sentence,
-never stood in for.** Training is no longer a gap — the loop carries the memory —
-so `:training_not_implemented` is gone and a config that trains is offered. What
-is left is not a refusal but a debt: nothing yet proves the trained memory is the
-one Monty would have built.
+One rule, from the no-stand-ins decision (`git log -S'no stand-ins'`): **a gap is
+refused with a sentence, never stood in for.**
 
-1. **A referee.** "It trains" has to mean "it learned what Monty learned" for some
-   config, compared the way the evaluation ladder compares. The
-   `test/evidence_lm/*` configs are the ones Monty's own tests assert on and they
-   are composed here — but their world is Habitat-Sim (§6), so the referee has to
-   be a config this build steps, or Monty's own numbers for one of its Habitat runs
-   taken as the reference while the graphs are compared rather than the pictures.
-2. **What was learned has to survive the run** _(done)_: `Memory.save/4` writes a
-   memory in the format `load/3` reads, and a run with a training phase writes
-   each module's memory to `<artifacts>/<run>/memory/trained/<name>.jsonl.gz`
-   when it ends — Monty's `save_state_dir/1`, in this port's format. The round
-   trip is specified by `test/monty/studio/memory_test.exs` (the same objects,
-   every node in the same place with the same features) and end to end by
-   `test/monty/studio/jobs/run_test.exs` (a training episode's memory is on disk
-   afterwards and names `new_object0`).
-3. **A loaded library is not the memory the config would build.**
-   `Memory.read!/1` builds a plain `GraphMemory` with `GraphObjectModel` and no
-   `k`/thresholds, and `Setup` hands that to the module in place of the empty
-   `EvidenceGraphMemory` the config's own numbers would have built. Recognition is
-   unaffected — matching reads the graphs — but a config that trains _on top of_ a
-   pretrained library would extend it with the wrong kind of model. Monty loads a
-   state dict into the module it has just built (`monty_experiment.py`), which is
-   the shape worth copying.
-4. **`Mix.Tasks.Monty.Run` has its own loop.** It steps an episode at a time and
-   neither writes the episode into memory nor carries it to the next one, so
-   `mix monty.run` trains differently from the page. It has to take the same
-   hand-off.
-5. **The other 170 refusals.** Of the 210 shipped experiments, 170 are refused in a
-   MuJoCo run: 80 for classes this port has not written (`DisplacementGraphLM`
-   alone is 44 of them, `FeatureGraphLM` 10, `TwoDSensorModule` with
-   `DefaultAttentionSystem` 10, `MontySupervisedObjectPretrainingExperiment` 11,
-   `SaccadeOnImage*` 7, `MontyBase` 3, `MontyForNoResetEvidenceGraphMatching` 3,
-   `Omniglot*` 2) and 83 because their world is Habitat-Sim, which this
-   application does not carry (§6).
+Training is no longer a gap. The loop carries the memory, the run writes it at the
+end (§2), `mix monty.run` does the same, and `:training_not_implemented` is gone.
 
-## 4. The order worth following
+Two debts remain. Neither is a refusal.
 
-1. Carry the memory through a phase _(done: §2)_ and lift the guard _(done)_.
-2. A referee for one config this build steps _(§3.1)_.
-3. Load a written memory into the memory the config itself would have built
-   _(§3.3)_, and give a later run a way to find the library an earlier one wrote.
-4. `Mix.Tasks.Monty.Run`'s own loop _(§3.4)_.
-5. Port what the catalog is missing, biggest first: `DisplacementGraphLM` (44),
-   `MontySupervisedObjectPretrainingExperiment` (11), `FeatureGraphLM` (10), the
-   cows image family (`TwoDSensorModule`, `DefaultAttentionSystem`, 10), the
-   saccade environments (7), then `MontyBase`, the no-reset learning module and
-   Omniglot (8) _(§3.5)_.
+1. **A referee.** "It trains" must mean "it learned what Monty learned", for one
+   config, checked like the evaluation ladder. Monty's own tests assert on
+   `test/evidence_lm/*`, and those configs compose here. Their world is
+   Habitat-Sim (§6). So the referee is either a config this build steps, or
+   Monty's own numbers for a Habitat run — comparing the graphs, not the pictures.
+2. **A loaded library is not the memory the config would build.** `Memory.read!/1`
+   builds a plain `GraphMemory`, with no `k` and no thresholds. `Setup` hands it
+   to the module instead of the `EvidenceGraphMemory` the config describes.
+   Recognition is unaffected — matching reads the graphs. But training _on top of_
+   a pretrained library would extend the wrong kind of model. Monty loads a state
+   dict into the module it just built (`monty_experiment.py`). Copy that shape.
+
+## 4. Order
+
+1. A referee for one config this build steps _(§3.1)_.
+2. Load a written memory into the memory the config would have built _(§3.2)_.
+   Then let a later run find the library an earlier one wrote.
+
+No porting order is needed. No shipped experiment is refused for a class this port
+has not written; `mix monty.readiness` prints the counts.
 
 ## 5. Two traps, recorded so they are not re-learned
 
@@ -168,8 +144,9 @@ one Monty would have built.
 
 ## 6. The world this application cannot step
 
-83 of the 210 shipped experiments name a world this build does not carry. Almost
-all of them are Habitat-Sim: the scene is images another program rendered, the
+A handful of the shipped experiments name a world this build does not carry (`mix
+monty.readiness` counts them; nine on 2026-11-16), and almost all of them are
+Habitat-Sim: the scene is images another program rendered, the
 config has no mesh to place, and the package exists only as a conda build for
 another Python. `Setup.world/3` cannot step it, so a MuJoCo run of such a config
 is refused at open time with `:world_not_carried` — an error, not a warning,

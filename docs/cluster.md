@@ -432,8 +432,8 @@ either safe: nothing the lost holder writes can land.
 
 A node dying _while a part is in hand_ is the case above — the part is re-taken
 inside the wave that was already running. A node dying _with the run_ is another:
-nothing is left to walk the division, and until `3738467` the answer was to close
-the run as failed (`Monty.Studio.Jobs.Reaper.sweep/0`) and lose the work.
+nothing is left to walk the division, and the answer used to be to close the run
+as failed (`Monty.Studio.Jobs.Reaper.sweep/0`) and lose the work.
 
 Now the boot sweep asks first. `Reaper.recover/0` runs once at boot, before the
 sweep, and put back in the queue every run of this node's whose division has

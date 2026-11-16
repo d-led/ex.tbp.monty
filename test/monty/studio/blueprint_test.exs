@@ -13,8 +13,8 @@ defmodule Monty.Studio.BlueprintTest do
       assert tree["experiment"]["config"]["monty_config"]["sensor_modules"] != %{}
 
       # The promise the builder makes: save without touching anything and the
-      # draft is one a run accepts. It was not — the default base names classes
-      # this port has not written (`docs/status.md` #11).
+      # draft is one a run accepts. It was not — the default base named classes
+      # this port had not written.
       assert {:ok, setup} = Setup.from_text(Blueprint.to_yaml(blueprint), name: "my_experiment")
       assert Setup.valid?(setup)
     end

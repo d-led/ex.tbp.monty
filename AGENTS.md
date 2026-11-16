@@ -50,6 +50,12 @@ Monty.Studio.RunStream.steps_from/2 is undefined (module … is not available)`,
   (wing `ex.tbp.monty`, room `handover`: the canonical drawer is
   `drawer_ex.tbp.monty_handover_8fbec177134c01cb3b6901fc`, and every section is a
   drawer of its own — search `hand-over §12`).
+- **Docs and memory carry no counts and no commit ids.** Put a number in the
+  command that prints it (`mix monty.readiness`, `mix monty.module_map.verify`,
+  `MIX_ENV=test mix run --no-start scripts/planned_classes.exs`). Find history with
+  `git log -S'<phrase>'`. Two exceptions: a measurement, when it says which box,
+  world and workload it came from; and a generated page a gate checks
+  (`docs/features.md`).
 
 Run `scripts/quality.sh` (what CI runs) before considering work done;
 `mix dialyzer` is the separate types job. Format with `scripts/reformat.sh` —

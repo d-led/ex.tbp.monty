@@ -18,28 +18,23 @@ a trade-off:
    `tests/unit/**/test_*.py` becomes one ExUnit test that names the case it
    translates; where Monty drove a private method, ours drives the nearest
    public entry point and says so. A hand-written behaviour test states intent,
-   never parity, and is not counted as such. Re-measure the count with the
-   one-liner in `handover.md` §12 — at the end of 2026-11-06 it was **22 of 652**,
-   all twenty-two the burst sampler's.
+   never parity, and is not counted as such. Re-measure the count by listing
+   Monty's `def test_` names (`monty-orig/tests/unit/**/test_*.py`) and grepping
+   ours for them; as of 2026-11-07 it was **22 of 652**, all twenty-two the burst
+   sampler's.
 
-## Done — v0.1, the studio
+## Where the port stands
 
-| Piece                                                                                         | State |
-| --------------------------------------------------------------------------------------------- | ----- |
-| Phoenix/OTP app, Postgres, quality gates, CI                                                  | done  |
-| `Monty.Cmp`, `Monty.Geometry`                                                                 | done  |
-| `Monty.Config` — Hydra composition, resolvers, snapshot parity (`mix monty.config.snapshots`) | done  |
-| `Monty.ModuleMap` — every Monty file mapped, target resolution, verification                  | done  |
-| `Monty.Runtime` — one process per module, step barriers, vote rounds with deadlines           | done  |
-| `Monty.Studio` — faceted index, setup + checks, builder, diagram, synthetic run, frames       | done  |
-| `Monty.Prerequisites` — streaming downloads into Monty's paths                                | done  |
-| Run history in Postgres, delete with confirmation                                             | done  |
-| Headless `mix monty.run`, `mix monty.bench`                                                   | done  |
+The v0.1 studio is built: the app and its gates, config composition, the module
+map, the runtime, the studio pages, prerequisites, run history, and the headless
+`mix monty.run` / `mix monty.bench`.
 
-What the studio can say about an experiment today: its wiring, its checks
-(Monty's own connectivity rules), how much of it is ported, and — for the ported
-part — a real run. The "not ported yet" line is the backlog below, in one
-sentence.
+For any experiment the studio can show its wiring, its checks, how much of it is
+ported, and — where ported — a real run.
+
+The phases below are what remains. `mix monty.readiness` and
+`mix monty.module_map.verify` print the live counts. Do not quote counts from
+prose.
 
 ## Phase 1 — the numeric core, in dependency order
 
@@ -235,8 +230,7 @@ from the page and from `mix monty.run`.
   about four of them — so the axis says where zero is instead of leaving it
   between two labels; and a hover that reads the line _at the pointer's x_,
   interpolating between the points it was drawn through, rather than snapping to
-  a subsampled one. Both are `handover.md` §13, with the measurements that found
-  them.
+  a subsampled one.
 - Config editor: edit a group, see the composed diff and the snapshot check
   before saving; a config Monty would reject cannot be saved.
 - Step inspector: the CMP payload a sensor sent and what a learning module did
@@ -253,17 +247,18 @@ from the page and from `mix monty.run`.
 
 ## Not in scope
 
-No pretrained `.pt`/torch checkpoint import (graphs only, rebuild by running a
-training experiment); no GPU or EXLA requirement; no distributed clustering (the
-design keeps it possible). Habitat and MuJoCo are not exclusions but bridges, and
-Phase 2 holds their order: Habitat's is done, MuJoCo's is next. wandb is in the
-same position — `WandbWrapper` and the Python client behind it exist and are
-tested offline; what a deployment adds is credentials, not code.
+No pretrained `.pt`/torch checkpoint import (graphs only; rebuild by running a training
+experiment); no GPU or EXLA requirement — Nx is a lever, not a demand. **Clustering is no
+longer out of scope**: a node can be named and joined to a cluster ([cluster.md](cluster.md),
+[container.md](container.md)), additively — with `MONTY_CLUSTER` unset nothing starts and
+nothing changes. Habitat-Sim is not carried: a Habitat config is refused as a world this
+build does not have, rather than silently given MuJoCo's scene. wandb is where it was —
+`WandbWrapper` and the Python client exist and are tested offline; what a deployment adds is
+credentials, not code.
 
-Two things that are not scope decisions but _later milestones_ — Monty's
-parallel episodes and an episode against a live world — are worked out in
-[parallel-and-live.md](parallel-and-live.md): what is free here, what is not, and
-what each one is done when.
+Two things that are not scope decisions but _later milestones_ — Monty's parallel episodes
+(built: `Partition` + `Jobs.Run.run_wave`) and an episode against a live world — are worked
+out in [parallel-and-live.md](parallel-and-live.md).
 
 ## Decision: the pretrained library lives as long as the experiment
 

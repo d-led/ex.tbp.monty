@@ -229,9 +229,9 @@ defmodule Monty.Studio.Blueprint do
   # What a run will read, for the two values that are checked: `n_eval_epochs:
   # ${constants.rotations_all_count}` is 14 by the time `Setup` builds the
   # experiment, so a builder that validated the text refused a base this port
-  # runs — `base_config_10distinctobj_dist_agent` among them (`docs/status.md`
-  # #11). The config itself keeps Monty's own text, because a draft must compose
-  # to the experiment it came from.
+  # runs — `base_config_10distinctobj_dist_agent` among them. The config itself
+  # keeps Monty's own text, because a draft must compose to the experiment it
+  # came from.
   defp readable_config(config, conf_dir) do
     constants = constants(conf_dir)
 

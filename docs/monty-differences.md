@@ -86,14 +86,14 @@ happens on a path Monty itself never takes.
 ## How the links work
 
 Monty's code is linked to
-[`thousandbrainsproject/tbp.monty` at `9130364`](https://github.com/thousandbrainsproject/tbp.monty/tree/91303642784ce176e2b8196c7bb990fef57688b6)
-— the revision these entries were read from, which is why line numbers are pinned
-to it; the function names will outlive them. The map and the shipped config copy
-have moved on since (`monty@760ad17`,
-[`priv/monty/inputs.json`](../priv/monty/inputs.json)), so a line number here is a
-line of `9130364` and not of today's checkout. This port's code is linked
-relative to this file. Snippets are quoted verbatim, only dedented from Monty's
-nesting.
+[the revision these entries were read from](https://github.com/thousandbrainsproject/tbp.monty/tree/91303642784ce176e2b8196c7bb990fef57688b6)
+— which is why line numbers are pinned to it; the function names will outlive
+them. The map and the shipped config copy have moved on since: the commit the map
+was read from is `Monty.ModuleMap.Data.sources/0`, and the copy is named in
+[`priv/monty/inputs.json`](../priv/monty/inputs.json), so a line number here is a
+line of the linked revision and not of today's checkout. This port's code is
+linked relative to this file. Snippets are quoted verbatim, only dedented from
+Monty's nesting.
 
 ---
 

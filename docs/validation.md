@@ -28,7 +28,7 @@ only place a tolerance is allowed to be loose, and each says why it is.
 
 |                      |                                                                                                        |
 | -------------------- | ------------------------------------------------------------------------------------------------------ |
-| Monty                | `../monty-orig` at `9130364` — the revision these recordings were taken from                           |
+| Monty                | `../monty-orig` — the checkout these recordings were taken from (re-record rather than trust a revision number) |
 | Interpreter          | Python 3.13 with numpy 2.4.1 and OpenCV 4.10.0                                                         |
 | Why that interpreter | the repo's default `python3` is 3.12 and has no OpenCV; only the recorders that touch OpenCV need 3.13 |
 
@@ -572,7 +572,7 @@ and put the studio's run beside it with
 `mix run scripts/probe_run_log.exs priv/studio_runs/<id>` — the run log's closing
 line names each episode's conclusion.
 
-### A run's `eval_stats.csv` is one row per episode only since `cbbbf48`
+### A run's `eval_stats.csv` is one row per episode
 
 Two defects in the statistics a run writes were fixed together, and a file
 written before them is not comparable with one written after:

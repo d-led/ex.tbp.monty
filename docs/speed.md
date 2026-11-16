@@ -2,7 +2,8 @@
 
 What a step costs, what has been measured, and what is left. Everything here is
 a measurement from this machine, quoted with the experiment it came from — not a
-target.
+target. Where a change is named as done, the change itself is in `git log`:
+search the function or phrase that sits beside it.
 
 The reference is Monty's own dashboard: `base_config_10distinctobj_dist_agent`,
 10 objects, 14 epochs, **~39 ms a step** (5 122 eval steps in 3:18). One run of
@@ -93,8 +94,7 @@ Python process, which `info.world_us` does not count), and the scheduler. The
 pictures are **1.4 ms and 1.0 ms** a step to encode warm, so ~12 s of the run is
 drawing the scene the page shows.
 
-**The same benchmark in four parts, later the same day** (`93b148f`, no page
-open): **198.8 s**, 5 110 steps, 140 episodes, `finished`, and a statistics file
+**The same benchmark in four parts, later the same day** (no page open): **198.8 s**, 5 110 steps, 140 episodes, `finished`, and a statistics file
 with **140 rows, `match` × 140** — versus Monty's dashboard's 3:18 for the same
 run. Four parts is what `Monty.Studio.Partition` divides a run into, and the
 parts are what makes up the difference: the same work in one part was 186 s
@@ -102,7 +102,7 @@ without contention and 242–247 s with the box as loaded as it was earlier, so 
 two readings are not a speedup to quote — they are the same run under two
 schedules. What is quoted is the comparison with Monty, which is now at parity.
 
-The parallel path only became usable in `183e57f`: MuJoCo's `Renderer` makes its
+The parallel path only became usable after a renderer fix: MuJoCo's `Renderer` makes its
 GL context current in `__init__` and never again, and `Renderer.close()` frees GL
 objects of whichever context is _current_, so a part finishing deleted another
 part's framebuffer and the survivor's segmentation pass read the colour image
@@ -196,7 +196,7 @@ comparison inside one call and never bring the column across.
    the crossing is. It also pays on every model step, which is why it is 20 % of
    the run rather than 18 %.
 
-3. **`Run.start` / positioning** — done (`932bdfb`), one sensor's cloud instead
+3. **`Run.start` / positioning** — done, one sensor's cloud instead
    of two.
 4. **The world's crossing and the transform beside it**: `Host.step` 7–8 ms a
    step and `DepthTo3DLocations` 240 k reductions of the ~590 k an
@@ -342,7 +342,8 @@ boundary there appends with `||`.
 :skip` means "a boundary leaves the pictures alone" — but it was only honoured on
 the append path. An adapter that rewrites the row was handed the `timeline` it
 already held, so every boundary encoded 42 MB and wrote it back: 230 ms against
-the 45 ms the same write costs without it. Fixed in `f8a0fa7`; the boundary on
+the 45 ms the same write costs without it. Fixed — `timeline: :skip` now reaches
+`rewrite/2` — and the boundary on
 SQLite is now 40–174 ms (a loaded box's spread, typically ~50 ms).
 
 **What that means for a run**: 140 boundaries at 50 ms is **7 s**, the closing
@@ -672,7 +673,7 @@ So the remaining cost has the shape the section above already names: a step is
 The change that matters carries a whole phase across once and hands back the
 columns the module keeps.
 
-**Done so far: the slope mask (`d59827f`).** `select_hypotheses/2` asked for the
+**Done so far: the slope mask.** `select_hypotheses/2` asked for the
 slope column, paired it with the ages and walked the pairs — a decode of one
 float per hypothesis and three list passes over the set — to decide one bit per
 hypothesis. `MatcherNif.keep_mask/7` decides it inside the kernel, which already
@@ -682,7 +683,7 @@ has the slopes, so the column never becomes Elixir terms: `decode_one` fell from
 behind `native_kernels?: false` and two parity tests compare the masks exactly;
 the acceptance ladder is unchanged digit for digit.
 
-**Then the tracker's write (`26a8f73`'s neighbour).** `EvidenceSlopeTracker.update/3`
+**Then the tracker's write.** `EvidenceSlopeTracker.update/3`
 wrote one column into every window with a three-part iolist per hypothesis and a
 flatten over all of them — 24 words a hypothesis, 19 306 calls a step.
 `MatcherNif.write_slot/4` is a copy with a column replaced, the Elixir walk stays
@@ -937,7 +938,7 @@ which is what the acceptance asked for.
 
 **The 823 ms was the machine, not the code.** That run was measured at load
 average 10.6-14.7 — another build was using the box throughout. The same
-experiment, on the same code path after `fc0a063`, ran at load 3.7-5.9 and
+experiment, on the same code path, ran at load 3.7-5.9 and
 finished in **4 789 steps in 203 s: 42.5 ms a step**, exit 0, **140 of 140
 episodes each ending in a recognition** — against Monty's ~39 ms. The step count
 and the goal total (4 558 928) are identical to the loaded run, so the two runs
@@ -1383,7 +1384,7 @@ digit-exact: same goals, same hypothesis counts, same evidence, run after run.
 ## Measured 2026-11-16: the step counts are Monty's — and the runner rebuilds its world per episode
 
 The surface policy remembered the raw curvature angle instead of the heading it
-took (`012ecc7`), and a 140-episode `base_10simobj_surf_agent` run (`ex_mujoco`,
+took, and a 140-episode `base_10simobj_surf_agent` run (`ex_mujoco`,
 `mix monty.run --no-record`) says what that was worth:
 
 | | before | after |

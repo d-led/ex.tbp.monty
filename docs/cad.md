@@ -137,7 +137,7 @@ scene, not a config, knows where the object is.
    rather than quietly replaced by the worker's own default.
 
 2. **The feature walk — reachable from a run, on another node.**
-   `MontyCad.Policy.FeatureWalk` (`ade1dd3`, `ex.monty.cad`) walks a part to the
+   `MontyCad.Policy.FeatureWalk` (in `ex.monty.cad`) walks a part to the
    features its recognition names. Each step it ray-casts from the sensor onto
    the exact surface, corrects the patch's standoff with a `MoveForward`, and
    only then takes one `MoveTangentially` towards the next target — a hole's
@@ -851,9 +851,8 @@ monty_cad.feature_walk 0.6.1 (owner_only)`, and then decided 500 times:
    while a graph column holds numbers and
    `GraphMemory.get_rotation_features_at_nodes/4` chunks a value by three — so
    every value was one level deeper than the reader assumed and the episode died
-   in burst sampling aligning a matrix against `[[matrix]]` (`a8628fe` in
-   `ex.monty.cad`, with the shape now stated in the percept and in the library
-   format cases). And the run needs the 500-step cap: at 400 it is still
+   in burst sampling aligning a matrix against `[[matrix]]` (`ex.monty.cad`;
+   the shape is now stated in the percept and in the library format cases). And the run needs the 500-step cap: at 400 it is still
    converging, which is information about the experiment rather than a bug.
 
 4. **A part per episode.** A CAD world steps one part; the object-per-episode
