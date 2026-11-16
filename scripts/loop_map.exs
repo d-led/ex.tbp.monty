@@ -36,6 +36,23 @@ defmodule LoopMap do
 
   @lifecycle %{"__init__" => "new", "__enter__" => "begin_step", "__exit__" => "end_step"}
 
+  # Monty methods this port deliberately puts somewhere other than the class the
+  # method belongs to. Each one is a decision, not a gap: the module that owns
+  # it here is named, so the report counts it as accounted for.
+  @elsewhere %{
+    "frameworks/models/evidence_matching/hypotheses_updater.py" => %{
+      "update_evidence" => "the behaviour's callbacks",
+      "reset" => "the behaviour's callbacks",
+      "displace_hypotheses" => "the behaviour's callbacks"
+    },
+    "frameworks/experiments/monty_experiment.py" => %{
+      # What one step is — the interface stepping a world, the model stepping on
+      # what came back — is the studio's, and the experiment owns only the loops.
+      "run_step" => "Monty.Studio.Run.step",
+      "recognition_complete" => "_recognition_complete/2 here"
+    }
+  }
+
   def run(source) do
     IO.puts("monty: #{source}")
     IO.puts("module map read from: #{inspect(Data.sources(), limit: :infinity)}\n")
@@ -80,8 +97,23 @@ defmodule LoopMap do
         "#{length(paired)} paired by name"
     )
 
-    for {name, nearest} <- python_only, do: IO.puts("  monty only: #{name} (nearest: #{nearest})")
+    for {name, nearest} <- python_only do
+      case Map.get(@elsewhere, python_file, %{}) |> Map.get(name) do
+        nil -> IO.puts("  monty only: #{name} (nearest: #{nearest})")
+        elsewhere -> IO.puts("  elsewhere:  #{name} -> #{elsewhere}")
+      end
+    end
+
     for name <- elixir_only, do: IO.puts("  port only:  #{name}")
+
+    unaccounted =
+      Enum.count(python_only, fn {name, _nearest} ->
+        not Map.has_key?(Map.get(@elsewhere, python_file, %{}), name)
+      end)
+
+    if python_only != [] do
+      IO.puts("  #{unaccounted} of #{length(python_only)} need a decision, one per method.")
+    end
 
     IO.puts("")
   end
@@ -144,13 +176,17 @@ defmodule LoopMap do
   end
 
   # This port's functions in one file, without the keyword and without arities: a
-  # loop pairs by name, and an arity difference is a different question.
+  # loop pairs by name, and an arity difference is a different question. A
+  # behaviour's callbacks are functions of the class it stands for, so they
+  # count too.
   defp functions(file) do
     case File.read(file) do
       {:ok, text} ->
-        ~r/^  defp? ([a-z_0-9]+[?]?)/m
+        ~r/^  (?:defp? |@callback )([a-z_0-9]+[?]?)/m
         |> Regex.scan(text)
-        |> Enum.map(fn [_, name] -> String.trim_trailing(name, "?") end)
+        |> Enum.map(fn [_, name] ->
+          name |> String.trim_leading("_") |> String.trim_trailing("?")
+        end)
         |> Enum.uniq()
 
       {:error, _reason} ->
