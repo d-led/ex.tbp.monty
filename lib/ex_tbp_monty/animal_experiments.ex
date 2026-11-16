@@ -15,7 +15,10 @@ defmodule ExTbpMonty.AnimalExperiments do
 
   The corpus those experiments need is data, not configuration: it lands under
   `MONTY_DATA` through `/prerequisites` like every other object set, and never
-  in this repository. `docs/animal-experiments.md` is the plan.
+  in this repository. Which experiments exist, on which corpus and on what
+  licence terms, is a plan and not a property of this tree: it lives in
+  MemPalace (wing `ex.tbp.monty`, room `plan`) and in the agent memory
+  `animal-corpus.md`.
   """
 
   @doc """

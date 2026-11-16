@@ -22,5 +22,6 @@ Only the files that differ from Monty's copy — an environment group naming a n
 object set's `data_path`, and the experiments that use it. Everything else is
 Monty's, and stays in the mirror where a refresh keeps it current.
 
-The plan — the corpora, their licences, the experiment matrix, and the first
-slice — is `docs/animal-experiments.md`.
+What those experiments are for, and the corpora they need, is a plan rather than
+a property of this tree: it lives in MemPalace (wing `ex.tbp.monty`, room `plan`)
+and in the agent memory `animal-corpus.md`.
