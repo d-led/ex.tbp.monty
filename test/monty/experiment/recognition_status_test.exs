@@ -19,8 +19,9 @@ defmodule Monty.Experiment.RecognitionStatusTest do
       end
     end
 
-    # `pose_time_out` is a performance label in Monty's loggers, not something a
-    # learning module concludes, so it must not become one by being accepted.
+    # `pose_time_out` is a label Monty's loggers derive from an episode's
+    # performance — no path sets a module's conclusion to it — so accepting it
+    # would put a fourth value in a vocabulary Monty declares with three.
     test "a word that is not one of them is refused, not guessed" do
       assert RecognitionConclusion.from_monty("pose_time_out") == :error
       assert RecognitionConclusion.from_monty("MATCH") == :error

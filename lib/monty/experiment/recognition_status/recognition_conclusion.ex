@@ -8,8 +8,10 @@ defmodule Monty.Experiment.RecognitionStatus.RecognitionConclusion do
   atoms the rest of the port compares against — and the one place they are read
   back.
 
-  `pose_time_out` is not one of these. In Monty it is a _performance_ label a
-  logger writes about an episode, not something a module concludes.
+  `pose_time_out` is not one of these. Monty's loggers derive it from an
+  episode's performance, and the evidence module tolerates it as a time-out if
+  one is ever handed to it — but nothing sets a module's conclusion to it, so it
+  is not part of the vocabulary a conclusion is written in.
   """
 
   @values [:match, :no_match, :time_out]
