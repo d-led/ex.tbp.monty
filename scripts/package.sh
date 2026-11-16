@@ -13,7 +13,8 @@
 #   .dmg   the by-hand form: drag the app across
 #
 # All of them carry the same bundle — the window, the Elixir release, the BEAM,
-# the embedded Python — so the only difference is how a person picks it up.
+# the embedded Python, and the two sample plugin nodes `Settings → Cluster`
+# starts — so the only difference is how a person picks it up.
 #
 #   scripts/package.sh                 # the platform this machine is
 #   scripts/package.sh osx-arm64       # one named runtime
@@ -129,6 +130,32 @@ build_app() {
 
   echo "the build said it finished and there is neither $bundle nor the window" >&2
   exit 1
+}
+
+# The two sample plugin nodes every shape has to carry, by the name each release
+# uses for itself.
+readonly plugin_nodes="example_plugin flyverse_plugin"
+
+# The bundle, asked rather than assumed. `start-desktop.sh --bundle` builds these
+# two and `bundle.resources` copies the folder into the window, which is what
+# Settings → Cluster starts — but a bundle that lost them is still a valid
+# bundle, and three artefacts were shipped from trees built before that step
+# existed and nobody noticed. So the packaging checks its own output: a missing
+# node is this script's failure, said here, not a demo a person finds empty.
+carries_plugins() {
+  local root=$1 node
+
+  for node in $plugin_nodes; do
+    if [ ! -x "$root/$node/bin/$node" ]; then
+      echo "the bundle carries no plugins/$node/bin/$node" >&2
+      echo "  looked in: $root" >&2
+      echo "  they are built by scripts/build-plugins.sh during bundling, and" >&2
+      echo "  scripts/start-desktop.sh --bundle is the step that runs it" >&2
+      echo "  see docs/desktop.md" >&2
+      ls "$root" 2>/dev/null | sed 's/^/    /' >&2
+      return 1
+    fi
+  done
 }
 
 # What a Linux person gets: a tarball holding the window with its release beside
@@ -287,6 +314,7 @@ for rid in "${rids[@]}"; do
   case "$rid" in
     osx-*)
       build_app
+      carries_plugins "$bundle/Contents/Resources/plugins" || exit 1
       cp -R "$bundle" "$artifacts/$rid/"
       register "$artifacts/$rid/$product.app"
       echo "  $artifacts/$rid/$product.app"
@@ -305,6 +333,7 @@ for rid in "${rids[@]}"; do
       ;;
     linux-*)
       build_app
+      carries_plugins "src-tauri/target/release/plugins" || exit 1
       linux_bundle "$rid"
       ;;
     *)

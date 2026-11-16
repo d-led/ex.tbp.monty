@@ -6,9 +6,10 @@
 #   scripts/build-plugins.sh
 #
 # Why releases and not escripts: `ex_tbp_monty_core` compiles native kernels, and
-# an escript cannot load one. Why here and not in `package.sh`: `bundle.resources`
-# in the three tauri configs copies `_build/desktop/plugins` into the bundle, so
-# the folder has to exist before `cargo tauri build` runs.
+# an escript cannot load one. Why not called from here by `package.sh`: the
+# packaging asks `scripts/start-desktop.sh --bundle` for the bundle, and that
+# script builds these before `cargo tauri build` — the step that copies
+# `_build/desktop/plugins` through `bundle.resources` into the window.
 #
 # Each is ~19 MB — a whole runtime of its own — and the launcher that starts them
 # is copied in beside them (`scripts/desktop-plugins/`). What a person gets is two
