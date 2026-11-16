@@ -82,6 +82,7 @@ happens on a path Monty itself never takes.
 | [2.21](#221-an-object-orientation-channels-evidence-is-ported-but-not-yet-dispatched)        | An orientation channel's evidence                                           | Ported, not dispatched                                      | Computed and answerable; nothing asks it yet                                       |
 | [2.22](#222-in-parallel-divides-one-runs-work-into-parts)                                    | `run_parallel.py` runs one config per episode                               | Decision                                                    | Parts of one run and one record                                                    |
 | [2.23](#223-how-often-a-surface-agent-reads)                                                 | A surface agent reads on one step in four                                   | Same rule; ours is named where it is read                   | Three gates, and the cheapest run wins by the filter, not the model                |
+| [2.24](#224-the-vote-round-finds-its-neighbours-by-scanning)                                 | The vote round's three nearest votes                                        | A scan, not a k-d tree                                      | Same neighbours, same arithmetic, more distance computations                       |
 
 ## How the links work
 
@@ -1599,3 +1600,39 @@ Monty's documentation makes; the rest are claims the code makes about itself.
 - `MotorSystem` keeps each step's actions with the state they were chosen in,
   resets that record per episode, and keeps the selector's own record for
   `state_dict`, as its comments say.
+
+## 2.24 The vote round finds its neighbours by scanning
+
+**In one line:** the same neighbours, the same arithmetic, found by a scan
+instead of a k-d tree.
+
+**What Monty does.** `_update_evidence_with_vote` builds a `KDTree` over the
+votes the module has been given, asks it for the three nearest votes to every
+hypothesis' location (`query(..., k=3, p=2)`), turns the distances into weights
+(`(max_match_distance - d) / max_match_distance`) so that a vote at or beyond
+`max_match_distance` is masked out, takes the masked maximum of those votes'
+confidences, and blends it into the hypothesis' evidence:
+`(evidence + vote_weight * vote) / (1 + vote_weight)` when
+`past_weight + present_weight == 1`, and `evidence + vote_weight * vote`
+otherwise.
+
+**What this port does.**
+[`EvidenceGraphLM.update_evidence_with_vote/3`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex)
+computes the same three things in the same order, and both blends are Monty's
+lines. The neighbour search is the difference: it walks the votes for each
+hypothesis and keeps the three nearest, rather than asking an index. The
+acceptance is the same set — `distance < max_match_distance` here is
+`node_distance_weights <= 0` there, because the weight is zero exactly at the
+radius — and the maximum over the surviving votes is the same value.
+
+**Why.** There is no k-d tree on the BEAM that answers "the three nearest of a
+few dozen points, repeatedly", and the port's vote rounds carry a handful of
+votes: the scan is `hypotheses × votes` distance computations, which a step
+affords, and it keeps the whole arithmetic in Elixir where it can be read
+against Monty's. If a config ever votes with thousands of points, the index is
+the answer and `native/kd_tree_nif` already exists for it.
+
+**What is therefore not compared.** The tree's own answers — the order of equal
+distances, and numpy's tie-breaking — because this port does not have a tree.
+For distinct distances the two agree exactly, and the vote round is covered by
+the learning module's own cases.

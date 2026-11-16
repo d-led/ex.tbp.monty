@@ -1622,14 +1622,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   defp apply_votes(%__MODULE__{} = lm, {graph_id, votes}) do
     case Map.fetch(lm.hypotheses, graph_id) do
       {:ok, hypotheses} ->
-        %{lm | hypotheses: Map.put(lm.hypotheses, graph_id, vote_evidence(lm, hypotheses, votes))}
+        %{lm | hypotheses: Map.put(lm.hypotheses, graph_id, update_evidence_with_vote(lm, hypotheses, votes))}
 
       :error ->
         lm
     end
   end
 
-  defp vote_evidence(%__MODULE__{} = lm, %Hypotheses{} = hypotheses, votes) do
+  defp update_evidence_with_vote(%__MODULE__{} = lm, %Hypotheses{} = hypotheses, votes) do
     vote_locations = Enum.map(votes, & &1.location)
     vote_confidences = Enum.map(votes, & &1.confidence)
     neighbours = min(3, length(votes))
