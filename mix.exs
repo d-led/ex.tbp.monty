@@ -216,6 +216,11 @@ defmodule ExTbpMonty.MixProject do
       # What the Checks tab reads: the suite can write its results as JUnit XML,
       # which is the only shape GitHub's test reporters understand.
       {:junit_formatter, "~> 3.4", only: :test},
+      # A trial: a Credo plugin that checks LiveView contracts (events, hooks,
+      # assigns, streams) across files. It is five days old and says of itself
+      # that it may break, so it is not in the quality gate — the standalone task
+      # is how it is run, and `docs/developers.md` says what came of the trial.
+      {:soundcheck, "~> 0.2.1", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false}
     ]
   end

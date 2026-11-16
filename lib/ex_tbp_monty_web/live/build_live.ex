@@ -249,9 +249,22 @@ defmodule ExTbpMontyWeb.BuildLive do
     preview = Studio.preview(blueprint)
 
     if saveable?(preview) do
-      {:ok, _path} = Drafts.save(blueprint)
+      # A draft that cannot be written — a full disk, a folder this process may not
+      # write in — is not a crash: the form is what the page is for, and the person
+      # keeps theirs. Matching `{:ok, _}` here took the LiveView down and lost it
+      # (soundcheck SC603).
+      case Drafts.save(blueprint) do
+        {:ok, _path} ->
+          {:noreply,
+           push_navigate(socket, to: ~p"/experiments/#{String.split(blueprint.name, "/")}")}
 
-      {:noreply, push_navigate(socket, to: ~p"/experiments/#{String.split(blueprint.name, "/")}")}
+        {:error, reason} ->
+          {:noreply,
+           socket
+           |> assign(blueprint: blueprint, preview: preview)
+           |> assign_forms()
+           |> put_flash(:error, "Could not save the draft: #{:file.format_error(reason)}.")}
+      end
     else
       {:noreply,
        socket

@@ -371,6 +371,28 @@ annotation's line — Sobelow rewrites that comment into an attribute, and trail
 prose turns the rewrite into a syntax error, which silently stops the file from
 being scanned.
 
+### A LiveView checker, on trial
+
+`soundcheck` (a Credo plugin, 0.2.x) checks the contracts between callbacks, HEEx
+templates and JS hooks across files: an event with no handler, an `assign_async`
+read as a plain value, a `phx-hook` no `LiveSocket` registers. It is a dependency
+for `:dev` and `:test` and **not** part of the gate — it says of itself that it
+may break, so it earns a place by finding what the other tools did not, not by
+being wired in.
+
+    MIX_ENV=test mix soundcheck --all --strict
+
+The first run over this tree: the default checks reported nothing, and `--all
+--strict` reported 26 findings, 17 of them unverifiable. Two were fixed — a
+`{:ok, _} = Drafts.save(...)` in `build_live.ex` that took the LiveView down when
+a draft could not be written (SC603: now a flash and the form kept, with a test
+that makes the folder unwritable), and `flash/1`'s `attr :kind`, which raised
+when a caller omitted it (SC204). The rest were left, and are worth knowing:
+`<tr>` and `<td phx-click>` are not keyboard reachable (SC901), three list assigns
+would rather be streams (SC308), and `input/1`'s `:options` has no default on
+purpose — the component serves text inputs too, so `required: true` would be
+wrong and a default would hide a caller's mistake.
+
 ## Releases and images
 
 CI publishes an image per ref to `ghcr.io/d-led/ex.tbp.monty`: `:main` and

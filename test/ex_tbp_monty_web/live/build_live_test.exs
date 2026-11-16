@@ -114,5 +114,24 @@ defmodule ExTbpMontyWeb.BuildLiveTest do
       assert written =~ "# @package _global_"
       assert written =~ "defaults:"
     end
+
+    # A draft that cannot be written is not a crash: the form is what the page is
+    # for. `{:ok, _} = Drafts.save(...)` took the LiveView down and lost it
+    # (soundcheck SC603). The folder is made unwritable rather than mocked, so the
+    # path exercised is the real `File.write/2`.
+    test "a draft that cannot be written keeps the form, and says why", %{conn: conn, tmp: tmp} do
+      File.chmod!(tmp, 0o500)
+      on_exit(fn -> File.chmod!(tmp, 0o700) end)
+
+      {:ok, view, _html} = live(conn, ~p"/build")
+
+      view |> element("#blueprint-form") |> render_change(%{"blueprint" => %{"name" => "mine"}})
+
+      html = view |> element("#blueprint-form") |> render_submit()
+
+      assert html =~ "Could not save the draft"
+      refute File.exists?(Path.join(tmp, "mine.yaml"))
+      assert has_element?(view, "#blueprint-form")
+    end
   end
 end
