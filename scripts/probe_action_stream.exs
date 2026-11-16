@@ -199,7 +199,9 @@ defmodule ActionStream do
     }
   end
 
-  # What the policy was holding when it answered.
+  # What the policy was holding when it answered. The branch it took follows from
+  # these three: `searching` is Monty's "nothing found yet", and a nil last action
+  # is an episode's first step.
   defp describe_policy(motor) do
     policy = motor.policy_selector.policy
 

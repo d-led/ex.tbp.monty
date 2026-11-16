@@ -124,23 +124,21 @@ Monty's own `depth − desired − sensor z` on our own readings,
 That is reproducible under every condition this was tried in: three runs back to
 back, three worlds built in one process, eight CPU hogs, and a second MuJoCo world
 rendering in another process at the same time — the centre pixel and the action
-come out identical each time. Two earlier readings of the same step (0.0906 and
-0.0912) are withdrawn: the first of them was taken by a version of the probe that
-stepped the world by its struct rather than through `Interface.step`, and neither
-could be reproduced with the probe as it stands.
+come out identical each time. But **not** under every length: asked to replay one
+step the probe answers his number, and asked to replay three it answers
+`0.035568021`, with a centre depth 0.87 mm off the one it printed for the same
+state. Nothing in the probe reads the replay length before its first step, so
+either the replay itself or something that outlives a step changes an earlier
+answer.
 
-So the instrument is trustworthy and the diff of two action logs can be read from
-here. Read, it parts at **step 2**, and the question is one number. His second
-action is `orient_horizontal` with a rotation of a thousandth of a degree — the
-systematic search his `_touch_object` runs when the view finder's centre is more
-than a metre from anything. Ours is `move_forward 0.036434553` again, which is what
-the same procedure answers when the centre is _within_ a metre, and our percepts
-carry `object_coverage 0` and no `min_depth` at every step after the first. So the
-next measurement is the view finder's centre depth on step 2, ours beside his
-implied one: the frames themselves agree to the last bit
-([`probe_percept_parity.exs`](../scripts/probe_percept_parity.exs)), so either that
-number is not what the branch reads, or the sensor is being asked to read nothing
-(`motor_only_step`) for one step too many.
+So the opening line of that report is evidence and the rest of it is not, until
+the replay is understood. What can be read already is the shape of the divergence
+once the opening agrees: his second action is `orient_horizontal` with a rotation
+of a thousandth of a degree — the systematic search his `_touch_object` runs when
+the view finder's centre is more than a metre from anything — and ours is the same
+`move_forward` again, which is what that procedure answers when the centre is
+within a metre. Our percepts carry `object_coverage 0` and no `min_depth` at every
+step after the first, while his patch sees the object from his step 3.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
