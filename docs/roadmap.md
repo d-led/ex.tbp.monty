@@ -239,6 +239,29 @@ loop, and its step count is Monty's for every episode of the epoch.
 - Parallelism is already legal where it is safe: vote rounds have deadlines, and
   a deadline hit is reported rather than hidden.
 
+- **Several viewpoints at once, and whether it is worth it.** A run can already
+  put a ring of patch cameras on one agent and give each its own learning module
+  with a vote between them: a shipped config does exactly that, and it steps here
+  today —
+  `mix monty.run randrot_noise_10distinctobj_5lms_dist_agent --steps 6 --episodes 1 --world ex_mujoco`
+  prints a step whose percepts are every patch, and a vote round that answered
+  for every module. So nothing in the architecture has to change to start from
+  several sides of the object at once.
+
+  What is not known is whether it is better. A step costs what its slowest module
+  costs — the modules are separate processes and run concurrently — so the trade
+  is one step of work multiplied by the number of viewpoints against fewer steps
+  to a conclusion. Reading it means the multi-view config beside its one-sensor
+  config on one machine: the conclusion, the step count, and the wall clock, as
+  the same table Phase 3 wants for the benchmark. The memory is the same problem
+  the 77-object bullet above describes, once per module.
+
+  Four side views and one from above is a layout no shipped config has. An
+  agent's `sensor_configs` is where it would be written, and it would be this
+  port's own experiment rather than Monty's — so it belongs in
+  [`monty-differences.md`](monty-differences.md) as a deviation with its numbers,
+  not quietly in `conf/`.
+
 **Done when**: a run of `base_77obj_dist_agent` produces a recognition rate
 within the tolerance Monty's own noisy runs show, with its step count, and the
 bench table is a CI trend.
