@@ -18,6 +18,7 @@ defmodule ActionStream do
   alias Monty.Frameworks.Actions.{MoveForward, MoveTangentially, OrientHorizontal, OrientVertical}
   alias Monty.Frameworks.Models.MotorSystem
   alias Monty.Frameworks.Models.SensorModules.CameraSM
+  alias Monty.Runtime.Positioning
   alias Monty.Studio
   alias Monty.Studio.Setup
 
@@ -48,14 +49,29 @@ defmodule ActionStream do
 
     # The transforms are the run's own, and so is the way the world is stepped:
     # `Interface.step/2` also tells the world *which* sensors to render, which
-    # `DepthTo3DLocations` needs to find a surface at all — a patch read without
-    # that answer carries no pixel on the object, and every action after it would
-    # be the policy's answer to an empty view rather than to his.
+    # `DepthTo3DLocations` needs to find a surface at all.
     interface =
       Interface.new(
         env: setup |> Setup.world(0) |> then(& &1.__struct__.reset(&1)),
         transforms: Setup.built_transforms(setup),
         seed: setup.seed || 0
+      )
+
+    # And the episode starts where a run starts it, not where the scene's own
+    # reset leaves the arm: Monty's `pre_episode` positions the agent at
+    # `desired_object_distance` from its object before the first step, and an
+    # agent that has not been positioned looks at the floor — a patch with no
+    # pixel on an object, so the first action compared would be the policy's
+    # answer to scenery.
+    {:ok, factories} = Setup.positioning_procedures(setup)
+
+    {:ok, interface, _positioning} =
+      Positioning.prepare(
+        factories,
+        Setup.target_semantic_id(setup, 0),
+        interface,
+        fn interface, actions -> Interface.step(interface, actions) end,
+        distractors: Setup.distractors(setup)
       )
 
     # The episode's own stream, which is what a policy draws from in a run:
