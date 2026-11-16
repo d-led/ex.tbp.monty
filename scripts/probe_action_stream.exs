@@ -10,14 +10,12 @@
 # step of his episode, while the world is moved by *his* actions, so both answers
 # answer the same question. The step they part at is the step to read.
 #
-# What it reads before that: the patch's own view. On the first step ours is 4096
-# pixels at a flat five centimetres with no semantic id on any of them — the table
-# beside the object — where his episode opens with the object 6.1 cm into the
-# patch. So the streams part at step 1 for a reason that is not the policy: the
-# positioning procedure that puts Monty's agent where his episode starts has not
-# put ours in the same place, and no comparison of actions means anything until it
-# has. The finding is the probe's, and it is why the first line of the report is
-# the observation rather than a verdict.
+# What it reports first is not a difference: the patch on the opening step is a flat
+# five centimetres of table for both of us — his episode's own first percepts are
+# empty, and the object enters his patch at step 3, with our world at reset being
+# his to the last bit (`probe_percept_parity.exs`). The difference is the action
+# that view produces: 0.035576 against his 0.036434555 from the same depth image,
+# which is the policy's arithmetic rather than anything about the world.
 
 defmodule ActionStream do
   @moduledoc false
@@ -74,7 +72,7 @@ defmodule ActionStream do
     # answer to scenery.
     {:ok, factories} = Setup.positioning_procedures(setup)
 
-    {:ok, interface, _positioning} =
+    {:ok, interface, positioning} =
       Positioning.prepare(
         factories,
         Setup.target_semantic_id(setup, 0),
@@ -82,6 +80,11 @@ defmodule ActionStream do
         fn interface, actions -> Interface.step(interface, actions) end,
         distractors: Setup.distractors(setup)
       )
+
+    IO.puts(
+      "positioning: #{inspect(positioning.procedures)} in #{inspect(positioning.steps)} steps, " <>
+        "success #{positioning.success}"
+    )
 
     # The episode's own stream, which is what a policy draws from in a run:
     # without it the probe would be asking the policy a different question from
@@ -92,10 +95,33 @@ defmodule ActionStream do
 
     {observations, proprioceptive_state, interface} = Interface.step(interface, [])
 
-    # What the patch was handed on the first step. A percept with no pixel on an
+    # What each sensor was handed on the first step. A percept with no pixel on an
     # object has two very different causes — a sensor that rendered nothing, and
-    # a surface the transform refused — and an action alone cannot say which.
-    describe_observation(observations[@agent][@channel])
+    # a surface the transform refused — and an action alone cannot say which. The
+    # two sensors together say where the agent is standing: a view finder with the
+    # object in it and a patch without means the positioning aimed at one of them.
+    describe_observation(@channel, observations[@agent][@channel])
+    describe_observation("view_finder", observations[@agent]["view_finder"])
+
+    # The three numbers the first action is made of: `depth − desired − sensor z`.
+    # His own first action is 0.036434555, so whichever of these differs by the
+    # eight tenths of a millimetre between his distance and ours is the answer.
+    centre =
+      Monty.Frameworks.Environments.PositioningProcedures.depth_at_center(
+        observations,
+        @agent,
+        "view_finder"
+      )
+
+    sensor_z =
+      proprioceptive_state
+      |> Map.fetch!(@agent)
+      |> Map.fetch!(:sensors)
+      |> Map.fetch!("view_finder")
+      |> Map.fetch!(:position)
+      |> Enum.at(2)
+
+    IO.puts("centre depth #{centre}, view finder z #{sensor_z}")
 
     state = %{
       interface: interface,
@@ -218,23 +244,25 @@ defmodule ActionStream do
   # points and a mask here, and one that arrives with the transform's own
   # `point`/`distance`/`on_surface` instead is a surface already found — or a
   # surface the transform found nothing in.
-  defp describe_observation(patch) when is_map(patch) do
-    depth = Map.get(patch, "depth") || Map.get(patch, :depth)
+  defp describe_observation(name, observation) when is_map(observation) do
+    depth = Map.get(observation, "depth") || Map.get(observation, :depth)
 
     depth =
       if is_list(depth) do
         flat = List.flatten(depth)
-        "#{length(flat)} pixels, #{Enum.count(flat, &(&1 == 0.0))} of them zero, " <>
-          "max #{Enum.max(flat)}, min on surface #{Enum.min(flat)}"
+        on_object = Enum.count(flat, &(&1 < 1.0))
+
+        "#{length(flat)} pixels, #{on_object} closer than a metre, " <>
+          "min #{Enum.min(flat)}, max #{Enum.max(flat)}"
       else
         "none"
       end
 
-    IO.puts("the patch on the first step: depth #{depth}; keys #{inspect(Map.keys(patch))}")
+    IO.puts("the #{name} on the first step: depth #{depth}; keys #{inspect(Map.keys(observation))}")
   end
 
-  defp describe_observation(other),
-    do: IO.puts("the patch on the first step: #{inspect(other, limit: 3)}")
+  defp describe_observation(name, other),
+    do: IO.puts("the #{name} on the first step: #{inspect(other, limit: 3)}")
 
   defp same?(theirs, ours) do
     length(theirs) == length(ours) and
