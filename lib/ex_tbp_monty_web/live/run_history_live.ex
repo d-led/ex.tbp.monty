@@ -1840,19 +1840,26 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
       <%!-- The snapshot is the run's whole config, and a person reads the facts
       above it far more often than the file they came from. A `details` is the
-      closed-by-default version of that: the browser remembers nothing for it,
-      the page patches it without disturbing what is open, and it is the same
-      control with or without JavaScript. YAML rather than JSON because it is
-      the format Monty's own files are written in: the same keys, read without
-      the braces. --%>
-      <details :if={@run} id="run-snapshot" class="space-y-1">
-        <summary class="cursor-pointer text-sm font-medium">Config snapshot</summary>
-        <pre
-          id="run-config"
+      closed-by-default version of that: it is the same control with or without
+      JavaScript. YAML rather than JSON because it is the format Monty's own files
+      are written in: the same keys, without the braces.
+
+      Ignored, and re-keyed by the config it holds: the page patches as a filter
+      is typed, and a `details` the server re-sends is a `details` the browser
+      closes. --%>
+      <div :if={@run} id="run-snapshot">
+        <details
+          id={"run-snapshot-#{:erlang.phash2(@run.config)}"}
           phx-update="ignore"
-          class="mt-1 max-h-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-[11px]"
-        ><code>{Yaml.highlight(@run.config)}</code></pre>
-      </details>
+          class="space-y-1"
+        >
+          <summary class="cursor-pointer text-sm font-medium">Config snapshot</summary>
+          <pre
+            id="run-config"
+            class="mt-1 max-h-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-[11px]"
+          ><code>{Yaml.highlight(@run.config)}</code></pre>
+        </details>
+      </div>
 
       <.confirm_delete :if={@confirming} run={@confirming} />
     </Layouts.app>

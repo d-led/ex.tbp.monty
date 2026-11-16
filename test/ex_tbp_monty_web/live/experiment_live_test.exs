@@ -54,6 +54,11 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       refute box =~ ~r/<details[^>]*\sopen/
       assert box =~ "The config"
 
+      # Ignored, so a run's patches leave it as the reader left it: a `details`
+      # the server re-sends is a `details` the browser closes, which is how the
+      # config folded itself up again on every line the log gained.
+      assert box =~ ~s(phx-update="ignore")
+
       # The keys of the composed config, each in a span of its own and the
       # episode ceiling from the config: the page prints Monty's own format,
       # coloured, not an inspection of a map.
@@ -1338,6 +1343,24 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert has_element?(view, "#run-log-empty")
       assert view |> element("#run-log-empty") |> render() =~ "no line matches"
     end
+
+    # The log grows downward while a run steps, so anything under it is pushed out
+    # of reach a line at a time. It is the page's last block, and the config — the
+    # thing a reader consults while watching — is above it.
+    test "the log is the last block on the page", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent?steps=2&episodes=1")
+
+      view |> element("#run") |> render_click()
+      perform_run(view)
+
+      html = render(view)
+
+      assert position(html, ~s(id="experiment-config-box")) <
+               position(html, ~s(id="run-log-panel"))
+    end
+
+    defp position(html, needle), do: html |> :binary.match(needle) |> elem(0)
 
     test "a log with no filter says nothing about matching", %{conn: conn} do
       {:ok, view, _html} =

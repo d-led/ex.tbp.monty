@@ -135,16 +135,25 @@ defmodule ExTbpMontyWeb.BuildLive do
 
       <%!-- The written config is a whole file, and the diagram and the facts
       above it are what a reader builds with: the file is what comes out. So it
-      sits in a `details` — closed until asked for, the browser's own control,
-      left as the reader left it while the page patches the preview. --%>
-      <details class="space-y-2" id="blueprint-config-box">
-        <summary class="cursor-pointer text-lg font-semibold tracking-tight">The config</summary>
-        <pre
-          id="blueprint-config"
+      sits in a `details` — closed until asked for, the browser's own control.
+
+      Ignored, and re-keyed by the file it holds: every keystroke in the builder
+      patches this page, and a `details` the server re-sends is a `details` the
+      browser closes. The id carries the file's hash, so a new draft is a new box
+      with the new text while the patches of the same draft leave it alone. --%>
+      <div id="blueprint-config-box">
+        <details
+          id={"blueprint-config-#{:erlang.phash2(@preview.yaml)}"}
           phx-update="ignore"
-          class="max-h-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-xs"
-        ><code>{Yaml.colour(@preview.yaml)}</code></pre>
-      </details>
+          class="space-y-2"
+        >
+          <summary class="cursor-pointer text-lg font-semibold tracking-tight">The config</summary>
+          <pre
+            id="blueprint-config"
+            class="max-h-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-xs"
+          ><code>{Yaml.colour(@preview.yaml)}</code></pre>
+        </details>
+      </div>
       <%!-- The other direction: a file from elsewhere becomes a draft here. It is
       composed before it is saved, so a file that is not a Hydra config is
       refused instead of becoming a draft nobody can open. --%>

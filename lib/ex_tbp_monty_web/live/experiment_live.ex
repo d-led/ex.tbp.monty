@@ -973,85 +973,99 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         draws the one this page is following in full. --%>
         <ExTbpMontyWeb.RunParts.parts :if={@parts != []} parts={@parts} />
 
-        <div :if={@run_id} id="run-log-panel" class="space-y-1">
-          <div class="flex flex-wrap items-center gap-2">
-            <h3 class="text-sm font-medium">Log</h3>
-            <form id="log-filter" phx-change="filter" phx-debounce="150" class="flex-1">
-              <%!-- The value is deliberately not bound: a run's log arrives
-              while a person is typing, and a re-render that rewrites the box
-              under their fingers is a filter that cannot be typed into. --%>
-              <input
-                type="search"
-                name="filter"
-                placeholder="filter: every word must match"
-                class="input input-xs w-full min-w-[16rem] max-w-sm font-mono"
-                aria-label="Filter the log: every word must appear in a line"
-              />
-            </form>
-            <span id="log-count" class="text-[11px] text-base-content/50">
-              {length(@shown)} of {length(@lines)} lines
-            </span>
-            <span :if={@log_path} class="font-mono text-[11px] text-base-content/40">
-              {@log_path}
-            </span>
-          </div>
-
-          <%!-- Where the run's own data is, so it can be found after the page is
-          closed: its directory, and the statistics files in it. Monty's own
-          handlers write `<mode>_stats.csv` beside the log, and a person asking
-          "where did this go?" should not have to guess. --%>
-          <div :if={@artifacts} id="run-artifacts" class="space-y-0.5">
-            <h4 class="text-[11px] font-medium text-base-content/50">Where the data is</h4>
-            <ul class="font-mono text-[11px] leading-5 text-base-content/60">
-              <li id="run-artifacts-dir">{@artifacts.dir}</li>
-              <li :for={stats <- @artifacts.stats} id={"run-artifacts-#{Path.basename(stats)}"}>
-                {stats}
-              </li>
-            </ul>
-          </div>
-
-          <ul
-            id="run-log"
-            phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
-            class="max-h-56 overflow-auto rounded-field border border-base-300 bg-base-100 p-2 font-mono text-[11px] leading-5"
-          >
-            <%!-- An empty state is for a log with nothing in it, or a filter
-            that kept nothing. With no filter typed, every line matches, so
-            there is nothing to say. --%>
-            <li :if={@shown == []} id="run-log-empty" class="text-base-content/50">
-              {if @lines == [], do: "no lines yet", else: "no line matches this filter"}
-            </li>
-            <li :for={line <- @shown} id={"log-#{line.id}"} class={line_class(line)}>
-              <%!-- The clock is a `<time>` with the instant in it, not a string:
-              a run's log says when a step happened, and "when" means the
-              reader's clock, not the server's. The hook rewrites the UTC text
-              the server sent into the browser's own time zone. --%>
-              <ExTbpMontyWeb.LocalTime.local_time
-                :if={line.at}
-                at={line.at}
-                style={:clock}
-                class="me-1.5 text-base-content/40 tabular-nums"
-              />{line.text}
-            </li>
-          </ul>
-          <ExTbpMontyWeb.LocalTime.local_time_hook />
-        </div>
-
         <ExTbpMontyWeb.StudioComponents.summary :if={@summary} summary={@summary} />
       </section>
 
       <%!-- The composed config is a whole file, and the page above it is what a
       person comes here for: what this experiment is, what it costs and how to
       run it. So the file sits in a `details` — closed until asked for, the
-      browser's own control, left open across the patches a run sends. --%>
-      <details :if={@config_html} id="experiment-config-box" class="space-y-2">
-        <summary class="cursor-pointer text-lg font-semibold tracking-tight">The config</summary>
-        <pre
-          id="experiment-config"
+      browser's own control.
+
+      Ignored, and re-keyed by the config it holds: a run patches this page every
+      step, and a `details` the server re-sends is a `details` the browser
+      closes — the one thing a reader had opened. The id carries the config's own
+      hash, so the box a world switch deserves is a new box with the new text,
+      while a run's patches leave the open one alone. --%>
+      <div :if={@config_html} id="experiment-config-box">
+        <details
+          id={"experiment-config-#{:erlang.phash2(@config_html)}"}
           phx-update="ignore"
-          class="max-h-96 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-xs"
-        ><code>{@config_html}</code></pre>
-      </details>
+          class="space-y-2"
+        >
+          <summary class="cursor-pointer text-lg font-semibold tracking-tight">The config</summary>
+          <pre
+            id="experiment-config"
+            class="max-h-96 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-xs"
+          ><code>{@config_html}</code></pre>
+        </details>
+      </div>
+
+      <%!-- The log is the last thing on the page: it is what a reader watches
+      while a run steps, and it grows downward, so anything put under it would be
+      pushed out of reach a line at a time. --%>
+      <div :if={@run_id} id="run-log-panel" class="space-y-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <h3 class="text-sm font-medium">Log</h3>
+          <form id="log-filter" phx-change="filter" phx-debounce="150" class="flex-1">
+            <%!-- The value is deliberately not bound: a run's log arrives
+            while a person is typing, and a re-render that rewrites the box
+            under their fingers is a filter that cannot be typed into. --%>
+            <input
+              type="search"
+              name="filter"
+              placeholder="filter: every word must match"
+              class="input input-xs w-full min-w-[16rem] max-w-sm font-mono"
+              aria-label="Filter the log: every word must appear in a line"
+            />
+          </form>
+          <span id="log-count" class="text-[11px] text-base-content/50">
+            {length(@shown)} of {length(@lines)} lines
+          </span>
+          <span :if={@log_path} class="font-mono text-[11px] text-base-content/40">
+            {@log_path}
+          </span>
+        </div>
+
+        <%!-- Where the run's own data is, so it can be found after the page is
+        closed: its directory, and the statistics files in it. Monty's own
+        handlers write `<mode>_stats.csv` beside the log, and a person asking
+        "where did this go?" should not have to guess. --%>
+        <div :if={@artifacts} id="run-artifacts" class="space-y-0.5">
+          <h4 class="text-[11px] font-medium text-base-content/50">Where the data is</h4>
+          <ul class="font-mono text-[11px] leading-5 text-base-content/60">
+            <li id="run-artifacts-dir">{@artifacts.dir}</li>
+            <li :for={stats <- @artifacts.stats} id={"run-artifacts-#{Path.basename(stats)}"}>
+              {stats}
+            </li>
+          </ul>
+        </div>
+
+        <ul
+          id="run-log"
+          phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
+          class="max-h-56 overflow-auto rounded-field border border-base-300 bg-base-100 p-2 font-mono text-[11px] leading-5"
+        >
+          <%!-- An empty state is for a log with nothing in it, or a filter
+          that kept nothing. With no filter typed, every line matches, so
+          there is nothing to say. --%>
+          <li :if={@shown == []} id="run-log-empty" class="text-base-content/50">
+            {if @lines == [], do: "no lines yet", else: "no line matches this filter"}
+          </li>
+          <li :for={line <- @shown} id={"log-#{line.id}"} class={line_class(line)}>
+            <%!-- The clock is a `<time>` with the instant in it, not a string:
+            a run's log says when a step happened, and "when" means the
+            reader's clock, not the server's. The hook rewrites the UTC text
+            the server sent into the browser's own time zone. --%>
+            <ExTbpMontyWeb.LocalTime.local_time
+              :if={line.at}
+              at={line.at}
+              style={:clock}
+              class="me-1.5 text-base-content/40 tabular-nums"
+            />{line.text}
+          </li>
+        </ul>
+        <ExTbpMontyWeb.LocalTime.local_time_hook />
+      </div>
     </Layouts.app>
     """
   end
