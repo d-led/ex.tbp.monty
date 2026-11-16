@@ -20,8 +20,8 @@ a trade-off:
    public entry point and says so. A hand-written behaviour test states intent,
    never parity, and is not counted as such. Re-measure the count by listing
    Monty's `def test_` names (`monty-orig/tests/unit/**/test_*.py`) and grepping
-   ours for them; as of 2026-11-07 it was **22 of 652**, all twenty-two the burst
-   sampler's.
+   ours for them. The number is the command's to print and this file does not
+   quote it: a count in prose is stale the week after it is written.
 
 ## Where the port stands
 
@@ -55,150 +55,63 @@ about what a run leaves behind, so it is written down in
 [`monty-differences.md`](monty-differences.md#225-two-epoch-brackets-have-no-counterpart-here)
 rather than settled in passing.
 
-## Phase 1 — the numeric core, in dependency order
+## Phase 1 — the numeric core, done
 
-Each module arrives with the Python test that specifies it, translated, and a
-fixture recorded from Monty where floating point is involved. `Setup.ported/1`
-should move with every commit; when a mapped class is implemented,
-`Setup.model_spec/2` uses it instead of the synthetic stand-in, so the page and
-`mix monty.run` stop calling it a stand-in the day it lands.
+Every class the loop of this experiment runs through is implemented — the maths,
+the buffers, the hypotheses and their updater, the graph memory, the learning
+module, the sensors, the goal generator and motor system, the model and the
+experiment loop — and `Mix.Tasks.Monty.Readiness` and `Setup.ported/1` print
+which as they are asked rather than this file remembering it. Two things from
+that work are still open, both about the burst sampler:
 
-1. **`math.py`, `geometry.py::Rotation`, `frameworks/utils/spatial_arithmetics.py`**
-   — the tolerances every comparison shares, a rotation with exactly one spelling
-   (quaternion `wxyz`, extrinsic Euler order, scipy's behaviour without scipy),
-   and the pose-vector arithmetic everything later measures with. **Ported**:
-   `TangentFrame` transport stays orthonormal over a thousand steps, and a
-   mirrored frame shows up as a large alignment error instead of a silent zero.
-2. **`frameworks/models/buffer.py`** — `FeatureAtLocationBuffer`,
-   `BufferEncoder`. **Ported**: the buffer is a value (every Python mutation
-   returns a new buffer), NaN padding is `nil`, and encoders are registered per
-   module because Elixir structs have no parent classes.
-3. **`evidence_matching/hypotheses.py`** — `Hypotheses` (**ported**: four
-   parallel columns plus `take/2` for the subset a module still believes), then
-   `hypotheses_updater/` (`BurstSamplingHypothesesUpdater`, `Displacer`,
-   `EvidenceSlopeTracker`). Property tests for evidence updates, fixtures for
-   the displacement. The pieces the updater is injected with are already ported:
-   `FeatureEvidence.Calculator` (**ported**: numeric, circular and categorical
-   comparisons, weighted per feature) and the two `FeaturesForMatching`
-   selectors (**ported**).
-
-   **`BurstSamplingHypothesesUpdater` (ported)** — the count per burst, the
-   trigger and its duration, the tracker per graph id, the maximum slope the
-   decision reads, the poses a burst proposes, and what a new hypothesis starts
-   with: the node's feature match, or nothing when the selector says that
-   channel is not matched on features. Monty's cases for the sampling are
-   translated through `update_evidence/5`, the public entry a burst has, and
-   they are checked against the real selector rather than a mock. What is still
-   open:
-
-   - **The threshold refusal** —
-     `test_init_fails_when_passed_invalid_evidence_threshold_config` — is
-     translated, but not where Monty asserts it: Monty validates in the
-     updater's constructor and this port parses the setting once when the module
-     is built, so the case lives against `LearningModule.parse_config/2`.
-   - A burst is where "which hypotheses get proposed" is decided, and that is
-     the one measured difference left on `test/evidence_lm/evidence_mujoco`: our
-     best hypothesis climbs monotonically where Monty's highest leaves the graph
-     every other step. Translate the rest of this file's neighbours
-     (`evidence_lm_test.py`) before hunting that difference by hand.
-
-4. **`graph_memory/`** — `GraphMemory`, `ObjectModel`, `features`/`locations`
-   bookkeeping. Fixtures: a small graph saved by Monty, loaded identically.
-5. **`evidence_matching/learning_module.py`** — `EvidenceGraphLM`. The first real
-   learning module; the `Setup` diagram's `learning_module_0` becomes genuinely
-   ported rather than "planned".
-6. **`sensor_modules/`** — `ObservationProcessor`, `SurfaceNormalMethod`,
-   `SnapshotTelemetry`, `CameraSM`, then `two_d_sensor_module`. Golden-file
-   tests on a recorded observation, feature by feature.
-7. **`goal_generation.py`** — `EvidenceGoalGenerator` (and
-   `GraphGoalGenerator`), then `motor_policies.py`, `motor_policy_selectors.py`,
-   `motor_system.py`.
-8. **`monty_base.py`, `graph_matching.py`, `evidence_matching/model.py`** — the
-   classes that wire modules together; here the runtime's routing is replaced by
-   the ported one where it is behaviour, and stays where it is supervision.
-   **`evidence_matching/model.py` done:**
-   `Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching`
-   is the model a config naming it starts — the class is the name a run uses and
-   `Monty.Runtime.Model` is the processes behind it — while a config naming a
-   model this port has not written keeps running on the runtime, and the setup
-   page says which of the two it got.
-9. **`experiments/`** — `MontyExperiment`, `MontySupervisedObjectPretraining…`,
-   `MontyObjectRecognition…`: epochs, episodes, recognition policy, hooks.
-   **Episode loop done:** `Monty.Frameworks.Experiments.MontyExperiment.run_episode_steps/2`
-   is Monty's `run_episode_steps`, and `Monty.Studio.Jobs.Run` drives every run
-   through it — the step, the policy and the counter stay where they are, and the
-   loop is the experiment's again. A stop and a step that dies come back as an
-   outcome rather than an exception, which is the one place this port's needs go
-   beyond Monty's. Epochs are not written: `MontyObjectRecognitionExperiment` only
-   overrides `pre_episode` to call a base hook that is `pass` in Monty, so the
-   subclass follows the epoch loop rather than leading it.
-
-**Done when**: `base_config_10distinctobj_dist_agent` reports `ported here 12/12`
-and a run of it is the ported pipeline, not stand-ins.
+- **The threshold refusal** —
+  `test_init_fails_when_passed_invalid_evidence_threshold_config` — is
+  translated, but not where Monty asserts it: Monty validates in the updater's
+  constructor and this port parses the setting once when the module is built, so
+  the case lives against `LearningModule.parse_config/2`.
+- A burst is where "which hypotheses get proposed" is decided, and that is the
+  one measured difference left on `test/evidence_lm/evidence_mujoco`: our best
+  hypothesis climbs monotonically where Monty's highest leaves the graph every
+  other step. Translate the rest of `evidence_lm_test.py` before hunting that
+  difference by hand.
 
 ## Phase 2 — the environment bridge
 
 Accuracy cannot be compared before the world is real, so this comes before
-benchmarks rather than after.
+benchmarks rather than after. What is built: MuJoCo is what a run steps, either
+through the compiled binding (`:ex_mujoco`) or Monty's own simulator in the
+interpreter this release carries (`:mujoco`), and it is Monty's own
+`MuJoCoSimulator`, agents, cameras and actuations in both cases, with no
+checkout and nothing from PyPI. The observation transforms are Elixir
+(`DepthTo3DLocations`, `MissingToMaxDepth`, `AddNoiseToRawDepthImage` and the
+rest of [`environment_utils/transforms/`](../lib/monty/frameworks/environment_utils/transforms)),
+a recorded episode replays through the real runtime
+([`recording_episode_test.exs`](../test/monty/recording_episode_test.exs)), and a
+sensor answers base64 PNGs so the page that draws a run's frames holds a
+camera's.
 
-- **Done, and MuJoCo is what a run steps.** MuJoCo is the world a run steps —
-  through the compiled binding (`:ex_mujoco`, the default on a machine that can
-  render with it) or Monty's own simulator in the interpreter this release carries
-  (`:mujoco`, the fallback): either way it is Monty's own `MuJoCoSimulator`, its
-  agents, cameras and actuations, with no checkout and
-  nothing from PyPI. Its classes stay `:planned` in the map on purpose: the code
-  is copied rather than ported, so there is no Elixir module per class to point
-  at. Units and quirks cross unchanged — metres, `wxyz` quaternions decoded into
-  `Monty.Geometry.Rotation`, sensor positions relative to the agent — and a
-  config's own model runs against it
-  ([`scripts/probe_world_episodes.exs`](../scripts/probe_world_episodes.exs)).
-  What that comparison shows — objects agree, step counts do not, because of the
-  random-stream deviation of §2.1 in [`monty-differences.md`](monty-differences.md) — is in
-  [`validation.md`](validation.md).
-- **The port, and what it is still for.** `Monty.Simulators.Port` is the boundary
-  a world outside this release would come through, tested in both directions:
-  [`scripts/monty_simulator_peer.py`](../scripts/monty_simulator_peer.py) is
-  Monty's own `HabitatEnvironment` and eval interface in Monty's pinned conda
-  environment, and
-  `Monty.Simulators.Habitat.Environment.HabitatEnvironment` is the handle that
-  would own it. Habitat-Sim is not carried — a conda package for another Python,
-  and on its way out of Monty — so a Habitat config is refused as a world this
-  build does not have rather than silently given MuJoCo's scene.
-- **The MuJoCo classes themselves are still `:planned`, and that is not a gap in
-  what runs.** All 17 of `simulators/mujoco/` — `agents.py` (`Axis`, `Embodiment`,
-  `Agent`, `NoopAgent`, `DistantAgent`, `SurfaceAgent`), `objects.py`
-  (`ObjectMetadata`, `ObjectMetadataDecoder` and the two errors a bad YCB entry
-  raises) and `simulator.py` (`MuJoCoSimulator`, `MuJoCoAgentFactory`,
-  `ModelMetadata`, `UnknownObjectType` and the three configuration errors) — are
-  Monty's Python, carried as it is. Porting them to Elixir would be a rewrite of a
-  physics front end for no gain: the same code runs a step today, inside the
-  interpreter the release already ships. The map keeps them `planned` so that
-  "ported" keeps meaning "there is an Elixir module to read", and
-  [`from-monty.md`](from-monty.md) records the copy the same way it records the
-  config tree.
-- **Done: the observation transforms**, in Elixir — `DepthTo3DLocations`,
-  `MissingToMaxDepth`, `AddNoiseToRawDepthImage`, `GaussianBlurRGB`,
-  `GaussianSmoothing`, `NoDepthSensorPresent` under
-  [`lib/monty/frameworks/environment_utils/transforms/`](../lib/monty/frameworks/environment_utils/transforms).
-  They are pure math and tested on their own; their numbers are the ones in
-  [`validation.md`](validation.md)'s table where a fixture exists, and they are
-  what makes a frame drawable from a replay.
-- **Done: recorded transcripts**, replayed through the real runtime
-  (`Monty.Simulators.Recording.SensorModule`,
-  [`test/monty/recording_episode_test.exs`](../test/monty/recording_episode_test.exs)).
-  A live MuJoCo test — tagged and excluded by default — is not written; it cannot
-  be until MuJoCo's peer exists.
-- **Done: the picture boundary.** `Monty.Simulators.Synthetic.Camera` already
-  answers base64 PNGs rather than SVG, so the page that draws a run's frames did
-  not have to change to hold a camera's.
+The MuJoCo classes stay `:planned` in the map on purpose: their code is copied
+rather than ported, so there is no Elixir module per class to point at, and
+"ported" keeps meaning "there is an Elixir module to read"
+([`from-monty.md`](from-monty.md) records the copy).
 
-The random stream is Monty's too: `Monty.Random.Numpy` is NumPy's generator and
-`Monty.Random.Stream` is the one stream an episode draws from, so an episode's
-first action is Monty's to the last digit ([`validation.md`](validation.md)). What
-is left is
-the middle of an episode: two of ten episodes of the comparison end on Monty's
-step, and the rest walk a path that parts from it later on. That is a diff of two
-action logs, not a design.
+`Monty.Simulators.Port` is the boundary a world outside this release would come
+through, tested in both directions: [`monty_simulator_peer.py`](../scripts/monty_simulator_peer.py)
+is Monty's own `HabitatEnvironment` and eval interface in Monty's pinned conda
+environment, and `Monty.Simulators.Habitat.Environment.HabitatEnvironment` is the
+handle that would own it. Habitat-Sim is not carried — a conda package for
+another Python, and on its way out of Monty — so a Habitat config is refused as a
+world this build does not have rather than silently given MuJoCo's scene.
+
+**What is left is the middle of an episode.** The random stream is Monty's
+(`Monty.Random.Numpy` is NumPy's generator, `Monty.Random.Stream` the one stream
+an episode draws from), so an episode's first action is Monty's to the last
+digit, and the percept, given his actions, is his to the last bit. After that the
+two action logs part: an episode ends on Monty's step in some of the comparison's
+episodes and walks a different path in the rest. That is a diff of two logs, not a
+design — and `scripts/probe_action_stream.exs` is the instrument that prints it,
+once it is reading a percept rather than an empty view (see
+[`validation.md`](validation.md)).
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
@@ -288,12 +201,6 @@ from the page and from `mix monty.run`.
   frames its sensors actually received, per sensor, per step. A chart that cannot
   be explained from the module's state is not shown: the point of the graph is to
   see Monty think, and of the frames to see what it was thinking about.
-- **A chart's values axis and its hover are part of that honesty** (done
-  2026-11-06): labelled lines on round numbers — 1, 2 or 5 times a power of ten,
-  about four of them — so the axis says where zero is instead of leaving it
-  between two labels; and a hover that reads the line _at the pointer's x_,
-  interpolating between the points it was drawn through, rather than snapping to
-  a subsampled one.
 - Config editor: edit a group, see the composed diff and the snapshot check
   before saving; a config Monty would reject cannot be saved.
 - Step inspector: the CMP payload a sensor sent and what a learning module did
