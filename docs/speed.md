@@ -1379,3 +1379,47 @@ deltas around one step, so it also counts whatever else the process answered in
 that window — the learning module's figures vary ±8 % between identical runs,
 while the view finder's do not. The ladder is the determinism check, and it is
 digit-exact: same goals, same hypothesis counts, same evidence, run after run.
+
+## Measured 2026-11-16: the step counts are Monty's — and the runner rebuilds its world per episode
+
+The surface policy remembered the raw curvature angle instead of the heading it
+took (`012ecc7`), and a 140-episode `base_10simobj_surf_agent` run (`ex_mujoco`,
+`mix monty.run --no-record`) says what that was worth:
+
+| | before | after |
+|---|---|---|
+| steps | 44 414 | **28 693** (−35 %) |
+| outcome | 138 match, 2 exhausted | **139 match, 1 time_out** |
+| model | 312.6 s | 208.6 s |
+| world | 448.7 s | 171.4 s |
+| wall | 985 s (16.4 min) | **748 s (12.5 min)** |
+
+28 693 steps is **fewer than Monty's 36 565** for the same 140 episodes, and the
+per-step cost is now the whole gap: 26 ms against his 14.8 ms.
+
+**Where the 748 s goes** (the log's own timestamps): 380 s in model + world, and
+**268.7 s over 139 gaps, every one of them followed by `step 0`** — the runner
+builds a fresh world and model per episode, at ~1.93 s each. The studio's job
+reuses a world between episodes (its run had 20 s of gaps in total), so the two
+wall clocks are not comparable: the real number for a studio run is nearer
+8 minutes. Compare runners before quoting a wall clock; quote **steps** across
+them.
+
+What the budget says from here (the rules, not options):
+
+1. **The maths first**, and it now holds: fewer steps than Monty for the same
+   episodes, one time-out instead of two exhausted budgets.
+2. **No partitioning to go faster.** Concurrency worth spending effort on is
+   inside a step — sensors already run behind a barrier, learning modules are the
+   next candidates. A config that is parallel by design (Monty's
+   `run_parallel.py`: N workers, own subsets and seeds) is a shape the studio
+   should honour; it is a gap, not a lever.
+3. **A queue, not a call.** A step publishes; I/O, PNG encoding and the page
+   consume and may lag. `RunStream` is that shape already (a cast plus an ETS
+   table the writer reads); what still sits on the step is the entry, the moment,
+   the four files a step writes and the CSV row.
+4. **`chumak` is a candidate, not a plan** — moving the page's fan-out off the
+   mailboxes is worth it only if the 5.1 ms that is neither model nor world is
+   measured per piece first.
+5. **Measure the world again on `ex_mujoco`**: 171 s of the run, and the last
+   split (render/decode/transform) predates the compiled world.
