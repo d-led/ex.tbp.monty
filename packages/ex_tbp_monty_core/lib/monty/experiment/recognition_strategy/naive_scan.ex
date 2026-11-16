@@ -33,7 +33,7 @@ defmodule Monty.Experiment.RecognitionStrategy.NaiveScan do
   end
 
   @doc "Done when the spiral is complete."
-  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionContext.t(), map()) ::
           RecognitionResult.t()
   def call(_model, counter, %{step_limit: step_limit}) do
     %RecognitionResult{is_done: counter.step >= step_limit}

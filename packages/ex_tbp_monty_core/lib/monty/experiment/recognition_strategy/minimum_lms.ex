@@ -28,7 +28,7 @@ defmodule Monty.Experiment.RecognitionStrategy.MinimumLMs do
   end
 
   @doc "Done when enough modules have concluded, however they concluded."
-  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionContext.t(), map()) ::
           RecognitionResult.t()
   def call(model, _counter, %{min_lms: min_lms}) do
     concluded = Enum.count(model.conclusions, &(&1 != nil))

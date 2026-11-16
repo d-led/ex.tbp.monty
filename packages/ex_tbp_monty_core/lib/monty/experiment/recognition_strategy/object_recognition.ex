@@ -52,7 +52,7 @@ defmodule Monty.Experiment.RecognitionStrategy.ObjectRecognition do
   end
 
   @doc "The first of the three conditions that holds, in Monty's order."
-  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionContext.t(), map()) ::
           RecognitionResult.t()
   def call(model, counter, state) do
     cond do

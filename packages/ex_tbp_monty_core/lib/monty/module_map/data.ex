@@ -415,7 +415,9 @@ defmodule Monty.ModuleMap.Data do
       python: "experiment/recognition_strategy.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/recognition_context.ex",
           elixir: "Monty.Experiment.RecognitionStrategy.RecognitionContext",
           python: "RecognitionContext"
         },
@@ -468,7 +470,9 @@ defmodule Monty.ModuleMap.Data do
           python: "StepLimit"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/match_criteria.ex",
           elixir: "Monty.Experiment.RecognitionStrategy.MatchCriteria",
           python: "MatchCriteria"
         },
@@ -494,7 +498,9 @@ defmodule Monty.ModuleMap.Data do
           python: "ObjectRecognition"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/any.ex",
           elixir: "Monty.Experiment.RecognitionStrategy.Any",
           python: "Any"
         }

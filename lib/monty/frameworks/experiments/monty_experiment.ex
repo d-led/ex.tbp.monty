@@ -17,7 +17,7 @@ defmodule Monty.Frameworks.Experiments.MontyExperiment do
           self.post_episode(last_step)
 
       def run_episode_steps(self):
-          count = RecognitionCounter(mode=self.experiment_mode)
+          count = RecognitionContext(mode=self.experiment_mode)
           while not self._recognition_complete(count):
               actions = self.run_step(ctx, count.step, actions)
               count.step += 1

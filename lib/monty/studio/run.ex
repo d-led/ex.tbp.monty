@@ -15,7 +15,7 @@ defmodule Monty.Studio.Run do
 
   alias Monty.Experiment.Environment.Interface
   alias Monty.Experiment.RecognitionStrategy
-  alias Monty.Experiment.RecognitionStrategy.{RecognitionCounter, RecognitionResult}
+  alias Monty.Experiment.RecognitionStrategy.{RecognitionContext, RecognitionResult}
   alias Monty.Frameworks.Experiments.Seed
   alias Monty.Runtime.{LearningModuleServer, Positioning, Registry}
   alias Monty.Studio.{Belief, Setup}
@@ -56,7 +56,7 @@ defmodule Monty.Studio.Run do
           pending_actions: [Monty.Frameworks.Actions.Action.t()],
           positioning: Monty.Runtime.Positioning.outcome() | nil,
           policy: Monty.Experiment.RecognitionStrategy.t() | nil,
-          counter: Monty.Experiment.RecognitionStrategy.RecognitionCounter.t() | nil,
+          counter: Monty.Experiment.RecognitionStrategy.RecognitionContext.t() | nil,
           first_seen: %{optional(String.t()) => [number()]},
           # What starting this episode cost, part by part, in microseconds.
           started_in: [{String.t(), non_neg_integer()}]
@@ -171,7 +171,7 @@ defmodule Monty.Studio.Run do
              interface: interface,
              positioning: positioning,
              policy: policy,
-             counter: RecognitionCounter.new(mode),
+             counter: RecognitionContext.new(mode),
              steps: Keyword.get(opts, :steps, @default_steps),
              # Where each object stood the first time the experiment showed it.
              # A later epoch may place it somewhere else, and a graph has to
@@ -461,7 +461,7 @@ defmodule Monty.Studio.Run do
         interface: interface,
         pending_actions: actions,
         counter:
-          RecognitionCounter.count_step(
+          RecognitionContext.count_step(
             run.counter,
             info.processed?,
             info.step_type == :exploratory

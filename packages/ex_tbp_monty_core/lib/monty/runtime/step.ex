@@ -134,13 +134,15 @@ defmodule Monty.Runtime.Step do
     do: GenServer.call(server, {:statistics, projection}, :infinity)
 
   @doc """
-  The four things a recognition policy may read off the model.
+  What a recognition policy may read off the model.
 
   Monty's `MontyIsDone` and its siblings read `model.is_done`, the model's step
-  type, its matching-step count and each module's conclusion — four fields, not
-  the model. The coordinator holds the pretrained memory in its own state, so
-  answering with the whole thing would copy tens of megabytes per step to
-  deliver four values (`docs/monty-differences.md` §2.17).
+  type, its matching-step count and each module's conclusion; `MatchCriteria`
+  also reads the terminal states and the model's match criterion. Those
+  readings, not the model. The coordinator holds the pretrained memory in its
+  own state, so answering with the whole thing would copy tens of megabytes per
+  step to deliver a handful of values
+  (`docs/monty-differences.md` §2.17).
   """
   @spec status(server()) :: Monty.Experiment.RecognitionStrategy.model()
   def status(server), do: GenServer.call(server, :status, :infinity)
@@ -589,15 +591,19 @@ defmodule Monty.Runtime.Step do
 
   # -- what a policy reads --------------------------------------------------
 
-  # Monty's `model.is_done` and the three other fields `MontyIsDone` and its
-  # siblings read. Built here, from the state that holds the memory, so that the
-  # four values travel and not the graphs behind them.
+  # Monty's model, as the recognition policies read it: `is_done` and the fields
+  # `MontyIsDone` and its siblings read, plus the terminal states and the match
+  # criterion that `MatchCriteria` asks the model for. Built here, from the state
+  # that holds the memory, so that the readings travel and not the graphs behind
+  # them.
   defp describe_status(%State{} = state) do
     %{
       is_done: state.done?,
       is_exploring: state.step_type == :exploratory,
       matching_steps: state.matching_steps,
-      conclusions: Enum.map(state.learning_modules, &Map.get(state.terminal_states, &1.id))
+      conclusions: Enum.map(state.learning_modules, &Map.get(state.terminal_states, &1.id)),
+      terminal_states: state.terminal_states,
+      match_criterion: state.match_criterion
     }
   end
 

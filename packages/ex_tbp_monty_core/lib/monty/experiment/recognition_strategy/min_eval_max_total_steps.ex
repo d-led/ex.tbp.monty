@@ -55,7 +55,7 @@ defmodule Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps do
   The wrapped answer, held back while too little has been seen, or ended at the
   ceiling.
   """
-  @spec call(map(), RecognitionStrategy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), RecognitionStrategy.RecognitionContext.t(), map()) ::
           RecognitionResult.t()
   def call(model, counter, state) do
     wrapped = RecognitionStrategy.call(state.wrapped, model, counter)

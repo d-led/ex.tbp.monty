@@ -31,7 +31,7 @@ defmodule Monty.Runtime.Episode do
 
   Monty's experiment does not stop an episode by counting steps; it asks a
   recognition policy (`MaxTotalSteps`, `MinEvalMaxTotalSteps`,
-  `ObjectRecognition`, and `AnyPolicy` over them), and the policy also decides
+  `ObjectRecognition`, and `Any` over them), and the policy also decides
   whether undecided modules should be timed out and whether the episode should
   start exploring. So this loop asks the same question, through the same
   policies: `:max_steps` is sugar for `MaxTotalSteps`, and `:policy` takes any
@@ -44,10 +44,10 @@ defmodule Monty.Runtime.Episode do
   alias Monty.Experiment.RecognitionStrategy
 
   alias Monty.Experiment.RecognitionStrategy.{
-    AnyPolicy,
+    Any,
     MaxTotalSteps,
     MontyIsDone,
-    RecognitionCounter
+    RecognitionContext
   }
 
   alias Monty.Runtime.Model
@@ -94,7 +94,7 @@ defmodule Monty.Runtime.Episode do
         environment,
         ctx,
         policy,
-        RecognitionCounter.new(mode),
+        RecognitionContext.new(mode),
         %{steps: 0, infos: []}
       )
 
@@ -119,7 +119,7 @@ defmodule Monty.Runtime.Episode do
         {:ok, ceiling} =
           MaxTotalSteps.new(max_total_steps: Keyword.get(options, :max_steps, @default_max_steps))
 
-        {:ok, policy} = AnyPolicy.new(policies: [done, ceiling])
+        {:ok, policy} = Any.new(strategies: [done, ceiling])
         policy
     end
   end
@@ -149,7 +149,7 @@ defmodule Monty.Runtime.Episode do
       environment,
       ctx,
       policy,
-      RecognitionCounter.count_step(counter, info.processed?, info.step_type == :exploratory),
+      RecognitionContext.count_step(counter, info.processed?, info.step_type == :exploratory),
       %{steps: run.steps + 1, infos: [info | run.infos], last_actions: actions}
     )
   end

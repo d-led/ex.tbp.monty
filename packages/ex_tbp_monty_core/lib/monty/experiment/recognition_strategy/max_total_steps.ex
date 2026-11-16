@@ -27,7 +27,7 @@ defmodule Monty.Experiment.RecognitionStrategy.MaxTotalSteps do
   end
 
   @doc "Done at the ceiling; a ceiling reached is also a timeout for the modules."
-  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionContext.t(), map()) ::
           RecognitionResult.t()
   def call(_model, counter, %{max_total_steps: max_total_steps}) do
     is_done = counter.step >= max_total_steps

@@ -2,17 +2,18 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
   @moduledoc """
   The recognition policies, held to Monty's own decisions.
 
-  `scripts/record_monty_recognition_strategy.py` asked Monty's real policies 403
-  questions — every branch and boundary of thirteen configured policies — and
-  wrote down the three booleans each answered. This replays them, so "when is an
-  episode over" is Monty's answer and not a reading of it.
+  `scripts/record_monty_recognition_strategy.py` asked Monty's real strategies
+  every branch and boundary of every configured strategy, and wrote down the
+  three booleans each answered. This replays them, so "when is an episode over"
+  is Monty's answer and not a reading of it.
 
   ## What the fixture's states are
 
-  A state is what a policy is allowed to read: `is_done`, `is_exploring`,
-  `matching_steps`, and how many learning modules have concluded; plus the
-  episode's counters. The states are chosen so that each policy's boundaries are
-  crossed at the step or count where it turns on, in both modes.
+  A state is what a strategy is allowed to read: `is_done`, `is_exploring`,
+  `matching_steps`, how many learning modules concluded, each module's terminal
+  state, and the match criterion the model carries; plus the episode's counters.
+  The states are chosen so that each strategy's boundaries are crossed at the
+  step or count where it turns on, in both modes.
 
   ## The two halves
 
@@ -24,15 +25,16 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
 
   use ExUnit.Case, async: true
 
+  alias Monty.Experiment.MatchCriteria
   alias Monty.Experiment.RecognitionStrategy
-  alias Monty.Experiment.RecognitionStrategy.AnyPolicy
+  alias Monty.Experiment.RecognitionStrategy.Any
   alias Monty.Experiment.RecognitionStrategy.MaximumSteps
   alias Monty.Experiment.RecognitionStrategy.MaxTotalSteps
   alias Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps
   alias Monty.Experiment.RecognitionStrategy.MinimumLMs
   alias Monty.Experiment.RecognitionStrategy.NaiveScan
   alias Monty.Experiment.RecognitionStrategy.ObjectRecognition
-  alias Monty.Experiment.RecognitionStrategy.RecognitionCounter
+  alias Monty.Experiment.RecognitionStrategy.RecognitionContext
   alias Monty.Experiment.RecognitionStrategy.RecognitionResult
   alias Monty.Experiment.RecognitionStrategy.StepLimit
 
@@ -126,10 +128,10 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
 
   defp policy("ObjectRecognition(1000, 500, 6000)"), do: object_recognition()
 
-  defp policy("AnyPolicy([MaximumSteps, MaxTotalSteps])"),
+  defp policy("Any([MaximumSteps, MaxTotalSteps])"),
     do:
-      Monty.Experiment.RecognitionStrategy.AnyPolicy.new(
-        policies: [
+      Monty.Experiment.RecognitionStrategy.Any.new(
+        strategies: [
           elem_of_ok(policy("MaximumSteps(1000, 500)")),
           elem_of_ok(policy("MaxTotalSteps(6000)"))
         ]
@@ -153,14 +155,21 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
         max_total_steps: 6000
       )
 
-  defp policy("AnyPolicy([MinEvalMaxTotalSteps, StepLimit])"),
+  defp policy("Any([MinEvalMaxTotalSteps, StepLimit])"),
     do:
-      Monty.Experiment.RecognitionStrategy.AnyPolicy.new(
-        policies: [
+      Monty.Experiment.RecognitionStrategy.Any.new(
+        strategies: [
           elem_of_ok(policy("MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)")),
           elem_of_ok(Monty.Experiment.RecognitionStrategy.StepLimit.new([]))
         ]
       )
+
+  # `MatchCriteria` takes no configuration; what differs between the two
+  # recordings is the criterion on the model, which the state carries.
+  defp policy("MatchCriteria"), do: Monty.Experiment.RecognitionStrategy.MatchCriteria.new()
+
+  defp policy("MatchCriteria(NamedLMsMatch[lm_2])"),
+    do: Monty.Experiment.RecognitionStrategy.MatchCriteria.new()
 
   defp policy("MaxTotalSteps(6000)"),
     do: Monty.Experiment.RecognitionStrategy.MaxTotalSteps.new(max_total_steps: 6000)
@@ -187,7 +196,7 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
       "MaximumSteps.eval" => {MaximumSteps, [max_train_steps: 1000, max_eval_steps: 0]},
       "MinimumLMs" => {MinimumLMs, [min_lms: 0]},
       "NaiveScan" => {NaiveScan, [fixed_amount: 0]},
-      "AnyPolicy" => {AnyPolicy, [policies: []]},
+      "Any" => {Any, [strategies: []]},
       "ObjectRecognition.total" =>
         {ObjectRecognition, [max_train_steps: 1000, max_eval_steps: 500, max_total_steps: 0]},
       "StepLimit.min" =>
@@ -209,7 +218,9 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
   # -- the recording's shapes -------------------------------------------------
 
   # A recording of a model has three modules; `matched_lms` says how many of them
-  # concluded.
+  # concluded, `terminal_states` is the same fact keyed by module id — with a
+  # module that timed out beside those that did — and `criterion` is the
+  # criterion the model carries.
   defp model_view(%{"is_done" => is_done, "is_exploring" => is_exploring} = model) do
     matched = model["matched_lms"]
 
@@ -217,12 +228,24 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
       is_done: is_done,
       is_exploring: is_exploring,
       matching_steps: model["matching_steps"],
-      conclusions: Enum.map(0..2, fn index -> if index < matched, do: :match, else: nil end)
+      conclusions: Enum.map(0..2, fn index -> if index < matched, do: :match, else: nil end),
+      terminal_states:
+        Map.new(model["terminal_states"], fn {id, state} -> {id, terminal_state(state)} end),
+      match_criterion: criterion(model["criterion"])
     }
   end
 
+  defp terminal_state(nil), do: nil
+  defp terminal_state(state), do: String.to_existing_atom(state)
+
+  defp criterion("AnyLMsMatch(1)"),
+    do: {MatchCriteria.AnyLMsMatch, elem_of_ok(MatchCriteria.AnyLMsMatch.new(1))}
+
+  defp criterion("NamedLMsMatch([lm_2])"),
+    do: {MatchCriteria.NamedLMsMatch, elem_of_ok(MatchCriteria.NamedLMsMatch.new(["lm_2"]))}
+
   defp counter_view(%{"mode" => mode} = counter) do
-    %RecognitionCounter{
+    %RecognitionContext{
       step: counter["step"],
       matching_steps: counter["matching_steps"],
       exploring_steps: counter["exploring_steps"],

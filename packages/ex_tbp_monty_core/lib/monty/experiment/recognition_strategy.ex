@@ -9,18 +9,18 @@ defmodule Monty.Experiment.RecognitionStrategy do
 
   ## The model, as a policy sees it
 
-  Monty's policies are handed the model and read four things off it. Rather than
-  reach into the runtime's processes, a policy here is given those four things as
-  a map — that is what keeps the decision logic pure and comparable with Monty's
-  own answers (`scripts/record_monty_recognition_strategy.py`). The episode loop is
-  what builds the map, from the model it is holding.
+  Monty's policies are handed the model and read a handful of things off it.
+  Rather than reach into the runtime's processes, a policy here is given those
+  readings as a map — that is what keeps the decision logic pure and comparable
+  with Monty's own answers (`scripts/record_monty_recognition_strategy.py`). The
+  episode loop is what builds the map, from the model it is holding.
 
   ## Policies are `{module, state}`
 
   Each policy is a module plus the numbers it was configured with, which is how
   the rest of this port composes behaviour (`Monty.Experiment.RecognitionStrategy.call/3`),
-  and it means `AnyPolicy` can hold a list of them without knowing what any of
-  them are.
+  and it means `Any` can hold a list of them without knowing what any of them
+  are.
 
   ## What is *not* here
 
@@ -29,7 +29,8 @@ defmodule Monty.Experiment.RecognitionStrategy do
   experiment's business, so it is not on this path.
   """
 
-  alias Monty.Experiment.RecognitionStrategy.RecognitionCounter
+  alias Monty.Experiment.MatchCriteria.MatchCriterion
+  alias Monty.Experiment.RecognitionStrategy.RecognitionContext
   alias Monty.Experiment.RecognitionStrategy.RecognitionResult
   alias Monty.Experiment.RecognitionStatus
 
@@ -38,13 +39,19 @@ defmodule Monty.Experiment.RecognitionStrategy do
 
   `is_done` is Monty's `model.is_done` — every learning module that matters has
   concluded. `conclusions` is each module's answer, in module order, with `nil`
-  for a module that has not concluded.
+  for a module that has not concluded. `terminal_states` is the same answers
+  keyed by module id, which is the shape a match criterion reads, and
+  `match_criterion` is the criterion the model was built with.
   """
   @type model :: %{
           required(:is_done) => boolean(),
           required(:is_exploring) => boolean(),
           required(:matching_steps) => non_neg_integer(),
-          required(:conclusions) => [RecognitionStatus.conclusion() | nil]
+          required(:conclusions) => [RecognitionStatus.conclusion() | nil],
+          required(:terminal_states) => %{
+            optional(atom() | String.t()) => MatchCriterion.terminal_state()
+          },
+          required(:match_criterion) => {module(), term()}
         }
 
   @typedoc "A policy and the numbers it was configured with."
@@ -56,7 +63,7 @@ defmodule Monty.Experiment.RecognitionStrategy do
   The whole reason a policy is a module and a state: this is the only place that
   need know the shape.
   """
-  @spec call(t(), model(), RecognitionCounter.t()) :: RecognitionResult.t()
+  @spec call(t(), model(), RecognitionContext.t()) :: RecognitionResult.t()
   def call({module, state}, model, counter), do: module.call(model, counter, state)
 
   @doc """
@@ -65,12 +72,13 @@ defmodule Monty.Experiment.RecognitionStrategy do
   `state` is whatever the policy's `new/1` decided to keep — Monty keeps them as
   instance attributes, which is the same thing without the object.
   """
-  @callback call(model(), RecognitionCounter.t(), state :: term()) :: RecognitionResult.t()
+  @callback call(model(), RecognitionContext.t(), state :: term()) :: RecognitionResult.t()
 
   # The classes of `experiment/recognition_strategy.py`, by the name a config
   # writes after `tbp.monty.experiment.recognition_strategy.`.
   @policies %{
-    "AnyPolicy" => Monty.Experiment.RecognitionStrategy.AnyPolicy,
+    "Any" => Monty.Experiment.RecognitionStrategy.Any,
+    "MatchCriteria" => Monty.Experiment.RecognitionStrategy.MatchCriteria,
     "MaxTotalSteps" => Monty.Experiment.RecognitionStrategy.MaxTotalSteps,
     "MaximumSteps" => Monty.Experiment.RecognitionStrategy.MaximumSteps,
     "MinEvalMaxTotalSteps" => Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps,
@@ -86,7 +94,7 @@ defmodule Monty.Experiment.RecognitionStrategy do
 
   Takes Monty's own shape — a map with `_target_` and the policy's arguments —
   and answers `{:ok, {module, state}}` or `{:error, message}`. `wrapped` and
-  `policies` are built first, so a wrapper over a policy, or an `AnyPolicy` over
+  `strategies` are built first, so a wrapper over a strategy, or an `Any` over
   several, comes out of the same call.
 
   An option the policy does not have is refused rather than ignored: a config
@@ -121,12 +129,12 @@ defmodule Monty.Experiment.RecognitionStrategy do
     end
   end
 
-  # A wrapping or combining policy names its children as policies of their own.
+  # A wrapping or combining policy names its children as strategies of their own.
   defp nested_options(options) do
     with {:ok, wrapped} <- nested(options, "wrapped"),
-         {:ok, policies} <- nested_policies(options) do
+         {:ok, strategies} <- nested_strategies(options) do
       {:ok,
-       Enum.reject([{:wrapped, wrapped}, {:policies, policies}], fn {_key, value} ->
+       Enum.reject([{:wrapped, wrapped}, {:strategies, strategies}], fn {_key, value} ->
          is_nil(value)
        end)}
     end
@@ -139,17 +147,17 @@ defmodule Monty.Experiment.RecognitionStrategy do
     end
   end
 
-  defp nested_policies(options) do
-    case Map.fetch(options, "policies") do
-      {:ok, configs} -> each_policy(configs)
+  defp nested_strategies(options) do
+    case Map.fetch(options, "strategies") do
+      {:ok, configs} -> each_strategy(configs)
       :error -> {:ok, nil}
     end
   end
 
-  defp each_policy(configs) do
+  defp each_strategy(configs) do
     Enum.reduce_while(configs, {:ok, []}, fn config, {:ok, built} ->
       case from_config(config) do
-        {:ok, policy} -> {:cont, {:ok, built ++ [policy]}}
+        {:ok, strategy} -> {:cont, {:ok, built ++ [strategy]}}
         {:error, message} -> {:halt, {:error, message}}
       end
     end)
@@ -160,7 +168,8 @@ defmodule Monty.Experiment.RecognitionStrategy do
   # take is a `TypeError` there and a refusal here — a config written for a
   # policy this port has not caught up with must say so.
   @options %{
-    Monty.Experiment.RecognitionStrategy.AnyPolicy => [:policies],
+    Monty.Experiment.RecognitionStrategy.Any => [:strategies],
+    Monty.Experiment.RecognitionStrategy.MatchCriteria => [],
     Monty.Experiment.RecognitionStrategy.MaxTotalSteps => [:max_total_steps],
     Monty.Experiment.RecognitionStrategy.MaximumSteps => [:max_train_steps, :max_eval_steps],
     Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps => [
@@ -188,7 +197,7 @@ defmodule Monty.Experiment.RecognitionStrategy do
     known = Map.fetch!(@options, module)
 
     options
-    |> Map.drop(["wrapped", "policies"])
+    |> Map.drop(["wrapped", "strategies"])
     |> Enum.reduce_while({:ok, []}, fn {name, value}, {:ok, built} ->
       atom = String.to_existing_atom(name)
 

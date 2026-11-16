@@ -54,7 +54,7 @@ defmodule Monty.Experiment.RecognitionStrategy.StepLimit do
   end
 
   @doc "The limit that applies to what the model is doing right now."
-  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionContext.t(), map()) ::
           RecognitionResult.t()
   def call(%{is_exploring: true}, counter, state) do
     is_done = counter.exploring_steps >= state.num_exploring_steps

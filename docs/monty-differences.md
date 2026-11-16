@@ -1238,18 +1238,18 @@ handed the model object and reads whatever it likes off it — `model.is_done`,
 telemeters every terminal decision through `logger.info` and `telemeter.info`.
 
 **What this port does.**
-[`Monty.Experiment.RecognitionStrategy`](../lib/monty/experiment/recognition_strategy.ex)
-declares a model _view_ — a map with exactly those four readings, the modules'
-conclusions flattened to a list — and each policy is a `{module, state}` pair
+[`Monty.Experiment.RecognitionStrategy`](../packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy.ex)
+declares a model _view_ — a map with exactly the readings a policy takes: the
+four above, plus the modules' terminal states and the model's match criterion,
+which `MatchCriteria` asks the model for. Each policy is a `{module, state}` pair
 dispatched by `RecognitionStrategy.call/3`. Constructors answer `{:ok, policy}` or
 `{:error, message}`, carrying Monty's `ValueError` sentences.
 
 **Why.** The decision is what has to be compared with Monty's, and a decision
 that can reach into live processes is a decision that cannot be recorded and
 replayed. [`scripts/record_monty_recognition_strategy.py`](../scripts/record_monty_recognition_strategy.py)
-asks Monty's real classes
-448 questions over the same view; the port answers every one of them the same
-way.
+asks Monty's real classes over the same view; the port answers every one of them
+the same way.
 
 **What is therefore not compared.** The log lines and telemetry events Monty
 emits when a policy fires. They are the experiment's reporting, not its

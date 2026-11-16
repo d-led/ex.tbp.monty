@@ -145,9 +145,7 @@ defmodule Monty.Runtime.Step.State do
   # before the first episode. With no experiment, "the module recognised
   # something" is the honest default — it is what a single-module run means,
   # and it never ends an episode that concluded nothing.
-  defp default_match_criterion do
-    {MatchCriteria.AnyLMsMatch, %MatchCriteria.AnyLMsMatch{count: 1}}
-  end
+  defp default_match_criterion, do: MatchCriteria.default()
 
   @doc """
   Monty's default vote routing: a receiver gets the votes of the modules wired

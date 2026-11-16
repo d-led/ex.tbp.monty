@@ -1,6 +1,7 @@
 defmodule Monty.Studio.SetupTest do
   use ExUnit.Case, async: true
 
+  alias Monty.Experiment.MatchCriteria.NamedLMsMatch
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
@@ -329,6 +330,47 @@ defmodule Monty.Studio.SetupTest do
         |> elem(1)
 
       assert :connection_index_out_of_range in errors(setup)
+    end
+  end
+
+  describe "the match criterion a termination config names" do
+    # Monty's experiment reads `match_criterion` from the same config group as
+    # the recognition strategy and sets it on the model before the first
+    # episode. A config that names `NamedLMsMatch` must not run to the model's
+    # own default, which is a different notion of recognition.
+    test "reaches the model, instead of the default" do
+      setup =
+        setup_from(
+          Map.put(@base, "termination", "named_lm2_objectrecognition_t1000_e100_tot6000")
+        )
+
+      named = {NamedLMsMatch, %NamedLMsMatch{ids: MapSet.new(["learning_module_2"])}}
+
+      assert setup.match_criterion == named
+      assert Setup.model_spec(setup, :criterion_test).match_criterion == named
+    end
+
+    test "a criterion that cannot be built is refused, not silently replaced" do
+      setup =
+        Setup.from_text("""
+        # @package _global_
+
+        defaults:
+          - /monty: graph_exp1000_e3_t3
+          - /monty/learning_module: evidence_1lm_nn5_dod003
+          - /monty/sensor_module: camera_dist_delta_salience
+
+        experiment:
+          _target_: "tbp.monty.frameworks.experiments.monty_experiment.MontyExperiment"
+          config:
+            match_criterion:
+              _target_: tbp.monty.experiment.match_criteria.AnyLMsMatch
+              count: 0
+        """)
+        |> elem(1)
+
+      assert :match_criterion_not_readable in errors(setup)
+      assert setup.match_criterion == nil
     end
   end
 

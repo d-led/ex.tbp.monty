@@ -42,41 +42,6 @@ Four groups:
 | MuJoCo agents, `SensorConfig` | every MuJoCo environment    | Runs — as Monty's Python in `priv/monty_py/world.py`. On purpose.   |
 | two wandb handlers           | two logging groups          | Skipped by name. A note in the run log, not a refusal.              |
 | `…telemetry.Snapshot`        | the `camera_*` / `3sm_*` groups | Not built. That sensor falls back to the stand-in. Telemetry only. |
-| `Any`, `MatchCriteria`       | every training config       | **Do not build. The run refuses.**                                  |
-
-## The two that stop runs
-
-Monty renamed `AnyPolicy` to `Any`, and its option `policies` to `strategies`.
-The port still has the old name and option. It has no `MatchCriteria` at all.
-
-So this termination fails:
-
-```yaml
-recognition_strategy:
-  _target_: …MinEvalMaxTotalSteps
-  wrapped:
-    _target_: …Any
-    strategies: [ …StepLimit …, …MatchCriteria ]
-```
-
-`Setup.recognition_strategy/1` answers:
-
-    {:error, "no recognition policy named Any"}
-
-and `Run.start/2` refuses the episode.
-
-`mix monty.readiness` does not check this. It looks at worlds and module classes.
-So the page offers these runs, and the worker refuses them.
-
-**Treat "runs here" as an upper bound until this is fixed.**
-`scripts/planned_classes.exs` lists the configs.
-
-The fix is small:
-
-- `Any` — the existing `AnyPolicy`, renamed, taking `strategies`.
-- `MatchCriteria` — new. It reads a model's `match_criterion`, whose classes
-  already exist and are implemented.
-- Spec — Monty's own tests, translated case for case.
 
 ## Excluded classes
 
@@ -107,4 +72,6 @@ reads a config, not the map.
 A verdict of "never" is a claim about someone's code. Keep the proof beside it:
 `git log -S'<phrase you remember>'` finds it.
 
-A class on a running path, like `Any`, is not a verdict. It is a defect.
+A class on a running path is not a verdict. It is a defect. The way to see the
+difference is `scripts/planned_classes.exs`: it says which planned classes a
+config actually names, and whether a config still fails to build.

@@ -34,7 +34,7 @@ defmodule Monty.Experiment.RecognitionStrategy.MaximumSteps do
   end
 
   @doc "Done when the mode's limit is reached, unless the model is exploring."
-  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionCounter.t(), map()) ::
+  @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionContext.t(), map()) ::
           RecognitionResult.t()
   def call(model, counter, state) do
     is_done = not model.is_exploring and model.matching_steps >= limit(state, counter.mode)

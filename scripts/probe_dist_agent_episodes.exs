@@ -14,7 +14,7 @@
 # episode uses all 43 of Monty's steps without recognising the mug. Chasing that
 # difference is the work; asserting it as behaviour would be the opposite.
 
-alias Monty.Experiment.RecognitionStrategy.{AnyPolicy, MaxTotalSteps}
+alias Monty.Experiment.RecognitionStrategy.{Any, MaxTotalSteps}
 alias Monty.Runtime.{Episode, LearningModuleServer, Model, Registry}
 alias Monty.Simulators.Recording
 alias Monty.Simulators.Synthetic.Environment
@@ -76,7 +76,7 @@ replay = fn percepts ->
   # not conclude stops where Monty did, and says so, rather than spinning to the
   # experiment's own 6000-step ceiling.
   {:ok, ceiling} = MaxTotalSteps.new(max_total_steps: length(percepts))
-  {:ok, bounded} = AnyPolicy.new(policies: [policy, ceiling])
+  {:ok, bounded} = Any.new(strategies: [policy, ceiling])
 
   result =
     Episode.run(

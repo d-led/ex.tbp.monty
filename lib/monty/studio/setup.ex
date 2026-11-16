@@ -90,6 +90,10 @@ defmodule Monty.Studio.Setup do
             object_init_sampler: %{train: nil, eval: nil},
             agent_class: nil,
             recognition_strategy: nil,
+            # Monty's experiment reads `match_criterion` from the same
+            # `experiment.config` and sets it on the model. `nil` is a config
+            # that names none, which keeps the model's own default.
+            match_criterion: nil,
             model_name_or_path: nil
 
   @type module_description :: %{
@@ -207,6 +211,7 @@ defmodule Monty.Studio.Setup do
       object_init_sampler: samplers(config),
       agent_class: agent_class_of(config),
       recognition_strategy: Map.get(config, "recognition_strategy"),
+      match_criterion: configured_match_criterion(config),
       model_name_or_path: Map.get(config, "model_name_or_path"),
       attention_system: describe_target(get_in(monty_config, ["attention_system", "_target_"])),
       monty_args: Map.get(monty_config, "monty_args", %{}),
@@ -530,9 +535,15 @@ defmodule Monty.Studio.Setup do
         # busy, which is the one thing a comparison must not let it decide.
         call_timeout: :infinity
       },
-      monty_args(setup)
+      Map.merge(criterion_spec(setup.match_criterion), monty_args(setup))
     )
   end
+
+  # Monty sets the criterion on the model before the first episode
+  # (`MontyExperiment._set_model`). A config that names none says nothing here,
+  # so the model keeps its own (`Monty.Runtime.Step.State`).
+  defp criterion_spec(nil), do: %{}
+  defp criterion_spec(criterion), do: %{match_criterion: criterion}
 
   # Monty keeps these on the model (`MontyBase.min_steps`), not on a module: a
   # matching episode may not conclude before `min_eval_steps` matching steps,
@@ -2963,7 +2974,36 @@ defmodule Monty.Studio.Setup do
 
   defp settings_findings(config) do
     epoch_findings(config["n_train_epochs"], "n_train_epochs") ++
-      epoch_findings(config["n_eval_epochs"], "n_eval_epochs")
+      epoch_findings(config["n_eval_epochs"], "n_eval_epochs") ++
+      match_criterion_findings(config)
+  end
+
+  # The criterion is built when the setup is read, so a config whose criterion
+  # cannot be built has already fallen back to the model's default by the time
+  # this asks. Saying so is what keeps that fallback from being silent.
+  defp match_criterion_findings(config) do
+    with %{"_target_" => _} = criterion <- Map.get(config, "match_criterion"),
+         {:error, message} <- Monty.Experiment.MatchCriteria.from_config(criterion) do
+      [
+        Finding.new(
+          :error,
+          :match_criterion_not_readable,
+          "This experiment's match criterion cannot be built: #{message}.",
+          "experiment.config.match_criterion"
+        )
+      ]
+    else
+      _built -> []
+    end
+  end
+
+  defp configured_match_criterion(config) do
+    with %{"_target_" => _} = criterion <- Map.get(config, "match_criterion"),
+         {:ok, built} <- Monty.Experiment.MatchCriteria.from_config(criterion) do
+      built
+    else
+      _none_or_unreadable -> nil
+    end
   end
 
   defp epoch_findings(count, _key) when is_integer(count) and count >= 0, do: []

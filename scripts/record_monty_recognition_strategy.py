@@ -26,8 +26,10 @@ import argparse
 import json
 from pathlib import Path
 
+from tbp.monty.experiment.match_criteria import AnyLMsMatch, NamedLMsMatch
 from tbp.monty.experiment.recognition_strategy import (
-    AnyPolicy,
+    Any,
+    MatchCriteria,
     MaxTotalSteps,
     MaximumSteps,
     MinEvalMaxTotalSteps,
@@ -35,7 +37,7 @@ from tbp.monty.experiment.recognition_strategy import (
     MontyIsDone,
     NaiveScan,
     ObjectRecognition,
-    RecognitionCounter,
+    RecognitionContext,
     StepLimit,
 )
 from tbp.monty.experiment.recognition_status import (
@@ -53,21 +55,46 @@ class StubStatus:
 
 
 class StubLM:
-    def __init__(self, conclusion):
+    def __init__(self, learning_module_id, conclusion, terminal_state):
+        self.learning_module_id = learning_module_id
         self.recognition_status = StubStatus(conclusion)
+        self.terminal_state = terminal_state
+
+
+def _terminal_states(matched_lms):
+    """Three module ids, `matched_lms` of which recognised the object.
+
+    The module after the last one that matched has timed out and the rest have
+    not concluded — the mix a match criterion has to tell apart.
+    """
+    return {
+        f"lm_{index}": (
+            "match"
+            if index < matched_lms
+            else "time_out"
+            if index == matched_lms
+            else None
+        )
+        for index in range(3)
+    }
 
 
 class StubModel:
-    """The four things a recognition policy is allowed to look at."""
+    """What a recognition strategy is allowed to look at."""
 
-    def __init__(self, is_done, is_exploring, matching_steps, matched_lms):
+    def __init__(self, is_done, is_exploring, matching_steps, matched_lms, criterion):
         self.is_done = is_done
         self.is_exploring = is_exploring
         self.matching_steps = matching_steps
         self.learning_modules = [
-            StubLM(RecognitionConclusion.MATCH if index < matched_lms else None)
-            for index in range(3)
+            StubLM(
+                module_id,
+                RecognitionConclusion.MATCH if state == "match" else None,
+                state,
+            )
+            for module_id, state in _terminal_states(matched_lms).items()
         ]
+        self._match_criterion = criterion
 
 
 def _states():
@@ -122,6 +149,7 @@ def _states():
                 "is_exploring": is_exploring,
                 "matching_steps": matching,
                 "matched_lms": matched,
+                "terminal_states": _terminal_states(matched),
             },
             "counter": {
                 "step": step,
@@ -133,11 +161,15 @@ def _states():
 
 
 def _policies():
-    """The policies the shipped configs use, and the ones they wrap."""
+    """The strategies the shipped configs use, and the ones they wrap.
+
+    Each is recorded with the criterion its model carries: the default for
+    every one of them, so that `MatchCriteria` reads it and the rest ignore it.
+    """
     object_recognition = ObjectRecognition(
         max_train_steps=1000, max_eval_steps=500, max_total_steps=6000
     )
-    return {
+    strategies = {
         "MontyIsDone": MontyIsDone(),
         "MaxTotalSteps(20)": MaxTotalSteps(max_total_steps=20),
         "MaximumSteps(1000, 500)": MaximumSteps(
@@ -155,7 +187,7 @@ def _policies():
         "NaiveScan(5)": NaiveScan(fixed_amount=5),
         "NaiveScan(90)": NaiveScan(fixed_amount=90),
         "ObjectRecognition(1000, 500, 6000)": object_recognition,
-        "AnyPolicy([MaximumSteps, MaxTotalSteps])": AnyPolicy(
+        "Any([MaximumSteps, MaxTotalSteps])": Any(
             [MaximumSteps(max_train_steps=1000, max_eval_steps=500), MaxTotalSteps(6000)]
         ),
         "MinEvalMaxTotalSteps(ObjectRecognition, 20, 6000)": MinEvalMaxTotalSteps(
@@ -164,7 +196,7 @@ def _policies():
         "MinEvalMaxTotalSteps(MaxTotalSteps(20), 20, 6000)": MinEvalMaxTotalSteps(
             MaxTotalSteps(max_total_steps=20), min_eval_steps=20, max_total_steps=6000
         ),
-        "AnyPolicy([MinEvalMaxTotalSteps, StepLimit])": AnyPolicy(
+        "Any([MinEvalMaxTotalSteps, StepLimit])": Any(
             [
                 MinEvalMaxTotalSteps(
                     object_recognition, min_eval_steps=20, max_total_steps=6000
@@ -174,6 +206,24 @@ def _policies():
         ),
     }
 
+    default_criterion = AnyLMsMatch(count=1)
+    named_criterion = NamedLMsMatch(ids=["lm_2"])
+
+    entries = {
+        name: (strategy, default_criterion, "AnyLMsMatch(1)")
+        for name, strategy in strategies.items()
+    }
+    # `MatchCriteria` takes no configuration: what varies between these two rows
+    # is the criterion on the model, which is what the strategy reads.
+    entries["MatchCriteria"] = (MatchCriteria(), default_criterion, "AnyLMsMatch(1)")
+    entries["MatchCriteria(NamedLMsMatch[lm_2])"] = (
+        MatchCriteria(),
+        named_criterion,
+        "NamedLMsMatch([lm_2])",
+    )
+
+    return entries
+
 
 REFUSALS = [
     ("MaxTotalSteps", lambda: MaxTotalSteps(max_total_steps=0)),
@@ -181,7 +231,7 @@ REFUSALS = [
     ("MaximumSteps.eval", lambda: MaximumSteps(max_train_steps=1000, max_eval_steps=0)),
     ("MinimumLMs", lambda: MinimumLMs(min_lms=0)),
     ("NaiveScan", lambda: NaiveScan(fixed_amount=0)),
-    ("AnyPolicy", lambda: AnyPolicy([])),
+    ("Any", lambda: Any([])),
     (
         "ObjectRecognition.total",
         lambda: ObjectRecognition(
@@ -229,7 +279,7 @@ def main() -> None:
     policies = _policies()
 
     decisions = []
-    for name, policy in policies.items():
+    for name, (strategy, criterion, criterion_name) in policies.items():
         for state in _states():
             model_state = state["model"]
             model = StubModel(
@@ -237,9 +287,10 @@ def main() -> None:
                 is_exploring=model_state["is_exploring"],
                 matching_steps=model_state["matching_steps"],
                 matched_lms=model_state["matched_lms"],
+                criterion=criterion,
             )
             counter_state = state["counter"]
-            counter = RecognitionCounter(
+            ctx = RecognitionContext(
                 step=counter_state["step"],
                 matching_steps=counter_state["matching_steps"],
                 exploring_steps=counter_state["exploring_steps"],
@@ -248,9 +299,9 @@ def main() -> None:
             decisions.append(
                 {
                     "policy": name,
-                    "model": model_state,
+                    "model": {**model_state, "criterion": criterion_name},
                     "counter": counter_state,
-                    "result": _result(policy(model, counter)),
+                    "result": _result(strategy(ctx, model)),
                 }
             )
 
@@ -266,10 +317,7 @@ def main() -> None:
         "policies": sorted(policies),
         "recognition_status": {
             "conclusions": [member.value for member in RecognitionConclusion],
-            "default": {
-                "conclusion": RecognitionStatus().conclusion,
-                "telemetry": RecognitionStatus().telemetry,
-            },
+            "default": {"conclusion": RecognitionStatus().conclusion},
         },
         "refusals": refusals,
         "decisions": decisions,
