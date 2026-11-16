@@ -313,6 +313,34 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       assert report_text =~ run.url
     end
 
+    # The cap on one episode is Monty's number and not this layer's: a caller
+    # that says nothing gets the `max_total_steps` its config names, which is
+    # what `run.py` runs. The tool used to answer with 500 of its own, so a
+    # request for anything longer was silently shortened to a different
+    # experiment.
+    test "a run asked for without a step count takes the config's own ceiling" do
+      {:ok, opened} = Studio.open(@experiment)
+      ceiling = Monty.Studio.Setup.max_total_steps(opened.setup)
+
+      assert is_integer(ceiling)
+
+      assert {:ok, %{structured: run}} =
+               Tools.call("monty_run_experiment", %{"name" => @experiment}, @ctx)
+
+      assert run.steps == ceiling
+    end
+
+    test "a step count above the old ceiling is taken as given" do
+      assert {:ok, %{structured: run}} =
+               Tools.call(
+                 "monty_run_experiment",
+                 %{"name" => @experiment, "steps" => 6000},
+                 @ctx
+               )
+
+      assert run.steps == 6000
+    end
+
     # `steps_done` is what the episodes took and `steps` is the cap on one of
     # them, so a `done/limit` form reads as an overshoot: a finished 140-episode
     # surf-agent run answered "20 780/200 steps" about a limit it never passed.

@@ -441,12 +441,12 @@ defmodule ExTbpMonty.Mcp.Tools do
           "steps" => %{
             "type" => "integer",
             "minimum" => 1,
-            "maximum" => 500,
-            "default" => 500,
             "description" =>
-              "The most timesteps one episode may take. Not a target: the experiment's own " <>
-                "recognition policy ends the episode first, which for a recognition is " <>
-                "about twenty matching steps."
+              "The most timesteps one episode may take. Absent, the experiment's own " <>
+                "ceiling applies — the `max_total_steps` its config names, which is what " <>
+                "Monty runs — so ask for fewer only to shorten a run on purpose. Not a " <>
+                "target either way: the recognition policy ends the episode first, which " <>
+                "for a recognition is about twenty matching steps."
           },
           "world" => %{
             "type" => "string",

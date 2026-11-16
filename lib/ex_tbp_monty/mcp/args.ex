@@ -61,7 +61,7 @@ defmodule ExTbpMonty.Mcp.Args do
 
     case args[key] do
       nil -> {:ok, default}
-      value when is_integer(value) -> {:ok, value |> max(min) |> min(max)}
+      value when is_integer(value) -> {:ok, within(value, min, max)}
       value when is_binary(value) -> parse_integer(value, key, min, max)
       _other -> {:error, "`#{key}` must be an integer."}
     end
@@ -69,10 +69,16 @@ defmodule ExTbpMonty.Mcp.Args do
 
   defp parse_integer(value, key, min, max) do
     case Integer.parse(String.trim(value)) do
-      {number, ""} -> {:ok, number |> max(min) |> min(max)}
+      {number, ""} -> {:ok, within(number, min, max)}
       _not_a_number -> {:error, "`#{key}` must be an integer."}
     end
   end
+
+  # A caller that passes `max: nil` means "no ceiling but the one the experiment
+  # itself has": the step count of a run is Monty's `max_total_steps`, and a tool
+  # that clamped it to a number of its own silently shortened the run.
+  defp within(number, min, nil), do: max(number, min)
+  defp within(number, min, max), do: number |> max(min) |> min(max)
 
   @doc "An optional JSON object, for the arguments that describe an experiment."
   @spec object(map(), String.t()) :: result(map())

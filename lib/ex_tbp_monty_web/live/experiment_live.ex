@@ -2667,7 +2667,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # on one episode. The per-mode limits belong to the recognition policy, which
   # is what actually ends an episode; this is only here so an episode that never
   # recognises anything still ends.
-  defp cap(nil, setup), do: Setup.max_total_steps(setup) || Monty.Studio.Run.default_steps()
+  defp cap(nil, setup), do: Monty.Studio.Run.cap(setup)
   defp cap(asked, _setup), do: asked
 
   # The composed config as Monty's own files are written: what a run of this

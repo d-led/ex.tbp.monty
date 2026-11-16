@@ -160,12 +160,7 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
   @doc "`monty_run_experiment`: queue a run, and answer with its link."
   def run(args, ctx) do
     with {:ok, name} <- Args.required(args, "name"),
-         {:ok, steps} <-
-           Args.integer(args, "steps",
-             default: Monty.Studio.Run.default_steps(),
-             min: 1,
-             max: 500
-           ),
+         {:ok, steps} <- Args.integer(args, "steps", default: nil, min: 1, max: nil),
          {:ok, world} <- world(args),
          {:ok, run} <- Experiments.run(name, steps, world: world) do
       url = ctx.base_url <> "/runs/" <> run.run_id

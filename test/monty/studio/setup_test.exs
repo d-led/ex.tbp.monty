@@ -140,6 +140,18 @@ defmodule Monty.Studio.SetupTest do
       assert setup.termination.max_total_steps == 6000
     end
 
+    # Monty's noisier configs name a `MinEvalMaxTotalSteps` that wraps an `Any` of
+    # a `StepLimit` and a `MatchCriteria`, and the per-mode limits are on the
+    # wrapped `StepLimit`. Reading only the outer block found the ceiling and lost
+    # them, so such an experiment had no limit of its own and a page invented one.
+    test "a composite policy's per-mode limits are read through its wrapper" do
+      setup = setup_for("randrot_noise_10distinctobj_dist_agent")
+
+      assert Setup.max_steps(setup, :eval) == 500
+      assert Setup.max_steps(setup, :train) == 1000
+      assert Setup.max_total_steps(setup) == 6000
+    end
+
     test "a config that names no policy says so rather than inventing a limit" do
       setup = %{setup_for("tutorial/first_experiment") | termination: %{}}
 

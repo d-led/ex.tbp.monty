@@ -1324,15 +1324,42 @@ defmodule Monty.Studio.Setup do
   # The `termination` group, as the limits it puts on an episode. Monty's policy
   # validates them when it is built; here they are read, and the policy itself
   # (`recognition_strategy/1`) does the validating.
-  defp termination(%{"_target_" => _policy} = policy) do
-    %{
-      max_train_steps: Map.get(policy, "max_train_steps"),
-      max_eval_steps: Map.get(policy, "max_eval_steps"),
-      max_total_steps: Map.get(policy, "max_total_steps")
+  #
+  # Read through the whole policy rather than its first block. A config that uses
+  # `MinEvalMaxTotalSteps` names its ceiling there and its per-mode limits on the
+  # `wrapped` strategy — an `Any` of a `StepLimit` and a `MatchCriteria`, since
+  # Monty ends an episode on whichever of those answers first. Reading only the
+  # outer block found the ceiling and lost the per-mode limits, so such an
+  # experiment had no limit of its own and a page invented one instead.
+  defp termination(policy), do: limits(policy, %{})
+
+  defp limits(%{"_target_" => _policy} = policy, found) do
+    found = %{
+      max_train_steps:
+        earliest(Map.get(found, :max_train_steps), Map.get(policy, "max_train_steps")),
+      max_eval_steps:
+        earliest(Map.get(found, :max_eval_steps), Map.get(policy, "max_eval_steps")),
+      max_total_steps:
+        earliest(Map.get(found, :max_total_steps), Map.get(policy, "max_total_steps"))
     }
+
+    Enum.reduce(nested(policy), found, &limits/2)
   end
 
-  defp termination(_none), do: %{}
+  defp limits(_none, found), do: found
+
+  # The earliest limit any part of the policy imposes is the one an episode meets
+  # first, which is what `Any` means: the smallest of them, not the last read.
+  defp earliest(nil, nil), do: nil
+  defp earliest(nil, inner), do: inner
+  defp earliest(outer, nil), do: outer
+  defp earliest(outer, inner), do: min(outer, inner)
+
+  # The strategies a policy delegates to: a wrapper's `wrapped`, or the `Any`
+  # that holds several.
+  defp nested(%{"wrapped" => wrapped}), do: [wrapped]
+  defp nested(%{"strategies" => strategies}) when is_list(strategies), do: strategies
+  defp nested(_none), do: []
 
   @doc """
   How many episodes a run of this experiment is: every object, in every rotation,

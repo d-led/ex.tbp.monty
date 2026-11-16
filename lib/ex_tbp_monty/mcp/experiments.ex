@@ -27,6 +27,7 @@ defmodule ExTbpMonty.Mcp.Experiments do
     Jobs,
     Panel,
     Readiness,
+    Run,
     RunHistory,
     RunLog,
     Setup
@@ -200,13 +201,19 @@ defmodule ExTbpMonty.Mcp.Experiments do
   carries the choice, so the queue steps what was asked for rather than whatever
   the worker's environment happens to say. Absent, the run steps the
   experiment's own engine in an external process.
+
+  `steps` may be `nil`, which is how a caller says "the config's own ceiling":
+  the number Monty's recognition policy carries, not one this layer invented. A
+  tool that asked for fewer steps than the config allows would be running a
+  different experiment.
   """
-  @spec run(String.t(), pos_integer(), keyword()) :: {:ok, map()} | {:error, String.t()}
+  @spec run(String.t(), pos_integer() | nil, keyword()) :: {:ok, map()} | {:error, String.t()}
   def run(name, steps, opts \\ [])
 
-  def run(name, steps, opts) when is_integer(steps) and steps > 0 do
+  def run(name, steps, opts) when is_nil(steps) or (is_integer(steps) and steps > 0) do
     with {:ok, opened} <- Studio.open(name, open_opts(opts)),
          :ok <- runnable(opened),
+         steps = steps || Run.cap(opened.setup),
          {:ok, record} <- record(opened, steps),
          {:ok, _job} <- Jobs.Run.enqueue_run(record) do
       {:ok,

@@ -606,6 +606,21 @@ defmodule Monty.Studio.Run do
   @spec default_steps() :: pos_integer()
   def default_steps, do: @default_steps
 
+  @doc """
+  The most timesteps one episode may take when the record names none.
+
+  The config's own ceiling on a single episode — `max_total_steps` of the
+  recognition policy, which for a recognition experiment is a number Monty
+  chose and measured against, not one of ours. `default_steps/0` is the answer
+  only for a config that names no policy at all, and the docstrings that said
+  "500 by default" were the studio's number standing where Monty's belongs.
+
+  Not a target: the recognition policy ends an episode long before this, on its
+  per-mode limit or on `match_criterion`.
+  """
+  @spec cap(Setup.t()) :: pos_integer()
+  def cap(%Setup{} = setup), do: Setup.max_total_steps(setup) || @default_steps
+
   defp seed(%Setup{seed: seed}) when is_integer(seed), do: seed
   defp seed(_setup), do: 0
 

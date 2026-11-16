@@ -168,8 +168,7 @@ defmodule Mix.Tasks.Monty.Run do
   # ceiling on one episode. The per-mode limits belong to the recognition policy,
   # which is what actually ends an episode.
   defp steps(opened, opts) do
-    opts[:steps] || Monty.Studio.Setup.max_total_steps(opened.setup) ||
-      Monty.Studio.Run.default_steps()
+    opts[:steps] || Monty.Studio.Run.cap(opened.setup)
   end
 
   # The episode index is also where the object comes from: the queued runner
