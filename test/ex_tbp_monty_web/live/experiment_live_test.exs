@@ -1455,6 +1455,15 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert run.summary["steps"] == 2
       assert is_map(run.config)
       assert File.exists?(run.log_path)
+
+      # Where the run's data is, on the page: the directory the run writes into,
+      # with a line for each statistics file in it. A person asking "where did
+      # this go?" should not have to guess. The names are read from the
+      # directory rather than written into the page, so a config's own handler
+      # name appears here without the page having to know it.
+      assert has_element?(view, "#run-artifacts")
+      assert has_element?(view, "#run-artifacts-dir", Path.dirname(run.log_path))
+
       assert has_element?(view, "#open-history")
     end
 

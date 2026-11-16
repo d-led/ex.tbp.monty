@@ -250,6 +250,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # belongs to the run being followed.
       episode: last_episode(record),
       log_path: record.log_path,
+      artifacts: artifacts(record.log_path),
       summary: nil
     )
     |> seed(record.id)
@@ -299,6 +300,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # page following a run already going. Without it a second run's steps land in
   # the first run's chart: the same episode numbers mean the same x, so the lines
   # of two runs that never happened together are drawn as one.
+  # Where a run's data is, so a reader can find it after the page is closed: the
+  # directory the run writes into and the statistics files in it. The log's path
+  # is that directory plus a name (`Artifacts.log_path/1`), so the directory is
+  # already here to be read — and the CSV names are read from the filesystem
+  # rather than guessed, because a config names its own handlers.
+  defp artifacts(nil), do: nil
+
+  defp artifacts(log_path) do
+    dir = Path.dirname(log_path)
+
+    %{
+      dir: dir,
+      stats: dir |> Path.join("*_stats.csv") |> Path.wildcard() |> Enum.sort()
+    }
+  end
+
   defp clear_run_view(socket) do
     socket
     |> assign(
@@ -346,7 +363,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       episode: 0,
       lines: [],
       summary: nil,
-      log_path: nil
+      log_path: nil,
+      artifacts: nil
     )
   end
 
@@ -971,6 +989,20 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             <span :if={@log_path} class="font-mono text-[11px] text-base-content/40">
               {@log_path}
             </span>
+          </div>
+
+          <%!-- Where the run's own data is, so it can be found after the page is
+          closed: its directory, and the statistics files in it. Monty's own
+          handlers write `<mode>_stats.csv` beside the log, and a person asking
+          "where did this go?" should not have to guess. --%>
+          <div :if={@artifacts} id="run-artifacts" class="space-y-0.5">
+            <h4 class="text-[11px] font-medium text-base-content/50">Where the data is</h4>
+            <ul class="font-mono text-[11px] leading-5 text-base-content/60">
+              <li id="run-artifacts-dir">{@artifacts.dir}</li>
+              <li :for={stats <- @artifacts.stats} id={"run-artifacts-#{Path.basename(stats)}"}>
+                {stats}
+              </li>
+            </ul>
           </div>
 
           <ul
@@ -1987,6 +2019,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           status: status_of(record, socket),
           progress: progress_from(record, socket.assigns[:progress]),
           log_path: record.log_path,
+          artifacts: artifacts(record.log_path),
           summary: if(record.summary == %{}, do: socket.assigns.summary, else: record.summary)
         )
         |> catch_up(record)
