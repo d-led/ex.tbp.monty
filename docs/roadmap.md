@@ -134,7 +134,7 @@ here. Read, it parts at **step 2**, and the question is one number. His second
 action is `orient_horizontal` with a rotation of a thousandth of a degree — the
 systematic search his `_touch_object` runs when the view finder's centre is more
 than a metre from anything. Ours is `move_forward 0.036434553` again, which is what
-the same procedure answers when the centre is *within* a metre, and our percepts
+the same procedure answers when the centre is _within_ a metre, and our percepts
 carry `object_coverage 0` and no `min_depth` at every step after the first. So the
 next measurement is the view finder's centre depth on step 2, ours beside his
 implied one: the frames themselves agree to the last bit
