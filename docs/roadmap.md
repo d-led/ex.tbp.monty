@@ -122,11 +122,15 @@ twenty-seven steps: action for action, and the numbers to the last digit.
 The first difference is step 28, a `move_tangentially` whose distance is his
 (0.004) and whose direction is not. Everything after it is a `move_forward` whose
 distance is off by between 1.5e-5 and 1.5e-3, which is what one different
-tangential step does to the body that reads the depth next. So the next thing to
-read is `tangential_direction` where the curvature heading is defined — the
-momentum term, the principal-curvature heading, and the `tangential_angle` the
-stream hands the sampler, since the sampled directions of the first twenty-seven
-steps agree exactly.
+tangential step does to the body that reads the depth next.
+
+What the policy was holding there says where to look. It is the step on which the
+curvature-guided phase ends: the two steps before it answered from a curvature
+(`using_pc_guide true`, counter at its minimum), and step 28 is back on momentum
+(`pc :no`, counter reset to 1 of 8) with the previous action still his. So the
+difference is in how a return from curvature guidance to momentum picks its
+heading — the blend, the bounds, the avoidance search that may replace it — and
+not in the curvature heading itself, which agreed for the steps that used one.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
