@@ -619,14 +619,24 @@ reports the loaded value's own size in heap words rather than the VM's memory
 before and after: the delta depends on how much has been swept, and two runs of
 the same load differed by a factor of two.
 
-So ~190 MB of memory becomes ~6 GB during one episode's start. The next question
-is therefore precise and unanswered: **what does a module build at episode start
-that costs thirty times the memory it was handed?** The candidates, none of them
-measured yet, are the derived feature rows (`GraphMemory.initialize_feature_arrays/1`
-over a hundred and fifty thousand nodes), the updater and displacer a module
-builds over that memory (`build_updater/1`), and the initial hypothesis space
-(`get_initial_hypotheses/1`). Until one of them is measured, the ceiling is what
-it says it is — a runaway worth a line in the log, not a wall to raise.
+What the module costs was measured second, and the first reading was wrong.
+[`scripts/measure_module_memory.exs`](../scripts/measure_module_memory.exs) builds
+the experiment's own learning module around that library and reports
+`:erts_debug.flat_size/1` per field: 1 890 MB, of which 945 MB sits in the goal
+generator and 756 MB in the updater. **That is not what the process holds.**
+`flat_size/1` counts a shared substructure once for every path that reaches it,
+and the updater, the goal generator and the module all point at the same library,
+so the same 189 MB is counted three times over. The same script measured from the
+process instead — `:erlang.process_info(self(), :memory)` after a collect — says
+the library costs **213 MB of heap** and the module adds **nothing measurable** on
+top of it: the module holds the library, it does not copy it.
+
+So the memory a run starts from is a few hundred megabytes, and the six
+gigabytes appear during the step. Step 0 of the first episode is where the run
+dies, after 12.2 s; what is unmeasured is that step — how many hypotheses it
+builds for 77 possible objects, and what each costs. That is the next
+measurement, and it wants the model's process watched step by step rather than
+the module sized once.
 
 For contrast, the ten-object experiment does run: `base_config_10distinctobj_dist_agent`
 completes its 140 episodes on both sides (the section above). Its library is an
