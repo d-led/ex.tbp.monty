@@ -24,7 +24,11 @@ defmodule Mix.Tasks.Monty.Readiness do
   An experiment whose **world** this build does not carry is reported as *not
   planned* rather than refused: Monty's Habitat-Sim configs are on their way out
   upstream, so they are postponed, and the class ranking only counts experiments
-  that some port work could make run.
+  that some port work could make run. So is a config built from Monty's own test
+  doubles (`tests.unit.frameworks.models.fakes`, `ProfiledExperiment`): those
+  live outside the `src/tbp/monty` tree the module map covers, they belong to
+  Monty's test suite rather than to a reader, and the port's own tests bring
+  their own.
   """
 
   use Mix.Task
@@ -78,7 +82,8 @@ defmodule Mix.Tasks.Monty.Readiness do
       runs here:                #{survey.runnable}
       waiting for prerequisites: #{waiting(survey)}
       cannot run here:          #{survey.refused - waiting(survey)}
-      not planned:              #{survey.not_planned}  (a world this build does not carry)
+      not planned:              #{survey.not_planned}  (a world this build does not carry,
+                                or a config built from Monty's test doubles)
       did not compose:          #{survey.did_not_compose}
     """)
 

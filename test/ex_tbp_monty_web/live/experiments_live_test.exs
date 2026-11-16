@@ -345,11 +345,19 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
       assert row_names(view) == []
     end
 
-    test "an experiment whose classes are missing is on the same side of the divide",
+    # Monty's own test configs are built from test doubles, which live outside the
+    # tree the module map covers. They belong to Monty's test suite rather than to
+    # a reader, so they sit with the worlds this build does not carry rather than
+    # with the refusals — the backlog counts work somebody has taken on.
+    test "an experiment built from Monty's test doubles is postponed, not refused",
          %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/experiments?ready=no&q=base_config/base")
+      {:ok, postponed, _html} =
+        live(conn, ~p"/experiments?ready=not_planned&q=base_config/base")
 
-      assert "test-base_config-base" in row_names(view)
+      {:ok, refused, _html} = live(conn, ~p"/experiments?ready=no&q=base_config/base")
+
+      assert "test-base_config-base" in row_names(postponed)
+      assert row_names(refused) == []
     end
 
     # A world this build does not carry is postponed rather than refused. Reading

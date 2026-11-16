@@ -170,7 +170,7 @@ defmodule ExTbpMonty.Mcp.ExperimentsTest do
 
       # Over Monty's own test fakes, which the module map cannot place. A preview
       # says so rather than composing a run this application would refuse.
-      assert Enum.any?(preview.findings, &(&1.code == :unknown_module_class))
+      assert Enum.any?(preview.findings, &(&1.code == :test_fixture_class))
     end
 
     test "reports an option that does not exist instead of silently ignoring it" do

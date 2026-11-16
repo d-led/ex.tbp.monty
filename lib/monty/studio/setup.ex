@@ -2589,15 +2589,35 @@ defmodule Monty.Studio.Setup do
   defp carried_finding(_setup, _classes), do: []
 
   defp unknown_module_finding(module) do
-    Finding.new(
-      :error,
-      :unknown_module_class,
-      "This config names a class the module map does not know, so it cannot run " <>
-        "here: nothing can stand in for a name nothing can place. Monty's own " <>
-        "test fakes are named this way.",
-      module.python || module.class
-    )
+    name = module.python || module.class
+
+    if fixture_class?(name) do
+      Finding.new(
+        :error,
+        :test_fixture_class,
+        "This config is built from a class in Monty's own test suite — #{name} — " <>
+          "which is a test double rather than an experiment this port carries: the " <>
+          "port's own tests bring their own. Nothing is missing here that anybody means " <>
+          "to write.",
+        name
+      )
+    else
+      Finding.new(
+        :error,
+        :unknown_module_class,
+        "This config names a class the module map does not know, so it cannot run " <>
+          "here: nothing can stand in for a name nothing can place.",
+        name
+      )
+    end
   end
+
+  # Monty's test doubles live under `tests/`, outside the `src/tbp/monty` tree the
+  # module map covers, so no row can place them and no stand-in can answer for
+  # them. A name outside that tree that is not a fixture is a typo or a class this
+  # port has never heard of, which is a different answer.
+  defp fixture_class?(name) when is_binary(name), do: String.starts_with?(name, "tests.")
+  defp fixture_class?(_name), do: false
 
   defp not_ported_finding([], _total), do: []
 

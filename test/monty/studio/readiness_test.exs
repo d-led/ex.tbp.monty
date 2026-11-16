@@ -14,13 +14,29 @@ defmodule Monty.Studio.ReadinessTest do
       assert entry.codes == []
     end
 
-    test "an experiment naming a class nothing here can place names it" do
+    # Monty's test doubles live under `tests/`, outside the tree the module map
+    # covers, so no row can place them. They belong to Monty's test suite rather
+    # than to a reader — the port's own tests bring their own — so a config built
+    # from them is shelved with the worlds this build does not carry instead of
+    # being counted as work somebody has taken on.
+    test "a config built from Monty's test doubles is postponed, not refused" do
       entry = Readiness.classified("test/base_config/base")
 
-      assert entry.status == :refused
-      assert entry.codes == [:unknown_module_class]
+      assert entry.status == :not_planned
+      assert entry.codes == [:test_fixture_class]
 
       assert "tests.unit.frameworks.models.fakes.sensor_modules.FakeSensorModule" in entry.blocked_by
+    end
+
+    # The shelf is decided by the doubles being there at all: read for a real
+    # world, this config also names a scene that holds no object of its kind, and
+    # neither reason is port work while the config is a fixture.
+    test "is postponed even when the same config also names an empty world" do
+      entry = Readiness.classified("test/run", world_simulator: :mujoco)
+
+      assert entry.status == :not_planned
+      assert :test_fixture_class in entry.codes
+      assert :world_holds_no_object in entry.codes
     end
 
     # The base `GraphLM` is buildable in Monty and trains in a supervised run: an

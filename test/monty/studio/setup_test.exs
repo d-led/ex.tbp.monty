@@ -430,22 +430,51 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "what is ported" do
-    test "an experiment built from classes this port has not written is refused" do
-      # `test/base_config/base` is the example: it names Monty's own test
-      # fakes, which live in Monty's `tests/` tree and so are not in the module
-      # map at all — a class nobody can place, which nothing can stand in for.
+    # `test/base_config/base` names Monty's own test doubles, which live in
+    # Monty's `tests/` tree and so are not in the module map at all. Nothing is
+    # missing here that anybody means to write, so the finding says which kind of
+    # gap it is rather than pointing at the port.
+    test "a config built from Monty's test doubles is refused, and says why" do
       setup = setup_for("test/base_config/base")
 
       assert [sensor, learning_module] =
-               for(%{code: :unknown_module_class} = finding <- setup.findings, do: finding)
+               for(%{code: :test_fixture_class} = finding <- setup.findings, do: finding)
 
-      # An error, not an info: no stand-in runs in place of a class this port
-      # has not written, so the page disables the run and the task refuses it.
+      # An error, not an info: no stand-in runs in place of a class the map cannot
+      # place, so the page disables the run and the task refuses it.
       assert sensor.level == :error
-      assert sensor.message =~ "cannot run here"
+      assert sensor.message =~ "Monty's own test suite"
       assert sensor.where =~ "FakeSensorModule"
       assert learning_module.where =~ "FakeLearningModule"
-      refute sensor.message =~ "MuJoCoSimulator"
+
+      refute Setup.valid?(setup)
+    end
+
+    # A class outside the map that is *not* a fixture is a different answer: a
+    # typo or a class this port has never heard of, not Monty's test suite asking.
+    test "a class nothing can place and that is not a fixture is unknown" do
+      setup =
+        Setup.from_text("""
+        # @package _global_
+
+        defaults:
+          - /monty: graph_exp1000_e3_t3
+          - /monty/learning_module: evidence_1lm_nn5_dod003
+
+        experiment:
+          _target_: "tbp.monty.frameworks.experiments.monty_experiment.MontyExperiment"
+          config:
+            monty_config:
+              learning_modules:
+                learning_module_0:
+                  _target_: tbp.monty.frameworks.models.nowhere.UnknownLM
+        """)
+        |> elem(1)
+
+      assert [finding] =
+               for(%{code: :unknown_module_class} = finding <- setup.findings, do: finding)
+
+      assert finding.where =~ "UnknownLM"
 
       refute Setup.valid?(setup)
     end

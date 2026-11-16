@@ -29,8 +29,11 @@ defmodule Monty.Studio.Readiness do
   at all, which is a finding about the port rather than about Monty.
 
   `:not_planned` is an experiment whose **world** this build does not carry —
-  Monty's Habitat-Sim configs today. Habitat is on its way out upstream
-  (2026-11-08), so those are postponed rather than refused: nothing here is
+  Monty's Habitat-Sim configs today — or one built from Monty's own test doubles
+  (`tests.unit.frameworks.models.fakes`, `ProfiledExperiment`), which live outside
+  the `src/tbp/monty` tree the module map covers. Habitat is on its way out
+  upstream (2026-11-08), and the test doubles belong to Monty's test suite rather
+  than to a reader, so both are postponed rather than refused: nothing here is
   missing that anybody means to write, and counting them as refusals made the
   backlog look twice its size. A world decides the status even when the config
   would also name a class this port has not written, because none of that work
@@ -114,7 +117,19 @@ defmodule Monty.Studio.Readiness do
   # deployment selected, so it reads the same under `--world synthetic`. The
   # findings decide the rest.
   defp status([], :mujoco), do: :runnable
-  defp status(_errors, :mujoco), do: :refused
+
+  # A config built from Monty's test doubles asks for classes the module map
+  # cannot place, because they live under `tests/` rather than `src/tbp/monty`.
+  # That is Monty's test suite asking, not a reader, so it is shelved with the
+  # worlds this build does not carry instead of counted as a refusal — and the
+  # shelf is decided by the doubles being there at all, not by them being the only
+  # thing wrong: a config of fakes says nothing about a world either way.
+  defp status(errors, :mujoco) do
+    if Enum.any?(errors, &(&1.code == :test_fixture_class)),
+      do: :not_planned,
+      else: :refused
+  end
+
   defp status(_errors, _not_carried_world), do: :not_planned
 
   defp blocked_by(setup, errors) do
