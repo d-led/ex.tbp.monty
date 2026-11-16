@@ -13,11 +13,11 @@
 defmodule ActionStream do
   @moduledoc false
 
+  alias Monty.Cmp
   alias Monty.Experiment.Environment.Interface
   alias Monty.Frameworks.Actions.{MoveForward, MoveTangentially, OrientHorizontal, OrientVertical}
   alias Monty.Frameworks.Models.MotorSystem
   alias Monty.Frameworks.Models.SensorModules.CameraSM
-  alias Monty.Geometry.Rotation
   alias Monty.Studio
   alias Monty.Studio.Setup
 
@@ -46,14 +46,14 @@ defmodule ActionStream do
     {:ok, sensor_module} =
       CameraSM.from_config(Enum.find(setup.sensors, &(&1.id == @channel)).config)
 
-    world = setup |> Setup.world(0) |> then(& &1.__struct__.reset(&1))
-
-    # The transforms are the run's own. The world is stepped here rather than
-    # through `Interface.step`, because a probe gives it *his* action and reads
-    # what the sensor made of it.
+    # The transforms are the run's own, and so is the way the world is stepped:
+    # `Interface.step/2` also tells the world *which* sensors to render, which
+    # `DepthTo3DLocations` needs to find a surface at all — a patch read without
+    # that answer carries no pixel on the object, and every action after it would
+    # be the policy's answer to an empty view rather than to his.
     interface =
       Interface.new(
-        env: world,
+        env: setup |> Setup.world(0) |> then(& &1.__struct__.reset(&1)),
         transforms: Setup.built_transforms(setup),
         seed: setup.seed || 0
       )
@@ -65,8 +65,7 @@ defmodule ActionStream do
     model_id = "probe-#{System.unique_integer([:positive])}"
     {:ok, _stream} = Monty.Random.Stream.start_link(%{model_id: model_id, seed: setup.seed || 0})
 
-    {observations, proprioceptive_state, world} = world.__struct__.step(world, [])
-    observations = Interface.apply_transforms(interface, observations, proprioceptive_state)
+    {observations, proprioceptive_state, interface} = Interface.step(interface, [])
 
     state = %{
       interface: interface,
@@ -74,7 +73,6 @@ defmodule ActionStream do
       observations: observations,
       proprioceptive_state: proprioceptive_state,
       sensor_module: sensor_module,
-      world: world,
       model_id: model_id,
       rows: []
     }
@@ -121,36 +119,68 @@ defmodule ActionStream do
       MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
 
     # The world moves by his action, so the next question is the same one.
-    {observations, proprioceptive_state, world} =
-      state.world.__struct__.step(state.world, Enum.map(recorded["actions"], &action/1))
+    {observations, proprioceptive_state, interface} =
+      Interface.step(state.interface, Enum.map(recorded["actions"], &action/1))
 
     %{
       state
       | rows:
           [{recorded["episode_step"], Enum.map(recorded["actions"], &describe/1),
-            Enum.map(actions, &describe/1)} | state.rows],
+            Enum.map(actions, &describe/1), inputs(percept)} | state.rows],
         motor: motor,
         sensor_module: sensor_module,
-        observations: Interface.apply_transforms(state.interface, observations, proprioceptive_state),
+        observations: observations,
         proprioceptive_state: proprioceptive_state,
-        world: world
+        interface: interface
     }
   end
 
+  # What our policy had to go on at that step. Two steps can differ for two
+  # different reasons — a percept that says the object is somewhere else, or a
+  # policy that reads the same percept another way — and the action alone does
+  # not say which. `min_depth` is the number `move_forward` is built from
+  # (`min_depth - desired_object_distance`), so a stream that keeps answering
+  # `move_forward` while his answers zero shows here as a depth that does not
+  # close, rather than as a puzzle.
+  defp inputs(percept) do
+    %{
+      min_depth: feature(percept, "min_depth"),
+      coverage: feature(percept, "object_coverage"),
+      on_object: Cmp.Message.on_object?(percept)
+    }
+  end
+
+  defp feature(percept, name) do
+    case Cmp.Message.feature(percept, name) do
+      {:ok, value} -> value
+      {:error, _absent} -> nil
+    end
+  end
+
   defp report(rows) do
-    Enum.each(rows, fn {step, theirs, ours} ->
+    Enum.each(rows, fn {step, theirs, ours, inputs} ->
       agree? = same?(theirs, ours)
 
       IO.puts(
-        "#{String.pad_leading(to_string(step), 3)}  his:  #{render(theirs)}\\n" <>
-          "     ours: #{render(ours)}#{if agree?, do: "  (the same act)", else: "  <- differs"}"
+        "#{String.pad_leading(to_string(step), 3)}  his:  #{render(theirs)}\n" <>
+          "     ours: #{render(ours)}#{if agree?, do: "  (the same act)", else: "  <- differs"}" <>
+          "   #{render_inputs(inputs)}"
       )
     end)
 
-    case Enum.find(rows, fn {_step, theirs, ours} -> not same?(theirs, ours) end) do
-      nil -> IO.puts("\\nevery one of #{length(rows)} steps is his act")
-      {step, _theirs, _ours} -> IO.puts("\\nthe streams part at step #{step}")
+    case Enum.find(rows, fn {_step, theirs, ours, _inputs} -> not same?(theirs, ours) end) do
+      nil ->
+        IO.puts("\nevery one of #{length(rows)} steps is his act")
+
+      {step, _theirs, _ours, inputs} ->
+        IO.puts("\nthe streams part at step #{step}")
+        IO.puts("  our percept there: #{render_inputs(inputs)}")
     end
+  end
+
+  defp render_inputs(inputs) do
+    "[min_depth=#{render_value(inputs.min_depth)} coverage=#{render_value(inputs.coverage)} " <>
+      "on_object=#{inputs.on_object}]"
   end
 
   defp same?(theirs, ours) do
@@ -199,6 +229,7 @@ defmodule ActionStream do
   defp render_values(values),
     do: " " <> (values |> Enum.sort() |> Enum.map_join(" ", fn {key, value} -> "#{key}=#{render_value(value)}" end))
 
+  defp render_value(nil), do: "none"
   defp render_value(value) when is_number(value), do: :erlang.float_to_binary(value * 1.0, decimals: 9)
   defp render_value(value) when is_list(value), do: "[" <> Enum.map_join(value, ", ", &render_value/1) <> "]"
   defp render_value(value), do: inspect(value)
