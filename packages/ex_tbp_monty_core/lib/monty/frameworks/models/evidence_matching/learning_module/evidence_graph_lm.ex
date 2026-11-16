@@ -418,26 +418,45 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   @impl true
   @spec reset_stm(t()) :: t()
   def reset_stm(%__MODULE__{} = lm) do
-    memory = GraphMemory.initialize_feature_arrays(lm.graph_memory)
-    mlh = fresh_mlh()
-
     lm
     |> Map.merge(%{
-      graph_memory: memory,
       buffer: FeatureAtLocationBuffer.new(),
-      hypotheses: %{},
       hypotheses_updater_telemetry: %{},
-      possible_matches: EvidenceGraphMemory.get_initial_hypotheses(memory),
-      symmetry_evidence: 0,
       terminal_state: nil,
       detected_object: nil,
       detected_pose: List.duplicate(nil, @detected_pose_width),
-      detected_rotation_r: nil,
-      current_mlh: mlh,
-      previous_mlh: mlh
+      detected_rotation_r: nil
     })
+    |> init_from_ltm()
+    |> init_EvidenceGraphLM()
     |> reset_goal_generator()
     |> build_updater()
+  end
+
+  # Monty's `init_from_ltm`: what long-term memory offers this episode — the
+  # objects that are possible matches, and feature arrays read so a graph learned
+  # earlier, or loaded from a pretrained library, is matchable from the first
+  # step. Monty's base `reset_stm` calls this first, which is why the port does.
+  defp init_from_ltm(%__MODULE__{} = lm) do
+    memory = GraphMemory.initialize_feature_arrays(lm.graph_memory)
+
+    %{
+      lm
+      | graph_memory: memory,
+        possible_matches: EvidenceGraphMemory.get_initial_hypotheses(memory)
+    }
+  end
+
+  # Monty's `_init_EvidenceGraphLM`: the short-term hypothesis space, the evidence
+  # symmetry was being counted with, and the two placeholders an episode reports
+  # from until the first percept arrives.
+  #
+  # Monty resets its hypotheses updater here. This port builds a new one, because
+  # an updater is handed the feature arrays of the memory being read, and those
+  # arrays are the ones `init_from_ltm/1` just rebuilt.
+  defp init_EvidenceGraphLM(%__MODULE__{} = lm) do
+    mlh = fresh_mlh()
+    %{lm | symmetry_evidence: 0, hypotheses: %{}, current_mlh: mlh, previous_mlh: mlh}
   end
 
   @doc """
@@ -1001,7 +1020,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         nil
 
       %Hypotheses{} = hypotheses ->
-        mlh_from_id(lm, graph_id, Hypotheses.argmax_evidence(hypotheses))
+        get_mlh_dict_from_id(lm, graph_id, Hypotheses.argmax_evidence(hypotheses))
 
       nil ->
         nil
@@ -1057,7 +1076,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     end
   end
 
-  defp mlh_from_id(%__MODULE__{} = lm, graph_id, id) do
+  defp get_mlh_dict_from_id(%__MODULE__{} = lm, graph_id, id) do
     hypotheses = Map.fetch!(lm.hypotheses, graph_id)
 
     %{
@@ -1139,7 +1158,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
     case Hypotheses.second_argmax_evidence(hypotheses) do
       nil -> {best, nil}
-      id -> {best, mlh_from_id(lm, graph_id, id)}
+      id -> {best, get_mlh_dict_from_id(lm, graph_id, id)}
     end
   end
 
@@ -2106,20 +2125,21 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   end
 
   @doc """
-  Resumes from `state_dict/1` and re-derives everything that depends on memory.
+  Resumes from `state_dict/1` and re-derives what depends on memory.
 
-  Memory that changes has to be re-read: the feature arrays are rebuilt and the
-  comparison is rebuilt with them, or the module would keep matching against
-  the memory it was constructed with.
+  Memory that changed has to be re-read: Monty's `load_state_dict` gives the
+  module a chance to update internal state from the contents of memory, which is
+  `init_from_ltm/1` here. This port also rebuilds the comparison, because an
+  updater is handed feature arrays and loading returns a memory it has not seen.
   """
   @spec load_state_dict(t(), map()) :: t()
   def load_state_dict(%__MODULE__{} = lm, memento) do
-    lm = %{
+    %{
       lm
       | graph_memory: GraphMemory.load_state_dict(lm.graph_memory, memento.graph_memory),
         has_detailed_logger: Map.get(memento, :has_detailed_logger, lm.has_detailed_logger)
     }
-
-    reset_stm(lm)
+    |> init_from_ltm()
+    |> build_updater()
   end
 end

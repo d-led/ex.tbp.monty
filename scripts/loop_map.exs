@@ -188,7 +188,7 @@ defmodule LoopMap do
   defp functions(file) do
     case File.read(file) do
       {:ok, text} ->
-        ~r/^  (?:defp? |@callback )([a-z_0-9]+[?]?)/m
+        ~r/^  (?:defp? |@callback )([a-zA-Z_0-9]+[?]?)/m
         |> Regex.scan(text)
         |> Enum.map(fn [_, name] ->
           name |> String.trim_leading("_") |> String.trim_trailing("?")
