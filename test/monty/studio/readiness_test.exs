@@ -1,7 +1,7 @@
 defmodule Monty.Studio.ReadinessTest do
   use ExUnit.Case, async: true
 
-  alias Monty.Studio.Readiness
+  alias Monty.Studio.{Readiness, Setup}
 
   # Whether an experiment runs here is `Setup`'s answer, read back out. These two
   # are real configs from Monty's own tree: one whose classes this port has
@@ -28,15 +28,43 @@ defmodule Monty.Studio.ReadinessTest do
       assert "tests.unit.frameworks.models.fakes.sensor_modules.FakeSensorModule" in entry.blocked_by
     end
 
-    # The shelf is decided by the doubles being there at all: read for a real
-    # world, this config also names a scene that holds no object of its kind, and
-    # neither reason is port work while the config is a fixture.
-    test "is postponed even when the same config also names an empty world" do
-      entry = Readiness.classified("test/run", world_simulator: :mujoco)
+    # The shelf is decided by the doubles being there at all, not by them being the
+    # only thing wrong: a config of fakes says nothing about a world either way, so
+    # a second refusal must not drag it back into the backlog. The second reason
+    # here is a wire to a module that does not exist, which is a fact about the
+    # config rather than about this machine.
+    test "is postponed even when the config is also refused for something else" do
+      setup =
+        Setup.from_text("""
+        # @package _global_
 
-      assert entry.status == :not_planned
+        defaults:
+          - /monty: graph_exp1000_e3_t3
+          - /monty/learning_module: evidence_1lm_nn5_dod003
+          - /environment: mujoco_ycb_dist_agent
+
+        experiment:
+          _target_: "tbp.monty.frameworks.experiments.monty_experiment.MontyExperiment"
+          config:
+            monty_config:
+              learning_modules:
+                learning_module_0:
+                  _target_: tests.unit.frameworks.models.fakes.learning_modules.FakeLearningModule
+              sm_to_agent_dict:
+                patch: agent_id_0
+              sm_to_lm_matrix:
+                - [0, 7]
+        """)
+        |> elem(1)
+
+      entry = Readiness.classify({"composed_of_fakes", {:ok, setup}})
+
+      # The world this config names is carried, so the refusal clause is the one
+      # the shelf has to win against.
+      assert entry.world == :mujoco
       assert :test_fixture_class in entry.codes
-      assert :world_holds_no_object in entry.codes
+      assert :connection_index_out_of_range in entry.codes
+      assert entry.status == :not_planned
     end
 
     # The base `GraphLM` is buildable in Monty and trains in a supervised run: an
