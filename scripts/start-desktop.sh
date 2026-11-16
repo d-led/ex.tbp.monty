@@ -262,7 +262,15 @@ run "building the two sample plugin nodes the bundle carries" \
 # `priv/monty/libraries` is the output of yesterday's development runs, and
 # every bundle carried it: two hundred megabytes of libraries this build never
 # reads, in a download a person waits for.
-rm -rf "$release"/lib/ex_tbp_monty-*/priv/monty/libraries
+#
+# The run recordings are the same mistake at a larger size, and the same
+# deletion: `priv/studio_runs` is what each development run wrote (a log, the
+# step statistics, the frames a sensor drew), the desktop names its own folder
+# elsewhere (`Monty.Paths.artifacts/0`, absolute, under the user's application
+# support), and a checkout mid-experiment would otherwise put gigabytes of its
+# own history into the window a person downloads.
+rm -rf "$release"/lib/ex_tbp_monty-*/priv/monty/libraries \
+       "$release"/lib/ex_tbp_monty-*/priv/studio_runs
 
 # And asked, rather than assumed: a release missing one kernel is a release whose
 # window cannot start, and this is the last moment the build can say so with a
