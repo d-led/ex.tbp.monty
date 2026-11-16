@@ -1841,6 +1841,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         <summary class="cursor-pointer text-sm font-medium">Config snapshot</summary>
         <pre
           id="run-config"
+          phx-update="ignore"
           class="mt-1 max-h-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-[11px]"
         ><code>{Yaml.highlight(@run.config)}</code></pre>
       </details>

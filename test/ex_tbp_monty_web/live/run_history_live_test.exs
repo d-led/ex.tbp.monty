@@ -1304,13 +1304,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     test "prints its snapshot as YAML that reads back to the record", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      printed =
-        view
-        |> element("#run-config")
-        |> render()
-        |> then(&Regex.run(~r{<code>(.*)</code>}s, &1))
-        |> List.last()
-        |> String.replace(~r/<[^>]+>/, "")
+      [printed] =
+        ~r{id="run-config"[^>]*><code[^>]*>(.*?)</code>}s
+        |> Regex.run(render(view), capture: :all_but_first)
+        |> then(fn [yaml] -> [String.replace(yaml, ~r/<[^>]+>/, "")] end)
 
       assert printed =~ ~r/^experiment:\n {2}config:/m
       assert YamlElixir.read_from_string!(printed) == run.config

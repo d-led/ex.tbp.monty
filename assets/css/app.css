@@ -76,3 +76,17 @@
 }
 
 /* This file is for your main application CSS */
+
+/* A config's syntax colours, from GitHub's light highlighting — the scheme a
+   reader already knows from every YAML file they have read on a forge: keys
+   blue, strings dark navy, numbers blue, the words that are types red, and what
+   is absent grey. Written as CSS rather than as Tailwind utilities because the
+   markup is built in `Monty.Studio.Yaml`, outside the trees Tailwind scans: a
+   class named there would never be generated, and the text would come out
+   colourless rather than wrong — the failure nobody notices. */
+.yaml-key { color: #0550ae; }
+.yaml-string { color: #0a3069; }
+.yaml-number { color: #0550ae; }
+.yaml-literal { color: #cf222e; }
+.yaml-empty { color: #6e7781; }
+

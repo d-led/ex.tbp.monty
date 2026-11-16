@@ -54,24 +54,62 @@ defmodule Monty.Studio.Yaml do
   end
 
   @doc """
-  The value as YAML, with each key in a span of its own.
+  The value as YAML, with its keys and its values in spans of their own.
 
-  Keys are what a reader scans for and YAML carries no colour of its own. Every
-  character printed around them is escaped where it is printed: the config is
-  Monty's data and this module only ever shows it.
+  A config is read, and YAML has no colour of its own: a key is found by its
+  colour and a value is told from a number by the same. Everything printed is
+  escaped where it is printed — the config is Monty's data and this module only
+  ever shows it.
   """
   @spec highlight(term()) :: {:safe, iodata()}
-  def highlight(value) do
-    value
-    |> block(0)
-    |> Enum.map_join("\n", &colour/1)
-    |> then(&{:safe, &1})
+  def highlight(value), do: value |> render() |> colour()
+
+  @doc """
+  YAML text, coloured line by line.
+
+  Separate from `highlight/1` because the colouring is a function of the text: a
+  page that already holds the file — a draft, a preview — does not have to
+  compose it again to show it.
+  """
+  @spec colour(String.t()) :: {:safe, iodata()}
+  def colour(text) when is_binary(text) do
+    {:safe, text |> String.split("\n") |> Enum.map_join("\n", &coloured_line/1)}
   end
 
-  defp colour({prefix, nil, rest}), do: [escape(prefix), escape(rest)]
+  # A line is a key with its value, a list item, or text that is neither — a
+  # bare `[]` under a key, a comment. A key holds no colon after quoting, so the
+  # first one on the line is the separator.
+  defp coloured_line(line) do
+    case Regex.run(~r/^(\s*(?:- )?)([^:]+?)(: ?)(.*)$/, line) do
+      [_, prefix, key, separator, ""] ->
+        [escape(prefix), span("yaml-key", key), escape(separator)]
 
-  defp colour({prefix, key, rest}),
-    do: [escape(prefix), ~s(<span class="text-info">), escape(key), "</span>", escape(rest)]
+      [_, prefix, key, separator, value] ->
+        [escape(prefix), span("yaml-key", key), escape(separator), span(kind(value), value)]
+
+      _neither ->
+        case Regex.run(~r/^(\s*- )(.*)$/, line) do
+          [_, prefix, value] -> [escape(prefix), span(kind(value), value)]
+          _bare -> escape(line)
+        end
+    end
+  end
+
+  # What a value is, said the way a reader needs it told apart: a number from a
+  # string from a word YAML reads as a literal, and an empty container as
+  # nothing at all. The classes are GitHub's highlighting, and they are defined
+  # in `app.css` (see the note there on why they are not utilities).
+  defp kind(value) do
+    cond do
+      value in ["{}", "[]"] -> "yaml-empty"
+      value == "null" -> "yaml-empty"
+      value in ["true", "false"] -> "yaml-literal"
+      numeric?(value) -> "yaml-number"
+      true -> "yaml-string"
+    end
+  end
+
+  defp span(class, text), do: [~s(<span class="), class, ~s(">), escape(text), "</span>"]
 
   defp escape(text), do: Plug.HTML.html_escape_to_iodata(text)
 

@@ -69,10 +69,18 @@ defmodule Monty.Studio.YamlTest do
     assert yaml =~ ~r/^empty: ""$/m
   end
 
-  test "colours the keys and escapes what the config holds" do
-    html = %{"name" => "<b>"} |> Yaml.highlight() |> elem(1) |> IO.iodata_to_binary()
+  test "colours the keys and the values by what they are, and escapes what the config holds" do
+    html =
+      %{"name" => "<b>", "seed" => 42, "on" => true, "nothing" => nil, "none" => []}
+      |> Yaml.highlight()
+      |> elem(1)
+      |> IO.iodata_to_binary()
 
-    assert html =~ ~s(<span class="text-info">name</span>: )
-    assert html =~ "&lt;b&gt;"
+    assert html =~ ~s(<span class="yaml-key">name</span>: )
+    assert html =~ ~s(<span class="yaml-string">&lt;b&gt;</span>)
+    assert html =~ ~s(<span class="yaml-number">42</span>)
+    assert html =~ ~s(<span class="yaml-literal">true</span>)
+    assert html =~ ~s(<span class="yaml-empty">null</span>)
+    assert html =~ ~s(<span class="yaml-empty">[]</span>)
   end
 end

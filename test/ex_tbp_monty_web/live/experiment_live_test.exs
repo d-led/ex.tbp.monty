@@ -54,10 +54,14 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       refute box =~ ~r/<details[^>]*\sopen/
       assert box =~ "The config"
 
-      config = view |> element("#experiment-config") |> render()
+      # The keys of the composed config, each in a span of its own and the
+      # episode ceiling from the config: the page prints Monty's own format,
+      # coloured, not an inspection of a map.
+      html = render(view)
 
-      assert config =~ "experiment:"
-      assert config =~ ~r/^ {2}config:/m
+      assert html =~ ~s(<span class="yaml-key">experiment</span>:)
+      assert html =~ ~s(<span class="yaml-key">config</span>:)
+      assert html =~ ~s(<span class="yaml-number">500</span>)
     end
   end
 

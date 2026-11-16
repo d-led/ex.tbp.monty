@@ -16,7 +16,7 @@ defmodule ExTbpMontyWeb.BuildLive do
   use ExTbpMontyWeb, :live_view
 
   alias Monty.Studio
-  alias Monty.Studio.{Blueprint, Catalog, Drafts}
+  alias Monty.Studio.{Blueprint, Catalog, Drafts, Yaml}
 
   # The groups worth exposing: they change what the experiment *is*. Monty's
   # env_interface, positioning and logging groups are plumbing the base
@@ -141,9 +141,9 @@ defmodule ExTbpMontyWeb.BuildLive do
         <summary class="cursor-pointer text-lg font-semibold tracking-tight">The config</summary>
         <pre
           id="blueprint-config"
-          phx-no-curly-interpolation
+          phx-update="ignore"
           class="max-h-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-xs"
-        ><code><%= @preview.yaml %></code></pre>
+        ><code>{Yaml.colour(@preview.yaml)}</code></pre>
       </details>
       <%!-- The other direction: a file from elsewhere becomes a draft here. It is
       composed before it is saved, so a file that is not a Hydra config is
