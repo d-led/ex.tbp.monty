@@ -4,33 +4,27 @@ defmodule Monty.Experiment.RecognitionStatus do
 
   Mirrors `tbp/monty/experiment/recognition_status.py::RecognitionStatus`. Each
   learning module decides *its own* answer — `:match`, `:no_match`, `:time_out`,
-  or nothing yet — and the recognition policy is what turns several modules'
+  or nothing yet — and the recognition strategy is what turns several modules'
   answers into one decision about the episode. Keeping the two apart is Monty's
   design and it is what lets `MinimumLMs` ask "how many modules have concluded"
   without knowing anything about objects.
-
-  `telemetry` is carried, not interpreted: Monty attaches whatever a module wants
-  to report and nothing in the policy reads it.
   """
 
-  @enforce_keys [:conclusion]
-  defstruct conclusion: nil, telemetry: %{}
+  alias Monty.Experiment.RecognitionStatus.RecognitionConclusion
 
-  @type conclusion :: :match | :no_match | :time_out
+  # Monty's dataclass defaults its conclusion, so a status exists before the
+  # module has decided anything.
+  defstruct conclusion: nil
 
-  @type t :: %__MODULE__{
-          conclusion: conclusion() | nil,
-          telemetry: map()
-        }
+  @type t :: %__MODULE__{conclusion: RecognitionConclusion.t() | nil}
 
   @doc "A module that has not concluded yet."
-  @spec pending(map()) :: t()
-  def pending(telemetry \\ %{}), do: %__MODULE__{conclusion: nil, telemetry: telemetry}
+  @spec pending() :: t()
+  def pending, do: %__MODULE__{}
 
   @doc "A module that has concluded."
-  @spec new(conclusion(), map()) :: t()
-  def new(conclusion, telemetry \\ %{}),
-    do: %__MODULE__{conclusion: conclusion, telemetry: telemetry}
+  @spec new(RecognitionConclusion.t()) :: t()
+  def new(conclusion), do: %__MODULE__{conclusion: conclusion}
 
   @doc "Whether this module has reached a conclusion."
   @spec concluded?(t()) :: boolean()

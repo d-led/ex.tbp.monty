@@ -395,7 +395,9 @@ defmodule Monty.ModuleMap.Data do
       python: "experiment/recognition_status.py",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file:
+            "lib/monty/experiment/recognition_status/recognition_conclusion.ex",
           elixir: "Monty.Experiment.RecognitionStatus.RecognitionConclusion",
           python: "RecognitionConclusion"
         },

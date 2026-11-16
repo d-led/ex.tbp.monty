@@ -26,6 +26,7 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
   use ExUnit.Case, async: true
 
   alias Monty.Experiment.MatchCriteria
+  alias Monty.Experiment.RecognitionStatus.RecognitionConclusion
   alias Monty.Experiment.RecognitionStrategy
   alias Monty.Experiment.RecognitionStrategy.Any
   alias Monty.Experiment.RecognitionStrategy.MaximumSteps
@@ -236,7 +237,11 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
   end
 
   defp terminal_state(nil), do: nil
-  defp terminal_state(state), do: String.to_existing_atom(state)
+
+  defp terminal_state(word) do
+    {:ok, conclusion} = RecognitionConclusion.from_monty(word)
+    conclusion
+  end
 
   defp criterion("AnyLMsMatch(1)"),
     do: {MatchCriteria.AnyLMsMatch, elem_of_ok(MatchCriteria.AnyLMsMatch.new(1))}
