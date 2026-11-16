@@ -1636,3 +1636,41 @@ the answer and `native/kd_tree_nif` already exists for it.
 distances, and numpy's tie-breaking — because this port does not have a tree.
 For distinct distances the two agree exactly, and the vote round is covered by
 the learning module's own cases.
+
+## 2.25 Two epoch brackets have no counterpart here
+
+**In one line:** Monty wraps every epoch in `pre_epoch` and `post_epoch`; this
+port runs the episodes of a phase and keeps the memory once, at the end of the
+run.
+
+**What Monty does.** `MontyExperiment.run_epoch` is a bracket around the episode
+loop: `pre_epoch()`, one `run_episode()` per object, `post_epoch()`. The first
+logs which epoch is running, sets `env_interface` to the train or the eval
+interface, and calls `env_interface.pre_epoch()` and
+`logger_handler.pre_epoch(logger_args)`. The second saves the model, the
+experiment's counters and the config with `torch.save` into
+`output_dir/<epoch number>`, calls `logger_handler.post_epoch(logger_args)`,
+increments `train_epochs` or `eval_epochs`, and calls that interface's
+`post_epoch`.
+
+**What this port does.** `MontyExperiment.run_epochs/2` walks the epochs and
+`run_epoch/2` walks the objects of one, which is Monty's bracket minus the two
+ends. The mode and the objects are chosen once per phase
+(`Monty.Studio.Setup`, `Monty.Studio.Jobs.Run`), the interface is opened per
+episode, every episode is reported as it ends (`Monty.Studio.Logging.report/4`),
+the epoch numbers live in the run's record, and what a run learns is kept once,
+under a release named by the studio (`Monty.Studio.Learned.keep/5`). The
+interface's own `pre_epoch` and `post_epoch` are ported — Monty's are no-ops —
+and nothing calls them, because nothing brackets an epoch.
+
+**Why.** What Monty's `post_epoch` writes is a checkpoint per epoch: a torch
+`model.pt` and an experiment-state file per epoch directory. This port's
+equivalent artefact is a memory library that the studio names by model and
+release, and it is written when a run finishes. Writing one per epoch would
+change what a run leaves behind and how often, which is a decision about the
+studio's releases rather than a translation of Monty's line, so it is recorded
+here unsolved.
+
+**What is therefore not compared.** The epoch directories Monty leaves, the
+`exp_state_dict.pt` counters it saves beside them, and the interface and logger
+epoch hooks, which here have no caller.

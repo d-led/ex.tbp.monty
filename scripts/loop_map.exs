@@ -18,6 +18,16 @@
 # Output, per loop class: how many methods and functions it has, then the names
 # that are on one side only — with the nearest name on the other side, so a
 # rename reads as a near miss instead of as two unrelated words.
+#
+# A Monty method with no counterpart is either a rename to undo or a decision,
+# and the decision is a line in `@elsewhere` naming where its work is done here.
+# This port's side is read the same way but from the other end: a `defp` is a step
+# inside one of the functions above — that is what the keyword means — so it is
+# counted, not asked about; a public function needs a reason, which is a line in
+# `@port`. A public function whose name Monty has in some other file is reported
+# as a hint rather than as a decision: this port keeps one module per class while
+# Monty spreads a class's methods over its bases, so that is usually where it
+# comes from, and usually not.
 
 defmodule LoopMap do
   alias Monty.ModuleMap.Data
@@ -51,6 +61,12 @@ defmodule LoopMap do
       # port and nothing to call.
       "add_votes_to_buffer_stats" => "nothing: Monty's is `pass`"
     },
+    "frameworks/models/evidence_matching/model.py" => %{
+      # The class's constructor forwards to its base class and does nothing else.
+      # Here the model is a process started by `Monty.Runtime.Model`, and this
+      # module is the evidence-matching half of what that process answers.
+      "new" => "Monty.Runtime.Model.start_link/1"
+    },
     "frameworks/experiments/monty_experiment.py" => %{
       # This port's experiment class is the epoch and the episode loop and
       # nothing else: `run_epochs/2` walks the epochs, `run_epoch/2` the objects
@@ -76,8 +92,8 @@ defmodule LoopMap do
       "restore_monty" => "absent: the same, an episode starts by resetting the model's short-term memory",
       "check_if_any_lms_updated" => "Monty.Runtime.Step: a step says what it processed",
       "fixme_generate_live_plot_frame" => "Monty.Studio.RunStream.publish/3 draws the frame",
-      "pre_epoch" => "pre_episode/4 here: Monty's epoch is one episode, and this port names it after what it holds",
-      "post_epoch" => "post_episode/4 here, for the same reason",
+      "pre_epoch" => "absent: the phase's mode and objects are chosen once, by Monty.Studio.Setup",
+      "post_epoch" => "absent: the memory is kept once per run, Monty.Studio.Learned.keep/5; nothing is saved per epoch",
       "run" => "the phases are the config's plan, walked by Monty.Studio.Jobs.Run",
       "train" => "the plan's train phase, Monty.Studio.Jobs.Run",
       "evaluate" => "the plan's eval phase, Monty.Studio.Jobs.Run",
@@ -92,9 +108,53 @@ defmodule LoopMap do
     }
   }
 
+  # Public functions this port has and Monty has nowhere. Each one is a
+  # consequence of a design the two do not share: Monty's modules are objects
+  # that are mutated, so setting a target or a terminal state is an attribute
+  # write there and a returned value here; its model is an object the experiment
+  # holds, so asking it anything is a method call there and a process call here.
+  @port %{
+    # Monty's `train`/`evaluate` each loop their epochs calling `run_epoch`;
+    # here the epoch loop is one function because the phase plan is the studio's.
+    "run_epochs" => "the epoch loop inside Monty's train/evaluate, split out",
+    # `EvidenceGraphLM` brackets a matching step with these so a burst can count
+    # down; Monty has no such pair.
+    "begin_step" => "the start of one matching step, which Monty does not bracket",
+    "end_step" => "the end of one matching step, for the same reason",
+    "message" => "Elixir's Exception protocol, which an exception struct answers",
+    "graph_memory" => "reads the memory, which Monty holds as an attribute",
+    "num_hypotheses" => "counts a graph's hypotheses, a list length in Monty",
+    "conclusion" => "reads the terminal state, an attribute in Monty",
+    "observation_processed" => "reads whether the last observation was processed, an attribute in Monty",
+    "set_terminal_state" => "writes the terminal state, an attribute assignment in Monty",
+    "clear_conclusion" => "clears the episode's answer, an attribute assignment in Monty",
+    "clear_buffers" => "drops the buffer, which Monty resets in place",
+    "displace_all" => "hands `displace_hypotheses` the buffer's last location",
+    "set_target" => "sets the stepwise target, attribute assignments in Monty",
+    "set_primary_target" => "names the episode's object, an attribute assignment in Monty",
+    "set_stepwise_target" => "sets one step's target, which Monty writes through `_set_stepwise_targets`",
+    # The model is a process here (`Monty.Runtime.Model`); these are what a
+    # caller can ask of a running one.
+    "child_spec" => "the model is a process here, so it has a child spec",
+    "status" => "asks a running model how it is doing",
+    "statistics" => "asks a running model for the statistics it collected",
+    "stop" => "stops a running model",
+    "supervise" => "tells a running model its supervised answer, a supervised run's call",
+    "time_out" => "tells a running model the step budget ran out",
+    # Names Monty has too, on a class that is not this one's: a coincidence, said
+    # out loud so the hint below is not read as a pairing.
+    "from_config" => "builds a module from a config map, which Monty's Hydra does",
+    "set_individual_ts" => "writes one module's terminal state, an attribute in Monty",
+    "state_dict" => "one module's own memento; Monty snapshots the model and the experiment",
+    "state" => "reads a running model's state; Monty's `state` is an environment's",
+    "step" => "one step of a running model; Monty's `step` is the attention system's"
+  }
+
   def run(source) do
     IO.puts("monty: #{source}")
     IO.puts("module map read from: #{inspect(Data.sources(), limit: :infinity)}\n")
+
+    defs = monty_defs(source)
 
     for entry <- Data.entries(), entry.python in @loops do
       for class <- entry.classes, class.status == :implemented, class[:file] do
@@ -103,7 +163,8 @@ defmodule LoopMap do
           class.python,
           class.elixir,
           methods(source, entry.python, class.python),
-          functions(class.file)
+          functions(class.file),
+          defs
         )
       end
     end
@@ -125,9 +186,14 @@ defmodule LoopMap do
     end
   end
 
-  defp report(python_file, python_class, elixir_module, python, elixir) do
+  defp report(python_file, python_class, elixir_module, python, functions, defs) do
+    elixir = Enum.map(functions, fn {name, _scope} -> name end)
     {paired, python_only} = pair(python, elixir)
-    elixir_only = elixir -- Enum.map(paired, fn {_python, elixir} -> elixir end)
+    paired_names = Enum.map(paired, fn {_python, name} -> name end)
+
+    {public_only, private_only} =
+      for({name, scope} <- functions, name not in paired_names, do: {name, scope})
+      |> Enum.split_with(fn {_name, scope} -> scope == :public end)
 
     IO.puts("#{python_file}::#{python_class} -> #{elixir_module}")
 
@@ -143,7 +209,28 @@ defmodule LoopMap do
       end
     end
 
-    for name <- elixir_only, do: IO.puts("  port only:  #{name}")
+    for {name, :public} <- public_only do
+      monty_file = Map.get(defs, "_" <> name) || Map.get(defs, name)
+
+      cond do
+        reason = Map.get(@port, name) ->
+          IO.puts("  explained:  #{name} -> #{reason}")
+
+        monty_file ->
+          IO.puts("  same name:  #{name} (Monty has a method of that name in #{monty_file})")
+
+        true ->
+          IO.puts("  port only:  #{name} (no Monty method of that name)")
+      end
+    end
+
+    # A `defp` is a step inside one of the functions above — that is what the
+    # keyword means — so it is not a decision, only a count.
+    if private_only != [] do
+      IO.puts(
+        "  #{length(private_only)} private helpers, each a step inside a method on this list"
+      )
+    end
 
     unaccounted =
       Enum.count(python_only, fn {name, _nearest} ->
@@ -152,6 +239,18 @@ defmodule LoopMap do
 
     if python_only != [] do
       IO.puts("  #{unaccounted} of #{length(python_only)} need a decision, one per method.")
+    end
+
+    undecided =
+      Enum.reject(public_only, fn {name, _scope} ->
+        Map.get(@port, name) || Map.get(defs, "_" <> name) || Map.get(defs, name)
+      end)
+
+    if public_only != [] do
+      IO.puts(
+        "  #{length(undecided)} of #{length(public_only)} public functions have no reason here " <>
+          "and no Monty name."
+      )
     end
 
     IO.puts("")
@@ -217,20 +316,51 @@ defmodule LoopMap do
   # This port's functions in one file, without the keyword and without arities: a
   # loop pairs by name, and an arity difference is a different question. A
   # behaviour's callbacks are functions of the class it stands for, so they
-  # count too.
+  # count too, as public ones. Capitals are allowed after the first letter,
+  # because Monty has names like `init_EvidenceGraphLM` and the port keeps them.
   defp functions(file) do
     case File.read(file) do
       {:ok, text} ->
-        ~r/^  (?:defp? |@callback )([a-zA-Z_0-9]+[?]?)/m
+        ~r/^  (defp|def|@callback) ([a-zA-Z_0-9]+[?]?)/m
         |> Regex.scan(text)
-        |> Enum.map(fn [_, name] ->
-          name |> String.trim_leading("_") |> String.trim_trailing("?")
+        |> Enum.map(fn [_, keyword, name] ->
+          {name |> String.trim_leading("_") |> String.trim_trailing("?"), scope(keyword)}
         end)
-        |> Enum.uniq()
+        |> Enum.group_by(fn {name, _scope} -> name end, fn {_name, scope} -> scope end)
+        |> Enum.map(fn {name, scopes} -> {name, most_visible(scopes)} end)
 
       {:error, _reason} ->
         []
     end
+  end
+
+  defp scope("defp"), do: :private
+  defp scope(_def), do: :public
+
+  # One name can be defined at several arities; a name reachable from outside is a
+  # public one.
+  defp most_visible(scopes), do: if(:public in scopes, do: :public, else: :private)
+
+  # Every method Monty's tree defines, name to the file that defines it. A port
+  # module is one class, while Monty spreads a class's methods over its bases, so
+  # a public function here may be a method Monty writes in another file.
+  defp monty_defs(source) do
+    source
+    |> Path.join("src/tbp/monty/**/*.py")
+    |> Path.wildcard()
+    |> Enum.reduce(%{}, fn path, acc ->
+      file = Path.relative_to(path, Path.join(source, "src/tbp/monty"))
+
+      case File.read(path) do
+        {:ok, text} ->
+          ~r/^    def ([a-zA-Z_0-9]+)\(/m
+          |> Regex.scan(text)
+          |> Enum.reduce(acc, fn [_, name], inner -> Map.put_new(inner, name, file) end)
+
+        {:error, _reason} ->
+          acc
+      end
+    end)
   end
 end
 

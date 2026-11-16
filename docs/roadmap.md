@@ -40,13 +40,20 @@ The classes a step runs through are also checked **function for function**:
 `MIX_ENV=test mix run --no-start scripts/loop_map.exs` prints, per loop class,
 which of Monty's methods have a counterpart here and which do not, with the
 nearest name on the other side. A rename is a defect; a port-only helper is a
-sub-step of a Monty method, or a deviation that has to be written down.
+sub-step of a Monty method, or a deviation that has to be written down. The
+script draws the same line on this side: a `defp` is a step inside a method and
+is counted, a public function has to have a reason in the script's own table.
 
-One rename is outstanding, written down in the script's `elsewhere` table rather
-than done: Monty's `pre_epoch` and `post_epoch` are `pre_episode` and
-`post_episode` here, because Monty's epoch holds one episode. Aligning them moves
-the experiment, the environment interface, the loggers and the studio's callback
-keys in one change, so it is a change of its own.
+One pair of Monty's methods is absent rather than renamed, and it is a behaviour
+question, not a name: Monty brackets every epoch with `pre_epoch` and
+`post_epoch` — choose the interface for the mode, tell the interface and the
+loggers, then save `model.pt`, `exp_state_dict.pt` and `config.pt` into a
+directory named after the epoch, and count it. This port chooses the mode and the
+objects once per phase, keeps the memory once per run, and counts epochs in the
+run's record. Whether a run should write a memory release per epoch is a decision
+about what a run leaves behind, so it is written down in
+[`monty-differences.md`](monty-differences.md#225-two-epoch-brackets-have-no-counterpart-here)
+rather than settled in passing.
 
 ## Phase 1 — the numeric core, in dependency order
 
