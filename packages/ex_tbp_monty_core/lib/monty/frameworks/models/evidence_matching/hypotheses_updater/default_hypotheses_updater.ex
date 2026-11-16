@@ -164,7 +164,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   defp start_hypotheses(updater, features, graph_id, input_channels) do
     hypotheses =
       input_channels
-      |> Enum.map(&initial_hypotheses(updater, Map.fetch!(features, &1), graph_id, &1))
+      |> Enum.map(&get_initial_hypothesis_space(updater, Map.fetch!(features, &1), graph_id, &1))
       |> Hypotheses.concatenate()
 
     updater = Enum.reduce(input_channels, updater, &mark_initialised(&2, graph_id, &1))
@@ -185,58 +185,51 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
     new_channels = Enum.reject(input_channels, &initialised?(updater, graph_id, &1))
 
     {updater, updated} =
-      Enum.reduce(new_channels, {updater, updated}, fn channel, {updater, updated} ->
-        hypotheses = initial_hypotheses(updater, Map.fetch!(features, channel), graph_id, channel)
-
-        # A newcomer starts where the others already are, so it is not beaten
-        # before its second observation.
-        lifted =
-          Hypotheses.put_evidence(
-            hypotheses,
-            Enum.map(Hypotheses.evidence(hypotheses), &(&1 + mean_evidence(updated)))
-          )
-
-        {mark_initialised(updater, graph_id, channel), Hypotheses.concatenate([updated, lifted])}
-      end)
+      initialize_new_channels(updater, updated, features, new_channels, graph_id)
 
     {updater, updated, %{mlh_prediction_error: telemetry.mlh_prediction_error}}
   end
 
-  defp initial_hypotheses(
+  # Monty's `_initialize_new_channels`: a channel that starts reporting after the
+  # others have already accumulated evidence. Its hypotheses are lifted to the
+  # mean the rest have reached, so a newcomer is not beaten before its second
+  # observation.
+  defp initialize_new_channels(updater, hypotheses, features, new_channels, graph_id) do
+    Enum.reduce(new_channels, {updater, hypotheses}, fn channel, {updater, so_far} ->
+      channel_hypotheses =
+        get_initial_hypothesis_space(updater, Map.fetch!(features, channel), graph_id, channel)
+
+      lifted =
+        Hypotheses.put_evidence(
+          channel_hypotheses,
+          Enum.map(Hypotheses.evidence(channel_hypotheses), &(&1 + mean_evidence(so_far)))
+        )
+
+      {mark_initialised(updater, graph_id, channel), Hypotheses.concatenate([so_far, lifted])}
+    end)
+  end
+
+  # Monty's `_get_initial_hypothesis_space`: the hypotheses a channel starts
+  # with — from its pose features, or from the fixed poses the config names.
+  defp get_initial_hypothesis_space(
          %__MODULE__{initial_possible_poses: :first_observation} = updater,
-         features,
+         channel_features,
          graph_id,
          input_channel
        ) do
-    locations = GraphMemory.get_locations_in_graph(updater.graph_memory, graph_id, input_channel)
-
-    node_directions =
-      GraphMemory.get_rotation_features_at_all_nodes(
-        updater.graph_memory,
-        graph_id,
-        input_channel
-      )
-
-    rotations =
-      features
-      |> sensed_pose_vectors()
-      |> GraphMatchingUtils.possible_sensed_directions(per_node(updater, features))
-      |> Enum.flat_map(fn sensed ->
-        # Matrices, not rotations: a stored frame is only nearly orthonormal and
-        # Monty keeps that — see `align_multiple_orthonormal_vectors_as_matrices/2`.
-        SpatialArithmetics.align_multiple_orthonormal_vectors_as_matrices(node_directions, sensed)
-      end)
+    {locations, rotations} =
+      get_all_informed_possible_poses(updater, graph_id, channel_features, input_channel)
 
     all_hypotheses(
       locations,
       rotations,
-      node_feature_evidence(updater, graph_id, input_channel, features)
+      node_feature_evidence(updater, graph_id, input_channel, channel_features)
     )
   end
 
-  defp initial_hypotheses(
+  defp get_initial_hypothesis_space(
          %__MODULE__{initial_possible_poses: poses} = updater,
-         features,
+         channel_features,
          graph_id,
          input_channel
        ) do
@@ -246,8 +239,36 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
     all_hypotheses(
       locations,
       rotations,
-      node_feature_evidence(updater, graph_id, input_channel, features)
+      node_feature_evidence(updater, graph_id, input_channel, channel_features)
     )
+  end
+
+  # Monty's `_get_all_informed_possible_poses`: how a stored frame has to be
+  # turned to line up with a sensed one, for every node and every sensed
+  # direction.
+  defp get_all_informed_possible_poses(updater, graph_id, sensed_channel_features, input_channel) do
+    node_directions =
+      GraphMemory.get_rotation_features_at_all_nodes(
+        updater.graph_memory,
+        graph_id,
+        input_channel
+      )
+
+    locations = GraphMemory.get_locations_in_graph(updater.graph_memory, graph_id, input_channel)
+
+    rotations =
+      sensed_channel_features
+      |> sensed_pose_vectors()
+      |> GraphMatchingUtils.possible_sensed_directions(
+        per_node(updater, sensed_channel_features)
+      )
+      |> Enum.flat_map(fn sensed ->
+        # Matrices, not rotations: a stored frame is only nearly orthonormal and
+        # Monty keeps that — see `align_multiple_orthonormal_vectors_as_matrices/2`.
+        SpatialArithmetics.align_multiple_orthonormal_vectors_as_matrices(node_directions, sensed)
+      end)
+
+    {locations, rotations}
   end
 
   # What the first observation already says about each node: hypotheses start
