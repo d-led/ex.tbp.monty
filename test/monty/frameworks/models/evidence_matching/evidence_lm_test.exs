@@ -34,7 +34,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
   describe "an object's identity as a feature" do
     # Monty's `test_object_id_features_are_unique_and_float32_safe`. It drives
     # the private `_object_id_to_features`; here that is the public
-    # `EvidenceGraphLM.object_id_of/1`.
+    # `EvidenceGraphLM.object_id_to_features/1`.
     test "every object of a dataset gets its own id, and the id survives a float32" do
       ycb = object_names("eval_77obj_predefined.yaml", "eval_env_interface_args")
 
@@ -53,7 +53,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
             {"expanded_compositional", compositional},
             {"combined", ycb ++ compositional}
           ] do
-        features = Enum.map(ids, &{&1, EvidenceGraphLM.object_id_of(&1)})
+        features = Enum.map(ids, &{&1, EvidenceGraphLM.object_id_to_features(&1)})
 
         assert collisions(features) == [],
                "#{dataset}: #{inspect(collisions(features))}"
@@ -62,7 +62,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
           assert exact_in_float32?(feature),
                  "#{dataset}: #{name} is #{feature}, which a float32 cannot hold"
 
-          assert EvidenceGraphLM.object_id_of(name) == feature,
+          assert EvidenceGraphLM.object_id_to_features(name) == feature,
                  "#{dataset}: #{name} is not the same id twice"
         end
       end
@@ -307,7 +307,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
           assert EvidenceGraphLM.get_possible_matches(lm) == ["new_object0"],
                  "Should have exactly one possible match."
 
-          evidence = EvidenceGraphLM.most_likely_hypothesis(lm, "new_object0").evidence
+          evidence = EvidenceGraphLM.calculate_most_likely_hypothesis(lm, "new_object0").evidence
 
           if evidence > lm.object_evidence_threshold do
             steps_with_evidence = steps_with_evidence + 1

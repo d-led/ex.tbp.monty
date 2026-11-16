@@ -75,7 +75,7 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGeneratorTest do
       end)
 
     lm = %{lm | hypotheses: hypotheses}
-    %{lm | current_mlh: EvidenceGraphLM.most_likely_hypothesis(lm)}
+    %{lm | current_mlh: EvidenceGraphLM.calculate_most_likely_hypothesis(lm)}
   end
 
   defp looking_from(%{current_mlh: mlh} = lm, rotation),

@@ -318,7 +318,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
   # mean the same thing. Only an evidence module has such a hypothesis; a
   # displacement or feature module's row is the one it already had.
   defp evidence_stats(%EvidenceGraphLM{} = lm) do
-    mlh = EvidenceGraphLM.most_likely_hypothesis(lm)
+    mlh = EvidenceGraphLM.calculate_most_likely_hypothesis(lm)
 
     %{
       "most_likely_object" => mlh.graph_id,
@@ -449,7 +449,7 @@ defmodule Monty.Frameworks.Utils.LoggingUtils do
   # neither word ever reaches a CSV whole.
   defp score_timeout(performance, %EvidenceGraphLM{} = lm) do
     if performance.primary in ["time_out", "pose_time_out"] do
-      target = EvidenceGraphLM.most_likely_hypothesis(lm).graph_id
+      target = EvidenceGraphLM.calculate_most_likely_hypothesis(lm).graph_id
       targets = Map.get(lm.graph_id_to_target, target, MapSet.new())
       judge = if lm.primary_target in targets, do: "correct_mlh", else: "confused_mlh"
       %{performance | primary: judge, stepwise: judge}

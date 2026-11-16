@@ -830,7 +830,7 @@ defmodule Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM do
 
     lm = %{lm | symmetry_evidence: if(unchanged?, do: lm.symmetry_evidence + 1, else: 0)}
 
-    if enough_symmetry_evidence?(lm) do
+    if enough_symmetry_evidence_accumulated?(lm) do
       Monty.Trace.trace(fn -> "Symmetry detected for poses #{inspect(euler_poses)}" end)
       {lm, true}
     else
@@ -838,7 +838,7 @@ defmodule Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM do
     end
   end
 
-  defp enough_symmetry_evidence?(%__MODULE__{} = lm),
+  defp enough_symmetry_evidence_accumulated?(%__MODULE__{} = lm),
     do: lm.symmetry_evidence >= lm.required_symmetry_evidence
 
   # Monty's `_get_possible_recent_paths`: the last few steps of the paths that
@@ -882,7 +882,7 @@ defmodule Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM do
   end
 
   defp record_symmetry_stats_if_detected(lm, object_id) do
-    if enough_symmetry_evidence?(lm) do
+    if enough_symmetry_evidence_accumulated?(lm) do
       stats = %{
         "symmetric_rotations" => lm.last_unique_poses,
         "symmetric_locations" =>

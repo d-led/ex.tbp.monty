@@ -210,7 +210,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         max_match_distance: Keyword.fetch!(options, :max_match_distance),
         tolerances: tolerances,
         feature_weights:
-          fill_default_weights(Keyword.get(options, :feature_weights, %{}), tolerances),
+          fill_feature_weights_with_default(Keyword.get(options, :feature_weights, %{}), tolerances),
         feature_evidence_increment: Keyword.get(options, :feature_evidence_increment, 1),
         threshold_config: threshold_config,
         x_percent_threshold: Keyword.get(options, :x_percent_threshold, 10),
@@ -357,7 +357,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   # Monty fills in a weight of one for every feature it has a tolerance for:
   # everything it compares counts, unless an experiment says otherwise.
-  defp fill_default_weights(feature_weights, tolerances) do
+  defp fill_feature_weights_with_default(feature_weights, tolerances) do
     Map.new(tolerances, fn {channel, channel_tolerances} ->
       weights = Map.get(feature_weights, channel, %{})
 
@@ -722,7 +722,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       lm
       | possible_matches: threshold_possible_matches(lm, 1.0),
         previous_mlh: lm.current_mlh,
-        current_mlh: most_likely_hypothesis(lm)
+        current_mlh: calculate_most_likely_hypothesis(lm)
     }
   end
 
@@ -979,16 +979,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   graph id `"new_object0"` — Monty's way of saying "there are no observations"
   without inventing an object that was seen.
   """
-  @spec most_likely_hypothesis(t(), graph_id() | nil) :: mlh()
-  def most_likely_hypothesis(lm, graph_id \\ nil)
+  @spec calculate_most_likely_hypothesis(t(), graph_id() | nil) :: mlh()
+  def calculate_most_likely_hypothesis(lm, graph_id \\ nil)
 
-  def most_likely_hypothesis(%__MODULE__{} = lm, graph_id) when is_binary(graph_id) do
+  def calculate_most_likely_hypothesis(%__MODULE__{} = lm, graph_id) when is_binary(graph_id) do
     lm
     |> best_of(graph_id)
     |> finish_mlh(lm)
   end
 
-  def most_likely_hypothesis(%__MODULE__{} = lm, nil) do
+  def calculate_most_likely_hypothesis(%__MODULE__{} = lm, nil) do
     lm
     |> get_all_known_object_ids()
     |> Enum.reduce(nil, fn graph_id, best -> better(best, best_of(lm, graph_id)) end)
@@ -1039,7 +1039,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   @doc "The most likely hypothesis of one object, whether or not it is the best overall."
   @spec get_mlh_for_object(t(), graph_id()) :: mlh()
-  def get_mlh_for_object(%__MODULE__{} = lm, graph_id), do: most_likely_hypothesis(lm, graph_id)
+  def get_mlh_for_object(%__MODULE__{} = lm, graph_id), do: calculate_most_likely_hypothesis(lm, graph_id)
 
   @doc """
   How many hypotheses the module holds for one object.
@@ -1134,7 +1134,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   """
   @spec get_top_two_pose_hypotheses_for_graph_id(t(), graph_id()) :: {mlh(), mlh() | nil}
   def get_top_two_pose_hypotheses_for_graph_id(%__MODULE__{} = lm, graph_id) do
-    best = most_likely_hypothesis(lm, graph_id)
+    best = calculate_most_likely_hypothesis(lm, graph_id)
     hypotheses = Map.fetch!(lm.hypotheses, graph_id)
 
     case Hypotheses.second_argmax_evidence(hypotheses) do
@@ -1492,7 +1492,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
           do: count_symmetry_evidence(lm, last_possible_ids, possible_ids),
           else: lm
 
-      {lm, enough_symmetry_evidence?(lm)}
+      {lm, enough_symmetry_evidence_accumulated?(lm)}
     end
   end
 
@@ -1508,8 +1508,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   end
 
   @doc "Whether the same alternatives have survived long enough to call it symmetry."
-  @spec enough_symmetry_evidence?(t()) :: boolean()
-  def enough_symmetry_evidence?(%__MODULE__{} = lm),
+  @spec enough_symmetry_evidence_accumulated?(t()) :: boolean()
+  def enough_symmetry_evidence_accumulated?(%__MODULE__{} = lm),
     do: lm.symmetry_evidence >= lm.required_symmetry_evidence
 
   # -- voting --------------------------------------------------------------
@@ -1612,7 +1612,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       lm = %{
         lm
         | possible_matches: threshold_possible_matches(lm, 1.0),
-          current_mlh: most_likely_hypothesis(lm)
+          current_mlh: calculate_most_likely_hypothesis(lm)
       }
 
       {:ok, lm}
@@ -1739,10 +1739,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
             value:
               mlh.rotation |> Rotation.invert() |> Rotation.to_matrix() |> Geometry.transpose()
           },
-          "pose_fully_defined" => not enough_symmetry_evidence?(lm),
+          "pose_fully_defined" => not enough_symmetry_evidence_accumulated?(lm),
           "on_object" => FeatureAtLocationBuffer.get_currently_on_object(lm.buffer)
         },
-        non_morphological_features: %{"object_id" => object_id_of(mlh.graph_id)},
+        non_morphological_features: %{"object_id" => object_id_to_features(mlh.graph_id)},
         confidence: confidence,
         pass_message:
           FeatureAtLocationBuffer.get_currently_on_object(lm.buffer) and
@@ -1759,8 +1759,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # without matching on strings: the first 24 bits of its SHA-256, which stay
   # exact in a float32 feature.
   @doc false
-  @spec object_id_of(graph_id()) :: non_neg_integer()
-  def object_id_of(object_id) do
+  @spec object_id_to_features(graph_id()) :: non_neg_integer()
+  def object_id_to_features(object_id) do
     <<head::binary-size(3), _rest::binary>> = :crypto.hash(:sha256, object_id)
     :binary.decode_unsigned(head, :big)
   end
@@ -1775,7 +1775,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   step's error is measured from.
   """
   @spec collect_stats_to_save(t()) :: {t(), map()}
-  def collect_stats_to_save(%__MODULE__{} = lm), do: collect_stats_to_save(lm, &detailed_stats/2)
+  def collect_stats_to_save(%__MODULE__{} = lm), do: collect_stats_to_save(lm, &add_detailed_stats/2)
 
   @doc """
   The same, with the detailed fields supplied by whoever owns the module.
@@ -1790,7 +1790,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   """
   @spec collect_stats_to_save(t(), (t(), map() -> map())) :: {t(), map()}
   def collect_stats_to_save(%__MODULE__{} = lm, detailed) do
-    lm = append_mlh_prediction_error(lm)
+    lm = append_mlh_prediction_error_to_stats(lm)
 
     stats = %{
       "possible_matches" => lm.possible_matches,
@@ -1810,7 +1810,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     }
   end
 
-  defp append_mlh_prediction_error(%__MODULE__{} = lm) do
+  defp append_mlh_prediction_error_to_stats(%__MODULE__{} = lm) do
     graph_id = lm.previous_mlh.graph_id
 
     if graph_id in ["no_observations_yet", "new_object0"] do
@@ -1846,7 +1846,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # its rows as one f64 binary, and a binary that is not text is not JSON — it
   # took a run with a ported learning module and the detailed logger to find,
   # because until then every run of it was a stand-in with no hypotheses at all.
-  defp detailed_stats(%__MODULE__{} = lm, stats) do
+  defp add_detailed_stats(%__MODULE__{} = lm, stats) do
     stats
     |> Map.put(
       "possible_locations",
