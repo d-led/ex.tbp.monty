@@ -42,7 +42,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     RunHistory,
     RunLog,
     RunStream,
-    Setup
+    Setup,
+    Yaml
   }
 
   alias Monty.Studio.Jobs.Reaper
@@ -155,6 +156,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # and the checks box names it.
       needs: needs(opened),
       missing: with_actions(missing(opened)),
+      # The config as Monty writes configs, drawn once here rather than on every
+      # patch: this page redraws its charts many times a second while a run is
+      # going, and the file does not change while it is open.
+      config_yaml: config_yaml(opened),
       # One run until somebody asks for more: parallelism is a choice made on
       # this page, not something a link should be able to set for them.
       parallelism: 1,
@@ -1039,13 +1044,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       person comes here for: what this experiment is, what it costs and how to
       run it. So the file sits in a `details` — closed until asked for, the
       browser's own control, left open across the patches a run sends. --%>
-      <details :if={@opened.yaml} id="experiment-config-box" class="space-y-2">
+      <details :if={@config_yaml} id="experiment-config-box" class="space-y-2">
         <summary class="cursor-pointer text-lg font-semibold tracking-tight">The config</summary>
         <pre
           id="experiment-config"
           phx-no-curly-interpolation
           class="max-h-96 overflow-auto rounded-box border border-base-300 bg-base-100 p-3 font-mono text-xs"
-        ><code><%= @opened.yaml %></code></pre>
+        ><code><%= @config_yaml %></code></pre>
       </details>
     </Layouts.app>
     """
@@ -2650,6 +2655,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # recognises anything still ends.
   defp cap(nil, setup), do: Setup.max_total_steps(setup) || Monty.Studio.Run.default_steps()
   defp cap(asked, _setup), do: asked
+
+  # The composed config as Monty's own files are written: what a run of this
+  # experiment will be, defaults resolved, before anything has run. A config this
+  # node does not have — a plugin's — composes to nothing here, and a box holding
+  # nothing is worse than no box.
+  defp config_yaml(%{config: config}) when is_map(config) and map_size(config) > 0,
+    do: Yaml.render(config)
+
+  defp config_yaml(_opened), do: nil
 
   # A number the page was given, or nothing at all — which is what an empty field
   # means: every episode of the config, and the config's own ceiling on steps.

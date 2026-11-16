@@ -39,6 +39,28 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     {:ok, tmp: tmp}
   end
 
+  # The composed config is a whole file, and what a reader comes here for is the
+  # diagram, the checks and the run button above it. So the file is drawn closed —
+  # the browser's `details`, which leaves it as the reader left it while the page
+  # patches the charts of a run in flight.
+  describe "the config the page composed" do
+    test "is a closed box, in the format Monty writes its files in", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/base_config_10distinctobj_dist_agent")
+      await_composition(view)
+
+      box = view |> element("#experiment-config-box") |> render()
+
+      assert box =~ "<details"
+      refute box =~ ~r/<details[^>]*\sopen/
+      assert box =~ "The config"
+
+      config = view |> element("#experiment-config") |> render()
+
+      assert config =~ "experiment:"
+      assert config =~ ~r/^ {2}config:/m
+    end
+  end
+
   describe "which world a run would step" do
     test "the page says so before anything runs", %{conn: conn} do
       # Tests step the stand-in (config/test.exs says so), and a stand-in is not
