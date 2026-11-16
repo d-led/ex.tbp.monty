@@ -1601,17 +1601,22 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               class="flex gap-2 border-b border-base-300 px-2.5 py-1 last:border-0"
             >
               <dt class="w-32 shrink-0 text-base-content/60">{key}</dt>
-              <dd class="font-mono break-all">{value}</dd>
+              <dd class="min-w-0 font-mono break-words">{value}</dd>
             </div>
           </dl>
         </div>
 
         <div class="space-y-1">
           <h2 class="text-sm font-medium">Summary</h2>
+          <%!-- A value can be one long unbroken token — `learning_module_0=match=138`
+          from `outcomes` — and a grid item is `auto`-sized in the inline axis, so
+          it refused to shrink below that token and the number ran under the cell
+          beside it. `min-w-0` lets the cell be narrower than its content, and
+          `break-words` keeps the token inside it. --%>
           <dl class="grid grid-cols-2 gap-1.5 rounded-box border border-base-300 bg-base-100 p-2 text-xs sm:grid-cols-3">
-            <div :for={{key, value} <- summary(@run)}>
+            <div :for={{key, value} <- summary(@run)} class="min-w-0">
               <dt class="text-base-content/60">{key}</dt>
-              <dd class="font-mono">{value}</dd>
+              <dd class="font-mono break-words">{value}</dd>
             </div>
           </dl>
         </div>
