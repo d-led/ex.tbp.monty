@@ -219,6 +219,9 @@ defmodule ActionStream do
         "guide #{inspect(Map.get(policy, :using_pc_guide))}, " <>
         "ignoring #{inspect(Map.get(policy, :ignoring_pc_counter))}/" <>
         "#{inspect(Map.get(policy, :min_general_steps))}, " <>
+        "heading #{inspect(Map.get(policy, :following_heading_counter))}/" <>
+        "#{inspect(Map.get(policy, :min_heading_steps))}, " <>
+        "angle #{inspect(Map.get(policy, :tangential_angle))}, " <>
         "last action #{inspect(policy.last_surface_policy_action, limit: 3)}, " <>
         "desired #{inspect(policy.desired_object_distance)}"
     )
@@ -235,6 +238,7 @@ defmodule ActionStream do
     %{
       min_depth: feature(percept, "min_depth"),
       coverage: feature(percept, "object_coverage"),
+      pose_defined: feature(percept, "pose_fully_defined"),
       on_object: Cmp.Message.on_object?(percept)
     }
   end
@@ -269,7 +273,7 @@ defmodule ActionStream do
 
   defp render_inputs(inputs) do
     "[min_depth=#{render_value(inputs.min_depth)} coverage=#{render_value(inputs.coverage)} " <>
-      "on_object=#{inputs.on_object}]"
+      "pose_defined=#{render_value(inputs.pose_defined)} on_object=#{inputs.on_object}]"
   end
 
   # What the sensor module is given, before it is asked to make a percept of it.

@@ -124,13 +124,21 @@ The first difference is step 28, a `move_tangentially` whose distance is his
 distance is off by between 1.5e-5 and 1.5e-3, which is what one different
 tangential step does to the body that reads the depth next.
 
-What the policy was holding there says where to look. It is the step on which the
-curvature-guided phase ends: the two steps before it answered from a curvature
-(`using_pc_guide true`, counter at its minimum), and step 28 is back on momentum
-(`pc :no`, counter reset to 1 of 8) with the previous action still his. So the
-difference is in how a return from curvature guidance to momentum picks its
-heading — the blend, the bounds, the avoidance search that may replace it — and
-not in the curvature heading itself, which agreed for the steps that used one.
+What the policy was holding there says where to look. Both sides are on the same
+branch at step 28 — momentum, not curvature: the two steps before it answered from
+a curvature, and this one is back on momentum with the counter at its first step of
+twelve, so the avoidance search does not run either. The heading the blend starts
+from is ours to read, `3.13055849388839`, set by the curvature step at 24, whose
+action was his to the last digit. The flag that chooses the branch is computed by
+the same rule on both sides — `|k1 − k2| >= pc1_is_pc2_threshold`, ten by default,
+and this config does not override it — and ours reads false at step 28, which is
+also what a patch whose curvatures are that close should read.
+
+So the difference is one of two numbers: the heading the curvature step stored, or
+the draw the stream handed the blend. Telling them apart means printing the draw
+beside the angle in Monty's own run, which needs his environment
+(`scripts/setup_monty_oracle.sh`): ours answers `2.8941245807491454` from a stored
+`3.13055849388839`, and his direction differs from ours by five and a half degrees.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
