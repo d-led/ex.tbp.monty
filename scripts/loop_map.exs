@@ -52,10 +52,43 @@ defmodule LoopMap do
       "add_votes_to_buffer_stats" => "nothing: Monty's is `pass`"
     },
     "frameworks/experiments/monty_experiment.py" => %{
+      # This port's experiment class is the epoch and the episode loop and
+      # nothing else: `run_epochs/2` walks the epochs, `run_epoch/2` the objects
+      # of one. Everything Monty keeps beside that loop — the setup, the world,
+      # the model, the counters, the loggers, the saved state — is the studio's,
+      # because a run here is a job, not an object that is entered and exited.
+      #
       # What one step is — the interface stepping a world, the model stepping on
-      # what came back — is the studio's, and the experiment owns only the loops.
+      # what came back — is the studio's too.
+      "new" => "Monty.Studio.Setup and Monty.Studio.Run.start/2",
+      "begin_step" => "the run's start, Monty.Studio.Run.start/2: nothing is entered",
+      "end_step" => "the run's stop, Monty.Studio.Run.stop/1: nothing is exited",
       "run_step" => "Monty.Studio.Run.step",
-      "recognition_complete" => "_recognition_complete/2 here"
+      "recognition_complete" => "_recognition_complete/2 here",
+      "setup_experiment" => "the run's start, Monty.Studio.Run.start/2",
+      "init_env" => "Monty.Studio.Setup.world/4",
+      "load_environment_interfaces" => "one interface per episode, opened by Monty.Studio.Run",
+      "create_env_interface" => "Monty.Experiment.Environment.Interface.new/1",
+      "init_counters" => "the run's record counts episodes; an episode's is Monty.Experiment.RecognitionContext",
+      "get_epoch_state" => "absent: the record holds epoch and episode, Setup.epoch_plan/1 the plan",
+      "create_monty" => "Monty.Studio.Setup.model_spec/3, started as Monty.Runtime.Model",
+      "snapshot_monty" => "absent: no recreation mode; Monty.Studio.Run.memories/1 carries memory between episodes",
+      "restore_monty" => "absent: the same, an episode starts by resetting the model's short-term memory",
+      "check_if_any_lms_updated" => "Monty.Runtime.Step: a step says what it processed",
+      "fixme_generate_live_plot_frame" => "Monty.Studio.RunStream.publish/3 draws the frame",
+      "pre_epoch" => "pre_episode/4 here: Monty's epoch is one episode, and this port names it after what it holds",
+      "post_epoch" => "post_episode/4 here, for the same reason",
+      "run" => "the phases are the config's plan, walked by Monty.Studio.Jobs.Run",
+      "train" => "the plan's train phase, Monty.Studio.Jobs.Run",
+      "evaluate" => "the plan's eval phase, Monty.Studio.Jobs.Run",
+      "state_dict" => "absent at the experiment's level: a module's own state is Monty.Studio.Run.state/1",
+      "save_state_dir" => "Monty.Studio.Learned.keep/5",
+      "load_state_dir" => "Monty.Studio.Setup.memories/1",
+      "close" => "Monty.Studio.Run.stop/1",
+      "reset_episode_rng" => "Monty.Frameworks.Experiments.Seed.episode_seed/3",
+      "logger_args" => "Monty.Studio.Run.logger_args/1",
+      "init_loggers" => "Monty.Studio.Artifacts.start/1 makes the run's directory and log",
+      "init_monty_data_loggers" => "Monty.Studio.Logging.open/1"
     }
   }
 
