@@ -130,7 +130,17 @@ stepped the world by its struct rather than through `Interface.step`, and neithe
 could be reproduced with the probe as it stands.
 
 So the instrument is trustworthy and the diff of two action logs can be read from
-here. What is left of this phase is the walk after the opening step.
+here. Read, it parts at **step 2**, and the question is one number. His second
+action is `orient_horizontal` with a rotation of a thousandth of a degree — the
+systematic search his `_touch_object` runs when the view finder's centre is more
+than a metre from anything. Ours is `move_forward 0.036434553` again, which is what
+the same procedure answers when the centre is *within* a metre, and our percepts
+carry `object_coverage 0` and no `min_depth` at every step after the first. So the
+next measurement is the view finder's centre depth on step 2, ours beside his
+implied one: the frames themselves agree to the last bit
+([`probe_percept_parity.exs`](../scripts/probe_percept_parity.exs)), so either that
+number is not what the branch reads, or the sensor is being asked to read nothing
+(`motor_only_step`) for one step too many.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
