@@ -527,6 +527,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp began(%{started_at: %DateTime{} = at}), do: at
   defp began(%{inserted_at: at}), do: at
 
+  # How many episodes the experiment planned, when the record kept it: a reader
+  # asking "episode 102" wants the denominator too.
+  defp episodes_of(%{inputs: %{"episodes" => count}}) when is_integer(count), do: count
+  defp episodes_of(_run), do: nil
+
   # What the reader chose to look at belongs to the run they chose it for: a
   # series, a window and a step are answers about one run. Carrying them to the
   # next run opened in the same tab meant every run after the first was drawn the
@@ -1726,6 +1731,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           pictures={@pictures}
           started_at={started_at(@run)}
           running={running?(@run)}
+          episode={Replay.episode_of(@moment)}
+          episodes={episodes_of(@run)}
+          took={Duration.of_run(@run)}
           recorded={length(Replay.steps(@run))}
           playing={@playing}
           follow={@follow}

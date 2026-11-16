@@ -354,8 +354,16 @@ defmodule Monty.Studio.Replay do
   defp point(moment, id),
     do: %{step: moment.position, value: value_of(moment, id), episode: episode_of(moment)}
 
-  defp episode_of(%{entry: %{"episode" => episode}}) when is_integer(episode), do: episode
-  defp episode_of(_moment), do: nil
+  @doc """
+  Which episode a recorded moment belongs to, when the record kept it.
+
+  The step's own number restarts in every episode, so it cannot say how far into
+  a run a reader is; the number the step was recorded with can, and it is the one
+  the bands and the seams are drawn from.
+  """
+  @spec episode_of(map()) :: non_neg_integer() | nil
+  def episode_of(%{entry: %{"episode" => episode}}) when is_integer(episode), do: episode
+  def episode_of(_moment), do: nil
 
   @doc """
   A window over the recorded steps, clamped to the ones the run has.

@@ -394,6 +394,14 @@ defmodule ExTbpMontyWeb.StudioComponents do
   # them has none, and that is said in one sentence rather than drawn as a row of
   # empty frames per step.
   attr :pictures, :boolean, default: false
+  # Which episode the moment under the slider belongs to, counting from nought as
+  # the record does, and how many the experiment planned. Both go in the row that
+  # says what the run settled on: a step number answers how far into one episode
+  # the reader is and nothing about how far into the run.
+  attr :episode, :integer, default: nil
+  attr :episodes, :integer, default: nil
+  # What a run that has stopped took, in the words the page's header uses.
+  attr :took, :string, default: nil
   attr :id, :string, default: "replay"
 
   def replay(assigns) do
@@ -412,14 +420,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
         <span :if={@moment && @moment.entry} class="text-xs text-base-content/60">
           {duration(@moment.entry["duration_us"])}
         </span>
-        <%!-- Beside the step it is about: stepping through a run is watching one
-        object climb, and "which one" should not need a second row. The row above
-        the plot says the same thing where a reader who is not stepping looks. --%>
-        <span :if={@best} id="replay-best-step" class="ms-auto text-sm text-base-content/70">
-          strongest evidence
-          <span class="font-mono font-semibold text-base-content">{@best.object}</span>
-        </span>
-        <span class={["text-[11px] text-base-content/50", if(@best == nil, do: "ms-auto")]}>
+        <span class="ms-auto text-[11px] text-base-content/50">
           {@recorded} recorded step(s)
         </span>
       </header>
@@ -562,50 +563,77 @@ defmodule ExTbpMontyWeb.StudioComponents do
               @series_id
             )}
           </span>
-          <%!-- How long this has been going, where the reader is looking: the
-          step count says how far it got and the clock says how long ago it
-          began, and neither says whether it is keeping pace. The reading is
-          the browser's — see `LocalTime` — because a server's snapshot of "an
-          hour ago" is wrong the moment it is sent. --%>
+        </div>
+
+        <%!-- The three numbers a reader of a run looks for, in one row and the
+        size an answer gets: what it settled on, how far into the run this moment
+        is, and how long it has been going. The episode and the clock used to be
+        eleven-point type beside a slider, and a step number — which restarts in
+        every episode — was carrying "how far" on its own. The weakest of them is
+        a badge-sized word; none of them is a caption. --%>
+        <div
+          :if={@best || @episode != nil || @started_at}
+          id="replay-facts"
+          class="flex flex-wrap items-baseline gap-2"
+        >
+          <.strongest_evidence :if={@best} id="replay-best" best={@best} />
+
+          <span
+            :if={@episode != nil}
+            id="replay-episode"
+            class="rounded-field bg-base-200/60 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content/55"
+          >
+            episode
+            <span class="font-mono text-xl leading-none font-semibold normal-case text-base-content">
+              {@episode + 1}
+            </span>
+            <span :if={@episodes} class="text-sm normal-case text-base-content/60">
+              / {@episodes}
+            </span>
+          </span>
+
+          <%!-- A run still going has a clock that says whether it is keeping
+          pace, and the reading is the browser's (`LocalTime`): a server's
+          snapshot of "an hour ago" is wrong the moment it is sent. A run that
+          has stopped gets what it took instead — a clock beside it would count
+          the minutes since somebody killed it and call them the time it ran. --%>
           <span
             :if={@started_at && @running}
-            id="replay-chart-since"
+            id="replay-run-time"
             phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
-            class="text-[11px] text-base-content/60"
+            class="rounded-field bg-base-200/60 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content/55"
           >
             running
             <ExTbpMontyWeb.LocalTime.local_time
               at={@started_at}
               style={:elapsed}
-              class="font-mono tabular-nums text-base-content"
+              class="font-mono text-xl leading-none font-semibold normal-case tabular-nums text-base-content"
             />
-            <span class="text-base-content/40">since</span>
-            <ExTbpMontyWeb.LocalTime.local_time at={@started_at} style={:clock} class="tabular-nums" />
+            <span class="normal-case text-base-content/40">since</span>
+            <ExTbpMontyWeb.LocalTime.local_time
+              at={@started_at}
+              style={:clock}
+              class="text-sm normal-case tabular-nums text-base-content/60"
+            />
           </span>
-          <%!-- Nothing is stepping a run that has stopped, so a clock beside it
-          would count the minutes since somebody killed it and call them the time
-          it has been running. What is worth knowing is when the last step
-          landed: that is what says how long ago it stopped. The clock carries the
-          same hook as the one above — only one of the two spans is ever in the
-          page — because a time nobody localises is a UTC time beside a local one. --%>
           <span
             :if={@started_at && !@running}
-            id="replay-chart-stopped"
+            id="replay-run-time"
             phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
-            class="text-[11px] text-base-content/60"
+            class="rounded-field bg-base-200/60 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content/55"
           >
-            last step
+            took
+            <span class="font-mono text-xl leading-none font-semibold normal-case tabular-nums text-base-content">
+              {@took || "—"}
+            </span>
+            <span class="normal-case text-base-content/40">last step</span>
             <ExTbpMontyWeb.LocalTime.local_time
               at={@moment && @moment.entry && @moment.entry["at"]}
               style={:clock}
-              class="font-mono tabular-nums text-base-content"
+              class="text-sm normal-case tabular-nums text-base-content/60"
             />
           </span>
         </div>
-
-        <%!-- What the run settled on, as a row of its own, above the plot: the
-        first thing an eye goes to, in the size an answer gets. --%>
-        <.strongest_evidence :if={@best} id="replay-best" best={@best} />
 
         <%!-- Hovering a line says which object is under the pointer, which step
         it is, and what it was worth. The samples come from the server, so the

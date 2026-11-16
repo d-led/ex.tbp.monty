@@ -240,6 +240,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       # drawn from — and it is there before the run has closed.
       assert view |> element("#replay-chart-window") |> render() =~ "steps"
       assert html =~ "mug"
+
+      # The newest step belongs to the second episode of the experiment, and the
+      # row beside the chart says so — the step's own number is nought in both.
+      assert view |> element("#replay-episode") |> render() =~ "2"
     end
   end
 
@@ -832,6 +836,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
           end)
 
         entry = %{
+          "episode" => 0,
           "step" => step,
           "percepts" => ["patch"],
           "inputs" => %{"learning_module_0" => 1},
@@ -1936,10 +1941,12 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       # And one number says what the episode came to.
       assert view |> element("#replay-best") |> render() =~ "bowl"
 
-      # Beside the step it is about as well: a reader stepping through a run is
-      # watching one object climb, and asking which one should not need another
-      # row.
-      assert view |> element("#replay-best-step") |> render() =~ "bowl"
+      # The episode and the clock live in that same row — a step number restarts
+      # in every episode and says nothing about how far into the run a reader is
+      # — and there is exactly one of each on the page.
+      assert view |> element("#replay-facts #replay-episode") |> render() =~ "1"
+      assert has_element?(view, "#replay-facts #replay-run-time")
+      refute has_element?(view, "#replay-best-step")
     end
 
     test "a hover over those lines names the object it is on", %{conn: conn} do
