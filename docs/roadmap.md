@@ -210,13 +210,29 @@ loop, and its step count is Monty's for every episode of the epoch.
 - Accuracy harness against Monty's own benchmarks (`benchmarks/*.csv`,
   `benchmarks/results/`): the same episodes, the same seeds, one table.
 - **Blocked as of 2026-11-16**: the experiment this phase's milestone names cannot
-  run yet. `base_77obj_dist_agent` is killed inside its first episode, at step 0,
-  when two processes pass the 4 GB per-process ceiling. The library is 213 MB of
-  heap and the module built around it holds that library rather than copying it, so
-  the six gigabytes appear **during the step** — which is the measurement still
-  owed: how many hypotheses a step builds for 77 possible objects, and what each
-  costs. The readings and the correction of a first, wrong one are in
+  run yet. `base_77obj_dist_agent` is killed while its model is being built, before
+  step 0, when a process passes the 4 GB ceiling — at a 3 GB ceiling of its own it
+  dies at `Total Heap Size: 459 908 514` words, about 3.7 GB. The library is 213 MB
+  of heap and the module holds that library rather than copying it, so the six
+  gigabytes are the library **copied between processes**: a term sent as a message
+  is copied, and this one is maps and lists rather than off-heap binaries. The
+  readings and the correction of a first, wrong one are in
   [`validation.md`](validation.md#where-the-77-object-benchmark-stops-2026-11-16).
+
+  Unblocking it, in order:
+
+  1. Count the hand-overs. `scripts/measure_step_memory.exs` grows a mode that
+     starts the run with a ceiling above the need and prints every process the
+     runtime registered with the heap each holds, so the copies are named rather
+     than inferred.
+  2. Hold the library once. `Monty.Studio.Memory` already caches it in
+     `:persistent_term`; `Setup.model_spec/3` hands the term itself to
+     `Monty.Runtime.Model`, whose init hands it to each module. The change is to
+     pass the cache key plus the shape a module needs, and let a module read the
+     library where it stands — the same move `Monty.Studio.Memory.built/2` already
+     makes for the loader.
+  3. Only then measure the step, which is where the remaining time goes.
+
 - Profiling before optimisation: `:tprof` for where the time goes, `:eprof` for
   call counts, `:fprof` when order matters. Optimise the loop the profile names,
   with a bench before and after in the same commit.
