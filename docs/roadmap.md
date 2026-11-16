@@ -209,6 +209,13 @@ loop, and its step count is Monty's for every episode of the epoch.
 - `mix monty.bench` (exists) times the timestep loop per experiment shape.
 - Accuracy harness against Monty's own benchmarks (`benchmarks/*.csv`,
   `benchmarks/results/`): the same episodes, the same seeds, one table.
+- **Blocked as of 2026-11-16**: the experiment this phase's milestone names cannot
+  run yet. `base_77obj_dist_agent` is killed inside its first episode, at step 0,
+  when two processes pass the 4 GB per-process ceiling; its 77-object library is
+  189 MB of heap words, so what a module builds at episode start costs about
+  thirty times the memory it was handed. The measurement, the reproduction and
+  the three candidates are in
+  [`validation.md`](validation.md#where-the-77-object-benchmark-stops-2026-11-16).
 - Profiling before optimisation: `:tprof` for where the time goes, `:eprof` for
   call counts, `:fprof` when order matters. Optimise the loop the profile names,
   with a bench before and after in the same commit.

@@ -592,6 +592,46 @@ Six MuJoCo episodes of `base_config_10distinctobj_dist_agent` after the fix:
 `match` × 6 with `num_steps 22 33 26 21 31 21`, `monty_steps 22 38 26 35 38 22`
 and `symmetry_evidence 1 5 5 0 5 0` — six rows where the file had held one.
 
+## Where the 77-object benchmark stops (2026-11-16)
+
+`base_77obj_dist_agent` is the experiment the roadmap's accuracy milestone names,
+and it does not run. It is an _inference_ experiment: its config loads the
+77-object pretrained library and evaluates three rotations of it.
+
+    mix monty.run base_77obj_dist_agent --steps 4 --episodes 1 --no-record
+
+dies inside episode 1, at **step 0** — after that step took 12.2 s and answered
+`learning_module_0: pudding_box ev 0.916 (840 hyps, 28 possible)`. Two processes
+passed the studio's per-process heap ceiling and were killed; the crash reports
+heaps of 933 407 881 and 744 654 557 words, which is about 7.5 GB and 6 GB.
+
+What the library itself costs is measured, and it is not the whole of it:
+
+| The library                                                           | Size                                    |
+| --------------------------------------------------------------------- | --------------------------------------- |
+| `pretrained_ycb_v10/surf_agent_1lm_77obj.jsonl.gz` on disk            | 23.4 MB (gzipped)                       |
+| the same file uncompressed                                            | 57.8 MB of text                         |
+| the terms `Monty.Studio.Memory.load/2` builds                         | **189 MB** of heap words, 3.3× the text |
+| — of which `models_in_memory` / `rotation_features` / `feature_array` | 101 MB / 57 MB / 29 MB                  |
+
+Measured with `mix run --no-start scripts/measure_library_memory.exs`, which
+reports the loaded value's own size in heap words rather than the VM's memory
+before and after: the delta depends on how much has been swept, and two runs of
+the same load differed by a factor of two.
+
+So ~190 MB of memory becomes ~6 GB during one episode's start. The next question
+is therefore precise and unanswered: **what does a module build at episode start
+that costs thirty times the memory it was handed?** The candidates, none of them
+measured yet, are the derived feature rows (`GraphMemory.initialize_feature_arrays/1`
+over a hundred and fifty thousand nodes), the updater and displacer a module
+builds over that memory (`build_updater/1`), and the initial hypothesis space
+(`get_initial_hypotheses/1`). Until one of them is measured, the ceiling is what
+it says it is — a runaway worth a line in the log, not a wall to raise.
+
+For contrast, the ten-object experiment does run: `base_config_10distinctobj_dist_agent`
+completes its 140 episodes on both sides (the section above). Its library is an
+order of magnitude smaller.
+
 ## Re-recording anything in this file
 
 The fixtures are generated, so they can be regenerated — and should be, when the
