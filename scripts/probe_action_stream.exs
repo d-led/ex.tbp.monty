@@ -17,6 +17,7 @@ defmodule ActionStream do
   alias Monty.Frameworks.Actions.{MoveForward, MoveTangentially, OrientHorizontal, OrientVertical}
   alias Monty.Frameworks.Models.MotorSystem
   alias Monty.Frameworks.Models.SensorModules.CameraSM
+  alias Monty.Geometry.Rotation
   alias Monty.Studio
   alias Monty.Studio.Setup
 
@@ -57,6 +58,13 @@ defmodule ActionStream do
         seed: setup.seed || 0
       )
 
+    # The episode's own stream, which is what a policy draws from in a run:
+    # without it the probe would be asking the policy a different question from
+    # the one a run asks.
+    {:ok, _registry} = Registry.start_link(keys: :unique, name: Monty.Runtime.Registry)
+    model_id = "probe-#{System.unique_integer([:positive])}"
+    {:ok, _stream} = Monty.Random.Stream.start_link(%{model_id: model_id, seed: setup.seed || 0})
+
     {observations, proprioceptive_state, world} = world.__struct__.step(world, [])
     observations = Interface.apply_transforms(interface, observations, proprioceptive_state)
 
@@ -67,6 +75,7 @@ defmodule ActionStream do
       proprioceptive_state: proprioceptive_state,
       sensor_module: sensor_module,
       world: world,
+      model_id: model_id,
       rows: []
     }
 
@@ -84,7 +93,7 @@ defmodule ActionStream do
   # One step, his and ours: his percept through our sensor, our policy's answer,
   # then the world moved by his action so the next question is the same one.
   defp step(recorded, state, seed) do
-    ctx = Monty.Context.new(seed)
+    ctx = %{Monty.Context.new(seed) | rng: Monty.Random.Stream.via(state.model_id)}
 
     sensor_module = CameraSM.update_state(state.proprioceptive_state[@agent], state.sensor_module)
 
@@ -100,6 +109,17 @@ defmodule ActionStream do
       MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
 
     policy = motor.policy_selector.policy
+    rotation = state.proprioceptive_state[@agent].rotation
+
+    his_heading =
+      case Enum.find(recorded["actions"], &(&1["action"] == "move_tangentially")) do
+        nil -> nil
+        his -> Rotation.apply(Rotation.invert(rotation), his["direction"])
+      end
+
+    IO.puts("  his_heading=#{inspect(his_heading)} ours=#{inspect(policy.tangential_vec)}")
+
+    policy = motor.policy_selector.policy
 
     IO.puts(
       "  policy: pref=#{inspect(policy.min_dir_pref)} pc=#{inspect(policy.using_pc_guide)} " <>
@@ -110,6 +130,17 @@ defmodule ActionStream do
 
     {actions, motor} =
       MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
+
+    policy = motor.policy_selector.policy
+    rotation = state.proprioceptive_state[@agent].rotation
+
+    his_heading =
+      case Enum.find(recorded["actions"], &(&1["action"] == "move_tangentially")) do
+        nil -> nil
+        his -> Rotation.apply(Rotation.invert(rotation), his["direction"])
+      end
+
+    IO.puts("  his_heading=#{inspect(his_heading)} ours=#{inspect(policy.tangential_vec)}")
 
     policy = motor.policy_selector.policy
 
