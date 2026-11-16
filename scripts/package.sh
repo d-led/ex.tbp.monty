@@ -110,16 +110,33 @@ register() {
 # answer: it costs the minutes a re-run would have cost and fails the same way if
 # the CDN is down for good.
 build_app() {
-  local attempt
+  local attempt built=false
+
+  # A bundle from an earlier run is not this run's answer. Tauri's bundler can
+  # fail with the folder from last time still there (a copy over read-only
+  # launchers is `Permission denied (os error 13)`), and the check below then read
+  # that stale bundle as success — a packaging run that reported nothing wrong and
+  # shipped nothing new.
+  if [ -e "$bundle" ] && ! rm -rf "$bundle" 2>/dev/null; then
+    echo "cannot replace $bundle: something is holding it" >&2
+    echo "  quit the app if it is open, then run this again" >&2
+    return 1
+  fi
 
   for attempt in 1 2 3; do
     if ./scripts/start-desktop.sh --bundle; then
+      built=true
       break
     fi
 
     echo "bundling failed (attempt $attempt of 3), retrying in $((attempt * 30))s" >&2
     sleep $((attempt * 30))
   done
+
+  if [ "$built" != true ]; then
+    echo "the bundle step failed every attempt; the reason is above" >&2
+    return 1
+  fi
 
   # macOS answers with the one product this script knows the name of; Linux
   # leaves the window and its release beside each other, which is what the

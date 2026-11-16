@@ -315,13 +315,21 @@ if [[ "$mode" == bundle || "$mode" == app ]]; then
     run "installing the Tauri CLI (a fresh machine has none)" \
       cargo install tauri-cli --version "^2" --locked
   fi
-  # The release is copied into the bundle by tauri-build, and it copies *over*
-  # whatever is there: the previous copy keeps the release's own modes (a
-  # launcher script is 0555, the `COOKIE` is 0400), so the copy fails with
-  # "Permission denied (os error 13)" on every run after the first. Removing the
-  # copy is cheaper than making 2 700 files writable, and nothing is lost — it is
-  # a copy of `_build/desktop/rel`.
-  rm -rf src-tauri/target/release/rel src-tauri/target/release/bundle
+  # The release and the two plugin nodes are copied into the bundle by
+  # tauri-build, and it copies *over* whatever is there: the previous copy keeps
+  # the modes it was built with (a launcher script is 0555, the `COOKIE` is 0400),
+  # so the copy fails with "Permission denied (os error 13)" on every run after the
+  # first. Removing the copies is cheaper than making 2 700 files writable, and
+  # nothing is lost — they are copies of `_build/desktop/rel` and
+  # `_build/desktop/plugins`.
+  #
+  # `target/release/plugins` is the one that was missed: tauri-build writes its
+  # resources beside the binary before it bundles, and the plugin releases have
+  # the same read-only launchers, so the second run of a packaging failed there.
+  rm -rf \
+    src-tauri/target/release/rel \
+    src-tauri/target/release/plugins \
+    src-tauri/target/release/bundle
 
 # What `linuxdeploy` needs and a build machine does not provide.
 #

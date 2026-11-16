@@ -383,6 +383,17 @@ because it needs no release to exist before somebody can try the app:
    is a different thing, and that is what `run-desktop.sh` does — at their own
    privilege, on a file they chose to unpack.
 
+   Two things make a rebuild fail in a way that names nothing. `tauri-build`
+   copies the release and the two plugin nodes **over** whatever is already
+   there, and a copy keeps the modes it was built with — a release launcher is
+   `0555` and its `COOKIE` is `0400` — so the next packaging run of the same tree
+   dies with `Permission denied (os error 13)` inside Tauri's build script, which
+   names no path. Both copies are therefore removed before the build
+   (`target/release/rel`, `target/release/plugins`), the bundle with them. And a
+   bundle left by an earlier run is no longer read as this run's answer: the
+   retry loop used to leave a failed build standing in the folder and report
+   success, which is how a tree that built nothing looked packaged.
+
 2. CI's `desktop` job runs it on a runner of the architecture it ships to and
    uploads the zip as `ex-tbp-monty-osx-arm64`, for ninety days.
 3. `scripts/run-desktop.sh` (`run-desktop.ps1` on Windows) takes the newest build
