@@ -42,6 +42,12 @@ which of Monty's methods have a counterpart here and which do not, with the
 nearest name on the other side. A rename is a defect; a port-only helper is a
 sub-step of a Monty method, or a deviation that has to be written down.
 
+One rename is outstanding, written down in the script's `elsewhere` table rather
+than done: Monty's `pre_epoch` and `post_epoch` are `pre_episode` and
+`post_episode` here, because Monty's epoch holds one episode. Aligning them moves
+the experiment, the environment interface, the loggers and the studio's callback
+keys in one change, so it is a change of its own.
+
 ## Phase 1 — the numeric core, in dependency order
 
 Each module arrives with the Python test that specifies it, translated, and a
