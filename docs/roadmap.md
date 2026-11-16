@@ -109,9 +109,13 @@ an episode draws from), so an episode's first action is Monty's to the last
 digit, and the percept, given his actions, is his to the last bit. After that the
 two action logs part: an episode ends on Monty's step in some of the comparison's
 episodes and walks a different path in the rest. That is a diff of two logs, not a
-design — and `scripts/probe_action_stream.exs` is the instrument that prints it,
-once it is reading a percept rather than an empty view (see
-[`validation.md`](validation.md)).
+design, and `scripts/probe_action_stream.exs` is the instrument that prints it.
+
+Its first reading is a difference of **pose**, not of policy: on the step his
+episode opens, our patch is handed a flat five-centimetre view of the table with
+no semantic id in it, where his sees the object just over six centimetres into the
+patch. So the next thing to fix is the positioning procedure — putting our agent
+where his episode starts — and only then can two action logs be compared at all.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
