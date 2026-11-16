@@ -348,17 +348,16 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
   def strongest_evidence(assigns) do
     ~H"""
-    <div
-      id={@id}
-      class="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-field bg-base-200/60 px-3 py-1.5"
-    >
-      <span class="text-[11px] font-medium uppercase tracking-wide text-base-content/55">
+    <div id={@id} class="min-w-0 rounded-field bg-base-200/60 px-3 py-1.5">
+      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content/55">
         {@words}
-      </span>
-      <span class="font-mono text-xl leading-none font-semibold text-base-content">
-        {@best.object}
-      </span>
-      <span class="text-sm text-base-content/60">{format_value(@best.value)}</span>
+      </div>
+      <div class="flex items-baseline gap-x-2">
+        <span class="truncate font-mono text-xl leading-none font-semibold text-base-content">
+          {@best.object}
+        </span>
+        <span class="text-sm text-base-content/60">{format_value(@best.value)}</span>
+      </div>
     </div>
     """
   end
@@ -574,65 +573,73 @@ defmodule ExTbpMontyWeb.StudioComponents do
         <div
           :if={@best || @episode != nil || @started_at}
           id="replay-facts"
-          class="flex flex-wrap items-baseline gap-2"
+          class="grid gap-2 sm:grid-cols-3"
         >
           <.strongest_evidence :if={@best} id="replay-best" best={@best} />
 
-          <span
+          <div
             :if={@episode != nil}
             id="replay-episode"
-            class="rounded-field bg-base-200/60 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content/55"
+            class="min-w-0 rounded-field bg-base-200/60 px-3 py-1.5"
           >
-            episode
-            <span class="font-mono text-xl leading-none font-semibold normal-case text-base-content">
-              {@episode + 1}
-            </span>
-            <span :if={@episodes} class="text-sm normal-case text-base-content/60">
-              / {@episodes}
-            </span>
-          </span>
+            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content/55">
+              episode
+            </div>
+            <div class="flex items-baseline gap-x-1.5">
+              <span class="font-mono text-xl leading-none font-semibold text-base-content">
+                {@episode + 1}
+              </span>
+              <span :if={@episodes} class="text-sm text-base-content/60">/ {@episodes}</span>
+            </div>
+          </div>
 
           <%!-- A run still going has a clock that says whether it is keeping
           pace, and the reading is the browser's (`LocalTime`): a server's
           snapshot of "an hour ago" is wrong the moment it is sent. A run that
           has stopped gets what it took instead — a clock beside it would count
           the minutes since somebody killed it and call them the time it ran. --%>
-          <span
+          <div
             :if={@started_at && @running}
             id="replay-run-time"
             phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
-            class="rounded-field bg-base-200/60 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content/55"
+            class="min-w-0 rounded-field bg-base-200/60 px-3 py-1.5"
           >
-            running
-            <ExTbpMontyWeb.LocalTime.local_time
-              at={@started_at}
-              style={:elapsed}
-              class="font-mono text-xl leading-none font-semibold normal-case tabular-nums text-base-content"
-            />
-            <span class="normal-case text-base-content/40">since</span>
-            <ExTbpMontyWeb.LocalTime.local_time
-              at={@started_at}
-              style={:clock}
-              class="text-sm normal-case tabular-nums text-base-content/60"
-            />
-          </span>
-          <span
+            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content/55">
+              running
+            </div>
+            <div class="flex items-baseline gap-x-1.5">
+              <ExTbpMontyWeb.LocalTime.local_time
+                at={@started_at}
+                style={:elapsed}
+                class="font-mono text-xl leading-none font-semibold tabular-nums text-base-content"
+              />
+              <span class="text-sm text-base-content/60">
+                since <ExTbpMontyWeb.LocalTime.local_time at={@started_at} style={:clock} />
+              </span>
+            </div>
+          </div>
+          <div
             :if={@started_at && !@running}
             id="replay-run-time"
             phx-hook={ExTbpMontyWeb.LocalTime.hook_name()}
-            class="rounded-field bg-base-200/60 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content/55"
+            class="min-w-0 rounded-field bg-base-200/60 px-3 py-1.5"
           >
-            took
-            <span class="font-mono text-xl leading-none font-semibold normal-case tabular-nums text-base-content">
-              {@took || "—"}
-            </span>
-            <span class="normal-case text-base-content/40">last step</span>
-            <ExTbpMontyWeb.LocalTime.local_time
-              at={@moment && @moment.entry && @moment.entry["at"]}
-              style={:clock}
-              class="text-sm normal-case tabular-nums text-base-content/60"
-            />
-          </span>
+            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content/55">
+              took
+            </div>
+            <div class="flex items-baseline gap-x-1.5">
+              <span class="font-mono text-xl leading-none font-semibold tabular-nums text-base-content">
+                {@took || "—"}
+              </span>
+              <span class="text-sm text-base-content/60">
+                last step
+                <ExTbpMontyWeb.LocalTime.local_time
+                  at={@moment && @moment.entry && @moment.entry["at"]}
+                  style={:clock}
+                />
+              </span>
+            </div>
+          </div>
         </div>
 
         <%!-- Hovering a line says which object is under the pointer, which step
