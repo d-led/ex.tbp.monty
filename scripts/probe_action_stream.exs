@@ -10,13 +10,14 @@
 # step of his episode, while the world is moved by *his* actions, so both answers
 # answer the same question. The step they part at is the step to read.
 #
-# What it reports first is the prologue's stability, not a difference of policy: on
-# a quiet machine our opening action is Monty's to the last digit (0.036434553
-# against his 0.036434555, which is his own `depth − desired − sensor z` on our own
-# readings), and the patch's flat five-centimetre view of the table is his too —
-# his episode's first percepts are empty and the object enters his patch at step 3.
-# Under load the same reading comes out different every run, so read the three
-# numbers this prints before trusting any line below them.
+# What it reports first is that the opening is already Monty's: the patch's flat
+# five-centimetre view of the table is his too (his episode's first percepts are
+# empty and the object enters his patch at step 3), the world at reset is his to the
+# last bit, and the opening action is his to the last digit — 0.036434553 against
+# his recorded 0.036434555. That holds across repeated runs, repeated worlds in one
+# process, a machine with every core busy, and a second MuJoCo world rendering
+# beside it. So read the three numbers it prints as the prologue's own account of
+# itself, and the lines below them as the walk that follows.
 
 defmodule ActionStream do
   @moduledoc false
