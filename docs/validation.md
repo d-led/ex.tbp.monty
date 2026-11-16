@@ -649,6 +649,14 @@ start, the module start, the update path — and the fix they point at is to hol
 the library once (`Monty.Studio.Memory` already caches it in `:persistent_term`)
 and pass a handle to it rather than the thing.
 
+That count has not been taken yet, and two attempts at it were confounded rather
+than informative. Raised to a 5 GB ceiling, the same script's run was stopped by
+`RunLimits`' whole-VM budget (`run_max_memory_mb`, 6 GB by default, read from the
+operating system) instead of by a process heap — once while `scripts/package.sh`
+was building the desktop bundle on the same machine, which holds several gigabytes
+by itself. A 77-object run therefore has two ceilings to fit, not one, and the
+measurement wants a machine with nothing else on it.
+
 For contrast, the ten-object experiment does run: `base_config_10distinctobj_dist_agent`
 completes its 140 episodes on both sides (the section above). Its library is an
 order of magnitude smaller.
