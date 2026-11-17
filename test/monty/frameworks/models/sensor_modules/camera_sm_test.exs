@@ -404,7 +404,11 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
 
     test "is emptied for the next episode, along with the filter's memory" do
       sensor =
-        sensor(save_raw_obs: true, has_detailed_logger: true, delta_thresholds: %{"n_steps" => 20})
+        sensor(
+          save_raw_obs: true,
+          has_detailed_logger: true,
+          delta_thresholds: %{"n_steps" => 20}
+        )
         |> placed_at()
 
       {_percept, sensor} = CameraSM.step(Patch.new(), false, ctx(), sensor)
