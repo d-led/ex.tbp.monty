@@ -119,9 +119,9 @@ defmodule Mix.Tasks.Monty.Run do
     carried = %{
       memories: Monty.Studio.Setup.memories(opened.setup),
       first_seen: %{},
-      # What each graph was built from. A training episode's answer replaces the
-      # last one's, because the graphs a phase wrote are the ones the phase's
-      # last episode handed on; an evaluation episode leaves it alone.
+      # What each graph was built from. A training episode adds to it — the phase
+      # learns one object per episode, each under a graph id of its own — and an
+      # evaluation episode leaves it alone.
       targets: %{}
     }
 
@@ -208,6 +208,7 @@ defmodule Mix.Tasks.Monty.Run do
         epoch: epoch,
         mode: scope.mode,
         memory: carried.memories,
+        memory_targets: carried.targets,
         first_seen: carried.first_seen
       )
 
@@ -304,7 +305,13 @@ defmodule Mix.Tasks.Monty.Run do
     }
   end
 
-  defp targets_after(run, _carried, :train), do: Monty.Studio.Run.memory_targets(run)
+  # The names a phase has learned are every episode's, not the last one's: a
+  # training episode builds a graph of its own and names it, so a phase of five
+  # episodes has five answers, four of which replacing would throw away — and it
+  # did, which is how a five-dog library was written with every graph called
+  # `new_object0`. `Monty.Studio.Run.merge_targets/2` is this port's addition.
+  defp targets_after(run, carried, :train),
+    do: Monty.Studio.Run.merge_targets(carried, Monty.Studio.Run.memory_targets(run))
 
   defp targets_after(_run, carried, :eval), do: carried
 

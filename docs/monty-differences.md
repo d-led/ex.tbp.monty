@@ -1740,13 +1740,24 @@ own id. `mix monty.run` reads the map off each module at the end of a training
 episode (`Monty.Studio.Run.memory_targets/1`) and passes it to
 `Monty.Studio.Learned.keep/5`.
 
+A phase is a sequence of episodes and each one builds a graph under an id of its
+own, so the map a phase writes down is every episode's.
+`Monty.Studio.Run.merge_targets/2` — this port's addition, with no Monty
+counterpart — is that union, and every episode's model is built with the names the
+phase already has (`:memory_targets` on `Monty.Studio.Run.start/2`), so its own
+update adds to them instead of starting again from the library on disk.
+
 **Why.** A graph an unsupervised training run names `new_object3` carries no
 identity: eight dogs gave four graphs, four of them concluded on `new_object3`,
 and the library held nothing that could say whether that was the dog the episode
 had shown. A `match` was therefore a conclusion and not an answer — the number
 this corpus exists to measure could not be computed at all. A library written
 before records carried `targets` is read as it always has been: a graph is named
-after the object it was stored under, which is what this port assumed.
+after the object it was stored under, which is what this port assumed. Keeping
+only the last episode's map was the other half of the same silence, and it hid
+behind the first half: a phase that trained on five dogs named one graph and left
+the rest called `new_object0`, which read as "this port has no names" rather than
+as "this port threw four of them away".
 
 **What is therefore not compared.** Monty's `.pt` checkpoint, which carries the
 whole model's state — the module's other learned fields included. Only the two

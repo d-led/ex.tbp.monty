@@ -114,12 +114,7 @@ defmodule Monty.Studio.Run do
         spec =
           if held?,
             do: nil,
-            else:
-              Setup.model_spec(setup, model_id,
-                has_detailed_logger: Keyword.get(opts, :has_detailed_logger, false),
-                memory: Keyword.get_lazy(opts, :memory, fn -> Setup.memories(setup) end),
-                sensors_step: Keyword.get(opts, :sensors_step, :auto)
-              )
+            else: Setup.model_spec(setup, model_id, spec_opts(setup, opts))
 
         {:ok, factories} = Setup.positioning_procedures(setup)
         {:ok, policy} = Setup.recognition_strategy(setup)
@@ -493,6 +488,27 @@ defmodule Monty.Studio.Run do
     RecognitionStrategy.call(policy, model_view(run), counter)
   end
 
+  # The options `Setup.model_spec/3` is given. `:memory_targets` is a port
+  # addition and is only passed when a caller has them: the spec's own default
+  # reads them off the library on disk, which is what a first episode wants.
+  # Without them a training episode is indexed with every graph "named after
+  # itself" (`index_objects_for_graphs/2`), so a phase of five episodes wrote a
+  # library whose graphs all said `new_object0` while the objects they were built
+  # from were one episode's worth of names, thrown away when the next episode
+  # started.
+  defp spec_opts(setup, opts) do
+    base = [
+      has_detailed_logger: Keyword.get(opts, :has_detailed_logger, false),
+      memory: Keyword.get_lazy(opts, :memory, fn -> Setup.memories(setup) end),
+      sensors_step: Keyword.get(opts, :sensors_step, :auto)
+    ]
+
+    case Keyword.fetch(opts, :memory_targets) do
+      {:ok, targets} -> [memory_targets: targets] ++ base
+      :error -> base
+    end
+  end
+
   @doc """
   What each module's graphs were built from — Monty's `graph_id_to_target`.
 
@@ -514,6 +530,25 @@ defmodule Monty.Studio.Run do
 
       {learning_module.id,
        Map.new(targets, fn {graph_id, names} -> {graph_id, Enum.sort(names)} end)}
+    end)
+  end
+
+  @doc """
+  The names a phase has learned so far — this port's addition, not Monty's.
+
+  A training phase is a sequence of episodes and each one builds a graph of its
+  own under a fresh id, so the names a phase has to hand on are every episode's,
+  not the last one's: the graphs are keyed by id and two episodes never share
+  one, which makes this a union rather than a decision. A graph both episodes
+  touched keeps both names, in order, because a run that meets the same object
+  twice has two of them and neither is the wrong one.
+  """
+  @spec merge_targets(map(), map()) :: map()
+  def merge_targets(learned_so_far, this_episode) do
+    Map.merge(learned_so_far, this_episode, fn _module_id, known, learned_now ->
+      Map.merge(known, learned_now, fn _graph_id, before, now ->
+        Enum.sort(Enum.uniq(before ++ now))
+      end)
     end)
   end
 
