@@ -252,7 +252,7 @@ defmodule Monty.Studio.Replay.Digest do
   defp add_object_lines(digest, position, episode, entry) do
     digest =
       entry
-      |> evidence_by_object(nil)
+      |> evidence_by_object()
       |> Enum.reduce(digest, fn {name, value}, digest ->
         push_object(digest, name, counted(position, episode, value))
       end)
@@ -271,7 +271,7 @@ defmodule Monty.Studio.Replay.Digest do
   defp remember_best(digest, entry) do
     best =
       entry
-      |> evidence_by_object(nil)
+      |> evidence_by_object()
       |> Enum.reduce(digest.best, fn {name, value}, best ->
         if best == nil or value > best.value, do: %{object: name, value: value}, else: best
       end)
@@ -291,13 +291,12 @@ defmodule Monty.Studio.Replay.Digest do
   defp episode_of(_entry), do: nil
 
   # What each object a step held a graph for was worth there: the strongest
-  # evidence any module held for it, or what one module held when a module is
-  # named. An object a module named without a number is worth nought rather than
-  # missing — the line has a point there with nothing behind it, which is what a
-  # ruled-out theory looks like.
-  defp evidence_by_object(entry, module_id) do
+  # evidence any module held for it. An object a module named without a number is
+  # worth nought rather than missing — the line has a point there with nothing
+  # behind it, which is what a ruled-out theory looks like.
+  defp evidence_by_object(entry) do
     entry
-    |> beliefs(module_id)
+    |> beliefs()
     |> Enum.map(&evidence_of_belief/1)
     |> Enum.reduce(%{}, fn strengths, kept -> Map.merge(strengths, kept, &strongest/3) end)
   end
@@ -326,14 +325,7 @@ defmodule Monty.Studio.Replay.Digest do
     end
   end
 
-  defp beliefs(entry, nil), do: entry |> beliefs_of() |> Map.values()
-
-  defp beliefs(entry, module_id) do
-    case entry |> beliefs_of() |> Map.get(module_id) do
-      nil -> []
-      belief -> [belief]
-    end
-  end
+  defp beliefs(entry), do: entry |> beliefs_of() |> Map.values()
 
   defp beliefs_of(entry) when is_map(entry), do: Map.get(entry, "beliefs", %{})
   defp beliefs_of(_entry), do: %{}

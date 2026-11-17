@@ -187,36 +187,25 @@ defmodule Monty.Studio.Replay do
     |> Enum.take(count)
   end
 
-  defp object_names(moment, module_id \\ nil) do
+  defp object_names(moment) do
     moment
-    |> beliefs(module_id)
+    |> beliefs()
     |> Enum.flat_map(fn belief -> belief |> Map.get("graphs", %{}) |> Map.keys() end)
     |> Enum.uniq()
   end
 
-  # An object's evidence on a step: the strongest any module held for it, or what
-  # one module held when a module is named. One number per object per step is what
-  # a line needs, and the best module is the one whose belief the ensemble acted
-  # on.
-  defp evidence_of(moment, name, module_id \\ nil) do
+  # An object's evidence on a step: the strongest any module held for it. One
+  # number per object per step is what a line needs, and the best module is the
+  # one whose belief the ensemble acted on.
+  defp evidence_of(moment, name) do
     moment
-    |> beliefs(module_id)
+    |> beliefs()
     |> Enum.map(&(&1 |> Map.get("graphs", %{}) |> Map.get(name, %{}) |> Map.get("max_evidence")))
     |> Enum.reject(&is_nil/1)
     |> Enum.max(fn -> 0.0 end)
   end
 
-  defp beliefs(moment, nil), do: moment |> beliefs_of() |> Map.values()
-
-  defp beliefs(moment, module_id) do
-    moment
-    |> beliefs_of()
-    |> Map.get(module_id)
-    |> case do
-      nil -> []
-      belief -> [belief]
-    end
-  end
+  defp beliefs(moment), do: moment |> beliefs_of() |> Map.values()
 
   # The entry's beliefs, keyed by the module that held them: the key is the only
   # place a module's name is written down.
