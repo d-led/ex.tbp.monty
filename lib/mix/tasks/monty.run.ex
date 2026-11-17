@@ -354,9 +354,25 @@ defmodule Mix.Tasks.Monty.Run do
   # The transcript of an episode is worth a write; its pictures are not, because
   # appending to the row's `timeline` rewrites every picture the run has taken so
   # far (`RunHistory.store/3`). `finish/2` writes them, once.
+  #
+  # A checkpoint that cannot be written is said out loud and the run goes on. An
+  # episode of a training phase can take minutes, and a database connection is
+  # not held that long: the ten-epoch sweep of the dog corpus died at its first
+  # episode boundary because the record's row was no longer there to be written,
+  # and a bookkeeping write is not worth nine epochs of stepping.
   defp checkpoint(history) do
-    {:ok, saved} = Monty.Studio.RunHistory.checkpoint(history, timeline: :skip)
-    saved
+    case Monty.Studio.RunHistory.checkpoint(history, timeline: :skip) do
+      {:ok, saved} ->
+        saved
+
+      {:error, reason} ->
+        Mix.shell().error(
+          "the run's transcript could not be written at an episode boundary " <>
+            "(#{inspect(reason)}); the episode is in the run's own log"
+        )
+
+        history
+    end
   end
 
   defp print_step(info, beliefs, episode, opts) do
