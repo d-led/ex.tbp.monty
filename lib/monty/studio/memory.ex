@@ -50,6 +50,27 @@ defmodule Monty.Studio.Memory do
   end
 
   @doc """
+  Where a library this application *writes* lives.
+
+  Monty's libraries are shipped beside the code and are inputs. A memory a run
+  produces — of a CAD part, of anything learned here — is output, and output
+  belongs under the data folder, never in the source tree. The two are different
+  kinds of thing, so they are different roots, and a write only ever goes here.
+  """
+  @spec generated_libraries_dir() :: Path.t()
+  def generated_libraries_dir, do: Path.join(Monty.Paths.data(), "monty_libraries")
+
+  @doc """
+  Every root a library may be read from, shipped first.
+
+  Shipped first so a library that ships is never shadowed by a stale copy
+  somewhere in a user's data folder; both, so a run can read a memory it wrote
+  and a memory that came with the application without being told which.
+  """
+  @spec library_roots() :: [Path.t()]
+  def library_roots, do: Enum.uniq([libraries_dir(), generated_libraries_dir()])
+
+  @doc """
   The library name a config's `model_name_or_path` refers to.
 
   Monty's path ends at the model's own directory
