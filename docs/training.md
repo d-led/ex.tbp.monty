@@ -441,3 +441,29 @@ between 704 and 979 nodes, and names seven of eight.
 
 So the corpus's density is decided by the policy, and the sample budget only
 scales whatever the policy already reached.
+
+#### The policy, not the sample count (measured 2026-11-17)
+
+The obvious objection to the table above is that the raster simply had fewer
+samples. `dogs/supervised_pretraining_dense` is the same dist agent with
+`naive_scan_3` — 871 samples of the view sphere instead of 307 — and the
+termination to match:
+
+| policy         | rotations | steps  | wall   | nodes  | per dog       | named correctly |
+| -------------- | --------- | ------ | ------ | ------ | ------------- | --------------- |
+| dist agent, 5° | 14        | 34 384 | 14 min | 2 518  | 124 – 1 109   | 5 of 8          |
+| dist agent, 3° | 14        | 97 552 | 21 min | 6 899  | 316 – 3 050   | 6 of 8          |
+| surface agent  | 2         | 42 263 | 13 min | 7 217  | 704 – 979     | 7 of 8          |
+| surface agent  | 4         | 77 892 | 32 min | 13 501 | 1 424 – 1 928 | 8 of 8          |
+
+Tripling the raster's samples — 34 384 steps to 97 552, 2 518 nodes to 6 899, and
+more steps than the surface agent's four rotations — buys **one** name, and the
+memory stays ten times imbalanced (`milka` 3 050 nodes, `kinder_guard_dog` 316).
+The surface agent at two rotations, with fewer than half the steps, buys two, and
+leaves every dog within a factor of 1.4 of every other.
+
+What differs is where a sample can land. A raster's samples fall on a fixed grid
+projected onto the view sphere, so how many meet a dog depends on the dog's
+silhouette; a surface agent walks the surface it is on, so every dog gets walked
+however its silhouette falls. **Denser sampling of the wrong place does not fix
+the wrong place.**
