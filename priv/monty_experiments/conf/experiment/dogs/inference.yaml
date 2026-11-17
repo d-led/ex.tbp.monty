@@ -1,0 +1,30 @@
+# @package _global_
+
+# Monty's `unsupervised_inference_distinctobj_surf_agent`, on the dog corpus:
+# recognition against the memory `dogs/surf_unsupervised` trained, which the
+# last path segments name — `trained/dogs_surf_unsupervised/` is the library
+# under `priv/monty/libraries`, and `Memory.release_of/1` reads exactly those.
+defaults:
+  - /monty: noresetevidencegraph_exp1000_e100_t3
+  - /monty/motor_system_config: surface_curvature_informed_goal1
+  - /monty/learning_module: noresetevidence_1lm_dod0025
+  - /monty/sensor_module: camera_surf_noise_raw0
+  - /monty/connectivity: 1lm_1sm
+  - /environment: mujoco_objaverse_dogs_surf_agent
+  - /env_interface: eval_dogs_random
+  - /env_interface/transform: missing_depthto3d_sensor2_semantic0_clip
+  - /termination: any1_min_e100_t3_exp1000_max_e100_t1000_tot6000
+  - /logging: basic_warning_wandb_monty_runs
+
+experiment:
+  _target_: tbp.monty.frameworks.experiments.object_recognition_experiments.MontyObjectRecognitionExperiment
+  config:
+    show_sensor_output: false
+    n_train_epochs: 0
+    model_name_or_path: ${constants.pretrained_dir}/trained/dogs_surf_unsupervised/pretrained/
+    n_eval_epochs: 10
+    seed: 42
+    supervised_lm_ids: []
+    python_log_level: DEBUG
+    logging:
+      run_name: dogs_inference

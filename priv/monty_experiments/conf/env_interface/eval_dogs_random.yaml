@@ -1,0 +1,19 @@
+# @package experiment.config
+
+# Recognition over the dog corpus: one object per episode, a random rotation
+# each time — the same interface as `eval_distinctobj_random`, with the corpus
+# swapped.
+do_eval: true
+eval_env_interface_args:
+  object_names:
+    - boykin_spaniel
+    - milka
+    - dog_free_fire
+    - kinder_guard_dog
+    - puppy_dog
+    - puppy
+    - smoothie_3d
+    - dogs_head
+  object_init_sampler:
+    _target_: tbp.monty.frameworks.environments.object_init_samplers.RandomRotation
+eval_env_interface_class: ${monty.class:tbp.monty.experiment.environment.OneObjectPerEpisodeInterface}
