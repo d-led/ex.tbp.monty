@@ -104,10 +104,16 @@ _stronger_ evidence (24.43 against 20.41). It did not say that the first time.
 ### What the first run was really measuring
 
 The first pass at this reached evidence 8.43 and had a shape worth reading: up to
-8.0, a long flat stretch, then five steps that each cost exactly one, then a
-climb. A matching step is worth `log(score / (1 - score))` for that node's
-weighted feature score, so a step of exactly minus one is a score of 0.27, and
-the healthy steps of +0.95 were scores of 0.72.
+8.0, a long flat stretch, then six steps that each cost exactly one — 8.0 down to
+2.0 — and then a climb. Those six are not the features: a node's feature evidence
+is the weighted average of how far inside its tolerance each column sits — `1` at
+a perfect match, `0` at the tolerance — and pose evidence lives in `[-1, 1]`, with
+a hypothesis whose predicted place holds no learned node within
+`max_match_distance` taking the floor of exactly `-1`. A step of exactly minus
+one is that floor: the model predicted somewhere it has nothing stored. What the
+colour changed is the other kind of step, the healthy ones, which moved from
+`+0.95` to `+1.28` — the same geometry scoring higher on a feature that now
+matches.
 
 The cause was colour, and it was ours. The CAD world's `rgba` is _shading_: one
 light, so the memory learned hue 0 with value 0.25, 0.62 and 0.83. `MontyCad.Export`
@@ -120,16 +126,15 @@ put the number in the texture; `MontyCad.Export` chose it.
 
 The export now writes one grey whose three channels are equal, which is the hue
 and saturation the exact world shows whatever light either world applies. Two
-cases in `ex_monty_cad` hold it there. A matching step is worth 1.28 rather than
-0.95 (a score of 0.78 rather than 0.72) and the episode reaches a far stronger
-conclusion, which is what the two curves are: the same memory, the same world,
-three times the evidence.
+cases in `ex_monty_cad` hold it there. The episode then reached a far stronger
+conclusion in fewer steps, which is what the two curves are: the same memory, the
+same world, three times the evidence.
 
 What is left of the gap is the part both renderers guess at differently — how
 bright a facet is under their own lights, and how much curvature a patch sees at
-the same point. That is why the curve still dips once, at step 90, and why it
-holds at 12.15 for fifty steps: the second is the agent not reaching new surface,
-which is the motor policy, not the features.
+the same point. That does not explain the dip at step 90 or the fifty steps at
+12.15 before it, and no feature could: the first is the `-1` floor, the second is
+the agent not reaching new surface, which is the motor policy.
 
 ## What these results are, and are not
 
