@@ -1,10 +1,12 @@
 defmodule Monty.Test.PrerequisiteRoots do
   @moduledoc """
-  Monty's three data roots, pointed at a directory of the test's own.
+  Monty's four data roots, pointed at a directory of the test's own.
 
-  The prerequisites are addressed by `MONTY_DATA`, `MONTY_MODELS` and
-  `MONTY_LOGS`, which are the machine's — so a test that asks what is missing
-  has to own them while it runs, and hand them back afterwards.
+  The prerequisites are addressed by `MONTY_DATA`, `MONTY_MODELS`, `MONTY_LOGS`
+  and `MONTY_LIBRARIES`, which are the machine's — so a test that asks what is
+  missing has to own them while it runs, and hand them back afterwards. The
+  libraries root is here because this application writes the memories it makes
+  there, and a test that left it alone would read a real person's folder.
   """
 
   alias Monty.Prerequisites
@@ -19,7 +21,8 @@ defmodule Monty.Test.PrerequisiteRoots do
     variables = [
       {"MONTY_DATA", Path.join(root, "data")},
       {"MONTY_MODELS", Path.join(root, "models")},
-      {"MONTY_LOGS", Path.join(root, "logs")}
+      {"MONTY_LOGS", Path.join(root, "logs")},
+      {"MONTY_LIBRARIES", Path.join(root, "libraries")}
     ]
 
     previous = Enum.map(variables, fn {name, _} -> {name, System.get_env(name)} end)
@@ -49,6 +52,15 @@ defmodule Monty.Test.PrerequisiteRoots do
   # A bundle that has been fetched holds something. A directory on its own is
   # what the page refuses to call "here", so a fixture that plants one leaves a
   # file where the bundle lands.
+  #
+  # A build has no archive: what it produces *is* the directory, so the file goes
+  # there and the target — which is that same directory — is not written over.
+  def plant(%{build: build} = prerequisite) when is_binary(build) do
+    lands = Prerequisites.where_it_lands(prerequisite)
+    File.mkdir_p!(lands)
+    File.write!(Path.join(lands, "planted-by-the-test"), "")
+  end
+
   def plant(prerequisite) do
     lands = Prerequisites.where_it_lands(prerequisite)
     File.mkdir_p!(lands)

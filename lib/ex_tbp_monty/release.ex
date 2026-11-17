@@ -107,9 +107,12 @@ defmodule ExTbpMonty.Release do
   def fetch_prerequisites do
     {:ok, _apps} = Application.ensure_all_started(@app)
 
+    # Downloads only: an entry this application makes has no url to fetch, and
+    # the work it names is minutes of this machine's own — a boot, a test or a
+    # container start is not a person asking for it.
     fetched =
       Prerequisites.all()
-      |> Enum.reject(&Prerequisites.present?/1)
+      |> Enum.reject(&(&1[:build] || Prerequisites.present?(&1)))
       |> Enum.map(&fetch_prerequisite/1)
 
     case Enum.reject(fetched, &(&1 == :ok)) do
