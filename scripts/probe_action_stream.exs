@@ -180,15 +180,18 @@ defmodule ActionStream do
         sensor_module
       )
 
+    before = stream_position(state.model_id)
+
     {actions, motor} =
       MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
+
+    describe_stream(state.model_id, before)
 
     # Which branch answered, and with what. `touch_object` computes its distance
     # from the view finder's centre pixel; the surface cycle samples one. The two
     # are 0.8 mm apart on the opening step, so the branch has to be named rather
     # than inferred from the movement.
     describe_policy(motor, state.proprioceptive_state)
-    describe_stream(state.model_id)
 
     # The world moves by his action, so the next question is the same one.
     {observations, proprioceptive_state, interface} =
@@ -208,16 +211,19 @@ defmodule ActionStream do
   end
 
   # Where the episode's stream stands, as the generator reports it: a position
-  # inside the block of words it draws from, not a count of draws. It is here
-  # because a policy that reads a different number of numbers produces actions
-  # that cannot be compared, and no action shows that on its own. Its first
-  # reading is a surprise: the position does not move for the episode's first
-  # twenty-six steps and then moves by two, which is either a policy that does not
-  # draw from the episode's stream or a position that is not the counter it looks
-  # like.
-  defp describe_stream(model_id) do
-    position = Monty.Random.Stream.state(Monty.Random.Stream.via(model_id)).pos
-    IO.puts("the stream: position #{position}")
+  # inside the block of words it draws from, not a count of draws. It is printed
+  # around the policy call, because a policy that reads a different number of
+  # numbers produces actions that cannot be compared, and no action shows that on
+  # its own. Its first reading is a surprise: the position does not move for the
+  # episode's first twenty-six steps and then moves by two, which is either a
+  # policy that does not draw from the episode's stream or a position that is not
+  # the counter it looks like.
+  defp stream_position(model_id) do
+    Monty.Random.Stream.state(Monty.Random.Stream.via(model_id)).pos
+  end
+
+  defp describe_stream(model_id, before) do
+    IO.puts("the stream: position #{before} before the policy, #{stream_position(model_id)} after")
   end
 
   # What the policy was holding when it answered. The branch it took follows from

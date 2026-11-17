@@ -144,14 +144,23 @@ returned a direction that was his to the last digit, and that direction _is_ the
 stored heading, projected.
 
 So the streams part somewhere between steps 20 and 28, in a window whose only
-variable-drawing call is the avoidance search — it draws once per candidate heading
-it tries, and how many it tries depends on the conflicts it finds against the
-points already visited. The instrument for that count is the episode stream's own
-position, which the probe now prints — and its first reading is a surprise of its
-own: the position does not move for the episode's first twenty-six steps and then
-moves by two. Either the policy's draws do not come from the episode's stream, or
-that position is not the per-draw counter it looks like. Until that is settled the
-count cannot be compared with Monty's, so settling it is the next step.
+variable-drawing call is the avoidance search. The instrument for that count is the
+episode stream's own position, printed around the policy call — and its reading is
+a finding of its own: **the position never moves across a policy call** (624 before
+and after, step after step), so the policy's numbers are not coming from the
+episode's stream at all.
+
+What they do come from is visible in two lines:
+`ActionSampler.stream/3` hands a sampler with no state of its own
+`Context.rng_for(ctx, module)`, and that is
+`:rand.seed_s(:exsss, {seed, :erlang.phash2(module_id), step})` — Erlang's
+generator, seeded per module **and per step**, not `Monty.Random.Numpy`, which is
+the port of the generator Monty actually draws from. That is not one stream per
+episode either, which is a rule this repository states about itself.
+
+How then the first twenty-seven actions are Monty's to the last digit is the next
+thing to answer, and it needs the _call site_ rather than the value: log which of
+the two draws each sampler takes, then make the answer one stream.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
