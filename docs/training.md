@@ -248,7 +248,7 @@ is **3**: raising it shortens a pretraining rather than lengthening it.
 ## 9. Which of the two memories a run can be scored against
 
 Both `dogs/inference` and `dogs/inference_supervised` read a library a run here
-trained, and only one of them can be judged:
+trained, and both can be judged — the difference is what their names mean:
 
 - **A supervised pretraining names each graph after the object it was told** —
   `milka`, `puppy`, … — so `graph_id_to_target` is the identity and a verdict can
@@ -267,19 +267,28 @@ trained, and only one of them can be judged:
   builds by those names (`docs/monty-differences.md` §2.27). A library written
   before that reads exactly as it did.
 
-  **Which does not make an unsupervised pretraining scorable**, and the first
-  library written under the new format says why. The same eight episodes that
-  produced `trained/dogs_surf_unsupervised`'s fragment wrote
-  `targets: ["new_object0"]` … `["new_object3"]` — each graph's own name. The map
-  is filled by `fixme_update_ground_truth/1` in a training episode, from the object
-  the module detected and the object it was _told to expect_; an unsupervised
-  pretraining is told nothing, which is what unsupervised means, so there is no
-  target to record and the record falls back to the graph's name.
+  **An unsupervised epoch does record the dog.** The first library written under
+  the new format appeared to say otherwise — its records fell back to
+  `["new_object0"]`, each graph's own name — but that was a bug in the writer, not
+  a property of unsupervised training: the map was read from a map literal beside
+  the memory write, and a map literal's evaluation order is not the source's, so it
+  was read before `update_ltm` filled it. Read in order, `new_object0` answers
+  `["boykin_spaniel"]`. The map comes from `fixme_update_ground_truth/1`, which
+  takes the object from `primary_target` — the environment's target, what the
+  simulator placed — and not from anything handed to the module, so "told nothing"
+  was never true of it.
+
+  What an unsupervised memory still cannot promise is one graph per dog: a training
+  episode that concludes `:match` appends to the graph it recognised and a
+  `:no_match` mints a new one (Monty's rule), so two dogs can end up in one graph
+  and that graph carries both names. This is why a recognition score has to say how
+  many objects the graph it settled on names:
+  `scripts/memory_names.exs` prints each graph's names, and
+  `scripts/probe_recognitions.exs` tallies the verdicts against them.
 
   So a memory is scorable when the run that wrote it was told the answers, and that
-  is supervised pretraining. Monty's unsupervised experiments are scored because
-  they train and evaluate **in one run**: the evaluation phase is told the object
-  it shows, and that is where the mapping comes from.
+  is either supervised pretraining or an unsupervised run that kept its targets —
+  either way the library now carries them.
 
 ### The dog corpus, end to end (measured 2026-11-17)
 
