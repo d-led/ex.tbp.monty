@@ -15,6 +15,7 @@ defmodule Monty.Studio.Replay do
   """
 
   alias Monty.Simulators.Synthetic.Camera
+  alias Monty.Studio.Chart
   alias Monty.Studio.Replay.Digest
   alias Monty.Studio.RunHistory.Run
 
@@ -146,6 +147,32 @@ defmodule Monty.Studio.Replay do
   @spec objects(Run.t(), String.t() | nil) :: [series()]
   def objects(%Run{} = run, module_id \\ nil),
     do: run |> digest() |> Digest.objects(module_id)
+
+  @doc """
+  One object's beliefs as the run's modules reported them, and the line they
+  converge on (`Monty.Studio.Chart.beliefs/2`).
+
+  A chart is drawn for one module, so an object that five modules were climbing
+  at different heights looks like an object one module climbed. This keeps both:
+  every module's own report for the graph, and the strongest report at each step.
+  `nil` when no module ever reported that object — an object nobody believed is
+  not a chart with one empty line in it.
+  """
+  @spec beliefs(Run.t(), String.t()) :: Chart.beliefs() | nil
+  def beliefs(%Run{} = run, graph_id) do
+    digest = digest(run)
+
+    reports =
+      for module_id <- Digest.modules(digest),
+          series <- Digest.objects(digest, module_id),
+          series.label == graph_id,
+          do: {module_id, Enum.map(series.points, &{&1.step, &1.value})}
+
+    case reports do
+      [] -> nil
+      reports -> Chart.beliefs(reports, graph_id)
+    end
+  end
 
   @doc """
   The learning modules the run reported beliefs for, oldest name first.
