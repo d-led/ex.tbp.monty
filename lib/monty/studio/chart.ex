@@ -55,6 +55,7 @@ defmodule Monty.Studio.Chart do
 
   defstruct width: 0,
             height: 0,
+            beliefs: nil,
             margin_left: 44,
             margin_right: 12,
             margin_top: 10,

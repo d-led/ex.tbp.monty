@@ -287,6 +287,25 @@ defmodule ExTbpMontyWeb.EvidenceChart do
               stroke-width="1.5"
               data-graph={series.graph_id}
             />
+            <%!-- One object's parallel beliefs: a hollow dot for every report a
+            module made, in the object's own colour — the same colour as its line,
+            because what differs is the mark and not the object. Drawn by the same
+            projection as the lines (`Chart.report_points/2`), so a dot cannot sit
+            beside the line it belongs to. --%>
+            <g :if={@chart.beliefs} id={"chart-reports-#{@module_id}"}>
+              <circle
+                :for={dot <- Monty.Studio.Chart.report_points(@chart.beliefs, @chart)}
+                cx={dot.x}
+                cy={dot.y}
+                r="2"
+                fill="none"
+                stroke={@chart.beliefs.colour}
+                stroke-width="1"
+                class="report-dot"
+                data-module={dot.module_id}
+                data-graph={@chart.beliefs.graph_id}
+              />
+            </g>
             <circle
               :if={@chart.mlh}
               cx={@chart.mlh.x}
