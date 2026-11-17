@@ -170,6 +170,6 @@ Mix.Tasks.Monty.Run.run(
     "1",
     "--steps",
     "500",
-    "--no-record"
+    "--record"
   ] ++ if(seed in [nil, ""], do: [], else: ["--seed", seed])
 )

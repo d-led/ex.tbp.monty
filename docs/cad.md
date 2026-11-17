@@ -11,11 +11,11 @@ evidence do, once the labels and the geometry stop being the hard part.
 
 ## The three stages
 
-| Stage | World | Memory | What it answers |
-| --- | --- | --- | --- |
-| **1. Learn features** | one part, `--world cad`, labels from the recognition | written, one label per feature | does a graph trained on exact geometry hold a hole, a boss, a fillet as an object? |
-| **2. Learn the composition** | the same parts, several features each | written, per-feature children plus the part above them | can the part be recognised as an arrangement of features rather than as one lump? |
-| **3. Recognise on meshes** | MuJoCo, the same parts as textured meshes | **read** — the file stage 1 and 2 wrote | does the memory survive the change of world, with no CAD on the node at all? |
+| Stage                        | World                                                | Memory                                                 | What it answers                                                                    |
+| ---------------------------- | ---------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| **1. Learn features**        | one part, `--world cad`, labels from the recognition | written, one label per feature                         | does a graph trained on exact geometry hold a hole, a boss, a fillet as an object? |
+| **2. Learn the composition** | the same parts, several features each                | written, per-feature children plus the part above them | can the part be recognised as an arrangement of features rather than as one lump?  |
+| **3. Recognise on meshes**   | MuJoCo, the same parts as textured meshes            | **read** — the file stage 1 and 2 wrote                | does the memory survive the change of world, with no CAD on the node at all?       |
 
 Stage 3 is the measurement. Stage 1 and 2 are the teaching, and they are allowed
 to be exact in a way no evaluation is.
@@ -74,29 +74,30 @@ same place MuJoCo's object sets come from, and `MONTY_CAD_PART` names one by nam
 rather than by path (`MontyCad.Inputs.part_path/1`). A path to a file that exists
 still works, for a part that should not have to be moved first.
 
-A *set* of parts is what a pretraining run needs, and a run currently opens the one
+A _set_ of parts is what a pretraining run needs, and a run currently opens the one
 part the variable names. That is the first thing stage 1 has to grow.
 
 ## How to run one
 
 `mix monty.run` needs the CAD package on the node's code path; the studio does not
-depend on it, because it brings a Rust build. A script does it:
+depend on it, because it brings a Rust build. `scripts/cad_experiment.exs`
+appends those builds, samples the parts you name and runs the config:
 
-```elixir
-cad = Path.expand("~/src/ex.monty.cad")
-
-for app <- ["ex_monty_cad", "ex_quiddity"] do
-  true = Code.append_path(Path.join([cad, "_build/dev/lib", app, "ebin"]))
-end
-
-System.put_env("MONTY_CAD_PART", "bracket")
-
-Mix.Tasks.Monty.Run.run(["base_10simobj_surf_agent", "--world", "cad", "--episodes", "1", "--no-record"])
+```sh
+mix run scripts/cad_experiment.exs plate plate          # remember plate, sense plate
+CAD_SENSE_ONLY=1 mix run scripts/cad_experiment.exs plate blend   # the control
 ```
 
-`-pa` does not survive `mix`'s own code-path setup, which is why this is a script
-and not a flag. On a node that carries the CAD application the world needs nothing
-at all.
+A training episode in the CAD world is the same world with a training config, and
+`MONTY_CAD_LABELS=features` is what makes the part its features rather than one
+object:
+
+```sh
+MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run tmp/cad_run.exs \
+  tutorial/surf_agent_2obj_train --world cad --episodes 1 --record
+```
+
+[The first results](cad-results.html) are the two runs above, with their pages.
 
 ## What is deliberately not here
 
@@ -112,16 +113,16 @@ at all.
 
 ## What is missing, in the order it is worth doing
 
-1. **Per-feature semantic ids.** `MontyCad.Scene` carries one id for the whole
-   part. `Quiddity.Frame.face_ids/1` and `Quiddity.Recognition.owner/2` already
-   answer which feature a pixel is on, so the ids are a change in one module, and
-   `semantic_id_to_label` — which a run already threads through — names them.
-2. **A set of parts.** Stage 1 wants several features across several parts, and a
-   run names one.
-3. **The pretraining configs.** `cad_feature_pretrain_*` (children) and the
+1. **A set of parts.** Stage 1 wants several features across several parts, and a
+   run names one (`MONTY_CAD_PART`), so a pretraining set is a change to how the
+   world is chosen per episode.
+2. **The pretraining configs.** `cad_feature_pretrain_*` (children) and the
    `_compositional` / `_monolithic` pair, which differ only in whether the labels
    name features or the part. The pair is the measurement: composition against one
-   lump, everything else held.
-4. **The mesh export.** Stage 3 needs those parts tessellated with a texture and
-   per-feature geometry ids, and `Quiddity.mesh/2` returns `face_of_triangle`,
-   which is what carries a label from a face onto triangles.
+   lump, everything else held. Today a feature-labelled run uses a training config
+   written for whole objects.
+3. **The evaluation on meshes.** `ExTbpMonty.Cad.Objects` writes a part's features
+   as the object set a world steps (`textured.obj`, `texture_map.png`,
+   `metadata.json`, one directory per feature and one for the body, in metres with
+   `scale` one); what is missing is the config that points `data_path` at that set
+   and loads the memory stage 1 wrote.
